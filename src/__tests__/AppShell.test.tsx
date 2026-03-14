@@ -12,7 +12,7 @@ describe('AppShell', () => {
     expect(screen.getByTestId('title-slot')).toBeInTheDocument();
   });
 
-  it('renders counters slot in top-left', () => {
+  it('renders counters slot in top-right', () => {
     render(<AppShell />);
     expect(screen.getByTestId('counters-slot')).toBeInTheDocument();
   });
@@ -22,7 +22,7 @@ describe('AppShell', () => {
     expect(screen.getByTestId('layer-toggles-slot')).toBeInTheDocument();
   });
 
-  it('renders filters slot in top-right', () => {
+  it('renders filters slot in bottom-left', () => {
     render(<AppShell />);
     expect(screen.getByTestId('filters-slot')).toBeInTheDocument();
   });

@@ -30,7 +30,7 @@
 ### Infrastructure
 
 - [ ] **INFRA-01**: Express API proxy for CORS handling, API key management, and data normalization
-- [ ] **INFRA-02**: Dark theme with clean grid layout (black/white primary, blue/red/green/yellow accents only)
+- [x] **INFRA-02**: Dark theme with clean grid layout (black/white primary, blue/red/green/yellow accents only)
 
 ## v2 Requirements
 
@@ -80,7 +80,7 @@
 | CTRL-04 | Phase 7 | Pending |
 | STAT-01 | Phase 10 | Pending |
 | INFRA-01 | Phase 3 | Pending |
-| INFRA-02 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 12 total

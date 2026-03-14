@@ -16,15 +16,19 @@ export function AppShell() {
         <div className="h-full w-full bg-surface" />
       </div>
 
-      {/* Top-left: Title + Counters */}
-      <div className="absolute top-4 left-4 z-[var(--z-overlay)] flex flex-col gap-3">
+      {/* Top-left: Title */}
+      <div className="absolute top-4 left-4 z-[var(--z-overlay)]">
         <TitleSlot />
-        <CountersSlot />
       </div>
 
-      {/* Top-right: Layer toggles + Filters */}
+      {/* Top-right: Counters + Layer toggles */}
       <div className="absolute top-4 right-4 z-[var(--z-controls)] flex flex-col items-end gap-2">
+        <CountersSlot />
         <LayerTogglesSlot />
+      </div>
+
+      {/* Bottom-left: Filters */}
+      <div className="absolute bottom-4 left-4 z-[var(--z-controls)]">
         <FiltersSlot />
       </div>
 
