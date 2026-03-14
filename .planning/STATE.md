@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-14T18:28:39.966Z"
-last_activity: 2026-03-14 -- Phase 1 Plan 01 completed
+status: in-progress
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-14T22:16:11Z"
+last_activity: 2026-03-14 -- Phase 2 Plan 01 completed
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 100
+  total_plans: 3
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -21,33 +21,34 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 1: Project Scaffolding & Theme
+**Current focus:** Phase 2: Base Map
 
 ## Current Position
 
-Phase: 1 of 10 (Project Scaffolding & Theme)
-Plan: 1 of 1 in current phase (COMPLETE)
-Status: Phase 1 complete
-Last activity: 2026-03-14 -- Phase 1 Plan 01 completed
+Phase: 2 of 10 (Base Map)
+Plan: 1 of 2 in current phase (COMPLETE)
+Status: Plan 02-01 complete, Plan 02-02 next
+Last activity: 2026-03-14 -- Phase 2 Plan 01 completed
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 5min
-- Total execution time: 0.08 hours
+- Total plans completed: 2
+- Average duration: 4min
+- Total execution time: 0.13 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Project Scaffolding & Theme | 1 | 5min | 5min |
+| 2. Base Map | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5min)
-- Trend: N/A (first plan)
+- Last 5 plans: 01-01 (5min), 02-01 (3min)
+- Trend: Improving
 
 *Updated after each plan completion*
 
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - Pinned TypeScript to ~5.9.3 to avoid TS 6.0 breaking changes
 - Zustand store uses curried create<UIState>()() pattern for type inference
 - Z-index scale defined as CSS custom properties for consistent overlay layering
+- Mocked maplibre-gl and @deck.gl/mapbox via vite.config.ts test.alias for jsdom compatibility
+- Used it.todo() for unimplemented component stubs to avoid import errors while keeping test presence
+- DeckGLOverlay wraps MapboxOverlay via useControl hook from react-maplibre
 
 ### Pending Todos
 
@@ -80,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T18:28:39.956Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-base-map/02-CONTEXT.md
+Last session: 2026-03-14T22:16:11Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: .planning/phases/02-base-map/02-02-PLAN.md

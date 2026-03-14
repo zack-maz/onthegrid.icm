@@ -12,7 +12,7 @@ This roadmap delivers a personal real-time intelligence dashboard for monitoring
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Project Scaffolding & Theme** - React/Vite/TypeScript project with dark theme layout shell
+- [x] **Phase 1: Project Scaffolding & Theme** - React/Vite/TypeScript project with dark theme layout shell
 - [ ] **Phase 2: Base Map** - Interactive 2.5D map of Iran with pan, zoom, rotate
 - [ ] **Phase 3: API Proxy** - Express backend for CORS handling, API key management, data normalization
 - [ ] **Phase 4: Flight Data Feed** - Live flight tracking via OpenSky Network with ~5s refresh
@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Scaffold Vite project, dark theme, AppShell with floating overlay regions
+- [x] 01-01-PLAN.md — Scaffold Vite project, dark theme, AppShell with floating overlay regions
 
 ### Phase 2: Base Map
 **Goal**: Users see an interactive 2.5D map of Iran and can navigate it freely
@@ -50,7 +50,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Install map deps, create mapStore + DeckGLOverlay + test mocks + Wave 0 stubs
+- [x] 02-01-PLAN.md — Install map deps, create mapStore + DeckGLOverlay + test mocks + Wave 0 stubs
 - [ ] 02-02-PLAN.md — Build BaseMap with overlays (vignette, loading, coords, compass), wire into AppShell
 
 ### Phase 3: API Proxy
@@ -176,8 +176,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Project Scaffolding & Theme | 0/1 | Not started | - |
-| 2. Base Map | 0/2 | Not started | - |
+| 1. Project Scaffolding & Theme | 1/1 | Complete | 2026-03-14 |
+| 2. Base Map | 1/2 | In progress | - |
 | 3. API Proxy | 0/? | Not started | - |
 | 4. Flight Data Feed | 0/? | Not started | - |
 | 5. Entity Rendering | 0/? | Not started | - |
