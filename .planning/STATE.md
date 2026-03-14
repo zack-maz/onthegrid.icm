@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-14T22:16:11Z"
-last_activity: 2026-03-14 -- Phase 2 Plan 01 completed
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-14T22:56:46Z"
+last_activity: 2026-03-14 -- Phase 2 Plan 02 completed
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 2
-  percent: 67
+  total_plans: 4
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -26,29 +26,29 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 ## Current Position
 
 Phase: 2 of 10 (Base Map)
-Plan: 1 of 2 in current phase (COMPLETE)
-Status: Plan 02-01 complete, Plan 02-02 next
-Last activity: 2026-03-14 -- Phase 2 Plan 01 completed
+Plan: 2 of 3 in current phase (COMPLETE)
+Status: Plan 02-02 complete, Plan 02-03 next
+Last activity: 2026-03-14 -- Phase 2 Plan 02 completed
 
-Progress: [██████░░░░] 67%
+Progress: [███████░░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
+- Total plans completed: 3
 - Average duration: 4min
-- Total execution time: 0.13 hours
+- Total execution time: 0.20 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Project Scaffolding & Theme | 1 | 5min | 5min |
-| 2. Base Map | 1 | 3min | 3min |
+| 2. Base Map | 2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5min), 02-01 (3min)
-- Trend: Improving
+- Last 5 plans: 01-01 (5min), 02-01 (3min), 02-02 (4min)
+- Trend: Stable
 
 *Updated after each plan completion*
 
@@ -71,6 +71,9 @@ Recent decisions affecting current work:
 - Mocked maplibre-gl and @deck.gl/mapbox via vite.config.ts test.alias for jsdom compatibility
 - Used it.todo() for unimplemented component stubs to avoid import errors while keeping test presence
 - DeckGLOverlay wraps MapboxOverlay via useControl hook from react-maplibre
+- Imperative style customization in onLoad with getLayer() guards -- never pre-fetch/modify CARTO style.json
+- CompassControl renders null (behavior-only) using useMap hook and DOM querySelector for compass button
+- Zustand selector pattern (s => s.field) in BaseMap components to minimize re-renders
 
 ### Pending Todos
 
@@ -84,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T22:16:11Z
-Stopped at: Completed 02-01-PLAN.md
-Resume file: .planning/phases/02-base-map/02-02-PLAN.md
+Last session: 2026-03-14T22:56:46Z
+Stopped at: Completed 02-02-PLAN.md
+Resume file: .planning/phases/02-base-map/02-03-PLAN.md
