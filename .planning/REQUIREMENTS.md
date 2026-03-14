@@ -69,24 +69,24 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAP-01 | — | Pending |
-| MAP-02 | — | Pending |
-| DATA-01 | — | Pending |
-| DATA-02 | — | Pending |
-| DATA-03 | — | Pending |
-| CTRL-01 | — | Pending |
-| CTRL-02 | — | Pending |
-| CTRL-03 | — | Pending |
-| CTRL-04 | — | Pending |
-| STAT-01 | — | Pending |
-| INFRA-01 | — | Pending |
-| INFRA-02 | — | Pending |
+| MAP-01 | Phase 2 | Pending |
+| MAP-02 | Phase 5 | Pending |
+| DATA-01 | Phase 4 | Pending |
+| DATA-02 | Phase 6 | Pending |
+| DATA-03 | Phase 6 | Pending |
+| CTRL-01 | Phase 7 | Pending |
+| CTRL-02 | Phase 8 | Pending |
+| CTRL-03 | Phase 9 | Pending |
+| CTRL-04 | Phase 7 | Pending |
+| STAT-01 | Phase 10 | Pending |
+| INFRA-01 | Phase 3 | Pending |
+| INFRA-02 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-13*
-*Last updated: 2026-03-13 after initial definition*
+*Last updated: 2026-03-13 after roadmap creation*
