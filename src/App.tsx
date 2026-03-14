@@ -1,5 +1,7 @@
+import { AppShell } from '@/components/layout/AppShell';
+
 function App() {
-  return <div>App</div>;
+  return <AppShell />;
 }
 
 export default App;
