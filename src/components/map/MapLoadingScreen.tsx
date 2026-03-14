@@ -5,7 +5,13 @@ export function MapLoadingScreen({ isLoaded }: { isLoaded: boolean }) {
         isLoaded ? 'pointer-events-none opacity-0' : 'opacity-100'
       }`}
     >
-      <div className="h-3 w-3 animate-pulse rounded-full bg-text-muted" />
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="absolute rounded-full border border-text-muted ripple"
+          style={{ animationDelay: `${i * 0.6}s` }}
+        />
+      ))}
     </div>
   );
 }

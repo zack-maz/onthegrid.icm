@@ -46,3 +46,20 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+@keyframes ripple {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 0.4;
+  }
+  100% {
+    width: 150vmax;
+    height: 150vmax;
+    opacity: 0;
+  }
+}
+
+.ripple {
+  animation: ripple 2s ease-out infinite;
+}

@@ -11,8 +11,10 @@ export const MAX_BOUNDS: [number, number, number, number] = [30, 15, 70, 45]; //
 export const MAP_STYLE =
   'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
-export const TERRAIN_SOURCE_URL =
-  'https://demotiles.maplibre.org/terrain-tiles/tiles.json';
+export const TERRAIN_SOURCE_TILES = [
+  'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+];
+export const TERRAIN_ENCODING = 'terrarium' as const;
 
 export const TERRAIN_CONFIG = { source: 'terrain-dem', exaggeration: 1.5 };
 
