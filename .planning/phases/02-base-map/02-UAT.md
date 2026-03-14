@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 02-base-map
 source: [02-01-SUMMARY.md, 02-02-PLAN.md must_haves]
 started: 2026-03-14T23:00:00Z
-updated: 2026-03-14T23:00:00Z
+updated: 2026-03-14T23:30:00Z
 ---
 
 ## Current Test
@@ -82,7 +82,7 @@ skipped: 0
 ## Gaps
 
 - truth: "User sees a 2.5D dark map centered on Iran with visible terrain bumps on mountain ranges (Zagros, Alborz)"
-  status: failed
+  status: resolved
   reason: "User reported: I'm not seeing any mountain range bumps"
   severity: major
   test: 1
@@ -94,7 +94,7 @@ skipped: 0
     - "Replace demo terrain URL with global DEM tileset (AWS Terrarium tiles or MapTiler)"
   debug_session: ".planning/debug/terrain-bumps-not-visible.md"
 - truth: "Loading screen pulse animation ripples across entire screen while map loads"
-  status: failed
+  status: resolved
   reason: "User reported: Make the pulse ripple across the entire screen while loading"
   severity: minor
   test: 12
@@ -109,7 +109,7 @@ skipped: 0
     - "Replace small dot with expanding ripple ring elements in MapLoadingScreen"
   debug_session: ""
 - truth: "A subtle dark gradient frames the viewport edges, giving a looking through a scope feel"
-  status: failed
+  status: resolved
   reason: "User reported: No subtle gradient. If you make one, keep it very faint"
   severity: minor
   test: 11
