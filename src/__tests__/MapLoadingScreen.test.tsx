@@ -1,11 +1,23 @@
 /**
- * MapLoadingScreen component tests (Wave 0 stubs)
+ * MapLoadingScreen component tests
  * Covers MAP-01f (loading screen fade behavior)
- * These stubs will be implemented in Plan 02 when MapLoadingScreen is built.
  */
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import { MapLoadingScreen } from '@/components/map/MapLoadingScreen';
 
 describe('MapLoadingScreen', () => {
-  it.todo('shows loading when isLoaded is false (MAP-01f)');
+  it('shows loading when isLoaded is false (MAP-01f)', () => {
+    const { container } = render(<MapLoadingScreen isLoaded={false} />);
+    const overlay = container.firstElementChild!;
+    expect(overlay.classList.contains('opacity-100')).toBe(true);
+    expect(overlay.classList.contains('pointer-events-none')).toBe(false);
+  });
 
-  it.todo('fades out when isLoaded is true (MAP-01f)');
+  it('fades out when isLoaded is true (MAP-01f)', () => {
+    const { container } = render(<MapLoadingScreen isLoaded={true} />);
+    const overlay = container.firstElementChild!;
+    expect(overlay.classList.contains('opacity-0')).toBe(true);
+    expect(overlay.classList.contains('pointer-events-none')).toBe(true);
+  });
 });
