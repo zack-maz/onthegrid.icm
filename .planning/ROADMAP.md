@@ -13,7 +13,7 @@ This roadmap delivers a personal real-time intelligence dashboard for monitoring
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Project Scaffolding & Theme** - React/Vite/TypeScript project with dark theme layout shell
-- [ ] **Phase 2: Base Map** - Interactive 2.5D map of Iran with pan, zoom, rotate
+- [x] **Phase 2: Base Map** - Interactive 2.5D map of Iran with pan, zoom, rotate
 - [ ] **Phase 3: API Proxy** - Express backend for CORS handling, API key management, data normalization
 - [ ] **Phase 4: Flight Data Feed** - Live flight tracking via OpenSky Network with ~5s refresh
 - [ ] **Phase 5: Entity Rendering** - Type-specific entity markers on the map
@@ -52,7 +52,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Install map deps, create mapStore + DeckGLOverlay + test mocks + Wave 0 stubs
 - [x] 02-02-PLAN.md — Build BaseMap with overlays (vignette, loading, coords, compass), wire into AppShell
-- [ ] 02-03-PLAN.md — Fix terrain tiles (global DEM), full-screen ripple loading, faint vignette (UAT gap closure)
+- [x] 02-03-PLAN.md — Fix terrain tiles (global DEM), full-screen ripple loading, faint vignette (UAT gap closure)
 
 ### Phase 3: API Proxy
 **Goal**: A backend proxy handles all external API calls, shielding the frontend from CORS issues and API key exposure
@@ -178,7 +178,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Scaffolding & Theme | 1/1 | Complete | 2026-03-14 |
-| 2. Base Map | 2/3 | In progress (02-03 remaining) | - |
+| 2. Base Map | 3/3 | Complete | 2026-03-14 |
 | 3. API Proxy | 0/? | Not started | - |
 | 4. Flight Data Feed | 0/? | Not started | - |
 | 5. Entity Rendering | 0/? | Not started | - |

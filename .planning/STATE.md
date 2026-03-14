@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in-progress
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-03-14T22:56:46Z"
-last_activity: 2026-03-14 -- Phase 2 Plan 02 completed
+status: completed
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-03-14T23:09:54.405Z"
+last_activity: 2026-03-14 -- Phase 2 Plan 03 completed (UAT gap closure)
 progress:
   total_phases: 10
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -21,33 +21,33 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 2: Base Map
+**Current focus:** Phase 2: Base Map (COMPLETE) -- Phase 3 next
 
 ## Current Position
 
-Phase: 2 of 10 (Base Map)
-Plan: 2 of 3 in current phase (COMPLETE)
-Status: Plan 02-02 complete, Plan 02-03 next
-Last activity: 2026-03-14 -- Phase 2 Plan 02 completed
+Phase: 2 of 10 (Base Map) -- COMPLETE
+Plan: 3 of 3 in current phase (COMPLETE)
+Status: Phase 2 complete, Phase 3 next
+Last activity: 2026-03-14 -- Phase 2 Plan 03 completed (UAT gap closure)
 
-Progress: [███████░░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 4min
-- Total execution time: 0.20 hours
+- Total plans completed: 4
+- Average duration: 5min
+- Total execution time: 0.32 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Project Scaffolding & Theme | 1 | 5min | 5min |
-| 2. Base Map | 2 | 7min | 3.5min |
+| 2. Base Map | 3 | 14min | 4.7min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5min), 02-01 (3min), 02-02 (4min)
+- Last 5 plans: 01-01 (5min), 02-01 (3min), 02-02 (4min), 02-03 (7min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -74,6 +74,11 @@ Recent decisions affecting current work:
 - Imperative style customization in onLoad with getLayer() guards -- never pre-fetch/modify CARTO style.json
 - CompassControl renders null (behavior-only) using useMap hook and DOM querySelector for compass button
 - Zustand selector pattern (s => s.field) in BaseMap components to minimize re-renders
+- AWS Terrarium S3 tiles for global DEM coverage (MapLibre demo was Alps-only)
+- Terrain exaggeration 3.0 with pitch 50 for dramatically visible mountains
+- Hillshade exaggeration 0.6 with brighter highlights (#444444) for ridge contrast
+- Vignette opacity 0.25 per user feedback (was 0.6, too dark)
+- tiles array + encoding prop pattern for raster-dem sources without TileJSON endpoints
 
 ### Pending Todos
 
@@ -87,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T22:56:46Z
-Stopped at: Completed 02-02-PLAN.md
-Resume file: .planning/phases/02-base-map/02-03-PLAN.md
+Last session: 2026-03-14T23:09:54.397Z
+Stopped at: Completed 02-03-PLAN.md
+Resume file: None
