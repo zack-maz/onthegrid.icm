@@ -15,7 +15,8 @@ import {
   INITIAL_VIEW_STATE,
   MAX_BOUNDS,
   MAP_STYLE,
-  TERRAIN_SOURCE_URL,
+  TERRAIN_SOURCE_TILES,
+  TERRAIN_ENCODING,
   TERRAIN_CONFIG,
   ROAD_LABEL_LAYERS,
   BORDER_LAYERS,
@@ -86,7 +87,6 @@ export function BaseMap() {
   return (
     <div className="relative h-full w-full">
       <MapLoadingScreen isLoaded={isMapLoaded} />
-      <MapVignette />
       <Map
         initialViewState={INITIAL_VIEW_STATE}
         style={{ width: '100%', height: '100%' }}
@@ -102,7 +102,8 @@ export function BaseMap() {
         <Source
           id="terrain-dem"
           type="raster-dem"
-          url={TERRAIN_SOURCE_URL}
+          tiles={TERRAIN_SOURCE_TILES}
+          encoding={TERRAIN_ENCODING}
           tileSize={256}
         />
         <Layer
@@ -125,6 +126,7 @@ export function BaseMap() {
         <DeckGLOverlay layers={[]} />
         <CompassControl />
       </Map>
+      <MapVignette />
       <div className="absolute bottom-8 right-14 z-[var(--z-controls)]">
         <CoordinateReadout />
       </div>
