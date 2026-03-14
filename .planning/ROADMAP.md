@@ -47,11 +47,12 @@ Plans:
   1. A 2.5D map renders centered on Iran using Deck.gl + MapLibre with the dark base style
   2. User can pan, zoom, and rotate/tilt the map smoothly with mouse and keyboard
   3. The map fills the main content area of the dark-themed layout
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 02-01-PLAN.md — Install map deps, create mapStore + DeckGLOverlay + test mocks + Wave 0 stubs
-- [ ] 02-02-PLAN.md — Build BaseMap with overlays (vignette, loading, coords, compass), wire into AppShell
+- [x] 02-02-PLAN.md — Build BaseMap with overlays (vignette, loading, coords, compass), wire into AppShell
+- [ ] 02-03-PLAN.md — Fix terrain tiles (global DEM), full-screen ripple loading, faint vignette (UAT gap closure)
 
 ### Phase 3: API Proxy
 **Goal**: A backend proxy handles all external API calls, shielding the frontend from CORS issues and API key exposure
@@ -177,7 +178,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Scaffolding & Theme | 1/1 | Complete | 2026-03-14 |
-| 2. Base Map | 1/2 | In progress | - |
+| 2. Base Map | 2/3 | In progress | - |
 | 3. API Proxy | 0/? | Not started | - |
 | 4. Flight Data Feed | 0/? | Not started | - |
 | 5. Entity Rendering | 0/? | Not started | - |
