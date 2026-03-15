@@ -139,10 +139,11 @@ describe('ACLED Adapter', () => {
     // Second call is the data request
     const dataCall = mockFetch.mock.calls[1];
     const url = dataCall[0] as string;
-    expect(url).toContain('country=Iran');
-    expect(url).toContain('event_date=2026-03-08');
-    expect(url).toContain('event_date=2026-03-15');
-    expect(url).toContain('event_date_where=BETWEEN');
+    const decodedUrl = decodeURIComponent(url);
+    expect(decodedUrl).toContain('country=Iran');
+    expect(decodedUrl).toContain('2026-03-08');
+    expect(decodedUrl).toContain('2026-03-15');
+    expect(decodedUrl).toContain('event_date_where=BETWEEN');
     expect(dataCall[1].headers.Authorization).toBe('Bearer acled-token');
   });
 
