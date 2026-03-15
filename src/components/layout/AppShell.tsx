@@ -4,8 +4,11 @@ import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
 import { FiltersSlot } from '@/components/layout/FiltersSlot';
 import { DetailPanelSlot } from '@/components/layout/DetailPanelSlot';
 import { BaseMap } from '@/components/map/BaseMap';
+import { useFlightPolling } from '@/hooks/useFlightPolling';
 
 export function AppShell() {
+  useFlightPolling();
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-surface">
       {/* Map container - fills viewport */}
