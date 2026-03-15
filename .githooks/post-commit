@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Project docs freshness agent
+# After feature commits, checks if key project docs may need updating
+
+set -euo pipefail
+
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+COMMIT_MSG=$(git log -1 --pretty=%s)
+
+# Only trigger on feature/fix commits (not docs, chore, ci, etc.)
+if ! echo "$COMMIT_MSG" | grep -qE '^(feat|fix|refactor|perf)'; then
+  exit 0
+fi
+
+# Track which docs might be stale
+STALE_DOCS=()
+
+# Check each doc's last modification vs recent feature commits
+DOCS=("README.md" "CHANGELOG.md" "CLAUDE.md")
+
+for doc in "${DOCS[@]}"; do
+  if [[ ! -f "$doc" ]]; then
+    STALE_DOCS+=("$doc (missing)")
+    continue
+  fi
+
+  # Count feature commits since this doc was last modified
+  DOC_LAST_MODIFIED=$(git log -1 --format=%ct -- "$doc" 2>/dev/null || echo "0")
+  FEATURE_COMMITS_SINCE=$(git log --oneline --after="@${DOC_LAST_MODIFIED}" --grep='^feat' --grep='^fix' --grep='^refactor' --grep='^perf' -- . 2>/dev/null | wc -l | tr -d ' ')
+
+  if [[ "$FEATURE_COMMITS_SINCE" -ge 3 ]]; then
+    STALE_DOCS+=("$doc (${FEATURE_COMMITS_SINCE} feature commits behind)")
+  fi
+done
+
+if [[ ${#STALE_DOCS[@]} -gt 0 ]]; then
+  echo ""
+  echo -e "${YELLOW}--- Project Docs Agent ---${NC}"
+  echo -e "These docs may need updating after recent feature work:"
+  echo ""
+  for doc in "${STALE_DOCS[@]}"; do
+    echo -e "  ${CYAN}$doc${NC}"
+  done
+  echo ""
+  echo "Consider updating them to reflect current project state."
+  echo -e "${YELLOW}-------------------------${NC}"
+  echo ""
+fi
