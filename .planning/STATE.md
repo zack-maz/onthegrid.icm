@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-03-15T03:55:16.603Z"
-last_activity: 2026-03-14 -- Phase 3 Plan 02 completed (data adapters)
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-03-15T15:22:00.000Z"
+last_activity: 2026-03-15 -- Phase 3 Plan 03 completed (gap closure)
 progress:
   total_phases: 10
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 7
+  completed_plans: 7
   percent: 100
 ---
 
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 3: API Proxy -- COMPLETE. Phase 4 next.
+**Current focus:** Phase 3: API Proxy -- COMPLETE (including gap closure). Phase 4 next.
 
 ## Current Position
 
 Phase: 3 of 10 (API Proxy) -- COMPLETE
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase 3 complete. All three API proxy endpoints functional.
-Last activity: 2026-03-14 -- Phase 3 Plan 02 completed (data adapters)
+Plan: 3 of 3 in current phase (COMPLETE)
+Status: Phase 3 complete. All API proxy endpoints functional, startup issues fixed.
+Last activity: 2026-03-15 -- Phase 3 Plan 03 completed (gap closure)
 
 Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 5min
-- Total execution time: 0.47 hours
+- Total plans completed: 7
+- Average duration: 4.6min
+- Total execution time: 0.53 hours
 
 **By Phase:**
 
@@ -45,10 +45,10 @@ Progress: [██████████] 100%
 |-------|-------|-------|----------|
 | 1. Project Scaffolding & Theme | 1 | 5min | 5min |
 | 2. Base Map | 3 | 14min | 4.7min |
-| 3. API Proxy | 2 | 9min | 4.5min |
+| 3. API Proxy | 3 | 11min | 3.7min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (3min), 02-02 (4min), 02-03 (7min), 03-01 (4min), 03-02 (5min)
+- Last 5 plans: 02-02 (4min), 02-03 (7min), 03-01 (4min), 03-02 (5min), 03-03 (2min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -88,6 +88,9 @@ Recent decisions affecting current work:
 - UTC date formatting in ACLED adapter to avoid timezone-dependent date drift
 - Mock adapter modules in security tests instead of mocking fetch globally, to test actual HTTP responses
 - AISStream reconnect uses simple 5s setTimeout (not exponential backoff) matching plan spec
+- Inline process.env reads for PORT/CORS_ORIGIN instead of getServerConfig() helper -- simpler, no unnecessary abstraction
+- Node --env-file-if-exists=.env flag (Node 22.14+) instead of dotenv dependency for optional .env loading
+- Guard connectAISStream() with env var presence check -- explicit opt-in for optional services
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T03:48:19.000Z
-Stopped at: Completed 03-02-PLAN.md
-Resume file: .planning/phases/03-api-proxy/03-02-SUMMARY.md
+Last session: 2026-03-15T15:22:00.000Z
+Stopped at: Completed 03-03-PLAN.md
+Resume file: .planning/phases/03-api-proxy/03-03-SUMMARY.md
