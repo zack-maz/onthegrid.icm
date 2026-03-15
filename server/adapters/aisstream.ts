@@ -34,8 +34,9 @@ export function connectAISStream(): void {
     );
   });
 
-  ws.addEventListener('message', (event) => {
-    const msg = JSON.parse(String(event.data)) as {
+  ws.addEventListener('message', async (event) => {
+    const raw = event.data instanceof Blob ? await event.data.text() : String(event.data);
+    const msg = JSON.parse(raw) as {
       MessageType: string;
       Message: {
         PositionReport: {
