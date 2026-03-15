@@ -17,11 +17,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: API Proxy** - Express backend for CORS handling, API key management, data normalization
 - [x] **Phase 4: Flight Data Feed** - Live flight tracking via OpenSky Network with ~5s refresh (completed 2026-03-15)
 - [x] **Phase 5: Entity Rendering** - Type-specific entity markers on the map (completed 2026-03-15)
-- [ ] **Phase 6: Ship & Conflict Data Feeds** - AIS ship tracking and ACLED conflict event data
-- [ ] **Phase 7: Layer Controls & News Toggle** - Layer visibility toggles and news content control
-- [ ] **Phase 8: Detail Panel** - Click-to-inspect panel showing live entity stats
-- [ ] **Phase 9: Smart Filters** - Advanced filtering by nationality, speed, altitude, proximity, date range
-- [ ] **Phase 10: Analytics Dashboard** - Running counters for strikes, sorties, and intercepts
+- [ ] **Phase 6: ADS-B Exchange Data Source** - ADS-B Exchange as alternative flight data source with UI toggle to switch between OpenSky and ADS-B
+- [ ] **Phase 7: Ship & Conflict Data Feeds** - AIS ship tracking and ACLED conflict event data
+- [ ] **Phase 8: Layer Controls & News Toggle** - Layer visibility toggles and news content control
+- [ ] **Phase 9: Detail Panel** - Click-to-inspect panel showing live entity stats
+- [ ] **Phase 10: Smart Filters** - Advanced filtering by nationality, speed, altitude, proximity, date range
+- [ ] **Phase 11: Analytics Dashboard** - Running counters for strikes, sorties, and intercepts
 
 ## Phase Details
 
@@ -100,7 +101,21 @@ Plans:
 - [x] 05-01-PLAN.md — Entity layer constants, canvas icon atlas, useEntityLayers hook, BaseMap wiring
 - [ ] 05-02-PLAN.md — Zoom-responsive icon sizing with meter-based sizeUnits (UAT gap closure)
 
-### Phase 6: Ship & Conflict Data Feeds
+### Phase 6: ADS-B Exchange Data Source
+**Goal**: Users can switch between OpenSky and ADS-B Exchange as their flight data source via a simple toggle button
+**Depends on**: Phase 4, Phase 5
+**Requirements**: DATA-04
+**Success Criteria** (what must be TRUE):
+  1. ADS-B Exchange (free tier) is integrated as a second flight data source via the server proxy
+  2. A toggle button in the UI switches the active flight data source between OpenSky and ADS-B Exchange
+  3. Switching sources replaces flight data seamlessly — same entity rendering, same polling cadence
+  4. If ADS-B Exchange rate limits are hit, the user is informed via a visible status message
+**Plans**: TBD
+
+Plans:
+- [ ] 06-01: TBD
+
+### Phase 7: Ship & Conflict Data Feeds
 **Goal**: Ship positions and conflict events flow into the application alongside flight data
 **Depends on**: Phase 3, Phase 5
 **Requirements**: DATA-02, DATA-03
@@ -112,12 +127,12 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 07-01: TBD
+- [ ] 07-02: TBD
 
-### Phase 7: Layer Controls & News Toggle
+### Phase 8: Layer Controls & News Toggle
 **Goal**: Users can show or hide entire categories of data and control non-statistical content visibility
-**Depends on**: Phase 6
+**Depends on**: Phase 7
 **Requirements**: CTRL-01, CTRL-04
 **Success Criteria** (what must be TRUE):
   1. Toggle buttons exist for each entity type: ships, flights, missiles, drones
@@ -127,11 +142,11 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 08-01: TBD
 
-### Phase 8: Detail Panel
+### Phase 9: Detail Panel
 **Goal**: Users can click any entity on the map and see its live stats in a detail panel
-**Depends on**: Phase 7
+**Depends on**: Phase 8
 **Requirements**: CTRL-02
 **Success Criteria** (what must be TRUE):
   1. Clicking an entity on the map opens a detail panel showing live stats (speed, heading, origin, coordinates, metadata)
@@ -141,11 +156,11 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 08-01: TBD
+- [ ] 09-01: TBD
 
-### Phase 9: Smart Filters
+### Phase 10: Smart Filters
 **Goal**: Users can narrow the displayed data using advanced multi-criteria filters
-**Depends on**: Phase 8
+**Depends on**: Phase 9
 **Requirements**: CTRL-03
 **Success Criteria** (what must be TRUE):
   1. Filter controls exist for nationality, speed range, altitude range, proximity radius, and date range
@@ -156,12 +171,12 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
+- [ ] 10-01: TBD
+- [ ] 10-02: TBD
 
-### Phase 10: Analytics Dashboard
+### Phase 11: Analytics Dashboard
 **Goal**: Users see running numerical counters that summarize conflict activity at a glance
-**Depends on**: Phase 9
+**Depends on**: Phase 10
 **Requirements**: STAT-01
 **Success Criteria** (what must be TRUE):
   1. A counters dashboard displays running tallies for strikes, sorties, and intercepts
@@ -170,12 +185,12 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 11-01: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 (Phases 2 and 3 can execute in parallel as they are independent.)
 
 | Phase | Plans Complete | Status | Completed |
@@ -183,10 +198,11 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Project Scaffolding & Theme | 1/1 | Complete | 2026-03-14 |
 | 2. Base Map | 3/3 | Complete | 2026-03-14 |
 | 3. API Proxy | 2/3 | In progress (gap closure) | - |
-| 4. Flight Data Feed | 0/2 | Complete    | 2026-03-15 |
+| 4. Flight Data Feed | 0/2 | Complete | 2026-03-15 |
 | 5. Entity Rendering | 1/2 | In progress (gap closure) | - |
-| 6. Ship & Conflict Data Feeds | 0/? | Not started | - |
-| 7. Layer Controls & News Toggle | 0/? | Not started | - |
-| 8. Detail Panel | 0/? | Not started | - |
-| 9. Smart Filters | 0/? | Not started | - |
-| 10. Analytics Dashboard | 0/? | Not started | - |
+| 6. ADS-B Exchange Data Source | 0/? | Not started | - |
+| 7. Ship & Conflict Data Feeds | 0/? | Not started | - |
+| 8. Layer Controls & News Toggle | 0/? | Not started | - |
+| 9. Detail Panel | 0/? | Not started | - |
+| 10. Smart Filters | 0/? | Not started | - |
+| 11. Analytics Dashboard | 0/? | Not started | - |
