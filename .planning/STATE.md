@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-15T16:22:22Z"
-last_activity: 2026-03-15 -- Phase 4 Plan 01 completed (flight pipeline fixes)
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-15T16:27:31Z"
+last_activity: 2026-03-15 -- Phase 4 Plan 02 completed (frontend flight polling pipeline)
 progress:
   total_phases: 10
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 4: Flight Data Feed -- Plan 01 complete. Plan 02 (frontend polling) next.
+**Current focus:** Phase 4: Flight Data Feed -- COMPLETE. All plans executed.
 
 ## Current Position
 
-Phase: 4 of 10 (Flight Data Feed)
-Plan: 1 of 2 in current phase (COMPLETE)
-Status: Plan 01 complete. onGround filter, unidentified flag, cache-first route. Plan 02 next.
-Last activity: 2026-03-15 -- Phase 4 Plan 01 completed (flight pipeline fixes)
+Phase: 4 of 10 (Flight Data Feed) -- COMPLETE
+Plan: 2 of 2 in current phase (COMPLETE)
+Status: Phase 4 complete. Flight pipeline with frontend polling, store, and Vite proxy.
+Last activity: 2026-03-15 -- Phase 4 Plan 02 completed (frontend flight polling pipeline)
 
-Progress: [████████░░] 89%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 4.4min
-- Total execution time: 0.58 hours
+- Total plans completed: 9
+- Average duration: 4.1min
+- Total execution time: 0.62 hours
 
 **By Phase:**
 
@@ -46,10 +46,10 @@ Progress: [████████░░] 89%
 | 1. Project Scaffolding & Theme | 1 | 5min | 5min |
 | 2. Base Map | 3 | 14min | 4.7min |
 | 3. API Proxy | 3 | 11min | 3.7min |
-| 4. Flight Data Feed | 1 | 3min | 3min |
+| 4. Flight Data Feed | 2 | 5min | 2.5min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (7min), 03-01 (4min), 03-02 (5min), 03-03 (2min), 04-01 (3min)
+- Last 5 plans: 03-01 (4min), 03-02 (5min), 03-03 (2min), 04-01 (3min), 04-02 (2min)
 - Trend: Stable/improving
 
 *Updated after each plan completion*
@@ -95,6 +95,10 @@ Recent decisions affecting current work:
 - onGround filter as early return null in normalizeFlightState for efficiency
 - unidentified flag derived from empty trimmed callsign at adapter level
 - Cache-first route pattern: check cache freshness before upstream call, conserve API credits
+- Recursive setTimeout (not setInterval) for polling -- waits for async completion before scheduling next
+- 60s stale threshold based on flight drift: 250m/s aircraft moves ~15km in 60s
+- Zustand getState() for staleness check in setTimeout callback avoids stale closures
+- Polling hook is behavior-only -- no return value, writes directly to Zustand store
 
 ### Pending Todos
 
@@ -108,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T16:22:22Z
-Stopped at: Completed 04-01-PLAN.md
-Resume file: .planning/phases/04-flight-data-feed/04-02-PLAN.md
+Last session: 2026-03-15T16:27:31Z
+Stopped at: Completed 04-02-PLAN.md
+Resume file: Phase 4 complete. Next phase TBD.
