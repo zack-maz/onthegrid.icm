@@ -79,10 +79,11 @@ Plans:
   2. Data refreshes approximately every 5 seconds without manual user action
   3. Flight data is stored in the Zustand state and available for rendering
   4. Stale or dropped connections are handled gracefully (auto-retry, no crash)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md — Server-side: onGround filter, unidentified flag, cache-first route optimization
+- [ ] 04-02-PLAN.md — Frontend: Zustand flight store, polling hook with tab visibility, Vite dev proxy
 
 ### Phase 5: Entity Rendering
 **Goal**: All data entities appear on the map as visually distinct, type-specific markers
@@ -181,7 +182,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Project Scaffolding & Theme | 1/1 | Complete | 2026-03-14 |
 | 2. Base Map | 3/3 | Complete | 2026-03-14 |
 | 3. API Proxy | 2/3 | In progress (gap closure) | - |
-| 4. Flight Data Feed | 0/? | Not started | - |
+| 4. Flight Data Feed | 0/2 | Not started | - |
 | 5. Entity Rendering | 0/? | Not started | - |
 | 6. Ship & Conflict Data Feeds | 0/? | Not started | - |
 | 7. Layer Controls & News Toggle | 0/? | Not started | - |
