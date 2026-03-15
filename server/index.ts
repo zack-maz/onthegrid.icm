@@ -1,17 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './middleware/errorHandler.js';
-import { loadConfig } from './config.js';
 import { flightsRouter } from './routes/flights.js';
 import { shipsRouter } from './routes/ships.js';
 import { eventsRouter } from './routes/events.js';
 import { connectAISStream } from './adapters/aisstream.js';
 
 export function createApp() {
-  const config = loadConfig();
   const app = express();
 
-  app.use(cors({ origin: config.corsOrigin }));
+  app.use(cors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' }));
   app.use(express.json());
 
   // Health check
@@ -37,16 +35,20 @@ const isMainModule =
 
 if (isMainModule) {
   try {
-    const config = loadConfig();
+    const port = Number(process.env.PORT ?? 3001);
     const app = createApp();
 
-    // Start AISStream WebSocket connection (not in test environment)
+    // Start AISStream WebSocket connection only if credentials are available
     if (!process.env.VITEST) {
-      connectAISStream();
+      if (process.env.AISSTREAM_API_KEY) {
+        connectAISStream();
+      } else {
+        console.log('[server] AISSTREAM_API_KEY not set, skipping AIS WebSocket connection');
+      }
     }
 
-    app.listen(config.port, () => {
-      console.log(`[server] listening on port ${config.port}`);
+    app.listen(port, () => {
+      console.log(`[server] listening on port ${port}`);
     });
   } catch (err) {
     console.error('[server] Failed to start:', (err as Error).message);
