@@ -94,10 +94,10 @@ Plans:
   2. Different entity types (ships, flights, missiles, drones) have visually distinct icons that are immediately distinguishable
   3. Markers update position on the map as new data arrives without full re-render
   4. Entity markers follow the color scheme (blue=naval/friendly, red=hostile/strikes, green=safe, yellow=warning)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md — Entity layer constants, canvas icon atlas, useEntityLayers hook, BaseMap wiring
 
 ### Phase 6: Ship & Conflict Data Feeds
 **Goal**: Ship positions and conflict events flow into the application alongside flight data
@@ -183,7 +183,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Base Map | 3/3 | Complete | 2026-03-14 |
 | 3. API Proxy | 2/3 | In progress (gap closure) | - |
 | 4. Flight Data Feed | 0/2 | Complete    | 2026-03-15 |
-| 5. Entity Rendering | 0/? | Not started | - |
+| 5. Entity Rendering | 0/1 | Not started | - |
 | 6. Ship & Conflict Data Feeds | 0/? | Not started | - |
 | 7. Layer Controls & News Toggle | 0/? | Not started | - |
 | 8. Detail Panel | 0/? | Not started | - |
