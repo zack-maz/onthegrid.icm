@@ -63,11 +63,11 @@ Plans:
   2. API keys are stored in environment variables and never exposed to the browser
   3. Proxy returns normalized data in a common `MapEntity` format
   4. CORS headers are correctly set so the React frontend can fetch from the proxy without errors
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — Server foundation: Express 5 scaffold, MapEntity types, config, cache, dev workflow
+- [ ] 03-02-PLAN.md — Data adapters: OpenSky, AISStream, ACLED with routes, normalization, and tests
 
 ### Phase 4: Flight Data Feed
 **Goal**: Live flight positions in the Iran region stream into the application at near-real-time refresh rates
@@ -179,7 +179,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 |-------|----------------|--------|-----------|
 | 1. Project Scaffolding & Theme | 1/1 | Complete | 2026-03-14 |
 | 2. Base Map | 3/3 | Complete | 2026-03-14 |
-| 3. API Proxy | 0/? | Not started | - |
+| 3. API Proxy | 0/2 | Not started | - |
 | 4. Flight Data Feed | 0/? | Not started | - |
 | 5. Entity Rendering | 0/? | Not started | - |
 | 6. Ship & Conflict Data Feeds | 0/? | Not started | - |
