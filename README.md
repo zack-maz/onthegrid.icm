@@ -1,54 +1,62 @@
-# React + TypeScript + Vite
+# Iran Conflict Monitor
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A personal real-time intelligence dashboard for monitoring the Iran conflict. Displays a 2.5D map of Iran with live data points for ships, flights, missiles, and drones sourced from public APIs. Prioritizes concrete mathematical data — movement vectors, strike counts, timelines, force posture — over qualitative news reporting.
 
-Currently, two official plugins are available:
+## Quick Start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Opens at http://localhost:5173
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Current State
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+Interactive 2.5D map of Iran with CARTO Dark Matter tiles, 3D terrain (AWS Terrarium DEM), compass control, coordinate readout, scale bar, vignette effect, and ripple loading animation. Dark-themed layout shell with floating overlay regions.
+
+**Next up:** Express API proxy for external data sources (OpenSky, AISStream, ACLED).
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, TypeScript 5.9, Vite 6 |
+| Styling | Tailwind CSS v4 (dark theme, CSS-first @theme) |
+| State | Zustand 5 |
+| Map | Deck.gl + MapLibre GL JS (2.5D rendering) |
+| Backend | Express 5 (API proxy — planned) |
+| Data Sources | OpenSky Network, AISStream.io, ACLED |
+| Testing | Vitest + Testing Library |
+
+## Project Structure
+
 ```
+src/
+├── components/
+│   ├── layout/     # AppShell, overlay regions
+│   ├── map/        # BaseMap, overlays (compass, coords, vignette, loading)
+│   └── ui/         # Reusable UI components
+├── stores/         # Zustand stores (mapStore, uiStore)
+├── styles/         # Global CSS, animations
+├── types/          # TypeScript interfaces
+└── __tests__/      # Component and store tests
+```
+
+## Design
+
+- **Theme:** Dark background, white grid, restrained color accents
+- **Colors:** Blue (naval/friendly), Red (hostile/strikes), Green (safe), Yellow (warning)
+- **Map:** CARTO Dark Matter base, 3D terrain with 3x exaggeration, 50-degree pitch
+- **News:** Non-statistical content hidden by default
+
+## Testing
+
+```bash
+npx vitest run              # Run all tests
+npx vitest run --watch      # Watch mode
+```
+
+## License
+
+Private — personal tool.
