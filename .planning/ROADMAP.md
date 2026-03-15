@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Base Map** - Interactive 2.5D map of Iran with pan, zoom, rotate
 - [ ] **Phase 3: API Proxy** - Express backend for CORS handling, API key management, data normalization
 - [x] **Phase 4: Flight Data Feed** - Live flight tracking via OpenSky Network with ~5s refresh (completed 2026-03-15)
-- [ ] **Phase 5: Entity Rendering** - Type-specific entity markers on the map
+- [x] **Phase 5: Entity Rendering** - Type-specific entity markers on the map (completed 2026-03-15)
 - [ ] **Phase 6: Ship & Conflict Data Feeds** - AIS ship tracking and ACLED conflict event data
 - [ ] **Phase 7: Layer Controls & News Toggle** - Layer visibility toggles and news content control
 - [ ] **Phase 8: Detail Panel** - Click-to-inspect panel showing live entity stats
@@ -183,7 +183,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Base Map | 3/3 | Complete | 2026-03-14 |
 | 3. API Proxy | 2/3 | In progress (gap closure) | - |
 | 4. Flight Data Feed | 0/2 | Complete    | 2026-03-15 |
-| 5. Entity Rendering | 0/1 | Not started | - |
+| 5. Entity Rendering | 0/1 | Complete    | 2026-03-15 |
 | 6. Ship & Conflict Data Feeds | 0/? | Not started | - |
 | 7. Layer Controls & News Toggle | 0/? | Not started | - |
 | 8. Detail Panel | 0/? | Not started | - |
