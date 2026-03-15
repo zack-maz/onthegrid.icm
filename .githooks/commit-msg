@@ -13,8 +13,11 @@ RED='\033[0;31m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-# --- Rule 1: Never commit to main ---
+# --- Rule 1: Never commit to main (except merges) ---
 if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then
+  if [[ "$COMMIT_MSG" =~ ^Merge\  ]]; then
+    exit 0
+  fi
   echo -e "${RED}BLOCKED: Direct commits to '$BRANCH' are not allowed.${NC}"
   echo ""
   echo "Create a feature branch first:"
