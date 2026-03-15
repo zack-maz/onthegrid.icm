@@ -2,6 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './middleware/errorHandler.js';
 import { loadConfig } from './config.js';
+import { flightsRouter } from './routes/flights.js';
+import { shipsRouter } from './routes/ships.js';
+import { eventsRouter } from './routes/events.js';
+import { connectAISStream } from './adapters/aisstream.js';
 
 export function createApp() {
   const config = loadConfig();
@@ -15,10 +19,10 @@ export function createApp() {
     res.json({ status: 'ok' });
   });
 
-  // Route mounts (Plan 02 will add these)
-  // app.use('/api/flights', flightsRouter);
-  // app.use('/api/ships', shipsRouter);
-  // app.use('/api/events', eventsRouter);
+  // Data source routes
+  app.use('/api/flights', flightsRouter);
+  app.use('/api/ships', shipsRouter);
+  app.use('/api/events', eventsRouter);
 
   // Error handler -- must be after routes
   app.use(errorHandler);
@@ -35,6 +39,12 @@ if (isMainModule) {
   try {
     const config = loadConfig();
     const app = createApp();
+
+    // Start AISStream WebSocket connection (not in test environment)
+    if (!process.env.VITEST) {
+      connectAISStream();
+    }
+
     app.listen(config.port, () => {
       console.log(`[server] listening on port ${config.port}`);
     });
