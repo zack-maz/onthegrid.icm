@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 03-api-proxy
 source: [03-01-SUMMARY.md, 03-02-SUMMARY.md]
 started: 2026-03-15T04:00:00Z
-updated: 2026-03-15T04:39:00Z
+updated: 2026-03-15T04:45:00Z
 ---
 
 ## Current Test
@@ -64,12 +64,27 @@ skipped: 4
   reason: "User reported: [server] Failed to start: Missing required env var: OPENSKY_CLIENT_ID"
   severity: major
   test: 1
-  artifacts: []
-  missing: []
+  root_cause: "server/index.ts calls loadConfig() eagerly at lines 11 (inside createApp) and 40 (in isMainModule block), validating all credentials at startup. The lazy Proxy pattern in config.ts is correct but bypassed by direct loadConfig() calls."
+  artifacts:
+    - path: "server/index.ts"
+      issue: "Lines 11 and 40 call loadConfig() eagerly, defeating lazy config pattern"
+    - path: "server/config.ts"
+      issue: "loadConfig() validates all credentials unconditionally — working as designed but called too early"
+  missing:
+    - "Remove loadConfig() calls from server/index.ts, use process.env.PORT with defaults for listen()"
+    - "Use lazy config Proxy for adapter credentials only when endpoints are called"
+    - "Guard connectAISStream() call behind env var check or make opt-in"
+  debug_session: ".planning/debug/server-eager-config-crash.md"
 - truth: "npm run dev starts both Vite and Express concurrently with visible output"
   status: failed
   reason: "User reported: [server] node: .env: not found — tsx --env-file .env watch server/index.ts exited with code 9"
   severity: major
   test: 2
-  artifacts: []
-  missing: []
+  root_cause: ".env file does not exist at project root. dev:server script uses tsx --env-file .env which requires the file to exist. .env.example is present but was never copied."
+  artifacts:
+    - path: "package.json"
+      issue: "dev:server script uses --env-file .env which crashes if .env is missing"
+  missing:
+    - "Make --env-file graceful: use dotenv package, or guard script with .env existence check"
+    - "Document cp .env.example .env as required setup step"
+  debug_session: ".planning/debug/env-file-not-found.md"
