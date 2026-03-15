@@ -8,7 +8,7 @@
 ### Map & Visualization
 
 - [x] **MAP-01**: Interactive 2.5D dark map with pan, zoom, rotate (Deck.gl + MapLibre)
-- [ ] **MAP-02**: Entity markers with type-specific icons (ships, flights, missiles, drones)
+- [x] **MAP-02**: Entity markers with type-specific icons (ships, flights, missiles, drones)
 
 ### Data Feeds
 
@@ -70,7 +70,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MAP-01 | Phase 2 | Complete |
-| MAP-02 | Phase 5 | Pending |
+| MAP-02 | Phase 5 | Complete |
 | DATA-01 | Phase 4 | Complete |
 | DATA-02 | Phase 6 | Pending |
 | DATA-03 | Phase 6 | Pending |
