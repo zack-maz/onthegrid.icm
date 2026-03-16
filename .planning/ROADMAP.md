@@ -99,7 +99,7 @@ Plans:
 
 Plans:
 - [x] 05-01-PLAN.md — Entity layer constants, canvas icon atlas, useEntityLayers hook, BaseMap wiring
-- [ ] 05-02-PLAN.md — Zoom-responsive icon sizing with meter-based sizeUnits (UAT gap closure)
+- [x] 05-02-PLAN.md — Zoom-responsive icon sizing with meter-based sizeUnits (UAT gap closure)
 
 ### Phase 6: ADS-B Exchange Data Source
 **Goal**: Users can switch between OpenSky and ADS-B Exchange as their flight data source via a simple toggle button
@@ -199,7 +199,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Base Map | 3/3 | Complete | 2026-03-14 |
 | 3. API Proxy | 2/3 | In progress (gap closure) | - |
 | 4. Flight Data Feed | 0/2 | Complete | 2026-03-15 |
-| 5. Entity Rendering | 1/2 | In progress (gap closure) | - |
+| 5. Entity Rendering | 2/2 | Complete   | 2026-03-16 |
 | 6. ADS-B Exchange Data Source | 0/? | Not started | - |
 | 7. Ship & Conflict Data Feeds | 0/? | Not started | - |
 | 8. Layer Controls & News Toggle | 0/? | Not started | - |
