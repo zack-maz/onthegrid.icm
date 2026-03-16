@@ -9,9 +9,9 @@ const STORAGE_KEY = 'flight-source';
 function loadPersistedSource(): FlightSource {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'opensky' || stored === 'adsb') return stored;
+    if (stored === 'opensky' || stored === 'adsb' || stored === 'adsblol') return stored;
   } catch { /* localStorage unavailable */ }
-  return 'opensky';
+  return 'adsblol';
 }
 
 function persistSource(source: FlightSource): void {

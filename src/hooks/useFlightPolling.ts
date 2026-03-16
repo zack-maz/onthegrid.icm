@@ -1,9 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { useFlightStore } from '@/stores/flightStore';
 import type { FlightEntity, CacheResponse } from '@/types/entities';
+import type { FlightSource } from '@/types/ui';
 
 export const OPENSKY_POLL_INTERVAL = 5_000;
 export const ADSB_POLL_INTERVAL = 260_000;
+export const ADSBLOL_POLL_INTERVAL = 30_000;
+
+const INTERVAL_MAP: Record<FlightSource, number> = {
+  opensky: OPENSKY_POLL_INTERVAL,
+  adsb: ADSB_POLL_INTERVAL,
+  adsblol: ADSBLOL_POLL_INTERVAL,
+};
 // 60s threshold: flights at 250m/s drift ~15km, making positions meaningfully outdated
 export const STALE_THRESHOLD = 60_000;
 
@@ -18,7 +26,7 @@ export function useFlightPolling(): void {
 
   useEffect(() => {
     const url = `/api/flights?source=${activeSource}`;
-    const interval = activeSource === 'adsb' ? ADSB_POLL_INTERVAL : OPENSKY_POLL_INTERVAL;
+    const interval = INTERVAL_MAP[activeSource];
 
     const fetchFlights = async (): Promise<void> => {
       try {

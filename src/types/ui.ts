@@ -1,4 +1,4 @@
-export type FlightSource = 'opensky' | 'adsb';
+export type FlightSource = 'opensky' | 'adsb' | 'adsblol';
 
 export interface UIState {
   isDetailPanelOpen: boolean;
