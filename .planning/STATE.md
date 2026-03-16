@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 7: adsb.lol Data Source -- COMPLETE. Both plans done (server + frontend).
+**Current focus:** Committing uncommitted improvements across Phases 6-7 (expanded Greater Middle East coverage, ground traffic toggle, rate limit handling).
 
 ## Current Position
 
@@ -130,6 +130,10 @@ Recent decisions affecting current work:
 - [Phase 07]: Record-based INTERVAL_MAP for polling intervals instead of ternary chain
 - [Phase 07]: Optimistic defaults (all sources enabled) until /api/sources responds
 - [Phase 07]: aria-disabled attribute on unconfigured source options for accessibility
+- Expanded IRAN_BBOX to Greater Middle East coverage (south:15 north:42 west:30 east:70) for all data sources
+- Ground traffic filtering moved from server-side (early return null) to client-side (useEntityLayers + showGroundTraffic toggle)
+- OpenSky adapter throws RateLimitError on 429 for consistent rate-limit handling across all sources
+- IRAN_CENTER repositioned to (30.0, 50.0) with 500 NM radius for broader ADS-B coverage
 
 ### Pending Todos
 

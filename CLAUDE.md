@@ -46,6 +46,8 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Entity types**: `flight`, `ship`, `missile`, `drone`
 - **FlightEntity.data** — includes `unidentified: boolean` flag for hex-only/no-callsign flights
 - **API endpoints**: `/api/flights`, `/api/ships`, `/api/events` (separate, independent caching)
+- **IRAN_BBOX** — covers Greater Middle East (south:15, north:42, west:30, east:70), not just Iran
+- **IRAN_CENTER** — (30.0, 50.0) with 500 NM radius for ADS-B queries
 
 ## Flight Data Patterns (Phase 4+)
 
@@ -55,3 +57,16 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Connection state** — `ConnectionStatus` type: `'connected' | 'stale' | 'error' | 'loading'`
 - **Stale threshold** — 60s of no fresh data → clear flights entirely (prevents showing dangerously outdated positions)
 - **Full replace** — each poll replaces entire flights array atomically (no merge-by-ID)
+- **Ground traffic filtering** — moved from server to client-side (`useEntityLayers` filters by `showGroundTraffic` toggle)
+- **RateLimitError** — OpenSky adapter throws `RateLimitError` on 429 responses (consistent with ADS-B Exchange pattern)
+
+## Multi-Source Flight Data (Phase 6-7)
+
+- **Three flight sources**: OpenSky, ADS-B Exchange (RapidAPI), adsb.lol (free, default)
+- **FlightSource type** — defined in `src/types/ui.ts` to avoid circular imports with server types
+- **Polling intervals** — OpenSky 5s, ADS-B Exchange 260s, adsb.lol 30s
+- **V2 normalizer** — shared normalizer in `server/adapters/adsb-v2-normalize.ts` for ADS-B Exchange and adsb.lol
+- **SourceSelector** — dropdown in top-right with connection status badge
+- **/api/sources** — returns per-source configuration status
+- **Persistence** — selected source stored in `localStorage`
+- **Unconfigured sources** — shown disabled with "(API key required)" hint

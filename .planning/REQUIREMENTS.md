@@ -72,8 +72,8 @@
 | MAP-01 | Phase 2 | Complete |
 | MAP-02 | Phase 5 | Complete |
 | DATA-01 | Phase 4 | Complete |
-| DATA-02 | Phase 6 | Pending |
-| DATA-03 | Phase 6 | Pending |
+| DATA-02 | Phase 8 | Pending |
+| DATA-03 | Phase 8 | Pending |
 | CTRL-01 | Phase 7 | Pending |
 | CTRL-02 | Phase 8 | Pending |
 | CTRL-03 | Phase 9 | Pending |
