@@ -47,9 +47,32 @@ const mockAdsbFlights: FlightEntity[] = [
   },
 ];
 
+const mockAdsbLolFlights: FlightEntity[] = [
+  {
+    id: 'flight-lol789',
+    type: 'flight',
+    lat: 33.0,
+    lng: 54.0,
+    timestamp: Date.now(),
+    label: 'LOL999',
+    data: {
+      icao24: 'lol789',
+      callsign: 'LOL999',
+      originCountry: '',
+      velocity: 200,
+      heading: 45,
+      altitude: 12000,
+      onGround: false,
+      verticalRate: 0,
+      unidentified: false,
+    },
+  },
+];
+
 // Module-level mock functions that persist across vi.resetModules()
 const mockFetchOpenSky = vi.fn(async (): Promise<FlightEntity[]> => mockOpenSkyFlights);
 const mockFetchAdsb = vi.fn(async (): Promise<FlightEntity[]> => mockAdsbFlights);
+const mockFetchAdsbLol = vi.fn(async (): Promise<FlightEntity[]> => mockAdsbLolFlights);
 
 // Mock config module
 vi.mock('../../config.js', () => ({
@@ -77,6 +100,10 @@ vi.mock('../../adapters/adsb-exchange.js', () => ({
   fetchFlights: (...args: unknown[]) => mockFetchAdsb(...args),
 }));
 
+vi.mock('../../adapters/adsb-lol.js', () => ({
+  fetchFlights: (...args: unknown[]) => mockFetchAdsbLol(...args),
+}));
+
 vi.mock('../../adapters/aisstream.js', () => ({
   getShips: vi.fn(() => []),
   getLastMessageTime: vi.fn(() => 0),
@@ -92,14 +119,18 @@ describe('Flight Route Dispatch', () => {
   let baseUrl: string;
 
   beforeEach(async () => {
-    // Set ADS-B Exchange API key for tests
+    // Set credential env vars for tests
     process.env.ADSB_EXCHANGE_API_KEY = 'test-adsb-key';
+    process.env.OPENSKY_CLIENT_ID = 'test-opensky-id';
+    process.env.OPENSKY_CLIENT_SECRET = 'test-opensky-secret';
 
     // Reset mock call history and restore default implementations
     mockFetchOpenSky.mockClear();
     mockFetchOpenSky.mockImplementation(async () => mockOpenSkyFlights);
     mockFetchAdsb.mockClear();
     mockFetchAdsb.mockImplementation(async () => mockAdsbFlights);
+    mockFetchAdsbLol.mockClear();
+    mockFetchAdsbLol.mockImplementation(async () => mockAdsbLolFlights);
 
     // Reset modules to get fresh cache instances per test
     vi.resetModules();
@@ -121,16 +152,19 @@ describe('Flight Route Dispatch', () => {
   afterEach(() => {
     server?.close();
     delete process.env.ADSB_EXCHANGE_API_KEY;
+    delete process.env.OPENSKY_CLIENT_ID;
+    delete process.env.OPENSKY_CLIENT_SECRET;
   });
 
-  it('GET /api/flights (no source param) dispatches to OpenSky adapter', async () => {
+  it('GET /api/flights (no source param) dispatches to adsblol adapter', async () => {
     const res = await fetch(`${baseUrl}/api/flights`);
     const body = await res.json();
 
     expect(res.ok).toBe(true);
-    expect(mockFetchOpenSky).toHaveBeenCalledTimes(1);
+    expect(mockFetchAdsbLol).toHaveBeenCalledTimes(1);
+    expect(mockFetchOpenSky).not.toHaveBeenCalled();
     expect(mockFetchAdsb).not.toHaveBeenCalled();
-    expect(body.data[0].data.icao24).toBe('abc123');
+    expect(body.data[0].data.icao24).toBe('lol789');
   });
 
   it('GET /api/flights?source=opensky dispatches to OpenSky adapter', async () => {
@@ -140,6 +174,7 @@ describe('Flight Route Dispatch', () => {
     expect(res.ok).toBe(true);
     expect(mockFetchOpenSky).toHaveBeenCalledTimes(1);
     expect(mockFetchAdsb).not.toHaveBeenCalled();
+    expect(mockFetchAdsbLol).not.toHaveBeenCalled();
     expect(body.data[0].data.icao24).toBe('abc123');
   });
 
@@ -150,31 +185,51 @@ describe('Flight Route Dispatch', () => {
     expect(res.ok).toBe(true);
     expect(mockFetchAdsb).toHaveBeenCalledTimes(1);
     expect(mockFetchOpenSky).not.toHaveBeenCalled();
+    expect(mockFetchAdsbLol).not.toHaveBeenCalled();
     expect(body.data[0].data.icao24).toBe('def456');
   });
 
-  it('GET /api/flights?source=invalid falls back to OpenSky', async () => {
+  it('GET /api/flights?source=adsblol dispatches to adsb-lol adapter', async () => {
+    const res = await fetch(`${baseUrl}/api/flights?source=adsblol`);
+    const body = await res.json();
+
+    expect(res.ok).toBe(true);
+    expect(mockFetchAdsbLol).toHaveBeenCalledTimes(1);
+    expect(mockFetchOpenSky).not.toHaveBeenCalled();
+    expect(mockFetchAdsb).not.toHaveBeenCalled();
+    expect(body.data[0].data.icao24).toBe('lol789');
+  });
+
+  it('GET /api/flights?source=invalid falls back to adsblol', async () => {
     const res = await fetch(`${baseUrl}/api/flights?source=invalid`);
     const body = await res.json();
 
     expect(res.ok).toBe(true);
-    expect(mockFetchOpenSky).toHaveBeenCalledTimes(1);
+    expect(mockFetchAdsbLol).toHaveBeenCalledTimes(1);
+    expect(mockFetchOpenSky).not.toHaveBeenCalled();
     expect(mockFetchAdsb).not.toHaveBeenCalled();
-    expect(body.data[0].data.icao24).toBe('abc123');
+    expect(body.data[0].data.icao24).toBe('lol789');
   });
 
   it('uses separate caches per source', async () => {
-    // First request to OpenSky
-    const res1 = await fetch(`${baseUrl}/api/flights?source=opensky`);
+    // First request to adsblol
+    const res1 = await fetch(`${baseUrl}/api/flights?source=adsblol`);
     expect(res1.ok).toBe(true);
-    expect(mockFetchOpenSky).toHaveBeenCalledTimes(1);
+    expect(mockFetchAdsbLol).toHaveBeenCalledTimes(1);
 
-    // Request to ADS-B -- should NOT serve from OpenSky cache
+    // Request to ADS-B -- should NOT serve from adsblol cache
     const res2 = await fetch(`${baseUrl}/api/flights?source=adsb`);
     const body2 = await res2.json();
     expect(res2.ok).toBe(true);
     expect(mockFetchAdsb).toHaveBeenCalledTimes(1);
     expect(body2.data[0].data.icao24).toBe('def456');
+
+    // Request to OpenSky -- should NOT serve from other caches
+    const res3 = await fetch(`${baseUrl}/api/flights?source=opensky`);
+    const body3 = await res3.json();
+    expect(res3.ok).toBe(true);
+    expect(mockFetchOpenSky).toHaveBeenCalledTimes(1);
+    expect(body3.data[0].data.icao24).toBe('abc123');
   });
 
   it('returns 429 when ADS-B adapter throws RateLimitError and no cache exists', async () => {
@@ -224,6 +279,17 @@ describe('Flight Route Dispatch', () => {
 
     expect(res.status).toBe(503);
     expect(body.error).toContain('API key not configured');
+  });
+
+  it('returns 503 when OpenSky source requested but credentials not set', async () => {
+    delete process.env.OPENSKY_CLIENT_ID;
+    delete process.env.OPENSKY_CLIENT_SECRET;
+
+    const res = await fetch(`${baseUrl}/api/flights?source=opensky`);
+    const body = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(body.error).toContain('credentials not configured');
   });
 
   it('ADS-B Exchange API key does not appear in response', async () => {
