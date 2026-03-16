@@ -69,6 +69,15 @@ describe('adsb.lol Adapter', () => {
     });
 
     await expect(fetchFlights()).rejects.toThrow(RateLimitError);
+  });
+
+  it('throws RateLimitError with correct message on 429', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: async () => ({ message: 'Rate limit exceeded' }),
+    });
+
     await expect(fetchFlights()).rejects.toThrow('adsb.lol rate limit exceeded');
   });
 
