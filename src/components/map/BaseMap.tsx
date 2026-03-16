@@ -11,6 +11,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { DeckGLOverlay } from './DeckGLOverlay';
 import { useMapStore } from '@/stores/mapStore';
+import { useEntityLayers } from '@/hooks/useEntityLayers';
 import {
   INITIAL_VIEW_STATE,
   MAX_BOUNDS,
@@ -32,6 +33,7 @@ export function BaseMap() {
   const isMapLoaded = useMapStore((s) => s.isMapLoaded);
   const setMapLoaded = useMapStore((s) => s.setMapLoaded);
   const setCursorPosition = useMapStore((s) => s.setCursorPosition);
+  const entityLayers = useEntityLayers();
 
   const handleLoad = useCallback(
     (e: MapEvent) => {
@@ -123,7 +125,7 @@ export function BaseMap() {
           position="bottom-right"
         />
         <ScaleControl unit="metric" position="bottom-right" />
-        <DeckGLOverlay layers={[]} />
+        <DeckGLOverlay layers={entityLayers} />
         <CompassControl />
       </Map>
       <MapVignette />

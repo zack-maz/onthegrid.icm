@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-15T20:08:44.338Z"
-last_activity: 2026-03-15 -- Phase 4 Plan 02 completed (frontend flight polling pipeline)
+stopped_at: Phase 6 context gathered
+last_updated: "2026-03-16T05:14:41.101Z"
+last_activity: 2026-03-16 -- Phase 5 Plan 02 completed (zoom-responsive icon sizing)
 progress:
-  total_phases: 10
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
+  total_phases: 11
+  completed_phases: 5
+  total_plans: 11
+  completed_plans: 11
   percent: 100
 ---
 
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 4: Flight Data Feed -- COMPLETE. All plans executed.
+**Current focus:** Phase 5: Entity Rendering -- COMPLETE. All plans executed (including gap closure).
 
 ## Current Position
 
-Phase: 4 of 10 (Flight Data Feed) -- COMPLETE
+Phase: 5 of 11 (Entity Rendering) -- COMPLETE
 Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase 4 complete. Flight pipeline with frontend polling, store, and Vite proxy.
-Last activity: 2026-03-15 -- Phase 4 Plan 02 completed (frontend flight polling pipeline)
+Status: Phase 5 fully complete. Entity rendering with zoom-responsive sizing, pulse animation, altitude opacity.
+Last activity: 2026-03-16 -- Phase 5 Plan 02 completed (zoom-responsive icon sizing)
 
 Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 4.1min
-- Total execution time: 0.62 hours
+- Total plans completed: 11
+- Average duration: 4.0min
+- Total execution time: 0.73 hours
 
 **By Phase:**
 
@@ -47,9 +47,10 @@ Progress: [██████████] 100%
 | 2. Base Map | 3 | 14min | 4.7min |
 | 3. API Proxy | 3 | 11min | 3.7min |
 | 4. Flight Data Feed | 2 | 5min | 2.5min |
+| 5. Entity Rendering | 2 | 19min | 9.5min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (4min), 03-02 (5min), 03-03 (2min), 04-01 (3min), 04-02 (2min)
+- Last 5 plans: 03-03 (2min), 04-01 (3min), 04-02 (2min), 05-01 (4min), 05-02 (15min)
 - Trend: Stable/improving
 
 *Updated after each plan completion*
@@ -99,6 +100,14 @@ Recent decisions affecting current work:
 - 60s stale threshold based on flight drift: 250m/s aircraft moves ~15km in 60s
 - Zustand getState() for staleness check in setTimeout callback avoids stale closures
 - Polling hook is behavior-only -- no return value, writes directly to Zustand store
+- Canvas icon atlas with mask mode for getColor tinting instead of pre-colored PNGs
+- Graceful canvas fallback in jsdom (return blank canvas) instead of requiring canvas npm package
+- Explicit null check for heading to avoid -0 vs 0 edge case from negation
+- Static ship/drone/missile layers in separate useMemo with empty deps (Phase 6 ready)
+- Pulse animation: rAF loop throttled to ~15fps, controlled by pulseEnabled store toggle
+- @deck.gl/layers mock added to vite.config.ts test aliases for jsdom compatibility
+- Meter-based sizeUnits with min/max pixel bounds for zoom-responsive entity icons
+- Icon sizes 3x plan values after user feedback: flight/drone/missile 2400m/15min/96max, ship 1800m/12min/84max
 
 ### Pending Todos
 
@@ -112,6 +121,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T16:27:31Z
-Stopped at: Completed 04-02-PLAN.md
-Resume file: Phase 4 complete. Next phase TBD.
+Last session: 2026-03-16T05:14:41.093Z
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-ads-b-exchange-data-source/06-CONTEXT.md
