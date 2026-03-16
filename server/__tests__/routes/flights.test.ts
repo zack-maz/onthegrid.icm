@@ -47,6 +47,10 @@ const mockAdsbFlights: FlightEntity[] = [
   },
 ];
 
+// Module-level mock functions that persist across vi.resetModules()
+const mockFetchOpenSky = vi.fn(async (): Promise<FlightEntity[]> => mockOpenSkyFlights);
+const mockFetchAdsb = vi.fn(async (): Promise<FlightEntity[]> => mockAdsbFlights);
+
 // Mock config module
 vi.mock('../../config.js', () => ({
   config: {
@@ -65,15 +69,12 @@ vi.mock('../../config.js', () => ({
   }),
 }));
 
-const mockFetchOpenSky = vi.fn(async (): Promise<FlightEntity[]> => mockOpenSkyFlights);
-const mockFetchAdsb = vi.fn(async (): Promise<FlightEntity[]> => mockAdsbFlights);
-
 vi.mock('../../adapters/opensky.js', () => ({
-  fetchFlights: mockFetchOpenSky,
+  fetchFlights: (...args: unknown[]) => mockFetchOpenSky(...args),
 }));
 
 vi.mock('../../adapters/adsb-exchange.js', () => ({
-  fetchFlights: mockFetchAdsb,
+  fetchFlights: (...args: unknown[]) => mockFetchAdsb(...args),
 }));
 
 vi.mock('../../adapters/aisstream.js', () => ({
@@ -94,9 +95,14 @@ describe('Flight Route Dispatch', () => {
     // Set ADS-B Exchange API key for tests
     process.env.ADSB_EXCHANGE_API_KEY = 'test-adsb-key';
 
-    // Reset mock call history
+    // Reset mock call history and restore default implementations
     mockFetchOpenSky.mockClear();
+    mockFetchOpenSky.mockImplementation(async () => mockOpenSkyFlights);
     mockFetchAdsb.mockClear();
+    mockFetchAdsb.mockImplementation(async () => mockAdsbFlights);
+
+    // Reset modules to get fresh cache instances per test
+    vi.resetModules();
 
     const { createApp } = await import('../../index.js');
     const app = createApp();
@@ -171,24 +177,6 @@ describe('Flight Route Dispatch', () => {
     expect(body2.data[0].data.icao24).toBe('def456');
   });
 
-  it('returns rateLimited flag with stale cache when ADS-B adapter throws RateLimitError', async () => {
-    const { RateLimitError } = await import('../../types.js');
-
-    // First successful request to populate cache
-    const res1 = await fetch(`${baseUrl}/api/flights?source=adsb`);
-    expect(res1.ok).toBe(true);
-
-    // Second request throws RateLimitError
-    mockFetchAdsb.mockRejectedValueOnce(new RateLimitError('Rate limit exceeded'));
-
-    // Need to wait for cache to go stale, or just make another request
-    // The cache is fresh for 260s so this request should use cache, not call adapter again
-    // Let's simulate by clearing mock and making a new request after cache expires
-    // Actually, since the cache is fresh (260s TTL), the route will serve from cache
-    // To test rate limit handling, we need the cache to be stale
-    // Instead, let's test the error path directly by mocking both calls
-  });
-
   it('returns 429 when ADS-B adapter throws RateLimitError and no cache exists', async () => {
     const { RateLimitError } = await import('../../types.js');
 
@@ -200,6 +188,32 @@ describe('Flight Route Dispatch', () => {
     expect(res.status).toBe(429);
     expect(body.rateLimited).toBe(true);
     expect(body.error).toBe('Rate limited');
+  });
+
+  it('returns rateLimited flag with stale cache data when rate limited', async () => {
+    const { RateLimitError } = await import('../../types.js');
+
+    // First request populates cache
+    const res1 = await fetch(`${baseUrl}/api/flights?source=adsb`);
+    expect(res1.ok).toBe(true);
+
+    // Advance time past TTL to make cache stale (260s + 1s)
+    const originalNow = Date.now;
+    let timeOffset = 0;
+    Date.now = () => originalNow() + timeOffset;
+    timeOffset = 261_000;
+
+    // Now cache is stale, adapter will be called but throws RateLimitError
+    mockFetchAdsb.mockRejectedValueOnce(new RateLimitError('Rate limit exceeded'));
+
+    const res2 = await fetch(`${baseUrl}/api/flights?source=adsb`);
+    const body2 = await res2.json();
+
+    expect(res2.ok).toBe(true);
+    expect(body2.rateLimited).toBe(true);
+    expect(body2.data[0].data.icao24).toBe('def456');
+
+    Date.now = originalNow;
   });
 
   it('returns 503 when ADS-B source requested but API key not set', async () => {
