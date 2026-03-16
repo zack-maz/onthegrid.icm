@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useFlightStore } from '@/stores/flightStore';
 import type { FlightEntity, CacheResponse } from '@/types/entities';
 
-export const POLL_INTERVAL = 5_000;
+export const OPENSKY_POLL_INTERVAL = 5_000;
+export const ADSB_POLL_INTERVAL = 260_000;
 // 60s threshold: flights at 250m/s drift ~15km, making positions meaningfully outdated
 export const STALE_THRESHOLD = 60_000;
 
@@ -13,12 +14,16 @@ export function useFlightPolling(): void {
   const setError = useFlightStore((s) => s.setError);
   const setLoading = useFlightStore((s) => s.setLoading);
   const clearStaleData = useFlightStore((s) => s.clearStaleData);
+  const activeSource = useFlightStore((s) => s.activeSource);
 
   useEffect(() => {
+    const url = `/api/flights?source=${activeSource}`;
+    const interval = activeSource === 'adsb' ? ADSB_POLL_INTERVAL : OPENSKY_POLL_INTERVAL;
+
     const fetchFlights = async (): Promise<void> => {
       try {
-        const res = await fetch('/api/flights');
-        const data: CacheResponse<FlightEntity[]> = await res.json();
+        const res = await fetch(url);
+        const data: CacheResponse<FlightEntity[]> & { rateLimited?: boolean } = await res.json();
         setFlightData(data);
       } catch {
         setError();
@@ -37,7 +42,7 @@ export function useFlightPolling(): void {
         await fetchFlights();
         checkStaleness();
         schedulePoll();
-      }, POLL_INTERVAL);
+      }, interval);
     };
 
     const handleVisibilityChange = (): void => {
@@ -64,7 +69,8 @@ export function useFlightPolling(): void {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-    // Zustand selectors return stable references -- no stale closure risk
+    // Re-run effect when activeSource changes to restart polling with new URL/interval
+    // Other Zustand selectors return stable references -- no stale closure risk
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeSource]);
 }
