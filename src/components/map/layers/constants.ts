@@ -9,12 +9,12 @@ export const ENTITY_COLORS = {
   missile: [239, 68, 68] as const,           // #ef4444 red
 } as const;
 
-/** Pixel sizes for entity icons */
+/** Zoom-responsive sizes for entity icons (meter-based with pixel bounds) */
 export const ICON_SIZE = {
-  flight: 14,
-  ship: 12,
-  drone: 14,
-  missile: 14,
+  flight:  { meters: 800, minPixels: 6, maxPixels: 40 },
+  ship:    { meters: 600, minPixels: 5, maxPixels: 36 },
+  drone:   { meters: 800, minPixels: 6, maxPixels: 40 },
+  missile: { meters: 800, minPixels: 6, maxPixels: 40 },
 } as const;
 
 /** Pulse animation config for unidentified flights */
