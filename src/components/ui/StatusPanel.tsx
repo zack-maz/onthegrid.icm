@@ -1,7 +1,17 @@
+import { useState, useEffect } from 'react';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
+
+function useUtcClock() {
+  const [time, setTime] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time.toISOString().slice(11, 19) + 'Z';
+}
 
 type FeedStatus = 'connected' | 'stale' | 'error' | 'loading' | 'rate_limited';
 
@@ -30,6 +40,7 @@ function FeedLine({ status, count, label }: { status: FeedStatus; count: number;
 }
 
 export function StatusPanel() {
+  const utc = useUtcClock();
   const flightStatus = useFlightStore((s) => s.connectionStatus);
   const flightCount = useFlightStore((s) => s.flightCount);
   const shipStatus = useShipStore((s) => s.connectionStatus);
@@ -40,6 +51,9 @@ export function StatusPanel() {
   return (
     <OverlayPanel className="min-w-[140px]">
       <div className="flex flex-col gap-1">
+        <span data-testid="utc-clock" className="text-xs text-text-secondary tabular-nums tracking-wide">
+          {utc}
+        </span>
         <FeedLine status={flightStatus} count={flightCount} label="flights" />
         <FeedLine status={shipStatus} count={shipCount} label="ships" />
         <FeedLine status={eventStatus} count={eventCount} label="events" />
