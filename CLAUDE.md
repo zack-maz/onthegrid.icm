@@ -35,7 +35,8 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 - `src/components/map/constants.ts` — map configuration (terrain, bounds, styles)
 - `src/components/map/BaseMap.tsx` — main map component with all overlays
-- `src/components/layout/AppShell.tsx` — root layout shell (wires useFlightPolling)
+- `src/components/layout/AppShell.tsx` — root layout shell (wires all three polling hooks)
+- `src/components/ui/StatusPanel.tsx` — HUD status panel (flights/ships/events counts + connection dots)
 - `src/stores/mapStore.ts` — map state (loaded, cursor position)
 - `src/stores/uiStore.ts` — UI state (panels, toggles)
 - `src/stores/flightStore.ts` — flight data state (entities, connection health, metadata)
@@ -67,7 +68,27 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **FlightSource type** — defined in `src/types/ui.ts` to avoid circular imports with server types
 - **Polling intervals** — OpenSky 5s, ADS-B Exchange 260s, adsb.lol 30s
 - **V2 normalizer** — shared normalizer in `server/adapters/adsb-v2-normalize.ts` for ADS-B Exchange and adsb.lol
-- **SourceSelector** — dropdown in top-right with connection status badge
+- **StatusPanel** — replaces SourceSelector, shows 3-line HUD (flights/ships/events with colored health dots)
 - **/api/sources** — returns per-source configuration status
-- **Persistence** — selected source stored in `localStorage`
-- **Unconfigured sources** — shown disabled with "(API key required)" hint
+- **Persistence** — selected flight source stored in `localStorage`
+
+## Ship & Event Data (Phase 8+)
+
+- **Ship store** — `src/stores/shipStore.ts` with 120s stale threshold
+- **Event store** — `src/stores/eventStore.ts` with no stale clearing (historical data)
+- **Polling hooks** — `useShipPolling` (30s), `useEventPolling` (900s / 15 min)
+- **AppShell** — wires all three: `useFlightPolling()`, `useShipPolling()`, `useEventPolling()`
+- **Entity colors** — flights yellow (#eab308), unidentified red (#ef4444), ships gray (#9ca3af), events red (#ef4444)
+- **Entity icons** — flights/ships use chevron, events use starburst (drone) and xmark (missile)
+- **Icon sizing** — 8000m base with minPixels:24, maxPixels:160 for zoom-responsive scaling
+
+## Conflict Event Data (Phase 8.1)
+
+- **GDELT v2** — default conflict event source (free, no auth, 15-min updates)
+- **ACLED** — adapter preserved in `server/adapters/acled.ts` but not active (requires account approval)
+- **GDELT adapter** — `server/adapters/gdelt.ts`, fetches lastupdate.txt → downloads ZIP → parses CSV → filters Middle East conflicts
+- **GDELT endpoint** — `http://data.gdeltproject.org/gdeltv2/lastupdate.txt` (HTTP, not HTTPS — TLS cert issues)
+- **CAMEO codes** — 18x (assault) → drone, 19x/20x (military force) → missile
+- **FIPS codes** — GDELT uses FIPS 10-4 (IZ=Iraq, TU=Turkey, IS=Israel), not ISO
+- **adm-zip** — required for ZIP decompression (Node zlib only handles gzip/deflate)
+- **No UI toggle** — GDELT is the only active event source, no switching exposed
