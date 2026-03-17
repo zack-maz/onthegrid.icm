@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 08-ship-conflict-data-feeds
 source: [08-01-SUMMARY.md]
 started: 2026-03-17T03:00:00Z
-updated: 2026-03-17T03:10:00Z
+updated: 2026-03-17T03:15:00Z
 ---
 
 ## Current Test
@@ -57,7 +57,16 @@ skipped: 0
   reason: "User reported: No events. 0 pulling"
   severity: major
   test: 5
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "/api/events returns HTTP 500 because ACLED OAuth2 credentials are invalid/expired. useEventPolling.ts has no res.ok check so the error is silently swallowed. 300s poll interval means only one failed request on load with no retry for 5 minutes."
+  artifacts:
+    - path: "src/hooks/useEventPolling.ts"
+      issue: "Missing res.ok check before res.json() — silent failure on 500"
+    - path: "server/routes/events.ts"
+      issue: "No credential guard — attempts upstream ACLED call even with bad/missing credentials"
+    - path: "src/stores/eventStore.ts"
+      issue: "setEventData() assumes response.data exists, throws TypeError on error responses"
+  missing:
+    - "Add res.ok check in useEventPolling.ts (and useShipPolling.ts, useFlightPolling.ts for consistency)"
+    - "Add credential guard in server/routes/events.ts (503 if ACLED_EMAIL/ACLED_PASSWORD missing)"
+    - "User must verify ACLED credentials at acleddata.com"
+  debug_session: ".planning/debug/event-feed-zero-events.md"
