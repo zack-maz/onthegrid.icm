@@ -143,11 +143,11 @@ Plans:
   2. Conflict events (missiles, drones, strikes) from ACLED appear on the map with 1-5 minute polling
   3. All three data sources (flights, ships, conflict events) render simultaneously on the map
   4. Each data source refreshes independently at its own rate without blocking the others
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Ship/event stores, polling hooks, entity layer wiring, ACLED country expansion
+- [ ] 08-02-PLAN.md — HUD status panel replacing SourceSelector, AppShell wiring of all three polling hooks
 
 ### Phase 9: Layer Controls & News Toggle
 **Goal**: Users can show or hide entire categories of data and control non-statistical content visibility
@@ -221,7 +221,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Entity Rendering | 2/2 | Complete | 2026-03-16 |
 | 6. ADS-B Exchange Data Source | 0/3 | Not started | - |
 | 7. adsb.lol Data Source | 0/2 | Not started | - |
-| 8. Ship & Conflict Data Feeds | 0/? | Not started | - |
+| 8. Ship & Conflict Data Feeds | 0/2 | Not started | - |
 | 9. Layer Controls & News Toggle | 0/? | Not started | - |
 | 10. Detail Panel | 0/? | Not started | - |
 | 11. Smart Filters | 0/? | Not started | - |
