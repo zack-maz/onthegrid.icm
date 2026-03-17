@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 8 context gathered
-last_updated: "2026-03-17T00:48:52.377Z"
-last_activity: 2026-03-16 -- Phase 7 Plan 02 completed (frontend adsb.lol integration)
+status: in_progress
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-17T02:09:00Z"
+last_activity: 2026-03-17 -- Phase 8 Plan 01 completed (ship/event stores, polling, entity layers)
 progress:
   total_phases: 12
-  completed_phases: 6
-  total_plans: 16
-  completed_plans: 15
-  percent: 100
+  completed_phases: 7
+  total_plans: 18
+  completed_plans: 17
+  percent: 89
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Committing uncommitted improvements across Phases 6-7 (expanded Greater Middle East coverage, ground traffic toggle, rate limit handling).
+**Current focus:** Phase 8: Ship and conflict event data feeds -- stores, polling, entity layer wiring.
 
 ## Current Position
 
-Phase: 7 of 12 (adsb.lol Data Source) -- COMPLETE
-Plan: 2 of 2 in current phase (all plans complete)
-Status: Full adsb.lol integration complete. Server adapter, 3-source dispatch, frontend SourceSelector with 3 options and disabled state.
-Last activity: 2026-03-16 -- Phase 7 Plan 02 completed (frontend adsb.lol integration)
+Phase: 8 of 12 (Ship & Conflict Data Feeds) -- IN PROGRESS
+Plan: 1 of 2 in current phase (Plan 01 complete)
+Status: Ship/event stores, polling hooks, dynamic entity layers, and ACLED multi-country expansion complete. Plan 02 (AppShell wiring) remaining.
+Last activity: 2026-03-17 -- Phase 8 Plan 01 completed (ship/event stores, polling, entity layers)
 
-Progress: [██████████] 100%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
-- Average duration: 3.6min
-- Total execution time: 0.96 hours
+- Total plans completed: 17
+- Average duration: 3.8min
+- Total execution time: 1.06 hours
 
 **By Phase:**
 
@@ -50,14 +50,16 @@ Progress: [██████████] 100%
 | 5. Entity Rendering | 2 | 19min | 9.5min |
 | 6. ADS-B Exchange | 1/3 | 3min | 3min |
 | 7. adsb.lol | 2/2 | 8min | 4min |
+| 8. Ship & Conflict Data | 1/2 | 6min | 6min |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (4min), 05-02 (15min), 06-02 (3min), 07-01 (5min), 07-02 (3min)
+- Last 5 plans: 05-02 (15min), 06-02 (3min), 07-01 (5min), 07-02 (3min), 08-01 (6min)
 - Trend: Stable
 
 *Updated after each plan completion*
 | Phase 07 P01 | 5min | 2 tasks | 14 files |
 | Phase 07 P02 | 3min | 2 tasks | 7 files |
+| Phase 08 P01 | 6min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -134,6 +136,10 @@ Recent decisions affecting current work:
 - Ground traffic filtering moved from server-side (early return null) to client-side (useEntityLayers + showGroundTraffic toggle)
 - OpenSky adapter throws RateLimitError on 429 for consistent rate-limit handling across all sources
 - IRAN_CENTER repositioned to (30.0, 50.0) with 500 NM radius for broader ADS-B coverage
+- [Phase 08]: 120s stale threshold for ships (~1km drift at 15 knots)
+- [Phase 08]: No stale clearing for conflict events (historical ACLED data never goes stale)
+- [Phase 08]: Separate useMemo per entity layer with individual deps for efficient re-rendering
+- [Phase 08]: ACLED expanded to 16 pipe-separated countries for Greater Middle East coverage
 
 ### Pending Todos
 
@@ -147,6 +153,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T00:48:52.369Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-ship-conflict-data-feeds/08-CONTEXT.md
+Last session: 2026-03-17T02:09:00Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: .planning/phases/08-ship-conflict-data-feeds/08-02-PLAN.md

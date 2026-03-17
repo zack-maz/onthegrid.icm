@@ -13,8 +13,8 @@
 ### Data Feeds
 
 - [x] **DATA-01**: Flight tracking via OpenSky/ADS-B (~5s refresh)
-- [ ] **DATA-02**: Ship tracking via AIS data (~30-60s refresh)
-- [ ] **DATA-03**: Conflict event data via ACLED API (1-5 min polling)
+- [x] **DATA-02**: Ship tracking via AIS data (~30-60s refresh)
+- [x] **DATA-03**: Conflict event data via ACLED API (1-5 min polling)
 
 ### Controls & Filtering
 
@@ -72,8 +72,8 @@
 | MAP-01 | Phase 2 | Complete |
 | MAP-02 | Phase 5 | Complete |
 | DATA-01 | Phase 4 | Complete |
-| DATA-02 | Phase 8 | Pending |
-| DATA-03 | Phase 8 | Pending |
+| DATA-02 | Phase 8 | Complete |
+| DATA-03 | Phase 8 | Complete |
 | CTRL-01 | Phase 7 | Pending |
 | CTRL-02 | Phase 8 | Pending |
 | CTRL-03 | Phase 9 | Pending |
