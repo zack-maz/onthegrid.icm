@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useEventStore } from '@/stores/eventStore';
 import type { ConflictEventEntity, CacheResponse } from '@/types/entities';
 
-export const EVENT_POLL_INTERVAL = 300_000;
+export const EVENT_POLL_INTERVAL = 900_000;
 
 export function useEventPolling(): void {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

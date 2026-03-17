@@ -50,7 +50,7 @@ describe('useEventPolling', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/events');
   });
 
-  it('schedules next fetch after 300s', async () => {
+  it('schedules next fetch after 900s', async () => {
     const { useEventPolling } = await import('@/hooks/useEventPolling');
     renderHook(() => useEventPolling());
 
@@ -58,12 +58,12 @@ describe('useEventPolling', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
-    // Should NOT poll at 30s
-    await vi.advanceTimersByTimeAsync(30_000);
+    // Should NOT poll at 100s
+    await vi.advanceTimersByTimeAsync(100_000);
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
-    // Should poll at 300s
-    await vi.advanceTimersByTimeAsync(270_000);
+    // Should poll at 900s
+    await vi.advanceTimersByTimeAsync(800_000);
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
@@ -78,8 +78,8 @@ describe('useEventPolling', () => {
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     document.dispatchEvent(new Event('visibilitychange'));
 
-    // Advance well past poll interval
-    await vi.advanceTimersByTimeAsync(600_000);
+    // Advance well past poll interval (15min + margin)
+    await vi.advanceTimersByTimeAsync(1_200_000);
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
@@ -127,9 +127,9 @@ describe('useEventPolling', () => {
     });
 
     // Advance through multiple poll cycles (well past any stale threshold)
-    await vi.advanceTimersByTimeAsync(300_000);
-    await vi.advanceTimersByTimeAsync(300_000);
-    await vi.advanceTimersByTimeAsync(300_000);
+    await vi.advanceTimersByTimeAsync(900_000);
+    await vi.advanceTimersByTimeAsync(900_000);
+    await vi.advanceTimersByTimeAsync(900_000);
 
     // Events should still be present (never cleared for staleness)
     expect(useEventStore.getState().events).toHaveLength(1);
