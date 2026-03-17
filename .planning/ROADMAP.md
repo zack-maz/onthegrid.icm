@@ -175,10 +175,11 @@ Plans:
   2. Toggling a layer off immediately hides all entities of that type from the map; toggling on restores them
   3. Non-statistical news content is hidden by default
   4. A dedicated toggle reveals/hides non-statistical news content
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md — Toggle state + localStorage persistence, GDELT metadata passthrough, entity layer filtering
+- [ ] 09-02-PLAN.md — LayerTogglesSlot UI panel, DeckGL tooltip wiring for GDELT event metadata
 
 ### Phase 10: Detail Panel
 **Goal**: Users can click any entity on the map and see its live stats in a detail panel
@@ -240,7 +241,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. adsb.lol Data Source | 0/2 | Not started | - |
 | 8. Ship & Conflict Data Feeds | 0/2 | Not started | - |
 | 08.1. GDELT Event Source | 2/2 | Complete    | 2026-03-17 |
-| 9. Layer Controls & News Toggle | 0/? | Not started | - |
+| 9. Layer Controls & News Toggle | 0/2 | Not started | - |
 | 10. Detail Panel | 0/? | Not started | - |
 | 11. Smart Filters | 0/? | Not started | - |
 | 12. Analytics Dashboard | 0/? | Not started | - |
