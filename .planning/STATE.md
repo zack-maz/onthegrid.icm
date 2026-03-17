@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: GDELT adapter wired into events route with 15-min polling. StatusPanel UI remaining.
-stopped_at: Completed 08.1-02-PLAN.md
-last_updated: "2026-03-17T22:35:01.707Z"
+stopped_at: Phase 9 context gathered
+last_updated: "2026-03-17T23:03:44.681Z"
 last_activity: 2026-03-17 -- Phase 08.1 Plan 02 completed (GDELT route wiring + polling intervals)
 progress:
   total_phases: 13
@@ -167,6 +167,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T22:30:01Z
-Stopped at: Completed 08.1-02-PLAN.md
-Resume file: .planning/phases/08.1-add-gdelt-as-default-conflict-event-source/08.1-03-PLAN.md
+Last session: 2026-03-17T23:03:44.671Z
+Stopped at: Phase 9 context gathered
+Resume file: .planning/phases/09-layer-controls-news-toggle/09-CONTEXT.md
