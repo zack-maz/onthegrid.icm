@@ -4,8 +4,10 @@ import { altitudeToOpacity, ENTITY_COLORS, ICON_SIZE, PULSE_CONFIG } from '@/com
 import { ICON_MAPPING } from '@/components/map/layers/icons';
 import { useUIStore } from '@/stores/uiStore';
 import { useFlightStore } from '@/stores/flightStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useEventStore } from '@/stores/eventStore';
 import { useEntityLayers } from '@/hooks/useEntityLayers';
-import type { FlightEntity } from '@/types/entities';
+import type { FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/entities';
 import type { IconLayer } from '@deck.gl/layers';
 
 describe('Entity Layer Constants', () => {
@@ -128,6 +130,58 @@ describe('uiStore pulseEnabled', () => {
 
 // --- Task 2: useEntityLayers hook tests ---
 
+const mockShip: ShipEntity = {
+  id: 'ship-123456789',
+  type: 'ship',
+  lat: 26.0,
+  lng: 56.0,
+  timestamp: Date.now(),
+  label: 'VESSEL ONE',
+  data: {
+    mmsi: 123456789,
+    shipName: 'VESSEL ONE',
+    speedOverGround: 12.5,
+    courseOverGround: 180,
+    trueHeading: 178,
+  },
+};
+
+const mockDroneEvent: ConflictEventEntity = {
+  id: 'event-IRN001',
+  type: 'drone',
+  lat: 32.6546,
+  lng: 51.668,
+  timestamp: Date.now(),
+  label: 'Air/drone strike',
+  data: {
+    eventType: 'Explosions/Remote violence',
+    subEventType: 'Air/drone strike',
+    fatalities: 0,
+    actor1: 'Unknown',
+    actor2: 'Unknown',
+    notes: '',
+    source: 'ISNA',
+  },
+};
+
+const mockMissileEvent: ConflictEventEntity = {
+  id: 'event-IRN002',
+  type: 'missile',
+  lat: 35.6892,
+  lng: 51.389,
+  timestamp: Date.now(),
+  label: 'Shelling/artillery/missile attack',
+  data: {
+    eventType: 'Explosions/Remote violence',
+    subEventType: 'Shelling/artillery/missile attack',
+    fatalities: 3,
+    actor1: 'Unknown',
+    actor2: 'Unknown',
+    notes: '',
+    source: 'Reuters',
+  },
+};
+
 const mockRegularFlight: FlightEntity = {
   id: 'flight-abc123',
   type: 'flight',
@@ -177,6 +231,8 @@ describe('useEntityLayers', () => {
       lastFresh: Date.now(),
       flightCount: 2,
     });
+    useShipStore.setState({ ships: [mockShip], shipCount: 1 });
+    useEventStore.setState({ events: [mockDroneEvent, mockMissileEvent], eventCount: 2 });
     useUIStore.setState({ pulseEnabled: true });
   });
 
@@ -255,7 +311,27 @@ describe('useEntityLayers', () => {
     expect(flightLayer.props.getSize).toBe(ICON_SIZE.flight.meters);
   });
 
-  it('ship/drone/missile layers have empty data arrays', () => {
+  it('ship layer contains ship data from store', () => {
+    const { result } = renderHook(() => useEntityLayers());
+    const shipLayer = result.current[0] as IconLayer;
+    expect(shipLayer.props.data).toHaveLength(1);
+  });
+
+  it('drone layer contains filtered drone events', () => {
+    const { result } = renderHook(() => useEntityLayers());
+    const droneLayer = result.current[2] as IconLayer;
+    expect(droneLayer.props.data).toHaveLength(1);
+  });
+
+  it('missile layer contains filtered missile events', () => {
+    const { result } = renderHook(() => useEntityLayers());
+    const missileLayer = result.current[3] as IconLayer;
+    expect(missileLayer.props.data).toHaveLength(1);
+  });
+
+  it('ship/drone/missile layers are empty when stores are empty', () => {
+    useShipStore.setState({ ships: [], shipCount: 0 });
+    useEventStore.setState({ events: [], eventCount: 0 });
     const { result } = renderHook(() => useEntityLayers());
     const [ships, _flights, drones, missiles] = result.current as IconLayer[];
     expect(ships.props.data).toEqual([]);

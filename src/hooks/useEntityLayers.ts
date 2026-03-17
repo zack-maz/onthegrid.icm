@@ -1,6 +1,8 @@
 import { useMemo, useEffect, useRef, useState } from 'react';
 import { IconLayer } from '@deck.gl/layers';
 import { useFlightStore } from '@/stores/flightStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useEventStore } from '@/stores/eventStore';
 import { useUIStore } from '@/stores/uiStore';
 import {
   ENTITY_COLORS,
@@ -17,6 +19,8 @@ import type { FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/enti
  */
 export function useEntityLayers() {
   const allFlights = useFlightStore((s) => s.flights);
+  const ships = useShipStore((s) => s.ships);
+  const events = useEventStore((s) => s.events);
   const pulseEnabled = useUIStore((s) => s.pulseEnabled);
   const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
 
@@ -24,6 +28,9 @@ export function useEntityLayers() {
     () => showGroundTraffic ? allFlights : allFlights.filter((f) => !f.data.onGround),
     [allFlights, showGroundTraffic],
   );
+
+  const drones = useMemo(() => events.filter((e) => e.type === 'drone'), [events]);
+  const missiles = useMemo(() => events.filter((e) => e.type === 'missile'), [events]);
 
   // Pulse animation state
   const [pulseOpacity, setPulseOpacity] = useState(1.0);
@@ -54,58 +61,56 @@ export function useEntityLayers() {
     return () => cancelAnimationFrame(rafRef.current);
   }, [pulseEnabled]);
 
-  // Static layers (empty data until Phase 6)
-  const staticLayers = useMemo(() => {
-    const shipLayer = new IconLayer<ShipEntity>({
-      id: 'ships',
-      data: [],
-      iconAtlas: getIconAtlas(),
-      iconMapping: ICON_MAPPING,
-      getIcon: () => 'diamond',
-      getPosition: (d: ShipEntity) => [d.lng, d.lat],
-      getSize: ICON_SIZE.ship.meters,
-      sizeUnits: 'meters' as const,
-      sizeMinPixels: ICON_SIZE.ship.minPixels,
-      sizeMaxPixels: ICON_SIZE.ship.maxPixels,
-      getAngle: (d: ShipEntity) => -(d.data.courseOverGround ?? 0),
-      getColor: () => [...ENTITY_COLORS.ship, 255],
-      billboard: false,
-    });
+  // Ship layer (updates with ship store data)
+  const shipLayer = useMemo(() => new IconLayer<ShipEntity>({
+    id: 'ships',
+    data: ships,
+    iconAtlas: getIconAtlas(),
+    iconMapping: ICON_MAPPING,
+    getIcon: () => 'diamond',
+    getPosition: (d: ShipEntity) => [d.lng, d.lat],
+    getSize: ICON_SIZE.ship.meters,
+    sizeUnits: 'meters' as const,
+    sizeMinPixels: ICON_SIZE.ship.minPixels,
+    sizeMaxPixels: ICON_SIZE.ship.maxPixels,
+    getAngle: (d: ShipEntity) => -(d.data.courseOverGround ?? 0),
+    getColor: () => [...ENTITY_COLORS.ship, 255],
+    billboard: false,
+  }), [ships]);
 
-    const droneLayer = new IconLayer<ConflictEventEntity>({
-      id: 'drones',
-      data: [],
-      iconAtlas: getIconAtlas(),
-      iconMapping: ICON_MAPPING,
-      getIcon: () => 'starburst',
-      getPosition: (d: ConflictEventEntity) => [d.lng, d.lat],
-      getSize: ICON_SIZE.drone.meters,
-      sizeUnits: 'meters' as const,
-      sizeMinPixels: ICON_SIZE.drone.minPixels,
-      sizeMaxPixels: ICON_SIZE.drone.maxPixels,
-      getAngle: () => 0,
-      getColor: () => [...ENTITY_COLORS.drone, 255],
-      billboard: false,
-    });
+  // Drone layer (filtered from event store)
+  const droneLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
+    id: 'drones',
+    data: drones,
+    iconAtlas: getIconAtlas(),
+    iconMapping: ICON_MAPPING,
+    getIcon: () => 'starburst',
+    getPosition: (d: ConflictEventEntity) => [d.lng, d.lat],
+    getSize: ICON_SIZE.drone.meters,
+    sizeUnits: 'meters' as const,
+    sizeMinPixels: ICON_SIZE.drone.minPixels,
+    sizeMaxPixels: ICON_SIZE.drone.maxPixels,
+    getAngle: () => 0,
+    getColor: () => [...ENTITY_COLORS.drone, 255],
+    billboard: false,
+  }), [drones]);
 
-    const missileLayer = new IconLayer<ConflictEventEntity>({
-      id: 'missiles',
-      data: [],
-      iconAtlas: getIconAtlas(),
-      iconMapping: ICON_MAPPING,
-      getIcon: () => 'xmark',
-      getPosition: (d: ConflictEventEntity) => [d.lng, d.lat],
-      getSize: ICON_SIZE.missile.meters,
-      sizeUnits: 'meters' as const,
-      sizeMinPixels: ICON_SIZE.missile.minPixels,
-      sizeMaxPixels: ICON_SIZE.missile.maxPixels,
-      getAngle: () => 0,
-      getColor: () => [...ENTITY_COLORS.missile, 255],
-      billboard: false,
-    });
-
-    return { shipLayer, droneLayer, missileLayer };
-  }, []);
+  // Missile layer (filtered from event store)
+  const missileLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
+    id: 'missiles',
+    data: missiles,
+    iconAtlas: getIconAtlas(),
+    iconMapping: ICON_MAPPING,
+    getIcon: () => 'xmark',
+    getPosition: (d: ConflictEventEntity) => [d.lng, d.lat],
+    getSize: ICON_SIZE.missile.meters,
+    sizeUnits: 'meters' as const,
+    sizeMinPixels: ICON_SIZE.missile.minPixels,
+    sizeMaxPixels: ICON_SIZE.missile.maxPixels,
+    getAngle: () => 0,
+    getColor: () => [...ENTITY_COLORS.missile, 255],
+    billboard: false,
+  }), [missiles]);
 
   // Flight layer (updates with flight data and pulse opacity)
   const flightLayer = useMemo(() => {
@@ -138,5 +143,5 @@ export function useEntityLayers() {
   }, [flights, pulseOpacity]);
 
   // Return layers bottom to top: ships, flights, drones, missiles
-  return [staticLayers.shipLayer, flightLayer, staticLayers.droneLayer, staticLayers.missileLayer];
+  return [shipLayer, flightLayer, droneLayer, missileLayer];
 }
