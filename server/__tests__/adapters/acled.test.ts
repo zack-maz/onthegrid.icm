@@ -46,6 +46,7 @@ const sampleDroneEvent = {
 
 describe('ACLED Adapter', () => {
   let fetchEvents: typeof import('../../adapters/acled.js').fetchEvents;
+  let GREATER_MIDDLE_EAST_COUNTRIES: typeof import('../../adapters/acled.js').GREATER_MIDDLE_EAST_COUNTRIES;
   let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -59,6 +60,7 @@ describe('ACLED Adapter', () => {
     vi.resetModules();
     const mod = await import('../../adapters/acled.js');
     fetchEvents = mod.fetchEvents;
+    GREATER_MIDDLE_EAST_COUNTRIES = mod.GREATER_MIDDLE_EAST_COUNTRIES;
   });
 
   afterEach(() => {
@@ -124,7 +126,7 @@ describe('ACLED Adapter', () => {
     expect(events[0].type).toBe('drone');
   });
 
-  it('requests last 7 days of Iran data', async () => {
+  it('requests last 7 days of Greater Middle East data (16 countries)', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ access_token: 'acled-token', expires_in: 86400 }),
@@ -140,11 +142,39 @@ describe('ACLED Adapter', () => {
     const dataCall = mockFetch.mock.calls[1];
     const url = dataCall[0] as string;
     const decodedUrl = decodeURIComponent(url);
-    expect(decodedUrl).toContain('country=Iran');
+
+    // Verify multi-country query (pipe-separated)
+    // URLSearchParams encodes spaces as '+', so decode those too
+    const fullyDecoded = decodedUrl.replace(/\+/g, ' ');
+    for (const country of ['Iran', 'Iraq', 'Syria', 'Turkey', 'Saudi Arabia']) {
+      expect(fullyDecoded).toContain(country);
+    }
+    expect(fullyDecoded).toContain('|'); // pipe-separated countries
     expect(decodedUrl).toContain('2026-03-08');
     expect(decodedUrl).toContain('2026-03-15');
     expect(decodedUrl).toContain('event_date_where=BETWEEN');
     expect(dataCall[1].headers.Authorization).toBe('Bearer acled-token');
+  });
+
+  it('GREATER_MIDDLE_EAST_COUNTRIES includes 16 pipe-separated countries', () => {
+    const countries = GREATER_MIDDLE_EAST_COUNTRIES.split('|');
+    expect(countries).toHaveLength(16);
+    expect(countries).toContain('Iran');
+    expect(countries).toContain('Iraq');
+    expect(countries).toContain('Syria');
+    expect(countries).toContain('Turkey');
+    expect(countries).toContain('Saudi Arabia');
+    expect(countries).toContain('Yemen');
+    expect(countries).toContain('Oman');
+    expect(countries).toContain('United Arab Emirates');
+    expect(countries).toContain('Qatar');
+    expect(countries).toContain('Bahrain');
+    expect(countries).toContain('Kuwait');
+    expect(countries).toContain('Jordan');
+    expect(countries).toContain('Israel');
+    expect(countries).toContain('Lebanon');
+    expect(countries).toContain('Afghanistan');
+    expect(countries).toContain('Pakistan');
   });
 
   it('does not leak API credentials in returned ConflictEventEntity data', async () => {

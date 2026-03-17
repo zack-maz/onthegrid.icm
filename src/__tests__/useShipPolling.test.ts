@@ -129,13 +129,14 @@ describe('useShipPolling', () => {
       json: () => Promise.resolve({ data: [], stale: true, lastFresh: Date.now() }),
     });
 
-    // Advance past 120s stale threshold (4 poll cycles of 30s = 120s)
+    // Advance past 120s stale threshold (5 poll cycles of 30s = 150s, past the >120s check)
+    await vi.advanceTimersByTimeAsync(30_000);
     await vi.advanceTimersByTimeAsync(30_000);
     await vi.advanceTimersByTimeAsync(30_000);
     await vi.advanceTimersByTimeAsync(30_000);
     await vi.advanceTimersByTimeAsync(30_000);
 
-    // After 120s of stale data, ships should be cleared
+    // After >120s of stale data, ships should be cleared
     const state = useShipStore.getState();
     expect(state.ships).toEqual([]);
     expect(state.connectionStatus).toBe('error');

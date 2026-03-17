@@ -4,6 +4,10 @@ import type { ConflictEventEntity } from '../types.js';
 const ACLED_TOKEN_URL = 'https://acleddata.com/oauth/token';
 const ACLED_API_URL = 'https://acleddata.com/api';
 
+// 16 Greater Middle East countries for comprehensive conflict event coverage
+export const GREATER_MIDDLE_EAST_COUNTRIES =
+  'Iran|Iraq|Syria|Turkey|Saudi Arabia|Yemen|Oman|United Arab Emirates|Qatar|Bahrain|Kuwait|Jordan|Israel|Lebanon|Afghanistan|Pakistan';
+
 // Token cache (23-hour TTL, safe margin under 24-hour expiry)
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -101,7 +105,7 @@ export async function fetchEvents(): Promise<ConflictEventEntity[]> {
   ].join('|');
 
   const params = new URLSearchParams({
-    country: 'Iran',
+    country: GREATER_MIDDLE_EAST_COUNTRIES,
     event_date: `${dateFrom}|${dateTo}`,
     event_date_where: 'BETWEEN',
     fields,
