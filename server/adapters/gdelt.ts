@@ -32,6 +32,8 @@ export const CONFLICT_ROOT_CODES = new Set(['18', '19', '20']);
 export const COL = {
   GLOBALEVENTID: 0,
   SQLDATE: 1,
+  Actor1Name: 6,
+  Actor2Name: 16,
   EventCode: 26,
   EventBaseCode: 27,
   EventRootCode: 28,
@@ -134,10 +136,13 @@ export function normalizeGdeltEvent(
       eventType: describeEvent(eventRootCode),
       subEventType: `CAMEO ${eventCode}`,
       fatalities: 0, // GDELT does not track fatalities
-      actor1: '',
-      actor2: '',
+      actor1: cols[COL.Actor1Name] || '',
+      actor2: cols[COL.Actor2Name] || '',
       notes: '',
       source: cols[COL.SOURCEURL] ?? '',
+      goldsteinScale: parseFloat(cols[COL.GoldsteinScale]) || 0,
+      locationName: cols[COL.ActionGeo_FullName] || '',
+      cameoCode: eventCode,
     },
   };
 }

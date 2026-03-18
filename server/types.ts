@@ -47,6 +47,9 @@ export interface ConflictEventEntity extends MapEntityBase {
     actor2: string;
     notes: string;
     source: string;
+    goldsteinScale: number; // GDELT Goldstein conflict scale (-10 to +10)
+    locationName: string; // ActionGeo_FullName
+    cameoCode: string; // CAMEO event code (e.g. "190")
   };
 }
 

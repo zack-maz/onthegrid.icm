@@ -68,6 +68,9 @@ function normalizeEvent(event: Record<string, unknown>): ConflictEventEntity {
       actor2: String(event.actor2 ?? ''),
       notes: String(event.notes ?? ''),
       source: String(event.source ?? ''),
+      goldsteinScale: 0, // ACLED does not provide Goldstein scale
+      locationName: String(event.country ?? ''),
+      cameoCode: '', // ACLED does not use CAMEO codes
     },
   };
 }

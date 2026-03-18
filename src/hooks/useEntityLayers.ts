@@ -16,6 +16,7 @@ import type { FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/enti
 /**
  * Returns Deck.gl IconLayer array driven by Zustand store data.
  * Includes pulse animation for unidentified flights, throttled to ~15fps.
+ * Layers are conditionally included based on toggle state.
  */
 export function useEntityLayers() {
   const allFlights = useFlightStore((s) => s.flights);
@@ -23,11 +24,22 @@ export function useEntityLayers() {
   const events = useEventStore((s) => s.events);
   const pulseEnabled = useUIStore((s) => s.pulseEnabled);
   const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
+  const showFlights = useUIStore((s) => s.showFlights);
+  const showShips = useUIStore((s) => s.showShips);
+  const showDrones = useUIStore((s) => s.showDrones);
+  const showMissiles = useUIStore((s) => s.showMissiles);
 
-  const flights = useMemo(
-    () => showGroundTraffic ? allFlights : allFlights.filter((f) => !f.data.onGround),
-    [allFlights, showGroundTraffic],
-  );
+  // Flight filtering: independent showFlights and showGroundTraffic controls
+  // showFlights=true, showGroundTraffic=true  -> all flights
+  // showFlights=true, showGroundTraffic=false -> airborne only
+  // showFlights=false, showGroundTraffic=true -> ground only
+  // showFlights=false, showGroundTraffic=false -> no flights (layer excluded)
+  const flights = useMemo(() => {
+    if (showFlights && showGroundTraffic) return allFlights;
+    if (showFlights && !showGroundTraffic) return allFlights.filter((f) => !f.data.onGround);
+    if (!showFlights && showGroundTraffic) return allFlights.filter((f) => f.data.onGround);
+    return [];
+  }, [allFlights, showFlights, showGroundTraffic]);
 
   const drones = useMemo(() => events.filter((e) => e.type === 'drone'), [events]);
   const missiles = useMemo(() => events.filter((e) => e.type === 'missile'), [events]);
@@ -93,6 +105,7 @@ export function useEntityLayers() {
     getAngle: () => 0,
     getColor: () => [...ENTITY_COLORS.drone, 255],
     billboard: false,
+    pickable: true,
   }), [drones]);
 
   // Missile layer (filtered from event store)
@@ -110,6 +123,7 @@ export function useEntityLayers() {
     getAngle: () => 0,
     getColor: () => [...ENTITY_COLORS.missile, 255],
     billboard: false,
+    pickable: true,
   }), [missiles]);
 
   // Flight layer (updates with flight data and pulse opacity)
@@ -142,6 +156,12 @@ export function useEntityLayers() {
     });
   }, [flights, pulseOpacity]);
 
-  // Return layers bottom to top: ships, flights, drones, missiles
-  return [shipLayer, flightLayer, droneLayer, missileLayer];
+  // Build return array conditionally based on toggle state
+  // Flight layer is included if EITHER showFlights or showGroundTraffic is true
+  return [
+    showShips ? shipLayer : null,
+    (showFlights || showGroundTraffic) ? flightLayer : null,
+    showDrones ? droneLayer : null,
+    showMissiles ? missileLayer : null,
+  ].filter(Boolean) as IconLayer[];
 }

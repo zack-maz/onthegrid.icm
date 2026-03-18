@@ -105,7 +105,7 @@ describe('useEventPolling', () => {
   it('does NOT have stale threshold check (events persist)', async () => {
     // Supply fresh data initially
     const freshResponse = {
-      data: [{ id: 'event-1', type: 'drone', lat: 32, lng: 51, timestamp: Date.now(), label: 'Test', data: { eventType: 'Test', subEventType: 'Test', fatalities: 0, actor1: '', actor2: '', notes: '', source: '' } }],
+      data: [{ id: 'event-1', type: 'drone', lat: 32, lng: 51, timestamp: Date.now(), label: 'Test', data: { eventType: 'Test', subEventType: 'Test', fatalities: 0, actor1: '', actor2: '', notes: '', source: '', goldsteinScale: 0, locationName: '', cameoCode: '' } }],
       stale: false,
       lastFresh: Date.now(),
     };

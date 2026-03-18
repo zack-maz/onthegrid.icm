@@ -17,6 +17,9 @@ const mockDroneEvent: ConflictEventEntity = {
     actor2: 'Unknown',
     notes: '',
     source: 'ISNA',
+    goldsteinScale: -5.0,
+    locationName: 'Isfahan, Iran',
+    cameoCode: '183',
   },
 };
 
@@ -35,6 +38,9 @@ const mockMissileEvent: ConflictEventEntity = {
     actor2: 'Unknown',
     notes: '',
     source: 'Reuters',
+    goldsteinScale: -9.5,
+    locationName: 'Tehran, Iran',
+    cameoCode: '190',
   },
 };
 
