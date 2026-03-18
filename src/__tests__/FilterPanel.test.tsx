@@ -6,7 +6,12 @@ import { FilterPanelSlot } from '@/components/layout/FilterPanelSlot';
 
 describe('FilterPanelSlot', () => {
   beforeEach(() => {
-    useUIStore.setState({ isFiltersCollapsed: true });
+    useUIStore.setState({
+      isFiltersCollapsed: true,
+      isFlightFiltersOpen: true,
+      isShipFiltersOpen: true,
+      isEventFiltersOpen: true,
+    });
     useFilterStore.setState({
       flightCountries: [],
       eventCountries: [],
@@ -27,46 +32,61 @@ describe('FilterPanelSlot', () => {
   it('renders collapsed by default with "Filters" header', () => {
     render(<FilterPanelSlot />);
     expect(screen.getByText('Filters')).toBeInTheDocument();
-    expect(screen.queryByText('Flight Country')).not.toBeInTheDocument();
+    expect(screen.queryByText('Flights')).not.toBeInTheDocument();
   });
 
-  it('expanding shows filter section headings', () => {
+  it('expanding shows entity section headers', () => {
     useUIStore.setState({ isFiltersCollapsed: false });
     render(<FilterPanelSlot />);
-    expect(screen.getByText('Flight Country')).toBeInTheDocument();
-    expect(screen.getByText('Event Country')).toBeInTheDocument();
-    expect(screen.getAllByText('Flight Speed').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Ship Speed').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Altitude').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Proximity').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Date Range')).toBeInTheDocument();
+    expect(screen.getByText('Flights')).toBeInTheDocument();
+    expect(screen.getByText('Ships')).toBeInTheDocument();
+    expect(screen.getByText('Events')).toBeInTheDocument();
   });
 
-  it('shows badge count when filters are active', () => {
+  it('proximity section appears at top level (outside entity sections)', () => {
+    useUIStore.setState({ isFiltersCollapsed: false });
+    render(<FilterPanelSlot />);
+    expect(screen.getAllByText('Proximity').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows badge count when filters are active (max 7)', () => {
     useFilterStore.setState({ flightCountries: ['Iran'] });
     useUIStore.setState({ isFiltersCollapsed: false });
     render(<FilterPanelSlot />);
     expect(screen.getByText('(1)')).toBeInTheDocument();
   });
 
-  it('shows "Clear all filters" button when filters are active', () => {
+  it('shows "Clear all filters" when filters are active', () => {
     useFilterStore.setState({ flightCountries: ['Iran'] });
     useUIStore.setState({ isFiltersCollapsed: false });
     render(<FilterPanelSlot />);
     expect(screen.getByText('Clear all filters')).toBeInTheDocument();
   });
 
-  it('does not show "Clear all filters" button when no filters active', () => {
+  it('does not show "Clear all filters" when no filters active', () => {
     useUIStore.setState({ isFiltersCollapsed: false });
     render(<FilterPanelSlot />);
     expect(screen.queryByText('Clear all filters')).not.toBeInTheDocument();
   });
 
-  it('clicking header toggles expansion', () => {
+  it('entity sections are collapsible', () => {
+    useUIStore.setState({ isFiltersCollapsed: false, isFlightFiltersOpen: true });
     render(<FilterPanelSlot />);
-    expect(screen.queryByText('Flight Country')).not.toBeInTheDocument();
+    // Flight section header visible and content visible
+    expect(screen.getByText('Flights')).toBeInTheDocument();
+    // Two "Country" sub-headers visible (one in Flights, one in Events)
+    expect(screen.getAllByText('Country').length).toBe(2);
+    // Collapse flights section
+    fireEvent.click(screen.getByText('Flights'));
+    // Only one "Country" remains (Events section)
+    expect(screen.getAllByText('Country').length).toBe(1);
+  });
+
+  it('clicking header toggles panel expansion', () => {
+    render(<FilterPanelSlot />);
+    expect(screen.queryByText('Flights')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Filters'));
-    expect(screen.getByText('Flight Country')).toBeInTheDocument();
+    expect(screen.getByText('Flights')).toBeInTheDocument();
   });
 
   it('has data-testid attribute', () => {
@@ -74,13 +94,11 @@ describe('FilterPanelSlot', () => {
     expect(screen.getByTestId('filter-panel-slot')).toBeInTheDocument();
   });
 
-  it('shows arrow indicator for active filter and dashes for inactive', () => {
-    useFilterStore.setState({ flightCountries: ['Iran'] });
+  it('update filter field names: flightCountries, eventCountries are used', () => {
+    useFilterStore.setState({ flightCountries: ['Iran'], eventCountries: ['ISRAEL'] });
     useUIStore.setState({ isFiltersCollapsed: false });
     render(<FilterPanelSlot />);
-    const arrows = screen.getAllByText('\u25B6');
-    expect(arrows.length).toBeGreaterThanOrEqual(1);
-    const dashes = screen.getAllByText('---');
-    expect(dashes.length).toBeGreaterThanOrEqual(4);
+    // Both country sections active
+    expect(screen.getByText('(2)')).toBeInTheDocument();
   });
 });

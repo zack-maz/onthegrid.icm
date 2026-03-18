@@ -44,10 +44,36 @@ function SectionHeader({
   );
 }
 
+function EntitySectionHeader({
+  label,
+  isOpen,
+  onToggle,
+}: {
+  label: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className="flex w-full items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-secondary"
+    >
+      <span className="text-[10px] text-text-muted">{isOpen ? '\u25BE' : '\u25B8'}</span>
+      {label}
+    </button>
+  );
+}
+
 export function FilterPanelSlot() {
   const isCollapsed = useUIStore((s) => s.isFiltersCollapsed);
   const isDetailPanelOpen = useUIStore((s) => s.isDetailPanelOpen);
   const toggleFilters = useUIStore((s) => s.toggleFilters);
+  const isFlightFiltersOpen = useUIStore((s) => s.isFlightFiltersOpen);
+  const isShipFiltersOpen = useUIStore((s) => s.isShipFiltersOpen);
+  const isEventFiltersOpen = useUIStore((s) => s.isEventFiltersOpen);
+  const toggleFlightFilters = useUIStore((s) => s.toggleFlightFilters);
+  const toggleShipFilters = useUIStore((s) => s.toggleShipFilters);
+  const toggleEventFilters = useUIStore((s) => s.toggleEventFilters);
 
   const flightCountries = useFilterStore((s) => s.flightCountries);
   const addFlightCountry = useFilterStore((s) => s.addFlightCountry);
@@ -129,7 +155,7 @@ export function FilterPanelSlot() {
           </button>
           {!isCollapsed && (
             <div className="mt-1 flex flex-col gap-3">
-              {/* Proximity (global) */}
+              {/* Proximity (global — applies to all entity types) */}
               <div>
                 <SectionHeader label="Proximity" active={isProximityActive} filterKey="proximity" onClear={clearFilter} />
                 <div className="mt-1">
@@ -145,96 +171,111 @@ export function FilterPanelSlot() {
                 </div>
               </div>
 
-              {/* Flight Country */}
+              {/* ── Flights section ─────────────────────────────────── */}
               <div>
-                <SectionHeader label="Flight Country" active={isFlightCountryActive} filterKey="flightCountry" onClear={clearFilter} />
-                <div className="mt-1">
-                  <CountryFilter
-                    selectedCountries={flightCountries}
-                    onAdd={addFlightCountry}
-                    onRemove={removeFlightCountry}
-                    availableCountries={availableFlightCountries}
-                  />
-                </div>
+                <EntitySectionHeader label="Flights" isOpen={isFlightFiltersOpen} onToggle={toggleFlightFilters} />
+                {isFlightFiltersOpen && (
+                  <div className="mt-1.5 flex flex-col gap-2 pl-3">
+                    <div>
+                      <SectionHeader label="Country" active={isFlightCountryActive} filterKey="flightCountry" onClear={clearFilter} />
+                      <div className="mt-1">
+                        <CountryFilter
+                          selectedCountries={flightCountries}
+                          onAdd={addFlightCountry}
+                          onRemove={removeFlightCountry}
+                          availableCountries={availableFlightCountries}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <SectionHeader label="Speed" active={isFlightSpeedActive} filterKey="flightSpeed" onClear={clearFilter} />
+                      <div className="mt-1">
+                        <RangeSlider
+                          label="Speed"
+                          min={0}
+                          max={700}
+                          step={10}
+                          unit="kn"
+                          valueMin={flightSpeedMin}
+                          valueMax={flightSpeedMax}
+                          onChangeMin={(v) => setFlightSpeedRange(v, flightSpeedMax)}
+                          onChangeMax={(v) => setFlightSpeedRange(flightSpeedMin, v)}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <SectionHeader label="Altitude" active={isAltitudeActive} filterKey="altitude" onClear={clearFilter} />
+                      <div className="mt-1">
+                        <RangeSlider
+                          label="Altitude"
+                          min={0}
+                          max={60000}
+                          step={500}
+                          unit="ft"
+                          valueMin={altitudeMin}
+                          valueMax={altitudeMax}
+                          onChangeMin={(v) => setAltitudeRange(v, altitudeMax)}
+                          onChangeMax={(v) => setAltitudeRange(altitudeMin, v)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Flight Speed */}
+              {/* ── Ships section ───────────────────────────────────── */}
               <div>
-                <SectionHeader label="Flight Speed" active={isFlightSpeedActive} filterKey="flightSpeed" onClear={clearFilter} />
-                <div className="mt-1">
-                  <RangeSlider
-                    label="Flight Speed"
-                    min={0}
-                    max={700}
-                    step={10}
-                    unit="kn"
-                    valueMin={flightSpeedMin}
-                    valueMax={flightSpeedMax}
-                    onChangeMin={(v) => setFlightSpeedRange(v, flightSpeedMax)}
-                    onChangeMax={(v) => setFlightSpeedRange(flightSpeedMin, v)}
-                  />
-                </div>
+                <EntitySectionHeader label="Ships" isOpen={isShipFiltersOpen} onToggle={toggleShipFilters} />
+                {isShipFiltersOpen && (
+                  <div className="mt-1.5 flex flex-col gap-2 pl-3">
+                    <div>
+                      <SectionHeader label="Speed" active={isShipSpeedActive} filterKey="shipSpeed" onClear={clearFilter} />
+                      <div className="mt-1">
+                        <RangeSlider
+                          label="Speed"
+                          min={0}
+                          max={30}
+                          step={1}
+                          unit="kn"
+                          valueMin={shipSpeedMin}
+                          valueMax={shipSpeedMax}
+                          onChangeMin={(v) => setShipSpeedRange(v, shipSpeedMax)}
+                          onChangeMax={(v) => setShipSpeedRange(shipSpeedMin, v)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Altitude */}
+              {/* ── Events section ──────────────────────────────────── */}
               <div>
-                <SectionHeader label="Altitude" active={isAltitudeActive} filterKey="altitude" onClear={clearFilter} />
-                <div className="mt-1">
-                  <RangeSlider
-                    label="Altitude"
-                    min={0}
-                    max={60000}
-                    step={500}
-                    unit="ft"
-                    valueMin={altitudeMin}
-                    valueMax={altitudeMax}
-                    onChangeMin={(v) => setAltitudeRange(v, altitudeMax)}
-                    onChangeMax={(v) => setAltitudeRange(altitudeMin, v)}
-                  />
-                </div>
-              </div>
-
-              {/* Ship Speed */}
-              <div>
-                <SectionHeader label="Ship Speed" active={isShipSpeedActive} filterKey="shipSpeed" onClear={clearFilter} />
-                <div className="mt-1">
-                  <RangeSlider
-                    label="Ship Speed"
-                    min={0}
-                    max={30}
-                    step={1}
-                    unit="kn"
-                    valueMin={shipSpeedMin}
-                    valueMax={shipSpeedMax}
-                    onChangeMin={(v) => setShipSpeedRange(v, shipSpeedMax)}
-                    onChangeMax={(v) => setShipSpeedRange(shipSpeedMin, v)}
-                  />
-                </div>
-              </div>
-
-              {/* Event Country */}
-              <div>
-                <SectionHeader label="Event Country" active={isEventCountryActive} filterKey="eventCountry" onClear={clearFilter} />
-                <div className="mt-1">
-                  <CountryFilter
-                    selectedCountries={eventCountries}
-                    onAdd={addEventCountry}
-                    onRemove={removeEventCountry}
-                    availableCountries={availableEventCountries}
-                  />
-                </div>
-              </div>
-
-              {/* Date Range */}
-              <div>
-                <SectionHeader label="Date Range" active={isDateActive} filterKey="date" onClear={clearFilter} />
-                <div className="mt-1">
-                  <DateRangeFilter
-                    dateStart={dateStart}
-                    dateEnd={dateEnd}
-                    onDateRange={setDateRange}
-                  />
-                </div>
+                <EntitySectionHeader label="Events" isOpen={isEventFiltersOpen} onToggle={toggleEventFilters} />
+                {isEventFiltersOpen && (
+                  <div className="mt-1.5 flex flex-col gap-2 pl-3">
+                    <div>
+                      <SectionHeader label="Country" active={isEventCountryActive} filterKey="eventCountry" onClear={clearFilter} />
+                      <div className="mt-1">
+                        <CountryFilter
+                          selectedCountries={eventCountries}
+                          onAdd={addEventCountry}
+                          onRemove={removeEventCountry}
+                          availableCountries={availableEventCountries}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <SectionHeader label="Date Range" active={isDateActive} filterKey="date" onClear={clearFilter} />
+                      <div className="mt-1">
+                        <DateRangeFilter
+                          dateStart={dateStart}
+                          dateEnd={dateEnd}
+                          onDateRange={setDateRange}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Clear all */}
