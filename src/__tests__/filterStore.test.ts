@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useFilterStore } from '@/stores/filterStore';
-import type { FilterState } from '@/stores/filterStore';
 
 describe('filterStore', () => {
   beforeEach(() => {
@@ -8,14 +7,24 @@ describe('filterStore', () => {
   });
 
   describe('defaults', () => {
-    it('selectedCountries defaults to empty array', () => {
-      expect(useFilterStore.getState().selectedCountries).toEqual([]);
+    it('flightCountries defaults to empty array', () => {
+      expect(useFilterStore.getState().flightCountries).toEqual([]);
     });
 
-    it('speedMin/speedMax default to null', () => {
+    it('eventCountries defaults to empty array', () => {
+      expect(useFilterStore.getState().eventCountries).toEqual([]);
+    });
+
+    it('flightSpeedMin/flightSpeedMax default to null', () => {
       const s = useFilterStore.getState();
-      expect(s.speedMin).toBeNull();
-      expect(s.speedMax).toBeNull();
+      expect(s.flightSpeedMin).toBeNull();
+      expect(s.flightSpeedMax).toBeNull();
+    });
+
+    it('shipSpeedMin/shipSpeedMax default to null', () => {
+      const s = useFilterStore.getState();
+      expect(s.shipSpeedMin).toBeNull();
+      expect(s.shipSpeedMax).toBeNull();
     });
 
     it('altitudeMin/altitudeMax default to null', () => {
@@ -43,37 +52,69 @@ describe('filterStore', () => {
     });
   });
 
-  describe('country actions', () => {
-    it('setCountries replaces selectedCountries array', () => {
-      useFilterStore.getState().setCountries(['Iran', 'Iraq']);
-      expect(useFilterStore.getState().selectedCountries).toEqual(['Iran', 'Iraq']);
+  describe('flight country actions', () => {
+    it('setFlightCountries replaces flightCountries array', () => {
+      useFilterStore.getState().setFlightCountries(['Iran', 'Iraq']);
+      expect(useFilterStore.getState().flightCountries).toEqual(['Iran', 'Iraq']);
     });
 
-    it('addCountry appends to selectedCountries', () => {
-      useFilterStore.getState().addCountry('Iran');
-      useFilterStore.getState().addCountry('Iraq');
-      expect(useFilterStore.getState().selectedCountries).toEqual(['Iran', 'Iraq']);
+    it('addFlightCountry appends to flightCountries', () => {
+      useFilterStore.getState().addFlightCountry('Iran');
+      useFilterStore.getState().addFlightCountry('Iraq');
+      expect(useFilterStore.getState().flightCountries).toEqual(['Iran', 'Iraq']);
     });
 
-    it('addCountry prevents duplicates', () => {
-      useFilterStore.getState().addCountry('Iran');
-      useFilterStore.getState().addCountry('Iran');
-      expect(useFilterStore.getState().selectedCountries).toEqual(['Iran']);
+    it('addFlightCountry prevents duplicates', () => {
+      useFilterStore.getState().addFlightCountry('Iran');
+      useFilterStore.getState().addFlightCountry('Iran');
+      expect(useFilterStore.getState().flightCountries).toEqual(['Iran']);
     });
 
-    it('removeCountry removes from selectedCountries', () => {
-      useFilterStore.getState().setCountries(['Iran', 'Iraq', 'Turkey']);
-      useFilterStore.getState().removeCountry('Iraq');
-      expect(useFilterStore.getState().selectedCountries).toEqual(['Iran', 'Turkey']);
+    it('removeFlightCountry removes from flightCountries', () => {
+      useFilterStore.getState().setFlightCountries(['Iran', 'Iraq', 'Turkey']);
+      useFilterStore.getState().removeFlightCountry('Iraq');
+      expect(useFilterStore.getState().flightCountries).toEqual(['Iran', 'Turkey']);
+    });
+  });
+
+  describe('event country actions', () => {
+    it('setEventCountries replaces eventCountries array', () => {
+      useFilterStore.getState().setEventCountries(['ISRAEL', 'IRAN']);
+      expect(useFilterStore.getState().eventCountries).toEqual(['ISRAEL', 'IRAN']);
+    });
+
+    it('addEventCountry appends to eventCountries', () => {
+      useFilterStore.getState().addEventCountry('ISRAEL');
+      useFilterStore.getState().addEventCountry('IRAN');
+      expect(useFilterStore.getState().eventCountries).toEqual(['ISRAEL', 'IRAN']);
+    });
+
+    it('addEventCountry prevents duplicates', () => {
+      useFilterStore.getState().addEventCountry('ISRAEL');
+      useFilterStore.getState().addEventCountry('ISRAEL');
+      expect(useFilterStore.getState().eventCountries).toEqual(['ISRAEL']);
+    });
+
+    it('removeEventCountry removes from eventCountries', () => {
+      useFilterStore.getState().setEventCountries(['ISRAEL', 'IRAN', 'IRAQ']);
+      useFilterStore.getState().removeEventCountry('IRAN');
+      expect(useFilterStore.getState().eventCountries).toEqual(['ISRAEL', 'IRAQ']);
     });
   });
 
   describe('range actions', () => {
-    it('setSpeedRange sets speedMin and speedMax', () => {
-      useFilterStore.getState().setSpeedRange(100, 400);
+    it('setFlightSpeedRange sets flightSpeedMin and flightSpeedMax', () => {
+      useFilterStore.getState().setFlightSpeedRange(100, 400);
       const s = useFilterStore.getState();
-      expect(s.speedMin).toBe(100);
-      expect(s.speedMax).toBe(400);
+      expect(s.flightSpeedMin).toBe(100);
+      expect(s.flightSpeedMax).toBe(400);
+    });
+
+    it('setShipSpeedRange sets shipSpeedMin and shipSpeedMax', () => {
+      useFilterStore.getState().setShipSpeedRange(5, 25);
+      const s = useFilterStore.getState();
+      expect(s.shipSpeedMin).toBe(5);
+      expect(s.shipSpeedMax).toBe(25);
     });
 
     it('setAltitudeRange sets altitudeMin and altitudeMax', () => {
@@ -123,18 +164,32 @@ describe('filterStore', () => {
   });
 
   describe('clearFilter', () => {
-    it('clearFilter(country) resets selectedCountries to empty', () => {
-      useFilterStore.getState().setCountries(['Iran', 'Iraq']);
-      useFilterStore.getState().clearFilter('country');
-      expect(useFilterStore.getState().selectedCountries).toEqual([]);
+    it('clearFilter(flightCountry) resets flightCountries to empty', () => {
+      useFilterStore.getState().setFlightCountries(['Iran', 'Iraq']);
+      useFilterStore.getState().clearFilter('flightCountry');
+      expect(useFilterStore.getState().flightCountries).toEqual([]);
     });
 
-    it('clearFilter(speed) resets speedMin/speedMax to null', () => {
-      useFilterStore.getState().setSpeedRange(100, 400);
-      useFilterStore.getState().clearFilter('speed');
+    it('clearFilter(eventCountry) resets eventCountries to empty', () => {
+      useFilterStore.getState().setEventCountries(['ISRAEL', 'IRAN']);
+      useFilterStore.getState().clearFilter('eventCountry');
+      expect(useFilterStore.getState().eventCountries).toEqual([]);
+    });
+
+    it('clearFilter(flightSpeed) resets flightSpeedMin/flightSpeedMax to null', () => {
+      useFilterStore.getState().setFlightSpeedRange(100, 400);
+      useFilterStore.getState().clearFilter('flightSpeed');
       const s = useFilterStore.getState();
-      expect(s.speedMin).toBeNull();
-      expect(s.speedMax).toBeNull();
+      expect(s.flightSpeedMin).toBeNull();
+      expect(s.flightSpeedMax).toBeNull();
+    });
+
+    it('clearFilter(shipSpeed) resets shipSpeedMin/shipSpeedMax to null', () => {
+      useFilterStore.getState().setShipSpeedRange(5, 25);
+      useFilterStore.getState().clearFilter('shipSpeed');
+      const s = useFilterStore.getState();
+      expect(s.shipSpeedMin).toBeNull();
+      expect(s.shipSpeedMax).toBeNull();
     });
 
     it('clearFilter(altitude) resets altitudeMin/altitudeMax to null', () => {
@@ -145,12 +200,11 @@ describe('filterStore', () => {
       expect(s.altitudeMax).toBeNull();
     });
 
-    it('clearFilter(proximity) resets proximityPin to null but keeps radius default', () => {
+    it('clearFilter(proximity) resets proximityPin to null and radius to default', () => {
       useFilterStore.getState().setProximityPin({ lat: 35, lng: 51 });
       useFilterStore.getState().setProximityRadius(250);
       useFilterStore.getState().clearFilter('proximity');
       expect(useFilterStore.getState().proximityPin).toBeNull();
-      // radius resets to default 100
       expect(useFilterStore.getState().proximityRadiusKm).toBe(100);
     });
 
@@ -165,8 +219,10 @@ describe('filterStore', () => {
 
   describe('clearAll', () => {
     it('resets all filter fields to defaults', () => {
-      useFilterStore.getState().setCountries(['Iran']);
-      useFilterStore.getState().setSpeedRange(100, 400);
+      useFilterStore.getState().setFlightCountries(['Iran']);
+      useFilterStore.getState().setEventCountries(['ISRAEL']);
+      useFilterStore.getState().setFlightSpeedRange(100, 400);
+      useFilterStore.getState().setShipSpeedRange(5, 25);
       useFilterStore.getState().setAltitudeRange(10000, 40000);
       useFilterStore.getState().setProximityPin({ lat: 35, lng: 51 });
       useFilterStore.getState().setProximityRadius(250);
@@ -175,9 +231,12 @@ describe('filterStore', () => {
 
       useFilterStore.getState().clearAll();
       const s = useFilterStore.getState();
-      expect(s.selectedCountries).toEqual([]);
-      expect(s.speedMin).toBeNull();
-      expect(s.speedMax).toBeNull();
+      expect(s.flightCountries).toEqual([]);
+      expect(s.eventCountries).toEqual([]);
+      expect(s.flightSpeedMin).toBeNull();
+      expect(s.flightSpeedMax).toBeNull();
+      expect(s.shipSpeedMin).toBeNull();
+      expect(s.shipSpeedMax).toBeNull();
       expect(s.altitudeMin).toBeNull();
       expect(s.altitudeMax).toBeNull();
       expect(s.proximityPin).toBeNull();
@@ -193,18 +252,28 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().activeFilterCount()).toBe(0);
     });
 
-    it('counts country filter when countries selected', () => {
-      useFilterStore.getState().setCountries(['Iran']);
+    it('counts flightCountry filter when countries selected', () => {
+      useFilterStore.getState().setFlightCountries(['Iran']);
       expect(useFilterStore.getState().activeFilterCount()).toBe(1);
     });
 
-    it('counts speed filter when speedMin set', () => {
-      useFilterStore.getState().setSpeedRange(100, null);
+    it('counts eventCountry filter when countries selected', () => {
+      useFilterStore.getState().setEventCountries(['ISRAEL']);
       expect(useFilterStore.getState().activeFilterCount()).toBe(1);
     });
 
-    it('counts speed filter when speedMax set', () => {
-      useFilterStore.getState().setSpeedRange(null, 400);
+    it('counts flightSpeed filter when flightSpeedMin set', () => {
+      useFilterStore.getState().setFlightSpeedRange(100, null);
+      expect(useFilterStore.getState().activeFilterCount()).toBe(1);
+    });
+
+    it('counts flightSpeed filter when flightSpeedMax set', () => {
+      useFilterStore.getState().setFlightSpeedRange(null, 400);
+      expect(useFilterStore.getState().activeFilterCount()).toBe(1);
+    });
+
+    it('counts shipSpeed filter when shipSpeedMin set', () => {
+      useFilterStore.getState().setShipSpeedRange(5, null);
       expect(useFilterStore.getState().activeFilterCount()).toBe(1);
     });
 
@@ -223,13 +292,15 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().activeFilterCount()).toBe(1);
     });
 
-    it('returns 5 when all filters active', () => {
-      useFilterStore.getState().setCountries(['Iran']);
-      useFilterStore.getState().setSpeedRange(100, 400);
+    it('returns 7 when all filters active', () => {
+      useFilterStore.getState().setFlightCountries(['Iran']);
+      useFilterStore.getState().setEventCountries(['ISRAEL']);
+      useFilterStore.getState().setFlightSpeedRange(100, 400);
+      useFilterStore.getState().setShipSpeedRange(5, 25);
       useFilterStore.getState().setAltitudeRange(10000, 40000);
       useFilterStore.getState().setProximityPin({ lat: 35, lng: 51 });
       useFilterStore.getState().setDateRange(1000, 2000);
-      expect(useFilterStore.getState().activeFilterCount()).toBe(5);
+      expect(useFilterStore.getState().activeFilterCount()).toBe(7);
     });
   });
 });

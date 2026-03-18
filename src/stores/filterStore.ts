@@ -5,13 +5,16 @@ export interface ProximityPin {
   lng: number;
 }
 
-export type FilterKey = 'country' | 'speed' | 'altitude' | 'proximity' | 'date';
+export type FilterKey = 'flightCountry' | 'eventCountry' | 'flightSpeed' | 'shipSpeed' | 'altitude' | 'proximity' | 'date';
 
 export interface FilterState {
   // State
-  selectedCountries: string[];
-  speedMin: number | null;
-  speedMax: number | null;
+  flightCountries: string[];
+  eventCountries: string[];
+  flightSpeedMin: number | null;
+  flightSpeedMax: number | null;
+  shipSpeedMin: number | null;
+  shipSpeedMax: number | null;
   altitudeMin: number | null;
   altitudeMax: number | null;
   proximityPin: ProximityPin | null;
@@ -21,10 +24,14 @@ export interface FilterState {
   isSettingPin: boolean;
 
   // Actions
-  setCountries: (countries: string[]) => void;
-  addCountry: (country: string) => void;
-  removeCountry: (country: string) => void;
-  setSpeedRange: (min: number | null, max: number | null) => void;
+  setFlightCountries: (countries: string[]) => void;
+  addFlightCountry: (country: string) => void;
+  removeFlightCountry: (country: string) => void;
+  setEventCountries: (countries: string[]) => void;
+  addEventCountry: (country: string) => void;
+  removeEventCountry: (country: string) => void;
+  setFlightSpeedRange: (min: number | null, max: number | null) => void;
+  setShipSpeedRange: (min: number | null, max: number | null) => void;
   setAltitudeRange: (min: number | null, max: number | null) => void;
   setProximityPin: (pin: ProximityPin | null) => void;
   setProximityRadius: (km: number) => void;
@@ -36,9 +43,12 @@ export interface FilterState {
 }
 
 const DEFAULTS = {
-  selectedCountries: [] as string[],
-  speedMin: null as number | null,
-  speedMax: null as number | null,
+  flightCountries: [] as string[],
+  eventCountries: [] as string[],
+  flightSpeedMin: null as number | null,
+  flightSpeedMax: null as number | null,
+  shipSpeedMin: null as number | null,
+  shipSpeedMax: null as number | null,
   altitudeMin: null as number | null,
   altitudeMax: null as number | null,
   proximityPin: null as ProximityPin | null,
@@ -51,20 +61,35 @@ const DEFAULTS = {
 export const useFilterStore = create<FilterState>()((set, get) => ({
   ...DEFAULTS,
 
-  setCountries: (countries) => set({ selectedCountries: countries }),
+  setFlightCountries: (countries) => set({ flightCountries: countries }),
 
-  addCountry: (country) =>
+  addFlightCountry: (country) =>
     set((s) => {
-      if (s.selectedCountries.includes(country)) return s;
-      return { selectedCountries: [...s.selectedCountries, country] };
+      if (s.flightCountries.includes(country)) return s;
+      return { flightCountries: [...s.flightCountries, country] };
     }),
 
-  removeCountry: (country) =>
+  removeFlightCountry: (country) =>
     set((s) => ({
-      selectedCountries: s.selectedCountries.filter((c) => c !== country),
+      flightCountries: s.flightCountries.filter((c) => c !== country),
     })),
 
-  setSpeedRange: (min, max) => set({ speedMin: min, speedMax: max }),
+  setEventCountries: (countries) => set({ eventCountries: countries }),
+
+  addEventCountry: (country) =>
+    set((s) => {
+      if (s.eventCountries.includes(country)) return s;
+      return { eventCountries: [...s.eventCountries, country] };
+    }),
+
+  removeEventCountry: (country) =>
+    set((s) => ({
+      eventCountries: s.eventCountries.filter((c) => c !== country),
+    })),
+
+  setFlightSpeedRange: (min, max) => set({ flightSpeedMin: min, flightSpeedMax: max }),
+
+  setShipSpeedRange: (min, max) => set({ shipSpeedMin: min, shipSpeedMax: max }),
 
   setAltitudeRange: (min, max) => set({ altitudeMin: min, altitudeMax: max }),
 
@@ -78,11 +103,17 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
 
   clearFilter: (filter) => {
     switch (filter) {
-      case 'country':
-        set({ selectedCountries: [] });
+      case 'flightCountry':
+        set({ flightCountries: [] });
         break;
-      case 'speed':
-        set({ speedMin: null, speedMax: null });
+      case 'eventCountry':
+        set({ eventCountries: [] });
+        break;
+      case 'flightSpeed':
+        set({ flightSpeedMin: null, flightSpeedMax: null });
+        break;
+      case 'shipSpeed':
+        set({ shipSpeedMin: null, shipSpeedMax: null });
         break;
       case 'altitude':
         set({ altitudeMin: null, altitudeMax: null });
@@ -101,8 +132,10 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
   activeFilterCount: () => {
     const s = get();
     let count = 0;
-    if (s.selectedCountries.length > 0) count++;
-    if (s.speedMin !== null || s.speedMax !== null) count++;
+    if (s.flightCountries.length > 0) count++;
+    if (s.eventCountries.length > 0) count++;
+    if (s.flightSpeedMin !== null || s.flightSpeedMax !== null) count++;
+    if (s.shipSpeedMin !== null || s.shipSpeedMax !== null) count++;
     if (s.altitudeMin !== null || s.altitudeMax !== null) count++;
     if (s.proximityPin !== null) count++;
     if (s.dateStart !== null || s.dateEnd !== null) count++;
