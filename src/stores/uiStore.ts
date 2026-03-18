@@ -27,6 +27,7 @@ function getToggles(state: UIState): LayerToggles {
   return {
     showFlights: state.showFlights,
     showShips: state.showShips,
+    showEvents: state.showEvents,
     showAirstrikes: state.showAirstrikes,
     showGroundCombat: state.showGroundCombat,
     showTargeted: state.showTargeted,
@@ -47,6 +48,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
   showGroundTraffic: initial.showGroundTraffic,
   showFlights: initial.showFlights,
   showShips: initial.showShips,
+  showEvents: initial.showEvents,
   showAirstrikes: initial.showAirstrikes,
   showGroundCombat: initial.showGroundCombat,
   showTargeted: initial.showTargeted,
@@ -72,6 +74,10 @@ export const useUIStore = create<UIState>()((set, get) => ({
   },
   toggleShips: () => {
     set((s) => ({ showShips: !s.showShips }));
+    persistToggles(getToggles(get()));
+  },
+  toggleEvents: () => {
+    set((s) => ({ showEvents: !s.showEvents }));
     persistToggles(getToggles(get()));
   },
   toggleAirstrikes: () => {

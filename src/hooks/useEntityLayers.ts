@@ -65,6 +65,7 @@ export function useEntityLayers() {
   const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
   const showFlights = useUIStore((s) => s.showFlights);
   const showShips = useUIStore((s) => s.showShips);
+  const showEvents = useUIStore((s) => s.showEvents);
   const showAirstrikes = useUIStore((s) => s.showAirstrikes);
   const showGroundCombat = useUIStore((s) => s.showGroundCombat);
   const showTargeted = useUIStore((s) => s.showTargeted);
@@ -76,12 +77,12 @@ export function useEntityLayers() {
   const activeId = hoveredEntityId ?? selectedEntityId;
 
   const flights = useMemo(() => {
-    if (showFlights && showGroundTraffic) return allFlights;
-    if (showFlights && !showGroundTraffic) return allFlights.filter(
-      (f) => !f.data.onGround || (pulseEnabled && f.data.unidentified)
-    );
-    if (!showFlights && showGroundTraffic) return allFlights.filter((f) => f.data.onGround);
-    return [];
+    return allFlights.filter((f) => {
+      // Mutually exclusive: unidentified first, then ground, then regular
+      if (f.data.unidentified) return pulseEnabled;
+      if (f.data.onGround) return showGroundTraffic;
+      return showFlights;
+    });
   }, [allFlights, showFlights, showGroundTraffic, pulseEnabled]);
 
   const airstrikeEvents = useMemo(() =>
@@ -150,7 +151,7 @@ export function useEntityLayers() {
   // Airstrike layer
   const airstrikeLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
     id: 'airstrikes',
-    visible: showAirstrikes,
+    visible: showEvents && showAirstrikes,
     data: airstrikeEvents,
     iconAtlas: getIconAtlas(),
     iconMapping: ICON_MAPPING,
@@ -169,12 +170,12 @@ export function useEntityLayers() {
     billboard: false,
     pickable: true,
     updateTriggers: { getColor: [activeId] },
-  }), [airstrikeEvents, showAirstrikes, activeId]);
+  }), [airstrikeEvents, showEvents, showAirstrikes, activeId]);
 
   // Ground combat layer
   const groundCombatLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
     id: 'groundCombat',
-    visible: showGroundCombat,
+    visible: showEvents && showGroundCombat,
     data: groundCombatEvents,
     iconAtlas: getIconAtlas(),
     iconMapping: ICON_MAPPING,
@@ -193,12 +194,12 @@ export function useEntityLayers() {
     billboard: false,
     pickable: true,
     updateTriggers: { getColor: [activeId] },
-  }), [groundCombatEvents, showGroundCombat, activeId]);
+  }), [groundCombatEvents, showEvents, showGroundCombat, activeId]);
 
   // Targeted layer
   const targetedLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
     id: 'targeted',
-    visible: showTargeted,
+    visible: showEvents && showTargeted,
     data: targetedEvents,
     iconAtlas: getIconAtlas(),
     iconMapping: ICON_MAPPING,
@@ -217,12 +218,12 @@ export function useEntityLayers() {
     billboard: false,
     pickable: true,
     updateTriggers: { getColor: [activeId] },
-  }), [targetedEvents, showTargeted, activeId]);
+  }), [targetedEvents, showEvents, showTargeted, activeId]);
 
   // Other conflict layer
   const otherConflictLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
     id: 'otherConflict',
-    visible: showOtherConflict,
+    visible: showEvents && showOtherConflict,
     data: otherConflictEvents,
     iconAtlas: getIconAtlas(),
     iconMapping: ICON_MAPPING,
@@ -241,10 +242,10 @@ export function useEntityLayers() {
     billboard: false,
     pickable: true,
     updateTriggers: { getColor: [activeId] },
-  }), [otherConflictEvents, showOtherConflict, activeId]);
+  }), [otherConflictEvents, showEvents, showOtherConflict, activeId]);
 
   // Flight layer
-  const showAnyFlights = showFlights || showGroundTraffic;
+  const showAnyFlights = showFlights || showGroundTraffic || pulseEnabled;
   const flightLayer = useMemo(() => new IconLayer<FlightEntity>({
     id: 'flights',
     visible: showAnyFlights,

@@ -49,6 +49,7 @@ export function BaseMap() {
   const openDetailPanel = useUIStore((s) => s.openDetailPanel);
   const closeDetailPanel = useUIStore((s) => s.closeDetailPanel);
   const hoverEntity = useUIStore((s) => s.hoverEntity);
+  const showEvents = useUIStore((s) => s.showEvents);
   const showAirstrikes = useUIStore((s) => s.showAirstrikes);
   const showGroundCombat = useUIStore((s) => s.showGroundCombat);
   const showTargeted = useUIStore((s) => s.showTargeted);
@@ -137,9 +138,10 @@ export function BaseMap() {
     [setCursorPosition],
   );
 
-  // Tooltip gating — conflict events only show when their category toggle is ON
+  // Tooltip gating — conflict events only show when master + category toggle are ON
   function isEntityTooltipVisible(entity: MapEntity): boolean {
     if (!isConflictEventType(entity.type)) return true;
+    if (!showEvents) return false;
     if ((CONFLICT_TOGGLE_GROUPS.showAirstrikes as readonly string[]).includes(entity.type)) return showAirstrikes;
     if ((CONFLICT_TOGGLE_GROUPS.showGroundCombat as readonly string[]).includes(entity.type)) return showGroundCombat;
     if ((CONFLICT_TOGGLE_GROUPS.showTargeted as readonly string[]).includes(entity.type)) return showTargeted;

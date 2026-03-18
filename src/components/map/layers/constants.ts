@@ -3,7 +3,7 @@
 /** RGB color tuples for entity types */
 export const ENTITY_COLORS = {
   flight: [234, 179, 8] as const,            // #eab308 yellow
-  flightUnidentified: [239, 68, 68] as const, // #ef4444 red
+  flightUnidentified: [185, 28, 28] as const,  // #b91c1c darker red
   ship: [156, 163, 175] as const,            // #9ca3af gray
   airstrike: [255, 59, 48] as const,         // #ff3b30 red
   groundCombat: [239, 68, 68] as const,      // #ef4444 red
@@ -20,7 +20,7 @@ export const ENTITY_DOT_COLORS = {
   targeted: '#8b1e1e',
   otherConflict: '#ef4444',
   ground: '#eab308',
-  unidentified: '#ef4444',
+  unidentified: '#b91c1c',
 } as const;
 
 /** Zoom-responsive sizes for entity icons (meter-based with pixel bounds) */

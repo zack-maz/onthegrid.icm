@@ -35,6 +35,7 @@ describe('uiStore', () => {
       showGroundTraffic: false,
       showFlights: true,
       showShips: true,
+      showEvents: true,
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
@@ -76,6 +77,7 @@ describe('uiStore layer toggles', () => {
     useUIStore.setState({
       showFlights: true,
       showShips: true,
+      showEvents: true,
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
@@ -92,6 +94,10 @@ describe('uiStore layer toggles', () => {
 
     it('showShips defaults to true', () => {
       expect(useUIStore.getState().showShips).toBe(true);
+    });
+
+    it('showEvents defaults to true', () => {
+      expect(useUIStore.getState().showEvents).toBe(true);
     });
 
     it('showAirstrikes defaults to true', () => {
@@ -126,6 +132,14 @@ describe('uiStore layer toggles', () => {
       expect(useUIStore.getState().showShips).toBe(false);
       useUIStore.getState().toggleShips();
       expect(useUIStore.getState().showShips).toBe(true);
+    });
+
+    it('toggleEvents flips showEvents', () => {
+      expect(useUIStore.getState().showEvents).toBe(true);
+      useUIStore.getState().toggleEvents();
+      expect(useUIStore.getState().showEvents).toBe(false);
+      useUIStore.getState().toggleEvents();
+      expect(useUIStore.getState().showEvents).toBe(true);
     });
 
     it('toggleAirstrikes flips showAirstrikes', () => {
@@ -174,6 +188,12 @@ describe('uiStore layer toggles', () => {
       expect(stored.pulseEnabled).toBe(false);
     });
 
+    it('showEvents is persisted as part of layerToggles', () => {
+      useUIStore.getState().toggleEvents();
+      const stored = JSON.parse(storageMock[STORAGE_KEY]);
+      expect(stored.showEvents).toBe(false);
+    });
+
     it('showGroundTraffic is persisted as part of layerToggles', () => {
       useUIStore.getState().toggleGroundTraffic();
       const stored = JSON.parse(storageMock[STORAGE_KEY]);
@@ -209,6 +229,7 @@ describe('uiStore layer toggles', () => {
       const loaded = loadPersistedToggles();
       expect(loaded.showFlights).toBe(false);
       expect(loaded.showShips).toBe(true); // default
+      expect(loaded.showEvents).toBe(true); // default
       expect(loaded.showAirstrikes).toBe(true); // default
       expect(loaded.pulseEnabled).toBe(true); // default
     });

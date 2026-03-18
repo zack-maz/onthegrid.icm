@@ -6,6 +6,7 @@ const mockState = {
   showGroundTraffic: false,
   pulseEnabled: true,
   showShips: true,
+  showEvents: true,
   showAirstrikes: true,
   showGroundCombat: true,
   showTargeted: true,
@@ -15,6 +16,7 @@ const mockState = {
   toggleGroundTraffic: vi.fn(),
   togglePulse: vi.fn(),
   toggleShips: vi.fn(),
+  toggleEvents: vi.fn(),
   toggleAirstrikes: vi.fn(),
   toggleGroundCombat: vi.fn(),
   toggleTargeted: vi.fn(),
@@ -36,6 +38,7 @@ describe('LayerTogglesSlot', () => {
     mockState.showGroundTraffic = false;
     mockState.pulseEnabled = true;
     mockState.showShips = true;
+    mockState.showEvents = true;
     mockState.showAirstrikes = true;
     mockState.showGroundCombat = true;
     mockState.showTargeted = true;
@@ -48,10 +51,10 @@ describe('LayerTogglesSlot', () => {
     expect(screen.getByText('Layers')).toBeTruthy();
   });
 
-  it('renders 8 toggle row buttons', () => {
+  it('renders 9 toggle row buttons', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
-    expect(switches).toHaveLength(8);
+    expect(switches).toHaveLength(9);
   });
 
   it('each button has role="switch" and aria-checked', () => {
@@ -67,7 +70,7 @@ describe('LayerTogglesSlot', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
     const labels = switches.map((btn) => btn.textContent?.trim());
-    expect(labels).toEqual(['Flights', 'Ground', 'Unidentified', 'Ships', 'Airstrikes', 'Ground Combat', 'Targeted', 'Other Conflict']);
+    expect(labels).toEqual(['Flights', 'Ground', 'Unidentified', 'Ships', 'Events', 'Airstrikes', 'Ground Combat', 'Targeted', 'Other Conflict']);
   });
 
   it('clicking Flights toggle calls toggleFlights', () => {
@@ -80,6 +83,12 @@ describe('LayerTogglesSlot', () => {
     render(<LayerTogglesSlot />);
     fireEvent.click(screen.getByLabelText('Toggle Ships visibility'));
     expect(mockState.toggleShips).toHaveBeenCalledOnce();
+  });
+
+  it('clicking Events toggle calls toggleEvents', () => {
+    render(<LayerTogglesSlot />);
+    fireEvent.click(screen.getByLabelText('Toggle Events visibility'));
+    expect(mockState.toggleEvents).toHaveBeenCalledOnce();
   });
 
   it('clicking Airstrikes toggle calls toggleAirstrikes', () => {

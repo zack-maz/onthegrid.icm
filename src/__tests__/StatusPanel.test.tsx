@@ -35,7 +35,7 @@ describe('StatusPanel', () => {
     useFlightStore.setState({ connectionStatus: 'connected', flights: [], flightCount: 0 });
     useShipStore.setState({ connectionStatus: 'connected', shipCount: 0 });
     useEventStore.setState({ connectionStatus: 'connected', events: [], eventCount: 0 });
-    useUIStore.setState({ showFlights: true, showGroundTraffic: false, showShips: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true, showOtherConflict: true });
+    useUIStore.setState({ showFlights: true, showGroundTraffic: false, showShips: true, showEvents: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true, showOtherConflict: true });
   });
 
   it('renders three feed lines (flights, ships, events)', () => {
@@ -158,6 +158,14 @@ describe('StatusPanel', () => {
 
     // 5 total - 1 ground_combat = 4
     expect(screen.getByText('4')).toBeInTheDocument();
+  });
+
+  it('shows 0 events when showEvents is false', () => {
+    useEventStore.setState({ events: allEvents, eventCount: 5 });
+    useUIStore.setState({ showEvents: false });
+    render(<StatusPanel />);
+
+    expect(screen.queryByText('5')).not.toBeInTheDocument();
   });
 
   it('shows 0 for events when all conflict toggles are OFF', () => {

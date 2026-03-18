@@ -39,8 +39,8 @@ describe('Entity Layer Constants', () => {
       expect(ENTITY_COLORS.flight).toEqual([234, 179, 8]);
     });
 
-    it('flightUnidentified is red [239, 68, 68]', () => {
-      expect(ENTITY_COLORS.flightUnidentified).toEqual([239, 68, 68]);
+    it('flightUnidentified is darker red [185, 28, 28]', () => {
+      expect(ENTITY_COLORS.flightUnidentified).toEqual([185, 28, 28]);
     });
 
     it('ship is gray [156, 163, 175]', () => {
@@ -321,6 +321,7 @@ describe('useEntityLayers', () => {
       pulseEnabled: true,
       showFlights: true,
       showShips: true,
+      showEvents: true,
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
@@ -377,9 +378,9 @@ describe('useEntityLayers', () => {
     const flightLayer = result.current[1] as IconLayer;
     const getColor = flightLayer.props.getColor as (d: FlightEntity) => number[];
     const color = getColor(mockUnidentifiedFlight);
-    expect(color[0]).toBe(239); // R
-    expect(color[1]).toBe(68);  // G
-    expect(color[2]).toBe(68);  // B
+    expect(color[0]).toBe(185); // R
+    expect(color[1]).toBe(28);  // G
+    expect(color[2]).toBe(28);  // B
   });
 
   it('all entity layers have sizeUnits meters', () => {
@@ -481,6 +482,7 @@ describe('useEntityLayers layer visibility toggles', () => {
       pulseEnabled: true,
       showFlights: true,
       showShips: true,
+      showEvents: true,
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
@@ -489,8 +491,21 @@ describe('useEntityLayers layer visibility toggles', () => {
     });
   });
 
-  it('showFlights=false hides flight layer via visible prop', () => {
-    useUIStore.setState({ showFlights: false, showGroundTraffic: false });
+  it('hides all conflict layers when showEvents is false', () => {
+    useUIStore.setState({ showEvents: false });
+    const { result } = renderHook(() => useEntityLayers());
+    const airstrikeLayer = result.current.find((l: IconLayer) => l.id === 'airstrikes') as IconLayer;
+    const gcLayer = result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer;
+    const tLayer = result.current.find((l: IconLayer) => l.id === 'targeted') as IconLayer;
+    const ocLayer = result.current.find((l: IconLayer) => l.id === 'otherConflict') as IconLayer;
+    expect(airstrikeLayer.props.visible).toBe(false);
+    expect(gcLayer.props.visible).toBe(false);
+    expect(tLayer.props.visible).toBe(false);
+    expect(ocLayer.props.visible).toBe(false);
+  });
+
+  it('all flight toggles off hides flight layer via visible prop', () => {
+    useUIStore.setState({ showFlights: false, showGroundTraffic: false, pulseEnabled: false });
     const { result } = renderHook(() => useEntityLayers());
     const flightLayer = result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer;
     expect(flightLayer.props.visible).toBe(false);
@@ -531,15 +546,37 @@ describe('useEntityLayers layer visibility toggles', () => {
     expect(ocLayer.props.visible).toBe(false);
   });
 
-  it('showFlights=false + showGroundTraffic=true still includes flight layer with only ground flights', () => {
-    useUIStore.setState({ showFlights: false, showGroundTraffic: true });
+  it('showFlights=false + showGroundTraffic=true includes ground + unidentified flights (mutually exclusive)', () => {
+    useUIStore.setState({ showFlights: false, showGroundTraffic: true, pulseEnabled: true });
     const { result } = renderHook(() => useEntityLayers());
     const flightLayer = result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer;
     expect(flightLayer).toBeDefined();
-    // Should only contain the ground flight
+    // Ground flight + unidentified flight (unidentified is independent of showFlights)
     const data = flightLayer.props.data as FlightEntity[];
+    expect(data).toHaveLength(2);
+    expect(data.some((f) => f.data.onGround)).toBe(true);
+    expect(data.some((f) => f.data.unidentified)).toBe(true);
+  });
+
+  it('pulseEnabled=false hides unidentified flights even when showFlights is on', () => {
+    useUIStore.setState({ showFlights: true, showGroundTraffic: false, pulseEnabled: false });
+    const { result } = renderHook(() => useEntityLayers());
+    const flightLayer = result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer;
+    const data = flightLayer.props.data as FlightEntity[];
+    // Only regular airborne flight, no unidentified or ground
     expect(data).toHaveLength(1);
-    expect(data[0].data.onGround).toBe(true);
+    expect(data[0].data.unidentified).toBe(false);
+    expect(data[0].data.onGround).toBe(false);
+  });
+
+  it('unidentified flights are independent of showFlights toggle', () => {
+    useUIStore.setState({ showFlights: false, showGroundTraffic: false, pulseEnabled: true });
+    const { result } = renderHook(() => useEntityLayers());
+    const flightLayer = result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer;
+    const data = flightLayer.props.data as FlightEntity[];
+    // Only unidentified flight should remain
+    expect(data).toHaveLength(1);
+    expect(data[0].data.unidentified).toBe(true);
   });
 
   it('all toggles ON returns 8 layers including glow and highlight', () => {

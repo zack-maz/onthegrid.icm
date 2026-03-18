@@ -54,28 +54,33 @@ export function StatusPanel() {
 
   const showFlights = useUIStore((s) => s.showFlights);
   const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
+  const pulseEnabled = useUIStore((s) => s.pulseEnabled);
   const showShips = useUIStore((s) => s.showShips);
+  const showEvents = useUIStore((s) => s.showEvents);
   const showAirstrikes = useUIStore((s) => s.showAirstrikes);
   const showGroundCombat = useUIStore((s) => s.showGroundCombat);
   const showTargeted = useUIStore((s) => s.showTargeted);
   const showOtherConflict = useUIStore((s) => s.showOtherConflict);
 
-  let visibleFlights = 0;
-  if (showFlights && showGroundTraffic) visibleFlights = flights.length;
-  else if (showFlights) visibleFlights = flights.filter((f) => !f.data.onGround).length;
-  else if (showGroundTraffic) visibleFlights = flights.filter((f) => f.data.onGround).length;
+  const visibleFlights = flights.filter((f) => {
+    if (f.data.unidentified) return pulseEnabled;
+    if (f.data.onGround) return showGroundTraffic;
+    return showFlights;
+  }).length;
 
   const visibleShips = showShips ? shipCount : 0;
 
   let visibleEvents = 0;
-  if (showAirstrikes) visibleEvents += events.filter((e) =>
-    (CONFLICT_TOGGLE_GROUPS.showAirstrikes as readonly string[]).includes(e.type)).length;
-  if (showGroundCombat) visibleEvents += events.filter((e) =>
-    (CONFLICT_TOGGLE_GROUPS.showGroundCombat as readonly string[]).includes(e.type)).length;
-  if (showTargeted) visibleEvents += events.filter((e) =>
-    (CONFLICT_TOGGLE_GROUPS.showTargeted as readonly string[]).includes(e.type)).length;
-  if (showOtherConflict) visibleEvents += events.filter((e) =>
-    (CONFLICT_TOGGLE_GROUPS.showOtherConflict as readonly string[]).includes(e.type)).length;
+  if (showEvents) {
+    if (showAirstrikes) visibleEvents += events.filter((e) =>
+      (CONFLICT_TOGGLE_GROUPS.showAirstrikes as readonly string[]).includes(e.type)).length;
+    if (showGroundCombat) visibleEvents += events.filter((e) =>
+      (CONFLICT_TOGGLE_GROUPS.showGroundCombat as readonly string[]).includes(e.type)).length;
+    if (showTargeted) visibleEvents += events.filter((e) =>
+      (CONFLICT_TOGGLE_GROUPS.showTargeted as readonly string[]).includes(e.type)).length;
+    if (showOtherConflict) visibleEvents += events.filter((e) =>
+      (CONFLICT_TOGGLE_GROUPS.showOtherConflict as readonly string[]).includes(e.type)).length;
+  }
 
   return (
     <OverlayPanel className="min-w-[140px]">

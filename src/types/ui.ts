@@ -41,6 +41,7 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
 export interface LayerToggles {
   showFlights: boolean;
   showShips: boolean;
+  showEvents: boolean;
   showAirstrikes: boolean;
   showGroundCombat: boolean;
   showTargeted: boolean;
@@ -52,6 +53,7 @@ export interface LayerToggles {
 export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
   showFlights: true,
   showShips: true,
+  showEvents: true,
   showAirstrikes: true,
   showGroundCombat: true,
   showTargeted: true,
@@ -69,6 +71,7 @@ export interface UIState {
   showGroundTraffic: boolean;
   showFlights: boolean;
   showShips: boolean;
+  showEvents: boolean;
   showAirstrikes: boolean;
   showGroundCombat: boolean;
   showTargeted: boolean;
@@ -84,6 +87,7 @@ export interface UIState {
   toggleGroundTraffic: () => void;
   toggleFlights: () => void;
   toggleShips: () => void;
+  toggleEvents: () => void;
   toggleAirstrikes: () => void;
   toggleGroundCombat: () => void;
   toggleTargeted: () => void;

@@ -157,6 +157,7 @@ describe('BaseMap click handler', () => {
     useUIStore.setState({
       showFlights: true,
       showShips: true,
+      showEvents: true,
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
@@ -198,6 +199,7 @@ describe('BaseMap tooltip gating', () => {
     useUIStore.setState({
       showFlights: true,
       showShips: true,
+      showEvents: true,
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
@@ -217,6 +219,13 @@ describe('BaseMap tooltip gating', () => {
 
   it('hides tooltip for airstrike entity when showAirstrikes is OFF', () => {
     useUIStore.setState({ showAirstrikes: false });
+    render(<BaseMap />);
+    simulateHover(mockAirstrikeEntity);
+    expect(screen.queryByText('Aerial weapons')).toBeNull();
+  });
+
+  it('hides tooltip for conflict entity when showEvents is OFF', () => {
+    useUIStore.setState({ showEvents: false });
     render(<BaseMap />);
     simulateHover(mockAirstrikeEntity);
     expect(screen.queryByText('Aerial weapons')).toBeNull();
