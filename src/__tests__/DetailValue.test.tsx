@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { DetailValue } from '@/components/detail/DetailValue';
 
 describe('DetailValue', () => {
@@ -38,7 +38,9 @@ describe('DetailValue', () => {
     const valueEl = screen.getByText('300');
     expect(valueEl.classList.contains('animate-flash')).toBe(true);
 
-    vi.advanceTimersByTime(600);
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
 
     expect(valueEl.classList.contains('animate-flash')).toBe(false);
   });

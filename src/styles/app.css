@@ -29,7 +29,7 @@
   --z-modal: 40;
 
   /* Layout dimensions */
-  --width-detail-panel: 320px;
+  --width-detail-panel: 360px;
 }
 
 @layer base {
@@ -62,4 +62,13 @@
 
 .ripple {
   animation: ripple 2s ease-out infinite;
+}
+
+@keyframes flash {
+  0% { background-color: rgba(234, 179, 8, 0.3); }
+  100% { background-color: transparent; }
+}
+
+.animate-flash {
+  animation: flash 600ms ease-out;
 }
