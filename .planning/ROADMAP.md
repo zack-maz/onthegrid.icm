@@ -206,11 +206,12 @@ Plans:
   3. Multiple filters can be combined (e.g., nationality=Iran AND speed>500)
   4. Clearing all filters restores the full unfiltered view
   5. Active filter state is visible to the user (they can see what filters are applied)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 11-01: TBD
-- [ ] 11-02: TBD
+- [ ] 11-01-PLAN.md — Filter store, types, haversine utility, pure filter predicate with TDD
+- [ ] 11-02-PLAN.md — useFilteredEntities hook, useEntityLayers refactor, StatusPanel filter awareness, proximity circle layer
+- [ ] 11-03-PLAN.md — Filter panel UI (country, speed, altitude, proximity, date), BaseMap pin placement, AppShell wiring
 
 ### Phase 12: Analytics Dashboard
 **Goal**: Users see running numerical counters that summarize conflict activity at a glance
@@ -244,5 +245,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 08.1. GDELT Event Source | 2/2 | Complete    | 2026-03-17 |
 | 9. Layer Controls & News Toggle | 0/2 | Not started | - |
 | 10. Detail Panel | 2/2 | Complete    | 2026-03-18 |
-| 11. Smart Filters | 0/? | Not started | - |
+| 11. Smart Filters | 0/3 | Not started | - |
 | 12. Analytics Dashboard | 0/? | Not started | - |
