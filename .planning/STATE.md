@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in-progress
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-03-18T04:17:06Z"
-last_activity: 2026-03-18 -- Phase 10 Plan 01 completed (detail panel foundation)
+status: Detail panel fully implemented with per-type content, dismiss, clipboard, lost contact, relative time.
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-03-18T04:25:56.120Z"
+last_activity: 2026-03-18 -- Phase 10 Plan 02 completed (detail panel content)
 progress:
   total_phases: 13
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 24
-  completed_plans: 21
-  percent: 87
+  completed_plans: 22
+  percent: 92
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 10: Detail Panel -- entity detail panel with cross-store lookup and live data.
+**Current focus:** Phase 10: Detail Panel -- COMPLETE. Ready for phase boundary merge.
 
 ## Current Position
 
-Phase: 10 (Detail Panel) -- IN PROGRESS
-Plan: 1 of 2 in current phase (Plan 01 complete)
-Status: Detail panel foundation complete. Panel content assembly next.
-Last activity: 2026-03-18 -- Phase 10 Plan 01 completed (detail panel foundation)
+Phase: 10 (Detail Panel) -- COMPLETE
+Plan: 2 of 2 in current phase (all plans complete)
+Status: Detail panel fully implemented with per-type content, dismiss, clipboard, lost contact, relative time.
+Last activity: 2026-03-18 -- Phase 10 Plan 02 completed (detail panel content)
 
-Progress: [████████░░] 87%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
-- Average duration: 4.0min
-- Total execution time: 1.41 hours
+- Total plans completed: 22
+- Average duration: 3.9min
+- Total execution time: 1.46 hours
 
 **By Phase:**
 
@@ -53,10 +53,10 @@ Progress: [████████░░] 87%
 | 8. Ship & Conflict Data | 1/2 | 6min | 6min |
 | 8.1 GDELT Default Source | 2/3 | 6min | 3min |
 | 9. Layer Controls & News | 1/2 | 12min | 12min |
-| 10. Detail Panel | 1/2 | 4min | 4min |
+| 10. Detail Panel | 2/2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 08-01 (6min), 08.1-01 (3min), 08.1-02 (3min), 09-01 (12min), 10-01 (4min)
+- Last 5 plans: 08.1-01 (3min), 08.1-02 (3min), 09-01 (12min), 10-01 (4min), 10-02 (3min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -67,6 +67,7 @@ Progress: [████████░░] 87%
 | Phase 08.1 P02 | 3min | 2 tasks | 8 files |
 | Phase 09 P01 | 12min | 2 tasks | 11 files |
 | Phase 10 P01 | 4min | 2 tasks | 9 files |
+| Phase 10 P02 | 3min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -162,6 +163,10 @@ Recent decisions affecting current work:
 - [Phase 10]: Removed pinned tooltip (clickState) in favor of detail panel for selected entity display
 - [Phase 10]: Hover tooltip remains for quick entity identification, detail panel for deep inspection
 - [Phase 10]: useRef for last-known entity tracking to survive store updates without extra renders
+- [Phase 10]: Inline useRelativeTime hook with 1s interval for live timestamp ticking
+- [Phase 10]: Copy-to-clipboard with 2s "Copied!" feedback timeout
+- [Phase 10]: Lost contact banner + content grayout (opacity-50 grayscale) preserving last-known data
+- [Phase 10]: Panel slides from right side (top-0 right-0, translate-x-full when hidden) with border-l
 
 ### Roadmap Evolution
 
@@ -179,6 +184,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T04:17:06Z
-Stopped at: Completed 10-01-PLAN.md
-Resume file: .planning/phases/10-detail-panel/10-02-PLAN.md
+Last session: 2026-03-18T04:25:56.117Z
+Stopped at: Completed 10-02-PLAN.md
+Resume file: None

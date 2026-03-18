@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 7: adsb.lol Data Source** - adsb.lol as third flight data source (free, no API key, 30s polling)
 - [ ] **Phase 8: Ship & Conflict Data Feeds** - AIS ship tracking and ACLED conflict event data
 - [ ] **Phase 9: Layer Controls & News Toggle** - Layer visibility toggles and news content control
-- [ ] **Phase 10: Detail Panel** - Click-to-inspect panel showing live entity stats
+- [x] **Phase 10: Detail Panel** - Click-to-inspect panel showing live entity stats (completed 2026-03-18)
 - [ ] **Phase 11: Smart Filters** - Advanced filtering by nationality, speed, altitude, proximity, date range
 - [ ] **Phase 12: Analytics Dashboard** - Running counters for strikes, sorties, and intercepts
 
@@ -243,6 +243,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 8. Ship & Conflict Data Feeds | 0/2 | Not started | - |
 | 08.1. GDELT Event Source | 2/2 | Complete    | 2026-03-17 |
 | 9. Layer Controls & News Toggle | 0/2 | Not started | - |
-| 10. Detail Panel | 1/2 | In Progress|  |
+| 10. Detail Panel | 2/2 | Complete   | 2026-03-18 |
 | 11. Smart Filters | 0/? | Not started | - |
 | 12. Analytics Dashboard | 0/? | Not started | - |
