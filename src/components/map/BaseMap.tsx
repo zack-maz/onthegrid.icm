@@ -45,12 +45,13 @@ export function BaseMap() {
   const setCursorPosition = useMapStore((s) => s.setCursorPosition);
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
   const selectEntity = useUIStore((s) => s.selectEntity);
+  const openDetailPanel = useUIStore((s) => s.openDetailPanel);
+  const closeDetailPanel = useUIStore((s) => s.closeDetailPanel);
   const hoverEntity = useUIStore((s) => s.hoverEntity);
   const showNews = useUIStore((s) => s.showNews);
   const entityLayers = useEntityLayers();
 
   const [hover, setHover] = useState<HoverState | null>(null);
-  const [clickState, setClickState] = useState<{ entity: MapEntity; x: number; y: number } | null>(null);
 
   const handleDeckHover = useCallback(
     (info: PickingInfo) => {
@@ -69,20 +70,21 @@ export function BaseMap() {
   const handleDeckClick = useCallback(
     (info: PickingInfo) => {
       if (!info.object) {
-        selectEntity(null);
-        setClickState(null);
+        // Empty map click does NOT dismiss panel -- panel persists until explicitly closed
         return;
       }
       const entity = info.object as MapEntity;
       if (selectedEntityId === entity.id) {
+        // Re-click same entity: deselect and close panel
         selectEntity(null);
-        setClickState(null);
+        closeDetailPanel();
       } else {
+        // Click new entity: select and open panel
         selectEntity(entity.id);
-        setClickState({ entity, x: info.x, y: info.y });
+        openDetailPanel();
       }
     },
-    [selectedEntityId, selectEntity],
+    [selectedEntityId, selectEntity, openDetailPanel, closeDetailPanel],
   );
 
   const handleLoad = useCallback(
@@ -131,18 +133,16 @@ export function BaseMap() {
     [setCursorPosition],
   );
 
-  // Show pinned tooltip for selected entity, or hover tooltip
+  // Hover tooltip only (pinned tooltip replaced by detail panel)
   // Event entities (drone/missile) only show tooltips when News toggle is ON
   const isEventEntity = (e: MapEntity) => e.type === 'drone' || e.type === 'missile';
-  const rawTooltipEntity = clickState?.entity ?? hover?.entity ?? null;
+  const rawTooltipEntity = hover?.entity ?? null;
   const tooltipEntity = rawTooltipEntity && isEventEntity(rawTooltipEntity) && !showNews
     ? null
     : rawTooltipEntity;
-  const tooltipPos = clickState
-    ? { x: clickState.x, y: clickState.y }
-    : hover
-      ? { x: hover.x, y: hover.y }
-      : { x: 0, y: 0 };
+  const tooltipPos = hover
+    ? { x: hover.x, y: hover.y }
+    : { x: 0, y: 0 };
 
   return (
     <div className="relative h-full w-full">

@@ -24,19 +24,15 @@ export function AppShell() {
         <BaseMap />
       </div>
 
-      {/* Top-left: Title */}
-      <div className="absolute top-4 left-4 z-[var(--z-overlay)]">
+      {/* Top-left: Title + Status + Counters + Layer toggles */}
+      <div className="absolute top-4 left-4 z-[var(--z-controls)] flex flex-col items-start gap-2">
         <TitleSlot />
-      </div>
-
-      {/* Top-right: Status panel + Counters + Layer toggles */}
-      <div className="absolute top-4 right-4 z-[var(--z-controls)] flex flex-col items-end gap-2">
         <StatusPanel />
         <CountersSlot />
         <LayerTogglesSlot />
       </div>
 
-{/* Left edge: Detail panel (hidden by default) */}
+      {/* Right edge: Detail panel (hidden by default) */}
       <DetailPanelSlot />
     </div>
   );

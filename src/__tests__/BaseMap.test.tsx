@@ -137,6 +137,60 @@ function simulateHoverClear() {
   });
 }
 
+function simulateClick(entity: unknown) {
+  const onClick = __lastOverlayProps.onClick as (info: PickingInfo) => void;
+  act(() => {
+    onClick({ object: entity, x: 100, y: 100 } as PickingInfo);
+  });
+}
+
+function simulateEmptyClick() {
+  const onClick = __lastOverlayProps.onClick as (info: PickingInfo) => void;
+  act(() => {
+    onClick({ object: null, x: 50, y: 50 } as unknown as PickingInfo);
+  });
+}
+
+describe('BaseMap click handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUIStore.setState({
+      showNews: true,
+      showFlights: true,
+      showShips: true,
+      showDrones: true,
+      showMissiles: true,
+      showGroundTraffic: false,
+      selectedEntityId: null,
+      hoveredEntityId: null,
+      isDetailPanelOpen: false,
+    });
+  });
+
+  it('does not clear selectedEntityId on empty map click', () => {
+    useUIStore.setState({ selectedEntityId: 'flight-abc', isDetailPanelOpen: true });
+    render(<BaseMap />);
+    simulateEmptyClick();
+    expect(useUIStore.getState().selectedEntityId).toBe('flight-abc');
+    expect(useUIStore.getState().isDetailPanelOpen).toBe(true);
+  });
+
+  it('clicking entity opens detail panel', () => {
+    render(<BaseMap />);
+    simulateClick(mockFlight);
+    expect(useUIStore.getState().selectedEntityId).toBe('flight-abc');
+    expect(useUIStore.getState().isDetailPanelOpen).toBe(true);
+  });
+
+  it('clicking same entity again closes detail panel', () => {
+    useUIStore.setState({ selectedEntityId: 'flight-abc', isDetailPanelOpen: true });
+    render(<BaseMap />);
+    simulateClick(mockFlight);
+    expect(useUIStore.getState().selectedEntityId).toBeNull();
+    expect(useUIStore.getState().isDetailPanelOpen).toBe(false);
+  });
+});
+
 describe('BaseMap tooltip gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();

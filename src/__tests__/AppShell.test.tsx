@@ -12,12 +12,12 @@ describe('AppShell', () => {
     expect(screen.getByTestId('title-slot')).toBeInTheDocument();
   });
 
-  it('renders counters slot in top-right', () => {
+  it('renders counters slot', () => {
     render(<AppShell />);
     expect(screen.getByTestId('counters-slot')).toBeInTheDocument();
   });
 
-  it('renders layer toggles slot in top-right', () => {
+  it('renders layer toggles slot', () => {
     render(<AppShell />);
     expect(screen.getByTestId('layer-toggles-slot')).toBeInTheDocument();
   });
