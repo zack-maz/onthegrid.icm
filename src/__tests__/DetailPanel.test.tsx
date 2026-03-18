@@ -89,7 +89,8 @@ describe('DetailPanelSlot', () => {
 
     render(<DetailPanelSlot />);
 
-    expect(screen.getByText('QTR123')).toBeInTheDocument();
+    // QTR123 appears in header + FlightDetail callsign field
+    expect(screen.getAllByText('QTR123').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('abc123')).toBeInTheDocument();
   });
 
@@ -99,7 +100,8 @@ describe('DetailPanelSlot', () => {
 
     render(<DetailPanelSlot />);
 
-    expect(screen.getByText('EVER GIVEN')).toBeInTheDocument();
+    // EVER GIVEN appears in header + ShipDetail name field
+    expect(screen.getAllByText('EVER GIVEN').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders event type when drone selected', () => {
@@ -108,8 +110,10 @@ describe('DetailPanelSlot', () => {
 
     render(<DetailPanelSlot />);
 
-    expect(screen.getByText('Drone')).toBeInTheDocument();
-    expect(screen.getByText('Explosions/Remote violence')).toBeInTheDocument();
+    // Drone appears in header type label + EventDetail type field
+    expect(screen.getAllByText('Drone').length).toBeGreaterThanOrEqual(1);
+    // Event type appears in header name + EventDetail event type field
+    expect(screen.getAllByText('Explosions/Remote violence').length).toBeGreaterThanOrEqual(1);
   });
 
   it('header shows type label and entity name', () => {
@@ -207,7 +211,7 @@ describe('DetailPanelSlot', () => {
     useUIStore.setState({ selectedEntityId: 'flight-abc', isDetailPanelOpen: true });
 
     const { rerender } = render(<DetailPanelSlot />);
-    expect(screen.getByText('QTR123')).toBeInTheDocument();
+    expect(screen.getAllByText('QTR123').length).toBeGreaterThanOrEqual(1);
 
     // Entity disappears
     act(() => {
