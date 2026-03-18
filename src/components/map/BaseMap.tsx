@@ -53,7 +53,6 @@ export function BaseMap() {
   const showAirstrikes = useUIStore((s) => s.showAirstrikes);
   const showGroundCombat = useUIStore((s) => s.showGroundCombat);
   const showTargeted = useUIStore((s) => s.showTargeted);
-  const showOtherConflict = useUIStore((s) => s.showOtherConflict);
   const entityLayers = useEntityLayers();
 
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -145,8 +144,7 @@ export function BaseMap() {
     if ((CONFLICT_TOGGLE_GROUPS.showAirstrikes as readonly string[]).includes(entity.type)) return showAirstrikes;
     if ((CONFLICT_TOGGLE_GROUPS.showGroundCombat as readonly string[]).includes(entity.type)) return showGroundCombat;
     if ((CONFLICT_TOGGLE_GROUPS.showTargeted as readonly string[]).includes(entity.type)) return showTargeted;
-    if ((CONFLICT_TOGGLE_GROUPS.showOtherConflict as readonly string[]).includes(entity.type)) return showOtherConflict;
-    return true;
+    return showGroundCombat;
   }
 
   const rawTooltipEntity = hover?.entity ?? null;

@@ -7,9 +7,8 @@ import type { ConflictEventType } from '../../server/types.js';
 
 export const CONFLICT_TOGGLE_GROUPS = {
   showAirstrikes: ['airstrike'] as const,
-  showGroundCombat: ['ground_combat', 'shelling', 'bombing'] as const,
+  showGroundCombat: ['ground_combat', 'shelling', 'bombing', 'assault', 'blockade', 'ceasefire_violation', 'mass_violence', 'wmd'] as const,
   showTargeted: ['assassination', 'abduction'] as const,
-  showOtherConflict: ['assault', 'blockade', 'ceasefire_violation', 'mass_violence', 'wmd'] as const,
 } as const;
 
 export type ConflictToggleKey = keyof typeof CONFLICT_TOGGLE_GROUPS;
@@ -45,7 +44,6 @@ export interface LayerToggles {
   showAirstrikes: boolean;
   showGroundCombat: boolean;
   showTargeted: boolean;
-  showOtherConflict: boolean;
   showGroundTraffic: boolean;
   pulseEnabled: boolean;
 }
@@ -57,7 +55,6 @@ export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
   showAirstrikes: true,
   showGroundCombat: true,
   showTargeted: true,
-  showOtherConflict: true,
   showGroundTraffic: false,
   pulseEnabled: true,
 };
@@ -76,7 +73,6 @@ export interface UIState {
   showAirstrikes: boolean;
   showGroundCombat: boolean;
   showTargeted: boolean;
-  showOtherConflict: boolean;
   selectedEntityId: string | null;
   hoveredEntityId: string | null;
   openDetailPanel: () => void;
@@ -93,7 +89,6 @@ export interface UIState {
   toggleAirstrikes: () => void;
   toggleGroundCombat: () => void;
   toggleTargeted: () => void;
-  toggleOtherConflict: () => void;
   selectEntity: (id: string | null) => void;
   hoverEntity: (id: string | null) => void;
 }

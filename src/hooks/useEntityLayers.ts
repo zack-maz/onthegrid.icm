@@ -1,9 +1,8 @@
 import { useMemo, useEffect, useRef, useState } from 'react';
-import { IconLayer } from '@deck.gl/layers';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
+import { IconLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { useUIStore } from '@/stores/uiStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 import {
   ENTITY_COLORS,
   ICON_SIZE,
@@ -11,7 +10,7 @@ import {
   altitudeToOpacity,
 } from '@/components/map/layers/constants';
 import { getIconAtlas, ICON_MAPPING } from '@/components/map/layers/icons';
-import { CONFLICT_TOGGLE_GROUPS, isConflictEventType } from '@/types/ui';
+import { CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
 import type { MapEntity, FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/entities';
 
 const DIM_ALPHA = 40;
@@ -41,7 +40,7 @@ function getColorForEntity(entity: MapEntity): [number, number, number] {
     case 'bombing': return [...ENTITY_COLORS.groundCombat];
     case 'assassination':
     case 'abduction': return [...ENTITY_COLORS.targeted];
-    default: return [...ENTITY_COLORS.otherConflict];
+    default: return [...ENTITY_COLORS.groundCombat];
   }
 }
 
@@ -54,13 +53,14 @@ function getAngleForEntity(entity: MapEntity): number {
 }
 
 /**
- * Returns Deck.gl IconLayer array driven by Zustand store data.
- * All layers are pickable. Hovered/selected entity is highlighted; others dim.
+ * Returns Deck.gl layer array driven by filtered entity data and Zustand store toggles.
+ * Includes proximity circle layer when a pin is set.
+ * All entity layers are pickable. Hovered/selected entity is highlighted; others dim.
  */
 export function useEntityLayers() {
-  const allFlights = useFlightStore((s) => s.flights);
-  const ships = useShipStore((s) => s.ships);
-  const events = useEventStore((s) => s.events);
+  // Consume filtered arrays (not raw store data)
+  const { flights: allFlights, ships, events } = useFilteredEntities();
+
   const pulseEnabled = useUIStore((s) => s.pulseEnabled);
   const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
   const showFlights = useUIStore((s) => s.showFlights);
@@ -69,9 +69,12 @@ export function useEntityLayers() {
   const showAirstrikes = useUIStore((s) => s.showAirstrikes);
   const showGroundCombat = useUIStore((s) => s.showGroundCombat);
   const showTargeted = useUIStore((s) => s.showTargeted);
-  const showOtherConflict = useUIStore((s) => s.showOtherConflict);
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
   const hoveredEntityId = useUIStore((s) => s.hoveredEntityId);
+
+  // Proximity circle state
+  const proximityPin = useFilterStore((s) => s.proximityPin);
+  const proximityRadiusKm = useFilterStore((s) => s.proximityRadiusKm);
 
   // Active entity = hovered (preview) or selected (pinned)
   const activeId = hoveredEntityId ?? selectedEntityId;
@@ -93,9 +96,6 @@ export function useEntityLayers() {
     [events]);
   const targetedEvents = useMemo(() =>
     events.filter((e) => (CONFLICT_TOGGLE_GROUPS.showTargeted as readonly string[]).includes(e.type)),
-    [events]);
-  const otherConflictEvents = useMemo(() =>
-    events.filter((e) => (CONFLICT_TOGGLE_GROUPS.showOtherConflict as readonly string[]).includes(e.type)),
     [events]);
 
   // Pulse animation state
@@ -123,6 +123,21 @@ export function useEntityLayers() {
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
   }, [pulseEnabled]);
+
+  // Proximity circle layer
+  const proximityCircleLayer = useMemo(() => new ScatterplotLayer({
+    id: 'proximity-circle',
+    data: proximityPin ? [proximityPin] : [],
+    getPosition: (d: { lat: number; lng: number }) => [d.lng, d.lat],
+    getRadius: proximityRadiusKm * 1000,
+    radiusUnits: 'meters' as const,
+    getFillColor: [59, 130, 246, 30],
+    getLineColor: [59, 130, 246, 120],
+    stroked: true,
+    filled: true,
+    lineWidthMinPixels: 2,
+    pickable: false,
+  }), [proximityPin, proximityRadiusKm]);
 
   // Ship layer
   const shipLayer = useMemo(() => new IconLayer<ShipEntity>({
@@ -172,14 +187,14 @@ export function useEntityLayers() {
     updateTriggers: { getColor: [activeId] },
   }), [airstrikeEvents, showEvents, showAirstrikes, activeId]);
 
-  // Ground combat layer
+  // Ground combat layer (includes assault, blockade, ceasefire_violation, mass_violence, wmd)
   const groundCombatLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
     id: 'groundCombat',
     visible: showEvents && showGroundCombat,
     data: groundCombatEvents,
     iconAtlas: getIconAtlas(),
     iconMapping: ICON_MAPPING,
-    getIcon: () => 'explosion',
+    getIcon: (d: ConflictEventEntity) => getIconForEntity(d),
     getPosition: (d: ConflictEventEntity) => [d.lng, d.lat],
     getSize: ICON_SIZE.groundCombat.meters,
     sizeUnits: 'meters' as const,
@@ -219,30 +234,6 @@ export function useEntityLayers() {
     pickable: true,
     updateTriggers: { getColor: [activeId] },
   }), [targetedEvents, showEvents, showTargeted, activeId]);
-
-  // Other conflict layer
-  const otherConflictLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
-    id: 'otherConflict',
-    visible: showEvents && showOtherConflict,
-    data: otherConflictEvents,
-    iconAtlas: getIconAtlas(),
-    iconMapping: ICON_MAPPING,
-    getIcon: () => 'xmark',
-    getPosition: (d: ConflictEventEntity) => [d.lng, d.lat],
-    getSize: ICON_SIZE.otherConflict.meters,
-    sizeUnits: 'meters' as const,
-    sizeMinPixels: ICON_SIZE.otherConflict.minPixels,
-    sizeMaxPixels: ICON_SIZE.otherConflict.maxPixels,
-    getAngle: () => 0,
-    getColor: (d: ConflictEventEntity) => {
-      const [r, g, b] = ENTITY_COLORS.otherConflict;
-      if (activeId && d.id !== activeId) return [r, g, b, DIM_ALPHA];
-      return [r, g, b, 255];
-    },
-    billboard: false,
-    pickable: true,
-    updateTriggers: { getColor: [activeId] },
-  }), [otherConflictEvents, showEvents, showOtherConflict, activeId]);
 
   // Flight layer
   const showAnyFlights = showFlights || showGroundTraffic || pulseEnabled;
@@ -323,5 +314,5 @@ export function useEntityLayers() {
     pickable: false,
   }), [activeEntity]);
 
-  return [shipLayer, flightLayer, airstrikeLayer, groundCombatLayer, targetedLayer, otherConflictLayer, glowLayer, highlightLayer];
+  return [proximityCircleLayer, shipLayer, flightLayer, airstrikeLayer, groundCombatLayer, targetedLayer, glowLayer, highlightLayer];
 }

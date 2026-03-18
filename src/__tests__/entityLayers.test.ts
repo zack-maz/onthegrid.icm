@@ -59,9 +59,6 @@ describe('Entity Layer Constants', () => {
       expect(ENTITY_COLORS.targeted).toEqual([139, 30, 30]);
     });
 
-    it('otherConflict is red [239, 68, 68]', () => {
-      expect(ENTITY_COLORS.otherConflict).toEqual([239, 68, 68]);
-    });
   });
 
   describe('ICON_SIZE', () => {
@@ -85,9 +82,6 @@ describe('Entity Layer Constants', () => {
       expect(ICON_SIZE.targeted).toEqual({ meters: 8000, minPixels: 24, maxPixels: 160 });
     });
 
-    it('otherConflict has meters, minPixels, and maxPixels properties', () => {
-      expect(ICON_SIZE.otherConflict).toEqual({ meters: 8000, minPixels: 24, maxPixels: 160 });
-    });
   });
 
   describe('PULSE_CONFIG', () => {
@@ -325,7 +319,6 @@ describe('useEntityLayers', () => {
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
-      showOtherConflict: true,
       showGroundTraffic: false,
     });
   });
@@ -335,35 +328,35 @@ describe('useEntityLayers', () => {
     expect(result.current).toHaveLength(8);
   });
 
-  it('returns layers in order: ships, flights, airstrikes, groundCombat, targeted, otherConflict, entity-glow, entity-highlight', () => {
+  it('returns layers in order: proximity-circle, ships, flights, airstrikes, groundCombat, targeted, entity-glow, entity-highlight', () => {
     const { result } = renderHook(() => useEntityLayers());
     const ids = result.current.map((l: { id: string }) => l.id);
-    expect(ids).toEqual(['ships', 'flights', 'airstrikes', 'groundCombat', 'targeted', 'otherConflict', 'entity-glow', 'entity-highlight']);
+    expect(ids).toEqual(['proximity-circle', 'ships', 'flights', 'airstrikes', 'groundCombat', 'targeted', 'entity-glow', 'entity-highlight']);
   });
 
   it('flight layer uses sizeUnits meters', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const flightLayer = result.current[1] as IconLayer;
+    const flightLayer = result.current[2] as IconLayer;
     expect(flightLayer.props.sizeUnits).toBe('meters');
   });
 
   it('flight layer getAngle negates heading', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const flightLayer = result.current[1] as IconLayer;
+    const flightLayer = result.current[2] as IconLayer;
     const getAngle = flightLayer.props.getAngle as (d: FlightEntity) => number;
     expect(getAngle(mockRegularFlight)).toBe(-90);
   });
 
   it('flight layer getAngle returns 0 for null heading', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const flightLayer = result.current[1] as IconLayer;
+    const flightLayer = result.current[2] as IconLayer;
     const getAngle = flightLayer.props.getAngle as (d: FlightEntity) => number;
     expect(getAngle(mockUnidentifiedFlight)).toBe(0);
   });
 
   it('flight layer getColor returns yellow for regular flights', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const flightLayer = result.current[1] as IconLayer;
+    const flightLayer = result.current[2] as IconLayer;
     const getColor = flightLayer.props.getColor as (d: FlightEntity) => number[];
     const color = getColor(mockRegularFlight);
     expect(color[0]).toBe(234); // R
@@ -375,7 +368,7 @@ describe('useEntityLayers', () => {
 
   it('flight layer getColor returns red for unidentified flights', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const flightLayer = result.current[1] as IconLayer;
+    const flightLayer = result.current[2] as IconLayer;
     const getColor = flightLayer.props.getColor as (d: FlightEntity) => number[];
     const color = getColor(mockUnidentifiedFlight);
     expect(color[0]).toBe(185); // R
@@ -385,7 +378,7 @@ describe('useEntityLayers', () => {
 
   it('all entity layers have sizeUnits meters', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const entityLayers = result.current.filter((l: { id: string }) => !l.id.startsWith('entity-'));
+    const entityLayers = result.current.filter((l: { id: string }) => !l.id.startsWith('entity-') && l.id !== 'proximity-circle');
     for (const layer of entityLayers) {
       expect((layer as IconLayer).props.sizeUnits).toBe('meters');
     }
@@ -393,7 +386,7 @@ describe('useEntityLayers', () => {
 
   it('all entity layers have sizeMinPixels and sizeMaxPixels set', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const entityLayers = result.current.filter((l: { id: string }) => !l.id.startsWith('entity-'));
+    const entityLayers = result.current.filter((l: { id: string }) => !l.id.startsWith('entity-') && l.id !== 'proximity-circle');
     for (const layer of entityLayers) {
       const props = (layer as IconLayer).props;
       expect(props.sizeMinPixels).toBeGreaterThan(0);
@@ -403,13 +396,13 @@ describe('useEntityLayers', () => {
 
   it('flight layer getSize returns ICON_SIZE.flight.meters', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const flightLayer = result.current[1] as IconLayer;
+    const flightLayer = result.current[2] as IconLayer;
     expect(flightLayer.props.getSize).toBe(ICON_SIZE.flight.meters);
   });
 
   it('ship layer contains ship data from store', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const shipLayer = result.current[0] as IconLayer;
+    const shipLayer = result.current[1] as IconLayer;
     expect(shipLayer.props.data).toHaveLength(1);
   });
 
@@ -419,10 +412,11 @@ describe('useEntityLayers', () => {
     expect(airstrikeLayer.props.data).toHaveLength(1);
   });
 
-  it('groundCombat layer contains filtered ground combat events', () => {
+  it('groundCombat layer contains filtered ground combat events (including blockade)', () => {
     const { result } = renderHook(() => useEntityLayers());
     const gcLayer = result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer;
-    expect(gcLayer.props.data).toHaveLength(1);
+    // ground_combat + blockade (merged from former otherConflict group)
+    expect(gcLayer.props.data).toHaveLength(2);
   });
 
   it('targeted layer contains filtered targeted events', () => {
@@ -431,10 +425,11 @@ describe('useEntityLayers', () => {
     expect(tLayer.props.data).toHaveLength(1);
   });
 
-  it('otherConflict layer contains filtered other conflict events', () => {
+  it('groundCombat layer includes former otherConflict events (blockade)', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const ocLayer = result.current.find((l: IconLayer) => l.id === 'otherConflict') as IconLayer;
-    expect(ocLayer.props.data).toHaveLength(1);
+    const gcLayer = result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer;
+    // ground_combat + blockade (formerly otherConflict)
+    expect(gcLayer.props.data).toHaveLength(2);
   });
 
   it('ship/event layers are empty when stores are empty', () => {
@@ -445,12 +440,10 @@ describe('useEntityLayers', () => {
     const airstrikes = result.current.find((l: IconLayer) => l.id === 'airstrikes') as IconLayer;
     const groundCombat = result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer;
     const targeted = result.current.find((l: IconLayer) => l.id === 'targeted') as IconLayer;
-    const otherConflict = result.current.find((l: IconLayer) => l.id === 'otherConflict') as IconLayer;
     expect(ships.props.data).toEqual([]);
     expect(airstrikes.props.data).toEqual([]);
     expect(groundCombat.props.data).toEqual([]);
     expect(targeted.props.data).toEqual([]);
-    expect(otherConflict.props.data).toEqual([]);
   });
 
   it('all layer IDs are unique', () => {
@@ -486,7 +479,6 @@ describe('useEntityLayers layer visibility toggles', () => {
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
-      showOtherConflict: true,
       showGroundTraffic: false,
     });
   });
@@ -497,11 +489,9 @@ describe('useEntityLayers layer visibility toggles', () => {
     const airstrikeLayer = result.current.find((l: IconLayer) => l.id === 'airstrikes') as IconLayer;
     const gcLayer = result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer;
     const tLayer = result.current.find((l: IconLayer) => l.id === 'targeted') as IconLayer;
-    const ocLayer = result.current.find((l: IconLayer) => l.id === 'otherConflict') as IconLayer;
     expect(airstrikeLayer.props.visible).toBe(false);
     expect(gcLayer.props.visible).toBe(false);
     expect(tLayer.props.visible).toBe(false);
-    expect(ocLayer.props.visible).toBe(false);
   });
 
   it('all flight toggles off hides flight layer via visible prop', () => {
@@ -539,13 +529,6 @@ describe('useEntityLayers layer visibility toggles', () => {
     expect(tLayer.props.visible).toBe(false);
   });
 
-  it('showOtherConflict=false hides otherConflict layer via visible prop', () => {
-    useUIStore.setState({ showOtherConflict: false });
-    const { result } = renderHook(() => useEntityLayers());
-    const ocLayer = result.current.find((l: IconLayer) => l.id === 'otherConflict') as IconLayer;
-    expect(ocLayer.props.visible).toBe(false);
-  });
-
   it('showFlights=false + showGroundTraffic=true includes ground + unidentified flights (mutually exclusive)', () => {
     useUIStore.setState({ showFlights: false, showGroundTraffic: true, pulseEnabled: true });
     const { result } = renderHook(() => useEntityLayers());
@@ -579,11 +562,11 @@ describe('useEntityLayers layer visibility toggles', () => {
     expect(data[0].data.unidentified).toBe(true);
   });
 
-  it('all toggles ON returns 8 layers including glow and highlight', () => {
+  it('all toggles ON returns 8 layers including proximity-circle, glow and highlight', () => {
     const { result } = renderHook(() => useEntityLayers());
     expect(result.current).toHaveLength(8);
     const ids = result.current.map((l: { id: string }) => l.id);
-    expect(ids).toEqual(['ships', 'flights', 'airstrikes', 'groundCombat', 'targeted', 'otherConflict', 'entity-glow', 'entity-highlight']);
+    expect(ids).toEqual(['proximity-circle', 'ships', 'flights', 'airstrikes', 'groundCombat', 'targeted', 'entity-glow', 'entity-highlight']);
   });
 
   it('airstrike layer has pickable=true', () => {

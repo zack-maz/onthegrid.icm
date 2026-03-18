@@ -27,15 +27,15 @@ const allFlights = [...airborne, ...ground];
 const airstrikes = [makeEvent('a1', 'airstrike'), makeEvent('a2', 'airstrike')];
 const groundCombat = [makeEvent('gc1', 'ground_combat')];
 const targeted = [makeEvent('t1', 'assassination')];
-const otherConflict = [makeEvent('o1', 'blockade')];
-const allEvents = [...airstrikes, ...groundCombat, ...targeted, ...otherConflict];
+const otherGroundCombat = [makeEvent('o1', 'blockade')];
+const allEvents = [...airstrikes, ...groundCombat, ...targeted, ...otherGroundCombat];
 
 describe('StatusPanel', () => {
   beforeEach(() => {
     useFlightStore.setState({ connectionStatus: 'connected', flights: [], flightCount: 0 });
     useShipStore.setState({ connectionStatus: 'connected', shipCount: 0 });
     useEventStore.setState({ connectionStatus: 'connected', events: [], eventCount: 0 });
-    useUIStore.setState({ showFlights: true, showGroundTraffic: false, showShips: true, showEvents: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true, showOtherConflict: true });
+    useUIStore.setState({ showFlights: true, showGroundTraffic: false, showShips: true, showEvents: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true });
   });
 
   it('renders three feed lines (flights, ships, events)', () => {
@@ -156,8 +156,8 @@ describe('StatusPanel', () => {
     useUIStore.setState({ showGroundCombat: false });
     render(<StatusPanel />);
 
-    // 5 total - 1 ground_combat = 4
-    expect(screen.getByText('4')).toBeInTheDocument();
+    // 5 total - 2 (ground_combat + blockade) = 3
+    expect(screen.getByText('3')).toBeInTheDocument();
   });
 
   it('shows 0 events when showEvents is false', () => {
@@ -170,7 +170,7 @@ describe('StatusPanel', () => {
 
   it('shows 0 for events when all conflict toggles are OFF', () => {
     useEventStore.setState({ events: allEvents, eventCount: 5 });
-    useUIStore.setState({ showAirstrikes: false, showGroundCombat: false, showTargeted: false, showOtherConflict: false });
+    useUIStore.setState({ showAirstrikes: false, showGroundCombat: false, showTargeted: false });
     render(<StatusPanel />);
 
     expect(screen.queryByText('5')).not.toBeInTheDocument();

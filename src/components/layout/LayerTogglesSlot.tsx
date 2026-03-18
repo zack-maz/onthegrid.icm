@@ -8,17 +8,19 @@ interface ToggleRowProps {
   active: boolean;
   onToggle: () => void;
   indent?: boolean;
+  disabled?: boolean;
 }
 
-function ToggleRow({ color, label, active, onToggle, indent = false }: ToggleRowProps) {
+function ToggleRow({ color, label, active, onToggle, indent = false, disabled = false }: ToggleRowProps) {
   return (
     <button
       role="switch"
       aria-checked={active}
       aria-label={`Toggle ${label} visibility`}
       onClick={onToggle}
+      disabled={disabled}
       className={`flex w-full items-center gap-2 transition-opacity ${
-        active ? 'opacity-100' : 'opacity-40'
+        disabled ? 'opacity-20 cursor-not-allowed' : active ? 'opacity-100' : 'opacity-40'
       } ${indent ? 'pl-4 text-[10px]' : 'text-xs'}`}
     >
       <span
@@ -42,7 +44,6 @@ export function LayerTogglesSlot() {
   const showAirstrikes = useUIStore((s) => s.showAirstrikes);
   const showGroundCombat = useUIStore((s) => s.showGroundCombat);
   const showTargeted = useUIStore((s) => s.showTargeted);
-  const showOtherConflict = useUIStore((s) => s.showOtherConflict);
 
   const toggleFlights = useUIStore((s) => s.toggleFlights);
   const toggleGroundTraffic = useUIStore((s) => s.toggleGroundTraffic);
@@ -52,7 +53,6 @@ export function LayerTogglesSlot() {
   const toggleAirstrikes = useUIStore((s) => s.toggleAirstrikes);
   const toggleGroundCombat = useUIStore((s) => s.toggleGroundCombat);
   const toggleTargeted = useUIStore((s) => s.toggleTargeted);
-  const toggleOtherConflict = useUIStore((s) => s.toggleOtherConflict);
 
   return (
     <div data-testid="layer-toggles-slot">
@@ -72,10 +72,9 @@ export function LayerTogglesSlot() {
               <ToggleRow color={ENTITY_DOT_COLORS.unidentified} label="Unidentified" active={pulseEnabled} onToggle={togglePulse} indent />
               <ToggleRow color={ENTITY_DOT_COLORS.ships} label="Ships" active={showShips} onToggle={toggleShips} />
               <ToggleRow color={ENTITY_DOT_COLORS.airstrikes} label="Events" active={showEvents} onToggle={toggleEvents} />
-              <ToggleRow color={ENTITY_DOT_COLORS.airstrikes} label="Airstrikes" active={showAirstrikes} onToggle={toggleAirstrikes} indent />
-              <ToggleRow color={ENTITY_DOT_COLORS.groundCombat} label="Ground Combat" active={showGroundCombat} onToggle={toggleGroundCombat} indent />
-              <ToggleRow color={ENTITY_DOT_COLORS.targeted} label="Targeted" active={showTargeted} onToggle={toggleTargeted} indent />
-              <ToggleRow color={ENTITY_DOT_COLORS.otherConflict} label="Other Conflict" active={showOtherConflict} onToggle={toggleOtherConflict} indent />
+              <ToggleRow color={ENTITY_DOT_COLORS.airstrikes} label="Airstrikes" active={showAirstrikes} onToggle={toggleAirstrikes} indent disabled={!showEvents} />
+              <ToggleRow color={ENTITY_DOT_COLORS.groundCombat} label="Ground Combat" active={showGroundCombat} onToggle={toggleGroundCombat} indent disabled={!showEvents} />
+              <ToggleRow color={ENTITY_DOT_COLORS.targeted} label="Targeted" active={showTargeted} onToggle={toggleTargeted} indent disabled={!showEvents} />
               <button
                 onClick={() => {
                   localStorage.clear();

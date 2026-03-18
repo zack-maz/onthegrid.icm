@@ -8,7 +8,7 @@ export const ENTITY_COLORS = {
   airstrike: [255, 59, 48] as const,         // #ff3b30 red
   groundCombat: [239, 68, 68] as const,      // #ef4444 red
   targeted: [139, 30, 30] as const,          // #8b1e1e dark red
-  otherConflict: [239, 68, 68] as const,     // #ef4444 red
+  otherConflict: [239, 68, 68] as const,    // #ef4444 red
 } as const;
 
 /** CSS hex color strings for toggle row dots */

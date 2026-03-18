@@ -39,7 +39,6 @@ describe('uiStore', () => {
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
-      showOtherConflict: true,
     });
   });
 
@@ -81,7 +80,6 @@ describe('uiStore layer toggles', () => {
       showAirstrikes: true,
       showGroundCombat: true,
       showTargeted: true,
-      showOtherConflict: true,
       pulseEnabled: true,
       showGroundTraffic: false,
     });
@@ -112,9 +110,6 @@ describe('uiStore layer toggles', () => {
       expect(useUIStore.getState().showTargeted).toBe(true);
     });
 
-    it('showOtherConflict defaults to true', () => {
-      expect(useUIStore.getState().showOtherConflict).toBe(true);
-    });
   });
 
   describe('toggle actions', () => {
@@ -166,13 +161,6 @@ describe('uiStore layer toggles', () => {
       expect(useUIStore.getState().showTargeted).toBe(true);
     });
 
-    it('toggleOtherConflict flips showOtherConflict', () => {
-      expect(useUIStore.getState().showOtherConflict).toBe(true);
-      useUIStore.getState().toggleOtherConflict();
-      expect(useUIStore.getState().showOtherConflict).toBe(false);
-      useUIStore.getState().toggleOtherConflict();
-      expect(useUIStore.getState().showOtherConflict).toBe(true);
-    });
   });
 
   describe('localStorage persistence', () => {
@@ -245,7 +233,6 @@ describe('uiStore layer toggles', () => {
       expect(loaded.showAirstrikes).toBe(true);
       expect(loaded.showGroundCombat).toBe(true);
       expect(loaded.showTargeted).toBe(true);
-      expect(loaded.showOtherConflict).toBe(true);
       expect(loaded.showFlights).toBe(true); // defaults, NOT preserved
     });
   });

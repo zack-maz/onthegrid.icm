@@ -60,8 +60,6 @@ export function StatusPanel() {
   const showAirstrikes = useUIStore((s) => s.showAirstrikes);
   const showGroundCombat = useUIStore((s) => s.showGroundCombat);
   const showTargeted = useUIStore((s) => s.showTargeted);
-  const showOtherConflict = useUIStore((s) => s.showOtherConflict);
-
   const visibleFlights = flights.filter((f) => {
     if (f.data.unidentified) return pulseEnabled;
     if (f.data.onGround) return showGroundTraffic;
@@ -78,8 +76,6 @@ export function StatusPanel() {
       (CONFLICT_TOGGLE_GROUPS.showGroundCombat as readonly string[]).includes(e.type)).length;
     if (showTargeted) visibleEvents += events.filter((e) =>
       (CONFLICT_TOGGLE_GROUPS.showTargeted as readonly string[]).includes(e.type)).length;
-    if (showOtherConflict) visibleEvents += events.filter((e) =>
-      (CONFLICT_TOGGLE_GROUPS.showOtherConflict as readonly string[]).includes(e.type)).length;
   }
 
   return (

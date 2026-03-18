@@ -10,7 +10,6 @@ const mockState = {
   showAirstrikes: true,
   showGroundCombat: true,
   showTargeted: true,
-  showOtherConflict: true,
   isLayersCollapsed: false,
   toggleFlights: vi.fn(),
   toggleGroundTraffic: vi.fn(),
@@ -20,7 +19,6 @@ const mockState = {
   toggleAirstrikes: vi.fn(),
   toggleGroundCombat: vi.fn(),
   toggleTargeted: vi.fn(),
-  toggleOtherConflict: vi.fn(),
   toggleLayers: vi.fn(),
 };
 
@@ -42,7 +40,6 @@ describe('LayerTogglesSlot', () => {
     mockState.showAirstrikes = true;
     mockState.showGroundCombat = true;
     mockState.showTargeted = true;
-    mockState.showOtherConflict = true;
     mockState.isLayersCollapsed = false;
   });
 
@@ -51,10 +48,10 @@ describe('LayerTogglesSlot', () => {
     expect(screen.getByText('Layers')).toBeTruthy();
   });
 
-  it('renders 9 toggle row buttons', () => {
+  it('renders 8 toggle row buttons', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
-    expect(switches).toHaveLength(9);
+    expect(switches).toHaveLength(8);
   });
 
   it('each button has role="switch" and aria-checked', () => {
@@ -70,7 +67,7 @@ describe('LayerTogglesSlot', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
     const labels = switches.map((btn) => btn.textContent?.trim());
-    expect(labels).toEqual(['Flights', 'Ground', 'Unidentified', 'Ships', 'Events', 'Airstrikes', 'Ground Combat', 'Targeted', 'Other Conflict']);
+    expect(labels).toEqual(['Flights', 'Ground', 'Unidentified', 'Ships', 'Events', 'Airstrikes', 'Ground Combat', 'Targeted']);
   });
 
   it('clicking Flights toggle calls toggleFlights', () => {
@@ -107,12 +104,6 @@ describe('LayerTogglesSlot', () => {
     render(<LayerTogglesSlot />);
     fireEvent.click(screen.getByLabelText('Toggle Targeted visibility'));
     expect(mockState.toggleTargeted).toHaveBeenCalledOnce();
-  });
-
-  it('clicking Other Conflict toggle calls toggleOtherConflict', () => {
-    render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Other Conflict visibility'));
-    expect(mockState.toggleOtherConflict).toHaveBeenCalledOnce();
   });
 
   it('inactive toggle has opacity-40 class', () => {
