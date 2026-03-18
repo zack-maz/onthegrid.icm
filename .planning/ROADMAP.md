@@ -190,10 +190,11 @@ Plans:
   2. The detail panel updates in real-time as new data arrives for the selected entity
   3. Clicking elsewhere on the map or pressing a close button dismisses the panel
   4. The detail panel does not obscure the selected entity on the map
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md — Foundation: useSelectedEntity hook, DetailValue flash component, CSS animation, AppShell layout repositioning (panels to left), BaseMap click handler fix
+- [ ] 10-02-PLAN.md — Detail panel content: FlightDetail, ShipDetail, EventDetail sections, DetailPanelSlot rewrite with dismiss, clipboard, relative time, lost contact
 
 ### Phase 11: Smart Filters
 **Goal**: Users can narrow the displayed data using advanced multi-criteria filters
@@ -242,6 +243,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 8. Ship & Conflict Data Feeds | 0/2 | Not started | - |
 | 08.1. GDELT Event Source | 2/2 | Complete    | 2026-03-17 |
 | 9. Layer Controls & News Toggle | 0/2 | Not started | - |
-| 10. Detail Panel | 0/? | Not started | - |
+| 10. Detail Panel | 0/2 | Not started | - |
 | 11. Smart Filters | 0/? | Not started | - |
 | 12. Analytics Dashboard | 0/? | Not started | - |
