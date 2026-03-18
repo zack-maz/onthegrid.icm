@@ -31,11 +31,14 @@ function makeGdeltRow(overrides: Partial<Record<number, string>> = {}): string {
   cols[0] = '1234567890'; // GLOBALEVENTID
   cols[1] = '20260315';   // SQLDATE
   cols[6] = 'IRANIAN GOVERNMENT'; // Actor1Name
+  cols[7] = 'IRN';          // Actor1CountryCode
   cols[16] = 'IRAQ';       // Actor2Name
+  cols[17] = 'IRQ';         // Actor2CountryCode
   cols[26] = '190';        // EventCode
   cols[27] = '190';        // EventBaseCode
   cols[28] = '19';         // EventRootCode
   cols[30] = '-9.5';       // GoldsteinScale
+  cols[31] = '10';          // NumMentions
   cols[52] = 'Tehran, Tehran, Iran'; // ActionGeo_FullName
   cols[53] = 'IR';         // ActionGeo_CountryCode (FIPS)
   cols[56] = '35.6892';    // ActionGeo_Lat
@@ -79,6 +82,18 @@ const missingLatLngRow = makeGdeltRow({
   57: '', // empty lng
 });
 const malformedShortRow = 'col0\tcol1\tcol2'; // < 61 columns
+
+// Duplicate rows for dedup testing: same date/code/location, different actors & mention counts
+const dupRowLowMentions = makeGdeltRow({
+  0: '4444444444',
+  16: '',         // no Actor2Name
+  31: '5',        // fewer mentions
+});
+const dupRowHighMentions = makeGdeltRow({
+  0: '5555555555',
+  16: 'Government', // has Actor2Name
+  31: '25',         // more mentions -> should win
+});
 
 const sampleCsv = [
   validIranMissileRow,
@@ -176,6 +191,27 @@ describe('GDELT Adapter', () => {
       const csvWithTrailing = validIranMissileRow + '\n\n';
       const events = parseAndFilter(csvWithTrailing);
       expect(events).toHaveLength(1);
+    });
+
+    it('deduplicates rows with same date/code/location, keeping highest NumMentions', () => {
+      const csv = [dupRowLowMentions, dupRowHighMentions].join('\n');
+      const events = parseAndFilter(csv);
+      expect(events).toHaveLength(1);
+      expect(events[0].data.actor2).toBe('Government');
+    });
+
+    it('dedup keeps first row when mention counts are equal', () => {
+      const rowA = makeGdeltRow({ 0: '6666666666', 6: 'ACTOR_A', 31: '10' });
+      const rowB = makeGdeltRow({ 0: '7777777777', 6: 'ACTOR_B', 31: '10' });
+      const events = parseAndFilter([rowA, rowB].join('\n'));
+      expect(events).toHaveLength(1);
+    });
+
+    it('does not dedup rows at the same location with different CAMEO codes', () => {
+      const row19 = makeGdeltRow({ 0: '8888888888', 26: '190', 31: '10' });
+      const row18 = makeGdeltRow({ 0: '9999999999', 26: '183', 28: '18', 27: '183', 31: '10' });
+      const events = parseAndFilter([row19, row18].join('\n'));
+      expect(events).toHaveLength(2);
     });
   });
 

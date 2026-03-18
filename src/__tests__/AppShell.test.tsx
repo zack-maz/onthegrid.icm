@@ -22,12 +22,7 @@ describe('AppShell', () => {
     expect(screen.getByTestId('layer-toggles-slot')).toBeInTheDocument();
   });
 
-  it('renders filters slot in bottom-left', () => {
-    render(<AppShell />);
-    expect(screen.getByTestId('filters-slot')).toBeInTheDocument();
-  });
-
-  it('renders detail panel slot', () => {
+it('renders detail panel slot', () => {
     render(<AppShell />);
     expect(screen.getByTestId('detail-panel-slot')).toBeInTheDocument();
   });

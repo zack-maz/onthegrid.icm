@@ -2,41 +2,54 @@ import { render, screen } from '@testing-library/react';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
+import { useUIStore } from '@/stores/uiStore';
 import { StatusPanel } from '@/components/ui/StatusPanel';
+import type { FlightEntity, ConflictEventEntity } from '@/types/entities';
+
+function makeFlight(id: string, onGround: boolean): FlightEntity {
+  return {
+    id, type: 'flight', lat: 32, lng: 51, timestamp: Date.now(), label: id,
+    data: { icao24: id, callsign: id, originCountry: '', velocity: 0, heading: 0, altitude: onGround ? 0 : 10000, onGround, verticalRate: 0, unidentified: false },
+  };
+}
+
+function makeEvent(id: string, type: 'drone' | 'missile'): ConflictEventEntity {
+  return {
+    id, type, lat: 32, lng: 51, timestamp: Date.now(), label: id,
+    data: { eventType: '', subEventType: '', fatalities: 0, actor1: '', actor2: '', notes: '', source: '', goldsteinScale: 0, locationName: '', cameoCode: '' },
+  };
+}
+
+const airborne = [makeFlight('f1', false), makeFlight('f2', false), makeFlight('f3', false)];
+const ground = [makeFlight('g1', true), makeFlight('g2', true)];
+const allFlights = [...airborne, ...ground];
+const drones = [makeEvent('d1', 'drone'), makeEvent('d2', 'drone')];
+const missiles = [makeEvent('m1', 'missile')];
+const allEvents = [...drones, ...missiles];
 
 describe('StatusPanel', () => {
   beforeEach(() => {
-    useFlightStore.setState({
-      connectionStatus: 'connected',
-      flightCount: 0,
-    });
-    useShipStore.setState({
-      connectionStatus: 'connected',
-      shipCount: 0,
-    });
-    useEventStore.setState({
-      connectionStatus: 'connected',
-      eventCount: 0,
-    });
+    useFlightStore.setState({ connectionStatus: 'connected', flights: [], flightCount: 0 });
+    useShipStore.setState({ connectionStatus: 'connected', shipCount: 0 });
+    useEventStore.setState({ connectionStatus: 'connected', events: [], eventCount: 0 });
+    useUIStore.setState({ showFlights: true, showGroundTraffic: false, showShips: true, showDrones: true, showMissiles: true });
   });
 
   it('renders three feed lines (flights, ships, events)', () => {
-    useFlightStore.setState({ connectionStatus: 'connected', flightCount: 247 });
-    useShipStore.setState({ connectionStatus: 'connected', shipCount: 42 });
-    useEventStore.setState({ connectionStatus: 'connected', eventCount: 17 });
+    useFlightStore.setState({ flights: airborne, flightCount: 3 });
+    useShipStore.setState({ shipCount: 42 });
+    useEventStore.setState({ events: drones, eventCount: 2 });
 
     render(<StatusPanel />);
 
-    expect(screen.getByText('247')).toBeInTheDocument();
-    expect(screen.getByText('42')).toBeInTheDocument();
-    expect(screen.getByText('17')).toBeInTheDocument();
     expect(screen.getByText('flights')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeInTheDocument();
     expect(screen.getByText('ships')).toBeInTheDocument();
     expect(screen.getByText('events')).toBeInTheDocument();
   });
 
   it('shows green dot for connected status', () => {
-    useFlightStore.setState({ connectionStatus: 'connected', flightCount: 10 });
+    useFlightStore.setState({ connectionStatus: 'connected', flights: [makeFlight('f1', false)], flightCount: 1 });
     render(<StatusPanel />);
 
     const dot = screen.getByTestId('status-dot-flights');
@@ -60,21 +73,88 @@ describe('StatusPanel', () => {
   });
 
   it('shows gray pulsing dot and dash for loading status', () => {
-    useFlightStore.setState({ connectionStatus: 'loading', flightCount: 0 });
+    useFlightStore.setState({ connectionStatus: 'loading', flights: [], flightCount: 0 });
     render(<StatusPanel />);
 
     const dot = screen.getByTestId('status-dot-flights');
     expect(dot.className).toContain('bg-text-muted');
     expect(dot.className).toContain('animate-pulse');
-    // Em dash (\u2014) should be shown instead of count
     expect(screen.getByText('\u2014')).toBeInTheDocument();
   });
 
   it('shows red dot for rate_limited status', () => {
-    useFlightStore.setState({ connectionStatus: 'rate_limited', flightCount: 100 });
+    useFlightStore.setState({ connectionStatus: 'rate_limited', flights: [makeFlight('f1', false)], flightCount: 1 });
     render(<StatusPanel />);
 
     const dot = screen.getByTestId('status-dot-flights');
     expect(dot.className).toContain('bg-accent-red');
+  });
+
+  it('excludes ground flights from count when showGroundTraffic is OFF', () => {
+    useFlightStore.setState({ flights: allFlights, flightCount: 5 });
+    useUIStore.setState({ showFlights: true, showGroundTraffic: false });
+    render(<StatusPanel />);
+
+    // 3 airborne only
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('includes ground flights when showGroundTraffic is ON', () => {
+    useFlightStore.setState({ flights: allFlights, flightCount: 5 });
+    useUIStore.setState({ showFlights: true, showGroundTraffic: true });
+    render(<StatusPanel />);
+
+    expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('shows only ground count when showFlights OFF but showGroundTraffic ON', () => {
+    useFlightStore.setState({ flights: allFlights, flightCount: 5 });
+    useUIStore.setState({ showFlights: false, showGroundTraffic: true });
+    render(<StatusPanel />);
+
+    // 2 ground only
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('shows 0 for flights when both showFlights and showGroundTraffic are OFF', () => {
+    useFlightStore.setState({ flights: allFlights, flightCount: 5 });
+    useUIStore.setState({ showFlights: false, showGroundTraffic: false });
+    render(<StatusPanel />);
+
+    expect(screen.queryByText('5')).not.toBeInTheDocument();
+  });
+
+  it('shows 0 for ships when showShips is OFF', () => {
+    useShipStore.setState({ shipCount: 42 });
+    useUIStore.setState({ showShips: false });
+    render(<StatusPanel />);
+
+    expect(screen.queryByText('42')).not.toBeInTheDocument();
+  });
+
+  it('counts only drones when showMissiles is OFF', () => {
+    useEventStore.setState({ events: allEvents, eventCount: 3 });
+    useUIStore.setState({ showDrones: true, showMissiles: false });
+    render(<StatusPanel />);
+
+    // 2 drones only
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('counts only missiles when showDrones is OFF', () => {
+    useEventStore.setState({ events: allEvents, eventCount: 3 });
+    useUIStore.setState({ showDrones: false, showMissiles: true });
+    render(<StatusPanel />);
+
+    // 1 missile only
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it('shows 0 for events when both showDrones and showMissiles are OFF', () => {
+    useEventStore.setState({ events: allEvents, eventCount: 3 });
+    useUIStore.setState({ showDrones: false, showMissiles: false });
+    render(<StatusPanel />);
+
+    expect(screen.queryByText('3')).not.toBeInTheDocument();
   });
 });

@@ -9,12 +9,13 @@ interface IconEntry {
   mask: boolean;
 }
 
-/** Icon mapping for the 4 entity shapes */
+/** Icon mapping for the 5 entity shapes */
 export const ICON_MAPPING: Record<string, IconEntry> = {
-  chevron:   { x: 0,  y: 0, width: 32, height: 32, mask: true },
-  diamond:   { x: 32, y: 0, width: 32, height: 32, mask: true },
-  starburst: { x: 64, y: 0, width: 32, height: 32, mask: true },
-  xmark:     { x: 96, y: 0, width: 32, height: 32, mask: true },
+  chevron:        { x: 0,   y: 0, width: 32, height: 32, mask: true },
+  diamond:        { x: 32,  y: 0, width: 32, height: 32, mask: true },
+  starburst:      { x: 64,  y: 0, width: 32, height: 32, mask: true },
+  xmark:          { x: 96,  y: 0, width: 32, height: 32, mask: true },
+  chevronGround:  { x: 128, y: 0, width: 32, height: 32, mask: true },
 };
 
 /** Cached atlas canvas */
@@ -28,7 +29,7 @@ export function getIconAtlas(): HTMLCanvasElement {
   if (atlas) return atlas;
 
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
+  canvas.width = 160;
   canvas.height = 32;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
@@ -86,6 +87,28 @@ export function getIconAtlas(): HTMLCanvasElement {
   ctx.moveTo(122, 6);
   ctx.lineTo(102, 26);
   ctx.stroke();
+
+  // Icon 4 (offset 128): Chevron-ground -- chevron with diagonal hash lines
+  ctx.beginPath();
+  ctx.moveTo(144, 4);   // top center
+  ctx.lineTo(156, 28);  // bottom right
+  ctx.lineTo(144, 20);  // center notch
+  ctx.lineTo(132, 28);  // bottom left
+  ctx.closePath();
+  ctx.fill();
+  // Hash lines clipped to chevron shape
+  ctx.save();
+  ctx.clip();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(101,67,33,0.7)';
+  for (let i = -2; i < 6; i++) {
+    const x0 = 128 + i * 7;
+    ctx.beginPath();
+    ctx.moveTo(x0, 0);
+    ctx.lineTo(x0 + 32, 32);
+    ctx.stroke();
+  }
+  ctx.restore();
 
   atlas = canvas;
   return canvas;

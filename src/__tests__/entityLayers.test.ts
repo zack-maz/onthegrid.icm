@@ -84,9 +84,9 @@ describe('Entity Layer Constants', () => {
 });
 
 describe('Icon Mapping', () => {
-  const expectedKeys = ['chevron', 'diamond', 'starburst', 'xmark'] as const;
+  const expectedKeys = ['chevron', 'chevronGround', 'diamond', 'starburst', 'xmark'] as const;
 
-  it('has all 4 icon keys', () => {
+  it('has all 5 icon keys', () => {
     expect(Object.keys(ICON_MAPPING).sort()).toEqual([...expectedKeys].sort());
   });
 
@@ -110,7 +110,7 @@ describe('uiStore pulseEnabled', () => {
     useUIStore.setState({
       isDetailPanelOpen: false,
       isCountersCollapsed: false,
-      isFiltersExpanded: false,
+
       pulseEnabled: true,
     });
   });
@@ -269,15 +269,15 @@ describe('useEntityLayers', () => {
     });
   });
 
-  it('returns an array of 4 layers', () => {
+  it('returns an array of 6 layers', () => {
     const { result } = renderHook(() => useEntityLayers());
-    expect(result.current).toHaveLength(4);
+    expect(result.current).toHaveLength(6);
   });
 
-  it('returns layers in order: ships, flights, drones, missiles', () => {
+  it('returns layers in order: ships, flights, drones, missiles, entity-glow, entity-highlight', () => {
     const { result } = renderHook(() => useEntityLayers());
-    const ids = result.current.map((l: IconLayer) => l.id);
-    expect(ids).toEqual(['ships', 'flights', 'drones', 'missiles']);
+    const ids = result.current.map((l: { id: string }) => l.id);
+    expect(ids).toEqual(['ships', 'flights', 'drones', 'missiles', 'entity-glow', 'entity-highlight']);
   });
 
   it('flight layer uses sizeUnits meters', () => {
@@ -322,16 +322,18 @@ describe('useEntityLayers', () => {
     expect(color[2]).toBe(68);  // B
   });
 
-  it('all layers have sizeUnits meters', () => {
+  it('all entity layers have sizeUnits meters', () => {
     const { result } = renderHook(() => useEntityLayers());
-    for (const layer of result.current) {
+    const entityLayers = result.current.filter((l: { id: string }) => !l.id.startsWith('entity-'));
+    for (const layer of entityLayers) {
       expect((layer as IconLayer).props.sizeUnits).toBe('meters');
     }
   });
 
-  it('all layers have sizeMinPixels and sizeMaxPixels set', () => {
+  it('all entity layers have sizeMinPixels and sizeMaxPixels set', () => {
     const { result } = renderHook(() => useEntityLayers());
-    for (const layer of result.current) {
+    const entityLayers = result.current.filter((l: { id: string }) => !l.id.startsWith('entity-'));
+    for (const layer of entityLayers) {
       const props = (layer as IconLayer).props;
       expect(props.sizeMinPixels).toBeGreaterThan(0);
       expect(props.sizeMaxPixels).toBeGreaterThan(0);
@@ -407,32 +409,32 @@ describe('useEntityLayers layer visibility toggles', () => {
     });
   });
 
-  it('showFlights=false removes flight layer from returned array', () => {
+  it('showFlights=false hides flight layer via visible prop', () => {
     useUIStore.setState({ showFlights: false, showGroundTraffic: false });
     const { result } = renderHook(() => useEntityLayers());
-    const ids = result.current.map((l: IconLayer) => l.id);
-    expect(ids).not.toContain('flights');
+    const flightLayer = result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer;
+    expect(flightLayer.props.visible).toBe(false);
   });
 
-  it('showShips=false removes ship layer from returned array', () => {
+  it('showShips=false hides ship layer via visible prop', () => {
     useUIStore.setState({ showShips: false });
     const { result } = renderHook(() => useEntityLayers());
-    const ids = result.current.map((l: IconLayer) => l.id);
-    expect(ids).not.toContain('ships');
+    const shipLayer = result.current.find((l: IconLayer) => l.id === 'ships') as IconLayer;
+    expect(shipLayer.props.visible).toBe(false);
   });
 
-  it('showDrones=false removes drone layer from returned array', () => {
+  it('showDrones=false hides drone layer via visible prop', () => {
     useUIStore.setState({ showDrones: false });
     const { result } = renderHook(() => useEntityLayers());
-    const ids = result.current.map((l: IconLayer) => l.id);
-    expect(ids).not.toContain('drones');
+    const droneLayer = result.current.find((l: IconLayer) => l.id === 'drones') as IconLayer;
+    expect(droneLayer.props.visible).toBe(false);
   });
 
-  it('showMissiles=false removes missile layer from returned array', () => {
+  it('showMissiles=false hides missile layer via visible prop', () => {
     useUIStore.setState({ showMissiles: false });
     const { result } = renderHook(() => useEntityLayers());
-    const ids = result.current.map((l: IconLayer) => l.id);
-    expect(ids).not.toContain('missiles');
+    const missileLayer = result.current.find((l: IconLayer) => l.id === 'missiles') as IconLayer;
+    expect(missileLayer.props.visible).toBe(false);
   });
 
   it('showFlights=false + showGroundTraffic=true still includes flight layer with only ground flights', () => {
@@ -446,11 +448,11 @@ describe('useEntityLayers layer visibility toggles', () => {
     expect(data[0].data.onGround).toBe(true);
   });
 
-  it('all toggles ON returns 4 layers (backward compatible)', () => {
+  it('all toggles ON returns 6 layers including glow and highlight', () => {
     const { result } = renderHook(() => useEntityLayers());
-    expect(result.current).toHaveLength(4);
-    const ids = result.current.map((l: IconLayer) => l.id);
-    expect(ids).toEqual(['ships', 'flights', 'drones', 'missiles']);
+    expect(result.current).toHaveLength(6);
+    const ids = result.current.map((l: { id: string }) => l.id);
+    expect(ids).toEqual(['ships', 'flights', 'drones', 'missiles', 'entity-glow', 'entity-highlight']);
   });
 
   it('drone layer has pickable=true', () => {

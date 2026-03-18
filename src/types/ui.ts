@@ -17,13 +17,12 @@ export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
   showMissiles: true,
   showGroundTraffic: false,
   pulseEnabled: true,
-  showNews: false,
+  showNews: true,
 };
 
 export interface UIState {
   isDetailPanelOpen: boolean;
   isCountersCollapsed: boolean;
-  isFiltersExpanded: boolean;
   pulseEnabled: boolean;
   showGroundTraffic: boolean;
   showFlights: boolean;
@@ -31,10 +30,11 @@ export interface UIState {
   showDrones: boolean;
   showMissiles: boolean;
   showNews: boolean;
+  selectedEntityId: string | null;
+  hoveredEntityId: string | null;
   openDetailPanel: () => void;
   closeDetailPanel: () => void;
   toggleCounters: () => void;
-  toggleFilters: () => void;
   togglePulse: () => void;
   toggleGroundTraffic: () => void;
   toggleFlights: () => void;
@@ -42,4 +42,6 @@ export interface UIState {
   toggleDrones: () => void;
   toggleMissiles: () => void;
   toggleNews: () => void;
+  selectEntity: (id: string | null) => void;
+  hoverEntity: (id: string | null) => void;
 }

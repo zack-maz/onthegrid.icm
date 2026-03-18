@@ -31,14 +31,13 @@ describe('uiStore', () => {
     useUIStore.setState({
       isDetailPanelOpen: false,
       isCountersCollapsed: false,
-      isFiltersExpanded: false,
       pulseEnabled: true,
       showGroundTraffic: false,
       showFlights: true,
       showShips: true,
       showDrones: true,
       showMissiles: true,
-      showNews: false,
+      showNews: true,
     });
   });
 
@@ -46,7 +45,6 @@ describe('uiStore', () => {
     const state = useUIStore.getState();
     expect(state.isDetailPanelOpen).toBe(false);
     expect(state.isCountersCollapsed).toBe(false);
-    expect(state.isFiltersExpanded).toBe(false);
   });
 
   it('openDetailPanel sets isDetailPanelOpen to true', () => {
@@ -68,13 +66,6 @@ describe('uiStore', () => {
     expect(useUIStore.getState().isCountersCollapsed).toBe(false);
   });
 
-  it('toggleFilters flips isFiltersExpanded', () => {
-    expect(useUIStore.getState().isFiltersExpanded).toBe(false);
-    useUIStore.getState().toggleFilters();
-    expect(useUIStore.getState().isFiltersExpanded).toBe(true);
-    useUIStore.getState().toggleFilters();
-    expect(useUIStore.getState().isFiltersExpanded).toBe(false);
-  });
 });
 
 describe('uiStore layer toggles', () => {
@@ -86,7 +77,7 @@ describe('uiStore layer toggles', () => {
       showShips: true,
       showDrones: true,
       showMissiles: true,
-      showNews: false,
+      showNews: true,
       pulseEnabled: true,
       showGroundTraffic: false,
     });
@@ -109,8 +100,8 @@ describe('uiStore layer toggles', () => {
       expect(useUIStore.getState().showMissiles).toBe(true);
     });
 
-    it('showNews defaults to false', () => {
-      expect(useUIStore.getState().showNews).toBe(false);
+    it('showNews defaults to true', () => {
+      expect(useUIStore.getState().showNews).toBe(true);
     });
   });
 
@@ -148,11 +139,11 @@ describe('uiStore layer toggles', () => {
     });
 
     it('toggleNews flips showNews', () => {
-      expect(useUIStore.getState().showNews).toBe(false);
-      useUIStore.getState().toggleNews();
       expect(useUIStore.getState().showNews).toBe(true);
       useUIStore.getState().toggleNews();
       expect(useUIStore.getState().showNews).toBe(false);
+      useUIStore.getState().toggleNews();
+      expect(useUIStore.getState().showNews).toBe(true);
     });
   });
 
@@ -180,13 +171,13 @@ describe('uiStore layer toggles', () => {
       const customToggles = {
         ...LAYER_TOGGLE_DEFAULTS,
         showFlights: false,
-        showNews: true,
+        showNews: false,
       };
       storageMock[STORAGE_KEY] = JSON.stringify(customToggles);
 
       const loaded = loadPersistedToggles();
       expect(loaded.showFlights).toBe(false);
-      expect(loaded.showNews).toBe(true);
+      expect(loaded.showNews).toBe(false);
       // Defaults for unmodified keys
       expect(loaded.showShips).toBe(true);
       expect(loaded.showDrones).toBe(true);
@@ -204,7 +195,7 @@ describe('uiStore layer toggles', () => {
       const loaded = loadPersistedToggles();
       expect(loaded.showFlights).toBe(false);
       expect(loaded.showShips).toBe(true); // default
-      expect(loaded.showNews).toBe(false); // default
+      expect(loaded.showNews).toBe(true); // default
       expect(loaded.pulseEnabled).toBe(true); // default
     });
   });

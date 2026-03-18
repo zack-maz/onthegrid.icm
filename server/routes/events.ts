@@ -1,25 +1,44 @@
 import { Router } from 'express';
-import { EntityCache } from '../cache/entityCache.js';
 import { fetchEvents } from '../adapters/gdelt.js';
-import { CACHE_TTL } from '../constants.js';
 import type { ConflictEventEntity } from '../types.js';
 
-const eventsCache = new EntityCache<ConflictEventEntity[]>(CACHE_TTL.events);
+const EVENT_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+/** Accumulated events map, keyed by entity ID */
+const eventMap = new Map<string, ConflictEventEntity>();
+
+/** Merge new events into accumulator and prune old ones */
+function mergeEvents(incoming: ConflictEventEntity[]): ConflictEventEntity[] {
+  for (const event of incoming) {
+    eventMap.set(event.id, event);
+  }
+  const cutoff = Date.now() - EVENT_WINDOW_MS;
+  for (const [id, event] of eventMap) {
+    if (event.timestamp < cutoff) {
+      eventMap.delete(id);
+    }
+  }
+  return Array.from(eventMap.values());
+}
 
 export const eventsRouter = Router();
 
 eventsRouter.get('/', async (_req, res) => {
   try {
-    const events = await fetchEvents();
-    eventsCache.set(events);
-    res.json({ data: events, stale: false, lastFresh: Date.now() });
+    const fresh = await fetchEvents();
+    const all = mergeEvents(fresh);
+    res.json({ data: all, stale: false, lastFresh: Date.now() });
   } catch (err) {
     console.error('[events] upstream error:', (err as Error).message);
-    const cached = eventsCache.get();
-    if (cached) {
-      res.json(cached);
+    if (eventMap.size > 0) {
+      // Prune stale entries even on error
+      const cutoff = Date.now() - EVENT_WINDOW_MS;
+      for (const [id, event] of eventMap) {
+        if (event.timestamp < cutoff) eventMap.delete(id);
+      }
+      res.json({ data: Array.from(eventMap.values()), stale: true, lastFresh: Date.now() });
     } else {
-      throw err; // Express 5 catches and forwards to errorHandler
+      throw err;
     }
   }
 });

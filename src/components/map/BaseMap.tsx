@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Map,
   Source,
@@ -11,10 +11,11 @@ import type { PickingInfo } from '@deck.gl/core';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { DeckGLOverlay } from './DeckGLOverlay';
+import { EntityTooltip } from './EntityTooltip';
 import { useMapStore } from '@/stores/mapStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useEntityLayers } from '@/hooks/useEntityLayers';
-import type { MapEntity, ConflictEventEntity } from '@/types/entities';
+import type { MapEntity } from '@/types/entities';
 import {
   INITIAL_VIEW_STATE,
   MAX_BOUNDS,
@@ -32,65 +33,74 @@ import { MapVignette } from './MapVignette';
 import { CoordinateReadout } from './CoordinateReadout';
 import { CompassControl } from './CompassControl';
 
+interface HoverState {
+  entity: MapEntity;
+  x: number;
+  y: number;
+}
+
 export function BaseMap() {
   const isMapLoaded = useMapStore((s) => s.isMapLoaded);
   const setMapLoaded = useMapStore((s) => s.setMapLoaded);
   const setCursorPosition = useMapStore((s) => s.setCursorPosition);
+  const selectedEntityId = useUIStore((s) => s.selectedEntityId);
+  const selectEntity = useUIStore((s) => s.selectEntity);
+  const hoverEntity = useUIStore((s) => s.hoverEntity);
   const showNews = useUIStore((s) => s.showNews);
   const entityLayers = useEntityLayers();
 
-  const getTooltip = useCallback(
+  const [hover, setHover] = useState<HoverState | null>(null);
+  const [clickState, setClickState] = useState<{ entity: MapEntity; x: number; y: number } | null>(null);
+
+  const handleDeckHover = useCallback(
     (info: PickingInfo) => {
-      if (!showNews || !info.object) return null;
+      if (!info.object) {
+        setHover(null);
+        hoverEntity(null);
+        return;
+      }
       const entity = info.object as MapEntity;
-      if (entity.type !== 'drone' && entity.type !== 'missile') return null;
-      const e = entity as ConflictEventEntity;
-      const lines = [
-        `<strong>${e.data.eventType}</strong>`,
-        e.data.locationName && `Location: ${e.data.locationName}`,
-        e.data.actor1 && `Actor 1: ${e.data.actor1}`,
-        e.data.actor2 && `Actor 2: ${e.data.actor2}`,
-        `Date: ${new Date(e.timestamp).toISOString().slice(0, 10)}`,
-        `CAMEO: ${e.data.cameoCode}`,
-        `Goldstein: ${e.data.goldsteinScale.toFixed(1)}`,
-        e.data.source &&
-          `<a href="${e.data.source}" target="_blank" rel="noopener" style="color:#60a5fa">Source</a>`,
-      ].filter(Boolean);
-      return {
-        html: `<div style="font-family:monospace;font-size:11px;line-height:1.5">${lines.join('<br/>')}</div>`,
-        style: {
-          backgroundColor: 'rgba(0,0,0,0.85)',
-          color: '#e5e5e5',
-          borderRadius: '6px',
-          padding: '8px 12px',
-          border: '1px solid rgba(255,255,255,0.1)',
-          maxWidth: '300px',
-          backdropFilter: 'blur(4px)',
-        },
-      };
+      setHover({ entity, x: info.x, y: info.y });
+      hoverEntity(entity.id);
     },
-    [showNews],
+    [hoverEntity],
+  );
+
+  const handleDeckClick = useCallback(
+    (info: PickingInfo) => {
+      if (!info.object) {
+        selectEntity(null);
+        setClickState(null);
+        return;
+      }
+      const entity = info.object as MapEntity;
+      if (selectedEntityId === entity.id) {
+        selectEntity(null);
+        setClickState(null);
+      } else {
+        selectEntity(entity.id);
+        setClickState({ entity, x: info.x, y: info.y });
+      }
+    },
+    [selectedEntityId, selectEntity],
   );
 
   const handleLoad = useCallback(
     (e: MapEvent) => {
       const map = e.target;
 
-      // Hide road labels
       ROAD_LABEL_LAYERS.forEach((id) => {
         if (map.getLayer(id)) {
           map.setLayoutProperty(id, 'visibility', 'none');
         }
       });
 
-      // Hide minor features
       MINOR_FEATURE_LAYERS.forEach((id) => {
         if (map.getLayer(id)) {
           map.setLayoutProperty(id, 'visibility', 'none');
         }
       });
 
-      // Brighten country borders
       BORDER_LAYERS.forEach((id) => {
         if (map.getLayer(id)) {
           map.setPaintProperty(id, 'line-color', '#888888');
@@ -98,10 +108,8 @@ export function BaseMap() {
         }
       });
 
-      // Tint water bodies dark blue
       WATER_LAYERS.forEach((id) => {
         if (map.getLayer(id)) {
-          // 'waterway' is a line layer, others are fill layers
           if (id === 'waterway') {
             map.setPaintProperty(id, 'line-color', '#0a1628');
           } else {
@@ -123,6 +131,19 @@ export function BaseMap() {
     [setCursorPosition],
   );
 
+  // Show pinned tooltip for selected entity, or hover tooltip
+  // Event entities (drone/missile) only show tooltips when News toggle is ON
+  const isEventEntity = (e: MapEntity) => e.type === 'drone' || e.type === 'missile';
+  const rawTooltipEntity = clickState?.entity ?? hover?.entity ?? null;
+  const tooltipEntity = rawTooltipEntity && isEventEntity(rawTooltipEntity) && !showNews
+    ? null
+    : rawTooltipEntity;
+  const tooltipPos = clickState
+    ? { x: clickState.x, y: clickState.y }
+    : hover
+      ? { x: hover.x, y: hover.y }
+      : { x: 0, y: 0 };
+
   return (
     <div className="relative h-full w-full">
       <MapLoadingScreen isLoaded={isMapLoaded} />
@@ -134,6 +155,7 @@ export function BaseMap() {
         minZoom={3}
         maxZoom={15}
         maxPitch={60}
+        doubleClickZoom={false}
         terrain={TERRAIN_CONFIG}
         onLoad={handleLoad}
         onMouseMove={handleMouseMove}
@@ -156,19 +178,31 @@ export function BaseMap() {
           }}
         />
         <NavigationControl
-          showZoom={false}
+          showZoom={true}
           showCompass={true}
           visualizePitch={true}
           position="bottom-right"
         />
         <ScaleControl unit="metric" position="bottom-right" />
-        <DeckGLOverlay layers={entityLayers} getTooltip={getTooltip} />
+        <DeckGLOverlay
+          layers={entityLayers}
+          onHover={handleDeckHover}
+          onClick={handleDeckClick}
+          pickingRadius={12}
+        />
         <CompassControl />
       </Map>
       <MapVignette />
       <div className="absolute bottom-8 right-14 z-[var(--z-controls)]">
         <CoordinateReadout />
       </div>
+      {tooltipEntity && (
+        <EntityTooltip
+          entity={tooltipEntity}
+          x={tooltipPos.x}
+          y={tooltipPos.y}
+        />
+      )}
     </div>
   );
 }

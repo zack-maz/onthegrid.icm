@@ -56,7 +56,7 @@ export function LayerTogglesSlot() {
           </span>
           <ToggleRow color={ENTITY_DOT_COLORS.flights} label="Flights" active={showFlights} onToggle={toggleFlights} />
           <ToggleRow color={ENTITY_DOT_COLORS.ground} label="Ground" active={showGroundTraffic} onToggle={toggleGroundTraffic} indent />
-          <ToggleRow color={ENTITY_DOT_COLORS.pulse} label="Pulse" active={pulseEnabled} onToggle={togglePulse} indent />
+          <ToggleRow color={ENTITY_DOT_COLORS.unidentified} label="Unidentified" active={pulseEnabled} onToggle={togglePulse} indent />
           <ToggleRow color={ENTITY_DOT_COLORS.ships} label="Ships" active={showShips} onToggle={toggleShips} />
           <ToggleRow color={ENTITY_DOT_COLORS.drones} label="Drones" active={showDrones} onToggle={toggleDrones} />
           <ToggleRow color={ENTITY_DOT_COLORS.missiles} label="Missiles" active={showMissiles} onToggle={toggleMissiles} />

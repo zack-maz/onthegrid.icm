@@ -16,7 +16,7 @@ export const ENTITY_DOT_COLORS = {
   drones: '#ef4444',
   missiles: '#ef4444',
   ground: '#eab308',
-  pulse: '#ef4444',
+  unidentified: '#ef4444',
   news: '#60a5fa',
 } as const;
 

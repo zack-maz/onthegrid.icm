@@ -39,11 +39,8 @@ export function ScaleControl() {
   return null;
 }
 
-const mockSetProps = { setProps: () => {} };
-
-export function useControl(_factory: () => unknown) {
-  if (_factory) _factory();
-  return mockSetProps;
+export function useControl<T>(_factory: () => T): T {
+  return _factory();
 }
 
 export function useMap() {

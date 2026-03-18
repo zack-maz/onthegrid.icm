@@ -8,7 +8,7 @@ const mockState = {
   showShips: true,
   showDrones: true,
   showMissiles: true,
-  showNews: false,
+  showNews: true,
   toggleFlights: vi.fn(),
   toggleGroundTraffic: vi.fn(),
   togglePulse: vi.fn(),
@@ -34,7 +34,7 @@ describe('LayerTogglesSlot', () => {
     mockState.showShips = true;
     mockState.showDrones = true;
     mockState.showMissiles = true;
-    mockState.showNews = false;
+    mockState.showNews = true;
   });
 
   it('renders "Layers" header text', () => {
@@ -61,7 +61,7 @@ describe('LayerTogglesSlot', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
     const labels = switches.map((btn) => btn.textContent?.trim());
-    expect(labels).toEqual(['Flights', 'Ground', 'Pulse', 'Ships', 'Drones', 'Missiles', 'News']);
+    expect(labels).toEqual(['Flights', 'Ground', 'Unidentified', 'Ships', 'Drones', 'Missiles', 'News']);
   });
 
   it('clicking Flights toggle calls toggleFlights', () => {
@@ -83,7 +83,8 @@ describe('LayerTogglesSlot', () => {
   });
 
   it('inactive toggle has opacity-40 class', () => {
-    // showGroundTraffic is false, showNews is false
+    // showGroundTraffic is false by default
+    mockState.showNews = false;
     render(<LayerTogglesSlot />);
     const groundBtn = screen.getByLabelText('Toggle Ground visibility');
     expect(groundBtn.className).toContain('opacity-40');
@@ -100,7 +101,7 @@ describe('LayerTogglesSlot', () => {
   it('Ground and Pulse rows have indent styling (pl-4)', () => {
     render(<LayerTogglesSlot />);
     const groundBtn = screen.getByLabelText('Toggle Ground visibility');
-    const pulseBtn = screen.getByLabelText('Toggle Pulse visibility');
+    const pulseBtn = screen.getByLabelText('Toggle Unidentified visibility');
     expect(groundBtn.className).toContain('pl-4');
     expect(pulseBtn.className).toContain('pl-4');
   });
@@ -116,7 +117,7 @@ describe('LayerTogglesSlot', () => {
   it('indented rows have text-[10px] class', () => {
     render(<LayerTogglesSlot />);
     const groundBtn = screen.getByLabelText('Toggle Ground visibility');
-    const pulseBtn = screen.getByLabelText('Toggle Pulse visibility');
+    const pulseBtn = screen.getByLabelText('Toggle Unidentified visibility');
     expect(groundBtn.className).toContain('text-[10px]');
     expect(pulseBtn.className).toContain('text-[10px]');
   });

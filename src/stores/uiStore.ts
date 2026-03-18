@@ -35,7 +35,6 @@ const initial = loadPersistedToggles();
 export const useUIStore = create<UIState>()((set, get) => ({
   isDetailPanelOpen: false,
   isCountersCollapsed: false,
-  isFiltersExpanded: false,
   pulseEnabled: initial.pulseEnabled,
   showGroundTraffic: initial.showGroundTraffic,
   showFlights: initial.showFlights,
@@ -43,10 +42,11 @@ export const useUIStore = create<UIState>()((set, get) => ({
   showDrones: initial.showDrones,
   showMissiles: initial.showMissiles,
   showNews: initial.showNews,
+  selectedEntityId: null,
+  hoveredEntityId: null,
   openDetailPanel: () => set({ isDetailPanelOpen: true }),
   closeDetailPanel: () => set({ isDetailPanelOpen: false }),
   toggleCounters: () => set((s) => ({ isCountersCollapsed: !s.isCountersCollapsed })),
-  toggleFilters: () => set((s) => ({ isFiltersExpanded: !s.isFiltersExpanded })),
   togglePulse: () => {
     set((s) => ({ pulseEnabled: !s.pulseEnabled }));
     persistToggles(getToggles(get()));
@@ -75,4 +75,6 @@ export const useUIStore = create<UIState>()((set, get) => ({
     set((s) => ({ showNews: !s.showNews }));
     persistToggles(getToggles(get()));
   },
+  selectEntity: (id) => set({ selectedEntityId: id }),
+  hoverEntity: (id) => set({ hoveredEntityId: id }),
 }));

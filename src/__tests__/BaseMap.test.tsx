@@ -1,11 +1,16 @@
 /**
  * BaseMap component tests
- * Covers MAP-01a (renders inside container) and MAP-01d (hides road labels on load)
+ * Covers MAP-01a (renders inside container), MAP-01d (hides road labels on load),
+ * and tooltip gating via showNews toggle.
  */
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { BaseMap } from '@/components/map/BaseMap';
 import { __capturedOnLoad } from '@vis.gl/react-maplibre';
+import { __lastOverlayProps } from '@deck.gl/mapbox';
+import { useUIStore } from '@/stores/uiStore';
+import type { PickingInfo } from '@deck.gl/core';
+import type { ConflictEventEntity, FlightEntity } from '@/types/entities';
 
 function createMockMap() {
   return {
@@ -74,5 +79,105 @@ describe('BaseMap', () => {
     // Verify water tinted
     expect(mockMap.setPaintProperty).toHaveBeenCalledWith('water', 'fill-color', '#0a1628');
     expect(mockMap.setPaintProperty).toHaveBeenCalledWith('waterway', 'line-color', '#0a1628');
+  });
+});
+
+const mockDroneEntity: ConflictEventEntity = {
+  id: 'event-drone-1',
+  type: 'drone',
+  lat: 32.65,
+  lng: 51.67,
+  timestamp: Date.now(),
+  label: 'Air/drone strike',
+  data: {
+    eventType: 'Explosions/Remote violence',
+    subEventType: 'Air/drone strike',
+    fatalities: 0,
+    actor1: 'Unknown',
+    actor2: 'Unknown',
+    notes: '',
+    source: 'https://example.com',
+    goldsteinScale: -5.0,
+    locationName: 'Isfahan, Iran',
+    cameoCode: '183',
+  },
+};
+
+const mockFlight: FlightEntity = {
+  id: 'flight-abc',
+  type: 'flight',
+  lat: 32.0,
+  lng: 51.0,
+  timestamp: Date.now(),
+  label: 'QTR123',
+  data: {
+    icao24: 'abc123',
+    callsign: 'QTR123',
+    originCountry: 'Qatar',
+    velocity: 250,
+    heading: 90,
+    altitude: 10000,
+    onGround: false,
+    verticalRate: 0,
+    unidentified: false,
+  },
+};
+
+function simulateHover(entity: unknown) {
+  const onHover = __lastOverlayProps.onHover as (info: PickingInfo) => void;
+  act(() => {
+    onHover({ object: entity, x: 100, y: 100 } as PickingInfo);
+  });
+}
+
+function simulateHoverClear() {
+  const onHover = __lastOverlayProps.onHover as (info: PickingInfo) => void;
+  act(() => {
+    onHover({ object: null, x: 0, y: 0 } as unknown as PickingInfo);
+  });
+}
+
+describe('BaseMap tooltip gating', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUIStore.setState({
+      showNews: true,
+      showFlights: true,
+      showShips: true,
+      showDrones: true,
+      showMissiles: true,
+      showGroundTraffic: false,
+      selectedEntityId: null,
+      hoveredEntityId: null,
+    });
+  });
+
+  it('shows tooltip for drone entity when showNews is ON', () => {
+    render(<BaseMap />);
+    simulateHover(mockDroneEntity);
+    expect(screen.getByText('Explosions/Remote violence')).toBeTruthy();
+    expect(screen.getByText('Isfahan, Iran', { exact: false })).toBeTruthy();
+  });
+
+  it('hides tooltip for drone entity when showNews is OFF', () => {
+    useUIStore.setState({ showNews: false });
+    render(<BaseMap />);
+    simulateHover(mockDroneEntity);
+    expect(screen.queryByText('Explosions/Remote violence')).toBeNull();
+  });
+
+  it('still shows tooltip for flight entity when showNews is OFF', () => {
+    useUIStore.setState({ showNews: false });
+    render(<BaseMap />);
+    simulateHover(mockFlight);
+    expect(screen.getByText('QTR123')).toBeTruthy();
+  });
+
+  it('clears tooltip when hover moves off entity', () => {
+    render(<BaseMap />);
+    simulateHover(mockDroneEntity);
+    expect(screen.getByText('Explosions/Remote violence')).toBeTruthy();
+    simulateHoverClear();
+    expect(screen.queryByText('Explosions/Remote violence')).toBeNull();
   });
 });

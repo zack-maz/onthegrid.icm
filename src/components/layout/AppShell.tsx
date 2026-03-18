@@ -1,7 +1,7 @@
 import { TitleSlot } from '@/components/layout/TitleSlot';
 import { CountersSlot } from '@/components/layout/CountersSlot';
 import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
-import { FiltersSlot } from '@/components/layout/FiltersSlot';
+
 import { DetailPanelSlot } from '@/components/layout/DetailPanelSlot';
 import { StatusPanel } from '@/components/ui/StatusPanel';
 import { BaseMap } from '@/components/map/BaseMap';
@@ -36,12 +36,7 @@ export function AppShell() {
         <LayerTogglesSlot />
       </div>
 
-      {/* Bottom-left: Filters */}
-      <div className="absolute bottom-4 left-4 z-[var(--z-controls)]">
-        <FiltersSlot />
-      </div>
-
-      {/* Left edge: Detail panel (hidden by default) */}
+{/* Left edge: Detail panel (hidden by default) */}
       <DetailPanelSlot />
     </div>
   );

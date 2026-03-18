@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
+import { useUIStore } from '@/stores/uiStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
 
 function useUtcClock() {
@@ -42,11 +43,28 @@ function FeedLine({ status, count, label }: { status: FeedStatus; count: number;
 export function StatusPanel() {
   const utc = useUtcClock();
   const flightStatus = useFlightStore((s) => s.connectionStatus);
-  const flightCount = useFlightStore((s) => s.flightCount);
+  const flights = useFlightStore((s) => s.flights);
   const shipStatus = useShipStore((s) => s.connectionStatus);
   const shipCount = useShipStore((s) => s.shipCount);
   const eventStatus = useEventStore((s) => s.connectionStatus);
-  const eventCount = useEventStore((s) => s.eventCount);
+  const events = useEventStore((s) => s.events);
+
+  const showFlights = useUIStore((s) => s.showFlights);
+  const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
+  const showShips = useUIStore((s) => s.showShips);
+  const showDrones = useUIStore((s) => s.showDrones);
+  const showMissiles = useUIStore((s) => s.showMissiles);
+
+  let visibleFlights = 0;
+  if (showFlights && showGroundTraffic) visibleFlights = flights.length;
+  else if (showFlights) visibleFlights = flights.filter((f) => !f.data.onGround).length;
+  else if (showGroundTraffic) visibleFlights = flights.filter((f) => f.data.onGround).length;
+
+  const visibleShips = showShips ? shipCount : 0;
+
+  let visibleEvents = 0;
+  if (showDrones) visibleEvents += events.filter((e) => e.type === 'drone').length;
+  if (showMissiles) visibleEvents += events.filter((e) => e.type === 'missile').length;
 
   return (
     <OverlayPanel className="min-w-[140px]">
@@ -54,9 +72,9 @@ export function StatusPanel() {
         <span data-testid="utc-clock" className="text-xs text-text-secondary tabular-nums tracking-wide">
           {utc}
         </span>
-        <FeedLine status={flightStatus} count={flightCount} label="flights" />
-        <FeedLine status={shipStatus} count={shipCount} label="ships" />
-        <FeedLine status={eventStatus} count={eventCount} label="events" />
+        <FeedLine status={flightStatus} count={visibleFlights} label="flights" />
+        <FeedLine status={shipStatus} count={visibleShips} label="ships" />
+        <FeedLine status={eventStatus} count={visibleEvents} label="events" />
       </div>
     </OverlayPanel>
   );

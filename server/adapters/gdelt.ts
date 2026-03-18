@@ -33,7 +33,9 @@ export const COL = {
   GLOBALEVENTID: 0,
   SQLDATE: 1,
   Actor1Name: 6,
+  Actor1CountryCode: 7,
   Actor2Name: 16,
+  Actor2CountryCode: 17,
   EventCode: 26,
   EventBaseCode: 27,
   EventRootCode: 28,
@@ -153,7 +155,9 @@ export function normalizeGdeltEvent(
  */
 export function parseAndFilter(csv: string): ConflictEventEntity[] {
   const lines = csv.trim().split('\n');
-  const events: ConflictEventEntity[] = [];
+
+  // Deduplicate by location + date + CAMEO code, keeping the row with the most mentions
+  const best = new Map<string, { cols: string[]; lat: number; lng: number; mentions: number }>();
 
   for (const line of lines) {
     const cols = line.split('\t');
@@ -165,14 +169,25 @@ export function parseAndFilter(csv: string): ConflictEventEntity[] {
     if (!CONFLICT_ROOT_CODES.has(eventRootCode)) continue;
     if (!MIDDLE_EAST_FIPS.has(countryCode)) continue;
 
+    // Require at least one actor with a country code (filters non-state actors)
+    const actor1Country = cols[COL.Actor1CountryCode]?.trim();
+    const actor2Country = cols[COL.Actor2CountryCode]?.trim();
+    if (!actor1Country && !actor2Country) continue;
+
     const lat = parseFloat(cols[COL.ActionGeo_Lat]);
     const lng = parseFloat(cols[COL.ActionGeo_Long]);
     if (isNaN(lat) || isNaN(lng)) continue;
 
-    events.push(normalizeGdeltEvent(cols, lat, lng));
+    const key = `${cols[COL.SQLDATE]}|${cols[COL.EventCode]}|${lat}|${lng}`;
+    const mentions = parseInt(cols[COL.NumMentions], 10) || 0;
+    const existing = best.get(key);
+
+    if (!existing || mentions > existing.mentions) {
+      best.set(key, { cols, lat, lng, mentions });
+    }
   }
 
-  return events;
+  return Array.from(best.values()).map((e) => normalizeGdeltEvent(e.cols, e.lat, e.lng));
 }
 
 /**
