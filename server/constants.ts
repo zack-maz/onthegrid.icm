@@ -1,5 +1,8 @@
 import type { BoundingBox } from './types.js';
 
+/** Start of the US-Iran war — earliest date for historical event data */
+export const WAR_START = Date.UTC(2026, 1, 28); // Feb 28, 2026 00:00Z
+
 // Greater Middle East + Mediterranean + Arabian Sea
 // Covers full visible map area for ship/event subscriptions
 export const IRAN_BBOX: BoundingBox = {
