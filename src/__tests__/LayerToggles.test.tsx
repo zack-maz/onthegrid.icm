@@ -26,11 +26,20 @@ vi.mock('@/stores/uiStore', () => ({
   useUIStore: (selector: (s: typeof mockState) => unknown) => selector(mockState),
 }));
 
+const mockFilterState = {
+  savedToggles: null as { showFlights: boolean; showGroundTraffic: boolean; pulseEnabled: boolean; showShips: boolean } | null,
+};
+
+vi.mock('@/stores/filterStore', () => ({
+  useFilterStore: (selector: (s: typeof mockFilterState) => unknown) => selector(mockFilterState),
+}));
+
 import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
 
 describe('LayerTogglesSlot', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFilterState.savedToggles = null;
     // Reset to defaults
     mockState.showFlights = true;
     mockState.showGroundTraffic = false;
@@ -144,5 +153,30 @@ describe('LayerTogglesSlot', () => {
     const pulseBtn = screen.getByLabelText('Toggle Unidentified visibility');
     expect(groundBtn.className).toContain('text-[10px]');
     expect(pulseBtn.className).toContain('text-[10px]');
+  });
+
+  describe('custom range disabling', () => {
+    it('flight/ship toggles are disabled when custom range is active', () => {
+      mockFilterState.savedToggles = { showFlights: true, showGroundTraffic: false, pulseEnabled: true, showShips: true };
+      render(<LayerTogglesSlot />);
+      expect(screen.getByLabelText('Toggle Flights visibility')).toBeDisabled();
+      expect(screen.getByLabelText('Toggle Ground visibility')).toBeDisabled();
+      expect(screen.getByLabelText('Toggle Unidentified visibility')).toBeDisabled();
+      expect(screen.getByLabelText('Toggle Ships visibility')).toBeDisabled();
+    });
+
+    it('flight/ship toggles are enabled when custom range is not active', () => {
+      mockFilterState.savedToggles = null;
+      render(<LayerTogglesSlot />);
+      expect(screen.getByLabelText('Toggle Flights visibility')).not.toBeDisabled();
+      expect(screen.getByLabelText('Toggle Ships visibility')).not.toBeDisabled();
+    });
+
+    it('event toggles are NOT disabled by custom range', () => {
+      mockFilterState.savedToggles = { showFlights: true, showGroundTraffic: false, pulseEnabled: true, showShips: true };
+      render(<LayerTogglesSlot />);
+      expect(screen.getByLabelText('Toggle Events visibility')).not.toBeDisabled();
+      expect(screen.getByLabelText('Toggle Airstrikes visibility')).not.toBeDisabled();
+    });
   });
 });

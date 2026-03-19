@@ -1,4 +1,5 @@
 import { useUIStore } from '@/stores/uiStore';
+import { useFilterStore } from '@/stores/filterStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
 import { ENTITY_DOT_COLORS } from '@/components/map/layers/constants';
 
@@ -52,6 +53,7 @@ export function LayerTogglesSlot() {
   const toggleAirstrikes = useUIStore((s) => s.toggleAirstrikes);
   const toggleGroundCombat = useUIStore((s) => s.toggleGroundCombat);
   const toggleTargeted = useUIStore((s) => s.toggleTargeted);
+  const customRangeLock = useFilterStore((s) => s.savedToggles !== null);
   return (
     <div data-testid="layer-toggles-slot">
       <OverlayPanel>
@@ -65,10 +67,10 @@ export function LayerTogglesSlot() {
           </button>
           {!isCollapsed && (
             <>
-              <ToggleRow color={ENTITY_DOT_COLORS.flights} label="Flights" active={showFlights} onToggle={toggleFlights} />
-              <ToggleRow color={ENTITY_DOT_COLORS.ground} label="Ground" active={showGroundTraffic} onToggle={toggleGroundTraffic} indent />
-              <ToggleRow color={ENTITY_DOT_COLORS.unidentified} label="Unidentified" active={pulseEnabled} onToggle={togglePulse} indent />
-              <ToggleRow color={ENTITY_DOT_COLORS.ships} label="Ships" active={showShips} onToggle={toggleShips} />
+              <ToggleRow color={ENTITY_DOT_COLORS.flights} label="Flights" active={showFlights} onToggle={toggleFlights} disabled={customRangeLock} />
+              <ToggleRow color={ENTITY_DOT_COLORS.ground} label="Ground" active={showGroundTraffic} onToggle={toggleGroundTraffic} indent disabled={customRangeLock} />
+              <ToggleRow color={ENTITY_DOT_COLORS.unidentified} label="Unidentified" active={pulseEnabled} onToggle={togglePulse} indent disabled={customRangeLock} />
+              <ToggleRow color={ENTITY_DOT_COLORS.ships} label="Ships" active={showShips} onToggle={toggleShips} disabled={customRangeLock} />
               <ToggleRow color={ENTITY_DOT_COLORS.airstrikes} label="Events" active={showEvents} onToggle={toggleEvents} />
               <ToggleRow color={ENTITY_DOT_COLORS.airstrikes} label="Airstrikes" active={showAirstrikes} onToggle={toggleAirstrikes} indent disabled={!showEvents} />
               <ToggleRow color={ENTITY_DOT_COLORS.groundCombat} label="Ground Combat" active={showGroundCombat} onToggle={toggleGroundCombat} indent disabled={!showEvents} />
