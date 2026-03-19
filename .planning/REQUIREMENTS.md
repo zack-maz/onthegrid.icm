@@ -25,7 +25,7 @@
 
 ### Analytics
 
-- [ ] **STAT-01**: Strike/sortie/intercept running counters dashboard
+- [x] **STAT-01**: Strike/sortie/intercept running counters dashboard
 
 ### Infrastructure
 
@@ -78,7 +78,7 @@
 | CTRL-02 | Phase 8 | Complete |
 | CTRL-03 | Phase 9 | Complete |
 | CTRL-04 | Phase 7 | Complete |
-| STAT-01 | Phase 10 | Pending |
+| STAT-01 | Phase 10 | Complete |
 | INFRA-01 | Phase 3 | Complete |
 | INFRA-02 | Phase 1 | Complete |
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 12 context gathered
-last_updated: "2026-03-19T01:20:46.481Z"
-last_activity: 2026-03-18 -- Phase 11 Plan 02 completed (filter integration pipeline)
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-03-19T02:05:25.104Z"
+last_activity: 2026-03-18 -- Phase 12 Plan 01 completed (analytics counters dashboard)
 progress:
   total_phases: 13
-  completed_phases: 9
-  total_plans: 27
-  completed_plans: 24
-  percent: 96
+  completed_phases: 10
+  total_plans: 28
+  completed_plans: 25
+  percent: 100
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 11: Smart Filters -- all 3 plans complete. Ready for Phase 12.
+**Current focus:** Phase 12: Analytics Dashboard -- counters dashboard complete.
 
 ## Current Position
 
-Phase: 11 (Smart Filters)
-Plan: 3 of 3 in current phase (COMPLETE)
-Status: All filter pipeline plans done (store, integration, UI). Phase 11 complete.
-Last activity: 2026-03-18 -- Phase 11 Plan 02 completed (filter integration pipeline)
+Phase: 12 (Analytics Dashboard)
+Plan: 1 of 1 in current phase (COMPLETE)
+Status: Counters dashboard plan complete. Phase 12 done.
+Last activity: 2026-03-18 -- Phase 12 Plan 01 completed (analytics counters dashboard)
 
-Progress: [█████████░] 96%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 25
+- Total plans completed: 26
 - Average duration: 3.8min
-- Total execution time: 1.57 hours
+- Total execution time: 1.64 hours
 
 **By Phase:**
 
@@ -55,9 +55,10 @@ Progress: [█████████░] 96%
 | 9. Layer Controls & News | 1/2 | 12min | 12min |
 | 10. Detail Panel | 2/2 | 7min | 3.5min |
 | 11. Smart Filters | 3/3 | 21min | 7min |
+| 12. Analytics Dashboard | 1/1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 09-01 (12min), 10-01 (4min), 10-02 (3min), 11-01 (4min), 11-02 (3min)
+- Last 5 plans: 10-01 (4min), 10-02 (3min), 11-01 (4min), 11-02 (3min), 12-01 (4min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -72,6 +73,7 @@ Progress: [█████████░] 96%
 | Phase 11 P01 | 4min | 2 tasks | 8 files |
 | Phase 11 P02 | 3min | 2 tasks | 4 files |
 | Phase 11 P03 | 14min | 2 tasks | 17 files |
+| Phase 12 P01 | 4min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -179,6 +181,9 @@ Recent decisions affecting current work:
 - [Phase 11]: Datalist-based country autocomplete (native browser UX)
 - [Phase 11]: isSettingPin mode pattern: crosshair cursor + DeckGLOverlay guard + Map onClick for pin placement
 - [Phase 11]: Consolidated showOtherConflict into showGroundCombat (3 toggle groups, 3 event layers)
+- [Phase 12]: CounterRow delta tracking via useRef + 3s setTimeout, CSS animation restart via key prop
+- [Phase 12]: Event filtered counts require BOTH smart filter passing AND toggle gating
+- [Phase 12]: Flight counters derive from raw flights (no filter/toggle narrowing per user decision)
 
 ### Roadmap Evolution
 
@@ -196,6 +201,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T01:20:46.472Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-analytics-dashboard/12-CONTEXT.md
+Last session: 2026-03-19T02:05:25.095Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None

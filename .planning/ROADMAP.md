@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 9: Layer Controls & News Toggle** - Layer visibility toggles and news content control
 - [x] **Phase 10: Detail Panel** - Click-to-inspect panel showing live entity stats (completed 2026-03-18)
 - [x] **Phase 11: Smart Filters** - Advanced filtering by nationality, speed, altitude, proximity, date range (completed 2026-03-18)
-- [ ] **Phase 12: Analytics Dashboard** - Running counters for strikes, sorties, and intercepts
+- [x] **Phase 12: Analytics Dashboard** - Running counters for strikes, sorties, and intercepts (completed 2026-03-19)
 
 ## Phase Details
 
@@ -246,4 +246,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 9. Layer Controls & News Toggle | 0/2 | Not started | - |
 | 10. Detail Panel | 2/2 | Complete    | 2026-03-18 |
 | 11. Smart Filters | 3/3 | Complete    | 2026-03-18 |
-| 12. Analytics Dashboard | 0/1 | Not started | - |
+| 12. Analytics Dashboard | 1/1 | Complete   | 2026-03-19 |
