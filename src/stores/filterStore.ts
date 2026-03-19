@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useUIStore } from '@/stores/uiStore';
+import { STEP_MS, snapToStep } from '@/lib/constants';
 
 export interface ProximityPin {
   lat: number;
@@ -15,16 +16,6 @@ export interface SavedToggles {
   showGroundTraffic: boolean;
   pulseEnabled: boolean;
   showShips: boolean;
-}
-
-const STEP_MS: Record<Granularity, number> = {
-  minute: 60 * 1000,
-  hour: 60 * 60 * 1000,
-  day: 24 * 60 * 60 * 1000,
-};
-
-function snapToStep(ts: number, step: number): number {
-  return Math.floor(ts / step) * step;
 }
 
 export interface FilterState {
