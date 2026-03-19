@@ -5,7 +5,7 @@
 ## Progress
 
 ```
-[████████████████████] 10/10 phases complete (100%)
+[████████████████████] 12/12 phases complete (100%)
 ```
 
 ## Phase Status
@@ -23,11 +23,12 @@
 | 8.1 | GDELT Conflict Events | Done | 2026-03-17 |
 | 9 | Layer Controls & News Toggle | Done | 2026-03-17 |
 | 10 | Detail Panel & Event Reclassification | Done | 2026-03-18 |
-| 11 | Hierarchical Event Toggles & UI Polish | Not started | — |
+| 11 | Smart Filters | Done | 2026-03-18 |
+| 12 | Analytics Dashboard | Done | 2026-03-18 |
 
 ## Current Focus
 
-**Phase 11: Hierarchical Event Toggles & UI Polish** — Master "Events" toggle with sub-toggles per category, darker unidentified flight color.
+All v1.0 milestone phases complete.
 
 ## What's Been Built
 
@@ -79,6 +80,17 @@
 - New explosion and crosshair map icons
 - Unidentified flight filter takes precedence over Ground filter
 - 365 tests passing
+
+### Phase 11: Smart Filters (Complete)
+- Advanced filtering by nationality, speed, altitude, proximity, date range
+- FilterPanelSlot with collapsible sections and pin-to-map proximity filter
+
+### Phase 12: Analytics Dashboard (Complete)
+- Counters panel with Flights (Iranian, Unidentified) and Events (Airstrikes, Ground Combat, Targeted, Fatalities)
+- Visibility-aware: counters reflect only entities visible on the map (toggle + smart filter gating)
+- Green +N delta animation with 3s fade on value changes
+- Fixed-width label column for vertically aligned values
+- 534 tests passing
 
 ## Blockers
 

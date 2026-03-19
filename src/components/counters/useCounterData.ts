@@ -1,19 +1,16 @@
 import { useMemo } from 'react';
-import { useFlightStore } from '@/stores/flightStore';
-import { useEventStore } from '@/stores/eventStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 import { CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
-import type { ConflictEventEntity } from '@/types/entities';
+import type { FlightEntity, ConflictEventEntity } from '@/types/entities';
 
 export interface CounterValues {
   iranianFlights: number;
   unidentifiedFlights: number;
-  airstrikes: { filtered: number; total: number };
-  groundCombat: { filtered: number; total: number };
-  targeted: { filtered: number; total: number };
-  totalEvents: { filtered: number; total: number };
-  fatalities: { filtered: number; total: number };
+  airstrikes: number;
+  groundCombat: number;
+  targeted: number;
+  fatalities: number;
 }
 
 const AIRSTRIKE_TYPES: readonly string[] = CONFLICT_TOGGLE_GROUPS.showAirstrikes;
@@ -31,64 +28,50 @@ function sumFatalitiesByGroup(events: ConflictEventEntity[], types: readonly str
 }
 
 export function useCounterData(): CounterValues {
-  const rawFlights = useFlightStore((s) => s.flights);
-  const rawEvents = useEventStore((s) => s.events);
-
+  const showFlights = useUIStore((s) => s.showFlights);
+  const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
+  const pulseEnabled = useUIStore((s) => s.pulseEnabled);
   const showEvents = useUIStore((s) => s.showEvents);
   const showAirstrikes = useUIStore((s) => s.showAirstrikes);
   const showGroundCombat = useUIStore((s) => s.showGroundCombat);
   const showTargeted = useUIStore((s) => s.showTargeted);
 
-  const { events: filteredEvents } = useFilteredEntities();
+  const { flights: filteredFlights, events: filteredEvents } = useFilteredEntities();
 
   return useMemo(() => {
-    // Flight counters from raw (no filter/toggle narrowing)
-    const iranianFlights = rawFlights.filter((f) => f.data.originCountry === 'Iran').length;
-    const unidentifiedFlights = rawFlights.filter((f) => f.data.unidentified).length;
+    // Visible flights: smart filters + toggle gating (matches useEntityLayers logic)
+    const visibleFlights = filteredFlights.filter((f: FlightEntity) => {
+      if (f.data.unidentified) return pulseEnabled;
+      if (f.data.onGround) return showGroundTraffic;
+      return showFlights;
+    });
 
-    // Event totals from raw (unfiltered)
-    const airstrikesTotal = countByGroup(rawEvents, AIRSTRIKE_TYPES);
-    const groundCombatTotal = countByGroup(rawEvents, GROUND_COMBAT_TYPES);
-    const targetedTotal = countByGroup(rawEvents, TARGETED_TYPES);
+    const iranianFlights = visibleFlights.filter((f: FlightEntity) => f.data.originCountry === 'Iran').length;
+    const unidentifiedFlights = visibleFlights.filter((f: FlightEntity) => f.data.unidentified).length;
 
-    // Event filtered counts: smart filter + toggle gating
-    const airstrikesFiltered = showEvents && showAirstrikes
+    // Visible event counts: smart filters + toggle gating
+    const airstrikes = showEvents && showAirstrikes
       ? countByGroup(filteredEvents, AIRSTRIKE_TYPES)
       : 0;
-    const groundCombatFiltered = showEvents && showGroundCombat
+    const groundCombat = showEvents && showGroundCombat
       ? countByGroup(filteredEvents, GROUND_COMBAT_TYPES)
       : 0;
-    const targetedFiltered = showEvents && showTargeted
+    const targeted = showEvents && showTargeted
       ? countByGroup(filteredEvents, TARGETED_TYPES)
       : 0;
 
-    // Totals sum three groups independently
-    const totalEventsTotal = airstrikesTotal + groundCombatTotal + targetedTotal;
-    const totalEventsFiltered = airstrikesFiltered + groundCombatFiltered + targetedFiltered;
-
-    // Fatalities
-    const fatalitiesTotalVal = rawEvents.reduce((sum, e) => sum + e.data.fatalities, 0);
-
-    // Fatalities filtered: sum fatalities from filtered+toggled events
-    let fatalitiesFilteredVal = 0;
+    // Fatalities from visible events only
+    let fatalities = 0;
     if (showEvents && showAirstrikes) {
-      fatalitiesFilteredVal += sumFatalitiesByGroup(filteredEvents, AIRSTRIKE_TYPES);
+      fatalities += sumFatalitiesByGroup(filteredEvents, AIRSTRIKE_TYPES);
     }
     if (showEvents && showGroundCombat) {
-      fatalitiesFilteredVal += sumFatalitiesByGroup(filteredEvents, GROUND_COMBAT_TYPES);
+      fatalities += sumFatalitiesByGroup(filteredEvents, GROUND_COMBAT_TYPES);
     }
     if (showEvents && showTargeted) {
-      fatalitiesFilteredVal += sumFatalitiesByGroup(filteredEvents, TARGETED_TYPES);
+      fatalities += sumFatalitiesByGroup(filteredEvents, TARGETED_TYPES);
     }
 
-    return {
-      iranianFlights,
-      unidentifiedFlights,
-      airstrikes: { filtered: airstrikesFiltered, total: airstrikesTotal },
-      groundCombat: { filtered: groundCombatFiltered, total: groundCombatTotal },
-      targeted: { filtered: targetedFiltered, total: targetedTotal },
-      totalEvents: { filtered: totalEventsFiltered, total: totalEventsTotal },
-      fatalities: { filtered: fatalitiesFilteredVal, total: fatalitiesTotalVal },
-    };
-  }, [rawFlights, rawEvents, filteredEvents, showEvents, showAirstrikes, showGroundCombat, showTargeted]);
+    return { iranianFlights, unidentifiedFlights, airstrikes, groundCombat, targeted, fatalities };
+  }, [filteredFlights, filteredEvents, showFlights, showGroundTraffic, pulseEnabled, showEvents, showAirstrikes, showGroundCombat, showTargeted]);
 }

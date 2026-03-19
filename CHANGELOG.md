@@ -4,6 +4,20 @@ All notable changes to the Iran Conflict Monitor project.
 
 ## [Unreleased]
 
+## [v0.12.0] - 2026-03-18
+
+### Phase 12: Analytics Dashboard
+
+#### Added
+- Counters panel (CountersSlot) with collapsible Flights + Events sections
+- Flight counters: Iranian (originCountry) and Unidentified (hex-only) tallies
+- Event counters: Airstrikes, Ground Combat, Targeted, Fatalities
+- Visibility-aware counts: reflect only entities visible on the map (smart filters + toggle gating)
+- Green +N delta animation with 3s fade (delta-fade keyframe in app.css)
+- useCounterData hook deriving counts from flightStore, eventStore, uiStore, and useFilteredEntities
+- CounterRow component with fixed-width label column for vertical value alignment
+- 534 tests passing
+
 ## [v0.10.0] - 2026-03-18
 
 ### Phase 10: Detail Panel & GDELT Event Reclassification

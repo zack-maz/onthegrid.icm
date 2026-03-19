@@ -35,6 +35,7 @@ describe('CountersSlot', () => {
       showFlights: true,
       showShips: true,
       showGroundTraffic: false,
+      pulseEnabled: true,
     });
     useFilterStore.setState({
       flightCountries: [],
@@ -63,35 +64,17 @@ describe('CountersSlot', () => {
     expect(screen.getByText('Events')).toBeInTheDocument();
   });
 
-  it('renders all 7 counter row labels', () => {
+  it('renders all 6 counter row labels', () => {
     render(<CountersSlot />);
     expect(screen.getByText('Iranian')).toBeInTheDocument();
     expect(screen.getByText('Unidentified')).toBeInTheDocument();
     expect(screen.getByText('Airstrikes')).toBeInTheDocument();
     expect(screen.getByText('Ground Combat')).toBeInTheDocument();
     expect(screen.getByText('Targeted')).toBeInTheDocument();
-    expect(screen.getByText('Total')).toBeInTheDocument();
     expect(screen.getByText('Fatalities')).toBeInTheDocument();
   });
 
-  it('shows ratio format when filtered !== total', () => {
-    useEventStore.setState({
-      events: [
-        makeEvent('a1', 'airstrike', 3),
-        makeEvent('a2', 'airstrike', 2),
-        makeEvent('gc1', 'ground_combat', 1),
-      ],
-      eventCount: 3,
-    });
-    useUIStore.setState({ showGroundCombat: false });
-    render(<CountersSlot />);
-
-    // Total events: 3 total, 2 filtered (airstrikes only, ground combat off)
-    // Should show ratio format somewhere
-    expect(screen.getByText(/2\/3/)).toBeInTheDocument();
-  });
-
-  it('shows simple format when no filtering narrows the count', () => {
+  it('shows plain counts for events (no ratios)', () => {
     useEventStore.setState({
       events: [
         makeEvent('a1', 'airstrike'),
@@ -101,13 +84,12 @@ describe('CountersSlot', () => {
     });
     render(<CountersSlot />);
 
-    // Airstrikes: filtered=2, total=2 -- should show just "2"
-    // The "2" should be present without a "/" ratio
-    const airstrikeValues = screen.getAllByText('2');
-    expect(airstrikeValues.length).toBeGreaterThan(0);
+    // Airstrikes = 2, should show just "2" with no ratio
+    const values = screen.getAllByText('2');
+    expect(values.length).toBeGreaterThan(0);
   });
 
-  it('flight counters show simple counts (no ratio)', () => {
+  it('flight counters show simple counts', () => {
     useFlightStore.setState({
       flights: [
         makeFlight('f1', 'Iran'),

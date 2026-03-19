@@ -2,7 +2,6 @@ import { useUIStore } from '@/stores/uiStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
 import { useCounterData } from '@/components/counters/useCounterData';
 import { CounterRow } from '@/components/counters/CounterRow';
-import { ENTITY_DOT_COLORS } from '@/components/map/layers/constants';
 
 export function CountersSlot() {
   const isCollapsed = useUIStore((s) => s.isCountersCollapsed);
@@ -25,20 +24,8 @@ export function CountersSlot() {
               Flights
             </div>
             <div className="mt-0.5 space-y-0.5">
-              <CounterRow
-                label="Iranian"
-                color={ENTITY_DOT_COLORS.flights}
-                showRatio={false}
-                filtered={counters.iranianFlights}
-                total={counters.iranianFlights}
-              />
-              <CounterRow
-                label="Unidentified"
-                color={ENTITY_DOT_COLORS.unidentified}
-                showRatio={false}
-                filtered={counters.unidentifiedFlights}
-                total={counters.unidentifiedFlights}
-              />
+              <CounterRow label="Iranian" value={counters.iranianFlights} />
+              <CounterRow label="Unidentified" value={counters.unidentifiedFlights} />
             </div>
 
             <div className="border-t border-border my-1.5" />
@@ -47,39 +34,10 @@ export function CountersSlot() {
               Events
             </div>
             <div className="mt-0.5 space-y-0.5">
-              <CounterRow
-                label="Airstrikes"
-                color={ENTITY_DOT_COLORS.airstrikes}
-                showRatio={true}
-                filtered={counters.airstrikes.filtered}
-                total={counters.airstrikes.total}
-              />
-              <CounterRow
-                label="Ground Combat"
-                color={ENTITY_DOT_COLORS.groundCombat}
-                showRatio={true}
-                filtered={counters.groundCombat.filtered}
-                total={counters.groundCombat.total}
-              />
-              <CounterRow
-                label="Targeted"
-                color={ENTITY_DOT_COLORS.targeted}
-                showRatio={true}
-                filtered={counters.targeted.filtered}
-                total={counters.targeted.total}
-              />
-              <CounterRow
-                label="Total"
-                showRatio={true}
-                filtered={counters.totalEvents.filtered}
-                total={counters.totalEvents.total}
-              />
-              <CounterRow
-                label="Fatalities"
-                showRatio={true}
-                filtered={counters.fatalities.filtered}
-                total={counters.fatalities.total}
-              />
+              <CounterRow label="Airstrikes" value={counters.airstrikes} />
+              <CounterRow label="Ground Combat" value={counters.groundCombat} />
+              <CounterRow label="Targeted" value={counters.targeted} />
+              <CounterRow label="Fatalities" value={counters.fatalities} />
             </div>
           </div>
         )}

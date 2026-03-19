@@ -2,28 +2,24 @@ import { useEffect, useRef, useState } from 'react';
 
 interface CounterRowProps {
   label: string;
-  filtered: number;
-  total: number;
-  showRatio: boolean;
+  value: number;
   color?: string;
 }
 
 const fmt = new Intl.NumberFormat('en-US');
 
-export function CounterRow({ label, filtered, total, showRatio, color }: CounterRowProps) {
-  // Track the "primary" value for delta detection
-  const primaryValue = showRatio ? filtered : total;
-  const prevRef = useRef<number>(primaryValue);
+export function CounterRow({ label, value, color }: CounterRowProps) {
+  const prevRef = useRef<number>(value);
   const [delta, setDelta] = useState<number | null>(null);
   const [deltaKey, setDeltaKey] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (prevRef.current !== primaryValue) {
-      const diff = primaryValue - prevRef.current;
+    if (prevRef.current !== value) {
+      const diff = value - prevRef.current;
       setDelta(diff);
       setDeltaKey((k) => k + 1);
-      prevRef.current = primaryValue;
+      prevRef.current = value;
 
       if (timeoutRef.current !== null) {
         clearTimeout(timeoutRef.current);
@@ -39,16 +35,7 @@ export function CounterRow({ label, filtered, total, showRatio, color }: Counter
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [primaryValue]);
-
-  // Value display logic
-  let valueDisplay: string;
-  if (showRatio && filtered !== total) {
-    const pct = total > 0 ? Math.round((filtered / total) * 100) : 0;
-    valueDisplay = `${fmt.format(filtered)}/${fmt.format(total)}  ${pct}%`;
-  } else {
-    valueDisplay = fmt.format(total);
-  }
+  }, [value]);
 
   const deltaText =
     delta !== null
@@ -58,8 +45,8 @@ export function CounterRow({ label, filtered, total, showRatio, color }: Counter
       : null;
 
   return (
-    <div className="flex items-center justify-between text-xs">
-      <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-4 text-xs">
+      <div className="flex items-center gap-1.5 w-24 shrink-0">
         {color && (
           <span
             className="inline-block h-1.5 w-1.5 rounded-full"
@@ -69,7 +56,7 @@ export function CounterRow({ label, filtered, total, showRatio, color }: Counter
         <span className="text-text-secondary">{label}</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="tabular-nums text-text-primary">{valueDisplay}</span>
+        <span className="tabular-nums text-text-primary">{fmt.format(value)}</span>
         {deltaText && (
           <span
             key={deltaKey}

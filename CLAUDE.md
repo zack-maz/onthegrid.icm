@@ -130,3 +130,13 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Lost contact** — grayscale + opacity-50 overlay with "LOST CONTACT" banner when entity disappears
 - **Relative timestamp** — "Updated Xs ago" ticking every second
 - **Instant swap** — content changes on entity switch, slide animation only on open/close
+
+## Analytics Counters (Phase 12)
+
+- **CountersSlot** — `src/components/layout/CountersSlot.tsx`, collapsible OverlayPanel with Flights + Events sections
+- **CounterRow** — `src/components/counters/CounterRow.tsx`, label + value with fixed-width label column (w-24) for vertical alignment, green +N delta with 3s fade animation
+- **useCounterData** — `src/components/counters/useCounterData.ts`, derives visible-only counts from filtered entities + toggle state
+- **Visibility-aware** — counters reflect only visible entities (smart filters + toggle gating matching useEntityLayers logic)
+- **Flight counters** — Iranian (originCountry === 'Iran'), Unidentified (data.unidentified flag); gated by showFlights/showGroundTraffic/pulseEnabled
+- **Event counters** — Airstrikes, Ground Combat, Targeted, Fatalities; gated by showEvents + per-category toggles
+- **Delta animation** — `@keyframes delta-fade` in app.css, 3s ease-out forwards via `animate-delta` class

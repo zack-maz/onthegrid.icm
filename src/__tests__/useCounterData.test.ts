@@ -8,10 +8,10 @@ import { useCounterData } from '@/components/counters/useCounterData';
 import type { FlightEntity, ConflictEventEntity } from '@/types/entities';
 import type { ConflictEventType } from '@/types/ui';
 
-function makeFlight(id: string, country: string, unidentified = false): FlightEntity {
+function makeFlight(id: string, country: string, unidentified = false, onGround = false): FlightEntity {
   return {
     id, type: 'flight', lat: 32, lng: 51, timestamp: Date.now(), label: id,
-    data: { icao24: id, callsign: id, originCountry: country, velocity: 250, heading: 45, altitude: 10000, onGround: false, verticalRate: 0, unidentified },
+    data: { icao24: id, callsign: id, originCountry: country, velocity: 250, heading: 45, altitude: 10000, onGround, verticalRate: 0, unidentified },
   };
 }
 
@@ -34,6 +34,7 @@ describe('useCounterData', () => {
       showFlights: true,
       showShips: true,
       showGroundTraffic: false,
+      pulseEnabled: true,
     });
     useFilterStore.setState({
       flightCountries: [],
@@ -56,14 +57,13 @@ describe('useCounterData', () => {
     const { result } = renderHook(() => useCounterData());
     expect(result.current.iranianFlights).toBe(0);
     expect(result.current.unidentifiedFlights).toBe(0);
-    expect(result.current.airstrikes).toEqual({ filtered: 0, total: 0 });
-    expect(result.current.groundCombat).toEqual({ filtered: 0, total: 0 });
-    expect(result.current.targeted).toEqual({ filtered: 0, total: 0 });
-    expect(result.current.totalEvents).toEqual({ filtered: 0, total: 0 });
-    expect(result.current.fatalities).toEqual({ filtered: 0, total: 0 });
+    expect(result.current.airstrikes).toBe(0);
+    expect(result.current.groundCombat).toBe(0);
+    expect(result.current.targeted).toBe(0);
+    expect(result.current.fatalities).toBe(0);
   });
 
-  it('counts iranianFlights from raw flights with originCountry Iran', () => {
+  it('counts visible Iranian flights (airborne + showFlights on)', () => {
     useFlightStore.setState({
       flights: [
         makeFlight('f1', 'Iran'),
@@ -76,7 +76,7 @@ describe('useCounterData', () => {
     expect(result.current.iranianFlights).toBe(2);
   });
 
-  it('counts unidentifiedFlights from raw flights with unidentified flag', () => {
+  it('counts visible unidentified flights (pulseEnabled on)', () => {
     useFlightStore.setState({
       flights: [
         makeFlight('f1', 'Unknown', true),
@@ -89,7 +89,46 @@ describe('useCounterData', () => {
     expect(result.current.unidentifiedFlights).toBe(2);
   });
 
-  it('computes event group totals from raw events matching CONFLICT_TOGGLE_GROUPS', () => {
+  it('unidentified flights hidden when pulseEnabled is false', () => {
+    useFlightStore.setState({
+      flights: [
+        makeFlight('f1', 'Unknown', true),
+        makeFlight('f2', 'Iran', false),
+      ],
+      flightCount: 2,
+    });
+    useUIStore.setState({ pulseEnabled: false });
+    const { result } = renderHook(() => useCounterData());
+    expect(result.current.unidentifiedFlights).toBe(0);
+  });
+
+  it('ground flights only counted when showGroundTraffic is on', () => {
+    useFlightStore.setState({
+      flights: [
+        makeFlight('f1', 'Iran', false, true), // on ground
+        makeFlight('f2', 'Iran', false, false), // airborne
+      ],
+      flightCount: 2,
+    });
+    // showGroundTraffic defaults to false
+    const { result } = renderHook(() => useCounterData());
+    expect(result.current.iranianFlights).toBe(1); // only airborne
+  });
+
+  it('Iranian flights hidden when showFlights is false (non-ground, non-unidentified)', () => {
+    useFlightStore.setState({
+      flights: [
+        makeFlight('f1', 'Iran'),
+        makeFlight('f2', 'Qatar'),
+      ],
+      flightCount: 2,
+    });
+    useUIStore.setState({ showFlights: false });
+    const { result } = renderHook(() => useCounterData());
+    expect(result.current.iranianFlights).toBe(0);
+  });
+
+  it('computes visible event counts matching CONFLICT_TOGGLE_GROUPS', () => {
     useEventStore.setState({
       events: [
         makeEvent('a1', 'airstrike'),
@@ -102,13 +141,12 @@ describe('useCounterData', () => {
       eventCount: 6,
     });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.airstrikes.total).toBe(2);
-    expect(result.current.groundCombat.total).toBe(3); // ground_combat + shelling + blockade
-    expect(result.current.targeted.total).toBe(1);
-    expect(result.current.totalEvents.total).toBe(6);
+    expect(result.current.airstrikes).toBe(2);
+    expect(result.current.groundCombat).toBe(3); // ground_combat + shelling + blockade
+    expect(result.current.targeted).toBe(1);
   });
 
-  it('filtered counts respect toggle gating (showAirstrikes=false yields 0 filtered airstrikes)', () => {
+  it('event counts are 0 when their toggle is off', () => {
     useEventStore.setState({
       events: [
         makeEvent('a1', 'airstrike'),
@@ -119,14 +157,12 @@ describe('useCounterData', () => {
     });
     useUIStore.setState({ showAirstrikes: false });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.airstrikes.filtered).toBe(0);
-    expect(result.current.airstrikes.total).toBe(1);
-    // Other groups still show filtered counts
-    expect(result.current.groundCombat.filtered).toBe(1);
-    expect(result.current.targeted.filtered).toBe(1);
+    expect(result.current.airstrikes).toBe(0);
+    expect(result.current.groundCombat).toBe(1);
+    expect(result.current.targeted).toBe(1);
   });
 
-  it('all filtered counts are 0 when showEvents is false', () => {
+  it('all event counts are 0 when showEvents is false', () => {
     useEventStore.setState({
       events: [
         makeEvent('a1', 'airstrike'),
@@ -137,32 +173,13 @@ describe('useCounterData', () => {
     });
     useUIStore.setState({ showEvents: false });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.airstrikes.filtered).toBe(0);
-    expect(result.current.groundCombat.filtered).toBe(0);
-    expect(result.current.targeted.filtered).toBe(0);
-    expect(result.current.totalEvents.filtered).toBe(0);
-    expect(result.current.fatalities.filtered).toBe(0);
-    // Totals still reflect raw
-    expect(result.current.airstrikes.total).toBe(1);
+    expect(result.current.airstrikes).toBe(0);
+    expect(result.current.groundCombat).toBe(0);
+    expect(result.current.targeted).toBe(0);
+    expect(result.current.fatalities).toBe(0);
   });
 
-  it('totalEvents sums three groups independently for filtered and total', () => {
-    useEventStore.setState({
-      events: [
-        makeEvent('a1', 'airstrike'),
-        makeEvent('gc1', 'ground_combat'),
-        makeEvent('t1', 'assassination'),
-        makeEvent('t2', 'abduction'),
-      ],
-      eventCount: 4,
-    });
-    useUIStore.setState({ showTargeted: false });
-    const { result } = renderHook(() => useCounterData());
-    expect(result.current.totalEvents.total).toBe(4);
-    expect(result.current.totalEvents.filtered).toBe(2); // airstrike + ground_combat, targeted OFF
-  });
-
-  it('fatalities.total sums data.fatalities from all raw events', () => {
+  it('fatalities sum from visible events only', () => {
     useEventStore.setState({
       events: [
         makeEvent('a1', 'airstrike', 5),
@@ -172,11 +189,10 @@ describe('useCounterData', () => {
       eventCount: 3,
     });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.fatalities.total).toBe(16);
-    expect(result.current.fatalities.filtered).toBe(16); // all toggles on
+    expect(result.current.fatalities).toBe(16);
   });
 
-  it('fatalities.filtered respects toggle gating', () => {
+  it('fatalities respect toggle gating', () => {
     useEventStore.setState({
       events: [
         makeEvent('a1', 'airstrike', 5),
@@ -187,11 +203,10 @@ describe('useCounterData', () => {
     });
     useUIStore.setState({ showGroundCombat: false });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.fatalities.total).toBe(16);
-    expect(result.current.fatalities.filtered).toBe(6); // 5 (airstrike) + 1 (assassination)
+    expect(result.current.fatalities).toBe(6); // 5 (airstrike) + 1 (assassination)
   });
 
-  it('flight counters derive from raw flights regardless of filters', () => {
+  it('flight counters respect smart filters', () => {
     useFlightStore.setState({
       flights: [
         makeFlight('f1', 'Iran'),
@@ -199,10 +214,9 @@ describe('useCounterData', () => {
       ],
       flightCount: 2,
     });
-    // Apply a country filter -- should NOT affect flight counters
+    // Country filter narrows visible flights
     useFilterStore.setState({ flightCountries: ['Qatar'] });
     const { result } = renderHook(() => useCounterData());
-    // iranianFlights still counts from raw
-    expect(result.current.iranianFlights).toBe(1);
+    expect(result.current.iranianFlights).toBe(0); // Iran filtered out
   });
 });
