@@ -117,6 +117,7 @@ No new files — verification + git only.
 - [ ] **Step 1: Write failing type test**
 
 ```typescript
+// @vitest-environment node
 // server/__tests__/types.test.ts  (add to existing file)
 import type { SiteEntity, EntityType } from '../types.js';
 
@@ -201,9 +202,10 @@ git commit -m "feat(15): add SiteEntity discriminated union type"
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
+// @vitest-environment node
 // server/__tests__/adapters/overpass.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchSites } from '../adapters/overpass.js';
+import { fetchSites } from '../../adapters/overpass.js';
 
 const mockResponse = {
   elements: [
@@ -364,6 +366,7 @@ git commit -m "feat(15): add Overpass adapter with whitelist tag filter"
 - [ ] **Step 1: Write failing route test**
 
 ```typescript
+// @vitest-environment node
 // server/__tests__/routes/sites.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
@@ -401,7 +404,11 @@ npx vitest run server/__tests__/routes/sites.test.ts
 ```
 Expected: FAIL — route not registered
 
-- [ ] **Step 3: Implement server/routes/sites.ts**
+- [ ] **Step 3: Add `sites` to CACHE_TTL in server/constants.ts**
+
+Open `server/constants.ts` and add `sites: 86_400_000` to the `CACHE_TTL` object alongside the existing `flights`, `ships`, and `events` entries. This must happen before Step 4 so TypeScript strict mode accepts the reference.
+
+- [ ] **Step 4: Implement server/routes/sites.ts**
 
 ```typescript
 import { Router } from 'express';
@@ -411,7 +418,7 @@ import { CACHE_TTL } from '../constants.js';
 import type { SiteEntity } from '../types.js';
 
 const SITES_KEY = 'sites:osm';
-const LOGICAL_TTL_MS = CACHE_TTL.sites ?? 86_400_000; // 24h
+const LOGICAL_TTL_MS = CACHE_TTL.sites; // 24h — defined in constants.ts
 const REDIS_TTL_SEC = 90_000; // 25h hard TTL
 
 export const sitesRouter = Router();
@@ -431,8 +438,6 @@ sitesRouter.get('/', async (_req, res) => {
   }
 });
 ```
-
-- [ ] **Step 4: Add `sites: 86_400_000` to CACHE_TTL in server/constants.ts** (check the existing shape and add if missing)
 
 - [ ] **Step 5: Register route in server/index.ts**
 
@@ -455,6 +460,8 @@ Expected: PASS
 git add server/routes/sites.ts server/__tests__/routes/sites.test.ts server/index.ts server/constants.ts
 git commit -m "feat(15): add /api/sites route with 24h Redis cache"
 ```
+
+
 
 ---
 
@@ -739,21 +746,21 @@ export function SiteDetail({ entity }: { entity: SiteEntity }) {
 - [ ] **Step 2: Update useSelectedEntity to search siteStore**
 
 ```typescript
-// Add import
+// Add import at top
 import { useSiteStore } from '@/stores/siteStore';
 
-// Add inside useSelectedEntity():
-const sites = useSiteStore((s) => s.sites);
+// Add store subscription inside useSelectedEntity() alongside the other selectors:
+const sites = useSiteStore((s) => s.sites);  // must be here, not inside useMemo
 
-// Add to search:
+// Update the search inside useMemo:
 const found =
   flights.find((f) => f.id === selectedId) ??
   ships.find((s) => s.id === selectedId) ??
   events.find((e) => e.id === selectedId) ??
-  sites.find((s) => s.id === selectedId) ??  // <-- add this
+  sites.find((s) => s.id === selectedId) ??  // <-- add
   null;
 
-// Add sites to useMemo deps: [..., sites]
+// Add sites to useMemo deps array (line 58): [selectedId, flights, ships, events, sites]
 ```
 
 - [ ] **Step 3: Add SiteDetail case to DetailPanelSlot.tsx**
@@ -853,9 +860,10 @@ git commit -m "feat(15): add site IconLayer, shrink event icons, wire useSitePol
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
+// @vitest-environment node
 // server/__tests__/adapters/news.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchNews, type NewsItem } from '../adapters/news.js';
+import { fetchNews, type NewsItem } from '../../adapters/news.js';
 
 const gdeltResponse = {
   articles: [
@@ -1111,27 +1119,37 @@ git commit -m "feat(16): add /api/news route, newsStore, useNewsPolling"
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
+// @vitest-environment node
 // server/__tests__/routes/notifications.test.ts
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import { createApp } from '../../index.js';
 
-const mockEvents = [
-  { id: 'e1', type: 'airstrike', lat: 32, lng: 48, timestamp: Date.now() - 3600_000, label: 'Baghdad',
-    data: { numMentions: 100, numSources: 20, goldsteinScale: -8, eventType: 'Airstrike', subEventType: 'CAMEO 190', fatalities: 0, actor1: 'ISRAEL', actor2: 'IRAN', notes: '', source: '', locationName: 'Baghdad', cameoCode: '190' }},
-  { id: 'e2', type: 'assault', lat: 33, lng: 44, timestamp: Date.now() - 7200_000, label: 'Tehran',
-    data: { numMentions: 5, numSources: 2, goldsteinScale: -4, eventType: 'Assault', subEventType: 'CAMEO 180', fatalities: 0, actor1: 'IRAN', actor2: 'ISRAEL', notes: '', source: '', locationName: 'Tehran', cameoCode: '180' }},
-];
+// Declare mock fn at module scope so it can be reassigned per test
+const mockCacheGet = vi.fn();
 
 vi.mock('../../cache/redis.js', () => ({
-  cacheGet: vi.fn().mockImplementation((key: string) => {
-    if (key === 'events:gdelt') return Promise.resolve({ data: mockEvents, stale: false, lastFresh: Date.now() });
-    if (key === 'news:feed') return Promise.resolve({ data: [], stale: false, lastFresh: Date.now() });
-    return Promise.resolve(null);
-  }),
+  cacheGet: mockCacheGet,
   cacheSet: vi.fn(),
   redis: { get: vi.fn(), set: vi.fn() },
 }));
+
+// Import after mock is registered
+const { createApp } = await import('../../index.js');
+
+const BASE_EVENTS = [
+  { id: 'e1', type: 'airstrike', lat: 32, lng: 48, timestamp: Date.now() - 3_600_000, label: 'Baghdad',
+    data: { goldsteinScale: -8, eventType: 'Airstrike', subEventType: 'CAMEO 190', fatalities: 0, actor1: 'ISRAEL', actor2: 'IRAN', notes: '', source: '', locationName: 'Baghdad', cameoCode: '190' }},
+  { id: 'e2', type: 'assault', lat: 33, lng: 44, timestamp: Date.now() - 7_200_000, label: 'Tehran',
+    data: { goldsteinScale: -4, eventType: 'Assault', subEventType: 'CAMEO 180', fatalities: 0, actor1: 'IRAN', actor2: 'ISRAEL', notes: '', source: '', locationName: 'Tehran', cameoCode: '180' }},
+];
+
+beforeEach(() => {
+  mockCacheGet.mockImplementation((key: string) => {
+    if (key === 'events:gdelt') return Promise.resolve({ data: BASE_EVENTS, stale: false, lastFresh: Date.now() });
+    if (key === 'news:feed') return Promise.resolve({ data: [], stale: false, lastFresh: Date.now() });
+    return Promise.resolve(null);
+  });
+});
 
 describe('GET /api/notifications', () => {
   it('returns 200 with scored, sorted notifications', async () => {
@@ -1139,15 +1157,15 @@ describe('GET /api/notifications', () => {
     const res = await request(app).get('/api/notifications');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
-    // airstrike should score higher than assault
+    // airstrike (weight 10) should score higher than assault (weight 3)
     expect(res.body[0].id).toBe('e1');
     expect(res.body[0].score).toBeGreaterThan(res.body[1].score);
   });
 
   it('drops events older than 24h', async () => {
-    vi.mocked(require('../../cache/redis.js').cacheGet).mockImplementation((key: string) => {
+    mockCacheGet.mockImplementation((key: string) => {
       if (key === 'events:gdelt') return Promise.resolve({ data: [
-        { ...mockEvents[0], timestamp: Date.now() - 86_400_001 }, // >24h
+        { ...BASE_EVENTS[0], timestamp: Date.now() - 86_400_001 },
       ], stale: false, lastFresh: Date.now() });
       return Promise.resolve({ data: [], stale: false, lastFresh: Date.now() });
     });
@@ -1349,12 +1367,12 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
   connectionStatus: 'loading',
   lastFetchAt: null,
 
-  setNotifications: (items) => set((s) => ({
+  setNotifications: (items) => set({
     notifications: items,
-    unreadCount: s.unreadCount + items.length,
+    unreadCount: items.length, // replace, not accumulate — server always returns current top-10
     connectionStatus: 'connected',
     lastFetchAt: Date.now(),
-  })),
+  }),
 
   addProximityAlert: (alert) => set((s) => {
     const exists = s.proximityAlerts.some(a => a.id === alert.id);
@@ -1378,17 +1396,22 @@ export const DEFAULT_EVENT_WINDOW_MS = 86_400_000;
 ```
 This is a module-level constant only. No store fields change.
 
-- [ ] **Step 4: Apply 24h window in event rendering**
+- [ ] **Step 4: Apply 24h window in event filtering**
 
-Find where events are filtered for display (likely `src/hooks/useFilteredEntities.ts` or `src/hooks/useEntityLayers.ts`). In the event filter predicate, add:
+Date filtering for events happens in `src/lib/filters.ts` inside `entityPassesFilters()`. Find the `dateStart` check for events and add the default window fallback:
 
 ```typescript
 import { DEFAULT_EVENT_WINDOW_MS } from '@/stores/filterStore';
-// ...
-// When dateStart is null, apply default 24h window to events only (not flights/ships)
-const eventWindowStart = dateStart ?? (Date.now() - DEFAULT_EVENT_WINDOW_MS);
-// filter: event.timestamp >= eventWindowStart
+
+// Inside entityPassesFilters, where dateStart is checked for conflict events:
+// Only apply default window to conflict events (not flights/ships which have separate custom-range behavior)
+if (isConflictEventType(entity.type)) {
+  const windowStart = filterState.dateStart ?? (Date.now() - DEFAULT_EVENT_WINDOW_MS);
+  if (entity.timestamp < windowStart) return false;
+}
 ```
+
+This targets `src/lib/filters.ts` specifically, not `useEntityLayers.ts` (which doesn't date-filter).
 
 - [ ] **Step 5: Run tests**
 
@@ -1400,7 +1423,7 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/stores/notificationStore.ts src/stores/filterStore.ts src/hooks/useFilteredEntities.ts
+git add src/stores/notificationStore.ts src/stores/filterStore.ts src/lib/filters.ts
 git commit -m "feat(17): add notificationStore, DEFAULT_EVENT_WINDOW_MS 24h default"
 ```
 
@@ -1646,6 +1669,7 @@ git commit -m "feat(17): add notification drawer with bell icon, cards, and pane
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
+// @vitest-environment node
 // server/__tests__/adapters/yahoo-finance.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fetchMarkets } from '../adapters/yahoo-finance.js';
@@ -1975,9 +1999,9 @@ git commit -m "feat(18): add marketStore, useMarketPolling, and MarketsPanel wit
 grep -r "STEP_MS" src/
 ```
 
-- [ ] **Step 2: Remove Min entry**
+- [ ] **Step 2: Remove minute entry**
 
-In the `STEP_MS` record, delete the `Min` key and its value. Remove the `'Min'` button from the granularity toggle UI in `DateRangeFilter.tsx`. Default granularity becomes `'Hr'` if it was `'Min'`.
+In the `STEP_MS` record, delete the `'minute'` key and its value (the key is lowercase `'minute'`, not `'Min'` — the button label and the key are different). Remove the button rendering the `'Min'` label from the granularity toggle UI in `DateRangeFilter.tsx`. If the current granularity state is `'minute'`, reset it to `'hour'` as the new default.
 
 - [ ] **Step 3: Run tests**
 
