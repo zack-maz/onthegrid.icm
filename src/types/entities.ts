@@ -11,4 +11,6 @@ export type {
   CacheResponse,
   SiteEntity,
   SiteType,
+  NewsArticle,
+  NewsCluster,
 } from '../../server/types.js';
