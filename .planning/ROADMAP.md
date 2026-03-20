@@ -135,7 +135,7 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 12. Analytics Dashboard | v0.9 | 1/1 | Complete | 2026-03-19 |
 | 13. Serverless Cache Migration | v1.0 | 4/4 | Complete | 2026-03-20 |
 | 14. Vercel Deployment | v1.0 | 2/2 | Complete | 2026-03-20 |
-| 15. Key Sites Overlay | 2/2 | Complete   | 2026-03-20 | - |
+| 15. Key Sites Overlay | 2/2 | Complete    | 2026-03-20 | - |
 | 16. News Feed | v1.1 | 0/TBD | Not started | - |
 | 17. Notification Center | v1.1 | 0/TBD | Not started | - |
 | 18. Oil Markets Tracker | v1.1 | 0/TBD | Not started | - |
