@@ -7,6 +7,7 @@ import { shipsRouter } from './routes/ships.js';
 import { eventsRouter } from './routes/events.js';
 import { sourcesRouter } from './routes/sources.js';
 import { sitesRouter } from './routes/sites.js';
+import { newsRouter } from './routes/news.js';
 export function createApp() {
   const app = express();
 
@@ -27,6 +28,7 @@ export function createApp() {
   app.use('/api/events', eventsRouter);
   app.use('/api/sources', sourcesRouter);
   app.use('/api/sites', sitesRouter);
+  app.use('/api/news', newsRouter);
 
   // Error handler -- must be after routes
   app.use(errorHandler);
