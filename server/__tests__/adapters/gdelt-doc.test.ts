@@ -57,6 +57,8 @@ describe('GDELT DOC Adapter', () => {
       source: 'GDELT',
       keywords: [],
     });
+    expect(articles[0].sourceCountry).toBe('United Kingdom');
+    expect(articles[1].sourceCountry).toBe('Qatar');
   });
 
   it('parses seendate "YYYYMMDDTHHmmssZ" format correctly using Date.UTC', async () => {
@@ -111,6 +113,26 @@ describe('GDELT DOC Adapter', () => {
     expect(calledUrl).toContain('maxrecords=250');
     expect(calledUrl).toContain('mode=artlist');
     expect(calledUrl).toContain('format=json');
+    expect(calledUrl).toContain('sourcelang');
+  });
+
+  it('sets sourceCountry to undefined when sourcecountry field is missing', async () => {
+    const fixture = {
+      articles: [
+        {
+          url: 'https://example.com/no-country',
+          title: 'Article without country metadata',
+          seendate: '20260320T120000Z',
+        },
+      ],
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(fixture), { status: 200 }),
+    );
+
+    const articles = await fetchGdeltArticles();
+    expect(articles).toHaveLength(1);
+    expect(articles[0].sourceCountry).toBeUndefined();
   });
 
   it('sets imageUrl to undefined when socialimage is empty string', async () => {

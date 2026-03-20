@@ -10,6 +10,7 @@ const makeArticle = (overrides: Partial<NewsArticle> = {}): NewsArticle => ({
   title: 'Iran launches missile strike on military targets',
   url: 'https://example.com/default',
   source: 'GDELT',
+  sourceCountry: 'United Kingdom',
   publishedAt: Date.now(),
   keywords: ['iran', 'missile', 'military'],
   ...overrides,
@@ -117,11 +118,11 @@ vi.mock('../../adapters/gdelt-doc.js', () => ({
 vi.mock('../../adapters/rss.js', () => ({
   fetchAllRssFeeds: (...args: unknown[]) => mockFetchAllRssFeeds(...args),
   RSS_FEEDS: [
-    { url: 'https://feeds.bbci.co.uk/rss.xml', name: 'BBC' },
-    { url: 'https://www.aljazeera.com/rss', name: 'Al Jazeera' },
-    { url: 'https://www.tehrantimes.com/rss', name: 'Tehran Times' },
-    { url: 'https://www.timesofisrael.com/feed/', name: 'Times of Israel' },
-    { url: 'https://www.middleeasteye.net/rss', name: 'Middle East Eye' },
+    { url: 'https://feeds.bbci.co.uk/rss.xml', name: 'BBC', country: 'United Kingdom' },
+    { url: 'https://www.aljazeera.com/rss', name: 'Al Jazeera', country: 'Qatar' },
+    { url: 'https://www.tehrantimes.com/rss', name: 'Tehran Times', country: 'Iran' },
+    { url: 'https://www.timesofisrael.com/feed/', name: 'Times of Israel', country: 'Israel' },
+    { url: 'https://www.middleeasteye.net/rss', name: 'Middle East Eye', country: 'United Kingdom' },
   ],
 }));
 
@@ -304,6 +305,7 @@ describe('News Route (/api/news)', () => {
       expect(cluster).toHaveProperty('articles');
       expect(cluster).toHaveProperty('firstSeen');
       expect(cluster).toHaveProperty('lastUpdated');
+      expect(cluster.primaryArticle).toHaveProperty('sourceCountry');
     }
   });
 

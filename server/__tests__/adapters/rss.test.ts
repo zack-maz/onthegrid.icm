@@ -34,9 +34,9 @@ const RSS_SINGLE_ITEM = `<?xml version="1.0" encoding="UTF-8"?>
 </rss>`;
 
 describe('RSS Adapter', () => {
-  let fetchRssFeed: (url: string, sourceName: string) => Promise<NewsArticle[]>;
+  let fetchRssFeed: (url: string, sourceName: string, sourceCountry: string) => Promise<NewsArticle[]>;
   let fetchAllRssFeeds: () => Promise<NewsArticle[]>;
-  let RSS_FEEDS: Array<{ url: string; name: string }>;
+  let RSS_FEEDS: Array<{ url: string; name: string; country: string }>;
   const originalFetch = globalThis.fetch;
 
   beforeEach(async () => {
@@ -61,6 +61,7 @@ describe('RSS Adapter', () => {
       expect(names).toContain('Tehran Times');
       expect(names).toContain('Times of Israel');
       expect(names).toContain('Middle East Eye');
+      expect(RSS_FEEDS.every((f) => 'country' in f)).toBe(true);
     });
   });
 
@@ -70,9 +71,10 @@ describe('RSS Adapter', () => {
         new Response(RSS_FIXTURE, { status: 200 }),
       );
 
-      const articles = await fetchRssFeed('https://feeds.bbci.co.uk/rss.xml', 'BBC');
+      const articles = await fetchRssFeed('https://feeds.bbci.co.uk/rss.xml', 'BBC', 'United Kingdom');
       expect(articles).toHaveLength(2);
       expect(articles[0].source).toBe('BBC');
+      expect(articles[0].sourceCountry).toBe('United Kingdom');
       expect(articles[0].title).toBe('Iran conflict update: latest developments');
       expect(articles[0].url).toBe('https://www.bbc.co.uk/news/article-1');
     });
@@ -82,7 +84,7 @@ describe('RSS Adapter', () => {
         new Response(RSS_FIXTURE, { status: 200 }),
       );
 
-      const articles = await fetchRssFeed('https://example.com/rss', 'Test');
+      const articles = await fetchRssFeed('https://example.com/rss', 'Test', 'United Kingdom');
       expect(articles[0].summary).toBe(
         'The latest developments in the Iran conflict region.',
       );
@@ -96,7 +98,7 @@ describe('RSS Adapter', () => {
         new Response(RSS_FIXTURE, { status: 200 }),
       );
 
-      const articles = await fetchRssFeed('https://example.com/rss', 'Test');
+      const articles = await fetchRssFeed('https://example.com/rss', 'Test', 'United Kingdom');
       // Second item has no description or thumbnail
       expect(articles[1].summary).toBeUndefined();
       expect(articles[1].imageUrl).toBeUndefined();
@@ -107,7 +109,7 @@ describe('RSS Adapter', () => {
         new Response(RSS_FIXTURE, { status: 200 }),
       );
 
-      const articles = await fetchRssFeed('https://example.com/rss', 'Test');
+      const articles = await fetchRssFeed('https://example.com/rss', 'Test', 'United Kingdom');
       expect(articles[0].imageUrl).toBe('https://ichef.bbci.co.uk/thumb.jpg');
     });
 
@@ -116,7 +118,7 @@ describe('RSS Adapter', () => {
         new Response(RSS_SINGLE_ITEM, { status: 200 }),
       );
 
-      const articles = await fetchRssFeed('https://example.com/rss', 'Test');
+      const articles = await fetchRssFeed('https://example.com/rss', 'Test', 'United Kingdom');
       expect(articles).toHaveLength(1);
       expect(articles[0].title).toBe('Single item feed');
     });
@@ -126,7 +128,7 @@ describe('RSS Adapter', () => {
         new Response(RSS_FIXTURE, { status: 200 }),
       );
 
-      const articles = await fetchRssFeed('https://example.com/rss', 'Test');
+      const articles = await fetchRssFeed('https://example.com/rss', 'Test', 'United Kingdom');
       expect(articles[0].id).toMatch(/^[0-9a-f]{16}$/);
       expect(articles[0].tone).toBeUndefined();
       expect(articles[0].keywords).toEqual([]);
@@ -143,6 +145,7 @@ describe('RSS Adapter', () => {
       const articles = await fetchAllRssFeeds();
       // 5 feeds * 1 item each = 5 articles
       expect(articles).toHaveLength(5);
+      expect(articles.every((a) => a.sourceCountry)).toBe(true);
     });
 
     it('individual feed failure does not block other feeds (best-effort)', async () => {
