@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: 24h default event window implemented
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-03-20T22:25:42.066Z"
-last_activity: 2026-03-20 -- Completed Phase 17 Plan 02 (24h default event window)
+status: in-progress
+stopped_at: Completed 17-04 (proximity alerts)
+last_updated: "2026-03-20T22:25:43Z"
+last_activity: 2026-03-20 -- Completed Phase 17 Plan 04 (proximity alerts)
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 9
-  completed_plans: 8
-  percent: 67
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 17 of 20 (Notification Center)
-Plan: 02 of 04 complete
-Status: 24h default event window implemented
-Last activity: 2026-03-20 -- Completed Phase 17 Plan 02 (24h default event window)
+Plan: 04 of 04 complete
+Status: Proximity alerts implemented -- phase 17 complete
+Last activity: 2026-03-20 -- Completed Phase 17 Plan 04 (proximity alerts)
 
-Progress: [██████░░░░] 67%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -45,10 +45,11 @@ Progress: [██████░░░░] 67%
 |-------|-------|-------|----------|
 | 15 | 2/2 | 15min | 7.5min |
 | 16 | 3/3 | 12min | 4min |
-| 17 | 1/4 | 3min | 3min |
+| 17 | 4/4 | 7min | 1.75min |
 
 *Updated after each plan completion*
 | Phase 17 P01 | 3min | 1 tasks | 8 files |
+| Phase 17 P04 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,10 @@ Progress: [██████░░░░] 67%
 - **17-02:** isDefaultWindowActive is a pure derived getter (dateStart===null && dateEnd===null, no new stored state)
 - **17-02:** 24h window applies to both events AND news clusters (per locked decision scope)
 - **17-02:** useFilteredEntities return type extended to include clusters (backward-compatible)
+- **17-04:** Pure computeProximityAlerts function exported separately from hook for testability
+- **17-04:** HTML overlay via map.project() chosen over deck.gl layer for easy expand/collapse with React state
+- **17-04:** RAF-throttled move event subscription prevents excessive re-renders during pan/zoom
+- **17-04:** Coarse 0.5 degree bbox pre-filter reuses attackStatus.ts pattern at 50km scale
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Full v0.9 + v1.0 decision history archived in previous STATE.md.
@@ -94,6 +99,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T22:25:42.059Z
-Stopped at: Completed 17-01-PLAN.md
-Resume file: None
+Last session: 2026-03-20T22:25:43Z
+Stopped at: Completed 17-04 (proximity alerts)
+Resume file: .planning/phases/17-notification-center/17-04-SUMMARY.md
