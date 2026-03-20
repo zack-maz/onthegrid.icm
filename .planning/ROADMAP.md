@@ -28,7 +28,7 @@
 ### v1.0 Deployment (Phases 13-14)
 
 - [x] **Phase 13: Serverless Cache Migration** — Replace in-memory caches with Upstash Redis for stateless serverless compatibility (gap closure in progress) (completed 2026-03-20)
-- [ ] **Phase 14: Vercel Deployment** — Add Vercel entry points, vercel.json, and deploy
+- [x] **Phase 14: Vercel Deployment** — Add Vercel entry points, vercel.json, and deploy (completed 2026-03-20)
 
 ### Phase 13: Serverless Cache Migration
 **Goal**: Replace all in-memory server-side caches with Upstash Redis so cached data persists across stateless serverless function invocations
@@ -56,11 +56,11 @@ Plans:
   3. Frontend is served from Vercel CDN
   4. Rate limiting protects upstream API credits
   5. Server boots without crashing when optional API keys are absent
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 14-01-PLAN.md — Server hardening: graceful config, rate limiting, CORS wildcard
-- [ ] 14-02-PLAN.md — Vercel entry point, vercel.json, deployment verification
+- [x] 14-01-PLAN.md — Server hardening: graceful config, rate limiting, CORS wildcard
+- [x] 14-02-PLAN.md — Vercel entry point, vercel.json, deployment verification
 
 ## Progress
 
@@ -80,4 +80,4 @@ Plans:
 | 11. Smart Filters | v0.9 | 3/3 | Complete | 2026-03-18 |
 | 12. Analytics Dashboard | v0.9 | 1/1 | Complete | 2026-03-19 |
 | 13. Serverless Cache Migration | 4/4 | Complete   | 2026-03-20 | 2026-03-20 |
-| 14. Vercel Deployment | 1/2 | In Progress|  | - |
+| 14. Vercel Deployment | 2/2 | Complete   | 2026-03-20 | 2026-03-20 |
