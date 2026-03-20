@@ -34,6 +34,7 @@ import { MapLoadingScreen } from './MapLoadingScreen';
 import { MapVignette } from './MapVignette';
 import { CoordinateReadout } from './CoordinateReadout';
 import { CompassControl } from './CompassControl';
+import { ProximityAlertOverlay } from './ProximityAlertOverlay';
 
 interface HoverState {
   entity: MapEntity | SiteEntity;
@@ -215,6 +216,7 @@ export function BaseMap() {
           pickingRadius={12}
         />
         <CompassControl />
+        <ProximityAlertOverlay />
       </Map>
       <MapVignette />
       <div className="absolute bottom-8 right-14 z-[var(--z-controls)]">
