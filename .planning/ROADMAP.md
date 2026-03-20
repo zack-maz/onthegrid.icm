@@ -48,13 +48,19 @@ Plans:
 - [ ] 13-04-PLAN.md — Gap closure: re-introduce GDELT backfill for historical event data
 
 ### Phase 14: Vercel Deployment
-**Goal**: Deploy the application to Vercel with serverless functions
+**Goal**: Deploy the application to Vercel as a serverless function + CDN-served SPA with rate limiting and graceful degradation for missing API keys
 **Depends on**: Phase 13
 **Success Criteria** (what must be TRUE):
   1. Application deploys to Vercel successfully
   2. All API routes work as serverless functions
   3. Frontend is served from Vercel CDN
-**Plans**: TBD
+  4. Rate limiting protects upstream API credits
+  5. Server boots without crashing when optional API keys are absent
+**Plans:** 2 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Server hardening: graceful config, rate limiting, CORS wildcard
+- [ ] 14-02-PLAN.md — Vercel entry point, vercel.json, deployment verification
 
 ## Progress
 
@@ -74,4 +80,4 @@ Plans:
 | 11. Smart Filters | v0.9 | 3/3 | Complete | 2026-03-18 |
 | 12. Analytics Dashboard | v0.9 | 1/1 | Complete | 2026-03-19 |
 | 13. Serverless Cache Migration | 4/4 | Complete   | 2026-03-20 | 2026-03-20 |
-| 14. Vercel Deployment | v1.0 | 0/0 | Not started | - |
+| 14. Vercel Deployment | v1.0 | 0/2 | Planning | - |
