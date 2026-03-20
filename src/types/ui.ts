@@ -46,6 +46,13 @@ export interface LayerToggles {
   showTargeted: boolean;
   showGroundTraffic: boolean;
   pulseEnabled: boolean;
+  showSites: boolean;
+  showNuclear: boolean;
+  showNaval: boolean;
+  showOil: boolean;
+  showAirbase: boolean;
+  showDam: boolean;
+  showPort: boolean;
 }
 
 export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
@@ -57,6 +64,13 @@ export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
   showTargeted: true,
   showGroundTraffic: false,
   pulseEnabled: true,
+  showSites: true,
+  showNuclear: true,
+  showNaval: true,
+  showOil: true,
+  showAirbase: true,
+  showDam: true,
+  showPort: true,
 };
 
 export interface UIState {
@@ -76,6 +90,13 @@ export interface UIState {
   showAirstrikes: boolean;
   showGroundCombat: boolean;
   showTargeted: boolean;
+  showSites: boolean;
+  showNuclear: boolean;
+  showNaval: boolean;
+  showOil: boolean;
+  showAirbase: boolean;
+  showDam: boolean;
+  showPort: boolean;
   selectedEntityId: string | null;
   hoveredEntityId: string | null;
   openDetailPanel: () => void;
@@ -95,6 +116,23 @@ export interface UIState {
   toggleAirstrikes: () => void;
   toggleGroundCombat: () => void;
   toggleTargeted: () => void;
+  toggleSites: () => void;
+  toggleNuclear: () => void;
+  toggleNaval: () => void;
+  toggleOil: () => void;
+  toggleAirbase: () => void;
+  toggleDam: () => void;
+  togglePort: () => void;
   selectEntity: (id: string | null) => void;
   hoverEntity: (id: string | null) => void;
 }
+
+/** Human-readable labels for each SiteType */
+export const SITE_TYPE_LABELS: Record<string, string> = {
+  nuclear: 'Nuclear',
+  naval: 'Naval',
+  oil: 'Oil Refinery',
+  airbase: 'Airbase',
+  dam: 'Dam',
+  port: 'Port',
+};

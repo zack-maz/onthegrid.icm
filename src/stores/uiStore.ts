@@ -33,6 +33,13 @@ function getToggles(state: UIState): LayerToggles {
     showTargeted: state.showTargeted,
     showGroundTraffic: state.showGroundTraffic,
     pulseEnabled: state.pulseEnabled,
+    showSites: state.showSites,
+    showNuclear: state.showNuclear,
+    showNaval: state.showNaval,
+    showOil: state.showOil,
+    showAirbase: state.showAirbase,
+    showDam: state.showDam,
+    showPort: state.showPort,
   };
 }
 
@@ -55,6 +62,13 @@ export const useUIStore = create<UIState>()((set, get) => ({
   showAirstrikes: initial.showAirstrikes,
   showGroundCombat: initial.showGroundCombat,
   showTargeted: initial.showTargeted,
+  showSites: initial.showSites,
+  showNuclear: initial.showNuclear,
+  showNaval: initial.showNaval,
+  showOil: initial.showOil,
+  showAirbase: initial.showAirbase,
+  showDam: initial.showDam,
+  showPort: initial.showPort,
   selectedEntityId: null,
   hoveredEntityId: null,
   openDetailPanel: () => set({ isDetailPanelOpen: true }),
@@ -101,6 +115,39 @@ export const useUIStore = create<UIState>()((set, get) => ({
   },
   toggleTargeted: () => {
     set((s) => ({ showTargeted: !s.showTargeted }));
+    persistToggles(getToggles(get()));
+  },
+  toggleSites: () => {
+    const wasOff = !get().showSites;
+    if (wasOff) {
+      set({ showSites: true, showNuclear: true, showNaval: true, showOil: true, showAirbase: true, showDam: true, showPort: true });
+    } else {
+      set({ showSites: false });
+    }
+    persistToggles(getToggles(get()));
+  },
+  toggleNuclear: () => {
+    set((s) => ({ showNuclear: !s.showNuclear }));
+    persistToggles(getToggles(get()));
+  },
+  toggleNaval: () => {
+    set((s) => ({ showNaval: !s.showNaval }));
+    persistToggles(getToggles(get()));
+  },
+  toggleOil: () => {
+    set((s) => ({ showOil: !s.showOil }));
+    persistToggles(getToggles(get()));
+  },
+  toggleAirbase: () => {
+    set((s) => ({ showAirbase: !s.showAirbase }));
+    persistToggles(getToggles(get()));
+  },
+  toggleDam: () => {
+    set((s) => ({ showDam: !s.showDam }));
+    persistToggles(getToggles(get()));
+  },
+  togglePort: () => {
+    set((s) => ({ showPort: !s.showPort }));
     persistToggles(getToggles(get()));
   },
   selectEntity: (id) => set({ selectedEntityId: id }),

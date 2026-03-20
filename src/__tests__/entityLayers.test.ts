@@ -45,8 +45,8 @@ describe('Entity Layer Constants', () => {
 });
 
 describe('Icon Mapping', () => {
-  const expectedKeys = ['chevron', 'chevronGround', 'crosshair', 'diamond', 'explosion', 'starburst', 'xmark'] as const;
-  it('has all 7 icon keys', () => { expect(Object.keys(ICON_MAPPING).sort()).toEqual([...expectedKeys].sort()); });
+  const expectedKeys = ['chevron', 'chevronGround', 'crosshair', 'diamond', 'explosion', 'starburst', 'xmark', 'siteNuclear', 'siteNaval', 'siteOil', 'siteAirbase', 'siteDam', 'sitePort'] as const;
+  it('has all 13 icon keys', () => { expect(Object.keys(ICON_MAPPING).sort()).toEqual([...expectedKeys].sort()); });
   for (const key of expectedKeys) {
     it(`${key} has mask: true`, () => { expect(ICON_MAPPING[key].mask).toBe(true); });
     it(`${key} has x, y, width, height`, () => {
