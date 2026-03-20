@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import type { Server } from 'node:http';
-import type { FlightEntity } from '../types.js';
+import type { FlightEntity, CacheResponse } from '../types.js';
+
+// In-memory store backing the Redis mock
+interface CacheEntry<T> {
+  data: T;
+  fetchedAt: number;
+}
+const redisStore = new Map<string, CacheEntry<unknown>>();
 
 // Mock config before importing createApp
 vi.mock('../config.js', () => ({
@@ -42,13 +49,31 @@ vi.mock('../adapters/adsb-lol.js', () => ({
   fetchFlights: vi.fn(async () => []),
 }));
 
-vi.mock('../adapters/gdelt.js', () => ({
-  fetchEvents: vi.fn(async () => []),
-  backfillEvents: vi.fn(async () => []),
+// Mock aisstream adapter (ships route imports getShips/getLastMessageTime)
+vi.mock('../adapters/aisstream.js', () => ({
+  getShips: vi.fn(() => []),
+  getLastMessageTime: vi.fn(() => 0),
+  connectAISStream: vi.fn(),
+  collectShips: vi.fn(async () => []),
 }));
 
-vi.mock('../adapters/acled.js', () => ({
+// Mock GDELT adapter -- events.ts only imports fetchEvents (no backfillEvents)
+vi.mock('../adapters/gdelt.js', () => ({
   fetchEvents: vi.fn(async () => []),
+}));
+
+// Mock Redis cache module with in-memory store
+vi.mock('../cache/redis.js', () => ({
+  redis: {},
+  cacheGet: vi.fn(async <T>(key: string, logicalTtlMs: number): Promise<CacheResponse<T> | null> => {
+    const entry = redisStore.get(key) as CacheEntry<T> | undefined;
+    if (!entry) return null;
+    const stale = Date.now() - entry.fetchedAt > logicalTtlMs;
+    return { data: entry.data, stale, lastFresh: entry.fetchedAt };
+  }),
+  cacheSet: vi.fn(async <T>(key: string, data: T, _redisTtlSec: number): Promise<void> => {
+    redisStore.set(key, { data, fetchedAt: Date.now() });
+  }),
 }));
 
 let server: Server;
@@ -123,6 +148,7 @@ describe('Flights route cache-first behavior', () => {
   ];
 
   beforeEach(() => {
+    redisStore.clear();
     mockFetchFlights.mockReset();
     mockFetchFlights.mockResolvedValue(mockFlights);
   });
