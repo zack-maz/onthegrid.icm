@@ -1,5 +1,5 @@
 ---
-status: complete
+status: resolved
 phase: 16-news-feed
 source: 16-01-SUMMARY.md, 16-02-SUMMARY.md
 started: 2026-03-20T19:30:00Z
@@ -45,7 +45,7 @@ skipped: 0
 ## Gaps
 
 - truth: "Articles in the response are conflict-relevant and presented in English with source country metadata"
-  status: failed
+  status: resolved
   reason: "User reported: Yes, but all titles should be translated to English and tagged with country of origin of the news source"
   severity: minor
   test: 3
