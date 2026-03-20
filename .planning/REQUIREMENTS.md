@@ -15,9 +15,9 @@ Requirements for the Intelligence Layer milestone. Each maps to roadmap phases.
 
 ### News Feed
 
-- [ ] **NEWS-01**: System aggregates conflict news from GDELT DOC API, BBC RSS, and Al Jazeera RSS into a unified feed
-- [ ] **NEWS-02**: System filters non-conflict articles using keyword whitelist (Iran, Israel, airstrike, military, etc.)
-- [ ] **NEWS-03**: System deduplicates articles by URL hash across sources
+- [x] **NEWS-01**: System aggregates conflict news from GDELT DOC API, BBC RSS, and Al Jazeera RSS into a unified feed
+- [x] **NEWS-02**: System filters non-conflict articles using keyword whitelist (Iran, Israel, airstrike, military, etc.)
+- [x] **NEWS-03**: System deduplicates articles by URL hash across sources
 
 ### Notifications
 
@@ -79,9 +79,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SITE-01 | Phase 15 | Complete |
 | SITE-02 | Phase 15 | Complete |
 | SITE-03 | Phase 15 | Complete |
-| NEWS-01 | Phase 16 | Pending |
-| NEWS-02 | Phase 16 | Pending |
-| NEWS-03 | Phase 16 | Pending |
+| NEWS-01 | Phase 16 | Complete |
+| NEWS-02 | Phase 16 | Complete |
+| NEWS-03 | Phase 16 | Complete |
 | NOTF-01 | Phase 17 | Pending |
 | NOTF-02 | Phase 17 | Pending |
 | NOTF-03 | Phase 17 | Pending |
