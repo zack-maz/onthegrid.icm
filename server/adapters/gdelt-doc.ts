@@ -6,7 +6,7 @@ const GDELT_DOC_BASE = 'https://api.gdeltproject.org/api/v2/doc/doc';
 
 /** Search query covering key Middle East conflict terms (parentheses required by GDELT for OR'd terms) */
 const GDELT_QUERY =
-  '(Iran OR Israel OR Iraq OR Syria OR Yemen OR Lebanon OR Hezbollah OR Hamas OR IRGC OR "Middle East" OR "Persian Gulf")';
+  '(Iran OR Israel OR Iraq OR Syria OR Yemen OR Lebanon OR Hezbollah OR Hamas OR IRGC OR "Middle East" OR "Persian Gulf") sourcelang:english';
 
 /**
  * Build the GDELT DOC API URL with ArtList mode.
@@ -75,6 +75,7 @@ export async function fetchGdeltArticles(): Promise<NewsArticle[]> {
     title: a.title,
     url: a.url,
     source: 'GDELT',
+    sourceCountry: a.sourcecountry || undefined,
     publishedAt: parseGdeltDate(a.seendate),
     imageUrl: a.socialimage || undefined,
     summary: undefined,

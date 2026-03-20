@@ -15,11 +15,11 @@ const parser = new XMLParser({
 
 /** RSS feed configurations */
 export const RSS_FEEDS = [
-  { url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', name: 'BBC' },
-  { url: 'https://www.aljazeera.com/xml/rss/all.xml', name: 'Al Jazeera' },
-  { url: 'https://www.tehrantimes.com/rss', name: 'Tehran Times' },
-  { url: 'https://www.timesofisrael.com/feed/', name: 'Times of Israel' },
-  { url: 'https://www.middleeasteye.net/rss', name: 'Middle East Eye' },
+  { url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', name: 'BBC', country: 'United Kingdom' },
+  { url: 'https://www.aljazeera.com/xml/rss/all.xml', name: 'Al Jazeera', country: 'Qatar' },
+  { url: 'https://www.tehrantimes.com/rss', name: 'Tehran Times', country: 'Iran' },
+  { url: 'https://www.timesofisrael.com/feed/', name: 'Times of Israel', country: 'Israel' },
+  { url: 'https://www.middleeasteye.net/rss', name: 'Middle East Eye', country: 'United Kingdom' },
 ] as const;
 
 interface RssItem {
@@ -36,6 +36,7 @@ interface RssItem {
 export async function fetchRssFeed(
   url: string,
   sourceName: string,
+  sourceCountry: string,
 ): Promise<NewsArticle[]> {
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   const xml = await res.text();
@@ -70,6 +71,7 @@ export async function fetchRssFeed(
         title: item.title,
         url: item.link,
         source: sourceName,
+        sourceCountry,
         publishedAt: item.pubDate ? new Date(item.pubDate).getTime() : Date.now(),
         summary: summary || undefined,
         imageUrl,
@@ -85,7 +87,7 @@ export async function fetchRssFeed(
  */
 export async function fetchAllRssFeeds(): Promise<NewsArticle[]> {
   const results = await Promise.allSettled(
-    RSS_FEEDS.map((feed) => fetchRssFeed(feed.url, feed.name)),
+    RSS_FEEDS.map((feed) => fetchRssFeed(feed.url, feed.name, feed.country)),
   );
 
   const articles: NewsArticle[] = [];

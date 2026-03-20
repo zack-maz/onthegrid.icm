@@ -99,6 +99,7 @@ export interface NewsArticle {
   title: string;
   url: string;
   source: string; // "GDELT", "BBC", "Al Jazeera", "Tehran Times", "Times of Israel", "Middle East Eye"
+  sourceCountry?: string; // Country of origin of the news source (e.g., "United Kingdom", "Qatar")
   publishedAt: number; // Unix ms
   summary?: string;
   imageUrl?: string;
