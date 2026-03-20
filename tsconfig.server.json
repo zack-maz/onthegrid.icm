@@ -13,5 +13,6 @@
     "erasableSyntaxOnly": true,
     "types": ["node"]
   },
-  "include": ["server", "api"]
+  "include": ["server", "api"],
+  "exclude": ["server/__tests__", "server/**/*.test.ts"]
 }
