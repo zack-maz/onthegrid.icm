@@ -6,13 +6,15 @@
 
 ## Overview
 
-Four-phase milestone adding key infrastructure sites, news ingestion, a notification center, and UI/search/filter cleanup to the Iran Conflict Monitor.
+Six-phase milestone adding key infrastructure sites, news ingestion, a notification center, oil markets tracker, UI/search/filter cleanup, and a production deployment sync to the Iran Conflict Monitor.
 
 ```
 Phase 15: Key Sites Overlay
 Phase 16: News Feed
 Phase 17: Notification Center + 24h Event Default
-Phase 18: Search, Filter & UI Cleanup
+Phase 18: Oil Markets Tracker
+Phase 19: Search, Filter & UI Cleanup
+Phase 20: Production Review & Deploy Sync
 ```
 
 ---
@@ -39,15 +41,27 @@ Phase 17: Notification Center
   ├── Bell icon (top-right)  →  unread badge
   └── Notification drawer  →  360px, stacks with detail panel
 
-Phase 18: Search, Filter & UI Cleanup
+Phase 18: Oil Markets Tracker
+  ├── server: /api/markets  →  Yahoo Finance (5 symbols)  →  Redis 60s cache
+  ├── server/adapters/yahoo-finance.ts  →  normalize to MarketQuote[]
+  ├── marketStore.ts  →  Zustand store + useMarketPolling (60s)
+  └── MarketsPanel  →  collapsible overlay, 5 tickers with price + % change + sparkline
+
+Phase 19: Search, Filter & UI Cleanup
   ├── Global search bar  →  fuzzy match across all entity stores
   ├── Filter panel redesign  →  grouped sections + Reset All + collapse
   └── Layout audit  →  z-index, spacing, responsiveness (1280px min)
+
+Phase 20: Production Review & Deploy Sync
+  ├── Full E2E smoke test (local dev vs. Vercel prod)
+  ├── Env var audit — all required keys present in Vercel dashboard
+  ├── Redis key inspection — confirm cache populated correctly in prod
+  └── Final git: merge to main, tag v1.1, push
 ```
 
-**New stores:** `siteStore`, `newsStore`, `notificationStore`
-**New server endpoints:** `/api/sites`, `/api/news`, `/api/notifications`
-**New UI:** bell icon, notification drawer, global search bar
+**New stores:** `siteStore`, `newsStore`, `notificationStore`, `marketStore`
+**New server endpoints:** `/api/sites`, `/api/news`, `/api/notifications`, `/api/markets`
+**New UI:** bell icon, notification drawer, global search bar, MarketsPanel
 **No changes to:** existing stores (except filterStore default), map layers, existing polling patterns, Redis key structure
 
 ---
@@ -247,7 +261,64 @@ The existing `filterStore` treats any non-null `dateStart` as "custom range mode
 
 ---
 
-## Phase 18: Search, Filter & UI Cleanup
+## Phase 18: Oil Markets Tracker
+
+### Instruments
+
+| Symbol | Description |
+|--------|-------------|
+| `BZ=F` | Brent Crude Oil futures — international benchmark, most sensitive to Middle East events |
+| `CL=F` | WTI Crude Oil futures — US benchmark |
+| `XLE` | Energy Select Sector SPDR ETF — broad energy sector |
+| `USO` | United States Oil Fund ETF — tracks WTI futures |
+| `XOM` | ExxonMobil — largest US oil company, sector proxy |
+
+### Data Source
+
+Yahoo Finance unofficial endpoint — free, no auth, real-time quotes:
+`https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d`
+
+Returns current price, previous close, % change, and 5-day OHLC for sparkline.
+
+### Server — `/api/markets`
+
+- Fetches all 5 symbols in parallel
+- Normalizes to `MarketQuote[]`
+- Redis key: `markets:quotes`, TTL: 60s
+- Returns empty array (not error) on Yahoo Finance failure — graceful degradation
+
+**Response shape:**
+```typescript
+interface MarketQuote {
+  symbol: string;        // 'BZ=F'
+  name: string;          // 'Brent Crude'
+  price: number;         // current price
+  change: number;        // absolute change
+  changePct: number;     // % change from previous close
+  sparkline: number[];   // 5-day closing prices for mini chart
+  updatedAt: number;     // ms timestamp
+  marketOpen: boolean;   // false on weekends/holidays
+}
+```
+
+### Store & Polling
+
+- `marketStore.ts` — `quotes: MarketQuote[]` + `status: ConnectionStatus`
+- `useMarketPolling` — 60s recursive setTimeout, wired into AppShell
+- Polling pauses when `marketOpen === false` for all symbols (check hourly instead)
+
+### UI — MarketsPanel
+
+- Collapsible `OverlayPanel` (same component as CountersSlot/LayerTogglesSlot)
+- Position: bottom-left corner, above scale bar
+- 5 rows: symbol + full name, current price, color-coded % change (green up, red down)
+- Mini sparkline per row (5-day, SVG path, 60×20px)
+- "Markets closed" dim state on weekends/after hours
+- No click interaction — display only
+
+---
+
+## Phase 19: Search, Filter & UI Cleanup
 
 ### Global Search Bar
 
@@ -279,12 +350,45 @@ The existing `filterStore` treats any non-null `dateStart` as "custom range mode
 
 ---
 
+## Phase 20: Production Review & Deploy Sync
+
+### Scope
+
+This phase has no new features. It verifies that everything built in Phases 15–19 works correctly in production and that dev and prod are fully in sync.
+
+### Checklist
+
+**E2E smoke test (local dev):**
+- All 6 data feeds return data: flights, ships, events, sites, news, markets
+- Notification drawer opens, shows scored events with matched headlines
+- Proximity alerts fire when test entity approaches key site (manual verification)
+- Key sites render on map with correct icons and sub-toggle gating
+- Oil markets panel shows live prices with sparklines
+- Search bar returns results across all entity types
+- Date range slider respects DEFAULT_EVENT_WINDOW_MS default
+- Minute granularity absent from slider
+
+**Vercel production audit:**
+- All env vars present in Vercel dashboard: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `OPENSKY_CLIENT_ID`, `OPENSKY_CLIENT_SECRET`, `ADSB_EXCHANGE_API_KEY`, `AISSTREAM_API_KEY`
+- All 7 API routes respond: `/api/flights`, `/api/ships`, `/api/events`, `/api/sites`, `/api/news`, `/api/notifications`, `/api/markets`
+- Redis cache keys populated: `flights:*`, `ships:ais`, `events:gdelt`, `sites:osm`, `news:feed`, `markets:quotes`
+- No CORS errors in browser console on prod domain
+
+**Git & release:**
+- All feature branches merged to main
+- `npm run build` passes clean (Vite + tsup + tsc)
+- Tag `v1.1` on main
+- Push to GitHub remote
+
+---
+
 ## Data Flow Summary
 
 ```
 Overpass API  →  /api/sites  →  Redis(24h)  →  siteStore  →  IconLayer
 GDELT DOC + BBC RSS + AJ RSS  →  /api/news  →  Redis(15min)  →  newsStore
 eventStore + newsStore + siteStore  →  /api/notifications  →  notificationStore  →  Bell + Drawer
+Yahoo Finance (5 symbols)  →  /api/markets  →  Redis(60s)  →  marketStore  →  MarketsPanel
 DEFAULT_EVENT_WINDOW_MS (module constant, 86_400_000)  →  event layer soft lower bound (dateStart stays null at init)
 All entity stores  →  global search index  →  search bar dropdown
 ```
