@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
 status: in-progress
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-03-20T19:19:06Z"
-last_activity: 2026-03-20 -- Completed Phase 16 Plan 01 (news aggregation pipeline)
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-03-20T19:23:33Z"
+last_activity: 2026-03-20 -- Completed Phase 16 Plan 02 (client news infrastructure)
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 17
+  completed_plans: 4
+  percent: 33
 ---
 
 # Project State
@@ -26,25 +26,25 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 16 of 20 (News Feed)
-Plan: 01 of 02 complete
-Status: Plan 01 complete -- news aggregation pipeline ready
-Last activity: 2026-03-20 -- Completed Phase 16 Plan 01 (news aggregation pipeline)
+Plan: 02 of 02 complete
+Status: Phase 16 complete -- news pipeline + client infrastructure ready
+Last activity: 2026-03-20 -- Completed Phase 16 Plan 02 (client news infrastructure)
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3 (v1.1)
-- Average duration: 7.3min
-- Total execution time: 22min
+- Total plans completed: 4 (v1.1)
+- Average duration: 6min
+- Total execution time: 24min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 15 | 2/2 | 15min | 7.5min |
-| 16 | 1/2 | 7min | 7min |
+| 16 | 2/2 | 9min | 4.5min |
 
 *Updated after each plan completion*
 
@@ -63,6 +63,9 @@ Progress: [█████████░] 90%
 - **16-01:** GDELT DOC 2.0 ArtList mode with 250 maxrecords and 24h timespan for article discovery
 - **16-01:** Jaccard similarity threshold 0.8 with 5-token minimum for fuzzy title clustering
 - **16-01:** 7-day sliding window for news retention, 15-min cache TTL matching GDELT update frequency
+- **16-02:** newsStore ConnectionStatus defined locally (same type as eventStore) to avoid cross-store coupling
+- **16-02:** articleCount derived field sums articles across all clusters for aggregate stats
+- **16-02:** 15-min polling interval matches GDELT DOC update frequency and server cache TTL
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Full v0.9 + v1.0 decision history archived in previous STATE.md.
@@ -80,6 +83,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T19:19:06Z
-Stopped at: Completed 16-01-PLAN.md
-Resume file: .planning/phases/16-news-feed/16-01-SUMMARY.md
+Last session: 2026-03-20T19:23:33Z
+Stopped at: Completed 16-02-PLAN.md
+Resume file: .planning/phases/16-news-feed/16-02-SUMMARY.md

@@ -38,7 +38,7 @@
 ### v1.1 Intelligence Layer (Phases 15-20)
 
 - [x] **Phase 15: Key Sites Overlay** - Infrastructure sites (nuclear, naval, oil, airbase, dam, port) on the map with per-type toggles and click-to-inspect (completed 2026-03-20)
-- [ ] **Phase 16: News Feed** - Multi-source news pipeline (GDELT DOC + BBC RSS + Al Jazeera RSS) with conflict filtering and deduplication
+- [x] **Phase 16: News Feed** - Multi-source news pipeline (GDELT DOC + BBC RSS + Al Jazeera RSS) with conflict filtering and deduplication (completed 2026-03-20)
 - [ ] **Phase 17: Notification Center** - Severity-scored conflict notifications with proximity alerts, news matching, and 24h event default
 - [ ] **Phase 18: Oil Markets Tracker** - Oil/energy price panel (Brent, WTI, XLE, USO, XOM) with sparkline trends
 - [ ] **Phase 19: Search, Filter & UI Cleanup** - Global search bar, Reset All, grouped filter sections, visual hierarchy
@@ -68,7 +68,7 @@ Plans:
   1. Server endpoint returns news articles merged from GDELT DOC API, BBC RSS, and Al Jazeera RSS
   2. Non-conflict articles are filtered out by keyword whitelist (Iran, Israel, airstrike, military, etc.)
   3. Duplicate articles (same URL across sources) appear only once in the feed
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 16-01-PLAN.md -- Server pipeline: NewsArticle/NewsCluster types, GDELT DOC adapter, RSS adapter, keyword filter, dedup/clustering, cache-first /api/news route
 - [ ] 16-02-PLAN.md -- Client integration: newsStore, useNewsPolling hook, AppShell wiring
@@ -139,7 +139,7 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 13. Serverless Cache Migration | v1.0 | 4/4 | Complete | 2026-03-20 |
 | 14. Vercel Deployment | v1.0 | 2/2 | Complete | 2026-03-20 |
 | 15. Key Sites Overlay | 2/2 | Complete    | 2026-03-20 | - |
-| 16. News Feed | 1/2 | In Progress|  | - |
+| 16. News Feed | 2/2 | Complete   | 2026-03-20 | - |
 | 17. Notification Center | v1.1 | 0/TBD | Not started | - |
 | 18. Oil Markets Tracker | v1.1 | 0/TBD | Not started | - |
 | 19. Search, Filter & UI Cleanup | v1.1 | 0/TBD | Not started | - |
