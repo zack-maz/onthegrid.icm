@@ -13,9 +13,9 @@ Opens at http://localhost:5173
 
 ## Current State
 
-Interactive 2.5D map of the Greater Middle East with live flights (3 sources), ships (AIS), and conflict events (GDELT). Layer toggles with 4 conflict categories, entity tooltips, click-to-inspect detail panel with live stats, hover/click highlighting, smart filters (nationality, speed, altitude, proximity, date range), analytics counters dashboard, and a real-time status HUD. Deployed on Vercel with Upstash Redis cache. 556 tests passing.
+Interactive 2.5D map of the Greater Middle East with live flights (3 sources), ships (AIS), conflict events (GDELT), and key infrastructure sites (Overpass/OSM). Layer toggles with 4 conflict categories + 6 site categories, entity tooltips, click-to-inspect detail panel with live stats, hover/click highlighting, smart filters (nationality, speed, altitude, proximity, date range), analytics counters dashboard, and a real-time status HUD. Deployed on Vercel with Upstash Redis cache. 571 tests passing.
 
-**Milestone:** v0.9 MVP shipped 2026-03-19 | v1.0 Deployment shipped 2026-03-20
+**Milestone:** v0.9 MVP shipped 2026-03-19 | v1.0 Deployment shipped 2026-03-20 | v1.1 Intelligence Layer in progress
 
 ## Tech Stack
 
@@ -28,7 +28,7 @@ Interactive 2.5D map of the Greater Middle East with live flights (3 sources), s
 | Backend | Express 5 (API proxy, port 3001) |
 | Cache | Upstash Redis (serverless-compatible) |
 | Hosting | Vercel (serverless functions + CDN) |
-| Data Sources | OpenSky, ADS-B Exchange, adsb.lol, AISStream.io, GDELT v2 |
+| Data Sources | OpenSky, ADS-B Exchange, adsb.lol, AISStream.io, GDELT v2, Overpass/OSM |
 | Testing | Vitest + Testing Library |
 
 ## Project Structure
@@ -45,9 +45,9 @@ src/
 ├── types/          # TypeScript interfaces
 └── __tests__/      # Component and store tests
 server/
-├── adapters/       # OpenSky, ADS-B Exchange, adsb.lol, AISStream, GDELT adapters
+├── adapters/       # OpenSky, ADS-B Exchange, adsb.lol, AISStream, GDELT, Overpass adapters
 ├── cache/          # Upstash Redis cache module (cacheGet/cacheSet)
-├── routes/         # /api/flights, /api/ships, /api/events, /api/sources
+├── routes/         # /api/flights, /api/ships, /api/events, /api/sites, /api/sources
 ├── middleware/      # Error handler, rate limiting
 ├── __tests__/      # Adapter, cache, security, and type tests
 ├── config.ts       # Environment-based configuration (graceful degradation)
@@ -68,7 +68,7 @@ server/
 ## Testing
 
 ```bash
-npx vitest run              # Run all tests (556 tests)
+npx vitest run              # Run all tests (571 tests)
 npx vitest run src/         # Frontend tests only
 npx vitest run server/      # Server tests only
 npx vitest run --watch      # Watch mode

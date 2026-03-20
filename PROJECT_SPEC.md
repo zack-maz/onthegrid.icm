@@ -19,7 +19,7 @@ Surface actionable, data-backed intelligence on the Iran conflict in real-time o
 | Backend | Express 5 (API proxy, port 3001) |
 | Cache | Upstash Redis (serverless-compatible) |
 | Hosting | Vercel (serverless functions + CDN) |
-| Data Sources | OpenSky, ADS-B Exchange, adsb.lol, AISStream.io, GDELT v2 |
+| Data Sources | OpenSky, ADS-B Exchange, adsb.lol, AISStream.io, GDELT v2, Overpass/OSM |
 | Testing | Vitest + Testing Library |
 | Dev Tooling | tsx watch (server), concurrently (parallel dev), tsup (bundling) |
 
@@ -51,6 +51,7 @@ Express API Proxy — port 3001 (local) / Vercel serverless (prod)
   ├── /api/flights → OpenSky / ADS-B Exchange / adsb.lol
   ├── /api/ships → AISStream.io (on-demand connect-collect-close)
   ├── /api/events → GDELT v2 (15-min updates)
+  ├── /api/sites → Overpass/OSM (one-time fetch, 24h cache)
   ├── /api/sources → per-source configuration status
   └── Upstash Redis cache with staleness indicators
 ```
@@ -92,7 +93,7 @@ interface MapEntityBase {
 - **Map**: CARTO Dark Matter, terrain exaggeration 3.0, pitch 50 degrees
 - **News**: Non-statistical content hidden by default with toggle
 
-## Features (14 Phases)
+## Features (15+ Phases)
 
 1. **Project Scaffolding & Theme** — Dark-themed React/Vite shell ✓
 2. **Base Map** — Interactive 2.5D map centered on Iran ✓
@@ -108,6 +109,7 @@ interface MapEntityBase {
 12. **Analytics Dashboard** — Visibility-aware counters with delta animations ✓
 13. **Serverless Cache Migration** — Upstash Redis for stateless deployment ✓
 14. **Vercel Deployment** — Serverless functions + CDN hosting ✓
+15. **Key Sites Overlay** — Infrastructure sites (nuclear, naval, oil, airbase, desalination, port) from OSM ✓
 
 ## Constraints
 

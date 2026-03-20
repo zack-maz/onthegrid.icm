@@ -5,8 +5,9 @@
 ## Progress
 
 ```
-v0.9 MVP:        [████████████████████] 12/12 phases (shipped 2026-03-19)
-v1.0 Deployment: [████████████████████]  2/2  phases (shipped 2026-03-20)
+v0.9 MVP:              [████████████████████] 12/12 phases (shipped 2026-03-19)
+v1.0 Deployment:       [████████████████████]  2/2  phases (shipped 2026-03-20)
+v1.1 Intelligence Layer: [██                  ]  1/6  phases (in progress)
 ```
 
 ## Phase Status
@@ -28,10 +29,11 @@ v1.0 Deployment: [████████████████████] 
 | 12 | Analytics Dashboard | v0.9 | Done | 2026-03-18 |
 | 13 | Serverless Cache Migration | v1.0 | Done | 2026-03-20 |
 | 14 | Vercel Deployment | v1.0 | Done | 2026-03-20 |
+| 15 | Key Sites Overlay | v1.1 | Done | 2026-03-20 |
 
 ## Current Focus
 
-All v1.0 milestone phases complete. Application deployed to Vercel.
+Phase 15 (Key Sites Overlay) complete. Next: Phase 16+ of v1.1 Intelligence Layer milestone.
 
 ## What's Been Built
 
@@ -65,6 +67,10 @@ All v1.0 milestone phases complete. Application deployed to Vercel.
 
 **Phase 14: Vercel Deployment** — Vercel serverless entry point with tsup bundling, rate limiting, graceful config for missing API keys, vercel.json routing.
 
+### v1.1 Intelligence Layer (Phase 15+)
+
+**Phase 15: Key Sites Overlay** — Overpass/OSM adapter for key infrastructure (nuclear, naval, oil, airbase, desalination, port). SiteEntity type, siteStore, one-time fetch with Redis cache. Site IconLayer with 6 category toggles, attack status detection (orange glow for recently-hit sites), tooltip and SiteDetail panel. 571 tests passing.
+
 ## Blockers
 
 None.
@@ -80,6 +86,7 @@ None.
 | CAMEO-based event types | 11 granular types replace fabricated drone/missile split |
 | Upstash Redis | REST-based, serverless-compatible, replaces in-memory cache |
 | Vercel deployment | Serverless functions + CDN, zero-config scaling |
+| Overpass/OSM for sites | Free, no auth, comprehensive infrastructure data |
 
 ## Repository
 

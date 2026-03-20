@@ -4,6 +4,33 @@ All notable changes to the Iran Conflict Monitor project.
 
 ## [Unreleased]
 
+## [v1.1.0-alpha.1] - 2026-03-20
+
+### Phase 15: Key Sites Overlay
+
+#### Added
+- Overpass/OSM adapter (`server/adapters/overpass.ts`) querying nuclear, naval, oil, airbase, desalination, port sites across Middle East
+- SiteEntity type with `siteType` discriminant and OSM metadata (operator, osmId)
+- `siteStore` Zustand store with connection status tracking
+- `useSiteFetch` one-time fetch hook (sites are static infrastructure, no polling)
+- `/api/sites` route with Redis cache (24h TTL)
+- Site IconLayer with 6 distinct icons (nuclear hazard, anchor, oil drop, jet, water drop, crane)
+- Attack status detection (`src/lib/attackStatus.ts`) — cross-references site locations with recent conflict events within 5km
+- 6 site category toggles in LayerTogglesSlot (Nuclear, Naval, Oil, Airbase, Desalination, Port)
+- "Hit Only" toggle to show only recently-attacked sites
+- Site row in StatusPanel with connection health dot
+- Site counts in CountersSlot (per-category + total)
+- SiteDetail panel with site type, operator, coordinates, and attack status
+- Site tooltip in EntityTooltip
+- Overpass API fallback (primary → private.coffee mirror)
+- 571 tests passing (15 new)
+
+#### Changed
+- Icon sizes reduced: flights/ships 4000m (was 8000m), events 3000m (was 5000m), to accommodate site markers
+- `useEntityLayers` expanded with site layer generation and category filtering
+- `useSelectedEntity` extended for site entity lookup from siteStore
+- CONFLICT_TOGGLE_GROUPS simplified to 3 groups (showOtherConflict merged into showGroundCombat)
+
 ## [v1.0.0] - 2026-03-20
 
 ### Phase 14: Vercel Deployment

@@ -45,13 +45,16 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - `src/stores/uiStore.ts` — UI state (panels, toggles)
 - `src/stores/flightStore.ts` — flight data state (entities, connection health, metadata)
 - `src/hooks/useFlightPolling.ts` — 5s recursive setTimeout with tab visibility awareness
+- `src/stores/siteStore.ts` — site data state (entities, connection health)
+- `src/hooks/useSiteFetch.ts` — one-time site fetch on mount
+- `src/lib/attackStatus.ts` — cross-references sites with nearby GDELT events
 
 ## Data Model (Phase 3+)
 
 - **MapEntity** — discriminated union with minimal shared fields (`id`, `type`, `lat`, `lng`, `timestamp`, `label`) + nested type-specific data
-- **Entity types**: `flight`, `ship`, plus 11 `ConflictEventType` values
+- **Entity types**: `flight`, `ship`, plus 11 `ConflictEventType` values, plus `site` (separate from MapEntity union)
 - **FlightEntity.data** — includes `unidentified: boolean` flag for hex-only/no-callsign flights
-- **API endpoints**: `/api/flights`, `/api/ships`, `/api/events` (separate, independent caching)
+- **API endpoints**: `/api/flights`, `/api/ships`, `/api/events`, `/api/sites` (separate, independent caching)
 - **IRAN_BBOX** — covers Greater Middle East (south:15, north:42, west:30, east:70), not just Iran
 - **IRAN_CENTER** — (30.0, 50.0) with 500 NM radius for ADS-B queries
 
@@ -81,10 +84,10 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Ship store** — `src/stores/shipStore.ts` with 120s stale threshold
 - **Event store** — `src/stores/eventStore.ts` with no stale clearing (historical data)
 - **Polling hooks** — `useShipPolling` (30s), `useEventPolling` (900s / 15 min)
-- **AppShell** — wires all three: `useFlightPolling()`, `useShipPolling()`, `useEventPolling()`
+- **AppShell** — wires all four: `useFlightPolling()`, `useShipPolling()`, `useEventPolling()`, `useSiteFetch()`
 - **Entity colors** — flights yellow (#eab308), unidentified red (#ef4444), ships gray (#9ca3af), airstrikes bright red (#ff3b30), ground combat red (#ef4444), targeted dark red (#8b1e1e), other conflict red (#ef4444)
 - **Entity icons** — flights/ships use chevron, airstrikes use starburst, ground combat uses explosion, targeted uses crosshair, other conflict uses xmark
-- **Icon sizing** — flights/ships 8000m base (minPixels:24, maxPixels:160); events 5000m base (minPixels:16, maxPixels:120)
+- **Icon sizing** — flights/ships 4000m base (minPixels:24, maxPixels:160); events 3000m base (minPixels:16, maxPixels:120); sites 2000m base (minPixels:12, maxPixels:80)
 
 ## Conflict Event Data (Phase 8.1+)
 
@@ -103,8 +106,8 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 ## Layer Controls & Tooltips (Phase 9-10)
 
-- **LayerTogglesSlot** — `src/components/layout/LayerTogglesSlot.tsx`, 8 toggle rows in OverlayPanel
-- **Toggle rows** — Flights, Ground (indented), Unidentified (indented), Ships, Airstrikes, Ground Combat, Targeted, Other Conflict
+- **LayerTogglesSlot** — `src/components/layout/LayerTogglesSlot.tsx`, toggle rows in OverlayPanel
+- **Toggle rows** — Flights, Ground (indented), Unidentified (indented), Ships, Airstrikes, Ground Combat, Targeted, Sites, Nuclear/Naval/Oil/Airbase/Desalination/Port (indented), Hit Only (indented)
 - **Toggle behavior** — opacity dims to 40% when OFF, smooth transition, persisted to localStorage
 - **Layer visibility** — `useEntityLayers` sets `visible` prop per toggle; ground/airborne filtering in `useMemo`
 - **Unidentified filter precedence** — unidentified flights stay visible when Ground is OFF (if pulse toggle ON)
@@ -145,7 +148,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 - **Upstash Redis** — REST-based client (`@upstash/redis`) for serverless compatibility
 - **CacheEntry<T>** — stores `{data, fetchedAt}` for staleness computation; hard Redis TTL = 10x logical TTL
-- **Cache keys** — `flights:SOURCE`, `ships:ais`, `events:gdelt`
+- **Cache keys** — `flights:SOURCE`, `ships:ais`, `events:gdelt`, `sites:overpass`
 - **Redis module** — `server/cache/redis.ts` exports `cacheGet<T>`, `cacheSet<T>`, `redis` instance
 - **AISStream on-demand** — connect, collect for N ms, close per request (no persistent WebSocket)
 - **Ship merge/prune** — fresh ships merged with cached by MMSI, 10 min stale threshold
@@ -163,6 +166,24 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Graceful config** — `loadConfig()` returns defaults for missing env vars instead of throwing
 - **Node engine** — pinned `>=20` in package.json
 - **Build** — `npm run build` runs Vite (frontend) + tsup (server) + tsc (typecheck)
+
+## Key Sites Overlay (Phase 15)
+
+- **Overpass adapter** — `server/adapters/overpass.ts`, queries OpenStreetMap for infrastructure sites across Middle East
+- **Site types** — `SiteType`: `nuclear`, `naval`, `oil`, `airbase`, `desalination`, `port`
+- **SiteEntity** — separate from MapEntity union (not a discriminated union member); has `siteType`, `operator`, `osmId` fields
+- **One-time fetch** — `useSiteFetch` hook fetches once on mount (sites are static infrastructure, no polling)
+- **Redis cache** — 24h TTL for site data via `sites:overpass` cache key
+- **Overpass fallback** — primary API → `private.coffee` mirror on failure
+- **Country filtering** — Overpass area union with `ISO3166-1` tags for Middle East countries
+- **Attack status** — `src/lib/attackStatus.ts` cross-references site locations with recent GDELT events within 5km radius
+- **Site toggles** — 6 category toggles (Nuclear, Naval, Oil, Airbase, Desalination, Port) + "Hit Only" filter
+- **Site icons** — 6 distinct icons: nuclear hazard, anchor, oil drop, jet, water drop, crane
+- **Site colors** — healthy green (#22c55e), attacked orange (#f97316)
+- **Icon sizing** — sites 2000m base (minPixels:12, maxPixels:80); flights/ships reduced to 4000m; events to 3000m
+- **SiteDetail** — detail panel with site type, operator, coordinates, attack status
+- **siteStore** — `src/stores/siteStore.ts` with `SiteConnectionStatus` including `'idle'` state
+- **CONFLICT_TOGGLE_GROUPS** — simplified to 3 groups (showOtherConflict types merged into showGroundCombat)
 
 ## Date Range Filter (Phase 11+13)
 
