@@ -4,9 +4,9 @@ import { hashUrl } from '../lib/newsClustering.js';
 /** GDELT DOC 2.0 API base URL */
 const GDELT_DOC_BASE = 'https://api.gdeltproject.org/api/v2/doc/doc';
 
-/** Search query covering key Middle East conflict terms */
+/** Search query covering key Middle East conflict terms (parentheses required by GDELT for OR'd terms) */
 const GDELT_QUERY =
-  'Iran OR Israel OR Iraq OR Syria OR Yemen OR Lebanon OR Hezbollah OR Hamas OR IRGC OR "Middle East" OR "Persian Gulf"';
+  '(Iran OR Israel OR Iraq OR Syria OR Yemen OR Lebanon OR Hezbollah OR Hamas OR IRGC OR "Middle East" OR "Persian Gulf")';
 
 /**
  * Build the GDELT DOC API URL with ArtList mode.
