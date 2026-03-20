@@ -114,9 +114,7 @@ vi.mock('../../adapters/adsb-lol.js', () => ({
 }));
 
 vi.mock('../../adapters/aisstream.js', () => ({
-  getShips: vi.fn(() => []),
-  getLastMessageTime: vi.fn(() => 0),
-  connectAISStream: vi.fn(),
+  collectShips: vi.fn(async () => []),
 }));
 
 vi.mock('../../adapters/acled.js', () => ({

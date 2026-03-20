@@ -1,91 +1,99 @@
-import { config } from '../config.js';
 import type { ShipEntity } from '../types.js';
 import { IRAN_BBOX } from '../constants.js';
 
-// In-memory store of current ship positions, keyed by MMSI
-const ships = new Map<number, ShipEntity>();
-let lastMessageTime = 0;
+const DEFAULT_COLLECT_MS = 5000;
 
-export function getShips(): ShipEntity[] {
-  return Array.from(ships.values());
-}
+/**
+ * On-demand ship data collection via AISStream WebSocket.
+ *
+ * Opens a WebSocket, subscribes to PositionReport messages within IRAN_BBOX,
+ * collects messages for AISSTREAM_COLLECT_MS milliseconds (default 5000),
+ * then closes the connection and returns the collected ships.
+ *
+ * Deduplicates by MMSI -- later messages overwrite earlier for the same ship.
+ */
+export async function collectShips(): Promise<ShipEntity[]> {
+  const apiKey = process.env.AISSTREAM_API_KEY;
+  if (!apiKey) {
+    throw new Error('AISSTREAM_API_KEY is not set');
+  }
 
-export function getLastMessageTime(): number {
-  return lastMessageTime;
-}
+  const collectMs = Number(process.env.AISSTREAM_COLLECT_MS) || DEFAULT_COLLECT_MS;
 
-export function connectAISStream(): void {
-  const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+  return new Promise<ShipEntity[]>((resolve, reject) => {
+    const collected = new Map<number, ShipEntity>();
+    const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+    let timer: ReturnType<typeof setTimeout>;
 
-  ws.addEventListener('open', () => {
-    console.log('[aisstream] connected');
-    // Must send subscription within 3 seconds of connection open
-    ws.send(
-      JSON.stringify({
-        APIKey: config.aisstream.apiKey,
-        BoundingBoxes: [
-          [
-            [IRAN_BBOX.south, IRAN_BBOX.west],
-            [IRAN_BBOX.north, IRAN_BBOX.east],
+    ws.addEventListener('open', () => {
+      ws.send(
+        JSON.stringify({
+          APIKey: apiKey,
+          BoundingBoxes: [
+            [
+              [IRAN_BBOX.south, IRAN_BBOX.west],
+              [IRAN_BBOX.north, IRAN_BBOX.east],
+            ],
           ],
-        ],
-        FilterMessageTypes: ['PositionReport'],
-      }),
-    );
-  });
+          FilterMessageTypes: ['PositionReport'],
+        }),
+      );
+    });
 
-  ws.addEventListener('message', async (event) => {
-    const raw = event.data instanceof Blob ? await event.data.text() : String(event.data);
-    const msg = JSON.parse(raw) as {
-      MessageType: string;
-      Message: {
-        PositionReport: {
-          UserID: number;
-          Latitude: number;
-          Longitude: number;
-          Sog: number;
-          Cog: number;
-          TrueHeading: number;
+    ws.addEventListener('message', async (event) => {
+      const raw = event.data instanceof Blob ? await event.data.text() : String(event.data);
+      const msg = JSON.parse(raw) as {
+        MessageType: string;
+        Message: {
+          PositionReport: {
+            UserID: number;
+            Latitude: number;
+            Longitude: number;
+            Sog: number;
+            Cog: number;
+            TrueHeading: number;
+          };
+        };
+        MetaData: {
+          MMSI: number;
+          ShipName: string;
+          latitude: number;
+          longitude: number;
+          time_utc: string;
         };
       };
-      MetaData: {
-        MMSI: number;
-        ShipName: string;
-        latitude: number;
-        longitude: number;
-        time_utc: string;
-      };
-    };
 
-    if (msg.MessageType === 'PositionReport') {
-      const report = msg.Message.PositionReport;
-      const meta = msg.MetaData;
-      const entity: ShipEntity = {
-        id: `ship-${meta.MMSI}`,
-        type: 'ship',
-        lat: report.Latitude,
-        lng: report.Longitude,
-        timestamp: new Date(meta.time_utc).getTime(),
-        label: meta.ShipName?.trim() || `MMSI ${meta.MMSI}`,
-        data: {
-          mmsi: meta.MMSI,
-          shipName: meta.ShipName?.trim() || '',
-          speedOverGround: report.Sog,
-          courseOverGround: report.Cog,
-          trueHeading: report.TrueHeading,
-        },
-      };
-      ships.set(meta.MMSI, entity);
-      lastMessageTime = Date.now();
-    }
-  });
+      if (msg.MessageType === 'PositionReport') {
+        const report = msg.Message.PositionReport;
+        const meta = msg.MetaData;
+        const entity: ShipEntity = {
+          id: `ship-${meta.MMSI}`,
+          type: 'ship',
+          lat: report.Latitude,
+          lng: report.Longitude,
+          timestamp: new Date(meta.time_utc).getTime(),
+          label: meta.ShipName?.trim() || `MMSI ${meta.MMSI}`,
+          data: {
+            mmsi: meta.MMSI,
+            shipName: meta.ShipName?.trim() || '',
+            speedOverGround: report.Sog,
+            courseOverGround: report.Cog,
+            trueHeading: report.TrueHeading,
+          },
+        };
+        collected.set(meta.MMSI, entity);
+      }
+    });
 
-  ws.addEventListener('close', () => {
-    console.log('[aisstream] disconnected, reconnecting in 5s...');
-    setTimeout(connectAISStream, 5000);
-  });
+    timer = setTimeout(() => {
+      ws.close();
+      resolve(Array.from(collected.values()));
+    }, collectMs);
 
-  ws.addEventListener('error', (err) => {
-    console.error('[aisstream] error:', err);
+    ws.addEventListener('error', () => {
+      clearTimeout(timer);
+      try { ws.close(); } catch { /* ignore */ }
+      reject(new Error('AISStream WebSocket connection failed'));
+    });
   });
 }

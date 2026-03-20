@@ -5,8 +5,6 @@ import { flightsRouter } from './routes/flights.js';
 import { shipsRouter } from './routes/ships.js';
 import { eventsRouter } from './routes/events.js';
 import { sourcesRouter } from './routes/sources.js';
-import { connectAISStream } from './adapters/aisstream.js';
-
 export function createApp() {
   const app = express();
 
@@ -39,15 +37,6 @@ if (isMainModule) {
   try {
     const port = Number(process.env.PORT ?? 3001);
     const app = createApp();
-
-    // Start AISStream WebSocket connection only if credentials are available
-    if (!process.env.VITEST) {
-      if (process.env.AISSTREAM_API_KEY) {
-        connectAISStream();
-      } else {
-        console.log('[server] AISSTREAM_API_KEY not set, skipping AIS WebSocket connection');
-      }
-    }
 
     app.listen(port, () => {
       console.log(`[server] listening on port ${port}`);
