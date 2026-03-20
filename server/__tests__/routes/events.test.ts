@@ -44,8 +44,12 @@ interface CacheEntry<T> {
 }
 const redisStore = new Map<string, CacheEntry<unknown>>();
 
+// Separate store for direct redis.get/set calls (raw values, not CacheEntry)
+const rawRedisStore = new Map<string, unknown>();
+
 // Module-level mock functions
 const mockFetchEvents = vi.fn(async (): Promise<ConflictEventEntity[]> => []);
+const mockBackfillEvents = vi.fn(async (): Promise<ConflictEventEntity[]> => []);
 
 // Mock config
 vi.mock('../../config.js', () => ({
@@ -88,14 +92,23 @@ vi.mock('../../adapters/acled.js', () => ({
   fetchEvents: vi.fn(async () => []),
 }));
 
-// Mock GDELT adapter -- only fetchEvents, no backfillEvents
+// Mock GDELT adapter
 vi.mock('../../adapters/gdelt.js', () => ({
   fetchEvents: (...args: unknown[]) => mockFetchEvents(...args),
+  backfillEvents: (...args: unknown[]) => mockBackfillEvents(...args),
 }));
 
 // Mock Redis cache module with in-memory store
+const mockRedisGet = vi.fn(async (key: string) => rawRedisStore.get(key) ?? null);
+const mockRedisSet = vi.fn(async (key: string, value: unknown, _opts?: unknown) => {
+  rawRedisStore.set(key, value);
+});
+
 vi.mock('../../cache/redis.js', () => ({
-  redis: {},
+  redis: {
+    get: (...args: unknown[]) => mockRedisGet(...(args as [string])),
+    set: (...args: unknown[]) => mockRedisSet(...(args as [string, unknown, unknown?])),
+  },
   cacheGet: vi.fn(async <T>(key: string, logicalTtlMs: number): Promise<CacheResponse<T> | null> => {
     const entry = redisStore.get(key) as CacheEntry<T> | undefined;
     if (!entry) return null;
@@ -113,8 +126,15 @@ describe('Events Route (Redis accumulator)', () => {
 
   beforeEach(async () => {
     redisStore.clear();
+    rawRedisStore.clear();
     mockFetchEvents.mockClear();
     mockFetchEvents.mockResolvedValue([]);
+    mockBackfillEvents.mockClear();
+    mockBackfillEvents.mockResolvedValue([]);
+    mockRedisGet.mockClear();
+    mockRedisSet.mockClear();
+    // Re-wire mockRedisGet default to use rawRedisStore
+    mockRedisGet.mockImplementation(async (key: string) => rawRedisStore.get(key) ?? null);
 
     const { createApp } = await import('../../index.js');
     const app = createApp();
@@ -244,5 +264,125 @@ describe('Events Route (Redis accumulator)', () => {
     // proves there are no module-level side effects.
     // fetchEvents should only be called within the route handler, not at import time.
     expect(mockFetchEvents).not.toHaveBeenCalled();
+  });
+
+  describe('Lazy backfill', () => {
+    const backfillEvent1 = makeEvent({
+      id: 'gdelt-BF1',
+      label: 'Backfill Event 1',
+      type: 'shelling',
+    });
+    const backfillEvent2 = makeEvent({
+      id: 'gdelt-BF2',
+      label: 'Backfill Event 2',
+      type: 'bombing',
+    });
+
+    it('triggers backfill on cache miss and merges results into response', async () => {
+      mockFetchEvents.mockResolvedValue([eventA]);
+      mockBackfillEvents.mockResolvedValue([backfillEvent1, backfillEvent2]);
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(mockBackfillEvents).toHaveBeenCalledTimes(1);
+      // Should have eventA from fetchEvents + 2 from backfill = 3 total
+      expect(body.data).toHaveLength(3);
+      const ids = body.data.map((e: ConflictEventEntity) => e.id);
+      expect(ids).toContain('gdelt-A');
+      expect(ids).toContain('gdelt-BF1');
+      expect(ids).toContain('gdelt-BF2');
+    });
+
+    it('does NOT trigger backfill when cache is fresh', async () => {
+      // Pre-populate with fresh cache
+      redisStore.set('events:gdelt', {
+        data: [eventA],
+        fetchedAt: Date.now(), // fresh
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(mockBackfillEvents).not.toHaveBeenCalled();
+    });
+
+    it('does NOT trigger backfill when cache is stale (has accumulated data)', async () => {
+      // Stale cache -- has accumulated data already
+      redisStore.set('events:gdelt', {
+        data: [eventA],
+        fetchedAt: Date.now() - 901_000, // past 15min TTL
+      });
+      mockFetchEvents.mockResolvedValue([eventB]);
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      // Should merge cached + fresh, but NO backfill
+      expect(mockBackfillEvents).not.toHaveBeenCalled();
+      expect(body.data).toHaveLength(2);
+    });
+
+    it('backfill failure is non-fatal -- returns fetchEvents data', async () => {
+      mockFetchEvents.mockResolvedValue([eventA]);
+      mockBackfillEvents.mockRejectedValue(new Error('GDELT master list down'));
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      // Should still have the fetchEvents data
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].id).toBe('gdelt-A');
+    });
+
+    it('records backfill timestamp in Redis and prevents re-trigger within cooldown', async () => {
+      // First request: cache miss, triggers backfill
+      mockFetchEvents.mockResolvedValue([eventA]);
+      mockBackfillEvents.mockResolvedValue([backfillEvent1]);
+
+      const res1 = await fetch(`${baseUrl}/api/events`);
+      expect(res1.ok).toBe(true);
+      expect(mockBackfillEvents).toHaveBeenCalledTimes(1);
+
+      // Backfill timestamp should have been stored
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        'events:backfill-ts',
+        expect.any(Number),
+        expect.objectContaining({ ex: expect.any(Number) }),
+      );
+
+      // Second request: cache miss again (clear event cache), but backfill timestamp exists
+      redisStore.clear();
+      mockFetchEvents.mockResolvedValue([eventB]);
+      mockBackfillEvents.mockClear();
+
+      const res2 = await fetch(`${baseUrl}/api/events`);
+      expect(res2.ok).toBe(true);
+      // Should NOT call backfill again because cooldown hasn't expired
+      expect(mockBackfillEvents).not.toHaveBeenCalled();
+    });
+
+    it('merges backfill results using same merge-by-ID pattern (deduplication)', async () => {
+      // fetchEvents and backfill return the same event ID -- should deduplicate
+      const freshA = makeEvent({ id: 'gdelt-SAME', label: 'Fresh version' });
+      const backfillA = makeEvent({ id: 'gdelt-SAME', label: 'Backfill version' });
+
+      mockFetchEvents.mockResolvedValue([freshA]);
+      mockBackfillEvents.mockResolvedValue([backfillA]);
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      // Only 1 event since they share the same ID
+      expect(body.data).toHaveLength(1);
+      // Backfill merges first, then fresh overwrites -- so fresh version wins
+      expect(body.data[0].label).toBe('Fresh version');
+    });
   });
 });
