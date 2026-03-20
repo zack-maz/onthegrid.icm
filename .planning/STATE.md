@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
 status: executing
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-03-20T16:21:09Z"
-last_activity: 2026-03-20 -- Completed Phase 15 Plan 01 (data pipeline)
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-03-20T16:35:26Z"
+last_activity: 2026-03-20 -- Completed Phase 15 Plan 02 (rendering + UI)
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 8
+  completed_plans: 2
+  percent: 17
 ---
 
 # Project State
@@ -26,24 +26,24 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 15 of 20 (Key Sites Overlay) -- first phase of v1.1
-Plan: 01 of 02 complete
-Status: Executing -- Plan 01 complete, Plan 02 next
-Last activity: 2026-03-20 -- Completed Phase 15 Plan 01 (data pipeline)
+Plan: 02 of 02 complete
+Status: Phase 15 complete -- ready for Phase 16
+Last activity: 2026-03-20 -- Completed Phase 15 Plan 02 (rendering + UI)
 
-Progress: [#░░░░░░░░░] 8%
+Progress: [##░░░░░░░░] 17%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1 (v1.1)
-- Average duration: 4min
-- Total execution time: 4min
+- Total plans completed: 2 (v1.1)
+- Average duration: 7.5min
+- Total execution time: 15min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 15 | 1/2 | 4min | 4min |
+| 15 | 2/2 | 15min | 7.5min |
 
 *Updated after each plan completion*
 
@@ -55,6 +55,10 @@ Progress: [#░░░░░░░░░] 8%
 - **15-01:** Single fetch on mount via useSiteFetch (no polling -- sites are static infrastructure)
 - **15-01:** SiteConnectionStatus includes 'idle' state for pre-fetch (unlike polling stores)
 - **15-01:** Overpass QL union query fetches all 6 site types in one request with fallback URL
+- **15-02:** SiteEntity types widened throughout UI (MapEntity | SiteEntity) rather than adding to MapEntity union
+- **15-02:** Attack status computed client-side with coarse bbox pre-filter + haversine
+- **15-02:** Site toggles NOT suppressed during custom date range mode (static reference data)
+- **15-02:** Glow/highlight layers widened to AnyEntity type alias for clean SiteEntity support
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Full v0.9 + v1.0 decision history archived in previous STATE.md.
@@ -72,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T16:21:09Z
-Stopped at: Completed 15-01-PLAN.md
-Resume file: .planning/phases/15-key-sites-overlay/15-02-PLAN.md
+Last session: 2026-03-20T16:35:26Z
+Stopped at: Completed 15-02-PLAN.md (Phase 15 complete)
+Resume file: Next phase (Phase 16)

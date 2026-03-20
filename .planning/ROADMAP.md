@@ -37,7 +37,7 @@
 
 ### v1.1 Intelligence Layer (Phases 15-20)
 
-- [ ] **Phase 15: Key Sites Overlay** - Infrastructure sites (nuclear, naval, oil, airbase, dam, port) on the map with per-type toggles and click-to-inspect
+- [x] **Phase 15: Key Sites Overlay** - Infrastructure sites (nuclear, naval, oil, airbase, dam, port) on the map with per-type toggles and click-to-inspect (completed 2026-03-20)
 - [ ] **Phase 16: News Feed** - Multi-source news pipeline (GDELT DOC + BBC RSS + Al Jazeera RSS) with conflict filtering and deduplication
 - [ ] **Phase 17: Notification Center** - Severity-scored conflict notifications with proximity alerts, news matching, and 24h event default
 - [ ] **Phase 18: Oil Markets Tracker** - Oil/energy price panel (Brent, WTI, XLE, USO, XOM) with sparkline trends
@@ -55,7 +55,7 @@
   2. User can toggle site visibility with a parent toggle and 6 individual sub-toggles per site type
   3. User can click any site marker and see its details (name, type, coordinates, operator, OSM link) in the detail panel
   4. Sites persist across page reloads without re-fetching (24h cache)
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 15-01-PLAN.md -- Server data pipeline: SiteEntity types, Overpass adapter, /api/sites route with 24h Redis cache, siteStore, useSiteFetch hook
 - [ ] 15-02-PLAN.md -- Client rendering: icon atlas extension, site IconLayer with attack coloring, toggle controls, tooltip, SiteDetail panel
@@ -135,7 +135,7 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 12. Analytics Dashboard | v0.9 | 1/1 | Complete | 2026-03-19 |
 | 13. Serverless Cache Migration | v1.0 | 4/4 | Complete | 2026-03-20 |
 | 14. Vercel Deployment | v1.0 | 2/2 | Complete | 2026-03-20 |
-| 15. Key Sites Overlay | 1/2 | In Progress|  | - |
+| 15. Key Sites Overlay | 2/2 | Complete   | 2026-03-20 | - |
 | 16. News Feed | v1.1 | 0/TBD | Not started | - |
 | 17. Notification Center | v1.1 | 0/TBD | Not started | - |
 | 18. Oil Markets Tracker | v1.1 | 0/TBD | Not started | - |
