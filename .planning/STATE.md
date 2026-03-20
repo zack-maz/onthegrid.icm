@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: completed
-stopped_at: Phase 17 context gathered
-last_updated: "2026-03-20T21:50:20.190Z"
-last_activity: 2026-03-20 -- Completed Phase 16 Plan 03 (sourceCountry and English filter gap closure)
+status: in-progress
+stopped_at: Completed 17-02 (24h default event window)
+last_updated: "2026-03-20T22:22:57Z"
+last_activity: 2026-03-20 -- Completed Phase 17 Plan 02 (24h default event window)
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 9
+  completed_plans: 7
   percent: 100
 ---
 
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 16 News Feed
+**Current focus:** Phase 17 Notification Center
 
 ## Current Position
 
-Phase: 16 of 20 (News Feed)
-Plan: 03 of 03 complete
-Status: Phase 16 complete -- news pipeline + client infrastructure + UAT gap closure
-Last activity: 2026-03-20 -- Completed Phase 16 Plan 03 (sourceCountry and English filter gap closure)
+Phase: 17 of 20 (Notification Center)
+Plan: 02 of 04 complete
+Status: 24h default event window implemented
+Last activity: 2026-03-20 -- Completed Phase 17 Plan 02 (24h default event window)
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5 (v1.1)
-- Average duration: 5.4min
-- Total execution time: 27min
+- Total plans completed: 6 (v1.1)
+- Average duration: 5min
+- Total execution time: 30min
 
 **By Phase:**
 
@@ -45,6 +45,7 @@ Progress: [██████████] 100%
 |-------|-------|-------|----------|
 | 15 | 2/2 | 15min | 7.5min |
 | 16 | 3/3 | 12min | 4min |
+| 17 | 1/4 | 3min | 3min |
 
 *Updated after each plan completion*
 
@@ -68,6 +69,9 @@ Progress: [██████████] 100%
 - **16-02:** 15-min polling interval matches GDELT DOC update frequency and server cache TTL
 - **16-03:** GDELT sourcelang:english appended as inline query modifier (not separate param)
 - **16-03:** RSS country mapping uses static config per feed (not runtime detection)
+- **17-02:** isDefaultWindowActive is a pure derived getter (dateStart===null && dateEnd===null, no new stored state)
+- **17-02:** 24h window applies to both events AND news clusters (per locked decision scope)
+- **17-02:** useFilteredEntities return type extended to include clusters (backward-compatible)
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Full v0.9 + v1.0 decision history archived in previous STATE.md.
@@ -85,6 +89,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T21:50:20.183Z
-Stopped at: Phase 17 context gathered
-Resume file: .planning/phases/17-notification-center/17-CONTEXT.md
+Last session: 2026-03-20T22:22:57Z
+Stopped at: Completed 17-02 (24h default event window)
+Resume file: .planning/phases/17-notification-center/17-02-SUMMARY.md

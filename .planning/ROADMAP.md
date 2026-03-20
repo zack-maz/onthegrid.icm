@@ -84,7 +84,7 @@ Plans:
   3. Each notification card shows 1-3 matched news headlines from the news feed (temporal + geographic/keyword matching)
   4. User receives proximity alerts when tracked flights or ships approach key sites within 50km
   5. Map shows only the last 24 hours of conflict events by default when no custom date filter is active
-**Plans:** 4 plans
+**Plans:** 3/4 plans executed
 Plans:
 - [ ] 17-01-PLAN.md -- Data layer: GDELT numMentions/numSources extension, severity scoring, news matching, time grouping libs
 - [ ] 17-02-PLAN.md -- 24h default event window in useFilteredEntities with "Showing last 24h" label
@@ -146,7 +146,7 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 14. Vercel Deployment | v1.0 | 2/2 | Complete | 2026-03-20 |
 | 15. Key Sites Overlay | 2/2 | Complete    | 2026-03-20 | - |
 | 16. News Feed | 3/3 | Complete    | 2026-03-20 | - |
-| 17. Notification Center | v1.1 | 0/4 | Not started | - |
+| 17. Notification Center | 3/4 | In Progress|  | - |
 | 18. Oil Markets Tracker | v1.1 | 0/TBD | Not started | - |
 | 19. Search, Filter & UI Cleanup | v1.1 | 0/TBD | Not started | - |
 | 20. Production Review & Deploy Sync | v1.1 | 0/TBD | Not started | - |
