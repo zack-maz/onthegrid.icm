@@ -94,6 +94,28 @@ export interface SiteEntity {
   osmId: number;
 }
 
+export interface NewsArticle {
+  id: string; // SHA-256 hash of URL (hex, truncated to 16 chars)
+  title: string;
+  url: string;
+  source: string; // "GDELT", "BBC", "Al Jazeera", "Tehran Times", "Times of Israel", "Middle East Eye"
+  publishedAt: number; // Unix ms
+  summary?: string;
+  imageUrl?: string;
+  lat?: number;
+  lng?: number;
+  tone?: number; // Reserved for Phase 17 (always undefined in Phase 16)
+  keywords: string[]; // Matched whitelist keywords
+}
+
+export interface NewsCluster {
+  id: string; // Same as primaryArticle.id
+  primaryArticle: NewsArticle;
+  articles: NewsArticle[]; // All articles in cluster (including primary)
+  firstSeen: number; // Earliest publishedAt
+  lastUpdated: number; // Latest publishedAt in cluster
+}
+
 export type FlightSource = 'opensky' | 'adsb' | 'adsblol';
 
 export class RateLimitError extends Error {

@@ -34,4 +34,13 @@ export const CACHE_TTL = {
   adsblolFlights: 30_000, // 30s -- adsb.lol community API (respectful polling)
   ships: 0, // N/A for WebSocket push
   events: 900_000, // 15min -- GDELT updates every 15 minutes
+  news: 900_000, // 15min -- news feed TTL
 } as const;
+
+// News aggregation constants
+export const NEWS_CACHE_TTL = 900_000; // 15 min logical TTL
+export const NEWS_REDIS_TTL_SEC = 9000; // 2.5h hard TTL (10x logical)
+export const NEWS_SLIDING_WINDOW_MS = 7 * 86_400_000; // 7 days
+export const NEWS_CLUSTER_WINDOW_MS = 86_400_000; // 24h fuzzy match window
+export const NEWS_JACCARD_THRESHOLD = 0.8;
+export const NEWS_MIN_TOKENS_FOR_FUZZY = 5;
