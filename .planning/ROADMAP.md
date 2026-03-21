@@ -40,7 +40,7 @@
 - [x] **Phase 15: Key Sites Overlay** - Infrastructure sites (nuclear, naval, oil, airbase, dam, port) on the map with per-type toggles and click-to-inspect (completed 2026-03-20)
 - [x] **Phase 16: News Feed** - Multi-source news pipeline (GDELT DOC + BBC RSS + Al Jazeera RSS) with conflict filtering and deduplication (completed 2026-03-20)
 - [x] **Phase 17: Notification Center** - Severity-scored conflict notifications with proximity alerts, news matching, and 24h event default (completed 2026-03-20)
-- [ ] **Phase 18: Oil Markets Tracker** - Oil/energy price panel (Brent, WTI, XLE, USO, XOM) with sparkline trends
+- [x] **Phase 18: Oil Markets Tracker** - Oil/energy price panel (Brent, WTI, XLE, USO, XOM) with sparkline trends (completed 2026-03-21)
 - [ ] **Phase 19: Search, Filter & UI Cleanup** - Global search bar, Reset All, grouped filter sections, visual hierarchy
 - [ ] **Phase 20: Production Review & Deploy Sync** - Full verification, integration testing, Vercel deployment, git tag v1.1
 
@@ -99,7 +99,7 @@ Plans:
   1. User can see current prices for Brent Crude, WTI Crude, XLE, USO, and XOM in a collapsible overlay panel
   2. Each instrument shows a 5-day sparkline trend chart with green (up) or red (down) color coding
   3. Price changes trigger green delta animations matching the existing counter animation pattern
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 18-01-PLAN.md -- Server pipeline: MarketQuote types, Yahoo Finance v8 adapter, cache-first /api/markets route with 5-min Redis cache
 - [ ] 18-02-PLAN.md -- Client panel: marketStore, useMarketPolling hook, Sparkline/ExpandedChart SVG components, MarketRow with delta animation, MarketsSlot overlay panel, AppShell wiring
@@ -150,6 +150,6 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 15. Key Sites Overlay | 2/2 | Complete    | 2026-03-20 | - |
 | 16. News Feed | 3/3 | Complete    | 2026-03-20 | - |
 | 17. Notification Center | 4/4 | Complete    | 2026-03-20 | - |
-| 18. Oil Markets Tracker | 1/2 | In Progress|  | - |
+| 18. Oil Markets Tracker | 2/2 | Complete   | 2026-03-21 | - |
 | 19. Search, Filter & UI Cleanup | v1.1 | 0/TBD | Not started | - |
 | 20. Production Review & Deploy Sync | v1.1 | 0/TBD | Not started | - |

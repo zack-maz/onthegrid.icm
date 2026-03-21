@@ -30,8 +30,8 @@ Requirements for the Intelligence Layer milestone. Each maps to roadmap phases.
 ### Oil Markets
 
 - [x] **MRKT-01**: User can see oil market prices (Brent Crude, WTI Crude, XLE, USO, XOM) in a collapsible overlay panel
-- [ ] **MRKT-02**: User can see 5-day sparkline trend chart per instrument with color-coded direction (green up, red down)
-- [ ] **MRKT-03**: User sees green delta animations on price changes matching the existing counter animation pattern
+- [x] **MRKT-02**: User can see 5-day sparkline trend chart per instrument with color-coded direction (green up, red down)
+- [x] **MRKT-03**: User sees green delta animations on price changes matching the existing counter animation pattern
 
 ### Search & UI
 
@@ -88,8 +88,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NOTF-04 | Phase 17 | Complete |
 | NOTF-05 | Phase 17 | Complete |
 | MRKT-01 | Phase 18 | Complete |
-| MRKT-02 | Phase 18 | Pending |
-| MRKT-03 | Phase 18 | Pending |
+| MRKT-02 | Phase 18 | Complete |
+| MRKT-03 | Phase 18 | Complete |
 | SRCH-01 | Phase 19 | Pending |
 | SRCH-02 | Phase 19 | Pending |
 | SRCH-03 | Phase 19 | Pending |

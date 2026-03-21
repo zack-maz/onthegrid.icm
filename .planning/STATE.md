@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
 status: completed
-stopped_at: Completed 18-01-PLAN.md
-last_updated: "2026-03-21T21:12:28.535Z"
-last_activity: 2026-03-21 -- Completed Phase 18 Plan 01 (oil markets data pipeline)
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-03-21T21:16:12.000Z"
+last_activity: 2026-03-21 -- Completed Phase 18 Plan 02 (oil markets client panel)
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 11
-  completed_plans: 10
-  percent: 94
+  completed_plans: 12
+  percent: 100
 ---
 
 # Project State
@@ -26,18 +26,18 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 18 of 20 (Oil Markets Tracker)
-Plan: 01 of 02 complete
-Status: Plan 01 complete (server-side data pipeline: Yahoo Finance adapter, /api/markets route, types)
-Last activity: 2026-03-21 -- Completed Phase 18 Plan 01 (oil markets data pipeline)
+Plan: 02 of 02 complete
+Status: Phase 18 complete (server data pipeline + client market panel with polling and charts)
+Last activity: 2026-03-21 -- Completed Phase 18 Plan 02 (oil markets client panel)
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7 (v1.1)
+- Total plans completed: 8 (v1.1)
 - Average duration: 5min
-- Total execution time: 36min
+- Total execution time: 38min
 
 **By Phase:**
 
@@ -46,12 +46,14 @@ Progress: [█████████░] 94%
 | 15 | 2/2 | 15min | 7.5min |
 | 16 | 3/3 | 12min | 4min |
 | 17 | 4/4 | 13min | 3.25min |
+| 18 | 2/2 | 4min | 2min |
 
 *Updated after each plan completion*
 | Phase 17 P01 | 3min | 1 tasks | 8 files |
 | Phase 17 P03 | 6min | 2 tasks | 9 files |
 | Phase 17 P04 | 4min | 2 tasks | 4 files |
 | Phase 18 P01 | 2min | 2 tasks | 6 files |
+| Phase 18 P02 | 2min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -93,6 +95,10 @@ Progress: [█████████░] 94%
 - **18-01:** Per-ticker fault isolation via Promise.allSettled (0-5 partial results)
 - **18-01:** 5-min logical cache TTL matching planned client polling interval
 - **18-01:** MarketQuote re-exported from src/types/entities.ts for frontend consumption
+- **18-02:** ConnectionStatus defined locally in marketStore (same pattern as newsStore, no cross-store coupling)
+- **18-02:** Delta animation reuses existing animate-delta CSS class from CounterRow (no new CSS)
+- **18-02:** MarketsSlot positioned at top-14 below NotificationBell with detail-panel-aware right offset
+- **18-02:** Accordion expand uses CSS max-height transition (0 to 160px) for smooth animation
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Full v0.9 + v1.0 decision history archived in previous STATE.md.
@@ -110,6 +116,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T21:12:28.518Z
-Stopped at: Completed 18-01-PLAN.md
+Last session: 2026-03-21T21:16:12Z
+Stopped at: Completed 18-02-PLAN.md
 Resume file: None
