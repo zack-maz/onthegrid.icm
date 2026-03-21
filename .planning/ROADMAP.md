@@ -99,7 +99,10 @@ Plans:
   1. User can see current prices for Brent Crude, WTI Crude, XLE, USO, and XOM in a collapsible overlay panel
   2. Each instrument shows a 5-day sparkline trend chart with green (up) or red (down) color coding
   3. Price changes trigger green delta animations matching the existing counter animation pattern
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 18-01-PLAN.md -- Server pipeline: MarketQuote types, Yahoo Finance v8 adapter, cache-first /api/markets route with 5-min Redis cache
+- [ ] 18-02-PLAN.md -- Client panel: marketStore, useMarketPolling hook, Sparkline/ExpandedChart SVG components, MarketRow with delta animation, MarketsSlot overlay panel, AppShell wiring
 
 ### Phase 19: Search, Filter & UI Cleanup
 **Goal**: Users can quickly find any entity and manage filters with a clean, organized interface
@@ -147,6 +150,6 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 15. Key Sites Overlay | 2/2 | Complete    | 2026-03-20 | - |
 | 16. News Feed | 3/3 | Complete    | 2026-03-20 | - |
 | 17. Notification Center | 4/4 | Complete    | 2026-03-20 | - |
-| 18. Oil Markets Tracker | v1.1 | 0/TBD | Not started | - |
+| 18. Oil Markets Tracker | v1.1 | 0/2 | Planning complete | - |
 | 19. Search, Filter & UI Cleanup | v1.1 | 0/TBD | Not started | - |
 | 20. Production Review & Deploy Sync | v1.1 | 0/TBD | Not started | - |
