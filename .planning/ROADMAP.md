@@ -133,12 +133,20 @@ Plans:
 ### Phase 19.2: Counter Entity Dropdowns (INSERTED)
 
 **Goal:** Each counter row in the Counters panel expands to list individual entities, with click-to-fly-to and detail panel integration
-**Requirements**: TBD
+**Requirements**: CNTR-01, CNTR-02, CNTR-03, CNTR-04, CNTR-05, CNTR-06
 **Depends on:** Phase 19
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. User can click any counter row to expand a dropdown showing individual entities with label + key metric
+  2. Only one counter row can be expanded at a time (accordion)
+  3. Clicking an entity flies the map to it and opens the detail panel
+  4. Entities sorted by proximity per category
+  5. Zero-count rows are disabled; dropdown shows empty state if count drops to 0
+  6. Overflow lists show scrollable container with "Showing X-Y of Z" range indicator
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 19.2 to break down)
+- [ ] 19.2-01-PLAN.md -- Data layer: extend useCounterData to return entity arrays with proximity sorting, create EntityListItem component
+- [ ] 19.2-02-PLAN.md -- UI layer: refactor CounterRow with expand/collapse dropdown, accordion in CountersContent, fly-to wiring, scroll range indicator
 
 ### Phase 20: Production Review & Deploy Sync
 **Goal**: v1.1 is verified end-to-end and deployed to production
@@ -177,4 +185,5 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 17. Notification Center | 4/4 | Complete    | 2026-03-20 | - |
 | 18. Oil Markets Tracker | 2/2 | Complete    | 2026-03-21 | - |
 | 19. Search, Filter & UI Cleanup | 4/4 | Complete    | 2026-03-22 | - |
+| 19.2. Counter Entity Dropdowns | v1.1 | 0/2 | In Progress | - |
 | 20. Production Review & Deploy Sync | v1.1 | 0/TBD | Not started | - |

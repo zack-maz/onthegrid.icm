@@ -39,6 +39,15 @@ Requirements for the Intelligence Layer milestone. Each maps to roadmap phases.
 - [x] **SRCH-02**: User can reset all active filters with a single "Reset All" button
 - [x] **SRCH-03**: Filter panel has grouped sections with scrollable layer toggles and visual hierarchy
 
+### Counter Dropdowns
+
+- [ ] **CNTR-01**: User can click a counter row to expand a dropdown showing individual entities with label + key metric per type
+- [ ] **CNTR-02**: Only one counter row can be expanded at a time (accordion behavior)
+- [ ] **CNTR-03**: User can click an entity in the dropdown to fly the map to it and open the detail panel
+- [ ] **CNTR-04**: Entities are sorted by proximity per category (flights/events from Tehran, ships from Strait of Hormuz, sites by attack count)
+- [ ] **CNTR-05**: Zero-count counter rows are disabled and non-expandable; expanded rows that drop to 0 show empty state
+- [ ] **CNTR-06**: Lists exceeding 8 items show a scrollable container with "Showing X-Y of Z" range indicator
+
 ## v1.2+ Requirements
 
 Deferred to future releases. Tracked but not in current roadmap.
@@ -93,12 +102,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRCH-01 | Phase 19 | Complete |
 | SRCH-02 | Phase 19 | Complete |
 | SRCH-03 | Phase 19 | Complete |
+| CNTR-01 | Phase 19.2 | In Progress |
+| CNTR-02 | Phase 19.2 | In Progress |
+| CNTR-03 | Phase 19.2 | In Progress |
+| CNTR-04 | Phase 19.2 | In Progress |
+| CNTR-05 | Phase 19.2 | In Progress |
+| CNTR-06 | Phase 19.2 | In Progress |
 
 **Coverage:**
-- v1.1 requirements: 17 total
-- Mapped to phases: 17
-- Unmapped: 0 ✓
+- v1.1 requirements: 23 total
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after initial definition*
+*Last updated: 2026-03-22 after Phase 19.2 planning*
