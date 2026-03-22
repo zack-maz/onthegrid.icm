@@ -122,13 +122,24 @@ Plans:
 
 ### Phase 19.1: Advanced search with tag and entity type filtering (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Users can compose structured tag-based queries with boolean logic, autocomplete, and bidirectional sync between the search bar and sidebar filter controls
+**Requirements**: ASRCH-01, ASRCH-02, ASRCH-03, ASRCH-04, ASRCH-05, ASRCH-06
 **Depends on:** Phase 19
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. User can type tag-based queries (e.g., `type:flight AND country:iran`) with full boolean expression support (AND/OR/NOT/parentheses)
+  2. Tags are syntax-highlighted with per-prefix colors in the search input
+  3. Two-stage autocomplete suggests tag prefixes then known values with counts from live entity data
+  4. Search bar and sidebar filters sync bidirectionally (typing `type:flight` activates Flights toggle; toggling Flights ON adds `type:flight` to search)
+  5. Clickable chips [Events] [Sites] [Iran] [US] above the input provide quick access to common queries
+  6. Plain text queries still work as freeform substring search (backward compat with Phase 19)
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 19.1 to break down)
+- [ ] 19.1-01-PLAN.md -- Core engine: query parser (tokenizer + recursive descent AST), evaluator (AST walker against entity data), serializer (AST to display string)
+- [ ] 19.1-02-PLAN.md -- Tag registry: centralized vocabulary with metadata, value extractors, display colors for all ~25 tag prefixes
+- [ ] 19.1-03-PLAN.md -- Data integration: extend searchStore with parsed AST, rewrite useSearchResults with evaluator, bidirectional useQuerySync hook
+- [ ] 19.1-04-PLAN.md -- Search UI: TagChipRow, SyntaxOverlay, AutocompleteDropdown, CheatSheet components integrated into SearchModal
+- [ ] 19.1-05-PLAN.md -- Wiring and verification: wire useQuerySync into AppShell, full integration test, visual checkpoint
 
 ### Phase 19.2: Counter Entity Dropdowns (INSERTED)
 
@@ -185,5 +196,6 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 17. Notification Center | 4/4 | Complete    | 2026-03-20 | - |
 | 18. Oil Markets Tracker | 2/2 | Complete    | 2026-03-21 | - |
 | 19. Search, Filter & UI Cleanup | 4/4 | Complete    | 2026-03-22 | - |
-| 19.2. Counter Entity Dropdowns | v1.1 | 0/2 | In Progress | - |
+| 19.1. Advanced Search | v1.1 | 0/5 | In Progress | - |
+| 19.2. Counter Entity Dropdowns | v1.1 | 0/2 | Not started | - |
 | 20. Production Review & Deploy Sync | v1.1 | 0/TBD | Not started | - |

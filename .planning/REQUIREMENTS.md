@@ -39,6 +39,15 @@ Requirements for the Intelligence Layer milestone. Each maps to roadmap phases.
 - [x] **SRCH-02**: User can reset all active filters with a single "Reset All" button
 - [x] **SRCH-03**: Filter panel has grouped sections with scrollable layer toggles and visual hierarchy
 
+### Advanced Search
+
+- [ ] **ASRCH-01**: User can type tag-based queries with full boolean expression support (AND/OR/NOT/parentheses)
+- [ ] **ASRCH-02**: Tags are evaluated against all entity types with the full tag vocabulary (~25 prefixes)
+- [ ] **ASRCH-03**: Search bar and sidebar filters sync bidirectionally (typing tags activates toggles; toggling adds/removes tags)
+- [ ] **ASRCH-04**: Two-stage autocomplete suggests tag prefixes then known values with counts from live entity data
+- [ ] **ASRCH-05**: SearchModal includes chip row, syntax highlighting, autocomplete dropdown, and cheat sheet popover
+- [ ] **ASRCH-06**: Plain text queries still work as freeform substring search (backward compat with Phase 19)
+
 ### Counter Dropdowns
 
 - [ ] **CNTR-01**: User can click a counter row to expand a dropdown showing individual entities with label + key metric per type
@@ -102,18 +111,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRCH-01 | Phase 19 | Complete |
 | SRCH-02 | Phase 19 | Complete |
 | SRCH-03 | Phase 19 | Complete |
-| CNTR-01 | Phase 19.2 | In Progress |
-| CNTR-02 | Phase 19.2 | In Progress |
-| CNTR-03 | Phase 19.2 | In Progress |
-| CNTR-04 | Phase 19.2 | In Progress |
-| CNTR-05 | Phase 19.2 | In Progress |
-| CNTR-06 | Phase 19.2 | In Progress |
+| ASRCH-01 | Phase 19.1 | In Progress |
+| ASRCH-02 | Phase 19.1 | In Progress |
+| ASRCH-03 | Phase 19.1 | In Progress |
+| ASRCH-04 | Phase 19.1 | In Progress |
+| ASRCH-05 | Phase 19.1 | In Progress |
+| ASRCH-06 | Phase 19.1 | In Progress |
+| CNTR-01 | Phase 19.2 | Not Started |
+| CNTR-02 | Phase 19.2 | Not Started |
+| CNTR-03 | Phase 19.2 | Not Started |
+| CNTR-04 | Phase 19.2 | Not Started |
+| CNTR-05 | Phase 19.2 | Not Started |
+| CNTR-06 | Phase 19.2 | Not Started |
 
 **Coverage:**
-- v1.1 requirements: 23 total
-- Mapped to phases: 23
+- v1.1 requirements: 29 total
+- Mapped to phases: 29
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-22 after Phase 19.2 planning*
+*Last updated: 2026-03-22 after Phase 19.1 planning*
