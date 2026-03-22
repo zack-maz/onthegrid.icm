@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: completed
-stopped_at: Phase 19 context gathered
-last_updated: "2026-03-22T18:57:19.072Z"
-last_activity: 2026-03-21 -- Completed Phase 18 Plan 02 (oil markets client panel)
+status: in-progress
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-03-22T19:42:35Z"
+last_activity: 2026-03-22 -- Completed Phase 19 Plan 01 (layout restructure)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_plans: 15
+  completed_plans: 12
+  percent: 80
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 18 Oil Markets Tracker
+**Current focus:** Phase 19 Search, Filter & UI Cleanup
 
 ## Current Position
 
-Phase: 18 of 20 (Oil Markets Tracker)
-Plan: 02 of 02 complete
-Status: Phase 18 complete (server data pipeline + client market panel with polling and charts)
-Last activity: 2026-03-21 -- Completed Phase 18 Plan 02 (oil markets client panel)
+Phase: 19 of 20 (Search, Filter & UI Cleanup)
+Plan: 01 of 04 complete
+Status: Plan 01 complete (layout restructure with Topbar + Sidebar)
+Last activity: 2026-03-22 -- Completed Phase 19 Plan 01 (layout restructure)
 
-Progress: [██████████] 100%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: [██████████] 100%
 | 16 | 3/3 | 12min | 4min |
 | 17 | 4/4 | 13min | 3.25min |
 | 18 | 2/2 | 4min | 2min |
+| 19 | 1/4 | 6min | 6min |
 
 *Updated after each plan completion*
 | Phase 17 P01 | 3min | 1 tasks | 8 files |
@@ -54,6 +55,7 @@ Progress: [██████████] 100%
 | Phase 17 P04 | 4min | 2 tasks | 4 files |
 | Phase 18 P01 | 2min | 2 tasks | 6 files |
 | Phase 18 P02 | 2min | 2 tasks | 7 files |
+| Phase 19 P01 | 6min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -100,6 +102,13 @@ Progress: [██████████] 100%
 - **18-02:** MarketsSlot positioned at top-14 below NotificationBell with detail-panel-aware right offset
 - **18-02:** Accordion expand uses CSS max-height transition (0 to 160px) for smooth animation
 
+- **19-01:** NotificationBell moved from absolute positioning to topbar flex layout
+- **19-01:** LayerTogglesContent and FilterPanelContent extracted as separate exports for sidebar reuse
+- **19-01:** Iranian flights counter row removed per locked decision
+- **19-01:** Sidebar overlays map with absolute positioning (does not resize map)
+- **19-01:** Icon strip always visible; content panel slides with translate-x transition
+- **19-01:** StatusDropdown shows aggregate health dot plus per-source breakdown in dropdown
+
 Decisions are logged in PROJECT.md Key Decisions table.
 Full v0.9 + v1.0 decision history archived in previous STATE.md.
 
@@ -116,6 +125,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T18:57:19.063Z
-Stopped at: Phase 19 context gathered
-Resume file: .planning/phases/19-search-filter-ui-cleanup/19-CONTEXT.md
+Last session: 2026-03-22T19:42:35Z
+Stopped at: Completed 19-01-PLAN.md
+Resume file: .planning/phases/19-search-filter-ui-cleanup/19-01-SUMMARY.md

@@ -37,7 +37,7 @@ Requirements for the Intelligence Layer milestone. Each maps to roadmap phases.
 
 - [ ] **SRCH-01**: User can search across all entity types via Cmd+K global search bar with fuzzy matching and fly-to-entity on selection
 - [ ] **SRCH-02**: User can reset all active filters with a single "Reset All" button
-- [ ] **SRCH-03**: Filter panel has grouped sections with scrollable layer toggles and visual hierarchy
+- [x] **SRCH-03**: Filter panel has grouped sections with scrollable layer toggles and visual hierarchy
 
 ## v1.2+ Requirements
 
@@ -92,7 +92,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MRKT-03 | Phase 18 | Complete |
 | SRCH-01 | Phase 19 | Pending |
 | SRCH-02 | Phase 19 | Pending |
-| SRCH-03 | Phase 19 | Pending |
+| SRCH-03 | Phase 19 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 17 total
