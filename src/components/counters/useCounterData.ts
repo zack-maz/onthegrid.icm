@@ -5,8 +5,19 @@ import { useSiteStore } from '@/stores/siteStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { computeAttackStatus } from '@/lib/attackStatus';
-import { CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
-import type { FlightEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
+import { haversineKm } from '@/lib/geo';
+import { CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS } from '@/types/ui';
+import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity, SiteType } from '@/types/entities';
+
+export interface SiteHitCounts {
+  nuclear: number;
+  naval: number;
+  oil: number;
+  airbase: number;
+  desalination: number;
+  port: number;
+  total: number;
+}
 
 export interface CounterValues {
   iranianFlights: number;
@@ -14,25 +25,92 @@ export interface CounterValues {
   airstrikes: number;
   groundCombat: number;
   targeted: number;
-  fatalities: number;
-  hitSites: number;
+  hitSites: SiteHitCounts;
+}
+
+export interface CounterEntity {
+  id: string;
+  label: string;
+  metric: string;
+  lat: number;
+  lng: number;
+  type: string;
+}
+
+export interface CounterEntities {
+  unidentifiedFlights: CounterEntity[];
+  ships: CounterEntity[];
+  airstrikeEvents: CounterEntity[];
+  groundCombatEvents: CounterEntity[];
+  targetedEvents: CounterEntity[];
+  hitSites: Record<SiteType, CounterEntity[]>;
 }
 
 const AIRSTRIKE_TYPES: readonly string[] = CONFLICT_TOGGLE_GROUPS.showAirstrikes;
 const GROUND_COMBAT_TYPES: readonly string[] = CONFLICT_TOGGLE_GROUPS.showGroundCombat;
 const TARGETED_TYPES: readonly string[] = CONFLICT_TOGGLE_GROUPS.showTargeted;
 
+// Proximity sort reference points
+const TEHRAN = { lat: 35.69, lng: 51.39 };
+const TEL_AVIV = { lat: 32.07, lng: 34.78 };
+const STRAIT_HORMUZ = { lat: 26.56, lng: 56.25 };
+
 function countByGroup(events: ConflictEventEntity[], types: readonly string[]): number {
   return events.filter((e) => types.includes(e.type)).length;
 }
 
-function sumFatalitiesByGroup(events: ConflictEventEntity[], types: readonly string[]): number {
-  return events
-    .filter((e) => types.includes(e.type))
-    .reduce((sum, e) => sum + e.data.fatalities, 0);
+function filterByGroup(events: ConflictEventEntity[], types: readonly string[]): ConflictEventEntity[] {
+  return events.filter((e) => types.includes(e.type));
 }
 
-export function useCounterData(): CounterValues {
+function sortByProximity(
+  entities: CounterEntity[],
+  primary: { lat: number; lng: number },
+  secondary?: { lat: number; lng: number },
+): CounterEntity[] {
+  return [...entities].sort((a, b) => {
+    const dA = haversineKm(a.lat, a.lng, primary.lat, primary.lng);
+    const dB = haversineKm(b.lat, b.lng, primary.lat, primary.lng);
+    if (Math.abs(dA - dB) > 0.01) return dA - dB;
+    if (secondary) {
+      return (
+        haversineKm(a.lat, a.lng, secondary.lat, secondary.lng) -
+        haversineKm(b.lat, b.lng, secondary.lat, secondary.lng)
+      );
+    }
+    return 0;
+  });
+}
+
+function toFlightEntity(f: FlightEntity): CounterEntity {
+  const label = f.data.unidentified ? f.data.icao24 : f.data.callsign;
+  const metric =
+    f.data.onGround
+      ? 'GND'
+      : f.data.altitude != null
+        ? `${Math.round(f.data.altitude * 3.28084).toLocaleString()} ft`
+        : '---';
+  return { id: f.id, label, metric, lat: f.lat, lng: f.lng, type: f.type };
+}
+
+function toShipEntity(s: ShipEntity): CounterEntity {
+  const label = s.data.shipName || String(s.data.mmsi);
+  const metric = `${s.data.speedOverGround.toFixed(1)} kn`;
+  return { id: s.id, label, metric, lat: s.lat, lng: s.lng, type: s.type };
+}
+
+function toEventEntity(e: ConflictEventEntity): CounterEntity {
+  const label = EVENT_TYPE_LABELS[e.type] || e.type;
+  const metric = `GS ${e.data.goldsteinScale}`;
+  return { id: e.id, label, metric, lat: e.lat, lng: e.lng, type: e.type };
+}
+
+function toSiteEntity(s: SiteEntity, attackCount: number): CounterEntity {
+  const metric = `${attackCount} attack${attackCount !== 1 ? 's' : ''}`;
+  return { id: s.id, label: s.label, metric, lat: s.lat, lng: s.lng, type: s.siteType };
+}
+
+export function useCounterData(): CounterValues & { entities: CounterEntities } {
   const showFlights = useUIStore((s) => s.showFlights);
   const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
   const pulseEnabled = useUIStore((s) => s.pulseEnabled);
@@ -47,8 +125,9 @@ export function useCounterData(): CounterValues {
   const showAirbase = useUIStore((s) => s.showAirbase);
   const showDesalination = useUIStore((s) => s.showDesalination);
   const showPort = useUIStore((s) => s.showPort);
+  const showShips = useUIStore((s) => s.showShips);
 
-  const { flights: filteredFlights, events: filteredEvents } = useFilteredEntities();
+  const { flights: filteredFlights, ships: filteredShips, events: filteredEvents } = useFilteredEntities();
 
   const sites = useSiteStore((s) => s.sites);
   const allEvents = useEventStore((s) => s.events);
@@ -63,33 +142,25 @@ export function useCounterData(): CounterValues {
     });
 
     const iranianFlights = visibleFlights.filter((f: FlightEntity) => f.data.originCountry === 'Iran').length;
-    const unidentifiedFlights = visibleFlights.filter((f: FlightEntity) => f.data.unidentified).length;
+    const unidentifiedFlightsCount = visibleFlights.filter((f: FlightEntity) => f.data.unidentified).length;
 
     // Visible event counts: smart filters + toggle gating
     const airstrikes = showEvents && showAirstrikes
       ? countByGroup(filteredEvents, AIRSTRIKE_TYPES)
       : 0;
-    const groundCombat = showEvents && showGroundCombat
+    const groundCombatCount = showEvents && showGroundCombat
       ? countByGroup(filteredEvents, GROUND_COMBAT_TYPES)
       : 0;
     const targeted = showEvents && showTargeted
       ? countByGroup(filteredEvents, TARGETED_TYPES)
       : 0;
 
-    // Fatalities from visible events only
-    let fatalities = 0;
-    if (showEvents && showAirstrikes) {
-      fatalities += sumFatalitiesByGroup(filteredEvents, AIRSTRIKE_TYPES);
-    }
-    if (showEvents && showGroundCombat) {
-      fatalities += sumFatalitiesByGroup(filteredEvents, GROUND_COMBAT_TYPES);
-    }
-    if (showEvents && showTargeted) {
-      fatalities += sumFatalitiesByGroup(filteredEvents, TARGETED_TYPES);
-    }
+    // Hit sites: per-type counts + entity collection
+    const hitSites: SiteHitCounts = { nuclear: 0, naval: 0, oil: 0, airbase: 0, desalination: 0, port: 0, total: 0 };
+    const hitSiteEntities: Record<SiteType, CounterEntity[]> = {
+      nuclear: [], naval: [], oil: [], airbase: [], desalination: [], port: [],
+    };
 
-    // Hit sites: visible sites with attack status
-    let hitSites = 0;
     if (showSites) {
       const visibleSites = sites.filter((s: SiteEntity) => {
         switch (s.siteType) {
@@ -102,12 +173,67 @@ export function useCounterData(): CounterValues {
         }
       });
       for (const site of visibleSites) {
-        if (computeAttackStatus(site, allEvents, dateEnd).isAttacked) {
-          hitSites++;
+        const status = computeAttackStatus(site, allEvents, dateEnd);
+        if (status.isAttacked) {
+          hitSites[site.siteType]++;
+          hitSites.total++;
+          hitSiteEntities[site.siteType].push(toSiteEntity(site, status.attackCount));
         }
+      }
+      // Sort each site type by attackCount descending
+      for (const key of Object.keys(hitSiteEntities) as SiteType[]) {
+        hitSiteEntities[key].sort((a, b) => {
+          const aCount = parseInt(a.metric);
+          const bCount = parseInt(b.metric);
+          return bCount - aCount;
+        });
       }
     }
 
-    return { iranianFlights, unidentifiedFlights, airstrikes, groundCombat, targeted, fatalities, hitSites };
-  }, [filteredFlights, filteredEvents, showFlights, showGroundTraffic, pulseEnabled, showEvents, showAirstrikes, showGroundCombat, showTargeted, sites, allEvents, dateEnd, showSites, showNuclear, showNaval, showOil, showAirbase, showDesalination, showPort]);
+    // --- Entity arrays ---
+
+    // Unidentified flights
+    const unidentifiedFlightEntities = sortByProximity(
+      visibleFlights.filter((f: FlightEntity) => f.data.unidentified).map(toFlightEntity),
+      TEHRAN,
+      TEL_AVIV,
+    );
+
+    // Ships
+    const shipEntities = showShips
+      ? sortByProximity(filteredShips.map(toShipEntity), STRAIT_HORMUZ)
+      : [];
+
+    // Event entities
+    const airstrikeEventEntities = showEvents && showAirstrikes
+      ? sortByProximity(filterByGroup(filteredEvents, AIRSTRIKE_TYPES).map(toEventEntity), TEHRAN, TEL_AVIV)
+      : [];
+
+    const groundCombatEventEntities = showEvents && showGroundCombat
+      ? sortByProximity(filterByGroup(filteredEvents, GROUND_COMBAT_TYPES).map(toEventEntity), TEHRAN, TEL_AVIV)
+      : [];
+
+    const targetedEventEntities = showEvents && showTargeted
+      ? sortByProximity(filterByGroup(filteredEvents, TARGETED_TYPES).map(toEventEntity), TEHRAN, TEL_AVIV)
+      : [];
+
+    const entities: CounterEntities = {
+      unidentifiedFlights: unidentifiedFlightEntities,
+      ships: shipEntities,
+      airstrikeEvents: airstrikeEventEntities,
+      groundCombatEvents: groundCombatEventEntities,
+      targetedEvents: targetedEventEntities,
+      hitSites: hitSiteEntities,
+    };
+
+    return {
+      iranianFlights,
+      unidentifiedFlights: unidentifiedFlightsCount,
+      airstrikes,
+      groundCombat: groundCombatCount,
+      targeted,
+      hitSites,
+      entities,
+    };
+  }, [filteredFlights, filteredShips, filteredEvents, showFlights, showGroundTraffic, pulseEnabled, showEvents, showAirstrikes, showGroundCombat, showTargeted, showShips, sites, allEvents, dateEnd, showSites, showNuclear, showNaval, showOil, showAirbase, showDesalination, showPort]);
 }
