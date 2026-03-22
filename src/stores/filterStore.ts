@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useUIStore } from '@/stores/uiStore';
+import { useSearchStore } from '@/stores/searchStore';
 import { STEP_MS, snapToStep } from '@/lib/constants';
 
 export interface ProximityPin {
@@ -203,6 +204,7 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
       useUIStore.setState({ ...savedToggles });
     }
     set({ ...DEFAULTS });
+    useSearchStore.getState().clearSearch();
   },
 
   activeFilterCount: () => {
