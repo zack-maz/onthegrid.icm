@@ -106,11 +106,17 @@ export function Sidebar() {
     filters: filtersRef,
   };
 
-  // Scroll to the active section when it changes
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to the active section within the sidebar content panel
   useEffect(() => {
     if (activeSidebarSection && isSidebarOpen) {
       const ref = sectionRefs[activeSidebarSection];
-      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const container = contentRef.current;
+      if (ref.current && container) {
+        const top = ref.current.offsetTop;
+        container.scrollTo({ top, behavior: 'smooth' });
+      }
     }
   }, [activeSidebarSection, isSidebarOpen]);
 
@@ -146,6 +152,7 @@ export function Sidebar() {
 
       {/* Content panel - slides in/out */}
       <div
+        ref={contentRef}
         data-testid="sidebar-content"
         className={`w-[var(--width-sidebar)] border-r border-border bg-surface-overlay backdrop-blur-sm overflow-y-auto transition-all duration-300 ease-in-out ${
           isSidebarOpen
