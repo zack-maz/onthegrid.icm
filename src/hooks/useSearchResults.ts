@@ -4,10 +4,16 @@ import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useSiteStore } from '@/stores/siteStore';
-import { searchEntities, type SearchResult } from '@/lib/searchUtils';
+import { evaluateQuery, type EvaluationContext } from '@/lib/queryEvaluator';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
 
 const MAX_PER_TYPE = 10;
+
+export interface SearchResult<T> {
+  entity: T;
+  matchField: string;
+  matchValue: string;
+}
 
 export interface GroupedSearchResults {
   flights: SearchResult<FlightEntity>[];
@@ -19,12 +25,14 @@ export interface GroupedSearchResults {
 
 /**
  * Cross-store entity search hook.
- * Reads query from searchStore and entities from all 4 entity stores.
+ * Reads parsedQuery AST from searchStore and entities from all 4 entity stores.
+ * Uses evaluateQuery for tag-based and freetext matching.
  * Uses useRef to hold latest entity data so results only recompute when query changes
  * (not on every poll cycle -- per research Pitfall 2).
  */
 export function useSearchResults(): GroupedSearchResults {
   const query = useSearchStore((s) => s.query);
+  const parsedQuery = useSearchStore((s) => s.parsedQuery);
 
   // Read entity arrays from stores
   const flights = useFlightStore((s) => s.flights);
@@ -45,30 +53,86 @@ export function useSearchResults(): GroupedSearchResults {
   // When filter mode is active and entity data changes, re-compute matchedIds
   // so newly arrived/departed entities are correctly dimmed (Pitfall 4 fix)
   const isFilterMode = useSearchStore((s) => s.isFilterMode);
-  const lastRefreshRef = useRef(0);
 
   useEffect(() => {
-    if (!isFilterMode || !query.trim()) return;
+    if (!isFilterMode || !parsedQuery) return;
 
-    // Recompute matched IDs from current entity data
+    const ctx: EvaluationContext = {
+      sites,
+      events,
+      now: Date.now(),
+    };
+
     const ids = new Set<string>();
-    for (const r of searchEntities(query, flights)) ids.add(r.entity.id);
-    for (const r of searchEntities(query, ships)) ids.add(r.entity.id);
-    for (const r of searchEntities(query, events)) ids.add(r.entity.id);
-    for (const r of searchEntities(query, sites)) ids.add(r.entity.id);
+    for (const f of flights) {
+      if (evaluateQuery(parsedQuery, f, ctx)) ids.add(f.id);
+    }
+    for (const s of ships) {
+      if (evaluateQuery(parsedQuery, s, ctx)) ids.add(s.id);
+    }
+    for (const e of events) {
+      if (evaluateQuery(parsedQuery, e, ctx)) ids.add(e.id);
+    }
+    for (const si of sites) {
+      if (evaluateQuery(parsedQuery, si, ctx)) ids.add(si.id);
+    }
 
-    // Only update if size changed to avoid needless Set creation
+    // Only update if changed to avoid needless Set creation
     const current = useSearchStore.getState().matchedIds;
     if (ids.size !== current.size || [...ids].some((id) => !current.has(id))) {
       useSearchStore.getState().setMatchedIds(ids);
     }
-  }, [isFilterMode, query, flights, ships, events, sites]);
+  }, [isFilterMode, parsedQuery, flights, ships, events, sites]);
 
   return useMemo(() => {
-    const f = searchEntities(query, flightsRef.current).slice(0, MAX_PER_TYPE);
-    const sh = searchEntities(query, shipsRef.current).slice(0, MAX_PER_TYPE);
-    const ev = searchEntities(query, eventsRef.current).slice(0, MAX_PER_TYPE);
-    const si = searchEntities(query, sitesRef.current).slice(0, MAX_PER_TYPE);
+    if (!query.trim() || !parsedQuery) {
+      return { flights: [], ships: [], events: [], sites: [], totalCount: 0 };
+    }
+
+    const ctx: EvaluationContext = {
+      sites: sitesRef.current,
+      events: eventsRef.current,
+      now: Date.now(),
+    };
+
+    const matchEntity = <T extends { type: string; label: string }>(entity: T): SearchResult<T> | null => {
+      if (evaluateQuery(parsedQuery, entity as any, ctx)) {
+        return {
+          entity,
+          matchField: 'match',
+          matchValue: entity.label ?? entity.type,
+        };
+      }
+      return null;
+    };
+
+    const f: SearchResult<FlightEntity>[] = [];
+    for (const fl of flightsRef.current) {
+      if (f.length >= MAX_PER_TYPE) break;
+      const r = matchEntity(fl);
+      if (r) f.push(r);
+    }
+
+    const sh: SearchResult<ShipEntity>[] = [];
+    for (const s of shipsRef.current) {
+      if (sh.length >= MAX_PER_TYPE) break;
+      const r = matchEntity(s);
+      if (r) sh.push(r);
+    }
+
+    const ev: SearchResult<ConflictEventEntity>[] = [];
+    for (const e of eventsRef.current) {
+      if (ev.length >= MAX_PER_TYPE) break;
+      const r = matchEntity(e);
+      if (r) ev.push(r);
+    }
+
+    const si: SearchResult<SiteEntity>[] = [];
+    for (const s of sitesRef.current) {
+      if (si.length >= MAX_PER_TYPE) break;
+      const r = matchEntity(s);
+      if (r) si.push(r);
+    }
 
     return {
       flights: f,
@@ -77,5 +141,5 @@ export function useSearchResults(): GroupedSearchResults {
       sites: si,
       totalCount: f.length + sh.length + ev.length + si.length,
     };
-  }, [query]);
+  }, [query, parsedQuery]);
 }
