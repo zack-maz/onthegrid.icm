@@ -113,7 +113,7 @@ Plans:
   2. User can select a search result and the map flies to that entity with the detail panel opening
   3. User can reset all active filters (date range, proximity, nationality, speed, altitude) with a single "Reset All" button
   4. Filter panel displays grouped sections with scrollable layer toggles and clear visual hierarchy
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 Plans:
 - [x] 19-01-PLAN.md -- Layout shell: Topbar (title, status dropdown, search hint, notification bell) + Sidebar (icon strip, counters/layers/filters sections) + AppShell restructure
 - [ ] 19-02-PLAN.md -- Search: searchStore, searchUtils, useSearchResults hook, Cmd+K SearchModal with grouped results and fly-to-entity
@@ -156,5 +156,5 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20
 | 16. News Feed | 3/3 | Complete    | 2026-03-20 | - |
 | 17. Notification Center | 4/4 | Complete    | 2026-03-20 | - |
 | 18. Oil Markets Tracker | 2/2 | Complete    | 2026-03-21 | - |
-| 19. Search, Filter & UI Cleanup | 2/4 | In Progress|  | - |
+| 19. Search, Filter & UI Cleanup | 3/4 | In Progress|  | - |
 | 20. Production Review & Deploy Sync | v1.1 | 0/TBD | Not started | - |

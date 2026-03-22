@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
 status: in-progress
-stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-03-22T19:51:54Z"
-last_activity: 2026-03-22 -- Completed Phase 19 Plan 02 (global search modal)
+stopped_at: Completed 19-04-PLAN.md
+last_updated: "2026-03-22T19:57:11Z"
+last_activity: 2026-03-22 -- Completed Phase 19 Plan 04 (draggable markets, purple ships, visual polish)
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 15
-  completed_plans: 13
-  percent: 87
+  completed_plans: 14
+  percent: 93
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 19 of 20 (Search, Filter & UI Cleanup)
-Plan: 02 of 04 complete
-Status: Plan 02 complete (global search modal with Cmd+K)
-Last activity: 2026-03-22 -- Completed Phase 19 Plan 02 (global search modal)
+Plan: 03 of 04 complete
+Status: Plans 01, 02, 04 complete (plan 03 pending)
+Last activity: 2026-03-22 -- Completed Phase 19 Plan 04 (draggable markets, purple ships, visual polish)
 
-Progress: [████████▓░] 87%
+Progress: [█████████▓] 93%
 
 ## Performance Metrics
 
@@ -47,7 +47,7 @@ Progress: [████████▓░] 87%
 | 16 | 3/3 | 12min | 4min |
 | 17 | 4/4 | 13min | 3.25min |
 | 18 | 2/2 | 4min | 2min |
-| 19 | 2/4 | 11min | 5.5min |
+| 19 | 3/4 | 22min | 7.3min |
 
 *Updated after each plan completion*
 | Phase 17 P01 | 3min | 1 tasks | 8 files |
@@ -57,6 +57,7 @@ Progress: [████████▓░] 87%
 | Phase 18 P02 | 2min | 2 tasks | 7 files |
 | Phase 19 P01 | 6min | 2 tasks | 13 files |
 | Phase 19 P02 | 5min | 2 tasks | 10 files |
+| Phase 19 P04 | 11min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,9 @@ Progress: [████████▓░] 87%
 - **19-02:** useSearchResults uses useRef for entity arrays to avoid recomputing on every poll cycle
 - **19-02:** SearchModal rendered inside Topbar; closeSearchModal preserves query for re-open
 - **19-02:** filterStore.clearAll extended to also call searchStore.clearSearch (Reset All clears search)
+- **19-04:** useDraggable hook: pointer-events drag with setPointerCapture, viewport clamping, localStorage persistence
+- **19-04:** Tooltip #9ca3af color kept as-is (generic type label color, not ship-specific identity)
+- **19-04:** clampPosition exported as pure helper for independent unit testing without pointer event simulation
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Full v0.9 + v1.0 decision history archived in previous STATE.md.
@@ -129,6 +133,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T19:51:54Z
-Stopped at: Completed 19-02-PLAN.md
-Resume file: .planning/phases/19-search-filter-ui-cleanup/19-02-SUMMARY.md
+Last session: 2026-03-22T19:57:11Z
+Stopped at: Completed 19-04-PLAN.md
+Resume file: .planning/phases/19-search-filter-ui-cleanup/19-04-SUMMARY.md
