@@ -1,5 +1,6 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { useUIStore } from '@/stores/uiStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useSearchStore } from '@/stores/searchStore';
 import { SidebarSection } from '@/components/layout/SidebarSection';
@@ -8,6 +9,7 @@ import { CounterRow } from '@/components/counters/CounterRow';
 import { LayerTogglesContent } from '@/components/layout/LayerTogglesSlot';
 import { FilterPanelContent } from '@/components/layout/FilterPanelSlot';
 import { FilterChip } from '@/components/ui/FilterChip';
+import type { CounterEntity } from '@/components/counters/useCounterData';
 import type { SidebarSection as SidebarSectionType } from '@/types/ui';
 
 /* SVG icons for the icon strip */
@@ -47,6 +49,23 @@ const SECTIONS: { key: SidebarSectionType; label: string; icon: React.ReactNode 
 
 function CountersContent() {
   const counters = useCounterData();
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const selectedEntityId = useUIStore((s) => s.selectedEntityId);
+
+  const handleToggle = useCallback((key: string) => {
+    setExpandedKey((prev) => (prev === key ? null : key));
+  }, []);
+
+  const handleEntityClick = useCallback((entity: CounterEntity) => {
+    useNotificationStore.getState().setFlyToTarget({
+      lng: entity.lng,
+      lat: entity.lat,
+      zoom: 10,
+    });
+    useUIStore.getState().selectEntity(entity.id);
+    useUIStore.getState().openDetailPanel();
+    // Dropdown stays open for quick jumping between entities
+  }, []);
 
   return (
     <div>
@@ -54,7 +73,32 @@ function CountersContent() {
         Flights
       </div>
       <div className="mt-0.5 space-y-0.5">
-        <CounterRow label="Unidentified" value={counters.unidentifiedFlights} />
+        <CounterRow
+          label="Unidentified"
+          value={counters.unidentifiedFlights}
+          entities={counters.entities.unidentifiedFlights}
+          isExpanded={expandedKey === 'unidentified'}
+          onToggle={() => handleToggle('unidentified')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
+      </div>
+
+      <div className="border-t border-border my-1.5" />
+
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+        Ships
+      </div>
+      <div className="mt-0.5 space-y-0.5">
+        <CounterRow
+          label="Ships"
+          value={counters.entities.ships.length}
+          entities={counters.entities.ships}
+          isExpanded={expandedKey === 'ships'}
+          onToggle={() => handleToggle('ships')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
       </div>
 
       <div className="border-t border-border my-1.5" />
@@ -63,19 +107,95 @@ function CountersContent() {
         Events
       </div>
       <div className="mt-0.5 space-y-0.5">
-        <CounterRow label="Airstrikes" value={counters.airstrikes} />
-        <CounterRow label="Ground Combat" value={counters.groundCombat} />
-        <CounterRow label="Targeted" value={counters.targeted} />
-        <CounterRow label="Fatalities" value={counters.fatalities} />
+        <CounterRow
+          label="Airstrikes"
+          value={counters.airstrikes}
+          entities={counters.entities.airstrikeEvents}
+          isExpanded={expandedKey === 'airstrikes'}
+          onToggle={() => handleToggle('airstrikes')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
+        <CounterRow
+          label="Ground Combat"
+          value={counters.groundCombat}
+          entities={counters.entities.groundCombatEvents}
+          isExpanded={expandedKey === 'groundCombat'}
+          onToggle={() => handleToggle('groundCombat')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
+        <CounterRow
+          label="Targeted"
+          value={counters.targeted}
+          entities={counters.entities.targetedEvents}
+          isExpanded={expandedKey === 'targeted'}
+          onToggle={() => handleToggle('targeted')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
       </div>
 
       <div className="border-t border-border my-1.5" />
 
       <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-        Sites
+        Struck Sites
       </div>
       <div className="mt-0.5 space-y-0.5">
-        <CounterRow label="Hit Sites" value={counters.hitSites} />
+        <CounterRow
+          label="Nuclear"
+          value={counters.hitSites.nuclear}
+          entities={counters.entities.hitSites.nuclear}
+          isExpanded={expandedKey === 'site-nuclear'}
+          onToggle={() => handleToggle('site-nuclear')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
+        <CounterRow
+          label="Naval"
+          value={counters.hitSites.naval}
+          entities={counters.entities.hitSites.naval}
+          isExpanded={expandedKey === 'site-naval'}
+          onToggle={() => handleToggle('site-naval')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
+        <CounterRow
+          label="Oil"
+          value={counters.hitSites.oil}
+          entities={counters.entities.hitSites.oil}
+          isExpanded={expandedKey === 'site-oil'}
+          onToggle={() => handleToggle('site-oil')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
+        <CounterRow
+          label="Airbase"
+          value={counters.hitSites.airbase}
+          entities={counters.entities.hitSites.airbase}
+          isExpanded={expandedKey === 'site-airbase'}
+          onToggle={() => handleToggle('site-airbase')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
+        <CounterRow
+          label="Desalination"
+          value={counters.hitSites.desalination}
+          entities={counters.entities.hitSites.desalination}
+          isExpanded={expandedKey === 'site-desalination'}
+          onToggle={() => handleToggle('site-desalination')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
+        <CounterRow
+          label="Port"
+          value={counters.hitSites.port}
+          entities={counters.entities.hitSites.port}
+          isExpanded={expandedKey === 'site-port'}
+          onToggle={() => handleToggle('site-port')}
+          onEntityClick={handleEntityClick}
+          selectedEntityId={selectedEntityId}
+        />
       </div>
     </div>
   );
@@ -125,13 +245,13 @@ export function Sidebar() {
   return (
     <div
       data-testid="sidebar"
-      className="absolute left-0 z-[var(--z-controls)] flex"
+      className="absolute left-0 z-[var(--z-controls)] flex pointer-events-none"
       style={{ top: 'var(--height-topbar)', height: 'calc(100vh - var(--height-topbar))' }}
     >
       {/* Icon strip - always visible */}
       <div
         data-testid="sidebar-icon-strip"
-        className="flex w-[var(--width-icon-strip)] flex-col items-center gap-1 border-r border-border bg-surface-overlay pt-2 backdrop-blur-sm"
+        className="pointer-events-auto flex w-[var(--width-icon-strip)] flex-col items-center gap-1 border-r border-border bg-surface-overlay pt-2 backdrop-blur-sm"
       >
         {SECTIONS.map(({ key, label, icon }) => (
           <button
@@ -154,10 +274,10 @@ export function Sidebar() {
       <div
         ref={contentRef}
         data-testid="sidebar-content"
-        className={`w-[var(--width-sidebar)] border-r border-border bg-surface-overlay backdrop-blur-sm overflow-y-auto transition-all duration-300 ease-in-out ${
+        className={`pointer-events-auto w-[var(--width-sidebar)] border-r border-border bg-surface-overlay backdrop-blur-sm overflow-y-auto transition-all duration-300 ease-in-out ${
           isSidebarOpen
             ? 'translate-x-0 opacity-100'
-            : '-translate-x-full opacity-0 pointer-events-none'
+            : '-translate-x-full opacity-0 !pointer-events-none'
         }`}
       >
         <div className="px-3 py-2 flex flex-col gap-1">
