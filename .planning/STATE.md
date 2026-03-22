@@ -122,6 +122,10 @@ Progress: [██████████] 100%
 - **19-04:** Tooltip #9ca3af color kept as-is (generic type label color, not ship-specific identity)
 - **19-04:** clampPosition exported as pure helper for independent unit testing without pointer event simulation
 
+### Roadmap Evolution
+
+- Phase 19.1 inserted after Phase 19: Advanced search with tag and entity type filtering (URGENT)
+
 Decisions are logged in PROJECT.md Key Decisions table.
 Full v0.9 + v1.0 decision history archived in previous STATE.md.
 

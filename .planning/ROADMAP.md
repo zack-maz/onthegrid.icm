@@ -120,6 +120,16 @@ Plans:
 - [ ] 19-03-PLAN.md -- Search/filter unification: entity dimming in useEntityLayers, FilterChip, Escape key priority
 - [ ] 19-04-PLAN.md -- Polish: draggable markets panel, ship color change to purple, visual consistency pass
 
+### Phase 19.1: Advanced search with tag and entity type filtering (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 19
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 19.1 to break down)
+
 ### Phase 20: Production Review & Deploy Sync
 **Goal**: v1.1 is verified end-to-end and deployed to production
 **Depends on**: Phase 19
