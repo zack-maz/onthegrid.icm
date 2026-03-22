@@ -7,33 +7,56 @@ describe('AppShell', () => {
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
   });
 
-  it('renders title slot in top-left', () => {
+  it('renders Topbar', () => {
     render(<AppShell />);
-    expect(screen.getByTestId('title-slot')).toBeInTheDocument();
+    expect(screen.getByTestId('topbar')).toBeInTheDocument();
   });
 
-  it('renders counters slot', () => {
+  it('renders Topbar search hint', () => {
     render(<AppShell />);
-    expect(screen.getByTestId('counters-slot')).toBeInTheDocument();
+    expect(screen.getByTestId('topbar-search-hint')).toBeInTheDocument();
   });
 
-  it('renders layer toggles slot', () => {
+  it('renders Topbar status dropdown', () => {
     render(<AppShell />);
-    expect(screen.getByTestId('layer-toggles-slot')).toBeInTheDocument();
+    expect(screen.getByTestId('topbar-status')).toBeInTheDocument();
   });
 
-it('renders detail panel slot', () => {
+  it('renders Sidebar', () => {
+    render(<AppShell />);
+    expect(screen.getByTestId('sidebar')).toBeInTheDocument();
+  });
+
+  it('renders Sidebar icon strip with 3 icon buttons', () => {
+    render(<AppShell />);
+    const iconStrip = screen.getByTestId('sidebar-icon-strip');
+    expect(iconStrip).toBeInTheDocument();
+    const buttons = iconStrip.querySelectorAll('button');
+    expect(buttons.length).toBe(3);
+  });
+
+  it('renders Sidebar content panel', () => {
+    render(<AppShell />);
+    expect(screen.getByTestId('sidebar-content')).toBeInTheDocument();
+  });
+
+  it('renders detail panel slot', () => {
     render(<AppShell />);
     expect(screen.getByTestId('detail-panel-slot')).toBeInTheDocument();
   });
 
-  it('renders StatusPanel instead of SourceSelector', () => {
+  it('renders notification bell in topbar', () => {
     render(<AppShell />);
-    expect(screen.getByTestId('status-dot-flights')).toBeInTheDocument();
+    expect(screen.getByTestId('notification-bell')).toBeInTheDocument();
   });
 
-  it('does not render SourceSelector', () => {
+  it('renders UTC clock', () => {
     render(<AppShell />);
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByTestId('utc-clock')).toBeInTheDocument();
+  });
+
+  it('does not render old floating TitleSlot', () => {
+    render(<AppShell />);
+    expect(screen.queryByTestId('title-slot')).not.toBeInTheDocument();
   });
 });

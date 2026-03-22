@@ -1,9 +1,8 @@
-import { TitleSlot } from '@/components/layout/TitleSlot';
-import { CountersSlot } from '@/components/layout/CountersSlot';
-import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
-import { FilterPanelSlot } from '@/components/layout/FilterPanelSlot';
+import { Topbar } from '@/components/layout/Topbar';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { DetailPanelSlot } from '@/components/layout/DetailPanelSlot';
-import { StatusPanel } from '@/components/ui/StatusPanel';
+import { MarketsSlot } from '@/components/layout/MarketsSlot';
+import { UtcClock } from '@/components/layout/UtcClock';
 import { BaseMap } from '@/components/map/BaseMap';
 import { useFlightPolling } from '@/hooks/useFlightPolling';
 import { useShipPolling } from '@/hooks/useShipPolling';
@@ -12,8 +11,6 @@ import { useSiteFetch } from '@/hooks/useSiteFetch';
 import { useNewsPolling } from '@/hooks/useNewsPolling';
 import { useMarketPolling } from '@/hooks/useMarketPolling';
 import { useNotifications } from '@/hooks/useNotifications';
-import { NotificationBell } from '@/components/layout/NotificationBell';
-import { MarketsSlot } from '@/components/layout/MarketsSlot';
 
 export function AppShell() {
   useFlightPolling();
@@ -26,29 +23,29 @@ export function AppShell() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-surface">
-      {/* Map container - fills viewport */}
+      {/* Topbar - full width at top */}
+      <Topbar />
+
+      {/* Map container - fills viewport below topbar */}
       <div
         data-testid="map-container"
         className="absolute inset-0 z-[var(--z-map)]"
+        style={{ top: 'var(--height-topbar)' }}
       >
         <BaseMap />
       </div>
 
-      {/* Top-left: Title + Status + Counters + Layer toggles */}
-      <div className="absolute top-4 left-4 z-[var(--z-controls)] flex flex-col items-start gap-2">
-        <TitleSlot />
-        <StatusPanel />
-        <CountersSlot />
-        <LayerTogglesSlot />
-      </div>
+      {/* Left sidebar - overlays map */}
+      <Sidebar />
 
-      {/* Top-right: Notification bell + Markets panel */}
-      <NotificationBell />
+      {/* Right detail panel - unchanged */}
+      <DetailPanelSlot />
+
+      {/* Floating markets panel */}
       <MarketsSlot />
 
-      {/* Right side: Filter panel + Detail panel */}
-      <FilterPanelSlot />
-      <DetailPanelSlot />
+      {/* Bottom-left: UTC clock */}
+      <UtcClock />
     </div>
   );
 }
