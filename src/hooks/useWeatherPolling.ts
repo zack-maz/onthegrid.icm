@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { useWeatherStore } from '@/stores/weatherStore';
-import { useLayerStore } from '@/stores/layerStore';
 import type { WeatherGridPoint } from '@/stores/weatherStore';
 
 export const WEATHER_POLL_INTERVAL = 1_800_000; // 30 minutes
@@ -23,10 +22,6 @@ export function useWeatherPolling(): void {
 
     const fetchWeather = async (): Promise<void> => {
       if (cancelled) return;
-
-      // Skip fetch when weather layer is inactive (but keep polling loop alive)
-      const isActive = useLayerStore.getState().activeLayers.has('weather');
-      if (!isActive) return;
 
       try {
         setLoading();
