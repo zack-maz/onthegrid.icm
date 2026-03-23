@@ -1,31 +1,22 @@
 // Query parser: tokenizer + recursive descent AST builder
-// Grammar: expr = term (OR term)*, term = factor (AND|implicit factor)*, factor = '!' factor | '(' expr ')' | tag | text
+// Grammar: expr = factor (OR|implicit factor)* — all terms OR together
 
 // ─── AST Node Types ───────────────────────────────────────────
 
 export type QueryNode =
   | TagNode
   | TextNode
-  | AndNode
-  | OrNode
-  | NotNode;
+  | OrNode;
 
 export interface TagNode {
   type: 'tag';
   prefix: string;
   value: string;
-  negated: boolean;
 }
 
 export interface TextNode {
   type: 'text';
   value: string;
-}
-
-export interface AndNode {
-  type: 'and';
-  left: QueryNode;
-  right: QueryNode;
 }
 
 export interface OrNode {
@@ -34,21 +25,15 @@ export interface OrNode {
   right: QueryNode;
 }
 
-export interface NotNode {
-  type: 'not';
-  child: QueryNode;
-}
-
 // ─── Token Types ──────────────────────────────────────────────
 
-export type TokenType = 'TAG' | 'TEXT' | 'AND' | 'OR' | 'LPAREN' | 'RPAREN';
+export type TokenType = 'TAG' | 'TEXT' | 'OR' | 'LPAREN' | 'RPAREN';
 
 export interface Token {
   type: TokenType;
   value: string;
   prefix?: string;
   tagValue?: string;
-  negated?: boolean;
   start: number;
   end: number;
 }
@@ -78,15 +63,8 @@ export function tokenize(input: string): Token[] {
       continue;
     }
 
-    // Read a word (including ! prefix, : separator, and range operators)
+    // Read a word (including : separator and range operators)
     const start = i;
-    let negated = false;
-
-    // Check for ! prefix
-    if (input[i] === '!') {
-      negated = true;
-      i++;
-    }
 
     // Read word characters (anything except whitespace and parens)
     const wordStart = i;
@@ -95,22 +73,13 @@ export function tokenize(input: string): Token[] {
     }
 
     const word = input.slice(wordStart, i);
-    const fullValue = input.slice(start, i);
 
     if (!word) {
-      // Just a lone '!' - treat as text
-      if (negated) {
-        tokens.push({ type: 'TEXT', value: '!', start, end: i });
-      }
       continue;
     }
 
-    // Check for AND/OR keywords (uppercase only, no negation prefix)
-    if (!negated && word === 'AND') {
-      tokens.push({ type: 'AND', value: 'AND', start, end: i });
-      continue;
-    }
-    if (!negated && word === 'OR') {
+    // Check for OR keyword (uppercase only)
+    if (word === 'OR') {
       tokens.push({ type: 'OR', value: 'OR', start, end: i });
       continue;
     }
@@ -119,14 +88,13 @@ export function tokenize(input: string): Token[] {
     const colonIdx = word.indexOf(':');
     if (colonIdx > 0) {
       const prefix = word.slice(0, colonIdx);
-      // Trailing colon with no value (e.g., "!site:") -> wildcard TAG with value "*"
+      // Trailing colon with no value (e.g., "site:") -> wildcard TAG with value "*"
       const tagValue = colonIdx < word.length - 1 ? word.slice(colonIdx + 1) : '*';
       tokens.push({
         type: 'TAG',
-        value: fullValue,
+        value: word,
         prefix,
         tagValue,
-        negated,
         start,
         end: i,
       });
@@ -136,8 +104,7 @@ export function tokenize(input: string): Token[] {
     // No colon -> TEXT
     tokens.push({
       type: 'TEXT',
-      value: negated ? word : fullValue,
-      negated: negated || undefined,
+      value: word,
       start,
       end: i,
     });
@@ -154,35 +121,38 @@ export function parse(input: string): QueryNode | null {
 
   let pos = 0;
 
-  function peek(): Token | undefined {
-    return tokens[pos];
-  }
+  function peek(): Token | undefined { return tokens[pos]; }
+  function consume(): Token { return tokens[pos++]; }
+  function isAtEnd(): boolean { return pos >= tokens.length; }
 
-  function consume(): Token {
-    return tokens[pos++];
-  }
+  // factor = '(' expr ')' | tag | text
+  function parseFactor(): QueryNode | null {
+    const t = peek();
+    if (!t) return null;
 
-  function isAtEnd(): boolean {
-    return pos >= tokens.length;
-  }
-
-  // expr = term (OR term)*
-  function parseOr(): QueryNode | null {
-    let left = parseAnd();
-    if (!left) return null;
-
-    while (!isAtEnd() && peek()?.type === 'OR') {
-      consume(); // eat OR
-      const right = parseAnd();
-      if (!right) break; // trailing OR
-      left = { type: 'or', left, right };
+    if (t.type === 'LPAREN') {
+      consume();
+      const expr = parseExpr();
+      if (!isAtEnd() && peek()?.type === 'RPAREN') consume();
+      return expr;
     }
 
-    return left;
+    if (t.type === 'TAG') {
+      consume();
+      return { type: 'tag', prefix: t.prefix!, value: t.tagValue! };
+    }
+
+    if (t.type === 'TEXT') {
+      consume();
+      return { type: 'text', value: t.value };
+    }
+
+    consume(); // skip unexpected
+    return parseFactor();
   }
 
-  // term = factor (AND|implicit factor)*
-  function parseAnd(): QueryNode | null {
+  // expr = factor (OR|implicit factor)*
+  function parseExpr(): QueryNode | null {
     let left = parseFactor();
     if (!left) return null;
 
@@ -190,16 +160,15 @@ export function parse(input: string): QueryNode | null {
       const t = peek();
       if (!t) break;
 
-      if (t.type === 'AND') {
-        consume(); // eat AND
-        const right = parseFactor();
-        if (!right) break; // trailing AND
-        left = { type: 'and', left, right };
-      } else if (t.type === 'TAG' || t.type === 'TEXT' || t.type === 'LPAREN') {
-        // Implicit AND: next factor without operator
+      if (t.type === 'OR') {
+        consume();
         const right = parseFactor();
         if (!right) break;
-        left = { type: 'and', left, right };
+        left = { type: 'or', left, right };
+      } else if (t.type === 'TAG' || t.type === 'TEXT' || t.type === 'LPAREN') {
+        const right = parseFactor();
+        if (!right) break;
+        left = { type: 'or', left, right }; // implicit OR
       } else {
         break;
       }
@@ -208,47 +177,5 @@ export function parse(input: string): QueryNode | null {
     return left;
   }
 
-  // factor = '!' factor | '(' expr ')' | tag | text
-  function parseFactor(): QueryNode | null {
-    const t = peek();
-    if (!t) return null;
-
-    // Parenthesized expression
-    if (t.type === 'LPAREN') {
-      consume(); // eat (
-      const expr = parseOr();
-      // Consume matching RPAREN if present
-      if (!isAtEnd() && peek()?.type === 'RPAREN') {
-        consume(); // eat )
-      }
-      return expr;
-    }
-
-    // TAG token
-    if (t.type === 'TAG') {
-      consume();
-      return {
-        type: 'tag',
-        prefix: t.prefix!,
-        value: t.tagValue!,
-        negated: t.negated ?? false,
-      };
-    }
-
-    // TEXT token
-    if (t.type === 'TEXT') {
-      consume();
-      const textNode: TextNode = { type: 'text', value: t.value };
-      if (t.negated) {
-        return { type: 'not', child: textNode };
-      }
-      return textNode;
-    }
-
-    // Skip unexpected tokens (RPAREN, stray AND/OR)
-    consume();
-    return parseFactor();
-  }
-
-  return parseOr();
+  return parseExpr();
 }
