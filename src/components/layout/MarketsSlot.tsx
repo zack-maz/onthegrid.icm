@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useMarketStore } from '@/stores/marketStore';
+import { useUIStore } from '@/stores/uiStore';
 import type { ConnectionStatus, MarketRange } from '@/stores/marketStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
 import { MarketRow } from '@/components/markets/MarketRow';
@@ -19,7 +20,7 @@ const RANGES: { value: MarketRange; label: string }[] = [
   { value: 'ytd', label: 'YTD' },
 ];
 
-const DEFAULT_POSITION = { x: typeof window !== 'undefined' ? window.innerWidth - 276 : 1200, y: 56 };
+const DEFAULT_POSITION = { x: typeof window !== 'undefined' ? window.innerWidth - 604 : 900, y: 56 };
 
 function readBool(key: string, fallback: boolean): boolean {
   try {
@@ -52,17 +53,10 @@ export function MarketsSlot() {
     return Math.abs(position.x - DEFAULT_POSITION.x) > 2 || Math.abs(position.y - DEFAULT_POSITION.y) > 2;
   }, [position]);
 
-  const [isCollapsed, setIsCollapsed] = useState(() => readBool('markets-collapsed', false));
+  const isCollapsed = useUIStore((s) => s.isMarketsCollapsed);
+  const toggleCollapse = useUIStore((s) => s.toggleMarkets);
   const [showPercent, setShowPercent] = useState(() => readBool('markets-show-percent', false));
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
-
-  const toggleCollapse = useCallback(() => {
-    setIsCollapsed((prev) => {
-      const next = !prev;
-      persistBool('markets-collapsed', next);
-      return next;
-    });
-  }, []);
 
   const toggleMode = useCallback(() => {
     setShowPercent((prev) => {

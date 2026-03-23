@@ -15,10 +15,11 @@ const REDIS_TTL_SEC = 259_200;
 
 export const sitesRouter = Router();
 
-sitesRouter.get('/', async (_req, res) => {
+sitesRouter.get('/', async (req, res) => {
+  const forceRefresh = req.query.refresh === 'true';
   const cached = await cacheGet<SiteEntity[]>(SITES_KEY, LOGICAL_TTL_MS);
 
-  if (cached && !cached.stale) {
+  if (cached && !cached.stale && !forceRefresh) {
     return res.json(cached);
   }
 

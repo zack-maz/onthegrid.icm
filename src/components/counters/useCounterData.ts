@@ -10,7 +10,7 @@ import { classifySeverity } from '@/lib/severity';
 import { CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS } from '@/types/ui';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity, SiteType } from '@/types/entities';
 
-export interface SiteHitCounts {
+export interface SiteCounts {
   nuclear: number;
   naval: number;
   oil: number;
@@ -23,11 +23,10 @@ export interface SiteHitCounts {
 export interface CounterValues {
   totalFlights: number;
   iranianFlights: number;
-  unidentifiedFlights: number;
   airstrikes: number;
   groundCombat: number;
   targeted: number;
-  hitSites: SiteHitCounts;
+  sites: SiteCounts;
 }
 
 export interface CounterEntity {
@@ -41,12 +40,11 @@ export interface CounterEntity {
 
 export interface CounterEntities {
   flights: CounterEntity[];
-  unidentifiedFlights: CounterEntity[];
   ships: CounterEntity[];
   airstrikeEvents: CounterEntity[];
   groundCombatEvents: CounterEntity[];
   targetedEvents: CounterEntity[];
-  hitSites: Record<SiteType, CounterEntity[]>;
+  sites: Record<SiteType, CounterEntity[]>;
 }
 
 const AIRSTRIKE_TYPES: readonly string[] = CONFLICT_TOGGLE_GROUPS.showAirstrikes;
@@ -109,7 +107,9 @@ function toEventEntity(e: ConflictEventEntity): CounterEntity {
 }
 
 function toSiteEntity(s: SiteEntity, attackCount: number): CounterEntity {
-  const metric = `${attackCount} attack${attackCount !== 1 ? 's' : ''}`;
+  const metric = attackCount > 0
+    ? `${attackCount} attack${attackCount !== 1 ? 's' : ''}`
+    : 'No attacks';
   return { id: s.id, label: s.label, metric, lat: s.lat, lng: s.lng, type: s.siteType };
 }
 
@@ -129,6 +129,9 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
   const showDesalination = useUIStore((s) => s.showDesalination);
   const showPort = useUIStore((s) => s.showPort);
   const showShips = useUIStore((s) => s.showShips);
+  const showHealthySites = useUIStore((s) => s.showHealthySites);
+  const showAttackedSites = useUIStore((s) => s.showAttackedSites);
+  const showHitOnly = useUIStore((s) => s.showHitOnly);
 
   const showHighSeverity = useFilterStore((s) => s.showHighSeverity);
   const showMediumSeverity = useFilterStore((s) => s.showMediumSeverity);
@@ -140,6 +143,9 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
   const allEvents = useEventStore((s) => s.events);
   const dateEnd = useFilterStore((s) => s.dateEnd);
 
+  const proximityPin = useFilterStore((s) => s.proximityPin);
+  const proximityRadiusKm = useFilterStore((s) => s.proximityRadiusKm);
+
   return useMemo(() => {
     // Visible flights: smart filters + toggle gating (matches useEntityLayers logic)
     const visibleFlights = filteredFlights.filter((f: FlightEntity) => {
@@ -149,7 +155,6 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
     });
 
     const iranianFlights = visibleFlights.filter((f: FlightEntity) => f.data.originCountry === 'Iran').length;
-    const unidentifiedFlightsCount = visibleFlights.filter((f: FlightEntity) => f.data.unidentified).length;
 
     // Apply severity filter to events
     const severityFilteredEvents = filteredEvents.filter((e: ConflictEventEntity) => {
@@ -170,14 +175,16 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
       ? countByGroup(severityFilteredEvents, TARGETED_TYPES)
       : 0;
 
-    // Hit sites: per-type counts + entity collection
-    const hitSites: SiteHitCounts = { nuclear: 0, naval: 0, oil: 0, airbase: 0, desalination: 0, port: 0, total: 0 };
-    const hitSiteEntities: Record<SiteType, CounterEntity[]> = {
+    // Sites: per-type counts + entity collection with proximity + attacked/healthy filtering
+    const siteCounts: SiteCounts = { nuclear: 0, naval: 0, oil: 0, airbase: 0, desalination: 0, port: 0, total: 0 };
+    const siteEntities: Record<SiteType, CounterEntity[]> = {
       nuclear: [], naval: [], oil: [], airbase: [], desalination: [], port: [],
     };
 
     if (showSites) {
       const visibleSites = sites.filter((s: SiteEntity) => {
+        // Proximity filter
+        if (proximityPin && haversineKm(proximityPin.lat, proximityPin.lng, s.lat, s.lng) > proximityRadiusKm) return false;
         switch (s.siteType) {
           case 'nuclear': return showNuclear;
           case 'naval': return showNaval;
@@ -189,17 +196,21 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
       });
       for (const site of visibleSites) {
         const status = computeAttackStatus(site, allEvents, dateEnd);
-        if (status.isAttacked) {
-          hitSites[site.siteType]++;
-          hitSites.total++;
-          hitSiteEntities[site.siteType].push(toSiteEntity(site, status.attackCount));
-        }
+        const isAttacked = status.attackCount > 0;
+        // Hit-only filter
+        if (showHitOnly && !isAttacked) continue;
+        // Attacked/healthy status filter
+        if (isAttacked && !showAttackedSites) continue;
+        if (!isAttacked && !showHealthySites) continue;
+        siteCounts[site.siteType]++;
+        siteCounts.total++;
+        siteEntities[site.siteType].push(toSiteEntity(site, status.attackCount));
       }
-      // Sort each site type by attackCount descending
-      for (const key of Object.keys(hitSiteEntities) as SiteType[]) {
-        hitSiteEntities[key].sort((a, b) => {
-          const aCount = parseInt(a.metric);
-          const bCount = parseInt(b.metric);
+      // Sort each site type: attacked first (by attack count desc), then non-attacked
+      for (const key of Object.keys(siteEntities) as SiteType[]) {
+        siteEntities[key].sort((a, b) => {
+          const aCount = parseInt(a.metric) || 0;
+          const bCount = parseInt(b.metric) || 0;
           return bCount - aCount;
         });
       }
@@ -207,16 +218,9 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
 
     // --- Entity arrays ---
 
-    // All visible flights (non-unidentified)
+    // All visible flights (including unidentified when toggle is on)
     const flightEntities = sortByProximity(
-      visibleFlights.filter((f: FlightEntity) => !f.data.unidentified).map(toFlightEntity),
-      TEHRAN,
-      TEL_AVIV,
-    );
-
-    // Unidentified flights
-    const unidentifiedFlightEntities = sortByProximity(
-      visibleFlights.filter((f: FlightEntity) => f.data.unidentified).map(toFlightEntity),
+      visibleFlights.map(toFlightEntity),
       TEHRAN,
       TEL_AVIV,
     );
@@ -241,23 +245,21 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
 
     const entities: CounterEntities = {
       flights: flightEntities,
-      unidentifiedFlights: unidentifiedFlightEntities,
       ships: shipEntities,
       airstrikeEvents: airstrikeEventEntities,
       groundCombatEvents: groundCombatEventEntities,
       targetedEvents: targetedEventEntities,
-      hitSites: hitSiteEntities,
+      sites: siteEntities,
     };
 
     return {
-      totalFlights: visibleFlights.filter((f: FlightEntity) => !f.data.unidentified).length,
+      totalFlights: visibleFlights.length,
       iranianFlights,
-      unidentifiedFlights: unidentifiedFlightsCount,
       airstrikes,
       groundCombat: groundCombatCount,
       targeted,
-      hitSites,
+      sites: siteCounts,
       entities,
     };
-  }, [filteredFlights, filteredShips, filteredEvents, showFlights, showGroundTraffic, pulseEnabled, showEvents, showAirstrikes, showGroundCombat, showTargeted, showShips, sites, allEvents, dateEnd, showSites, showNuclear, showNaval, showOil, showAirbase, showDesalination, showPort, showHighSeverity, showMediumSeverity, showLowSeverity]);
+  }, [filteredFlights, filteredShips, filteredEvents, showFlights, showGroundTraffic, pulseEnabled, showEvents, showAirstrikes, showGroundCombat, showTargeted, showShips, sites, allEvents, dateEnd, showSites, showNuclear, showNaval, showOil, showAirbase, showDesalination, showPort, showHighSeverity, showMediumSeverity, showLowSeverity, showHealthySites, showAttackedSites, showHitOnly, proximityPin, proximityRadiusKm]);
 }

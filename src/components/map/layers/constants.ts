@@ -3,7 +3,7 @@
 /** RGB color tuples for entity types */
 export const ENTITY_COLORS = {
   flight: [234, 179, 8] as const,            // #eab308 yellow
-  flightUnidentified: [185, 28, 28] as const,  // #b91c1c darker red
+  flightUnidentified: [255, 255, 100] as const,   // #ffff64 shiny bright yellow
   ship: [167, 139, 250] as const,            // #a78bfa violet-400
   airstrike: [255, 59, 48] as const,         // #ff3b30 red
   groundCombat: [239, 68, 68] as const,      // #ef4444 red
@@ -20,25 +20,25 @@ export const ENTITY_DOT_COLORS = {
   groundCombat: '#ef4444',
   targeted: '#8b1e1e',
   ground: '#eab308',
-  unidentified: '#b91c1c',
+  unidentified: '#ffff64',
   sites: '#22c55e',
 } as const;
 
 /** Zoom-responsive sizes for entity icons (meter-based with pixel bounds) */
 export const ICON_SIZE = {
-  flight: { meters: 1000, minPixels: 16, maxPixels: 120 },
-  ship: { meters: 1000, minPixels: 16, maxPixels: 120 },
+  flight: { meters: 1000, minPixels: 16, maxPixels: 100 },
+  ship: { meters: 1000, minPixels: 16, maxPixels: 100 },
   airstrike: { meters: 1500, minPixels: 16, maxPixels: 120 },
   groundCombat: { meters: 1500, minPixels: 16, maxPixels: 120 },
   targeted: { meters: 1500, minPixels: 16, maxPixels: 120 },
-  site: { meters: 1000, minPixels: 12, maxPixels: 80 },
+  site: { meters: 1500, minPixels: 16, maxPixels: 50 },
 } as const;
 
 /** Pulse animation config for unidentified flights */
 export const PULSE_CONFIG = {
-  minOpacity: 0.7,
+  minOpacity: 0.3,
   maxOpacity: 1.0,
-  periodMs: 2000,
+  periodMs: 800,
 } as const;
 
 /** Altitude ceiling for opacity mapping (meters) */

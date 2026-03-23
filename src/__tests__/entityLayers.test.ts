@@ -81,7 +81,7 @@ function resetStores() {
   useShipStore.setState({ ships: [mockShip], shipCount: 1 });
   useEventStore.setState({ events: [mockAirstrikeEvent, mockGroundCombatEvent, mockTargetedEvent, mockOtherEvent], eventCount: 4 });
   useUIStore.setState({ pulseEnabled: true, showFlights: true, showShips: true, showEvents: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true, showGroundTraffic: false });
-  useFilterStore.setState({ flightCountries: [], eventCountries: [], flightSpeedMin: null, flightSpeedMax: null, altitudeMin: null, altitudeMax: null, proximityPin: null, proximityRadiusKm: 100, dateStart: null, dateEnd: null, isSettingPin: false });
+  useFilterStore.setState({ flightCountries: [], eventCountries: [], flightSpeedMin: null, flightSpeedMax: null, altitudeMin: null, altitudeMax: null, proximityPin: null, proximityRadiusKm: 100, dateStart: 0, dateEnd: Date.now() + 86400000, isSettingPin: false });
 }
 
 describe('useEntityLayers', () => {

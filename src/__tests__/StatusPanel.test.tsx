@@ -46,7 +46,7 @@ describe('StatusPanel', () => {
     useEventStore.setState({ connectionStatus: 'connected', events: [], eventCount: 0 });
     useSiteStore.setState({ connectionStatus: 'idle', sites: [], siteCount: 0 });
     useUIStore.setState({ showFlights: true, showGroundTraffic: false, showShips: true, showEvents: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true, showSites: true });
-    useFilterStore.setState({ flightCountries: [], eventCountries: [], flightSpeedMin: null, flightSpeedMax: null, shipSpeedMin: null, shipSpeedMax: null, altitudeMin: null, altitudeMax: null, proximityPin: null, proximityRadiusKm: 100, dateStart: null, dateEnd: null, isSettingPin: false });
+    useFilterStore.setState({ flightCountries: [], eventCountries: [], flightSpeedMin: null, flightSpeedMax: null, shipSpeedMin: null, shipSpeedMax: null, altitudeMin: null, altitudeMax: null, proximityPin: null, proximityRadiusKm: 100, dateStart: 0, dateEnd: Date.now() + 86400000, isSettingPin: false });
   });
 
   it('renders four feed lines (flights, ships, events, sites)', () => {

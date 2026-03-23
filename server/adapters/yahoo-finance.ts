@@ -15,11 +15,14 @@ export const DISPLAY_NAMES: Record<string, string> = {
 /** Valid market timeframe ranges */
 export type MarketRange = '1d' | '5d' | '1mo' | 'ytd';
 
-/** Yahoo Finance range/interval mapping */
+/** Yahoo Finance range/interval mapping
+ * 1d uses 5d range to ensure commodity futures (BZ=F, CL=F) have
+ * enough data points on weekends/holidays when the 1d window is sparse.
+ */
 const RANGE_CONFIG: Record<MarketRange, { range: string; interval: string }> = {
-  '1d': { range: '1d', interval: '5m' },
-  '5d': { range: '5d', interval: '1d' },
-  '1mo': { range: '1mo', interval: '1d' },
+  '1d': { range: '5d', interval: '2m' },
+  '5d': { range: '5d', interval: '15m' },
+  '1mo': { range: '1mo', interval: '30m' },
   ytd: { range: 'ytd', interval: '1d' },
 };
 

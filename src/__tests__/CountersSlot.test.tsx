@@ -46,14 +46,12 @@ describe('CountersSlot', () => {
       eventCountries: [],
       flightSpeedMin: null,
       flightSpeedMax: null,
-      shipSpeedMin: null,
-      shipSpeedMax: null,
       altitudeMin: null,
       altitudeMax: null,
       proximityPin: null,
       proximityRadiusKm: 100,
-      dateStart: null,
-      dateEnd: null,
+      dateStart: 0,
+      dateEnd: Date.now() + 86400000,
       isSettingPin: false,
     });
   });
@@ -71,7 +69,6 @@ describe('CountersSlot', () => {
   it('renders all counter row labels', () => {
     render(<CountersSlot />);
     expect(screen.getAllByText('Flights').length).toBeGreaterThan(0);
-    expect(screen.getByText('Unidentified')).toBeInTheDocument();
     expect(screen.getByText('Airstrikes')).toBeInTheDocument();
     expect(screen.getByText('Ground Combat')).toBeInTheDocument();
     expect(screen.getByText('Targeted')).toBeInTheDocument();
@@ -98,15 +95,14 @@ describe('CountersSlot', () => {
       flights: [
         makeFlight('f1', 'Iran'),
         makeFlight('f2', 'Iran'),
-        makeFlight('f3', 'Qatar', true),
+        makeFlight('f3', 'Qatar'),
       ],
       flightCount: 3,
     });
     render(<CountersSlot />);
 
-    // Iranian = 2, Unidentified = 1
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    // Flights = 3
+    expect(screen.getByText('3')).toBeInTheDocument();
   });
 
   it('hides content when collapsed', () => {
@@ -117,32 +113,29 @@ describe('CountersSlot', () => {
     expect(screen.queryByText('Events')).not.toBeInTheDocument();
   });
 
-  // --- New tests for expandable dropdown behavior ---
+  // --- Expandable dropdown behavior ---
 
   it('clicking a counter row with entities > 0 expands it', () => {
-    useFlightStore.setState({
-      flights: [makeFlight('f1', 'Unknown', true)],
-      flightCount: 1,
+    useEventStore.setState({
+      events: [makeEvent('e1', 'airstrike')],
+      eventCount: 1,
     });
     render(<CountersSlot />);
 
-    // Unidentified row has entities, click to expand
     const buttons = screen.getAllByTestId('counter-row-button');
-    // Find the Unidentified button
-    const unidentifiedBtn = buttons.find(
-      (btn) => btn.textContent?.includes('Unidentified'),
+    const airstrikesBtn = buttons.find(
+      (btn) => btn.textContent?.includes('Airstrikes'),
     );
-    expect(unidentifiedBtn).toBeDefined();
-    fireEvent.click(unidentifiedBtn!);
+    expect(airstrikesBtn).toBeDefined();
+    fireEvent.click(airstrikesBtn!);
 
-    // Should show entity list items
     const items = screen.getAllByTestId('entity-list-item');
     expect(items.length).toBe(1);
   });
 
   it('accordion: expanding a second row collapses the first', () => {
     useFlightStore.setState({
-      flights: [makeFlight('f1', 'Unknown', true)],
+      flights: [makeFlight('f1', 'Iran')],
       flightCount: 1,
     });
     useEventStore.setState({
@@ -152,73 +145,69 @@ describe('CountersSlot', () => {
     render(<CountersSlot />);
 
     const buttons = screen.getAllByTestId('counter-row-button');
-    const unidentifiedBtn = buttons.find(
-      (btn) => btn.textContent?.includes('Unidentified'),
+    const flightsBtn = buttons.find(
+      (btn) => btn.textContent?.includes('Flights'),
     );
     const airstrikesBtn = buttons.find(
       (btn) => btn.textContent?.includes('Airstrikes'),
     );
 
-    // Expand unidentified
-    fireEvent.click(unidentifiedBtn!);
+    // Expand flights
+    fireEvent.click(flightsBtn!);
     let items = screen.getAllByTestId('entity-list-item');
     expect(items.length).toBe(1);
 
-    // Expand airstrikes -- unidentified should collapse
+    // Expand airstrikes -- flights should collapse
     fireEvent.click(airstrikesBtn!);
     items = screen.getAllByTestId('entity-list-item');
-    // Should still be exactly 1 item (just the airstrike now)
     expect(items.length).toBe(1);
   });
 
   it('counter row with value 0 has disabled styling and no chevron', () => {
-    // No flights, no events -- all zero
     render(<CountersSlot />);
 
     const buttons = screen.getAllByTestId('counter-row-button');
-    const unidentifiedBtn = buttons.find(
-      (btn) => btn.textContent?.includes('Unidentified'),
+    const airstrikesBtn = buttons.find(
+      (btn) => btn.textContent?.includes('Airstrikes'),
     );
-    expect(unidentifiedBtn).toBeDefined();
-    expect(unidentifiedBtn!.className).toContain('opacity-40');
-    expect(unidentifiedBtn!.className).toContain('pointer-events-none');
+    expect(airstrikesBtn).toBeDefined();
+    expect(airstrikesBtn!.className).toContain('opacity-40');
+    expect(airstrikesBtn!.className).toContain('pointer-events-none');
 
-    // No chevron SVG in the disabled button
-    const svg = unidentifiedBtn!.querySelector('svg');
+    const svg = airstrikesBtn!.querySelector('svg');
     expect(svg).toBeNull();
   });
 
   it('expanded dropdown with entities shows entity labels', () => {
-    useFlightStore.setState({
-      flights: [
-        makeFlight('abc123', 'Unknown', true),
-        makeFlight('def456', 'Unknown', true),
+    useEventStore.setState({
+      events: [
+        makeEvent('e1', 'airstrike'),
+        makeEvent('e2', 'airstrike'),
       ],
-      flightCount: 2,
+      eventCount: 2,
     });
     render(<CountersSlot />);
 
     const buttons = screen.getAllByTestId('counter-row-button');
-    const unidentifiedBtn = buttons.find(
-      (btn) => btn.textContent?.includes('Unidentified'),
+    const airstrikesBtn = buttons.find(
+      (btn) => btn.textContent?.includes('Airstrikes'),
     );
-    fireEvent.click(unidentifiedBtn!);
+    fireEvent.click(airstrikesBtn!);
 
-    // Entity labels should be visible (icao24 used as label for unidentified)
-    expect(screen.getByText('abc123')).toBeInTheDocument();
-    expect(screen.getByText('def456')).toBeInTheDocument();
+    // Entity labels use EVENT_TYPE_LABELS, so both show "Airstrike"
+    const items = screen.getAllByTestId('entity-list-item');
+    expect(items.length).toBe(2);
   });
 
   it('clicking an entity calls selectEntity and openDetailPanel', () => {
-    useFlightStore.setState({
-      flights: [makeFlight('f1', 'Unknown', true)],
-      flightCount: 1,
+    useEventStore.setState({
+      events: [makeEvent('e1', 'airstrike')],
+      eventCount: 1,
     });
     const selectEntitySpy = vi.fn();
     const openDetailPanelSpy = vi.fn();
     const setFlyToTargetSpy = vi.fn();
 
-    // Spy on store methods
     useUIStore.setState({
       selectEntity: selectEntitySpy,
       openDetailPanel: openDetailPanelSpy,
@@ -229,18 +218,16 @@ describe('CountersSlot', () => {
 
     render(<CountersSlot />);
 
-    // Expand unidentified row
     const buttons = screen.getAllByTestId('counter-row-button');
-    const unidentifiedBtn = buttons.find(
-      (btn) => btn.textContent?.includes('Unidentified'),
+    const airstrikesBtn = buttons.find(
+      (btn) => btn.textContent?.includes('Airstrikes'),
     );
-    fireEvent.click(unidentifiedBtn!);
+    fireEvent.click(airstrikesBtn!);
 
-    // Click the entity
     const entityItem = screen.getByTestId('entity-list-item');
     fireEvent.click(entityItem);
 
-    expect(selectEntitySpy).toHaveBeenCalledWith('f1');
+    expect(selectEntitySpy).toHaveBeenCalledWith('e1');
     expect(openDetailPanelSpy).toHaveBeenCalled();
     expect(setFlyToTargetSpy).toHaveBeenCalledWith(
       expect.objectContaining({ lat: 32, lng: 51, zoom: 10 }),

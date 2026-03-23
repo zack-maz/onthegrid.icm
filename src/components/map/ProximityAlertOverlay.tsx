@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMap } from '@vis.gl/react-maplibre';
 import { useProximityAlerts } from '@/hooks/useProximityAlerts';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useUIStore } from '@/stores/uiStore';
 import type { ProximityAlert } from '@/hooks/useProximityAlerts';
 
 function AlertIcon({
   alert,
   isExpanded,
-  onToggle,
+  onExpand,
+  onCollapse,
+  onFlyTo,
   screenX,
   screenY,
 }: {
   alert: ProximityAlert;
   isExpanded: boolean;
-  onToggle: () => void;
+  onExpand: () => void;
+  onCollapse: () => void;
+  onFlyTo: () => void;
   screenX: number;
   screenY: number;
 }) {
@@ -25,12 +31,14 @@ function AlertIcon({
         zIndex: 'var(--z-controls)',
         pointerEvents: 'auto',
       }}
+      onMouseEnter={onExpand}
+      onMouseLeave={onCollapse}
     >
-      {/* Collapsed: pulsing warning icon */}
+      {/* Pulsing warning icon — click to fly to */}
       <button
         onClick={(e) => {
           e.stopPropagation();
-          onToggle();
+          onFlyTo();
         }}
         className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black shadow-md animate-pulse hover:animate-none hover:bg-amber-400 transition-colors"
         title={`Proximity alert: ${alert.siteLabel}`}
@@ -39,21 +47,11 @@ function AlertIcon({
         {'\u26A0'}
       </button>
 
-      {/* Expanded: detail card */}
+      {/* Detail card on hover */}
       {isExpanded && (
         <div className="absolute left-5 top-0 w-36 rounded-md border border-amber-500/50 bg-[var(--color-surface-overlay)]/95 px-1.5 py-1 text-[9px] shadow-lg backdrop-blur-sm">
-          <div className="mb-0.5 flex items-center justify-between">
+          <div className="mb-0.5">
             <span className="font-semibold text-amber-400 text-[9px]">PROXIMITY ALERT</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggle();
-              }}
-              className="ml-1 text-[8px] text-text-secondary hover:text-text-primary"
-              aria-label="Close alert details"
-            >
-              {'\u2715'}
-            </button>
           </div>
           <div className="mb-0.5 truncate font-medium text-text-primary">
             {alert.siteLabel}
@@ -84,7 +82,8 @@ export function ProximityAlertOverlay() {
   const alerts = useProximityAlerts();
   const { current: mapRef } = useMap();
   const [, setRenderTick] = useState(0);
-  const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null);
+  const expandedSiteId = useUIStore((s) => s.expandedAlertSiteId);
+  const setExpandedSiteId = useUIStore((s) => s.setExpandedAlertSiteId);
   const rafRef = useRef<number>(0);
 
   // Force re-render on map move to update projected positions
@@ -132,11 +131,17 @@ export function ProximityAlertOverlay() {
             key={alert.siteId}
             alert={alert}
             isExpanded={expandedSiteId === alert.siteId}
-            onToggle={() =>
-              setExpandedSiteId((prev) =>
-                prev === alert.siteId ? null : alert.siteId,
-              )
-            }
+            onExpand={() => setExpandedSiteId(alert.siteId)}
+            onCollapse={() => setExpandedSiteId(null)}
+            onFlyTo={() => {
+              useNotificationStore.getState().setFlyToTarget({
+                lng: alert.siteLng,
+                lat: alert.siteLat,
+                zoom: 10,
+              });
+              useUIStore.getState().selectEntity(alert.flightId);
+              useUIStore.getState().openDetailPanel();
+            }}
             screenX={projected.x}
             screenY={projected.y}
           />

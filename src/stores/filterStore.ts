@@ -1,6 +1,17 @@
 import { create } from 'zustand';
 import { useSearchStore } from '@/stores/searchStore';
-import { STEP_MS, snapToStep } from '@/lib/constants';
+import { WAR_START, STEP_MS, LOOKBACK_MS, snapToStep } from '@/lib/constants';
+
+/** Full default range for a given granularity (thumbs at both ends) */
+function defaultRange(g: Granularity): { dateStart: number; dateEnd: number } {
+  const now = Date.now();
+  const step = STEP_MS[g];
+  const lookback = LOOKBACK_MS[g];
+  return {
+    dateStart: lookback !== null ? snapToStep(now - lookback, step) : WAR_START,
+    dateEnd: snapToStep(now, step),
+  };
+}
 
 export interface ProximityPin {
   lat: number;
@@ -34,8 +45,8 @@ export interface FilterState {
   altitudeMax: number | null;
   proximityPin: ProximityPin | null;
   proximityRadiusKm: number;
-  dateStart: number | null;
-  dateEnd: number | null;
+  dateStart: number;
+  dateEnd: number;
   isSettingPin: boolean;
   granularity: Granularity;
 
@@ -67,10 +78,9 @@ export interface FilterState {
   setAltitudeRange: (min: number | null, max: number | null) => void;
   setProximityPin: (pin: ProximityPin | null) => void;
   setProximityRadius: (km: number) => void;
-  setDateRange: (start: number | null, end: number | null) => void;
+  setDateRange: (start: number, end: number) => void;
   setSettingPin: (v: boolean) => void;
   setGranularity: (g: Granularity) => void;
-  isDefaultWindowActive: () => boolean;
   clearFilter: (filter: FilterKey) => void;
   clearAll: () => void;
   activeFilterCount: () => number;
@@ -97,8 +107,7 @@ const DEFAULTS = {
   altitudeMax: null as number | null,
   proximityPin: null as ProximityPin | null,
   proximityRadiusKm: 100,
-  dateStart: null as number | null,
-  dateEnd: null as number | null,
+  ...defaultRange('hour'),
   isSettingPin: false,
   granularity: 'hour' as Granularity,
 
@@ -161,19 +170,7 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
 
   setSettingPin: (v) => set({ isSettingPin: v }),
 
-  setGranularity: (g) => {
-    const { dateStart, dateEnd } = get();
-    const step = STEP_MS[g];
-    let newStart = dateStart !== null ? snapToStep(dateStart, step) : null;
-    let newEnd = dateEnd !== null ? snapToStep(dateEnd, step) : null;
-    // Clamp start to end if snapping reversed them
-    if (newStart !== null && newEnd !== null && newStart > newEnd) {
-      newStart = newEnd;
-    }
-    set({ granularity: g, dateStart: newStart, dateEnd: newEnd });
-  },
-
-  isDefaultWindowActive: () => get().dateStart === null && get().dateEnd === null,
+  setGranularity: (g) => set({ granularity: g, ...defaultRange(g) }),
 
   clearFilter: (filter) => {
     switch (filter) {
@@ -193,7 +190,7 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
         set({ proximityPin: null, proximityRadiusKm: 100 });
         break;
       case 'date':
-        set({ dateStart: null, dateEnd: null });
+        set({ granularity: 'hour' as Granularity, ...defaultRange('hour') });
         break;
       case 'mentions':
         set({ mentionsMin: null, mentionsMax: null });
@@ -220,7 +217,7 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
   },
 
   clearAll: () => {
-    set({ ...DEFAULTS });
+    set({ ...DEFAULTS, ...defaultRange('hour') });
     useSearchStore.getState().clearSearch();
   },
 
@@ -232,7 +229,6 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
     if (s.flightSpeedMin !== null || s.flightSpeedMax !== null) count++;
     if (s.altitudeMin !== null || s.altitudeMax !== null) count++;
     if (s.proximityPin !== null) count++;
-    if (s.dateStart !== null || s.dateEnd !== null) count++;
     if (s.mentionsMin !== null || s.mentionsMax !== null) count++;
     if (s.headingAngle !== null) count++;
     if (s.flightCallsign !== '') count++;

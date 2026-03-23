@@ -80,11 +80,10 @@ describe('FilterPanelSlot', () => {
     expect(screen.getByTestId('filter-panel-slot')).toBeInTheDocument();
   });
 
-  it('shows "Showing last 24h" label when default window is active and Events expanded', () => {
+  it('does not show "Showing last 24h" label in default state (explicit 1h date range)', () => {
     useUIStore.setState({ isFiltersCollapsed: false, isEventFiltersOpen: true });
-    // Default state: dateStart=null, dateEnd=null -> isDefaultWindowActive=true
     render(<FilterPanelSlot />);
-    expect(screen.getByText('Showing last 24h')).toBeInTheDocument();
+    expect(screen.queryByText('Showing last 24h')).not.toBeInTheDocument();
   });
 
   it('hides "Showing last 24h" label when custom date range is set', () => {

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useSearchStore } from '@/stores/searchStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useFilterStore } from '@/stores/filterStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { useSiteStore } from '@/stores/siteStore';
 import { type QueryNode } from '@/lib/queryParser';
 import { parseTemporalValue, parseRangeValue } from '@/lib/queryEvaluator';
@@ -210,8 +211,8 @@ export function deriveTogglesFromAST(
  * Search -> FilterStore: Extract date/country/range/text filters from AST.
  */
 export interface DerivedFilters {
-  dateStart?: number | null;
-  dateEnd?: number | null;
+  dateStart?: number;
+  dateEnd?: number;
   flightCountries?: string[];
   eventCountries?: string[];
   altitudeMin?: number | null;
@@ -703,9 +704,15 @@ export function useQuerySync(): void {
     if (filterUpdates.proximityPin !== undefined) {
       useFilterStore.getState().setProximityPin(filterUpdates.proximityPin);
       hasFilterUpdates = true;
-      // Open the filters panel so the user can see the proximity controls
       if (filterUpdates.proximityPin !== null) {
+        // Open the filters panel so the user can see the proximity controls
         useUIStore.setState({ isFiltersCollapsed: false });
+        // Fly to the proximity pin location
+        useNotificationStore.getState().setFlyToTarget({
+          lng: filterUpdates.proximityPin.lng,
+          lat: filterUpdates.proximityPin.lat,
+          zoom: 8,
+        });
       }
     }
 

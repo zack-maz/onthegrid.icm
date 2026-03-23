@@ -36,6 +36,7 @@ const QUERY = `
   nwr["military"="airfield"](area.searchArea);
   nwr["aeroway"="aerodrome"]["aerodrome:type"="military"](area.searchArea);
   nwr["man_made"="desalination_plant"](area.searchArea);
+  nwr["water_works"="desalination"](area.searchArea);
   nwr["man_made"="water_works"]["name"~"[Dd]esal|تحلية"](area.searchArea);
   nwr["industrial"="port"](area.searchArea);
   nwr["harbour"="yes"](area.searchArea);
@@ -63,23 +64,32 @@ function toTitleCase(str: string): string {
     .replace(/\b(\w)(\w*)/g, (_m, first, rest) => first + rest);
 }
 
+/** True if string contains only Latin script characters (plus digits, punctuation, spaces) */
+function isLatin(str: string): boolean {
+  return /^[\p{Script=Latin}\d\s\p{P}\p{S}]+$/u.test(str);
+}
+
+const SITE_TYPE_LABELS: Record<SiteType, string> = {
+  nuclear: 'Nuclear Facility',
+  naval: 'Naval Base',
+  oil: 'Oil Refinery',
+  airbase: 'Air Base',
+  desalination: 'Desalination Plant',
+  port: 'Port',
+};
+
 /** Extract an English, title-cased label from OSM tags */
 function extractLabel(tags: Record<string, string>, siteType: SiteType): string {
-  // Prefer English name, then generic name
-  const raw = tags['name:en'] || tags['name'] || '';
-  if (raw) return toTitleCase(raw);
-  // Fallback: use operator name if available
-  if (tags.operator) return toTitleCase(tags.operator);
+  // Prefer English name
+  const en = tags['name:en'];
+  if (en && en.trim()) return toTitleCase(en);
+  // Accept generic name only if it's Latin script
+  const raw = tags['name'] || '';
+  if (raw && isLatin(raw)) return toTitleCase(raw);
+  // Fallback: use operator name if Latin
+  if (tags.operator && isLatin(tags.operator)) return toTitleCase(tags.operator);
   // Last resort: generic label from type
-  const typeLabels: Record<SiteType, string> = {
-    nuclear: 'Nuclear Facility',
-    naval: 'Naval Base',
-    oil: 'Oil Refinery',
-    airbase: 'Air Base',
-    desalination: 'Desalination Plant',
-    port: 'Port',
-  };
-  return typeLabels[siteType];
+  return SITE_TYPE_LABELS[siteType];
 }
 
 export function classifySiteType(tags: Record<string, string>): SiteType | null {
@@ -88,6 +98,7 @@ export function classifySiteType(tags: Record<string, string>): SiteType | null 
   if (tags['industrial'] === 'refinery' || tags['industrial'] === 'oil_refinery') return 'oil';
   if (tags['military'] === 'airfield' || tags['aerodrome:type'] === 'military') return 'airbase';
   if (tags['man_made'] === 'desalination_plant') return 'desalination';
+  if (tags['water_works'] === 'desalination') return 'desalination';
   if (tags['man_made'] === 'water_works') {
     const name = (tags['name'] || tags['name:en'] || '').toLowerCase();
     if (name.includes('desal') || name.includes('تحلية')) return 'desalination';

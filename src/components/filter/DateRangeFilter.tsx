@@ -1,5 +1,5 @@
 import { useCallback, useRef, useMemo } from 'react';
-import { WAR_START, STEP_MS, snapToStep } from '@/lib/constants';
+import { WAR_START, STEP_MS, LOOKBACK_MS, snapToStep } from '@/lib/constants';
 import type { Granularity } from '@/stores/filterStore';
 
 const NOW_THRESHOLD_MS = 60_000; // 60s
@@ -26,10 +26,10 @@ function clamp(v: number, min: number, max: number): number {
 }
 
 interface DateRangeFilterProps {
-  dateStart: number | null;
-  dateEnd: number | null;
+  dateStart: number;
+  dateEnd: number;
   granularity: Granularity;
-  onDateRange: (start: number | null, end: number | null) => void;
+  onDateRange: (start: number, end: number) => void;
   onGranularity: (g: Granularity) => void;
 }
 
@@ -45,13 +45,14 @@ export function DateRangeFilter({
   const now = Date.now();
   const step = STEP_MS[granularity];
 
-  // Slider range: WAR_START to now, snapped
-  const sliderMin = WAR_START;
+  // Slider range: lookback limit to now, snapped
+  const lookback = LOOKBACK_MS[granularity];
+  const sliderMin = lookback !== null ? snapToStep(now - lookback, step) : WAR_START;
   const sliderMax = snapToStep(now, step);
 
-  // Current handle values
-  const lo = dateStart ?? sliderMin;
-  const hi = dateEnd ?? sliderMax;
+  // Current handle values, clamped to slider range
+  const lo = clamp(dateStart, sliderMin, sliderMax);
+  const hi = clamp(dateEnd, sliderMin, sliderMax);
 
   // Positions as percentages
   const range = sliderMax - sliderMin || 1;
@@ -60,9 +61,9 @@ export function DateRangeFilter({
 
   const startLabel = useMemo(() => formatLabel(lo, granularity), [lo, granularity]);
   const endLabel = useMemo(() => {
-    if (dateEnd === null) return 'Now';
+    if (sliderMax - hi < NOW_THRESHOLD_MS) return 'Now';
     return formatLabel(hi, granularity);
-  }, [dateEnd, hi, granularity]);
+  }, [sliderMax, hi, granularity]);
 
   /** Convert a pointer clientX to a snapped timestamp */
   const pointerToValue = useCallback(
@@ -79,24 +80,19 @@ export function DateRangeFilter({
 
   const commitLo = useCallback(
     (val: number) => {
-      const clamped = Math.min(val, hi - step); // enforce minimum 1-step gap
-      const newStart = Math.max(clamped, sliderMin);
-      // At far-left (WAR_START) → null means "no start bound"
-      onDateRange(newStart <= sliderMin ? null : newStart, dateEnd);
+      const clamped = clamp(val, sliderMin, hi - step);
+      onDateRange(clamped, hi);
     },
-    [hi, step, sliderMin, dateEnd, onDateRange],
+    [hi, step, sliderMin, onDateRange],
   );
 
   const commitHi = useCallback(
     (val: number) => {
-      const clamped = Math.max(val, lo + step); // enforce minimum 1-step gap
-      if (sliderMax - clamped < NOW_THRESHOLD_MS) {
-        onDateRange(dateStart, null);
-      } else {
-        onDateRange(dateStart, clamped);
-      }
+      const clamped = clamp(val, lo + step, sliderMax);
+      const snapped = sliderMax - clamped < NOW_THRESHOLD_MS ? sliderMax : clamped;
+      onDateRange(lo, snapped);
     },
-    [lo, step, sliderMax, dateStart, onDateRange],
+    [lo, step, sliderMax, onDateRange],
   );
 
   const onPointerMove = useCallback(

@@ -82,12 +82,10 @@ export function entityPassesFilters(
   }
 
   // ── Date range filter ───────────────────────────────────────────────
-  if (filters.dateStart !== null || filters.dateEnd !== null) {
-    if (entity.type !== 'flight' && entity.type !== 'ship') {
-      // Only applies to conflict events (historical); flights/ships are live
-      if (filters.dateStart !== null && entity.timestamp < filters.dateStart) return false;
-      if (filters.dateEnd !== null && entity.timestamp > filters.dateEnd) return false;
-    }
+  if (entity.type !== 'flight' && entity.type !== 'ship') {
+    // Only applies to conflict events (historical); flights/ships are live
+    if (entity.timestamp < filters.dateStart) return false;
+    if (entity.timestamp > filters.dateEnd) return false;
   }
 
   // ── Flight callsign filter ──

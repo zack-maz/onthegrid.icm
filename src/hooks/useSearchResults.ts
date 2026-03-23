@@ -4,7 +4,9 @@ import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useSiteStore } from '@/stores/siteStore';
+import { useFilterStore } from '@/stores/filterStore';
 import { evaluateQuery, type EvaluationContext } from '@/lib/queryEvaluator';
+import { haversineKm } from '@/lib/geo';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
 
 const MAX_PER_TYPE = 10;
@@ -49,6 +51,10 @@ export function useSearchResults(): GroupedSearchResults {
   shipsRef.current = ships;
   eventsRef.current = events;
   sitesRef.current = sites;
+
+  // Proximity pin for scoping search results
+  const proximityPin = useFilterStore((s) => s.proximityPin);
+  const proximityRadiusKm = useFilterStore((s) => s.proximityRadiusKm);
 
   // When filter mode is active and entity data changes, re-compute matchedIds
   // so newly arrived/departed entities are correctly dimmed (Pitfall 4 fix)
@@ -95,7 +101,14 @@ export function useSearchResults(): GroupedSearchResults {
       now: Date.now(),
     };
 
-    const matchEntity = <T extends { type: string; label: string }>(entity: T): SearchResult<T> | null => {
+    // When a proximity pin is active, exclude entities outside the radius
+    const pin = proximityPin;
+    const radius = proximityRadiusKm;
+    const inProximity = (lat: number, lng: number) =>
+      !pin || haversineKm(pin.lat, pin.lng, lat, lng) <= radius;
+
+    const matchEntity = <T extends { type: string; label: string; lat: number; lng: number }>(entity: T): SearchResult<T> | null => {
+      if (!inProximity(entity.lat, entity.lng)) return null;
       if (evaluateQuery(parsedQuery, entity as any, ctx)) {
         return {
           entity,
@@ -141,5 +154,5 @@ export function useSearchResults(): GroupedSearchResults {
       sites: si,
       totalCount: f.length + sh.length + ev.length + si.length,
     };
-  }, [query, parsedQuery]);
+  }, [query, parsedQuery, proximityPin, proximityRadiusKm]);
 }

@@ -11,3 +11,10 @@ export const STEP_MS: Record<Granularity, number> = {
 export function snapToStep(ts: number, step: number): number {
   return Math.floor(ts / step) * step;
 }
+
+/** Per-granularity slider lookback: minute=1h, hour=24h, day=full history (null) */
+export const LOOKBACK_MS: Record<Granularity, number | null> = {
+  minute: 60 * 60 * 1000,
+  hour: 24 * 60 * 60 * 1000,
+  day: null,
+};

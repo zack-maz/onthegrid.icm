@@ -5,6 +5,7 @@ interface AutocompleteDropdownProps {
   suggestions: AutocompleteSuggestion[];
   selectedIndex: number;
   onSelect: (suggestion: AutocompleteSuggestion) => void;
+  onHover?: (index: number) => void;
 }
 
 /**
@@ -15,6 +16,7 @@ export function AutocompleteDropdown({
   suggestions,
   selectedIndex,
   onSelect,
+  onHover,
 }: AutocompleteDropdownProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +42,7 @@ export function AutocompleteDropdown({
           className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
             i === selectedIndex ? 'bg-surface' : 'hover:bg-surface'
           }`}
+          onMouseEnter={() => onHover?.(i)}
           onClick={() => onSelect(suggestion)}
           role="option"
           aria-selected={i === selectedIndex}

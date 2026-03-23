@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { FlightEntity, SiteEntity } from '@/types/entities';
 import { useFlightStore } from '@/stores/flightStore';
 import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
 import { haversineKm } from '@/lib/geo';
 
 const PROXIMITY_THRESHOLD_KM = 25;
@@ -69,10 +70,32 @@ export function computeProximityAlerts(
   );
 }
 
-/** React hook that computes proximity alerts from stores */
+/** React hook that computes proximity alerts from visible sites only */
 export function useProximityAlerts(): ProximityAlert[] {
   const flights = useFlightStore((s) => s.flights);
   const sites = useSiteStore((s) => s.sites);
+  const showSites = useUIStore((s) => s.showSites);
+  const showNuclear = useUIStore((s) => s.showNuclear);
+  const showNaval = useUIStore((s) => s.showNaval);
+  const showOil = useUIStore((s) => s.showOil);
+  const showAirbase = useUIStore((s) => s.showAirbase);
+  const showDesalination = useUIStore((s) => s.showDesalination);
+  const showPort = useUIStore((s) => s.showPort);
 
-  return useMemo(() => computeProximityAlerts(flights, sites), [flights, sites]);
+  const visibleSites = useMemo(() => {
+    if (!showSites) return [];
+    return sites.filter((s) => {
+      switch (s.siteType) {
+        case 'nuclear': return showNuclear;
+        case 'naval': return showNaval;
+        case 'oil': return showOil;
+        case 'airbase': return showAirbase;
+        case 'desalination': return showDesalination;
+        case 'port': return showPort;
+        default: return false;
+      }
+    });
+  }, [sites, showSites, showNuclear, showNaval, showOil, showAirbase, showDesalination, showPort]);
+
+  return useMemo(() => computeProximityAlerts(flights, visibleSites), [flights, visibleSites]);
 }

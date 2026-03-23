@@ -7,6 +7,7 @@ import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 import { useSiteStore } from '@/stores/siteStore';
 import { useEventStore } from '@/stores/eventStore';
 import { computeAttackStatus } from '@/lib/attackStatus';
+import { haversineKm } from '@/lib/geo';
 import { classifySeverity } from '@/lib/severity';
 import {
   ENTITY_COLORS,
@@ -170,10 +171,12 @@ export function useEntityLayers() {
       .filter((e) => passesSeverityFilter(e, showHighSeverity, showMediumSeverity, showLowSeverity)),
     [events, showHighSeverity, showMediumSeverity, showLowSeverity]);
 
-  // Sites filtered by type sub-toggles
+  // Sites filtered by proximity pin + type sub-toggles
   const toggleFilteredSites = useMemo(() => {
     if (!showSites) return [];
     return sites.filter(s => {
+      // Proximity filter
+      if (proximityPin && haversineKm(proximityPin.lat, proximityPin.lng, s.lat, s.lng) > proximityRadiusKm) return false;
       switch (s.siteType) {
         case 'nuclear': return showNuclear;
         case 'naval': return showNaval;
@@ -183,7 +186,7 @@ export function useEntityLayers() {
         case 'port': return showPort;
       }
     });
-  }, [sites, showSites, showNuclear, showNaval, showOil, showAirbase, showDesalination, showPort]);
+  }, [sites, showSites, showNuclear, showNaval, showOil, showAirbase, showDesalination, showPort, proximityPin, proximityRadiusKm]);
 
   // Compute attack status for all toggle-filtered sites
   const siteAttackMap = useMemo(() => {

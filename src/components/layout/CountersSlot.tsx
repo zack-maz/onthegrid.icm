@@ -48,15 +48,11 @@ export function CountersSlot() {
             </div>
             <div className="mt-0.5 space-y-0.5">
               <CounterRow
-                label="Iranian"
-                value={counters.iranianFlights}
-              />
-              <CounterRow
-                label="Unidentified"
-                value={counters.unidentifiedFlights}
-                entities={counters.entities.unidentifiedFlights}
-                isExpanded={expandedKey === 'unidentified'}
-                onToggle={() => handleToggle('unidentified')}
+                label="Flights"
+                value={counters.totalFlights}
+                entities={counters.entities.flights}
+                isExpanded={expandedKey === 'flights'}
+                onToggle={() => handleToggle('flights')}
                 onEntityClick={handleEntityClick}
                 selectedEntityId={selectedEntityId}
               />
@@ -117,13 +113,13 @@ export function CountersSlot() {
             <div className="border-t border-border my-1.5" />
 
             <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-              Struck Sites
+              Sites
             </div>
             <div className="mt-0.5 space-y-0.5">
               <CounterRow
                 label="Nuclear"
-                value={counters.hitSites.nuclear}
-                entities={counters.entities.hitSites.nuclear}
+                value={counters.sites.nuclear}
+                entities={counters.entities.sites.nuclear}
                 isExpanded={expandedKey === 'site-nuclear'}
                 onToggle={() => handleToggle('site-nuclear')}
                 onEntityClick={handleEntityClick}
@@ -131,8 +127,8 @@ export function CountersSlot() {
               />
               <CounterRow
                 label="Naval"
-                value={counters.hitSites.naval}
-                entities={counters.entities.hitSites.naval}
+                value={counters.sites.naval}
+                entities={counters.entities.sites.naval}
                 isExpanded={expandedKey === 'site-naval'}
                 onToggle={() => handleToggle('site-naval')}
                 onEntityClick={handleEntityClick}
@@ -140,8 +136,8 @@ export function CountersSlot() {
               />
               <CounterRow
                 label="Oil"
-                value={counters.hitSites.oil}
-                entities={counters.entities.hitSites.oil}
+                value={counters.sites.oil}
+                entities={counters.entities.sites.oil}
                 isExpanded={expandedKey === 'site-oil'}
                 onToggle={() => handleToggle('site-oil')}
                 onEntityClick={handleEntityClick}
@@ -149,8 +145,8 @@ export function CountersSlot() {
               />
               <CounterRow
                 label="Airbase"
-                value={counters.hitSites.airbase}
-                entities={counters.entities.hitSites.airbase}
+                value={counters.sites.airbase}
+                entities={counters.entities.sites.airbase}
                 isExpanded={expandedKey === 'site-airbase'}
                 onToggle={() => handleToggle('site-airbase')}
                 onEntityClick={handleEntityClick}
@@ -158,8 +154,8 @@ export function CountersSlot() {
               />
               <CounterRow
                 label="Desalination"
-                value={counters.hitSites.desalination}
-                entities={counters.entities.hitSites.desalination}
+                value={counters.sites.desalination}
+                entities={counters.entities.sites.desalination}
                 isExpanded={expandedKey === 'site-desalination'}
                 onToggle={() => handleToggle('site-desalination')}
                 onEntityClick={handleEntityClick}
@@ -167,8 +163,8 @@ export function CountersSlot() {
               />
               <CounterRow
                 label="Port"
-                value={counters.hitSites.port}
-                entities={counters.entities.hitSites.port}
+                value={counters.sites.port}
+                entities={counters.entities.sites.port}
                 isExpanded={expandedKey === 'site-port'}
                 onToggle={() => handleToggle('site-port')}
                 onEntityClick={handleEntityClick}

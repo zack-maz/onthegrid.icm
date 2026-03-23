@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useSearchStore } from '@/stores/searchStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useSiteStore } from '@/stores/siteStore';
 import { useSearchResults } from '@/hooks/useSearchResults';
 import { useAutocomplete, type AutocompleteSuggestion } from '@/hooks/useAutocomplete';
 import { SearchResultGroup } from '@/components/search/SearchResultGroup';
@@ -9,6 +10,7 @@ import { TagChipRow } from '@/components/search/TagChipRow';
 import { SyntaxOverlay } from '@/components/search/SyntaxOverlay';
 import { AutocompleteDropdown } from '@/components/search/AutocompleteDropdown';
 import { CheatSheet } from '@/components/search/CheatSheet';
+import { findGeoName } from '@/lib/geoNames';
 import type { MapEntity, SiteEntity } from '@/types/entities';
 
 // --- Word-at-cursor extraction (for autocomplete acceptance) ---
@@ -51,6 +53,25 @@ export function SearchModal() {
   useEffect(() => {
     setAcIndex(0);
   }, [suggestions.length]);
+
+  // Fly-to preview when highlighting a near: suggestion (keyboard or mouse hover)
+  useEffect(() => {
+    const suggestion = suggestions[acIndex];
+    if (!suggestion || suggestion.type !== 'value' || suggestion.prefix !== 'near') return;
+    const name = suggestion.value;
+    // Try sites first
+    const sites = useSiteStore.getState().sites;
+    const siteMatch = sites.find((s) => s.label.toLowerCase() === name.toLowerCase());
+    if (siteMatch) {
+      useNotificationStore.getState().setFlyToTarget({ lng: siteMatch.lng, lat: siteMatch.lat, zoom: 8 });
+      return;
+    }
+    // Then cities
+    const geo = findGeoName(name);
+    if (geo) {
+      useNotificationStore.getState().setFlyToTarget({ lng: geo.lng, lat: geo.lat, zoom: 8 });
+    }
+  }, [acIndex, suggestions]);
 
   // Close cheat sheet when modal closes
   useEffect(() => {
@@ -297,6 +318,7 @@ export function SearchModal() {
             suggestions={suggestions}
             selectedIndex={acIndex}
             onSelect={acceptSuggestion}
+            onHover={setAcIndex}
           />
 
           {/* Cheat sheet popover */}
@@ -305,8 +327,8 @@ export function SearchModal() {
           )}
         </div>
 
-        {/* Results area */}
-        {query.trim() && (
+        {/* Results area — hidden while autocomplete dropdown is open */}
+        {query.trim() && suggestions.length === 0 && (
           <div className="max-h-[400px] overflow-y-auto">
             {results.totalCount === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-text-muted">

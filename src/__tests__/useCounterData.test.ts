@@ -60,8 +60,8 @@ describe('useCounterData', () => {
       altitudeMax: null,
       proximityPin: null,
       proximityRadiusKm: 100,
-      dateStart: null,
-      dateEnd: null,
+      dateStart: 0,
+      dateEnd: Date.now() + 86400000,
       isSettingPin: false,
     });
   });
@@ -69,7 +69,6 @@ describe('useCounterData', () => {
   it('returns zero counts with empty stores', () => {
     const { result } = renderHook(() => useCounterData());
     expect(result.current.iranianFlights).toBe(0);
-    expect(result.current.unidentifiedFlights).toBe(0);
     expect(result.current.airstrikes).toBe(0);
     expect(result.current.groundCombat).toBe(0);
     expect(result.current.targeted).toBe(0);
@@ -88,7 +87,7 @@ describe('useCounterData', () => {
     expect(result.current.iranianFlights).toBe(2);
   });
 
-  it('counts visible unidentified flights (pulseEnabled on)', () => {
+  it('unidentified flights included in totalFlights when pulseEnabled is on', () => {
     useFlightStore.setState({
       flights: [
         makeFlight('f1', 'Unknown', true),
@@ -98,10 +97,10 @@ describe('useCounterData', () => {
       flightCount: 3,
     });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.unidentifiedFlights).toBe(2);
+    expect(result.current.totalFlights).toBe(3);
   });
 
-  it('unidentified flights hidden when pulseEnabled is false', () => {
+  it('unidentified flights excluded from totalFlights when pulseEnabled is false', () => {
     useFlightStore.setState({
       flights: [
         makeFlight('f1', 'Unknown', true),
@@ -111,7 +110,7 @@ describe('useCounterData', () => {
     });
     useUIStore.setState({ pulseEnabled: false });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.unidentifiedFlights).toBe(0);
+    expect(result.current.totalFlights).toBe(1);
   });
 
   it('ground flights only counted when showGroundTraffic is on', () => {
@@ -210,15 +209,14 @@ describe('useCounterData', () => {
     const { result } = renderHook(() => useCounterData());
     expect(result.current.entities).toBeDefined();
     expect(result.current.entities.flights).toEqual([]);
-    expect(result.current.entities.unidentifiedFlights).toEqual([]);
     expect(result.current.entities.ships).toEqual([]);
     expect(result.current.entities.airstrikeEvents).toEqual([]);
     expect(result.current.entities.groundCombatEvents).toEqual([]);
     expect(result.current.entities.targetedEvents).toEqual([]);
-    expect(result.current.entities.hitSites).toBeDefined();
+    expect(result.current.entities.sites).toBeDefined();
   });
 
-  it('totalFlights counts non-unidentified visible flights', () => {
+  it('totalFlights counts all visible flights including unidentified', () => {
     useFlightStore.setState({
       flights: [
         makeFlight('f1', 'Iran', false),
@@ -228,24 +226,8 @@ describe('useCounterData', () => {
       flightCount: 3,
     });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.totalFlights).toBe(2);
-    expect(result.current.entities.flights).toHaveLength(2);
-  });
-
-  it('entities.unidentifiedFlights contains unidentified FlightEntity[] mapped to CounterEntity', () => {
-    useFlightStore.setState({
-      flights: [
-        makeFlight('f1', 'Unknown', true),
-        makeFlight('f2', 'Iran', false),
-        makeFlight('f3', 'Unknown', true),
-      ],
-      flightCount: 3,
-    });
-    const { result } = renderHook(() => useCounterData());
-    expect(result.current.entities.unidentifiedFlights).toHaveLength(2);
-    expect(result.current.entities.unidentifiedFlights[0].id).toBeDefined();
-    expect(result.current.entities.unidentifiedFlights[0].label).toBeDefined();
-    expect(result.current.entities.unidentifiedFlights[0].metric).toBeDefined();
+    expect(result.current.totalFlights).toBe(3);
+    expect(result.current.entities.flights).toHaveLength(3);
   });
 
   it('entities.ships contains ShipEntity[] from useFilteredEntities', () => {
@@ -315,14 +297,14 @@ describe('useCounterData', () => {
     // f1 is closer to Tehran (~0 km), f2 farther (~800 km)
     useFlightStore.setState({
       flights: [
-        makeFlight('f1', 'Unknown', true, false, 28, 60), // farther from Tehran
-        makeFlight('f2', 'Unknown', true, false, 35.5, 51.5), // closer to Tehran
+        makeFlight('f1', 'Iran', false, false, 28, 60), // farther from Tehran
+        makeFlight('f2', 'Iran', false, false, 35.5, 51.5), // closer to Tehran
       ],
       flightCount: 2,
     });
     const { result } = renderHook(() => useCounterData());
-    expect(result.current.entities.unidentifiedFlights[0].id).toBe('f2'); // closer
-    expect(result.current.entities.unidentifiedFlights[1].id).toBe('f1'); // farther
+    expect(result.current.entities.flights[0].id).toBe('f2'); // closer
+    expect(result.current.entities.flights[1].id).toBe('f1'); // farther
   });
 
   it('event entities sorted by distance from Tehran (closest first)', () => {
@@ -371,7 +353,7 @@ describe('useCounterData', () => {
       eventCount: 3,
     });
     const { result } = renderHook(() => useCounterData());
-    const nuclearSites = result.current.entities.hitSites.nuclear;
+    const nuclearSites = result.current.entities.sites.nuclear;
     expect(nuclearSites).toHaveLength(2);
     // Site-2 has 2 attacks, site-1 has 1 attack -- sorted descending
     expect(nuclearSites[0].label).toBe('Nuclear Plant B'); // 2 attacks

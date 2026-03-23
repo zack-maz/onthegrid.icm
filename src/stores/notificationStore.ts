@@ -16,6 +16,8 @@ export interface FlyToTarget {
   lng: number;
   lat: number;
   zoom: number;
+  pitch?: number;
+  bearing?: number;
 }
 
 interface NotificationState {

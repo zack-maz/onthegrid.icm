@@ -35,10 +35,13 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().proximityRadiusKm).toBe(100);
     });
 
-    it('dateStart defaults to null, dateEnd defaults to null', () => {
+    it('dateStart defaults to ~24h ago, dateEnd defaults to ~now', () => {
       const s = useFilterStore.getState();
-      expect(s.dateStart).toBeNull();
-      expect(s.dateEnd).toBeNull();
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      expect(s.dateStart).toBeTypeOf('number');
+      expect(Math.abs(s.dateStart - oneDayAgo)).toBeLessThan(60 * 60 * 1000);
+      expect(s.dateEnd).toBeTypeOf('number');
+      expect(Math.abs(s.dateEnd - Date.now())).toBeLessThan(60 * 60 * 1000);
     });
 
     it('isSettingPin defaults to false', () => {
@@ -226,12 +229,13 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().proximityRadiusKm).toBe(100);
     });
 
-    it('clearFilter(date) resets dateStart and dateEnd to null', () => {
+    it('clearFilter(date) resets dateStart to ~1h ago and dateEnd to ~now', () => {
       useFilterStore.getState().setDateRange(1000, 2000);
       useFilterStore.getState().clearFilter('date');
       const s = useFilterStore.getState();
-      expect(s.dateStart).toBeNull();
-      expect(s.dateEnd).toBeNull();
+      expect(s.dateStart).toBeTypeOf('number');
+      expect(s.dateEnd).toBeTypeOf('number');
+      expect(s.dateEnd).toBeGreaterThan(s.dateStart);
     });
 
     it('clearFilter(mentions) resets mentionsMin/mentionsMax to null', () => {
@@ -278,8 +282,8 @@ describe('filterStore', () => {
       expect(s.altitudeMax).toBeNull();
       expect(s.proximityPin).toBeNull();
       expect(s.proximityRadiusKm).toBe(100);
-      expect(s.dateStart).toBeNull();
-      expect(s.dateEnd).toBeNull();
+      expect(s.dateStart).toBeTypeOf('number');
+      expect(s.dateEnd).toBeTypeOf('number');
       expect(s.isSettingPin).toBe(false);
       expect(s.flightCallsign).toBe('');
       expect(s.flightIcao).toBe('');
@@ -301,57 +305,16 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().granularity).toBe('minute');
     });
 
-    it('setGranularity snaps dateStart to new step boundary', () => {
-      const oddTs = Date.UTC(2026, 2, 10, 14, 37, 22);
-      useFilterStore.getState().setDateRange(oddTs, null);
+    it('setGranularity resets dateStart and dateEnd to that granularity defaults', () => {
+      const start = Date.UTC(2026, 2, 10, 14, 37, 22);
+      const end = Date.UTC(2026, 2, 20, 8, 0, 0);
+      useFilterStore.getState().setDateRange(start, end);
       useFilterStore.getState().setGranularity('hour');
       const s = useFilterStore.getState();
-      expect(s.dateStart).toBe(Date.UTC(2026, 2, 10, 14, 0, 0));
-    });
-
-    it('setGranularity snaps dateEnd to new step boundary', () => {
-      const oddTs = Date.UTC(2026, 2, 10, 14, 37, 22);
-      useFilterStore.getState().setDateRange(null, oddTs);
-      useFilterStore.getState().setGranularity('day');
-      const s = useFilterStore.getState();
-      expect(s.dateEnd).toBe(Date.UTC(2026, 2, 10, 0, 0, 0));
-    });
-
-    it('setGranularity clamps start to end if snapping makes start > end', () => {
-      const start = Date.UTC(2026, 2, 10, 23, 30, 0);
-      const end = Date.UTC(2026, 2, 10, 23, 45, 0);
-      useFilterStore.getState().setDateRange(start, end);
-      useFilterStore.getState().setGranularity('day');
-      const s = useFilterStore.getState();
-      expect(s.dateStart! <= s.dateEnd!).toBe(true);
-    });
-  });
-
-  describe('24h default event window', () => {
-    it('isDefaultWindowActive returns true when dateStart=null and dateEnd=null', () => {
-      const s = useFilterStore.getState();
-      expect(s.isDefaultWindowActive()).toBe(true);
-    });
-
-    it('isDefaultWindowActive returns false when dateStart is non-null', () => {
-      useFilterStore.getState().setDateRange(Date.now() - 86400000, null);
-      expect(useFilterStore.getState().isDefaultWindowActive()).toBe(false);
-    });
-
-    it('isDefaultWindowActive returns false when dateEnd is non-null', () => {
-      useFilterStore.getState().setDateRange(null, Date.now());
-      expect(useFilterStore.getState().isDefaultWindowActive()).toBe(false);
-    });
-
-    it('isDefaultWindowActive returns false when both dateStart and dateEnd are non-null', () => {
-      useFilterStore.getState().setDateRange(Date.now() - 86400000, Date.now());
-      expect(useFilterStore.getState().isDefaultWindowActive()).toBe(false);
-    });
-
-    it('isDefaultWindowActive returns true after clearing date range', () => {
-      useFilterStore.getState().setDateRange(1000, 2000);
-      useFilterStore.getState().clearFilter('date');
-      expect(useFilterStore.getState().isDefaultWindowActive()).toBe(true);
+      // Should reset to hour defaults (now - 24h to now), not preserve old values
+      expect(s.dateStart).not.toBe(start);
+      expect(s.dateEnd).not.toBe(end);
+      expect(s.dateEnd).toBeGreaterThan(s.dateStart);
     });
   });
 
@@ -390,18 +353,12 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().activeFilterCount()).toBe(1);
     });
 
-    it('counts date filter when dateStart set', () => {
-      useFilterStore.getState().setDateRange(1000, null);
-      expect(useFilterStore.getState().activeFilterCount()).toBe(1);
-    });
-
     it('returns correct count when all filters active', () => {
       useFilterStore.getState().setFlightCountries(['Iran']);
       useFilterStore.getState().setEventCountries(['ISRAEL']);
       useFilterStore.getState().setFlightSpeedRange(100, 400);
       useFilterStore.getState().setAltitudeRange(10000, 40000);
       useFilterStore.getState().setProximityPin({ lat: 35, lng: 51 });
-      useFilterStore.getState().setDateRange(1000, 2000);
       useFilterStore.getState().setMentionsRange(10, 500);
       useFilterStore.getState().setHeadingAngle(180);
       useFilterStore.getState().setFlightCallsign('IRA');
@@ -409,8 +366,8 @@ describe('filterStore', () => {
       useFilterStore.getState().setShipMmsi('123');
       useFilterStore.getState().setShipNameFilter('TANK');
       useFilterStore.getState().setCameoCode('190');
-      // 13 filters: flightCountry, eventCountry, flightSpeed, altitude, proximity, date, mentions, heading, callsign, icao, mmsi, shipName, cameo
-      expect(useFilterStore.getState().activeFilterCount()).toBe(13);
+      // 12 filters: flightCountry, eventCountry, flightSpeed, altitude, proximity, mentions, heading, callsign, icao, mmsi, shipName, cameo
+      expect(useFilterStore.getState().activeFilterCount()).toBe(12);
     });
   });
 });

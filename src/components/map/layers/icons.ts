@@ -262,14 +262,14 @@ export function getIconAtlas(): HTMLCanvasElement {
   ctx.closePath();
   ctx.fill();
 
-  // Icon 11 (offset 352): Water Droplet/Desalination -- teardrop shape
+  // Icon 11 (offset 352): Water Droplet/Desalination -- simple filled teardrop
   ctx.fillStyle = 'white';
   const cx11 = 368;
+  const cy11 = 20;
+  const r11 = 11;
   ctx.beginPath();
-  ctx.moveTo(cx11, 4); // top point
-  ctx.bezierCurveTo(cx11 - 2, 10, cx11 - 10, 16, cx11 - 10, 21);
-  ctx.arc(cx11, 21, 10, Math.PI, 0, false); // bottom semicircle
-  ctx.bezierCurveTo(cx11 + 10, 16, cx11 + 2, 10, cx11, 4);
+  ctx.arc(cx11, cy11, r11, 0.2 * Math.PI, 0.8 * Math.PI, false); // round bottom
+  ctx.lineTo(cx11, 2); // converge to sharp top point
   ctx.closePath();
   ctx.fill();
 

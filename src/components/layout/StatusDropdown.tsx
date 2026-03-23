@@ -62,6 +62,7 @@ export function StatusDropdown() {
   const sites = useSiteStore((s) => s.sites);
   const newsClusterCount = useNewsStore((s) => s.clusterCount);
   const marketQuoteCount = useMarketStore((s) => s.quotes).length;
+  const isSidebarOpen = useUIStore((s) => s.isSidebarOpen);
 
   const visibleFlights = flights.filter((f) => {
     if (f.data.unidentified) return pulseEnabled;
@@ -124,7 +125,7 @@ export function StatusDropdown() {
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 rounded-lg border border-border bg-surface-overlay px-4 py-3 shadow-lg backdrop-blur-sm min-w-[180px]">
+        <div className="absolute top-full z-[var(--z-modal)] mt-2 rounded-lg border border-border bg-surface-overlay px-4 py-3 shadow-lg backdrop-blur-sm min-w-[180px] transition-[left] duration-300" style={{ left: isSidebarOpen ? 'calc(var(--width-icon-strip) + var(--width-sidebar) - 1rem)' : 'calc(var(--width-icon-strip) - 1rem)' }}>
           <div className="flex flex-col gap-1">
             <FeedLine status={flightStatus} count={visibleFlights} label="flights" />
             <FeedLine status={shipStatus} count={visibleShips} label="ships" />

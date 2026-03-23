@@ -184,8 +184,6 @@ export function FilterPanelContent() {
   const clearFilter = useFilterStore((s) => s.clearFilter);
   const granularity = useFilterStore((s) => s.granularity);
   const setGranularity = useFilterStore((s) => s.setGranularity);
-  const isDefaultWindowActive = useFilterStore((s) => s.isDefaultWindowActive)();
-
   // Derive available countries from current event data
   const events = useEventStore((s) => s.events);
   const availableEventCountries = useMemo(() => {
@@ -202,7 +200,7 @@ export function FilterPanelContent() {
   const isFlightSpeedActive = flightSpeedMin !== null || flightSpeedMax !== null;
   const isAltitudeActive = altitudeMin !== null || altitudeMax !== null;
   const isProximityActive = proximityPin !== null;
-  const isDateActive = dateStart !== null || dateEnd !== null;
+  const isDateActive = true; // Date range is always active
   const isMentionsActive = mentionsMin !== null || mentionsMax !== null;
 
   return (
@@ -373,9 +371,6 @@ export function FilterPanelContent() {
             {/* Date range slider */}
             <div>
               <SectionHeader label="Date Range" active={isDateActive} filterKey="date" onClear={clearFilter} />
-              {isDefaultWindowActive && (
-                <div className="mt-0.5 text-[10px] italic text-text-muted">Showing last 24h</div>
-              )}
               <div className="mt-1">
                 <DateRangeFilter
                   dateStart={dateStart}

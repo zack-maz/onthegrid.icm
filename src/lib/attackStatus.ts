@@ -28,12 +28,12 @@ export interface AttackStatus {
 export function computeAttackStatus(
   site: SiteEntity,
   events: ConflictEventEntity[],
-  dateEnd: number | null,
+  dateEnd: number,
 ): AttackStatus {
   // Coarse bbox pre-filter (~0.05 degrees is roughly 5km+)
   const COARSE_DEG = 0.05;
   const attacks = events.filter(e => {
-    if (dateEnd !== null && e.timestamp > dateEnd) return false;
+    if (e.timestamp > dateEnd) return false;
     // Coarse filter first
     if (Math.abs(e.lat - site.lat) > COARSE_DEG || Math.abs(e.lng - site.lng) > COARSE_DEG) return false;
     return haversineDistanceKm(site.lat, site.lng, e.lat, e.lng) <= ATTACK_RADIUS_KM;

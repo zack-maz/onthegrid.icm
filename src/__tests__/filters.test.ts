@@ -17,8 +17,8 @@ function makeDefaults(): FilterState {
     altitudeMax: null,
     proximityPin: null,
     proximityRadiusKm: 100,
-    dateStart: null,
-    dateEnd: null,
+    dateStart: 0,
+    dateEnd: Date.now() + 86400000,
     isSettingPin: false,
     granularity: 'hour' as const,
     // New text search fields
@@ -49,7 +49,6 @@ function makeDefaults(): FilterState {
     setDateRange: () => {},
     setSettingPin: () => {},
     setGranularity: () => {},
-    isDefaultWindowActive: () => true,
     clearFilter: () => {},
     clearAll: () => {},
     activeFilterCount: () => 0,
@@ -355,14 +354,14 @@ describe('altitude filter', () => {
       expect(entityPassesFilters(makeShip({ timestamp: now - 2 * dayMs }), filters)).toBe(true);
     });
 
-    it('date filter with only start set works', () => {
-      const filters = { ...makeDefaults(), dateStart: now, dateEnd: null };
+    it('date filter with start only (end far in future)', () => {
+      const filters = { ...makeDefaults(), dateStart: now, dateEnd: now + 10 * dayMs };
       expect(entityPassesFilters(makeEvent({ timestamp: now + dayMs }), filters)).toBe(true);
       expect(entityPassesFilters(makeEvent({ timestamp: now - dayMs }), filters)).toBe(false);
     });
 
-    it('date filter with only end set works', () => {
-      const filters = { ...makeDefaults(), dateStart: null, dateEnd: now };
+    it('date filter with end only (start at 0)', () => {
+      const filters = { ...makeDefaults(), dateStart: 0, dateEnd: now };
       expect(entityPassesFilters(makeEvent({ timestamp: now - dayMs }), filters)).toBe(true);
       expect(entityPassesFilters(makeEvent({ timestamp: now + dayMs }), filters)).toBe(false);
     });
