@@ -38,6 +38,7 @@ import { MapVignette } from './MapVignette';
 import { CoordinateReadout } from './CoordinateReadout';
 import { CompassControl } from './CompassControl';
 import { ProximityAlertOverlay } from './ProximityAlertOverlay';
+import { MapLegend } from './MapLegend';
 
 /** Watches notificationStore.flyToTarget and animates the map. Renders null. */
 function FlyToHandler() {
@@ -242,6 +243,7 @@ export function BaseMap() {
         <FlyToHandler />
       </Map>
       <MapVignette />
+      <MapLegend />
       <div className="absolute bottom-8 right-14 z-[var(--z-controls)] flex flex-col items-end gap-1">
         <UtcClock />
         <CoordinateReadout />
