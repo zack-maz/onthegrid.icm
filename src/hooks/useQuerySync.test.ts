@@ -39,7 +39,6 @@ const DEFAULT_STATE: SyncableState = {
   showPort: false,
   showGroundTraffic: false,
   pulseEnabled: false,
-  showHitOnly: false,
   altitudeMin: null,
   altitudeMax: null,
   flightSpeedMin: null,
@@ -200,18 +199,6 @@ describe('deriveTogglesFromAST', () => {
     const ast = parse('unidentified:true');
     const updates = deriveTogglesFromAST(ast);
     expect(updates['pulseEnabled']).toBe(true);
-  });
-
-  it('status:attacked activates showHitOnly', () => {
-    const ast = parse('status:attacked');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showHitOnly']).toBe(true);
-  });
-
-  it('status:healthy deactivates showHitOnly', () => {
-    const ast = parse('status:healthy');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showHitOnly']).toBe(false);
   });
 
   it('boolean tags work alongside type tags', () => {
@@ -387,36 +374,25 @@ describe('buildASTFromToggles', () => {
 
   // ── Boolean tag (bidirectional) ──
 
-  it('showHitOnly ON adds status:attacked to AST', () => {
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showHitOnly: true }, null);
-    const str = serialize(ast);
-    expect(str).toContain('status:attacked');
-  });
+  // ── Boolean tags only appear when non-default ──
 
-  it('showHitOnly OFF does not add status: tag', () => {
-    const ast = buildASTFromToggles(DEFAULT_STATE, null);
-    expect(ast).toBeNull();
-  });
-
-  // ── Bidirectional boolean tags rebuilt from toggle state ──
-
-  it('ground:true rebuilt when showGroundTraffic ON', () => {
+  it('ground:true not emitted at default (true)', () => {
     const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true, showGroundTraffic: true }, null);
     const str = serialize(ast);
-    expect(str).toContain('ground:true');
+    expect(str).not.toContain('ground');
   });
 
-  it('ground:true absent when showGroundTraffic OFF', () => {
+  it('ground:true absent when showGroundTraffic OFF (non-default but no way to express OFF)', () => {
     const existingAST = parse('type:flight ground:true');
     const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
     const str = serialize(ast);
     expect(str).not.toContain('ground');
   });
 
-  it('unidentified:true rebuilt when pulseEnabled ON', () => {
+  it('unidentified:true not emitted at default (true)', () => {
     const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true, pulseEnabled: true }, null);
     const str = serialize(ast);
-    expect(str).toContain('unidentified:true');
+    expect(str).not.toContain('unidentified');
   });
 
   // ── Range filter tags ──
@@ -455,12 +431,12 @@ describe('buildASTFromToggles', () => {
     expect(str).not.toContain('speed');
   });
 
-  it('status:attacked is rebuilt from showHitOnly (not preserved as non-synced)', () => {
+  it('status: prefix is no longer synced (treated as non-synced text)', () => {
     const existingAST = parse('type:flight status:attacked');
-    // showHitOnly OFF -> status:attacked should be removed
     const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
     const str = serialize(ast);
-    expect(str).not.toContain('status');
+    // status: is no longer in SYNCED_PREFIXES, so it's preserved as non-synced
+    expect(str).toContain('status:attacked');
   });
 
   it('altitude tag is rebuilt from filter state (not preserved as non-synced)', () => {
@@ -507,8 +483,8 @@ describe('sync loop prevention', () => {
     expect(str2).toBe(str1);
   });
 
-  it('round-trip with boolean and range tags is stable', () => {
-    const originalAST = parse('type:flight ground:true altitude:>=30000 status:attacked');
+  it('round-trip with range tags is stable', () => {
+    const originalAST = parse('type:flight altitude:>=30000');
     const toggles = deriveTogglesFromAST(originalAST);
     const filters = deriveFiltersFromAST(originalAST, Date.now());
 
@@ -528,10 +504,8 @@ describe('sync loop prevention', () => {
     const str2 = serialize(rebuilt2);
 
     expect(str2).toBe(str1);
-    // ground:true should be preserved (bidirectional, rebuilt from showGroundTraffic)
-    expect(str1).toContain('ground:true');
-    // status:attacked should be present (bidirectional, rebuilt from showHitOnly)
-    expect(str1).toContain('status:attacked');
+    // type:flight should be present (only flight toggle is ON, others OFF)
+    expect(str1).toContain('type:flight');
     // altitude should be present (bidirectional, rebuilt from filter state)
     expect(str1).toContain('altitude:>=30000');
   });

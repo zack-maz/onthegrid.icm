@@ -113,6 +113,7 @@ export interface UIState {
   showAttackedSites: boolean;
   selectedEntityId: string | null;
   hoveredEntityId: string | null;
+  expandedAlertSiteId: string | null;
   openDetailPanel: () => void;
   closeDetailPanel: () => void;
   toggleStatus: () => void;
@@ -142,6 +143,7 @@ export interface UIState {
   toggleAttackedSites: () => void;
   selectEntity: (id: string | null) => void;
   hoverEntity: (id: string | null) => void;
+  setExpandedAlertSiteId: (id: string | null) => void;
   toggleSidebar: () => void;
   openSidebarSection: (section: SidebarSection) => void;
   closeSidebar: () => void;

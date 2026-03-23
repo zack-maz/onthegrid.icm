@@ -62,16 +62,15 @@ export const SITE_TOGGLE_MAP: Record<string, string> = {
  * Boolean search tags that map to uiStore toggles.
  * All are fully bidirectional: search ↔ filter panel toggles.
  */
-export const BOOL_TAG_MAP: Record<string, { toggle: string; trueValue: string }> = {
-  ground: { toggle: 'showGroundTraffic', trueValue: 'true' },
-  unidentified: { toggle: 'pulseEnabled', trueValue: 'true' },
-  status: { toggle: 'showHitOnly', trueValue: 'attacked' },
+export const BOOL_TAG_MAP: Record<string, { toggle: string; trueValue: string; defaultOn: boolean }> = {
+  ground: { toggle: 'showGroundTraffic', trueValue: 'true', defaultOn: true },
+  unidentified: { toggle: 'pulseEnabled', trueValue: 'true', defaultOn: true },
 };
 
 /** All synced tag prefixes */
 const SYNCED_PREFIXES = new Set([
   'type', 'site', 'country', 'since', 'before',
-  'ground', 'unidentified', 'status',  // boolean tags
+  'ground', 'unidentified',             // boolean tags
   'altitude', 'speed',                 // existing range tags
   'callsign', 'icao', 'mmsi', 'shipname', 'cameo',  // new text tags
   'mentions', 'heading',               // new range tags
@@ -350,7 +349,6 @@ export interface SyncableState {
   // Boolean filter toggles
   showGroundTraffic: boolean;
   pulseEnabled: boolean;
-  showHitOnly: boolean;
   // Range filters
   altitudeMin: number | null;
   altitudeMax: number | null;
@@ -386,36 +384,47 @@ export function buildASTFromToggles(
 ): QueryNode | null {
   const nodes: QueryNode[] = [];
 
-  // Add type: tags for ON toggles
-  for (const [toggleKey, typeValues] of Object.entries(TOGGLE_TYPE_MAP)) {
-    if ((state as Record<string, unknown>)[toggleKey]) {
-      nodes.push({
-        type: 'tag',
-        prefix: 'type',
-        value: typeValues[0],
-      });
+  // Add type: tags only when some type toggles are OFF (non-default)
+  const allTypesOn = Object.keys(TOGGLE_TYPE_MAP).every(
+    (k) => (state as Record<string, unknown>)[k] === true,
+  );
+  if (!allTypesOn) {
+    for (const [toggleKey, typeValues] of Object.entries(TOGGLE_TYPE_MAP)) {
+      if ((state as Record<string, unknown>)[toggleKey]) {
+        nodes.push({
+          type: 'tag',
+          prefix: 'type',
+          value: typeValues[0],
+        });
+      }
     }
   }
 
-  // Add site: tags for ON site toggles
-  for (const [siteType, toggleKey] of Object.entries(SITE_TOGGLE_MAP)) {
-    if ((state as Record<string, unknown>)[toggleKey]) {
-      nodes.push({
-        type: 'tag',
-        prefix: 'site',
-        value: siteType,
-      });
+  // Add site: tags only when some site toggles are OFF (non-default)
+  const allSitesOn = Object.values(SITE_TOGGLE_MAP).every(
+    (toggleKey) => (state as Record<string, unknown>)[toggleKey] === true,
+  );
+  if (!allSitesOn) {
+    for (const [siteType, toggleKey] of Object.entries(SITE_TOGGLE_MAP)) {
+      if ((state as Record<string, unknown>)[toggleKey]) {
+        nodes.push({
+          type: 'tag',
+          prefix: 'site',
+          value: siteType,
+        });
+      }
     }
   }
 
-  // Add boolean filter tags
-  for (const [prefix, { toggle, trueValue }] of Object.entries(BOOL_TAG_MAP)) {
-    if ((state as Record<string, unknown>)[toggle]) {
-      nodes.push({
-        type: 'tag',
-        prefix,
-        value: trueValue,
-      });
+  // Add boolean filter tags only when non-default
+  for (const [prefix, { toggle, trueValue, defaultOn }] of Object.entries(BOOL_TAG_MAP)) {
+    const isOn = (state as Record<string, unknown>)[toggle];
+    if (isOn !== defaultOn) {
+      // Only emit when the value differs from default
+      // Since we can't express negation, we emit the tag when it's ON and default is OFF
+      if (isOn) {
+        nodes.push({ type: 'tag', prefix, value: trueValue });
+      }
     }
   }
 
@@ -532,7 +541,6 @@ export function useQuerySync(): void {
   const showPort = useUIStore((s) => s.showPort);
   const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
   const pulseEnabled = useUIStore((s) => s.pulseEnabled);
-  const showHitOnly = useUIStore((s) => s.showHitOnly);
 
   // Subscribe to filter ranges
   const altitudeMin = useFilterStore((s) => s.altitudeMin);
@@ -699,7 +707,7 @@ export function useQuerySync(): void {
     showPort,
     showGroundTraffic,
     pulseEnabled,
-    showHitOnly,
+
     altitudeMin,
     altitudeMax,
     flightSpeedMin,
@@ -785,7 +793,7 @@ export function useQuerySync(): void {
     showPort,
     showGroundTraffic,
     pulseEnabled,
-    showHitOnly,
+
     altitudeMin,
     altitudeMax,
     flightSpeedMin,
