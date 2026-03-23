@@ -37,48 +37,6 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   wmd: 'WMD',
 };
 
-export interface LayerToggles {
-  showFlights: boolean;
-  showShips: boolean;
-  showEvents: boolean;
-  showAirstrikes: boolean;
-  showGroundCombat: boolean;
-  showTargeted: boolean;
-  showGroundTraffic: boolean;
-  pulseEnabled: boolean;
-  showSites: boolean;
-  showNuclear: boolean;
-  showNaval: boolean;
-  showOil: boolean;
-  showAirbase: boolean;
-  showDesalination: boolean;
-  showPort: boolean;
-  showHitOnly: boolean;
-  showHealthySites: boolean;
-  showAttackedSites: boolean;
-}
-
-export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
-  showFlights: true,
-  showShips: true,
-  showEvents: true,
-  showAirstrikes: true,
-  showGroundCombat: true,
-  showTargeted: true,
-  showGroundTraffic: true,
-  pulseEnabled: true,
-  showSites: true,
-  showNuclear: true,
-  showNaval: false,
-  showOil: true,
-  showAirbase: false,
-  showDesalination: false,
-  showPort: false,
-  showHitOnly: false,
-  showHealthySites: true,
-  showAttackedSites: true,
-};
-
 export type SidebarSection = 'counters' | 'layers' | 'filters';
 
 export interface UIState {
@@ -93,24 +51,6 @@ export interface UIState {
   isSidebarOpen: boolean;
   activeSidebarSection: SidebarSection | null;
   isMarketsCollapsed: boolean;
-  pulseEnabled: boolean;
-  showGroundTraffic: boolean;
-  showFlights: boolean;
-  showShips: boolean;
-  showEvents: boolean;
-  showAirstrikes: boolean;
-  showGroundCombat: boolean;
-  showTargeted: boolean;
-  showSites: boolean;
-  showNuclear: boolean;
-  showNaval: boolean;
-  showOil: boolean;
-  showAirbase: boolean;
-  showDesalination: boolean;
-  showPort: boolean;
-  showHitOnly: boolean;
-  showHealthySites: boolean;
-  showAttackedSites: boolean;
   selectedEntityId: string | null;
   hoveredEntityId: string | null;
   expandedAlertSiteId: string | null;
@@ -123,24 +63,6 @@ export interface UIState {
   toggleFlightFilters: () => void;
   toggleShipFilters: () => void;
   toggleEventFilters: () => void;
-  togglePulse: () => void;
-  toggleGroundTraffic: () => void;
-  toggleFlights: () => void;
-  toggleShips: () => void;
-  toggleEvents: () => void;
-  toggleAirstrikes: () => void;
-  toggleGroundCombat: () => void;
-  toggleTargeted: () => void;
-  toggleSites: () => void;
-  toggleNuclear: () => void;
-  toggleNaval: () => void;
-  toggleOil: () => void;
-  toggleAirbase: () => void;
-  toggleDesalination: () => void;
-  togglePort: () => void;
-  toggleHitOnly: () => void;
-  toggleHealthySites: () => void;
-  toggleAttackedSites: () => void;
   selectEntity: (id: string | null) => void;
   hoverEntity: (id: string | null) => void;
   setExpandedAlertSiteId: (id: string | null) => void;
