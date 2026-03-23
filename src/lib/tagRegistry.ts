@@ -225,15 +225,6 @@ export const TAG_REGISTRY: Record<string, TagDefinition> = {
     entityTypes: ['flight', 'ship'],
     examples: ['speed:>200', 'speed:<50'],
   },
-  squawk: {
-    prefix: 'squawk',
-    label: 'Squawk Code',
-    description: 'Filter flights by transponder squawk code (data not yet available)',
-    color: 'text-yellow-400',
-    entityTypes: ['flight'],
-    examples: ['squawk:7700', 'squawk:7500'],
-    // No getValues -- squawk data not in FlightEntity.data yet
-  },
   ground: {
     prefix: 'ground',
     label: 'On Ground',
@@ -242,15 +233,6 @@ export const TAG_REGISTRY: Record<string, TagDefinition> = {
     entityTypes: ['flight'],
     examples: ['ground:true', 'ground:false'],
     getValues: () => staticValues(['true', 'false']),
-  },
-  vertical: {
-    prefix: 'vertical',
-    label: 'Vertical Rate',
-    description: 'Filter flights by vertical direction (climbing or descending)',
-    color: 'text-yellow-400',
-    entityTypes: ['flight'],
-    examples: ['vertical:climbing', 'vertical:descending'],
-    getValues: () => staticValues(['climbing', 'descending']),
   },
   unidentified: {
     prefix: 'unidentified',
@@ -276,7 +258,7 @@ export const TAG_REGISTRY: Record<string, TagDefinition> = {
     label: 'Heading',
     description: 'Filter ships by heading in degrees (supports >/< operators)',
     color: 'text-violet-400',
-    entityTypes: ['ship'],
+    entityTypes: ['flight', 'ship'],
     examples: ['heading:>180', 'heading:<90'],
   },
   shipname: {
@@ -296,14 +278,6 @@ export const TAG_REGISTRY: Record<string, TagDefinition> = {
     color: 'text-orange-400',
     entityTypes: ['event'],
     examples: ['cameo:190', 'cameo:195'],
-  },
-  goldstein: {
-    prefix: 'goldstein',
-    label: 'Goldstein Scale',
-    description: 'Filter events by Goldstein conflict scale (-10 to +10, supports >/< operators)',
-    color: 'text-orange-400',
-    entityTypes: ['event'],
-    examples: ['goldstein:<-5', 'goldstein:>0'],
   },
   mentions: {
     prefix: 'mentions',

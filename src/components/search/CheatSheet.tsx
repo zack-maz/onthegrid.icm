@@ -13,15 +13,15 @@ const TAG_GROUPS = [
   },
   {
     label: 'Flight',
-    prefixes: ['callsign', 'icao', 'altitude', 'speed', 'squawk', 'ground', 'vertical', 'unidentified'],
+    prefixes: ['callsign', 'icao', 'altitude', 'speed', 'ground', 'heading', 'unidentified'],
   },
   {
     label: 'Ship',
-    prefixes: ['mmsi', 'heading', 'shipname'],
+    prefixes: ['mmsi', 'shipname'],
   },
   {
     label: 'Event',
-    prefixes: ['actor', 'location', 'severity', 'cameo', 'goldstein', 'mentions', 'date'],
+    prefixes: ['actor', 'location', 'severity', 'cameo', 'mentions', 'date'],
   },
   {
     label: 'Site',
