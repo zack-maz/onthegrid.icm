@@ -37,6 +37,8 @@ const DEFAULT_STATE: SyncableState = {
   showAirbase: false,
   showDesalination: false,
   showPort: false,
+  showGroundTraffic: false,
+  pulseEnabled: false,
   showHitOnly: false,
   altitudeMin: null,
   altitudeMax: null,
@@ -212,6 +214,62 @@ describe('deriveTogglesFromAST', () => {
     // No type/site keys should be set
     expect(updates['showFlights']).toBeUndefined();
   });
+
+  // ── Negated tag sync ──
+
+  it('!site: (wildcard) turns off all site toggles', () => {
+    const ast = parse('!site:');
+    const updates = deriveTogglesFromAST(ast);
+    expect(updates['showNuclear']).toBe(false);
+    expect(updates['showNaval']).toBe(false);
+    expect(updates['showOil']).toBe(false);
+    expect(updates['showAirbase']).toBe(false);
+    expect(updates['showDesalination']).toBe(false);
+    expect(updates['showPort']).toBe(false);
+    expect(updates['showSites']).toBe(false);
+  });
+
+  it('!site:nuclear enables all sites except nuclear', () => {
+    const ast = parse('!site:nuclear');
+    const updates = deriveTogglesFromAST(ast);
+    expect(updates['showSites']).toBe(true);
+    expect(updates['showNuclear']).toBe(false);
+    expect(updates['showNaval']).toBe(true);
+    expect(updates['showOil']).toBe(true);
+    expect(updates['showAirbase']).toBe(true);
+    expect(updates['showDesalination']).toBe(true);
+    expect(updates['showPort']).toBe(true);
+  });
+
+  it('!type: (wildcard) turns off all type toggles and showEvents', () => {
+    const ast = parse('!type:');
+    const updates = deriveTogglesFromAST(ast);
+    expect(updates['showFlights']).toBe(false);
+    expect(updates['showShips']).toBe(false);
+    expect(updates['showAirstrikes']).toBe(false);
+    expect(updates['showGroundCombat']).toBe(false);
+    expect(updates['showTargeted']).toBe(false);
+    expect(updates['showEvents']).toBe(false);
+  });
+
+  it('!type:flight enables all types except flights', () => {
+    const ast = parse('!type:flight');
+    const updates = deriveTogglesFromAST(ast);
+    expect(updates['showFlights']).toBe(false);
+    expect(updates['showShips']).toBe(true);
+    expect(updates['showAirstrikes']).toBe(true);
+    expect(updates['showGroundCombat']).toBe(true);
+    expect(updates['showTargeted']).toBe(true);
+    expect(updates['showEvents']).toBe(true);
+  });
+
+  it('positive and negated tags can coexist', () => {
+    const ast = parse('type:flight !site:');
+    const updates = deriveTogglesFromAST(ast);
+    expect(updates['showFlights']).toBe(true);
+    expect(updates['showSites']).toBe(false);
+    expect(updates['showNuclear']).toBe(false);
+  });
 });
 
 // ─── deriveFiltersFromAST ────────────────────────────────────
@@ -379,18 +437,23 @@ describe('buildASTFromToggles', () => {
     expect(ast).toBeNull();
   });
 
-  // ── Non-bidirectional boolean tags preserved ──
+  // ── Bidirectional boolean tags rebuilt from toggle state ──
 
-  it('preserves ground:true from existing AST (not rebuilt from toggle)', () => {
-    const existingAST = parse('type:flight ground:true');
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
+  it('ground:true rebuilt when showGroundTraffic ON', () => {
+    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true, showGroundTraffic: true }, null);
     const str = serialize(ast);
     expect(str).toContain('ground:true');
   });
 
-  it('preserves unidentified:true from existing AST', () => {
-    const existingAST = parse('type:flight unidentified:true');
+  it('ground:true absent when showGroundTraffic OFF', () => {
+    const existingAST = parse('type:flight ground:true');
     const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
+    const str = serialize(ast);
+    expect(str).not.toContain('ground');
+  });
+
+  it('unidentified:true rebuilt when pulseEnabled ON', () => {
+    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true, pulseEnabled: true }, null);
     const str = serialize(ast);
     expect(str).toContain('unidentified:true');
   });

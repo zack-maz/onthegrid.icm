@@ -60,13 +60,12 @@ export const SITE_TOGGLE_MAP: Record<string, string> = {
 
 /**
  * Boolean search tags that map to uiStore toggles.
- * ground/unidentified: search→sidebar only (ensures visibility for search results).
- * status: fully bidirectional (showHitOnly IS a filter).
+ * All are fully bidirectional: search ↔ filter panel toggles.
  */
-export const BOOL_TAG_MAP: Record<string, { toggle: string; trueValue: string; bidirectional: boolean }> = {
-  ground: { toggle: 'showGroundTraffic', trueValue: 'true', bidirectional: false },
-  unidentified: { toggle: 'pulseEnabled', trueValue: 'true', bidirectional: false },
-  status: { toggle: 'showHitOnly', trueValue: 'attacked', bidirectional: true },
+export const BOOL_TAG_MAP: Record<string, { toggle: string; trueValue: string }> = {
+  ground: { toggle: 'showGroundTraffic', trueValue: 'true' },
+  unidentified: { toggle: 'pulseEnabled', trueValue: 'true' },
+  status: { toggle: 'showHitOnly', trueValue: 'attacked' },
 };
 
 /** Synced range tag prefixes → filterStore setter info */
@@ -105,11 +104,11 @@ function extractNonSyncedNodes(node: QueryNode | null): QueryNode[] {
       if (p === 'type' && (v in TYPE_TOGGLE_MAP || v === '*')) return [];
       if (p === 'site' && (v in SITE_TOGGLE_MAP || v === '*')) return [];
       if (p === 'country' || p === 'since' || p === 'before') return [];
-      // Bidirectional boolean tags are synced (rebuilt from toggle state)
-      if (p in BOOL_TAG_MAP && BOOL_TAG_MAP[p].bidirectional) return [];
+      // Boolean tags are synced (rebuilt from toggle state)
+      if (p in BOOL_TAG_MAP) return [];
       // Range tags are synced (rebuilt from filter state)
       if (RANGE_TAG_PREFIXES.has(p)) return [];
-      // Non-synced tag (callsign, actor, near, ground, unidentified, etc.)
+      // Non-synced tag (callsign, actor, near, etc.)
       return [node];
     }
     case 'text':
@@ -219,6 +218,8 @@ export function deriveTogglesFromAST(
   }
 
   // Negated tags: turn OFF mentioned toggles
+  // Wildcard (*) turns off everything. Specific negation (e.g. !site:nuclear)
+  // means "show all EXCEPT these" — so turn everything ON first, then OFF the negated ones.
   if (negTypeTags.length > 0) {
     if (negTypeTags.includes('*')) {
       for (const toggleKey of Object.values(TYPE_TOGGLE_MAP)) {
@@ -226,6 +227,11 @@ export function deriveTogglesFromAST(
       }
       updates['showEvents'] = false;
     } else {
+      // "Show all except these" — enable all type toggles, then disable negated
+      for (const toggleKey of new Set(Object.values(TYPE_TOGGLE_MAP))) {
+        updates[toggleKey] = true;
+      }
+      updates['showEvents'] = true;
       for (const tv of negTypeTags) {
         const toggleKey = TYPE_TOGGLE_MAP[tv];
         if (toggleKey) updates[toggleKey] = false;
@@ -240,6 +246,11 @@ export function deriveTogglesFromAST(
       }
       updates['showSites'] = false;
     } else {
+      // "Show all except these" — enable all site toggles, then disable negated
+      updates['showSites'] = true;
+      for (const toggleKey of Object.values(SITE_TOGGLE_MAP)) {
+        updates[toggleKey] = true;
+      }
       for (const sv of negSiteTags) {
         const toggleKey = SITE_TOGGLE_MAP[sv];
         if (toggleKey) updates[toggleKey] = false;
@@ -314,7 +325,9 @@ export interface SyncableState {
   showAirbase: boolean;
   showDesalination: boolean;
   showPort: boolean;
-  // Bidirectional boolean toggles
+  // Boolean filter toggles
+  showGroundTraffic: boolean;
+  pulseEnabled: boolean;
   showHitOnly: boolean;
   // Range filters
   altitudeMin: number | null;
@@ -356,9 +369,9 @@ export function buildASTFromToggles(
     }
   }
 
-  // Add bidirectional boolean tags
-  for (const [prefix, { toggle, trueValue, bidirectional }] of Object.entries(BOOL_TAG_MAP)) {
-    if (bidirectional && (state as Record<string, unknown>)[toggle]) {
+  // Add boolean filter tags
+  for (const [prefix, { toggle, trueValue }] of Object.entries(BOOL_TAG_MAP)) {
+    if ((state as Record<string, unknown>)[toggle]) {
       nodes.push({
         type: 'tag',
         prefix,
@@ -412,6 +425,8 @@ export function useQuerySync(): void {
   const showAirbase = useUIStore((s) => s.showAirbase);
   const showDesalination = useUIStore((s) => s.showDesalination);
   const showPort = useUIStore((s) => s.showPort);
+  const showGroundTraffic = useUIStore((s) => s.showGroundTraffic);
+  const pulseEnabled = useUIStore((s) => s.pulseEnabled);
   const showHitOnly = useUIStore((s) => s.showHitOnly);
 
   // Subscribe to filter ranges
@@ -502,6 +517,8 @@ export function useQuerySync(): void {
     showAirbase,
     showDesalination,
     showPort,
+    showGroundTraffic,
+    pulseEnabled,
     showHitOnly,
     altitudeMin,
     altitudeMax,
@@ -559,6 +576,8 @@ export function useQuerySync(): void {
     showAirbase,
     showDesalination,
     showPort,
+    showGroundTraffic,
+    pulseEnabled,
     showHitOnly,
     altitudeMin,
     altitudeMax,
