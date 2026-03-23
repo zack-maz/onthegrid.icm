@@ -56,16 +56,6 @@ export function entityPassesFilters(
     // Ships and events: always pass flight speed filter
   }
 
-  // ── Ship speed filter ──────────────────────────────────────────────
-  if (filters.shipSpeedMin !== null || filters.shipSpeedMax !== null) {
-    if (entity.type === 'ship') {
-      const knots = entity.data.speedOverGround;
-      if (filters.shipSpeedMin !== null && knots < filters.shipSpeedMin) return false;
-      if (filters.shipSpeedMax !== null && knots > filters.shipSpeedMax) return false;
-    }
-    // Flights and events: always pass ship speed filter
-  }
-
   // ── Altitude filter ─────────────────────────────────────────────────
   if (filters.altitudeMin !== null || filters.altitudeMax !== null) {
     if (entity.type === 'flight') {
@@ -97,6 +87,61 @@ export function entityPassesFilters(
       // Only applies to conflict events (historical); flights/ships are live
       if (filters.dateStart !== null && entity.timestamp < filters.dateStart) return false;
       if (filters.dateEnd !== null && entity.timestamp > filters.dateEnd) return false;
+    }
+  }
+
+  // ── Flight callsign filter ──
+  if (filters.flightCallsign) {
+    if (entity.type === 'flight') {
+      if (!entity.label.toLowerCase().includes(filters.flightCallsign.toLowerCase())) return false;
+    }
+  }
+
+  // ── Flight ICAO filter ──
+  if (filters.flightIcao) {
+    if (entity.type === 'flight') {
+      if (!entity.data.icao24.toLowerCase().includes(filters.flightIcao.toLowerCase())) return false;
+    }
+  }
+
+  // ── Ship MMSI filter ──
+  if (filters.shipMmsi) {
+    if (entity.type === 'ship') {
+      if (!String(entity.data.mmsi).includes(filters.shipMmsi)) return false;
+    }
+  }
+
+  // ── Ship name filter ──
+  if (filters.shipNameFilter) {
+    if (entity.type === 'ship') {
+      if (!entity.data.shipName.toLowerCase().includes(filters.shipNameFilter.toLowerCase())) return false;
+    }
+  }
+
+  // ── CAMEO code filter ──
+  if (filters.cameoCode) {
+    if (isConflictEventType(entity.type)) {
+      if (entity.data.cameoCode !== filters.cameoCode) return false;
+    }
+  }
+
+  // ── Mentions range filter ──
+  if (filters.mentionsMin !== null || filters.mentionsMax !== null) {
+    if (isConflictEventType(entity.type)) {
+      const mentions = entity.data.numMentions ?? 0;
+      if (filters.mentionsMin !== null && mentions < filters.mentionsMin) return false;
+      if (filters.mentionsMax !== null && mentions > filters.mentionsMax) return false;
+    }
+  }
+
+  // ── Heading filter (flight only, ±15° tolerance) ──
+  if (filters.headingAngle !== null) {
+    if (entity.type === 'flight') {
+      const heading = entity.data.heading;
+      if (heading !== null && heading !== undefined) {
+        const diff = Math.abs(((heading - filters.headingAngle + 180) % 360) - 180);
+        if (diff > 15) return false;
+      }
     }
   }
 
