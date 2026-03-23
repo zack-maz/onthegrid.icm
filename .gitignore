@@ -9,9 +9,11 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-server
 api/*.mjs
 api/*.js
 dist-ssr
+*.tsbuildinfo
 *.local
 
 # Environment variables
