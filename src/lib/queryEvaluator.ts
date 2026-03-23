@@ -126,20 +126,10 @@ export function evaluateQuery(
   if (!node) return true; // null AST matches everything
 
   switch (node.type) {
-    case 'and':
-      return evaluateQuery(node.left, entity, context) && evaluateQuery(node.right, entity, context);
-
     case 'or':
       return evaluateQuery(node.left, entity, context) || evaluateQuery(node.right, entity, context);
-
-    case 'not':
-      return !evaluateQuery(node.child, entity, context);
-
-    case 'tag': {
-      const result = evaluateTag(entity, node.prefix, node.value, context);
-      return node.negated ? !result : result;
-    }
-
+    case 'tag':
+      return evaluateTag(entity, node.prefix, node.value, context);
     case 'text': {
       const fields = getSearchableFields(entity);
       const lower = node.value.toLowerCase();
@@ -245,11 +235,6 @@ export function evaluateTag(
       return false;
     }
 
-    case 'goldstein': {
-      if (entity.type === 'ship' || entity.type === 'flight' || entity.type === 'site') return false;
-      return matchRange((entity as ConflictEventEntity).data.goldsteinScale, value);
-    }
-
     case 'mentions': {
       if (entity.type === 'ship' || entity.type === 'flight' || entity.type === 'site') return false;
       return matchRange((entity as ConflictEventEntity).data.numMentions, value);
@@ -259,15 +244,6 @@ export function evaluateTag(
       if (entity.type !== 'flight') return false;
       const isGround = (entity as FlightEntity).data.onGround;
       return value.toLowerCase() === 'true' ? isGround : !isGround;
-    }
-
-    case 'vertical': {
-      if (entity.type !== 'flight') return false;
-      const vr = (entity as FlightEntity).data.verticalRate;
-      if (vr == null) return false;
-      if (value.toLowerCase() === 'climbing') return vr > 0;
-      if (value.toLowerCase() === 'descending') return vr < 0;
-      return false;
     }
 
     case 'unidentified': {
@@ -330,11 +306,6 @@ export function evaluateTag(
 
     case 'has': {
       return checkHasAttribute(entity, value);
-    }
-
-    case 'squawk': {
-      // No-op: squawk data not in FlightEntity yet
-      return true;
     }
 
     default:
