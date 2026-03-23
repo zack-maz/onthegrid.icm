@@ -11,6 +11,7 @@ export type VisualizationLayerId =
 interface LayerState {
   activeLayers: Set<VisualizationLayerId>;
   toggleLayer: (id: VisualizationLayerId) => void;
+  resetLayers: () => void;
 }
 
 export const useLayerStore = create<LayerState>()((set) => ({
@@ -25,4 +26,5 @@ export const useLayerStore = create<LayerState>()((set) => ({
       }
       return { activeLayers: next };
     }),
+  resetLayers: () => set({ activeLayers: new Set<VisualizationLayerId>() }),
 }));

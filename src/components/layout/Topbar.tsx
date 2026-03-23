@@ -6,22 +6,21 @@ import { useSearchStore } from '@/stores/searchStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { LAYER_TOGGLE_DEFAULTS } from '@/types/ui';
+import { useLayerStore } from '@/stores/layerStore';
 import { INITIAL_VIEW_STATE } from '@/components/map/constants';
 
 function ResetButton() {
   const handleReset = useCallback(() => {
-    // Reset layer toggles to defaults + persist
+    // Reset UI state
     useUIStore.setState({
-      ...LAYER_TOGGLE_DEFAULTS,
       selectedEntityId: null,
       hoveredEntityId: null,
       isDetailPanelOpen: false,
       expandedAlertSiteId: null,
     });
-    try {
-      localStorage.setItem('layerToggles', JSON.stringify(LAYER_TOGGLE_DEFAULTS));
-    } catch { /* */ }
+
+    // Reset visualization layers to defaults
+    useLayerStore.getState().resetLayers();
 
     // Reset all filters
     useFilterStore.getState().clearAll();
