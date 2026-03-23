@@ -9,38 +9,20 @@ describe('tokenize', () => {
       type: 'TAG',
       prefix: 'type',
       tagValue: 'flight',
-      negated: false,
     });
     expect(tokens[0].start).toBe(0);
     expect(tokens[0].end).toBe(11);
   });
 
-  it('tokenizes a negated TAG token', () => {
-    const tokens = tokenize('!country:iran');
-    expect(tokens).toHaveLength(1);
-    expect(tokens[0]).toMatchObject({
-      type: 'TAG',
-      prefix: 'country',
-      tagValue: 'iran',
-      negated: true,
-    });
-  });
-
-  it('tokenizes AND keyword between tags', () => {
-    const tokens = tokenize('type:flight AND country:iran');
-    expect(tokens).toHaveLength(3);
-    expect(tokens[0].type).toBe('TAG');
-    expect(tokens[1]).toMatchObject({ type: 'AND' });
-    expect(tokens[2].type).toBe('TAG');
-  });
-
   it('tokenizes OR keyword between tags', () => {
     const tokens = tokenize('type:flight OR type:ship');
     expect(tokens).toHaveLength(3);
+    expect(tokens[0].type).toBe('TAG');
     expect(tokens[1]).toMatchObject({ type: 'OR' });
+    expect(tokens[2].type).toBe('TAG');
   });
 
-  it('tokenizes implicit AND (adjacent tags with no operator)', () => {
+  it('tokenizes adjacent tags (implicit OR)', () => {
     const tokens = tokenize('type:flight country:iran');
     expect(tokens).toHaveLength(2);
     expect(tokens[0].type).toBe('TAG');
@@ -61,12 +43,6 @@ describe('tokenize', () => {
     expect(tokens[1]).toMatchObject({ type: 'TEXT', value: '747' });
   });
 
-  it('tokenizes negated freeform text', () => {
-    const tokens = tokenize('!boeing');
-    expect(tokens).toHaveLength(1);
-    expect(tokens[0]).toMatchObject({ type: 'TEXT', value: 'boeing', negated: true });
-  });
-
   it('preserves range operators in tag values', () => {
     const tokens = tokenize('altitude:>30000');
     expect(tokens).toHaveLength(1);
@@ -78,13 +54,11 @@ describe('tokenize', () => {
   });
 
   it('tracks start/end positions', () => {
-    const tokens = tokenize('type:flight AND speed:>500');
+    const tokens = tokenize('type:flight country:iran');
     expect(tokens[0].start).toBe(0);
     expect(tokens[0].end).toBe(11);
     expect(tokens[1].start).toBe(12);
-    expect(tokens[1].end).toBe(15);
-    expect(tokens[2].start).toBe(16);
-    expect(tokens[2].end).toBe(26);
+    expect(tokens[1].end).toBe(24);
   });
 
   it('returns empty array for empty input', () => {
@@ -114,16 +88,6 @@ describe('parse', () => {
       type: 'tag',
       prefix: 'type',
       value: 'flight',
-      negated: false,
-    });
-  });
-
-  it('parses AND expression', () => {
-    const ast = parse('type:flight AND country:iran');
-    expect(ast).toEqual({
-      type: 'and',
-      left: { type: 'tag', prefix: 'type', value: 'flight', negated: false },
-      right: { type: 'tag', prefix: 'country', value: 'iran', negated: false },
     });
   });
 
@@ -131,46 +95,40 @@ describe('parse', () => {
     const ast = parse('type:flight OR type:ship');
     expect(ast).toEqual({
       type: 'or',
-      left: { type: 'tag', prefix: 'type', value: 'flight', negated: false },
-      right: { type: 'tag', prefix: 'type', value: 'ship', negated: false },
+      left: { type: 'tag', prefix: 'type', value: 'flight' },
+      right: { type: 'tag', prefix: 'type', value: 'ship' },
     });
   });
 
-  it('AND binds tighter than OR (standard precedence)', () => {
-    // a AND b OR c should be (a AND b) OR c
-    const ast = parse('type:flight AND country:iran OR type:ship');
+  it('parses implicit OR (adjacent terms)', () => {
+    const ast = parse('boeing 747');
+    expect(ast).toEqual({
+      type: 'or',
+      left: { type: 'text', value: 'boeing' },
+      right: { type: 'text', value: '747' },
+    });
+  });
+
+  it('parses implicit OR with tags', () => {
+    const ast = parse('type:flight country:iran');
+    expect(ast).toEqual({
+      type: 'or',
+      left: { type: 'tag', prefix: 'type', value: 'flight' },
+      right: { type: 'tag', prefix: 'country', value: 'iran' },
+    });
+  });
+
+  it('chains multiple implicit OR terms correctly', () => {
+    const ast = parse('type:flight country:iran altitude:>30000');
+    // Should be OR(OR(tag, tag), tag) - left-associative
     expect(ast).toEqual({
       type: 'or',
       left: {
-        type: 'and',
-        left: { type: 'tag', prefix: 'type', value: 'flight', negated: false },
-        right: { type: 'tag', prefix: 'country', value: 'iran', negated: false },
-      },
-      right: { type: 'tag', prefix: 'type', value: 'ship', negated: false },
-    });
-  });
-
-  it('parses parenthesized expressions to override precedence', () => {
-    // (type:flight OR type:ship) AND country:iran
-    const ast = parse('(type:flight OR type:ship) AND country:iran');
-    expect(ast).toEqual({
-      type: 'and',
-      left: {
         type: 'or',
-        left: { type: 'tag', prefix: 'type', value: 'flight', negated: false },
-        right: { type: 'tag', prefix: 'type', value: 'ship', negated: false },
+        left: { type: 'tag', prefix: 'type', value: 'flight' },
+        right: { type: 'tag', prefix: 'country', value: 'iran' },
       },
-      right: { type: 'tag', prefix: 'country', value: 'iran', negated: false },
-    });
-  });
-
-  it('parses negated tag', () => {
-    const ast = parse('!country:iran');
-    expect(ast).toEqual({
-      type: 'tag',
-      prefix: 'country',
-      value: 'iran',
-      negated: true,
+      right: { type: 'tag', prefix: 'altitude', value: '>30000' },
     });
   });
 
@@ -179,54 +137,13 @@ describe('parse', () => {
     expect(ast).toEqual({ type: 'text', value: 'boeing' });
   });
 
-  it('parses negated freeform text to NotNode(TextNode)', () => {
-    const ast = parse('!boeing');
-    expect(ast).toEqual({
-      type: 'not',
-      child: { type: 'text', value: 'boeing' },
-    });
-  });
-
-  it('parses implicit AND (adjacent terms)', () => {
-    const ast = parse('boeing 747');
-    expect(ast).toEqual({
-      type: 'and',
-      left: { type: 'text', value: 'boeing' },
-      right: { type: 'text', value: '747' },
-    });
-  });
-
-  it('parses implicit AND with tags', () => {
-    const ast = parse('type:flight country:iran');
-    expect(ast).toEqual({
-      type: 'and',
-      left: { type: 'tag', prefix: 'type', value: 'flight', negated: false },
-      right: { type: 'tag', prefix: 'country', value: 'iran', negated: false },
-    });
-  });
-
-  it('chains multiple implicit AND terms correctly', () => {
-    const ast = parse('type:flight country:iran altitude:>30000');
-    // Should be AND(AND(tag, tag), tag) - left-associative
-    expect(ast).toEqual({
-      type: 'and',
-      left: {
-        type: 'and',
-        left: { type: 'tag', prefix: 'type', value: 'flight', negated: false },
-        right: { type: 'tag', prefix: 'country', value: 'iran', negated: false },
-      },
-      right: { type: 'tag', prefix: 'altitude', value: '>30000', negated: false },
-    });
-  });
-
-  it('handles trailing operator gracefully', () => {
-    const ast = parse('type:flight AND');
+  it('handles trailing OR gracefully', () => {
+    const ast = parse('type:flight OR');
     // Should parse as just the tag (trailing operator ignored)
     expect(ast).toEqual({
       type: 'tag',
       prefix: 'type',
       value: 'flight',
-      negated: false,
     });
   });
 
@@ -235,18 +152,22 @@ describe('parse', () => {
     // Should treat as if closed
     expect(ast).toEqual({
       type: 'or',
-      left: { type: 'tag', prefix: 'type', value: 'flight', negated: false },
-      right: { type: 'tag', prefix: 'type', value: 'ship', negated: false },
+      left: { type: 'tag', prefix: 'type', value: 'flight' },
+      right: { type: 'tag', prefix: 'type', value: 'ship' },
     });
   });
 
   it('handles empty tag value as wildcard tag', () => {
     const ast = parse('type:');
-    expect(ast).toEqual({ type: 'tag', prefix: 'type', value: '*', negated: false });
+    expect(ast).toEqual({ type: 'tag', prefix: 'type', value: '*' });
   });
 
-  it('handles negated empty tag value as negated wildcard tag', () => {
-    const ast = parse('!site:');
-    expect(ast).toEqual({ type: 'tag', prefix: 'site', value: '*', negated: true });
+  it('OR-only: "type:flight type:ship" parses as OR chain', () => {
+    const ast = parse('type:flight type:ship');
+    expect(ast).toEqual({
+      type: 'or',
+      left: { type: 'tag', prefix: 'type', value: 'flight' },
+      right: { type: 'tag', prefix: 'type', value: 'ship' },
+    });
   });
 });

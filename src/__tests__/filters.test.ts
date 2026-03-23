@@ -13,8 +13,6 @@ function makeDefaults(): FilterState {
     eventCountries: [],
     flightSpeedMin: null,
     flightSpeedMax: null,
-    shipSpeedMin: null,
-    shipSpeedMax: null,
     altitudeMin: null,
     altitudeMax: null,
     proximityPin: null,
@@ -22,6 +20,21 @@ function makeDefaults(): FilterState {
     dateStart: null,
     dateEnd: null,
     isSettingPin: false,
+    granularity: 'hour' as const,
+    // New text search fields
+    flightCallsign: '',
+    flightIcao: '',
+    shipMmsi: '',
+    shipNameFilter: '',
+    cameoCode: '',
+    // New range fields
+    mentionsMin: null,
+    mentionsMax: null,
+    headingAngle: null,
+    // Severity toggles
+    showHighSeverity: true,
+    showMediumSeverity: true,
+    showLowSeverity: true,
     // Actions (unused by pure function, but satisfy the type)
     setFlightCountries: () => {},
     addFlightCountry: () => {},
@@ -30,19 +43,26 @@ function makeDefaults(): FilterState {
     addEventCountry: () => {},
     removeEventCountry: () => {},
     setFlightSpeedRange: () => {},
-    setShipSpeedRange: () => {},
     setAltitudeRange: () => {},
     setProximityPin: () => {},
     setProximityRadius: () => {},
     setDateRange: () => {},
     setSettingPin: () => {},
-    granularity: 'hour' as const,
-    savedToggles: null,
     setGranularity: () => {},
-    isCustomRangeActive: () => false,
+    isDefaultWindowActive: () => true,
     clearFilter: () => {},
     clearAll: () => {},
     activeFilterCount: () => 0,
+    setFlightCallsign: () => {},
+    setFlightIcao: () => {},
+    setShipMmsi: () => {},
+    setShipNameFilter: () => {},
+    setCameoCode: () => {},
+    setMentionsRange: () => {},
+    setHeadingAngle: () => {},
+    setShowHighSeverity: () => {},
+    setShowMediumSeverity: () => {},
+    setShowLowSeverity: () => {},
   };
 }
 
@@ -240,34 +260,7 @@ describe('entityPassesFilters', () => {
     });
   });
 
-  describe('ship speed filter', () => {
-    it('ship within speed range passes (already in knots)', () => {
-      const filters = { ...makeDefaults(), shipSpeedMin: 10, shipSpeedMax: 25 };
-      expect(entityPassesFilters(makeShip({ speedOverGround: 15 }), filters)).toBe(true);
-    });
-
-    it('ship below speed range fails', () => {
-      const filters = { ...makeDefaults(), shipSpeedMin: 10, shipSpeedMax: 25 };
-      expect(entityPassesFilters(makeShip({ speedOverGround: 5 }), filters)).toBe(false);
-    });
-
-    it('ship above speed range fails', () => {
-      const filters = { ...makeDefaults(), shipSpeedMin: 10, shipSpeedMax: 25 };
-      expect(entityPassesFilters(makeShip({ speedOverGround: 30 }), filters)).toBe(false);
-    });
-
-    it('flight always passes ship speed filter', () => {
-      const filters = { ...makeDefaults(), shipSpeedMin: 10, shipSpeedMax: 25 };
-      expect(entityPassesFilters(makeFlight(), filters)).toBe(true);
-    });
-
-    it('event always passes ship speed filter', () => {
-      const filters = { ...makeDefaults(), shipSpeedMin: 10, shipSpeedMax: 25 };
-      expect(entityPassesFilters(makeEvent(), filters)).toBe(true);
-    });
-  });
-
-  describe('altitude filter', () => {
+describe('altitude filter', () => {
     it('flight within altitude range passes (altitude in meters, filter in feet)', () => {
       const filters = { ...makeDefaults(), altitudeMin: 10000, altitudeMax: 40000 };
       expect(entityPassesFilters(makeFlight({ altitude: 5000 }), filters)).toBe(true);
@@ -426,8 +419,6 @@ describe('entityPassesFilters', () => {
         ...makeDefaults(),
         flightSpeedMin: 200,
         flightSpeedMax: 400,
-        shipSpeedMin: 10,
-        shipSpeedMax: 25,
         altitudeMin: 10000,
         altitudeMax: 40000,
       };

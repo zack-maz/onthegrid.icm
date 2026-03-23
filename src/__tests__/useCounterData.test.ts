@@ -209,12 +209,27 @@ describe('useCounterData', () => {
   it('returns entities object alongside counts', () => {
     const { result } = renderHook(() => useCounterData());
     expect(result.current.entities).toBeDefined();
+    expect(result.current.entities.flights).toEqual([]);
     expect(result.current.entities.unidentifiedFlights).toEqual([]);
     expect(result.current.entities.ships).toEqual([]);
     expect(result.current.entities.airstrikeEvents).toEqual([]);
     expect(result.current.entities.groundCombatEvents).toEqual([]);
     expect(result.current.entities.targetedEvents).toEqual([]);
     expect(result.current.entities.hitSites).toBeDefined();
+  });
+
+  it('totalFlights counts non-unidentified visible flights', () => {
+    useFlightStore.setState({
+      flights: [
+        makeFlight('f1', 'Iran', false),
+        makeFlight('f2', 'Qatar', false),
+        makeFlight('f3', 'Unknown', true),
+      ],
+      flightCount: 3,
+    });
+    const { result } = renderHook(() => useCounterData());
+    expect(result.current.totalFlights).toBe(2);
+    expect(result.current.entities.flights).toHaveLength(2);
   });
 
   it('entities.unidentifiedFlights contains unidentified FlightEntity[] mapped to CounterEntity', () => {

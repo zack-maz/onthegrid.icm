@@ -21,14 +21,14 @@ describe('Entity Layer Constants', () => {
   });
   describe('ENTITY_COLORS', () => {
     it('flight is yellow', () => { expect(ENTITY_COLORS.flight).toEqual([234, 179, 8]); });
-    it('flightUnidentified is darker red', () => { expect(ENTITY_COLORS.flightUnidentified).toEqual([185, 28, 28]); });
+    it('flightUnidentified is bright yellow', () => { expect(ENTITY_COLORS.flightUnidentified).toEqual([255, 255, 100]); });
     it('ship is purple', () => { expect(ENTITY_COLORS.ship).toEqual([167, 139, 250]); });
     it('airstrike is red', () => { expect(ENTITY_COLORS.airstrike).toEqual([255, 59, 48]); });
     it('groundCombat is red', () => { expect(ENTITY_COLORS.groundCombat).toEqual([239, 68, 68]); });
     it('targeted is dark red', () => { expect(ENTITY_COLORS.targeted).toEqual([139, 30, 30]); });
   });
   describe('ICON_SIZE', () => {
-    const movingExpected = { meters: 1000, minPixels: 16, maxPixels: 120 };
+    const movingExpected = { meters: 1000, minPixels: 16, maxPixels: 100 };
     const eventExpected = { meters: 1500, minPixels: 16, maxPixels: 120 };
     it('flight', () => { expect(ICON_SIZE.flight).toEqual(movingExpected); });
     it('ship', () => { expect(ICON_SIZE.ship).toEqual(movingExpected); });
@@ -38,9 +38,9 @@ describe('Entity Layer Constants', () => {
   });
   describe('PULSE_CONFIG', () => {
     it('has correct config', () => {
-      expect(PULSE_CONFIG.minOpacity).toBe(0.7);
+      expect(PULSE_CONFIG.minOpacity).toBe(0.3);
       expect(PULSE_CONFIG.maxOpacity).toBe(1.0);
-      expect(PULSE_CONFIG.periodMs).toBe(2000);
+      expect(PULSE_CONFIG.periodMs).toBe(800);
     });
   });
 });
@@ -81,7 +81,7 @@ function resetStores() {
   useShipStore.setState({ ships: [mockShip], shipCount: 1 });
   useEventStore.setState({ events: [mockAirstrikeEvent, mockGroundCombatEvent, mockTargetedEvent, mockOtherEvent], eventCount: 4 });
   useUIStore.setState({ pulseEnabled: true, showFlights: true, showShips: true, showEvents: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true, showGroundTraffic: false });
-  useFilterStore.setState({ flightCountries: [], eventCountries: [], flightSpeedMin: null, flightSpeedMax: null, shipSpeedMin: null, shipSpeedMax: null, altitudeMin: null, altitudeMax: null, proximityPin: null, proximityRadiusKm: 100, dateStart: null, dateEnd: null, isSettingPin: false });
+  useFilterStore.setState({ flightCountries: [], eventCountries: [], flightSpeedMin: null, flightSpeedMax: null, altitudeMin: null, altitudeMax: null, proximityPin: null, proximityRadiusKm: 100, dateStart: null, dateEnd: null, isSettingPin: false });
 }
 
 describe('useEntityLayers', () => {
@@ -99,10 +99,10 @@ describe('useEntityLayers', () => {
     const color = ((result.current.find((l: { id: string }) => l.id === 'flights') as IconLayer).props.getColor as (d: FlightEntity) => number[])(mockRegularFlight);
     expect(color[0]).toBe(234); expect(color[1]).toBe(179); expect(color[2]).toBe(8); expect(color[3]).toBeGreaterThan(0);
   });
-  it('flight layer getColor returns red for unidentified flights', () => {
+  it('flight layer getColor returns bright yellow for unidentified flights', () => {
     const { result } = renderHook(() => useEntityLayers());
     const color = ((result.current.find((l: { id: string }) => l.id === 'flights') as IconLayer).props.getColor as (d: FlightEntity) => number[])(mockUnidentifiedFlight);
-    expect(color[0]).toBe(185); expect(color[1]).toBe(28); expect(color[2]).toBe(28);
+    expect(color[0]).toBe(255); expect(color[1]).toBe(255); expect(color[2]).toBe(100);
   });
   it('all icon entity layers have sizeUnits meters', () => {
     const { result } = renderHook(() => useEntityLayers());
@@ -117,7 +117,11 @@ describe('useEntityLayers', () => {
       expect((layer as IconLayer).props.sizeMaxPixels).toBeGreaterThan(0);
     }
   });
-  it('flight layer getSize returns ICON_SIZE.flight.meters', () => { const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: { id: string }) => l.id === 'flights') as IconLayer).props.getSize).toBe(ICON_SIZE.flight.meters); });
+  it('flight layer getSize returns ICON_SIZE.flight.meters for regular flights', () => {
+    const { result } = renderHook(() => useEntityLayers());
+    const getSize = (result.current.find((l: { id: string }) => l.id === 'flights') as IconLayer).props.getSize as (d: FlightEntity) => number;
+    expect(getSize(mockRegularFlight)).toBe(ICON_SIZE.flight.meters);
+  });
   it('ship layer contains ship data', () => { const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'ships') as IconLayer).props.data).toHaveLength(1); });
   it('airstrike layer contains airstrike events', () => { const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'airstrikes') as IconLayer).props.data).toHaveLength(1); });
   it('groundCombat layer contains ground combat + other events', () => { const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer).props.data).toHaveLength(2); });

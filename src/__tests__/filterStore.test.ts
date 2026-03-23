@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useFilterStore } from '@/stores/filterStore';
-import { useUIStore } from '@/stores/uiStore';
 
 describe('filterStore', () => {
   beforeEach(() => {
@@ -20,12 +19,6 @@ describe('filterStore', () => {
       const s = useFilterStore.getState();
       expect(s.flightSpeedMin).toBeNull();
       expect(s.flightSpeedMax).toBeNull();
-    });
-
-    it('shipSpeedMin/shipSpeedMax default to null', () => {
-      const s = useFilterStore.getState();
-      expect(s.shipSpeedMin).toBeNull();
-      expect(s.shipSpeedMax).toBeNull();
     });
 
     it('altitudeMin/altitudeMax default to null', () => {
@@ -56,8 +49,27 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().granularity).toBe('hour');
     });
 
-    it('savedToggles defaults to null', () => {
-      expect(useFilterStore.getState().savedToggles).toBeNull();
+    it('new text fields default to empty strings', () => {
+      const s = useFilterStore.getState();
+      expect(s.flightCallsign).toBe('');
+      expect(s.flightIcao).toBe('');
+      expect(s.shipMmsi).toBe('');
+      expect(s.shipNameFilter).toBe('');
+      expect(s.cameoCode).toBe('');
+    });
+
+    it('new range fields default to null', () => {
+      const s = useFilterStore.getState();
+      expect(s.mentionsMin).toBeNull();
+      expect(s.mentionsMax).toBeNull();
+      expect(s.headingAngle).toBeNull();
+    });
+
+    it('severity toggles default to true', () => {
+      const s = useFilterStore.getState();
+      expect(s.showHighSeverity).toBe(true);
+      expect(s.showMediumSeverity).toBe(true);
+      expect(s.showLowSeverity).toBe(true);
     });
   });
 
@@ -119,18 +131,23 @@ describe('filterStore', () => {
       expect(s.flightSpeedMax).toBe(400);
     });
 
-    it('setShipSpeedRange sets shipSpeedMin and shipSpeedMax', () => {
-      useFilterStore.getState().setShipSpeedRange(5, 25);
-      const s = useFilterStore.getState();
-      expect(s.shipSpeedMin).toBe(5);
-      expect(s.shipSpeedMax).toBe(25);
-    });
-
     it('setAltitudeRange sets altitudeMin and altitudeMax', () => {
       useFilterStore.getState().setAltitudeRange(10000, 40000);
       const s = useFilterStore.getState();
       expect(s.altitudeMin).toBe(10000);
       expect(s.altitudeMax).toBe(40000);
+    });
+
+    it('setMentionsRange sets mentionsMin and mentionsMax', () => {
+      useFilterStore.getState().setMentionsRange(10, 500);
+      const s = useFilterStore.getState();
+      expect(s.mentionsMin).toBe(10);
+      expect(s.mentionsMax).toBe(500);
+    });
+
+    it('setHeadingAngle sets headingAngle', () => {
+      useFilterStore.getState().setHeadingAngle(180);
+      expect(useFilterStore.getState().headingAngle).toBe(180);
     });
   });
 
@@ -193,14 +210,6 @@ describe('filterStore', () => {
       expect(s.flightSpeedMax).toBeNull();
     });
 
-    it('clearFilter(shipSpeed) resets shipSpeedMin/shipSpeedMax to null', () => {
-      useFilterStore.getState().setShipSpeedRange(5, 25);
-      useFilterStore.getState().clearFilter('shipSpeed');
-      const s = useFilterStore.getState();
-      expect(s.shipSpeedMin).toBeNull();
-      expect(s.shipSpeedMax).toBeNull();
-    });
-
     it('clearFilter(altitude) resets altitudeMin/altitudeMax to null', () => {
       useFilterStore.getState().setAltitudeRange(10000, 40000);
       useFilterStore.getState().clearFilter('altitude');
@@ -224,6 +233,20 @@ describe('filterStore', () => {
       expect(s.dateStart).toBeNull();
       expect(s.dateEnd).toBeNull();
     });
+
+    it('clearFilter(mentions) resets mentionsMin/mentionsMax to null', () => {
+      useFilterStore.getState().setMentionsRange(10, 500);
+      useFilterStore.getState().clearFilter('mentions');
+      const s = useFilterStore.getState();
+      expect(s.mentionsMin).toBeNull();
+      expect(s.mentionsMax).toBeNull();
+    });
+
+    it('clearFilter(heading) resets headingAngle to null', () => {
+      useFilterStore.getState().setHeadingAngle(180);
+      useFilterStore.getState().clearFilter('heading');
+      expect(useFilterStore.getState().headingAngle).toBeNull();
+    });
   });
 
   describe('clearAll', () => {
@@ -231,12 +254,19 @@ describe('filterStore', () => {
       useFilterStore.getState().setFlightCountries(['Iran']);
       useFilterStore.getState().setEventCountries(['ISRAEL']);
       useFilterStore.getState().setFlightSpeedRange(100, 400);
-      useFilterStore.getState().setShipSpeedRange(5, 25);
       useFilterStore.getState().setAltitudeRange(10000, 40000);
       useFilterStore.getState().setProximityPin({ lat: 35, lng: 51 });
       useFilterStore.getState().setProximityRadius(250);
       useFilterStore.getState().setDateRange(1000, 2000);
       useFilterStore.getState().setSettingPin(true);
+      useFilterStore.getState().setFlightCallsign('IRA');
+      useFilterStore.getState().setFlightIcao('abc');
+      useFilterStore.getState().setShipMmsi('123');
+      useFilterStore.getState().setShipNameFilter('TANK');
+      useFilterStore.getState().setCameoCode('190');
+      useFilterStore.getState().setMentionsRange(10, 500);
+      useFilterStore.getState().setHeadingAngle(180);
+      useFilterStore.getState().setShowHighSeverity(false);
 
       useFilterStore.getState().clearAll();
       const s = useFilterStore.getState();
@@ -244,8 +274,6 @@ describe('filterStore', () => {
       expect(s.eventCountries).toEqual([]);
       expect(s.flightSpeedMin).toBeNull();
       expect(s.flightSpeedMax).toBeNull();
-      expect(s.shipSpeedMin).toBeNull();
-      expect(s.shipSpeedMax).toBeNull();
       expect(s.altitudeMin).toBeNull();
       expect(s.altitudeMax).toBeNull();
       expect(s.proximityPin).toBeNull();
@@ -253,6 +281,17 @@ describe('filterStore', () => {
       expect(s.dateStart).toBeNull();
       expect(s.dateEnd).toBeNull();
       expect(s.isSettingPin).toBe(false);
+      expect(s.flightCallsign).toBe('');
+      expect(s.flightIcao).toBe('');
+      expect(s.shipMmsi).toBe('');
+      expect(s.shipNameFilter).toBe('');
+      expect(s.cameoCode).toBe('');
+      expect(s.mentionsMin).toBeNull();
+      expect(s.mentionsMax).toBeNull();
+      expect(s.headingAngle).toBeNull();
+      expect(s.showHighSeverity).toBe(true);
+      expect(s.showMediumSeverity).toBe(true);
+      expect(s.showLowSeverity).toBe(true);
     });
   });
 
@@ -263,12 +302,10 @@ describe('filterStore', () => {
     });
 
     it('setGranularity snaps dateStart to new step boundary', () => {
-      // Set a dateStart at an odd timestamp
-      const oddTs = Date.UTC(2026, 2, 10, 14, 37, 22); // Mar 10 14:37:22
+      const oddTs = Date.UTC(2026, 2, 10, 14, 37, 22);
       useFilterStore.getState().setDateRange(oddTs, null);
       useFilterStore.getState().setGranularity('hour');
       const s = useFilterStore.getState();
-      // Should snap to Mar 10 14:00:00 (floor to hour)
       expect(s.dateStart).toBe(Date.UTC(2026, 2, 10, 14, 0, 0));
     });
 
@@ -277,7 +314,6 @@ describe('filterStore', () => {
       useFilterStore.getState().setDateRange(null, oddTs);
       useFilterStore.getState().setGranularity('day');
       const s = useFilterStore.getState();
-      // Should snap to Mar 10 00:00:00 (floor to day)
       expect(s.dateEnd).toBe(Date.UTC(2026, 2, 10, 0, 0, 0));
     });
 
@@ -285,99 +321,9 @@ describe('filterStore', () => {
       const start = Date.UTC(2026, 2, 10, 23, 30, 0);
       const end = Date.UTC(2026, 2, 10, 23, 45, 0);
       useFilterStore.getState().setDateRange(start, end);
-      // Switching to day: start snaps to Mar 10, end snaps to Mar 10 — equal is fine
       useFilterStore.getState().setGranularity('day');
       const s = useFilterStore.getState();
       expect(s.dateStart! <= s.dateEnd!).toBe(true);
-    });
-  });
-
-  describe('custom range activation', () => {
-    beforeEach(() => {
-      // Reset uiStore toggles to known state
-      useUIStore.setState({
-        showFlights: true,
-        showGroundTraffic: false,
-        pulseEnabled: true,
-        showShips: true,
-      });
-    });
-
-    it('setDateRange with non-null end auto-activates custom range', () => {
-      useFilterStore.getState().setDateRange(1000, 2000);
-      expect(useFilterStore.getState().savedToggles).not.toBeNull();
-    });
-
-    it('activating custom range snapshots and suppresses flight/ship toggles', () => {
-      useFilterStore.getState().setDateRange(1000, 2000);
-      // uiStore toggles should be suppressed
-      const ui = useUIStore.getState();
-      expect(ui.showFlights).toBe(false);
-      expect(ui.showGroundTraffic).toBe(false);
-      expect(ui.pulseEnabled).toBe(false);
-      expect(ui.showShips).toBe(false);
-      // Snapshot should contain original values
-      const saved = useFilterStore.getState().savedToggles;
-      expect(saved).toEqual({
-        showFlights: true,
-        showGroundTraffic: false,
-        pulseEnabled: true,
-        showShips: true,
-      });
-    });
-
-    it('setDateRange with both null auto-deactivates and restores toggles', () => {
-      useFilterStore.getState().setDateRange(1000, 2000); // activate
-      useFilterStore.getState().setDateRange(null, null); // deactivate
-      expect(useFilterStore.getState().savedToggles).toBeNull();
-      const ui = useUIStore.getState();
-      expect(ui.showFlights).toBe(true);
-      expect(ui.showGroundTraffic).toBe(false);
-      expect(ui.pulseEnabled).toBe(true);
-      expect(ui.showShips).toBe(true);
-    });
-
-    it('setDateRange with start non-null and end null stays active', () => {
-      useFilterStore.getState().setDateRange(1000, 2000); // activate
-      useFilterStore.getState().setDateRange(1000, null); // end removed but start remains
-      expect(useFilterStore.getState().savedToggles).not.toBeNull();
-      const ui = useUIStore.getState();
-      expect(ui.showFlights).toBe(false); // still paused
-    });
-
-    it('moving start handle while custom range active does not re-snapshot', () => {
-      useFilterStore.getState().setDateRange(1000, 2000); // activate
-      // Manually change a toggle to verify snapshot is not overwritten
-      useUIStore.setState({ showFlights: true }); // would be different if re-snapshotted
-      useFilterStore.getState().setDateRange(500, 2000); // move start only
-      const saved = useFilterStore.getState().savedToggles;
-      // Still original snapshot
-      expect(saved?.showFlights).toBe(true);
-    });
-
-    it('isCustomRangeActive returns true when savedToggles is not null', () => {
-      useFilterStore.getState().setDateRange(1000, 2000);
-      expect(useFilterStore.getState().isCustomRangeActive()).toBe(true);
-    });
-
-    it('isCustomRangeActive returns false when savedToggles is null', () => {
-      expect(useFilterStore.getState().isCustomRangeActive()).toBe(false);
-    });
-
-    it('clearFilter(date) deactivates custom range and restores toggles', () => {
-      useFilterStore.getState().setDateRange(1000, 2000);
-      useFilterStore.getState().clearFilter('date');
-      expect(useFilterStore.getState().savedToggles).toBeNull();
-      expect(useUIStore.getState().showFlights).toBe(true);
-      expect(useUIStore.getState().showShips).toBe(true);
-    });
-
-    it('clearAll deactivates custom range and restores toggles', () => {
-      useFilterStore.getState().setDateRange(1000, 2000);
-      useFilterStore.getState().clearAll();
-      expect(useFilterStore.getState().savedToggles).toBeNull();
-      expect(useUIStore.getState().showFlights).toBe(true);
-      expect(useUIStore.getState().showShips).toBe(true);
     });
   });
 
@@ -434,11 +380,6 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().activeFilterCount()).toBe(1);
     });
 
-    it('counts shipSpeed filter when shipSpeedMin set', () => {
-      useFilterStore.getState().setShipSpeedRange(5, null);
-      expect(useFilterStore.getState().activeFilterCount()).toBe(1);
-    });
-
     it('counts altitude filter when altitudeMin set', () => {
       useFilterStore.getState().setAltitudeRange(10000, null);
       expect(useFilterStore.getState().activeFilterCount()).toBe(1);
@@ -454,15 +395,22 @@ describe('filterStore', () => {
       expect(useFilterStore.getState().activeFilterCount()).toBe(1);
     });
 
-    it('returns 7 when all filters active', () => {
+    it('returns correct count when all filters active', () => {
       useFilterStore.getState().setFlightCountries(['Iran']);
       useFilterStore.getState().setEventCountries(['ISRAEL']);
       useFilterStore.getState().setFlightSpeedRange(100, 400);
-      useFilterStore.getState().setShipSpeedRange(5, 25);
       useFilterStore.getState().setAltitudeRange(10000, 40000);
       useFilterStore.getState().setProximityPin({ lat: 35, lng: 51 });
       useFilterStore.getState().setDateRange(1000, 2000);
-      expect(useFilterStore.getState().activeFilterCount()).toBe(7);
+      useFilterStore.getState().setMentionsRange(10, 500);
+      useFilterStore.getState().setHeadingAngle(180);
+      useFilterStore.getState().setFlightCallsign('IRA');
+      useFilterStore.getState().setFlightIcao('abc');
+      useFilterStore.getState().setShipMmsi('123');
+      useFilterStore.getState().setShipNameFilter('TANK');
+      useFilterStore.getState().setCameoCode('190');
+      // 13 filters: flightCountry, eventCountry, flightSpeed, altitude, proximity, date, mentions, heading, callsign, icao, mmsi, shipName, cameo
+      expect(useFilterStore.getState().activeFilterCount()).toBe(13);
     });
   });
 });

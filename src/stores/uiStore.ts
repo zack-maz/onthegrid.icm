@@ -87,6 +87,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
   showAttackedSites: initial.showAttackedSites,
   selectedEntityId: null,
   hoveredEntityId: null,
+  expandedAlertSiteId: null,
   openDetailPanel: () => set({ isDetailPanelOpen: true }),
   closeDetailPanel: () => set({ isDetailPanelOpen: false }),
   toggleStatus: () => set((s) => ({ isStatusCollapsed: !s.isStatusCollapsed })),
@@ -214,4 +215,5 @@ export const useUIStore = create<UIState>()((set, get) => ({
   },
   selectEntity: (id) => set({ selectedEntityId: id }),
   hoverEntity: (id) => set({ hoveredEntityId: id }),
+  setExpandedAlertSiteId: (id) => set({ expandedAlertSiteId: id }),
 }));

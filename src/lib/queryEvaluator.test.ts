@@ -96,16 +96,6 @@ describe('evaluateQuery', () => {
     expect(evaluateQuery(null, mockFlight, emptyContext)).toBe(true);
   });
 
-  it('AND node requires both children to match', () => {
-    const ast = parse('type:flight AND country:iran');
-    expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(true);
-  });
-
-  it('AND node fails when one child does not match', () => {
-    const ast = parse('type:flight AND country:turkey');
-    expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(false);
-  });
-
   it('OR node matches when either child matches', () => {
     const ast = parse('type:flight OR type:ship');
     expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(true);
@@ -115,24 +105,6 @@ describe('evaluateQuery', () => {
   it('OR node fails when neither child matches', () => {
     const ast = parse('type:ship OR country:turkey');
     expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(false);
-  });
-
-  it('NOT node inverts child match', () => {
-    const ast = parse('!boeing');
-    // mockFlight label is 'IRA123', doesn't contain 'boeing'
-    expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(true);
-  });
-
-  it('NOT node inverts for matching text', () => {
-    const ast = parse('!IRA');
-    // mockFlight label contains 'IRA'
-    expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(false);
-  });
-
-  it('negated tag inverts match', () => {
-    const ast = parse('!country:iran');
-    expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(false);
-    expect(evaluateQuery(ast, mockShip, emptyContext)).toBe(true);
   });
 
   it('TEXT node does substring match against searchable fields', () => {
@@ -148,6 +120,12 @@ describe('evaluateQuery', () => {
   it('TEXT node fails when no field matches', () => {
     const ast = parse('nonexistent');
     expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(false);
+  });
+
+  it('implicit OR matches when one term matches', () => {
+    const ast = parse('type:flight country:turkey');
+    // type:flight matches, country:turkey does not, but OR means pass
+    expect(evaluateQuery(ast, mockFlight, emptyContext)).toBe(true);
   });
 });
 
@@ -287,11 +265,9 @@ describe('evaluateTag', () => {
     it('matches ship trueHeading', () => {
       expect(evaluateTag(mockShip, 'heading', '175', emptyContext)).toBe(true);
     });
-  });
 
-  describe('goldstein:', () => {
-    it('matches event goldsteinScale', () => {
-      expect(evaluateTag(mockEvent, 'goldstein', '<0', emptyContext)).toBe(true);
+    it('matches flight heading', () => {
+      expect(evaluateTag(mockFlight, 'heading', '90', emptyContext)).toBe(true);
     });
   });
 
@@ -305,13 +281,6 @@ describe('evaluateTag', () => {
     it('matches flight onGround boolean', () => {
       expect(evaluateTag(mockFlight, 'ground', 'false', emptyContext)).toBe(true);
       expect(evaluateTag(mockFlight, 'ground', 'true', emptyContext)).toBe(false);
-    });
-  });
-
-  describe('vertical:', () => {
-    it('matches climbing/descending', () => {
-      expect(evaluateTag(mockFlight, 'vertical', 'climbing', emptyContext)).toBe(true);
-      expect(evaluateTag(mockFlight, 'vertical', 'descending', emptyContext)).toBe(false);
     });
   });
 
@@ -331,9 +300,6 @@ describe('evaluateTag', () => {
 
   describe('near:', () => {
     it('matches entities within 50km of named site', () => {
-      // mockFlight is at 32.0, 52.0 and mockSite is at 32.5, 51.7
-      // distance ~60km - should NOT match with default 50km
-      // Let's create a close flight
       const closeFlight = { ...mockFlight, lat: 32.5, lng: 51.7 };
       expect(evaluateTag(closeFlight, 'near', 'isfahan', contextWithSites)).toBe(true);
     });
@@ -346,7 +312,6 @@ describe('evaluateTag', () => {
 
   describe('since:', () => {
     it('matches relative time (entity within window)', () => {
-      // mockFlight timestamp is NOW - 60_000 (1 min ago)
       expect(evaluateTag(mockFlight, 'since', '1h', { ...emptyContext, now: NOW })).toBe(true);
     });
 
@@ -374,12 +339,6 @@ describe('evaluateTag', () => {
     it('returns false for empty attribute', () => {
       const noCallsign = { ...mockFlight, data: { ...mockFlight.data, callsign: '' } };
       expect(evaluateTag(noCallsign, 'has', 'callsign', emptyContext)).toBe(false);
-    });
-  });
-
-  describe('squawk:', () => {
-    it('always returns true (no-op)', () => {
-      expect(evaluateTag(mockFlight, 'squawk', '7700', emptyContext)).toBe(true);
     });
   });
 

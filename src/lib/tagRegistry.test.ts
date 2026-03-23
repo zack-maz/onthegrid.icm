@@ -116,9 +116,9 @@ function makeDataSources(overrides: Partial<EntityDataSources> = {}): EntityData
 describe('TAG_REGISTRY', () => {
   const EXPECTED_PREFIXES = [
     'type', 'country', 'actor', 'location', 'severity', 'near', 'since', 'before', 'has',
-    'callsign', 'icao', 'altitude', 'speed', 'squawk', 'ground', 'vertical', 'unidentified',
+    'callsign', 'icao', 'altitude', 'speed', 'ground', 'unidentified',
     'mmsi', 'heading', 'shipname',
-    'cameo', 'goldstein', 'mentions', 'date',
+    'cameo', 'mentions', 'date',
     'site', 'status',
   ];
 
@@ -295,17 +295,7 @@ describe('getTagValues', () => {
     });
   });
 
-  describe('squawk: prefix', () => {
-    it('returns empty array (data not available)', () => {
-      const data = makeDataSources({
-        flights: [makeFlight()],
-      });
-      const values = getTagValues('squawk', data);
-      expect(values).toEqual([]);
-    });
-  });
-
-  describe('severity: prefix', () => {
+describe('severity: prefix', () => {
     it('returns static high/medium/low values', () => {
       const values = getTagValues('severity', makeDataSources());
       expect(values).toEqual([
@@ -326,17 +316,7 @@ describe('getTagValues', () => {
     });
   });
 
-  describe('vertical: prefix', () => {
-    it('returns static climbing/descending values', () => {
-      const values = getTagValues('vertical', makeDataSources());
-      expect(values).toEqual([
-        { value: 'climbing', count: 0 },
-        { value: 'descending', count: 0 },
-      ]);
-    });
-  });
-
-  describe('unidentified: prefix', () => {
+describe('unidentified: prefix', () => {
     it('returns static true/false values', () => {
       const values = getTagValues('unidentified', makeDataSources());
       expect(values).toEqual([
@@ -390,11 +370,7 @@ describe('getTagValues', () => {
       expect(getTagValues('speed', makeDataSources())).toEqual([]);
     });
 
-    it('returns empty array for goldstein', () => {
-      expect(getTagValues('goldstein', makeDataSources())).toEqual([]);
-    });
-
-    it('returns empty array for mentions', () => {
+it('returns empty array for mentions', () => {
       expect(getTagValues('mentions', makeDataSources())).toEqual([]);
     });
 

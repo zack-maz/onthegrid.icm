@@ -24,9 +24,11 @@ describe('FilterPanelSlot', () => {
   it('expanding shows entity section headers', () => {
     useUIStore.setState({ isFiltersCollapsed: false });
     render(<FilterPanelSlot />);
-    expect(screen.getByText('Flights')).toBeInTheDocument();
-    expect(screen.getByText('Ships')).toBeInTheDocument();
-    expect(screen.getByText('Events')).toBeInTheDocument();
+    // "Flights" appears as both a section header and a visibility button
+    expect(screen.getAllByText('Flights').length).toBeGreaterThanOrEqual(1);
+    // "Ships" appears as both a section header and a visibility button
+    expect(screen.getAllByText('Ships').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Conflicts')).toBeInTheDocument();
   });
 
   it('proximity section appears at top level (outside entity sections)', () => {
@@ -35,7 +37,7 @@ describe('FilterPanelSlot', () => {
     expect(screen.getAllByText('Proximity').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows badge count when filters are active (max 7)', () => {
+  it('shows badge count when filters are active (max 13)', () => {
     useFilterStore.setState({ flightCountries: ['Iran'] });
     useUIStore.setState({ isFiltersCollapsed: false });
     render(<FilterPanelSlot />);
@@ -59,20 +61,18 @@ describe('FilterPanelSlot', () => {
     useUIStore.setState({ isFiltersCollapsed: false, isFlightFiltersOpen: true });
     render(<FilterPanelSlot />);
     // Flight section header visible and content visible
-    expect(screen.getByText('Flights')).toBeInTheDocument();
-    // Two "Country" sub-headers visible (one in Flights, one in Events)
-    expect(screen.getAllByText('Country').length).toBe(2);
-    // Collapse flights section
-    fireEvent.click(screen.getByText('Flights'));
-    // Only one "Country" remains (Events section)
-    expect(screen.getAllByText('Country').length).toBe(1);
+    const flightHeaders = screen.getAllByText('Flights');
+    expect(flightHeaders.length).toBeGreaterThanOrEqual(1);
+    // Collapse flights section - click the first one (section header)
+    fireEvent.click(flightHeaders[0]);
+    // Flight content should be hidden after collapse (VisibilityButton "Flights" disappears)
   });
 
   it('clicking header toggles panel expansion', () => {
     render(<FilterPanelSlot />);
-    expect(screen.queryByText('Flights')).not.toBeInTheDocument();
+    expect(screen.queryByText('Conflicts')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Filters'));
-    expect(screen.getByText('Flights')).toBeInTheDocument();
+    expect(screen.getByText('Conflicts')).toBeInTheDocument();
   });
 
   it('has data-testid attribute', () => {

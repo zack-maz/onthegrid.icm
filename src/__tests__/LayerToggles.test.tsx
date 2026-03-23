@@ -18,6 +18,8 @@ const mockState = {
   showDesalination: true,
   showPort: true,
   showHitOnly: false,
+  showHealthySites: true,
+  showAttackedSites: true,
   isLayersCollapsed: false,
   toggleFlights: vi.fn(),
   toggleGroundTraffic: vi.fn(),
@@ -35,6 +37,8 @@ const mockState = {
   toggleDesalination: vi.fn(),
   togglePort: vi.fn(),
   toggleHitOnly: vi.fn(),
+  toggleHealthySites: vi.fn(),
+  toggleAttackedSites: vi.fn(),
   toggleLayers: vi.fn(),
 };
 
@@ -42,20 +46,11 @@ vi.mock('@/stores/uiStore', () => ({
   useUIStore: (selector: (s: typeof mockState) => unknown) => selector(mockState),
 }));
 
-const mockFilterState = {
-  savedToggles: null as { showFlights: boolean; showGroundTraffic: boolean; pulseEnabled: boolean; showShips: boolean } | null,
-};
-
-vi.mock('@/stores/filterStore', () => ({
-  useFilterStore: (selector: (s: typeof mockFilterState) => unknown) => selector(mockFilterState),
-}));
-
 import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
 
 describe('LayerTogglesSlot', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFilterState.savedToggles = null;
     // Reset to defaults
     mockState.showFlights = true;
     mockState.showGroundTraffic = false;
@@ -73,6 +68,8 @@ describe('LayerTogglesSlot', () => {
     mockState.showDesalination = true;
     mockState.showPort = true;
     mockState.showHitOnly = false;
+    mockState.showHealthySites = true;
+    mockState.showAttackedSites = true;
     mockState.isLayersCollapsed = false;
   });
 
@@ -81,10 +78,10 @@ describe('LayerTogglesSlot', () => {
     expect(screen.getByText('Layers')).toBeTruthy();
   });
 
-  it('renders 16 toggle row buttons', () => {
+  it('renders 18 toggle row buttons', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
-    expect(switches).toHaveLength(16);
+    expect(switches).toHaveLength(18);
   });
 
   it('each button has role="switch" and aria-checked', () => {
@@ -100,7 +97,12 @@ describe('LayerTogglesSlot', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
     const labels = switches.map((btn) => btn.textContent?.trim());
-    expect(labels).toEqual(['Flights', 'Ground', 'Unidentified', 'Ships', 'Events', 'Airstrikes', 'Ground Combat', 'Targeted', 'Sites', 'Nuclear', 'Naval', 'Oil', 'Airbase', 'Desalination', 'Port', 'Hit Only']);
+    expect(labels).toEqual([
+      'Flights', 'Ground', 'Unidentified', 'Ships',
+      'Events', 'Airstrikes', 'Ground Combat', 'Targeted',
+      'Sites', 'Nuclear', 'Naval', 'Oil', 'Airbase', 'Desalination', 'Port',
+      'Hit Only', 'Healthy', 'Attacked',
+    ]);
   });
 
   it('clicking Flights toggle calls toggleFlights', () => {
@@ -137,6 +139,18 @@ describe('LayerTogglesSlot', () => {
     render(<LayerTogglesSlot />);
     fireEvent.click(screen.getByLabelText('Toggle Targeted visibility'));
     expect(mockState.toggleTargeted).toHaveBeenCalledOnce();
+  });
+
+  it('clicking Healthy toggle calls toggleHealthySites', () => {
+    render(<LayerTogglesSlot />);
+    fireEvent.click(screen.getByLabelText('Toggle Healthy visibility'));
+    expect(mockState.toggleHealthySites).toHaveBeenCalledOnce();
+  });
+
+  it('clicking Attacked toggle calls toggleAttackedSites', () => {
+    render(<LayerTogglesSlot />);
+    fireEvent.click(screen.getByLabelText('Toggle Attacked visibility'));
+    expect(mockState.toggleAttackedSites).toHaveBeenCalledOnce();
   });
 
   it('inactive toggle has opacity-40 class', () => {
@@ -177,30 +191,5 @@ describe('LayerTogglesSlot', () => {
     const pulseBtn = screen.getByLabelText('Toggle Unidentified visibility');
     expect(groundBtn.className).toContain('text-[10px]');
     expect(pulseBtn.className).toContain('text-[10px]');
-  });
-
-  describe('custom range disabling', () => {
-    it('flight/ship toggles are disabled when custom range is active', () => {
-      mockFilterState.savedToggles = { showFlights: true, showGroundTraffic: false, pulseEnabled: true, showShips: true };
-      render(<LayerTogglesSlot />);
-      expect(screen.getByLabelText('Toggle Flights visibility')).toBeDisabled();
-      expect(screen.getByLabelText('Toggle Ground visibility')).toBeDisabled();
-      expect(screen.getByLabelText('Toggle Unidentified visibility')).toBeDisabled();
-      expect(screen.getByLabelText('Toggle Ships visibility')).toBeDisabled();
-    });
-
-    it('flight/ship toggles are enabled when custom range is not active', () => {
-      mockFilterState.savedToggles = null;
-      render(<LayerTogglesSlot />);
-      expect(screen.getByLabelText('Toggle Flights visibility')).not.toBeDisabled();
-      expect(screen.getByLabelText('Toggle Ships visibility')).not.toBeDisabled();
-    });
-
-    it('event toggles are NOT disabled by custom range', () => {
-      mockFilterState.savedToggles = { showFlights: true, showGroundTraffic: false, pulseEnabled: true, showShips: true };
-      render(<LayerTogglesSlot />);
-      expect(screen.getByLabelText('Toggle Events visibility')).not.toBeDisabled();
-      expect(screen.getByLabelText('Toggle Airstrikes visibility')).not.toBeDisabled();
-    });
   });
 });
