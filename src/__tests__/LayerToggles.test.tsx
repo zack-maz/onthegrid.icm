@@ -67,4 +67,11 @@ describe('LayerTogglesSlot', () => {
     const geoToggle = screen.getByLabelText('Toggle Geographic layer');
     expect(geoToggle.className).toContain('opacity-100');
   });
+
+  it('clicking political toggle calls toggleLayer', () => {
+    render(<LayerTogglesSlot />);
+    const politicalToggle = screen.getByLabelText('Toggle Political layer');
+    fireEvent.click(politicalToggle);
+    expect(useLayerStore.getState().activeLayers.has('political')).toBe(true);
+  });
 });
