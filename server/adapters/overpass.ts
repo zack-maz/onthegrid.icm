@@ -36,6 +36,7 @@ const QUERY = `
   nwr["military"="airfield"](area.searchArea);
   nwr["aeroway"="aerodrome"]["aerodrome:type"="military"](area.searchArea);
   nwr["man_made"="desalination_plant"](area.searchArea);
+  nwr["man_made"="water_works"]["name"~"[Dd]esal|تحلية"](area.searchArea);
   nwr["industrial"="port"](area.searchArea);
   nwr["harbour"="yes"](area.searchArea);
   nwr["landuse"="port"](area.searchArea);
@@ -87,6 +88,10 @@ export function classifySiteType(tags: Record<string, string>): SiteType | null 
   if (tags['industrial'] === 'refinery' || tags['industrial'] === 'oil_refinery') return 'oil';
   if (tags['military'] === 'airfield' || tags['aerodrome:type'] === 'military') return 'airbase';
   if (tags['man_made'] === 'desalination_plant') return 'desalination';
+  if (tags['man_made'] === 'water_works') {
+    const name = (tags['name'] || tags['name:en'] || '').toLowerCase();
+    if (name.includes('desal') || name.includes('تحلية')) return 'desalination';
+  }
   if (tags['industrial'] === 'port' || tags['harbour'] === 'yes' || tags['landuse'] === 'port') return 'port';
   return null;
 }
