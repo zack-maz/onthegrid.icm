@@ -1,7 +1,7 @@
 /**
  * BaseMap component tests
  * Covers MAP-01a (renders inside container), MAP-01d (hides road labels on load),
- * and tooltip gating via conflict toggle groups.
+ * and tooltip handling (search filter suppression, no entity toggle gating).
  */
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
@@ -155,13 +155,6 @@ describe('BaseMap click handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useUIStore.setState({
-      showFlights: true,
-      showShips: true,
-      showEvents: true,
-      showAirstrikes: true,
-      showGroundCombat: true,
-      showTargeted: true,
-      showGroundTraffic: false,
       selectedEntityId: null,
       hoveredEntityId: null,
       isDetailPanelOpen: false,
@@ -192,45 +185,23 @@ describe('BaseMap click handler', () => {
   });
 });
 
-describe('BaseMap tooltip gating', () => {
+describe('BaseMap tooltip behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useUIStore.setState({
-      showFlights: true,
-      showShips: true,
-      showEvents: true,
-      showAirstrikes: true,
-      showGroundCombat: true,
-      showTargeted: true,
-      showGroundTraffic: false,
       selectedEntityId: null,
       hoveredEntityId: null,
     });
   });
 
-  it('shows tooltip for airstrike entity when showAirstrikes is ON', () => {
+  it('shows tooltip for airstrike entity', () => {
     render(<BaseMap />);
     simulateHover(mockAirstrikeEntity);
     expect(screen.getByText('Aerial weapons')).toBeTruthy();
     expect(screen.getByText('Isfahan, Iran', { exact: false })).toBeTruthy();
   });
 
-  it('hides tooltip for airstrike entity when showAirstrikes is OFF', () => {
-    useUIStore.setState({ showAirstrikes: false });
-    render(<BaseMap />);
-    simulateHover(mockAirstrikeEntity);
-    expect(screen.queryByText('Aerial weapons')).toBeNull();
-  });
-
-  it('hides tooltip for conflict entity when showEvents is OFF', () => {
-    useUIStore.setState({ showEvents: false });
-    render(<BaseMap />);
-    simulateHover(mockAirstrikeEntity);
-    expect(screen.queryByText('Aerial weapons')).toBeNull();
-  });
-
-  it('still shows tooltip for flight entity when showAirstrikes is OFF', () => {
-    useUIStore.setState({ showAirstrikes: false });
+  it('shows tooltip for flight entity', () => {
     render(<BaseMap />);
     simulateHover(mockFlight);
     expect(screen.getByText('QTR123')).toBeTruthy();

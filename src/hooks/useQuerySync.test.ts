@@ -10,35 +10,17 @@ vi.stubGlobal('localStorage', localStorageMock);
 
 import { parse } from '@/lib/queryParser';
 import {
-  TYPE_TOGGLE_MAP,
-  TOGGLE_TYPE_MAP,
-  SITE_TOGGLE_MAP,
-  BOOL_TAG_MAP,
   extractTags,
-  deriveTogglesFromAST,
   deriveFiltersFromAST,
-  buildASTFromToggles,
+  buildASTFromFilters,
   rangeToMinMax,
   minMaxToRangeValue,
   type SyncableState,
 } from '@/hooks/useQuerySync';
 import { serialize } from '@/lib/querySerializer';
 
-// Helper: default syncable state with everything OFF/null
+// Helper: default syncable state with everything null/empty
 const DEFAULT_STATE: SyncableState = {
-  showFlights: false,
-  showShips: false,
-  showAirstrikes: false,
-  showGroundCombat: false,
-  showTargeted: false,
-  showNuclear: false,
-  showNaval: false,
-  showOil: false,
-  showAirbase: false,
-  showDesalination: false,
-  showPort: false,
-  showGroundTraffic: false,
-  pulseEnabled: false,
   altitudeMin: null,
   altitudeMax: null,
   flightSpeedMin: null,
@@ -58,34 +40,6 @@ const DEFAULT_STATE: SyncableState = {
   eventCountries: [],
   proximityPin: null,
 };
-
-// ─── TYPE_TOGGLE_MAP coverage ────────────────────────────────
-
-describe('TYPE_TOGGLE_MAP coverage', () => {
-  it('maps all 11 ConflictEventType values from CONFLICT_TOGGLE_GROUPS', () => {
-    const allConflictTypes = [
-      'airstrike',
-      'ground_combat',
-      'shelling',
-      'bombing',
-      'assault',
-      'blockade',
-      'ceasefire_violation',
-      'mass_violence',
-      'wmd',
-      'assassination',
-      'abduction',
-    ];
-    for (const ct of allConflictTypes) {
-      expect(TYPE_TOGGLE_MAP).toHaveProperty(ct);
-    }
-  });
-
-  it('maps flight and ship types', () => {
-    expect(TYPE_TOGGLE_MAP['flight']).toBe('showFlights');
-    expect(TYPE_TOGGLE_MAP['ship']).toBe('showShips');
-  });
-});
 
 // ─── extractTags ─────────────────────────────────────────────
 
@@ -112,108 +66,6 @@ describe('extractTags', () => {
 
   it('returns empty for null AST', () => {
     expect(extractTags(null)).toEqual([]);
-  });
-});
-
-// ─── deriveTogglesFromAST ────────────────────────────────────
-
-describe('deriveTogglesFromAST', () => {
-  it('type:flight activates showFlights', () => {
-    const ast = parse('type:flight');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showFlights']).toBe(true);
-  });
-
-  it('type:airstrike activates showAirstrikes AND showEvents', () => {
-    const ast = parse('type:airstrike');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showAirstrikes']).toBe(true);
-    expect(updates['showEvents']).toBe(true);
-  });
-
-  it('type:wmd activates showGroundCombat AND showEvents', () => {
-    const ast = parse('type:wmd');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showGroundCombat']).toBe(true);
-    expect(updates['showEvents']).toBe(true);
-  });
-
-  it('type:assassination activates showTargeted AND showEvents', () => {
-    const ast = parse('type:assassination');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showTargeted']).toBe(true);
-    expect(updates['showEvents']).toBe(true);
-  });
-
-  it('type:flight (non-conflict) does NOT set showEvents', () => {
-    const ast = parse('type:flight');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showEvents']).toBeUndefined();
-  });
-
-  it('no conflict event type tags -> showEvents not set (preserves current state)', () => {
-    const ast = parse('type:flight type:ship');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showEvents']).toBeUndefined();
-  });
-
-  it('site:nuclear activates showNuclear and showSites', () => {
-    const ast = parse('site:nuclear');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showNuclear']).toBe(true);
-    expect(updates['showSites']).toBe(true);
-  });
-
-  it('text-only query returns empty updates (no toggle changes)', () => {
-    const ast = parse('iran');
-    const updates = deriveTogglesFromAST(ast);
-    expect(Object.keys(updates)).toHaveLength(0);
-  });
-
-  it('only activates mentioned toggles, does not deactivate absent ones', () => {
-    const ast = parse('type:flight');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showFlights']).toBe(true);
-    // Absent types should NOT be set at all (preserves existing toggle state)
-    expect(updates['showShips']).toBeUndefined();
-    expect(updates['showAirstrikes']).toBeUndefined();
-    expect(updates['showGroundCombat']).toBeUndefined();
-    expect(updates['showTargeted']).toBeUndefined();
-  });
-
-  // ── Boolean tag sync ──
-
-  it('ground:true activates showGroundTraffic', () => {
-    const ast = parse('ground:true');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showGroundTraffic']).toBe(true);
-  });
-
-  it('ground:false deactivates showGroundTraffic', () => {
-    const ast = parse('ground:false');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showGroundTraffic']).toBe(false);
-  });
-
-  it('unidentified:true activates pulseEnabled', () => {
-    const ast = parse('unidentified:true');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['pulseEnabled']).toBe(true);
-  });
-
-  it('boolean tags work alongside type tags', () => {
-    const ast = parse('type:flight ground:true');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showFlights']).toBe(true);
-    expect(updates['showGroundTraffic']).toBe(true);
-  });
-
-  it('boolean tags alone return updates even without type/site tags', () => {
-    const ast = parse('ground:true');
-    const updates = deriveTogglesFromAST(ast);
-    expect(updates['showGroundTraffic']).toBe(true);
-    // No type/site keys should be set
-    expect(updates['showFlights']).toBeUndefined();
   });
 });
 
@@ -334,72 +186,21 @@ describe('range helpers', () => {
   });
 });
 
-// ─── buildASTFromToggles ─────────────────────────────────────
+// ─── buildASTFromFilters ─────────────────────────────────────
 
-describe('buildASTFromToggles', () => {
-  it('showFlights ON adds type:flight to AST', () => {
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, null);
-    expect(ast).not.toBeNull();
-    const str = serialize(ast);
-    expect(str).toContain('type:flight');
-  });
-
-  it('showFlights OFF does not add type:flight', () => {
-    const ast = buildASTFromToggles(DEFAULT_STATE, null);
-    expect(ast).toBeNull();
-  });
-
-  it('preserves non-synced tags (callsign:, actor:)', () => {
-    // In the OR-only parser, 'type:flight callsign:IRA123' becomes an OR chain
-    const existingAST = parse('type:flight callsign:IRA123');
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
-    const str = serialize(ast);
-    expect(str).toContain('type:flight');
-    // callsign: is synced now (it's in SYNCED_PREFIXES), so it would be managed by the flightCallsign field
-    // With flightCallsign='', it should not be re-added
-  });
-
-  it('preserves text nodes during toggle sync', () => {
+describe('buildASTFromFilters', () => {
+  it('preserves text nodes during filter sync', () => {
     const existingAST = parse('type:flight iran');
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
+    const ast = buildASTFromFilters(DEFAULT_STATE, existingAST);
     const str = serialize(ast);
     expect(str).toContain('iran');
+    // type: is not a synced prefix, so it's preserved as non-synced
+    expect(str).toContain('type:flight');
   });
-
-  it('site toggle ON adds site: tag', () => {
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showNuclear: true }, null);
-    const str = serialize(ast);
-    expect(str).toContain('site:nuclear');
-  });
-
-  // ── Boolean tag (bidirectional) ──
-
-  // ── Boolean tags only appear when non-default ──
-
-  it('ground:true not emitted at default (true)', () => {
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true, showGroundTraffic: true }, null);
-    const str = serialize(ast);
-    expect(str).not.toContain('ground');
-  });
-
-  it('ground:true absent when showGroundTraffic OFF (non-default but no way to express OFF)', () => {
-    const existingAST = parse('type:flight ground:true');
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
-    const str = serialize(ast);
-    expect(str).not.toContain('ground');
-  });
-
-  it('unidentified:true not emitted at default (true)', () => {
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true, pulseEnabled: true }, null);
-    const str = serialize(ast);
-    expect(str).not.toContain('unidentified');
-  });
-
-  // ── Range filter tags ──
 
   it('altitude range adds altitude tag to AST', () => {
-    const ast = buildASTFromToggles(
-      { ...DEFAULT_STATE, showFlights: true, altitudeMin: 30000, altitudeMax: null },
+    const ast = buildASTFromFilters(
+      { ...DEFAULT_STATE, altitudeMin: 30000, altitudeMax: null },
       null,
     );
     const str = serialize(ast);
@@ -407,8 +208,8 @@ describe('buildASTFromToggles', () => {
   });
 
   it('altitude min+max adds range tag', () => {
-    const ast = buildASTFromToggles(
-      { ...DEFAULT_STATE, showFlights: true, altitudeMin: 10000, altitudeMax: 40000 },
+    const ast = buildASTFromFilters(
+      { ...DEFAULT_STATE, altitudeMin: 10000, altitudeMax: 40000 },
       null,
     );
     const str = serialize(ast);
@@ -416,8 +217,8 @@ describe('buildASTFromToggles', () => {
   });
 
   it('speed range adds speed tag to AST', () => {
-    const ast = buildASTFromToggles(
-      { ...DEFAULT_STATE, showFlights: true, flightSpeedMin: 200, flightSpeedMax: 500 },
+    const ast = buildASTFromFilters(
+      { ...DEFAULT_STATE, flightSpeedMin: 200, flightSpeedMax: 500 },
       null,
     );
     const str = serialize(ast);
@@ -425,24 +226,23 @@ describe('buildASTFromToggles', () => {
   });
 
   it('null altitude/speed does not add range tags', () => {
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, null);
-    const str = serialize(ast);
-    expect(str).not.toContain('altitude');
-    expect(str).not.toContain('speed');
+    const ast = buildASTFromFilters(DEFAULT_STATE, null);
+    // With no filters set, no tags should be generated
+    expect(ast).toBeNull();
   });
 
-  it('status: prefix is no longer synced (treated as non-synced text)', () => {
+  it('status: prefix is preserved as non-synced text', () => {
     const existingAST = parse('type:flight status:attacked');
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
+    const ast = buildASTFromFilters(DEFAULT_STATE, existingAST);
     const str = serialize(ast);
-    // status: is no longer in SYNCED_PREFIXES, so it's preserved as non-synced
+    // status: is not in SYNCED_PREFIXES, so it's preserved as non-synced
     expect(str).toContain('status:attacked');
   });
 
   it('altitude tag is rebuilt from filter state (not preserved as non-synced)', () => {
     const existingAST = parse('type:flight altitude:>=30000');
     // altitudeMin is null -> altitude tag should be removed
-    const ast = buildASTFromToggles({ ...DEFAULT_STATE, showFlights: true }, existingAST);
+    const ast = buildASTFromFilters(DEFAULT_STATE, existingAST);
     const str = serialize(ast);
     expect(str).not.toContain('altitude');
   });
@@ -451,33 +251,22 @@ describe('buildASTFromToggles', () => {
 // ─── Sync loop prevention ────────────────────────────────────
 
 describe('sync loop prevention', () => {
-  it('deriveTogglesFromAST and buildASTFromToggles are stable (no infinite expansion)', () => {
-    const ast1 = parse('type:flight type:airstrike');
-    const toggles1 = deriveTogglesFromAST(ast1);
-
-    const ast2 = buildASTFromToggles({ ...DEFAULT_STATE, ...toggles1 }, null);
-    const toggles2 = deriveTogglesFromAST(ast2);
-
-    expect(toggles2['showFlights']).toBe(toggles1['showFlights']);
-    expect(toggles2['showAirstrikes']).toBe(toggles1['showAirstrikes']);
-    expect(toggles2['showEvents']).toBe(toggles1['showEvents']);
-
-    const ast3 = buildASTFromToggles({ ...DEFAULT_STATE, ...toggles2 }, null);
-    const toggles3 = deriveTogglesFromAST(ast3);
-    expect(toggles3).toEqual(toggles2);
-  });
-
   it('round-trip preserves non-synced tags without growth', () => {
-    // With the new SYNCED_PREFIXES, callsign is now synced, so we use a truly non-synced prefix for this test
-    // 'near' is synced. Let's use an unrecognized prefix like 'custom:value'
-    // Actually, let's use a text node to test non-synced preservation
     const originalAST = parse('type:flight iran');
-    const toggles = deriveTogglesFromAST(originalAST);
+    const filters = deriveFiltersFromAST(originalAST, Date.now());
 
-    const rebuilt1 = buildASTFromToggles({ ...DEFAULT_STATE, ...toggles }, originalAST);
+    const state: SyncableState = {
+      ...DEFAULT_STATE,
+      altitudeMin: filters.altitudeMin ?? null,
+      altitudeMax: filters.altitudeMax ?? null,
+      flightSpeedMin: filters.flightSpeedMin ?? null,
+      flightSpeedMax: filters.flightSpeedMax ?? null,
+    };
+
+    const rebuilt1 = buildASTFromFilters(state, originalAST);
     const str1 = serialize(rebuilt1);
 
-    const rebuilt2 = buildASTFromToggles({ ...DEFAULT_STATE, ...toggles }, rebuilt1);
+    const rebuilt2 = buildASTFromFilters(state, rebuilt1);
     const str2 = serialize(rebuilt2);
 
     expect(str2).toBe(str1);
@@ -485,26 +274,24 @@ describe('sync loop prevention', () => {
 
   it('round-trip with range tags is stable', () => {
     const originalAST = parse('type:flight altitude:>=30000');
-    const toggles = deriveTogglesFromAST(originalAST);
     const filters = deriveFiltersFromAST(originalAST, Date.now());
 
     const state: SyncableState = {
       ...DEFAULT_STATE,
-      ...toggles,
       altitudeMin: filters.altitudeMin ?? null,
       altitudeMax: filters.altitudeMax ?? null,
       flightSpeedMin: filters.flightSpeedMin ?? null,
       flightSpeedMax: filters.flightSpeedMax ?? null,
     };
 
-    const rebuilt1 = buildASTFromToggles(state, originalAST);
+    const rebuilt1 = buildASTFromFilters(state, originalAST);
     const str1 = serialize(rebuilt1);
 
-    const rebuilt2 = buildASTFromToggles(state, rebuilt1);
+    const rebuilt2 = buildASTFromFilters(state, rebuilt1);
     const str2 = serialize(rebuilt2);
 
     expect(str2).toBe(str1);
-    // type:flight should be present (only flight toggle is ON, others OFF)
+    // type:flight should be preserved as non-synced tag
     expect(str1).toContain('type:flight');
     // altitude should be present (bidirectional, rebuilt from filter state)
     expect(str1).toContain('altitude:>=30000');

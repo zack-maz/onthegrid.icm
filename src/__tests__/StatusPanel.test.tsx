@@ -3,7 +3,6 @@ import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useSiteStore } from '@/stores/siteStore';
-import { useUIStore } from '@/stores/uiStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { StatusPanel } from '@/components/ui/StatusPanel';
 import type { FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/entities';
@@ -45,12 +44,11 @@ describe('StatusPanel', () => {
     useShipStore.setState({ connectionStatus: 'connected', ships: [], shipCount: 0 });
     useEventStore.setState({ connectionStatus: 'connected', events: [], eventCount: 0 });
     useSiteStore.setState({ connectionStatus: 'idle', sites: [], siteCount: 0 });
-    useUIStore.setState({ showFlights: true, showGroundTraffic: false, showShips: true, showEvents: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true, showSites: true });
     useFilterStore.setState({ flightCountries: [], eventCountries: [], flightSpeedMin: null, flightSpeedMax: null, shipSpeedMin: null, shipSpeedMax: null, altitudeMin: null, altitudeMax: null, proximityPin: null, proximityRadiusKm: 100, dateStart: 0, dateEnd: Date.now() + 86400000, isSettingPin: false });
   });
 
   it('renders four feed lines (flights, ships, events, sites)', () => {
-    useFlightStore.setState({ flights: airborne, flightCount: 3 });
+    useFlightStore.setState({ flights: allFlights, flightCount: 5 });
     const ships = Array.from({ length: 5 }, (_, i) => makeShip(`s${i}`, 100000 + i));
     useShipStore.setState({ ships, shipCount: 5 });
     useEventStore.setState({ events: airstrikes, eventCount: 2 });
@@ -58,7 +56,6 @@ describe('StatusPanel', () => {
     render(<StatusPanel />);
 
     expect(screen.getByText('flights')).toBeInTheDocument();
-    expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByText('ships')).toBeInTheDocument();
     expect(screen.getByText('events')).toBeInTheDocument();
   });
@@ -106,88 +103,25 @@ describe('StatusPanel', () => {
     expect(dot.className).toContain('bg-accent-red');
   });
 
-  it('excludes ground flights from count when showGroundTraffic is OFF', () => {
+  // --- Unconditional counting tests ---
+
+  it('counts all flights including ground', () => {
     useFlightStore.setState({ flights: allFlights, flightCount: 5 });
-    useUIStore.setState({ showFlights: true, showGroundTraffic: false });
     render(<StatusPanel />);
-
-    // 3 airborne only
-    expect(screen.getByText('3')).toBeInTheDocument();
-  });
-
-  it('includes ground flights when showGroundTraffic is ON', () => {
-    useFlightStore.setState({ flights: allFlights, flightCount: 5 });
-    useUIStore.setState({ showFlights: true, showGroundTraffic: true });
-    render(<StatusPanel />);
-
     expect(screen.getByText('5')).toBeInTheDocument();
   });
 
-  it('shows only ground count when showFlights OFF but showGroundTraffic ON', () => {
-    useFlightStore.setState({ flights: allFlights, flightCount: 5 });
-    useUIStore.setState({ showFlights: false, showGroundTraffic: true });
+  it('counts all ships', () => {
+    const ships = Array.from({ length: 4 }, (_, i) => makeShip(`s${i}`, 100000 + i));
+    useShipStore.setState({ ships, shipCount: 4 });
     render(<StatusPanel />);
-
-    // 2 ground only
-    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
   });
 
-  it('shows 0 for flights when both showFlights and showGroundTraffic are OFF', () => {
-    useFlightStore.setState({ flights: allFlights, flightCount: 5 });
-    useUIStore.setState({ showFlights: false, showGroundTraffic: false });
-    render(<StatusPanel />);
-
-    expect(screen.queryByText('5')).not.toBeInTheDocument();
-  });
-
-  it('shows 0 for ships when showShips is OFF', () => {
-    const ships = Array.from({ length: 5 }, (_, i) => makeShip(`s${i}`, 100000 + i));
-    useShipStore.setState({ ships, shipCount: 5 });
-    useUIStore.setState({ showShips: false });
-    render(<StatusPanel />);
-
-    expect(screen.queryByText('5')).not.toBeInTheDocument();
-  });
-
-  it('counts all events when all conflict toggles are ON', () => {
+  it('counts all events', () => {
     useEventStore.setState({ events: allEvents, eventCount: 5 });
     render(<StatusPanel />);
-
     expect(screen.getByText('5')).toBeInTheDocument();
-  });
-
-  it('excludes airstrikes when showAirstrikes is OFF', () => {
-    useEventStore.setState({ events: allEvents, eventCount: 5 });
-    useUIStore.setState({ showAirstrikes: false });
-    render(<StatusPanel />);
-
-    // 5 total - 2 airstrikes = 3
-    expect(screen.getByText('3')).toBeInTheDocument();
-  });
-
-  it('excludes ground combat when showGroundCombat is OFF', () => {
-    useEventStore.setState({ events: allEvents, eventCount: 5 });
-    useUIStore.setState({ showGroundCombat: false });
-    render(<StatusPanel />);
-
-    // 5 total - 2 (ground_combat + blockade) = 3
-    expect(screen.getByText('3')).toBeInTheDocument();
-  });
-
-  it('shows 0 events when showEvents is false', () => {
-    useEventStore.setState({ events: allEvents, eventCount: 5 });
-    useUIStore.setState({ showEvents: false });
-    render(<StatusPanel />);
-
-    expect(screen.queryByText('5')).not.toBeInTheDocument();
-  });
-
-  it('shows 0 for events when all conflict toggles are OFF', () => {
-    useEventStore.setState({ events: allEvents, eventCount: 5 });
-    useUIStore.setState({ showAirstrikes: false, showGroundCombat: false, showTargeted: false });
-    render(<StatusPanel />);
-
-    expect(screen.queryByText('5')).not.toBeInTheDocument();
   });
 
   describe('filter-aware counts', () => {

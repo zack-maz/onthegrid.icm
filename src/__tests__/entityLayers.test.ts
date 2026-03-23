@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { altitudeToOpacity, ENTITY_COLORS, ICON_SIZE, PULSE_CONFIG } from '@/components/map/layers/constants';
 import { ICON_MAPPING } from '@/components/map/layers/icons';
-import { useUIStore } from '@/stores/uiStore';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
@@ -58,15 +57,6 @@ describe('Icon Mapping', () => {
   }
 });
 
-describe('uiStore pulseEnabled', () => {
-  beforeEach(() => { useUIStore.setState({ isDetailPanelOpen: false, isCountersCollapsed: false, pulseEnabled: true }); });
-  it('defaults to true', () => { expect(useUIStore.getState().pulseEnabled).toBe(true); });
-  it('togglePulse flips', () => {
-    useUIStore.getState().togglePulse(); expect(useUIStore.getState().pulseEnabled).toBe(false);
-    useUIStore.getState().togglePulse(); expect(useUIStore.getState().pulseEnabled).toBe(true);
-  });
-});
-
 const mockShip: ShipEntity = { id: 'ship-123456789', type: 'ship', lat: 26.0, lng: 56.0, timestamp: Date.now(), label: 'VESSEL ONE', data: { mmsi: 123456789, shipName: 'VESSEL ONE', speedOverGround: 12.5, courseOverGround: 180, trueHeading: 178 } };
 const mockAirstrikeEvent: ConflictEventEntity = { id: 'event-IRN001', type: 'airstrike', lat: 32.6546, lng: 51.668, timestamp: Date.now(), label: 'Aerial weapons', data: { eventType: 'Aerial weapons', subEventType: 'CAMEO 195', fatalities: 0, actor1: 'Unknown', actor2: 'Unknown', notes: '', source: 'ISNA', goldsteinScale: -5.0, locationName: 'Isfahan, Iran', cameoCode: '195' } };
 const mockGroundCombatEvent: ConflictEventEntity = { id: 'event-IRN002', type: 'ground_combat', lat: 35.6892, lng: 51.389, timestamp: Date.now(), label: 'Conventional military force', data: { eventType: 'Conventional military force', subEventType: 'CAMEO 190', fatalities: 3, actor1: 'Unknown', actor2: 'Unknown', notes: '', source: 'Reuters', goldsteinScale: -9.5, locationName: 'Tehran, Iran', cameoCode: '190' } };
@@ -80,7 +70,6 @@ function resetStores() {
   useFlightStore.setState({ flights: [mockRegularFlight, mockUnidentifiedFlight], connectionStatus: 'connected', lastFetchAt: Date.now(), lastFresh: Date.now(), flightCount: 2 });
   useShipStore.setState({ ships: [mockShip], shipCount: 1 });
   useEventStore.setState({ events: [mockAirstrikeEvent, mockGroundCombatEvent, mockTargetedEvent, mockOtherEvent], eventCount: 4 });
-  useUIStore.setState({ pulseEnabled: true, showFlights: true, showShips: true, showEvents: true, showAirstrikes: true, showGroundCombat: true, showTargeted: true, showGroundTraffic: false });
   useFilterStore.setState({ flightCountries: [], eventCountries: [], flightSpeedMin: null, flightSpeedMax: null, altitudeMin: null, altitudeMax: null, proximityPin: null, proximityRadiusKm: 100, dateStart: 0, dateEnd: Date.now() + 86400000, isSettingPin: false });
 }
 
@@ -138,37 +127,23 @@ describe('useEntityLayers', () => {
   it('empty flights produce empty data', () => { useFlightStore.setState({ flights: [], flightCount: 0 }); const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer).props.data).toEqual([]); });
 });
 
-describe('useEntityLayers visibility toggles', () => {
-  beforeEach(() => { resetStores(); useFlightStore.setState({ flights: [mockRegularFlight, mockUnidentifiedFlight, mockGroundFlight], connectionStatus: 'connected', lastFetchAt: Date.now(), lastFresh: Date.now(), flightCount: 3 }); });
-  it('hides all conflict layers when showEvents is false', () => {
-    useUIStore.setState({ showEvents: false }); const { result } = renderHook(() => useEntityLayers());
-    expect((result.current.find((l: IconLayer) => l.id === 'airstrikes') as IconLayer).props.visible).toBe(false);
-    expect((result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer).props.visible).toBe(false);
-    expect((result.current.find((l: IconLayer) => l.id === 'targeted') as IconLayer).props.visible).toBe(false);
+describe('useEntityLayers always-visible behavior', () => {
+  beforeEach(() => {
+    resetStores();
+    useFlightStore.setState({ flights: [mockRegularFlight, mockUnidentifiedFlight, mockGroundFlight], connectionStatus: 'connected', lastFetchAt: Date.now(), lastFresh: Date.now(), flightCount: 3 });
   });
-  it('all flight toggles off hides flight layer', () => { useUIStore.setState({ showFlights: false, showGroundTraffic: false, pulseEnabled: false }); const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer).props.visible).toBe(false); });
-  it('showShips=false hides ship layer', () => { useUIStore.setState({ showShips: false }); const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'ships') as IconLayer).props.visible).toBe(false); });
-  it('showAirstrikes=false hides airstrike layer', () => { useUIStore.setState({ showAirstrikes: false }); const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'airstrikes') as IconLayer).props.visible).toBe(false); });
-  it('showGroundCombat=false hides groundCombat layer', () => { useUIStore.setState({ showGroundCombat: false }); const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer).props.visible).toBe(false); });
-  it('showTargeted=false hides targeted layer', () => { useUIStore.setState({ showTargeted: false }); const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'targeted') as IconLayer).props.visible).toBe(false); });
-  it('showFlights=false + showGroundTraffic=true includes ground + unidentified', () => {
-    useUIStore.setState({ showFlights: false, showGroundTraffic: true, pulseEnabled: true }); const { result } = renderHook(() => useEntityLayers());
-    const data = (result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer).props.data as FlightEntity[];
-    expect(data).toHaveLength(2); expect(data.some((f) => f.data.onGround)).toBe(true); expect(data.some((f) => f.data.unidentified)).toBe(true);
-  });
-  it('pulseEnabled=false hides unidentified flights', () => {
-    useUIStore.setState({ showFlights: true, showGroundTraffic: false, pulseEnabled: false }); const { result } = renderHook(() => useEntityLayers());
-    const data = (result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer).props.data as FlightEntity[];
-    expect(data).toHaveLength(1); expect(data[0].data.unidentified).toBe(false); expect(data[0].data.onGround).toBe(false);
-  });
-  it('unidentified flights independent of showFlights', () => {
-    useUIStore.setState({ showFlights: false, showGroundTraffic: false, pulseEnabled: true }); const { result } = renderHook(() => useEntityLayers());
-    const data = (result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer).props.data as FlightEntity[];
-    expect(data).toHaveLength(1); expect(data[0].data.unidentified).toBe(true);
-  });
-  it('all toggles ON returns 9 layers', () => {
-    const { result } = renderHook(() => useEntityLayers()); expect(result.current).toHaveLength(9);
+  it('all entity layers are always created', () => {
+    const { result } = renderHook(() => useEntityLayers());
+    expect(result.current).toHaveLength(9);
     expect(result.current.map((l: { id: string }) => l.id)).toEqual(['proximity-circle', 'ships', 'flights', 'airstrikes', 'groundCombat', 'targeted', 'site-icons', 'entity-glow', 'entity-highlight']);
+  });
+  it('flight layer includes all flights (airborne + ground + unidentified)', () => {
+    const { result } = renderHook(() => useEntityLayers());
+    const data = (result.current.find((l: IconLayer) => l.id === 'flights') as IconLayer).props.data as FlightEntity[];
+    expect(data).toHaveLength(3);
+    expect(data.some((f) => f.data.onGround)).toBe(true);
+    expect(data.some((f) => f.data.unidentified)).toBe(true);
+    expect(data.some((f) => !f.data.onGround && !f.data.unidentified)).toBe(true);
   });
   it('airstrike layer has pickable=true', () => { const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'airstrikes') as IconLayer).props.pickable).toBe(true); });
   it('groundCombat layer has pickable=true', () => { const { result } = renderHook(() => useEntityLayers()); expect((result.current.find((l: IconLayer) => l.id === 'groundCombat') as IconLayer).props.pickable).toBe(true); });

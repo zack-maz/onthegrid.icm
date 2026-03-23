@@ -1,47 +1,12 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-
-const mockState = {
-  showFlights: true,
-  showGroundTraffic: false,
-  pulseEnabled: true,
-  showShips: true,
-  showEvents: true,
-  showAirstrikes: true,
-  showGroundCombat: true,
-  showTargeted: true,
-  showSites: true,
-  showNuclear: true,
-  showNaval: true,
-  showOil: true,
-  showAirbase: true,
-  showDesalination: true,
-  showPort: true,
-  showHealthySites: true,
-  showAttackedSites: true,
-  isLayersCollapsed: false,
-  toggleFlights: vi.fn(),
-  toggleGroundTraffic: vi.fn(),
-  togglePulse: vi.fn(),
-  toggleShips: vi.fn(),
-  toggleEvents: vi.fn(),
-  toggleAirstrikes: vi.fn(),
-  toggleGroundCombat: vi.fn(),
-  toggleTargeted: vi.fn(),
-  toggleSites: vi.fn(),
-  toggleNuclear: vi.fn(),
-  toggleNaval: vi.fn(),
-  toggleOil: vi.fn(),
-  toggleAirbase: vi.fn(),
-  toggleDesalination: vi.fn(),
-  togglePort: vi.fn(),
-  toggleHealthySites: vi.fn(),
-  toggleAttackedSites: vi.fn(),
-  toggleLayers: vi.fn(),
-};
+import { useLayerStore } from '@/stores/layerStore';
 
 vi.mock('@/stores/uiStore', () => ({
-  useUIStore: (selector: (s: typeof mockState) => unknown) => selector(mockState),
+  useUIStore: (selector: (s: Record<string, unknown>) => unknown) => selector({
+    isLayersCollapsed: false,
+    toggleLayers: vi.fn(),
+  }),
 }));
 
 import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
@@ -49,25 +14,7 @@ import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
 describe('LayerTogglesSlot', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset to defaults
-    mockState.showFlights = true;
-    mockState.showGroundTraffic = false;
-    mockState.pulseEnabled = true;
-    mockState.showShips = true;
-    mockState.showEvents = true;
-    mockState.showAirstrikes = true;
-    mockState.showGroundCombat = true;
-    mockState.showTargeted = true;
-    mockState.showSites = true;
-    mockState.showNuclear = true;
-    mockState.showNaval = true;
-    mockState.showOil = true;
-    mockState.showAirbase = true;
-    mockState.showDesalination = true;
-    mockState.showPort = true;
-    mockState.showHealthySites = true;
-    mockState.showAttackedSites = true;
-    mockState.isLayersCollapsed = false;
+    useLayerStore.setState({ activeLayers: new Set() });
   });
 
   it('renders "Layers" header text', () => {
@@ -75,118 +22,52 @@ describe('LayerTogglesSlot', () => {
     expect(screen.getByText('Layers')).toBeTruthy();
   });
 
-  it('renders 18 toggle row buttons', () => {
+  it('renders 6 visualization layer toggle rows', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
-    expect(switches).toHaveLength(17);
+    expect(switches).toHaveLength(6);
   });
 
-  it('each button has role="switch" and aria-checked', () => {
+  it('renders toggle rows with correct labels', () => {
     render(<LayerTogglesSlot />);
-    const switches = screen.getAllByRole('switch');
-    switches.forEach((btn) => {
-      expect(btn.getAttribute('role')).toBe('switch');
-      expect(btn.getAttribute('aria-checked')).toBeDefined();
-    });
+    expect(screen.getByText('Geographic')).toBeTruthy();
+    expect(screen.getByText('Weather')).toBeTruthy();
+    expect(screen.getByText('Threat Heatmap')).toBeTruthy();
+    expect(screen.getByText('Political')).toBeTruthy();
+    expect(screen.getByText('Satellite')).toBeTruthy();
+    expect(screen.getByText('Infrastructure')).toBeTruthy();
   });
 
-  it('renders toggle rows in correct order', () => {
+  it('clicking a toggle calls toggleLayer', () => {
     render(<LayerTogglesSlot />);
-    const switches = screen.getAllByRole('switch');
-    const labels = switches.map((btn) => btn.textContent?.trim());
-    expect(labels).toEqual([
-      'Flights', 'Ground', 'Unidentified', 'Ships',
-      'Events', 'Airstrikes', 'Ground Combat', 'Targeted',
-      'Sites', 'Nuclear', 'Naval', 'Oil', 'Airbase', 'Desalination', 'Port',
-      'Healthy', 'Attacked',
-    ]);
+    const geoToggle = screen.getByLabelText('Toggle Geographic layer');
+    fireEvent.click(geoToggle);
+    expect(useLayerStore.getState().activeLayers.has('geographic')).toBe(true);
   });
 
-  it('clicking Flights toggle calls toggleFlights', () => {
+  it('renders "coming soon" subtitle text', () => {
     render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Flights visibility'));
-    expect(mockState.toggleFlights).toHaveBeenCalledOnce();
+    expect(screen.getByText(/coming soon/i)).toBeTruthy();
   });
 
-  it('clicking Ships toggle calls toggleShips', () => {
+  it('renders "Clear cache & reload" button', () => {
     render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Ships visibility'));
-    expect(mockState.toggleShips).toHaveBeenCalledOnce();
-  });
-
-  it('clicking Events toggle calls toggleEvents', () => {
-    render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Events visibility'));
-    expect(mockState.toggleEvents).toHaveBeenCalledOnce();
-  });
-
-  it('clicking Airstrikes toggle calls toggleAirstrikes', () => {
-    render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Airstrikes visibility'));
-    expect(mockState.toggleAirstrikes).toHaveBeenCalledOnce();
-  });
-
-  it('clicking Ground Combat toggle calls toggleGroundCombat', () => {
-    render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Ground Combat visibility'));
-    expect(mockState.toggleGroundCombat).toHaveBeenCalledOnce();
-  });
-
-  it('clicking Targeted toggle calls toggleTargeted', () => {
-    render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Targeted visibility'));
-    expect(mockState.toggleTargeted).toHaveBeenCalledOnce();
-  });
-
-  it('clicking Healthy toggle calls toggleHealthySites', () => {
-    render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Healthy visibility'));
-    expect(mockState.toggleHealthySites).toHaveBeenCalledOnce();
-  });
-
-  it('clicking Attacked toggle calls toggleAttackedSites', () => {
-    render(<LayerTogglesSlot />);
-    fireEvent.click(screen.getByLabelText('Toggle Attacked visibility'));
-    expect(mockState.toggleAttackedSites).toHaveBeenCalledOnce();
+    expect(screen.getByText('Clear cache & reload')).toBeTruthy();
   });
 
   it('inactive toggle has opacity-40 class', () => {
-    // showGroundTraffic is false by default
-    mockState.showAirstrikes = false;
     render(<LayerTogglesSlot />);
-    const groundBtn = screen.getByLabelText('Toggle Ground visibility');
-    expect(groundBtn.className).toContain('opacity-40');
-    const airstrikeBtn = screen.getByLabelText('Toggle Airstrikes visibility');
-    expect(airstrikeBtn.className).toContain('opacity-40');
+    const switches = screen.getAllByRole('switch');
+    // All are inactive initially (no active layers)
+    for (const btn of switches) {
+      expect(btn.className).toContain('opacity-40');
+    }
   });
 
   it('active toggle has opacity-100 class', () => {
+    useLayerStore.setState({ activeLayers: new Set(['geographic']) });
     render(<LayerTogglesSlot />);
-    const flightsBtn = screen.getByLabelText('Toggle Flights visibility');
-    expect(flightsBtn.className).toContain('opacity-100');
-  });
-
-  it('Ground and Pulse rows have indent styling (pl-4)', () => {
-    render(<LayerTogglesSlot />);
-    const groundBtn = screen.getByLabelText('Toggle Ground visibility');
-    const pulseBtn = screen.getByLabelText('Toggle Unidentified visibility');
-    expect(groundBtn.className).toContain('pl-4');
-    expect(pulseBtn.className).toContain('pl-4');
-  });
-
-  it('non-indented rows do not have pl-4', () => {
-    render(<LayerTogglesSlot />);
-    const flightsBtn = screen.getByLabelText('Toggle Flights visibility');
-    const shipsBtn = screen.getByLabelText('Toggle Ships visibility');
-    expect(flightsBtn.className).not.toContain('pl-4');
-    expect(shipsBtn.className).not.toContain('pl-4');
-  });
-
-  it('indented rows have text-[10px] class', () => {
-    render(<LayerTogglesSlot />);
-    const groundBtn = screen.getByLabelText('Toggle Ground visibility');
-    const pulseBtn = screen.getByLabelText('Toggle Unidentified visibility');
-    expect(groundBtn.className).toContain('text-[10px]');
-    expect(pulseBtn.className).toContain('text-[10px]');
+    const geoToggle = screen.getByLabelText('Toggle Geographic layer');
+    expect(geoToggle.className).toContain('opacity-100');
   });
 });

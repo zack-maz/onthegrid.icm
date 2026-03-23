@@ -31,14 +31,6 @@ describe('CountersSlot', () => {
     useShipStore.setState({ ships: [], shipCount: 0, connectionStatus: 'connected' });
     useUIStore.setState({
       isCountersCollapsed: false,
-      showEvents: true,
-      showAirstrikes: true,
-      showGroundCombat: true,
-      showTargeted: true,
-      showFlights: true,
-      showShips: true,
-      showGroundTraffic: false,
-      pulseEnabled: true,
       selectedEntityId: null,
     });
     useFilterStore.setState({
