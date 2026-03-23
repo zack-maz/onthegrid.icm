@@ -4,6 +4,13 @@ import { LAYER_TOGGLE_DEFAULTS } from '@/types/ui';
 
 const STORAGE_KEY = 'layerToggles';
 
+function readBool(key: string, fallback: boolean): boolean {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === 'true';
+  } catch { return fallback; }
+}
+
 export function loadPersistedToggles(): LayerToggles {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -41,6 +48,8 @@ function getToggles(state: UIState): LayerToggles {
     showDesalination: state.showDesalination,
     showPort: state.showPort,
     showHitOnly: state.showHitOnly,
+    showHealthySites: state.showHealthySites,
+    showAttackedSites: state.showAttackedSites,
   };
 }
 
@@ -57,6 +66,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
   isEventFiltersOpen: true,
   isSidebarOpen: false,
   activeSidebarSection: null,
+  isMarketsCollapsed: readBool('markets-collapsed', false),
   pulseEnabled: initial.pulseEnabled,
   showGroundTraffic: initial.showGroundTraffic,
   showFlights: initial.showFlights,
@@ -73,6 +83,8 @@ export const useUIStore = create<UIState>()((set, get) => ({
   showDesalination: initial.showDesalination,
   showPort: initial.showPort,
   showHitOnly: initial.showHitOnly,
+  showHealthySites: initial.showHealthySites,
+  showAttackedSites: initial.showAttackedSites,
   selectedEntityId: null,
   hoveredEntityId: null,
   openDetailPanel: () => set({ isDetailPanelOpen: true }),
@@ -158,6 +170,14 @@ export const useUIStore = create<UIState>()((set, get) => ({
     set((s) => ({ showHitOnly: !s.showHitOnly }));
     persistToggles(getToggles(get()));
   },
+  toggleHealthySites: () => {
+    set((s) => ({ showHealthySites: !s.showHealthySites }));
+    persistToggles(getToggles(get()));
+  },
+  toggleAttackedSites: () => {
+    set((s) => ({ showAttackedSites: !s.showAttackedSites }));
+    persistToggles(getToggles(get()));
+  },
   toggleSidebar: () => {
     const { isSidebarOpen } = get();
     if (isSidebarOpen) {
@@ -168,15 +188,30 @@ export const useUIStore = create<UIState>()((set, get) => ({
   },
   openSidebarSection: (section) => {
     const { isSidebarOpen, activeSidebarSection } = get();
+    // Expand the clicked section, collapse the others
+    const collapseState = {
+      isCountersCollapsed: section !== 'counters',
+      isLayersCollapsed: section !== 'layers',
+      isFiltersCollapsed: section !== 'filters',
+    };
     if (!isSidebarOpen) {
-      set({ isSidebarOpen: true, activeSidebarSection: section });
+      set({ isSidebarOpen: true, activeSidebarSection: section, ...collapseState });
     } else if (activeSidebarSection === section) {
       set({ isSidebarOpen: false, activeSidebarSection: null });
     } else {
-      set({ activeSidebarSection: section });
+      set({ activeSidebarSection: section, ...collapseState });
     }
   },
   closeSidebar: () => set({ isSidebarOpen: false, activeSidebarSection: null }),
+  toggleMarkets: () => {
+    const next = !get().isMarketsCollapsed;
+    set({ isMarketsCollapsed: next });
+    try { localStorage.setItem('markets-collapsed', String(next)); } catch { /* */ }
+  },
+  collapseMarkets: () => {
+    set({ isMarketsCollapsed: true });
+    try { localStorage.setItem('markets-collapsed', 'true'); } catch { /* */ }
+  },
   selectEntity: (id) => set({ selectedEntityId: id }),
   hoverEntity: (id) => set({ hoveredEntityId: id }),
 }));

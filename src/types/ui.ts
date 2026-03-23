@@ -54,6 +54,8 @@ export interface LayerToggles {
   showDesalination: boolean;
   showPort: boolean;
   showHitOnly: boolean;
+  showHealthySites: boolean;
+  showAttackedSites: boolean;
 }
 
 export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
@@ -63,7 +65,7 @@ export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
   showAirstrikes: true,
   showGroundCombat: true,
   showTargeted: true,
-  showGroundTraffic: false,
+  showGroundTraffic: true,
   pulseEnabled: true,
   showSites: true,
   showNuclear: true,
@@ -73,6 +75,8 @@ export const LAYER_TOGGLE_DEFAULTS: LayerToggles = {
   showDesalination: true,
   showPort: true,
   showHitOnly: false,
+  showHealthySites: true,
+  showAttackedSites: true,
 };
 
 export type SidebarSection = 'counters' | 'layers' | 'filters';
@@ -88,6 +92,7 @@ export interface UIState {
   isEventFiltersOpen: boolean;
   isSidebarOpen: boolean;
   activeSidebarSection: SidebarSection | null;
+  isMarketsCollapsed: boolean;
   pulseEnabled: boolean;
   showGroundTraffic: boolean;
   showFlights: boolean;
@@ -104,6 +109,8 @@ export interface UIState {
   showDesalination: boolean;
   showPort: boolean;
   showHitOnly: boolean;
+  showHealthySites: boolean;
+  showAttackedSites: boolean;
   selectedEntityId: string | null;
   hoveredEntityId: string | null;
   openDetailPanel: () => void;
@@ -131,11 +138,15 @@ export interface UIState {
   toggleDesalination: () => void;
   togglePort: () => void;
   toggleHitOnly: () => void;
+  toggleHealthySites: () => void;
+  toggleAttackedSites: () => void;
   selectEntity: (id: string | null) => void;
   hoverEntity: (id: string | null) => void;
   toggleSidebar: () => void;
   openSidebarSection: (section: SidebarSection) => void;
   closeSidebar: () => void;
+  toggleMarkets: () => void;
+  collapseMarkets: () => void;
 }
 
 /** Human-readable labels for each SiteType */

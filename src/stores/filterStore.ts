@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { useUIStore } from '@/stores/uiStore';
 import { useSearchStore } from '@/stores/searchStore';
 import { STEP_MS, snapToStep } from '@/lib/constants';
 
@@ -8,16 +7,22 @@ export interface ProximityPin {
   lng: number;
 }
 
-export type FilterKey = 'flightCountry' | 'eventCountry' | 'flightSpeed' | 'shipSpeed' | 'altitude' | 'proximity' | 'date';
+export type FilterKey =
+  | 'flightCountry'
+  | 'eventCountry'
+  | 'flightSpeed'
+  | 'altitude'
+  | 'proximity'
+  | 'date'
+  | 'mentions'
+  | 'heading'
+  | 'callsign'
+  | 'icao'
+  | 'mmsi'
+  | 'shipNameFilter'
+  | 'cameo';
 
 export type Granularity = 'minute' | 'hour' | 'day';
-
-export interface SavedToggles {
-  showFlights: boolean;
-  showGroundTraffic: boolean;
-  pulseEnabled: boolean;
-  showShips: boolean;
-}
 
 export interface FilterState {
   // State
@@ -25,8 +30,6 @@ export interface FilterState {
   eventCountries: string[];
   flightSpeedMin: number | null;
   flightSpeedMax: number | null;
-  shipSpeedMin: number | null;
-  shipSpeedMax: number | null;
   altitudeMin: number | null;
   altitudeMax: number | null;
   proximityPin: ProximityPin | null;
@@ -35,7 +38,23 @@ export interface FilterState {
   dateEnd: number | null;
   isSettingPin: boolean;
   granularity: Granularity;
-  savedToggles: SavedToggles | null;
+
+  // New text search fields
+  flightCallsign: string;
+  flightIcao: string;
+  shipMmsi: string;
+  shipNameFilter: string;
+  cameoCode: string;
+
+  // New range fields
+  mentionsMin: number | null;
+  mentionsMax: number | null;
+  headingAngle: number | null; // 0-360, null = no filter
+
+  // Severity toggles
+  showHighSeverity: boolean;
+  showMediumSeverity: boolean;
+  showLowSeverity: boolean;
 
   // Actions
   setFlightCountries: (countries: string[]) => void;
@@ -45,18 +64,28 @@ export interface FilterState {
   addEventCountry: (country: string) => void;
   removeEventCountry: (country: string) => void;
   setFlightSpeedRange: (min: number | null, max: number | null) => void;
-  setShipSpeedRange: (min: number | null, max: number | null) => void;
   setAltitudeRange: (min: number | null, max: number | null) => void;
   setProximityPin: (pin: ProximityPin | null) => void;
   setProximityRadius: (km: number) => void;
   setDateRange: (start: number | null, end: number | null) => void;
   setSettingPin: (v: boolean) => void;
   setGranularity: (g: Granularity) => void;
-  isCustomRangeActive: () => boolean;
   isDefaultWindowActive: () => boolean;
   clearFilter: (filter: FilterKey) => void;
   clearAll: () => void;
   activeFilterCount: () => number;
+
+  // New setters
+  setFlightCallsign: (v: string) => void;
+  setFlightIcao: (v: string) => void;
+  setShipMmsi: (v: string) => void;
+  setShipNameFilter: (v: string) => void;
+  setCameoCode: (v: string) => void;
+  setMentionsRange: (min: number | null, max: number | null) => void;
+  setHeadingAngle: (v: number | null) => void;
+  setShowHighSeverity: (v: boolean) => void;
+  setShowMediumSeverity: (v: boolean) => void;
+  setShowLowSeverity: (v: boolean) => void;
 }
 
 const DEFAULTS = {
@@ -64,8 +93,6 @@ const DEFAULTS = {
   eventCountries: [] as string[],
   flightSpeedMin: null as number | null,
   flightSpeedMax: null as number | null,
-  shipSpeedMin: null as number | null,
-  shipSpeedMax: null as number | null,
   altitudeMin: null as number | null,
   altitudeMax: null as number | null,
   proximityPin: null as ProximityPin | null,
@@ -74,7 +101,23 @@ const DEFAULTS = {
   dateEnd: null as number | null,
   isSettingPin: false,
   granularity: 'hour' as Granularity,
-  savedToggles: null as SavedToggles | null,
+
+  // New text search fields
+  flightCallsign: '',
+  flightIcao: '',
+  shipMmsi: '',
+  shipNameFilter: '',
+  cameoCode: '',
+
+  // New range fields
+  mentionsMin: null as number | null,
+  mentionsMax: null as number | null,
+  headingAngle: null as number | null,
+
+  // Severity toggles
+  showHighSeverity: true,
+  showMediumSeverity: true,
+  showLowSeverity: true,
 };
 
 export const useFilterStore = create<FilterState>()((set, get) => ({
@@ -108,46 +151,13 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
 
   setFlightSpeedRange: (min, max) => set({ flightSpeedMin: min, flightSpeedMax: max }),
 
-  setShipSpeedRange: (min, max) => set({ shipSpeedMin: min, shipSpeedMax: max }),
-
   setAltitudeRange: (min, max) => set({ altitudeMin: min, altitudeMax: max }),
 
   setProximityPin: (pin) => set({ proximityPin: pin }),
 
   setProximityRadius: (km) => set({ proximityRadiusKm: km }),
 
-  setDateRange: (start, end) => {
-    const prev = get();
-    set({ dateStart: start, dateEnd: end });
-
-    const isCustom = start !== null || end !== null;
-    const wasCustom = prev.savedToggles !== null;
-
-    // Auto-activate: entering custom date range (either slider moved)
-    if (isCustom && !wasCustom) {
-      const ui = useUIStore.getState();
-      set({
-        savedToggles: {
-          showFlights: ui.showFlights,
-          showGroundTraffic: ui.showGroundTraffic,
-          pulseEnabled: ui.pulseEnabled,
-          showShips: ui.showShips,
-        },
-      });
-      useUIStore.setState({
-        showFlights: false,
-        showGroundTraffic: false,
-        pulseEnabled: false,
-        showShips: false,
-      });
-    }
-
-    // Auto-deactivate: both sliders back to defaults
-    if (!isCustom && wasCustom) {
-      useUIStore.setState({ ...prev.savedToggles });
-      set({ savedToggles: null });
-    }
-  },
+  setDateRange: (start, end) => set({ dateStart: start, dateEnd: end }),
 
   setSettingPin: (v) => set({ isSettingPin: v }),
 
@@ -163,8 +173,6 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
     set({ granularity: g, dateStart: newStart, dateEnd: newEnd });
   },
 
-  isCustomRangeActive: () => get().savedToggles !== null,
-
   isDefaultWindowActive: () => get().dateStart === null && get().dateEnd === null,
 
   clearFilter: (filter) => {
@@ -178,31 +186,40 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
       case 'flightSpeed':
         set({ flightSpeedMin: null, flightSpeedMax: null });
         break;
-      case 'shipSpeed':
-        set({ shipSpeedMin: null, shipSpeedMax: null });
-        break;
       case 'altitude':
         set({ altitudeMin: null, altitudeMax: null });
         break;
       case 'proximity':
         set({ proximityPin: null, proximityRadiusKm: 100 });
         break;
-      case 'date': {
-        const { savedToggles } = get();
-        if (savedToggles !== null) {
-          useUIStore.setState({ ...savedToggles });
-        }
-        set({ dateStart: null, dateEnd: null, savedToggles: null });
+      case 'date':
+        set({ dateStart: null, dateEnd: null });
         break;
-      }
+      case 'mentions':
+        set({ mentionsMin: null, mentionsMax: null });
+        break;
+      case 'heading':
+        set({ headingAngle: null });
+        break;
+      case 'callsign':
+        set({ flightCallsign: '' });
+        break;
+      case 'icao':
+        set({ flightIcao: '' });
+        break;
+      case 'mmsi':
+        set({ shipMmsi: '' });
+        break;
+      case 'shipNameFilter':
+        set({ shipNameFilter: '' });
+        break;
+      case 'cameo':
+        set({ cameoCode: '' });
+        break;
     }
   },
 
   clearAll: () => {
-    const { savedToggles } = get();
-    if (savedToggles !== null) {
-      useUIStore.setState({ ...savedToggles });
-    }
     set({ ...DEFAULTS });
     useSearchStore.getState().clearSearch();
   },
@@ -213,10 +230,28 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
     if (s.flightCountries.length > 0) count++;
     if (s.eventCountries.length > 0) count++;
     if (s.flightSpeedMin !== null || s.flightSpeedMax !== null) count++;
-    if (s.shipSpeedMin !== null || s.shipSpeedMax !== null) count++;
     if (s.altitudeMin !== null || s.altitudeMax !== null) count++;
     if (s.proximityPin !== null) count++;
     if (s.dateStart !== null || s.dateEnd !== null) count++;
+    if (s.mentionsMin !== null || s.mentionsMax !== null) count++;
+    if (s.headingAngle !== null) count++;
+    if (s.flightCallsign !== '') count++;
+    if (s.flightIcao !== '') count++;
+    if (s.shipMmsi !== '') count++;
+    if (s.shipNameFilter !== '') count++;
+    if (s.cameoCode !== '') count++;
     return count;
   },
+
+  // New setters
+  setFlightCallsign: (v) => set({ flightCallsign: v }),
+  setFlightIcao: (v) => set({ flightIcao: v }),
+  setShipMmsi: (v) => set({ shipMmsi: v }),
+  setShipNameFilter: (v) => set({ shipNameFilter: v }),
+  setCameoCode: (v) => set({ cameoCode: v }),
+  setMentionsRange: (min, max) => set({ mentionsMin: min, mentionsMax: max }),
+  setHeadingAngle: (v) => set({ headingAngle: v }),
+  setShowHighSeverity: (v) => set({ showHighSeverity: v }),
+  setShowMediumSeverity: (v) => set({ showMediumSeverity: v }),
+  setShowLowSeverity: (v) => set({ showLowSeverity: v }),
 }));
