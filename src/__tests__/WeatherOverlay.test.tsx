@@ -31,7 +31,7 @@ describe('useWeatherLayers', () => {
     useLayerStore.getState().toggleLayer('weather');
     const { result } = renderHook(() => useWeatherLayers());
     expect(result.current).toHaveLength(3);
-    expect(result.current[0].id).toBe('weather-temp-heatmap');
+    expect(result.current[0].id).toBe('weather-temp-dots');
     expect(result.current[1].id).toBe('weather-wind-barbs');
     expect(result.current[2].id).toBe('weather-picker');
   });
