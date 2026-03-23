@@ -43,7 +43,11 @@
 - [x] **Phase 18: Oil Markets Tracker** - Oil/energy price panel (Brent, WTI, XLE, USO, XOM) with sparkline trends (completed 2026-03-21)
 - [x] **Phase 19: Search, Filter & UI Cleanup** - Global search bar, Reset All, grouped filter sections, visual hierarchy (completed 2026-03-22)
 - [x] **Phase 20: Layer Purpose Refactor** - Remove entity toggles, replace with visualization layer architecture, inline legend framework (completed 2026-03-23)
-- [ ] **Phase 20.1: Geographical & Weather Layers** - Monochrome elevation tinting with contour lines + real-time temperature overlay from Open-Meteo
+- [x] **Phase 20.1: Geographical & Weather Layers** - Monochrome elevation tinting with contour lines + real-time temperature overlay from Open-Meteo (completed 2026-03-23)
+- [ ] **Phase 20.2: Threat Heatmap Layer** - Color-codes regions by GDELT conflict event density, hot zones glow red
+- [ ] **Phase 20.3: Political Boundaries Layer** - Country borders, disputed territories, alliance/faction color-coding
+- [ ] **Phase 20.4: Satellite Imagery Layer** - ArcGIS World Imagery as semi-transparent overlay on Dark Matter basemap
+- [ ] **Phase 20.5: Infrastructure Focus Layer** - Dims non-site entities, highlights sites with enhanced labels
 - [ ] **Phase 21: Production Review & Deploy Sync** - Full verification, integration testing, Vercel deployment, git tag v1.2
 
 ## Phase Details
@@ -188,12 +192,52 @@ Plans:
   3. Both layers have inline legends that appear/disappear with the toggle
   4. Server provides `/api/weather` endpoint with Redis-cached Open-Meteo data (30-60 min polling)
   5. Major geographic feature labels (Zagros Mountains, Dasht-e Kavir, etc.) appear when Geographical layer is active
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 20.1-01-PLAN.md -- Server pipeline: WeatherGridPoint types, Open-Meteo adapter with 2-band request splitting, cache-first /api/weather route
 - [ ] 20.1-02-PLAN.md -- Geographic overlay: color-relief elevation tinting, maplibre-contour contour lines, geographic feature labels, elevation legend
 - [ ] 20.1-03-PLAN.md -- Weather overlay: weatherStore, useWeatherPolling, HeatmapLayer temperature heatmap, wind barb IconLayer, weather tooltip, temperature legend
+
+### Phase 20.2: Threat Heatmap Layer (INSERTED)
+**Goal**: Users can toggle a threat heatmap that color-codes regions by GDELT conflict event density
+**Depends on**: Phase 20
+**Requirements**: LREF-01 (layer architecture)
+**Success Criteria** (what must be TRUE):
+  1. User can toggle a Threat Heatmap layer that visualizes conflict event density across the map
+  2. Hot zones glow red, quiet areas stay dark — uses existing GDELT event data (no new API)
+  3. Inline legend shows density scale when layer is active
+**Plans**: TBD
+
+### Phase 20.3: Political Boundaries Layer (INSERTED)
+**Goal**: Users can toggle a political boundaries overlay that emphasizes country borders and faction alignment
+**Depends on**: Phase 20
+**Requirements**: LREF-01 (layer architecture)
+**Success Criteria** (what must be TRUE):
+  1. User can toggle a Political Boundaries layer that renders country borders and disputed territories
+  2. Countries are color-coded by alliance/faction
+  3. Inline legend shows faction color key when layer is active
+**Plans**: TBD
+
+### Phase 20.4: Satellite Imagery Layer (INSERTED)
+**Goal**: Users can toggle a satellite imagery overlay using ArcGIS World Imagery tiles
+**Depends on**: Phase 20
+**Requirements**: LREF-01 (layer architecture)
+**Success Criteria** (what must be TRUE):
+  1. User can toggle a Satellite Imagery layer that renders ArcGIS World Imagery as a semi-transparent overlay
+  2. Overlay blends on top of Dark Matter basemap at fixed opacity
+  3. Inline legend or label indicates satellite imagery source when layer is active
+**Plans**: TBD
+
+### Phase 20.5: Infrastructure Focus Layer (INSERTED)
+**Goal**: Users can toggle an infrastructure focus mode that highlights key sites and dims other entities
+**Depends on**: Phase 20
+**Requirements**: LREF-01 (layer architecture)
+**Success Criteria** (what must be TRUE):
+  1. User can toggle an Infrastructure Focus layer that dims non-site entities
+  2. Sites are highlighted with enhanced labels and visibility
+  3. Provides an infrastructure-only "X-ray" view of the region
+**Plans**: TBD
 
 ### Phase 21: Production Review & Deploy Sync
 **Goal**: v1.2 is verified end-to-end and deployed to production
@@ -235,5 +279,5 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 21
 | 19.1. Advanced Search | 5/5 | Complete    | 2026-03-22 | - |
 | 19.2. Counter Entity Dropdowns | 2/2 | Complete    | 2026-03-22 | - |
 | 20. Layer Purpose Refactor | 3/3 | Complete    | 2026-03-23 | - |
-| 20.1. Geographical & Weather Layers | 2/3 | In Progress|  | - |
+| 20.1. Geographical & Weather Layers | 3/3 | Complete   | 2026-03-23 | - |
 | 21. Production Review & Deploy Sync | v1.2 | 0/TBD | Not started | - |

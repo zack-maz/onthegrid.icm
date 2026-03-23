@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: executing
-stopped_at: Completed 20.1-01-PLAN.md
-last_updated: "2026-03-23T08:06:20.000Z"
-last_activity: 2026-03-23 -- Completed Phase 20.1 Plan 01 (server weather pipeline)
+status: completed
+stopped_at: Completed 20.1-03-PLAN.md
+last_updated: "2026-03-23T08:17:04.952Z"
+last_activity: 2026-03-23 -- Completed Phase 20.1 Plan 03 (weather visualization layer)
 progress:
-  total_phases: 10
-  completed_phases: 7
+  total_phases: 14
+  completed_phases: 8
   total_plans: 28
-  completed_plans: 26
-  percent: 91
+  completed_plans: 27
+  percent: 97
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 20.1 (Geographical & Weather Layers Inserted)
-Plan: 02 of 03 complete
-Status: In progress -- Plans 01 and 02 complete, Plan 03 remaining
-Last activity: 2026-03-23 -- Completed Phase 20.1 Plan 01 (server weather pipeline)
+Plan: 03 of 03 complete
+Status: Phase complete -- all plans delivered
+Last activity: 2026-03-23 -- Completed Phase 20.1 Plan 03 (weather visualization layer)
 
-Progress: [█████████░] 91%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [█████████░] 91%
 | Phase 20 P03 | 7min | 2 tasks | 10 files |
 | Phase 20.1 P02 | 3min | 2 tasks | 10 files |
 | Phase 20.1 P01 | 3min | 2 tasks | 7 files |
+| Phase 20.1 P03 | 6min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,10 @@ Progress: [█████████░] 91%
 - [Phase 20.1-01]: 2-band latitude split at lat 28 keeps each Open-Meteo request under 574 locations
 - [Phase 20.1-01]: Promise.all for parallel band fetching to minimize weather data latency
 - [Phase 20.1-01]: 30-min weather cache TTL matches Open-Meteo hourly update frequency with margin
+- [Phase 20.1]: Wind barb SVG pre-cached for 0-100 knots in 5-knot steps using Map<number, string> for O(1) lookup
+- [Phase 20.1]: Weather picker uses invisible ScatterplotLayer (50km radius) for tooltip picking separate from heatmap
+- [Phase 20.1]: Wind barbs filtered to 3-degree spacing via lat/lng modulo for clean visual density
+- [Phase 20.1]: Weather tooltip shows dual-unit temperature (C/F) and compass direction matching EntityTooltip style
 
 ### Roadmap Evolution
 
@@ -193,6 +198,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T08:06:20.000Z
-Stopped at: Completed 20.1-01-PLAN.md
+Last session: 2026-03-23T08:17:04.949Z
+Stopped at: Completed 20.1-03-PLAN.md
 Resume file: None
