@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: in-progress
-stopped_at: Completed 20-02-PLAN.md
-last_updated: "2026-03-23T05:18:00Z"
-last_activity: 2026-03-23 -- Completed Phase 20 Plan 02 (UI toggle cleanup and legend framework)
+status: completed
+stopped_at: Completed 20-03-PLAN.md
+last_updated: "2026-03-23T05:28:43.604Z"
+last_activity: 2026-03-23 -- Completed Phase 20 Plan 03 (test suite update for toggle-free architecture)
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 24
-  completed_plans: 23
+  completed_phases: 7
+  total_plans: 25
+  completed_plans: 24
   percent: 96
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 20 of 20 (Layer Purpose Refactor)
-Plan: 02 of 03 complete
-Status: Plan 02 complete, Plan 03 remaining
-Last activity: 2026-03-23 -- Completed Phase 20 Plan 02 (UI toggle cleanup and legend framework)
+Plan: 03 of 03 complete
+Status: Phase 20 complete (all 3 plans done)
+Last activity: 2026-03-23 -- Completed Phase 20 Plan 03 (test suite update for toggle-free architecture)
 
-Progress: [█████████░] 96%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [█████████░] 96%
 | Phase 19.1 P03 | 5min | 2 tasks | 5 files |
 | Phase 20 P01 | 6min | 2 tasks | 7 files |
 | Phase 20 P02 | 4min | 2 tasks | 6 files |
+| Phase 20 P03 | 7min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,9 @@ Progress: [█████████░] 96%
 - [Phase 20-01]: CONFLICT_TOGGLE_GROUPS keys preserved as event type grouping constants (structural, not visibility)
 - [Phase 20-01]: buildASTFromToggles renamed to buildASTFromFilters to reflect new filter-only scope
 - [Phase 20-01]: SyncableState stripped of all 15 toggle fields, keeping only filter fields
+- [Phase 20]: Removed 717 lines of toggle-related test code across 8 files (net -717 LOC)
+- [Phase 20]: LayerToggles test fully rewritten for 6 visualization layers via layerStore (not patched)
+- [Phase 20]: StatusPanel gets unconditional count tests replacing 9 toggle-gated zero-count tests
 
 ### Roadmap Evolution
 
@@ -181,6 +185,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T05:18:00Z
-Stopped at: Completed 20-02-PLAN.md
-Resume file: .planning/phases/20-layer-purpose-refactor/20-03-PLAN.md
+Last session: 2026-03-23T05:28:43.602Z
+Stopped at: Completed 20-03-PLAN.md
+Resume file: None

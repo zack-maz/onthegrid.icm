@@ -42,7 +42,7 @@
 - [x] **Phase 17: Notification Center** - Severity-scored conflict notifications with proximity alerts, news matching, and 24h event default (completed 2026-03-20)
 - [x] **Phase 18: Oil Markets Tracker** - Oil/energy price panel (Brent, WTI, XLE, USO, XOM) with sparkline trends (completed 2026-03-21)
 - [x] **Phase 19: Search, Filter & UI Cleanup** - Global search bar, Reset All, grouped filter sections, visual hierarchy (completed 2026-03-22)
-- [ ] **Phase 20: Layer Purpose Refactor** - Remove entity toggles, replace with visualization layer architecture, inline legend framework
+- [x] **Phase 20: Layer Purpose Refactor** - Remove entity toggles, replace with visualization layer architecture, inline legend framework (completed 2026-03-23)
 - [ ] **Phase 21: Production Review & Deploy Sync** - Full verification, integration testing, Vercel deployment, git tag v1.2
 
 ## Phase Details
@@ -170,7 +170,7 @@ Plans:
   3. A layerStore manages visualization layer on/off state with no localStorage persistence
   4. An inline legend framework renders in the bottom-left map corner when visualization layers are active
   5. Search/filter is the only way to narrow visible entity data
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 20-01-PLAN.md -- State refactor: remove entity toggles from types/uiStore, create layerStore, simplify useEntityLayers/useCounterData/useProximityAlerts/useQuerySync
@@ -216,5 +216,5 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21
 | 19. Search, Filter & UI Cleanup | 4/4 | Complete    | 2026-03-22 | - |
 | 19.1. Advanced Search | 5/5 | Complete    | 2026-03-22 | - |
 | 19.2. Counter Entity Dropdowns | 2/2 | Complete    | 2026-03-22 | - |
-| 20. Layer Purpose Refactor | 2/3 | In Progress|  | - |
+| 20. Layer Purpose Refactor | 3/3 | Complete   | 2026-03-23 | - |
 | 21. Production Review & Deploy Sync | v1.2 | 0/TBD | Not started | - |
