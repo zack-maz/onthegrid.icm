@@ -1,8 +1,8 @@
-import { DemSource } from 'maplibre-contour';
+import mlcontour from 'maplibre-contour';
 import maplibregl from 'maplibre-gl';
 import { TERRAIN_SOURCE_TILES } from '../constants';
 
-const demSource = new DemSource({
+const demSource = new mlcontour.DemSource({
   url: TERRAIN_SOURCE_TILES[0],
   encoding: 'terrarium',
   maxzoom: 13,
