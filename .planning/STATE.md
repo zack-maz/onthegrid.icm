@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
 status: executing
-stopped_at: Completed 20.1-02-PLAN.md
-last_updated: "2026-03-23T08:07:11.818Z"
-last_activity: 2026-03-23 -- Completed Phase 20.1 Plan 02 (geographic overlay with elevation, contours, labels)
+stopped_at: Completed 20.1-01-PLAN.md
+last_updated: "2026-03-23T08:06:20.000Z"
+last_activity: 2026-03-23 -- Completed Phase 20.1 Plan 01 (server weather pipeline)
 progress:
   total_phases: 10
   completed_phases: 7
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 Phase: 20.1 (Geographical & Weather Layers Inserted)
 Plan: 02 of 03 complete
-Status: In progress -- Plan 02 complete, Plan 03 remaining
-Last activity: 2026-03-23 -- Completed Phase 20.1 Plan 02 (geographic overlay with elevation, contours, labels)
+Status: In progress -- Plans 01 and 02 complete, Plan 03 remaining
+Last activity: 2026-03-23 -- Completed Phase 20.1 Plan 01 (server weather pipeline)
 
 Progress: [█████████░] 91%
 
@@ -69,6 +69,7 @@ Progress: [█████████░] 91%
 | Phase 20 P02 | 4min | 2 tasks | 6 files |
 | Phase 20 P03 | 7min | 2 tasks | 10 files |
 | Phase 20.1 P02 | 3min | 2 tasks | 10 files |
+| Phase 20.1 P01 | 3min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -168,6 +169,9 @@ Progress: [█████████░] 91%
 - [Phase 20.1-02]: color-relief layer uses type assertion for react-maplibre type gap
 - [Phase 20.1-02]: contour protocol registered once via module-level initialized guard (idempotent)
 - [Phase 20.1-02]: elevation legend registered via LEGEND_REGISTRY.push at module scope (first consumer of registry pattern)
+- [Phase 20.1-01]: 2-band latitude split at lat 28 keeps each Open-Meteo request under 574 locations
+- [Phase 20.1-01]: Promise.all for parallel band fetching to minimize weather data latency
+- [Phase 20.1-01]: 30-min weather cache TTL matches Open-Meteo hourly update frequency with margin
 
 ### Roadmap Evolution
 
@@ -189,6 +193,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T08:07:11.815Z
-Stopped at: Completed 20.1-02-PLAN.md
+Last session: 2026-03-23T08:06:20.000Z
+Stopped at: Completed 20.1-01-PLAN.md
 Resume file: None
