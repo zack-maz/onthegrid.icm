@@ -57,7 +57,6 @@ export function LayerTogglesContent() {
   const showAirbase = useUIStore((s) => s.showAirbase);
   const showDesalination = useUIStore((s) => s.showDesalination);
   const showPort = useUIStore((s) => s.showPort);
-  const showHitOnly = useUIStore((s) => s.showHitOnly);
   const showHealthySites = useUIStore((s) => s.showHealthySites);
   const showAttackedSites = useUIStore((s) => s.showAttackedSites);
   const toggleSites = useUIStore((s) => s.toggleSites);
@@ -67,7 +66,6 @@ export function LayerTogglesContent() {
   const toggleAirbase = useUIStore((s) => s.toggleAirbase);
   const toggleDesalination = useUIStore((s) => s.toggleDesalination);
   const togglePort = useUIStore((s) => s.togglePort);
-  const toggleHitOnly = useUIStore((s) => s.toggleHitOnly);
   const toggleHealthySites = useUIStore((s) => s.toggleHealthySites);
   const toggleAttackedSites = useUIStore((s) => s.toggleAttackedSites);
 
@@ -88,7 +86,6 @@ export function LayerTogglesContent() {
       <ToggleRow color={ENTITY_DOT_COLORS.sites} label="Airbase" active={showAirbase} onToggle={toggleAirbase} indent disabled={!showSites} />
       <ToggleRow color={ENTITY_DOT_COLORS.sites} label="Desalination" active={showDesalination} onToggle={toggleDesalination} indent disabled={!showSites} />
       <ToggleRow color={ENTITY_DOT_COLORS.sites} label="Port" active={showPort} onToggle={togglePort} indent disabled={!showSites} />
-      <ToggleRow color="#f97316" label="Hit Only" active={showHitOnly} onToggle={toggleHitOnly} indent disabled={!showSites} />
       <ToggleRow color="#22c55e" label="Healthy" active={showHealthySites} onToggle={toggleHealthySites} indent disabled={!showSites} />
       <ToggleRow color="#f97316" label="Attacked" active={showAttackedSites} onToggle={toggleAttackedSites} indent disabled={!showSites} />
       <button

@@ -134,8 +134,6 @@ export function FilterPanelContent() {
   const toggleDesalination = useUIStore((s) => s.toggleDesalination);
   const showPort = useUIStore((s) => s.showPort);
   const togglePort = useUIStore((s) => s.togglePort);
-  const showHitOnly = useUIStore((s) => s.showHitOnly);
-  const toggleHitOnly = useUIStore((s) => s.toggleHitOnly);
   const showHealthySites = useUIStore((s) => s.showHealthySites);
   const toggleHealthySites = useUIStore((s) => s.toggleHealthySites);
   const showAttackedSites = useUIStore((s) => s.showAttackedSites);
@@ -209,6 +207,115 @@ export function FilterPanelContent() {
 
   return (
     <div className="flex flex-col gap-3">
+
+      {/* Proximity (global -- applies to all entity types) */}
+      <div>
+        <SectionHeader label="Proximity" active={isProximityActive} filterKey="proximity" onClear={clearFilter} />
+        <div className="mt-1">
+          <ProximityFilter
+            pin={proximityPin}
+            radiusKm={proximityRadiusKm}
+            isSettingPin={isSettingPin}
+            onSetPin={setProximityPin}
+            onClearPin={() => clearFilter('proximity')}
+            onRadiusChange={setProximityRadius}
+            onStartSettingPin={() => setSettingPin(true)}
+          />
+        </div>
+      </div>
+
+      {/* Flights section */}
+      <div>
+        <EntitySectionHeader label="Flights" isOpen={isFlightFiltersOpen} onToggle={toggleFlightFilters} />
+        {isFlightFiltersOpen && (
+          <div className="mt-1.5 flex flex-col gap-2 pl-3">
+            {/* Visibility button */}
+            <div className="flex flex-wrap gap-1">
+              <VisibilityButton label="Flights" active={showFlights} onToggle={toggleFlights} color="#eab308" />
+            </div>
+            {/* Boolean sub-filters */}
+            <BooleanToggle label="Grounded" active={showGroundTraffic} onToggle={toggleGroundTraffic} />
+            <BooleanToggle label="Unidentified" active={pulseEnabled} onToggle={togglePulse} />
+            {/* Callsign search */}
+            <TextSearchInput
+              label="Callsign"
+              value={flightCallsign}
+              onChange={setFlightCallsign}
+              placeholder="Filter by callsign..."
+            />
+            {/* ICAO search */}
+            <TextSearchInput
+              label="ICAO"
+              value={flightIcao}
+              onChange={setFlightIcao}
+              placeholder="Filter by ICAO hex..."
+            />
+            {/* Altitude slider */}
+            <div>
+              <SectionHeader label="Altitude" active={isAltitudeActive} filterKey="altitude" onClear={clearFilter} />
+              <div className="mt-1">
+                <RangeSlider
+                  label="Altitude"
+                  min={0}
+                  max={60000}
+                  step={500}
+                  unit="ft"
+                  valueMin={altitudeMin}
+                  valueMax={altitudeMax}
+                  onChangeMin={(v) => setAltitudeRange(v, altitudeMax)}
+                  onChangeMax={(v) => setAltitudeRange(altitudeMin, v)}
+                />
+              </div>
+            </div>
+            {/* Speed slider */}
+            <div>
+              <SectionHeader label="Speed" active={isFlightSpeedActive} filterKey="flightSpeed" onClear={clearFilter} />
+              <div className="mt-1">
+                <RangeSlider
+                  label="Speed"
+                  min={0}
+                  max={700}
+                  step={10}
+                  unit="kn"
+                  valueMin={flightSpeedMin}
+                  valueMax={flightSpeedMax}
+                  onChangeMin={(v) => setFlightSpeedRange(v, flightSpeedMax)}
+                  onChangeMax={(v) => setFlightSpeedRange(flightSpeedMin, v)}
+                />
+              </div>
+            </div>
+            {/* Heading slider */}
+            <HeadingSlider value={headingAngle} onChange={setHeadingAngle} />
+          </div>
+        )}
+      </div>
+
+      {/* Ships section */}
+      <div>
+        <EntitySectionHeader label="Ships" isOpen={isShipFiltersOpen} onToggle={toggleShipFilters} />
+        {isShipFiltersOpen && (
+          <div className="mt-1.5 flex flex-col gap-2 pl-3">
+            {/* Visibility button */}
+            <div className="flex flex-wrap gap-1">
+              <VisibilityButton label="Ships" active={showShips} onToggle={toggleShips} color="#a78bfa" />
+            </div>
+            {/* MMSI search */}
+            <TextSearchInput
+              label="MMSI"
+              value={shipMmsi}
+              onChange={setShipMmsi}
+              placeholder="Filter by MMSI..."
+            />
+            {/* Ship name search */}
+            <TextSearchInput
+              label="Ship Name"
+              value={shipNameFilter}
+              onChange={setShipNameFilter}
+              placeholder="Filter by name..."
+            />
+          </div>
+        )}
+      </div>
 
       {/* Conflicts section */}
       <div>
@@ -299,116 +406,6 @@ export function FilterPanelContent() {
           {/* Status toggles */}
           <BooleanToggle label="Healthy" active={showHealthySites} onToggle={toggleHealthySites} />
           <BooleanToggle label="Attacked" active={showAttackedSites} onToggle={toggleAttackedSites} />
-          <BooleanToggle label="Hit Only" active={showHitOnly} onToggle={toggleHitOnly} />
-        </div>
-      </div>
-
-      {/* Ships section */}
-      <div>
-        <EntitySectionHeader label="Ships" isOpen={isShipFiltersOpen} onToggle={toggleShipFilters} />
-        {isShipFiltersOpen && (
-          <div className="mt-1.5 flex flex-col gap-2 pl-3">
-            {/* Visibility button */}
-            <div className="flex flex-wrap gap-1">
-              <VisibilityButton label="Ships" active={showShips} onToggle={toggleShips} color="#a78bfa" />
-            </div>
-            {/* MMSI search */}
-            <TextSearchInput
-              label="MMSI"
-              value={shipMmsi}
-              onChange={setShipMmsi}
-              placeholder="Filter by MMSI..."
-            />
-            {/* Ship name search */}
-            <TextSearchInput
-              label="Ship Name"
-              value={shipNameFilter}
-              onChange={setShipNameFilter}
-              placeholder="Filter by name..."
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Flights section */}
-      <div>
-        <EntitySectionHeader label="Flights" isOpen={isFlightFiltersOpen} onToggle={toggleFlightFilters} />
-        {isFlightFiltersOpen && (
-          <div className="mt-1.5 flex flex-col gap-2 pl-3">
-            {/* Visibility button */}
-            <div className="flex flex-wrap gap-1">
-              <VisibilityButton label="Flights" active={showFlights} onToggle={toggleFlights} color="#eab308" />
-            </div>
-            {/* Boolean sub-filters */}
-            <BooleanToggle label="Grounded" active={showGroundTraffic} onToggle={toggleGroundTraffic} />
-            <BooleanToggle label="Unidentified" active={pulseEnabled} onToggle={togglePulse} />
-            {/* Callsign search */}
-            <TextSearchInput
-              label="Callsign"
-              value={flightCallsign}
-              onChange={setFlightCallsign}
-              placeholder="Filter by callsign..."
-            />
-            {/* ICAO search */}
-            <TextSearchInput
-              label="ICAO"
-              value={flightIcao}
-              onChange={setFlightIcao}
-              placeholder="Filter by ICAO hex..."
-            />
-            {/* Altitude slider */}
-            <div>
-              <SectionHeader label="Altitude" active={isAltitudeActive} filterKey="altitude" onClear={clearFilter} />
-              <div className="mt-1">
-                <RangeSlider
-                  label="Altitude"
-                  min={0}
-                  max={60000}
-                  step={500}
-                  unit="ft"
-                  valueMin={altitudeMin}
-                  valueMax={altitudeMax}
-                  onChangeMin={(v) => setAltitudeRange(v, altitudeMax)}
-                  onChangeMax={(v) => setAltitudeRange(altitudeMin, v)}
-                />
-              </div>
-            </div>
-            {/* Speed slider */}
-            <div>
-              <SectionHeader label="Speed" active={isFlightSpeedActive} filterKey="flightSpeed" onClear={clearFilter} />
-              <div className="mt-1">
-                <RangeSlider
-                  label="Speed"
-                  min={0}
-                  max={700}
-                  step={10}
-                  unit="kn"
-                  valueMin={flightSpeedMin}
-                  valueMax={flightSpeedMax}
-                  onChangeMin={(v) => setFlightSpeedRange(v, flightSpeedMax)}
-                  onChangeMax={(v) => setFlightSpeedRange(flightSpeedMin, v)}
-                />
-              </div>
-            </div>
-            {/* Heading slider */}
-            <HeadingSlider value={headingAngle} onChange={setHeadingAngle} />
-          </div>
-        )}
-      </div>
-
-      {/* Proximity (global -- applies to all entity types) */}
-      <div>
-        <SectionHeader label="Proximity" active={isProximityActive} filterKey="proximity" onClear={clearFilter} />
-        <div className="mt-1">
-          <ProximityFilter
-            pin={proximityPin}
-            radiusKm={proximityRadiusKm}
-            isSettingPin={isSettingPin}
-            onSetPin={setProximityPin}
-            onClearPin={() => clearFilter('proximity')}
-            onRadiusChange={setProximityRadius}
-            onStartSettingPin={() => setSettingPin(true)}
-          />
         </div>
       </div>
 

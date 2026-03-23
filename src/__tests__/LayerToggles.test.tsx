@@ -17,7 +17,6 @@ const mockState = {
   showAirbase: true,
   showDesalination: true,
   showPort: true,
-  showHitOnly: false,
   showHealthySites: true,
   showAttackedSites: true,
   isLayersCollapsed: false,
@@ -36,7 +35,6 @@ const mockState = {
   toggleAirbase: vi.fn(),
   toggleDesalination: vi.fn(),
   togglePort: vi.fn(),
-  toggleHitOnly: vi.fn(),
   toggleHealthySites: vi.fn(),
   toggleAttackedSites: vi.fn(),
   toggleLayers: vi.fn(),
@@ -67,7 +65,6 @@ describe('LayerTogglesSlot', () => {
     mockState.showAirbase = true;
     mockState.showDesalination = true;
     mockState.showPort = true;
-    mockState.showHitOnly = false;
     mockState.showHealthySites = true;
     mockState.showAttackedSites = true;
     mockState.isLayersCollapsed = false;
@@ -81,7 +78,7 @@ describe('LayerTogglesSlot', () => {
   it('renders 18 toggle row buttons', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
-    expect(switches).toHaveLength(18);
+    expect(switches).toHaveLength(17);
   });
 
   it('each button has role="switch" and aria-checked', () => {
@@ -101,7 +98,7 @@ describe('LayerTogglesSlot', () => {
       'Flights', 'Ground', 'Unidentified', 'Ships',
       'Events', 'Airstrikes', 'Ground Combat', 'Targeted',
       'Sites', 'Nuclear', 'Naval', 'Oil', 'Airbase', 'Desalination', 'Port',
-      'Hit Only', 'Healthy', 'Attacked',
+      'Healthy', 'Attacked',
     ]);
   });
 
