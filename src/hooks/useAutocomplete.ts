@@ -96,10 +96,9 @@ export function useAutocomplete(
     if (!word) return [];
 
     // Skip keywords
-    if (word === 'AND' || word === 'OR') return [];
+    if (word === 'OR') return [];
 
-    // Strip leading ! for negation
-    const cleanWord = word.startsWith('!') ? word.slice(1) : word;
+    const cleanWord = word;
     if (!cleanWord) return [];
 
     const colonIdx = cleanWord.indexOf(':');

@@ -30,9 +30,6 @@ function extractTagExpressions(node: QueryNode | null): string[] {
       return [`${node.prefix}:${node.value}`];
     case 'text':
       return [];
-    case 'not':
-      return extractTagExpressions(node.child);
-    case 'and':
     case 'or':
       return [...extractTagExpressions(node.left), ...extractTagExpressions(node.right)];
   }

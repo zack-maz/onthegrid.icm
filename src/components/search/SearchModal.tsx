@@ -102,9 +102,7 @@ export function SearchModal() {
         const prefix = colonIdx >= 0 ? word.slice(0, colonIdx) : suggestion.prefix;
         // Quote values with spaces
         const val = suggestion.value.includes(' ') ? `"${suggestion.value}"` : suggestion.value;
-        // Preserve negation prefix
-        const negPrefix = word.startsWith('!') ? '!' : '';
-        replacement = `${negPrefix}${prefix}:${val}`;
+        replacement = `${prefix}:${val}`;
       }
 
       const newQuery = currentQuery.slice(0, start) + replacement + currentQuery.slice(end);
