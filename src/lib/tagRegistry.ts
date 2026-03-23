@@ -6,6 +6,7 @@ import type {
   ConflictEventType,
   EntityType,
 } from '../../server/types';
+import { GEO_NAMES } from './geoNames';
 
 // --- Types ---
 
@@ -100,6 +101,19 @@ function getLocationValues(data: EntityDataSources): TagValue[] {
   return countValues(locations);
 }
 
+function getNearValues(data: EntityDataSources): TagValue[] {
+  const names: TagValue[] = [];
+  // Sites first (with count 1 to rank above cities)
+  for (const s of data.sites) {
+    if (s.label) names.push({ value: s.label, count: 1 });
+  }
+  // Then cities (count 0)
+  for (const g of GEO_NAMES) {
+    names.push({ value: g.name, count: 0 });
+  }
+  return names;
+}
+
 function getSiteValues(data: EntityDataSources): TagValue[] {
   const types: string[] = [];
 
@@ -166,6 +180,7 @@ export const TAG_REGISTRY: Record<string, TagDefinition> = {
     color: 'text-amber-400',
     entityTypes: ['flight', 'ship', 'event', 'site'],
     examples: ['near:Tehran', 'near:Natanz', 'near:Baghdad'],
+    getValues: getNearValues,
   },
   since: {
     prefix: 'since',
