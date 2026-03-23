@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useSearchStore } from '@/stores/searchStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useFilterStore } from '@/stores/filterStore';
-import { parse, type QueryNode } from '@/lib/queryParser';
-import { serialize } from '@/lib/querySerializer';
+import { useSiteStore } from '@/stores/siteStore';
+import { type QueryNode } from '@/lib/queryParser';
 import { parseTemporalValue, parseRangeValue } from '@/lib/queryEvaluator';
 import { CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
 
@@ -68,8 +68,17 @@ export const BOOL_TAG_MAP: Record<string, { toggle: string; trueValue: string }>
   status: { toggle: 'showHitOnly', trueValue: 'attacked' },
 };
 
-/** Synced range tag prefixes → filterStore setter info */
-const RANGE_TAG_PREFIXES = new Set(['altitude', 'speed']);
+/** All synced tag prefixes */
+const SYNCED_PREFIXES = new Set([
+  'type', 'site', 'country', 'since', 'before',
+  'ground', 'unidentified', 'status',  // boolean tags
+  'altitude', 'speed',                 // existing range tags
+  'callsign', 'icao', 'mmsi', 'shipname', 'cameo',  // new text tags
+  'mentions', 'heading',               // new range tags
+  'severity',                          // severity toggles
+  'actor',                             // actor → eventCountries
+  'near',                              // proximity pin
+]);
 
 /** All conflict event type values (for showEvents parent toggle detection) */
 const CONFLICT_EVENT_TYPES = new Set<string>(
@@ -79,16 +88,13 @@ const CONFLICT_EVENT_TYPES = new Set<string>(
 // ─── AST Helpers ─────────────────────────────────────────────
 
 /** Extract all tag nodes from an AST, walking the tree */
-export function extractTags(node: QueryNode | null): Array<{ prefix: string; value: string; negated: boolean }> {
+export function extractTags(node: QueryNode | null): Array<{ prefix: string; value: string }> {
   if (!node) return [];
   switch (node.type) {
     case 'tag':
-      return [{ prefix: node.prefix, value: node.value, negated: node.negated }];
+      return [{ prefix: node.prefix, value: node.value }];
     case 'text':
       return [];
-    case 'not':
-      return extractTags(node.child);
-    case 'and':
     case 'or':
       return [...extractTags(node.left), ...extractTags(node.right)];
   }
@@ -98,35 +104,21 @@ export function extractTags(node: QueryNode | null): Array<{ prefix: string; val
 function extractNonSyncedNodes(node: QueryNode | null): QueryNode[] {
   if (!node) return [];
   switch (node.type) {
-    case 'tag': {
-      const p = node.prefix.toLowerCase();
-      const v = node.value.toLowerCase();
-      if (p === 'type' && (v in TYPE_TOGGLE_MAP || v === '*')) return [];
-      if (p === 'site' && (v in SITE_TOGGLE_MAP || v === '*')) return [];
-      if (p === 'country' || p === 'since' || p === 'before') return [];
-      // Boolean tags are synced (rebuilt from toggle state)
-      if (p in BOOL_TAG_MAP) return [];
-      // Range tags are synced (rebuilt from filter state)
-      if (RANGE_TAG_PREFIXES.has(p)) return [];
-      // Non-synced tag (callsign, actor, near, etc.)
-      return [node];
-    }
+    case 'tag':
+      return SYNCED_PREFIXES.has(node.prefix.toLowerCase()) ? [] : [node];
     case 'text':
       return [node];
-    case 'not':
-      return extractNonSyncedNodes(node.child).length > 0 ? [node] : [];
-    case 'and':
     case 'or':
       return [...extractNonSyncedNodes(node.left), ...extractNonSyncedNodes(node.right)];
   }
 }
 
-/** Build an AND chain from an array of nodes */
-function buildAndChain(nodes: QueryNode[]): QueryNode | null {
+/** Build an OR chain from an array of nodes */
+function buildOrChain(nodes: QueryNode[]): QueryNode | null {
   if (nodes.length === 0) return null;
   let result = nodes[0];
   for (let i = 1; i < nodes.length; i++) {
-    result = { type: 'and', left: result, right: nodes[i] };
+    result = { type: 'or', left: result, right: nodes[i] };
   }
   return result;
 }
@@ -166,23 +158,17 @@ export function deriveTogglesFromAST(
 ): Record<string, boolean> {
   const tags = extractTags(node);
   const typeTags = tags
-    .filter((t) => t.prefix.toLowerCase() === 'type' && !t.negated)
+    .filter((t) => t.prefix.toLowerCase() === 'type')
     .map((t) => t.value.toLowerCase());
   const siteTags = tags
-    .filter((t) => t.prefix.toLowerCase() === 'site' && !t.negated)
-    .map((t) => t.value.toLowerCase());
-  const negTypeTags = tags
-    .filter((t) => t.prefix.toLowerCase() === 'type' && t.negated)
-    .map((t) => t.value.toLowerCase());
-  const negSiteTags = tags
-    .filter((t) => t.prefix.toLowerCase() === 'site' && t.negated)
+    .filter((t) => t.prefix.toLowerCase() === 'site')
     .map((t) => t.value.toLowerCase());
 
   const updates: Record<string, boolean> = {};
 
   // ── Boolean tags (ground, unidentified, status) ──
   for (const [prefix, { toggle, trueValue }] of Object.entries(BOOL_TAG_MAP)) {
-    const boolTags = tags.filter((t) => t.prefix.toLowerCase() === prefix && !t.negated);
+    const boolTags = tags.filter((t) => t.prefix.toLowerCase() === prefix);
     if (boolTags.length > 0) {
       const v = boolTags[0].value.toLowerCase();
       updates[toggle] = v === trueValue;
@@ -190,12 +176,11 @@ export function deriveTogglesFromAST(
   }
 
   // If no type: or site: tags in query, skip type/site toggle updates
-  if (typeTags.length === 0 && siteTags.length === 0 &&
-      negTypeTags.length === 0 && negSiteTags.length === 0) {
+  if (typeTags.length === 0 && siteTags.length === 0) {
     return updates;
   }
 
-  // Positive tags: turn ON mentioned toggles
+  // Each type:X tag enables its toggle
   if (typeTags.length > 0) {
     for (const tv of typeTags) {
       const toggleKey = TYPE_TOGGLE_MAP[tv];
@@ -209,6 +194,7 @@ export function deriveTogglesFromAST(
     }
   }
 
+  // Each site:X tag enables its toggle
   if (siteTags.length > 0) {
     for (const sv of siteTags) {
       const toggleKey = SITE_TOGGLE_MAP[sv];
@@ -217,61 +203,33 @@ export function deriveTogglesFromAST(
     updates['showSites'] = true;
   }
 
-  // Negated tags: turn OFF mentioned toggles
-  // Wildcard (*) turns off everything. Specific negation (e.g. !site:nuclear)
-  // means "show all EXCEPT these" — so turn everything ON first, then OFF the negated ones.
-  if (negTypeTags.length > 0) {
-    if (negTypeTags.includes('*')) {
-      for (const toggleKey of Object.values(TYPE_TOGGLE_MAP)) {
-        updates[toggleKey] = false;
-      }
-      updates['showEvents'] = false;
-    } else {
-      // "Show all except these" — enable all type toggles, then disable negated
-      for (const toggleKey of new Set(Object.values(TYPE_TOGGLE_MAP))) {
-        updates[toggleKey] = true;
-      }
-      updates['showEvents'] = true;
-      for (const tv of negTypeTags) {
-        const toggleKey = TYPE_TOGGLE_MAP[tv];
-        if (toggleKey) updates[toggleKey] = false;
-      }
-    }
-  }
-
-  if (negSiteTags.length > 0) {
-    if (negSiteTags.includes('*')) {
-      for (const toggleKey of Object.values(SITE_TOGGLE_MAP)) {
-        updates[toggleKey] = false;
-      }
-      updates['showSites'] = false;
-    } else {
-      // "Show all except these" — enable all site toggles, then disable negated
-      updates['showSites'] = true;
-      for (const toggleKey of Object.values(SITE_TOGGLE_MAP)) {
-        updates[toggleKey] = true;
-      }
-      for (const sv of negSiteTags) {
-        const toggleKey = SITE_TOGGLE_MAP[sv];
-        if (toggleKey) updates[toggleKey] = false;
-      }
-    }
-  }
-
   return updates;
 }
 
 /**
- * Search -> FilterStore: Extract date/country/range filters from AST.
+ * Search -> FilterStore: Extract date/country/range/text filters from AST.
  */
 export interface DerivedFilters {
   dateStart?: number | null;
   dateEnd?: number | null;
-  countries?: string[];
+  flightCountries?: string[];
+  eventCountries?: string[];
   altitudeMin?: number | null;
   altitudeMax?: number | null;
   flightSpeedMin?: number | null;
   flightSpeedMax?: number | null;
+  flightCallsign?: string;
+  flightIcao?: string;
+  shipMmsi?: string;
+  shipNameFilter?: string;
+  cameoCode?: string;
+  mentionsMin?: number | null;
+  mentionsMax?: number | null;
+  headingAngle?: number | null;
+  showHighSeverity?: boolean;
+  showMediumSeverity?: boolean;
+  showLowSeverity?: boolean;
+  proximityPin?: { lat: number; lng: number } | null;
 }
 
 export function deriveFiltersFromAST(
@@ -281,11 +239,21 @@ export function deriveFiltersFromAST(
   const tags = extractTags(node);
   const result: DerivedFilters = {};
 
-  const sinceTags = tags.filter((t) => t.prefix.toLowerCase() === 'since' && !t.negated);
-  const beforeTags = tags.filter((t) => t.prefix.toLowerCase() === 'before' && !t.negated);
-  const countryTags = tags.filter((t) => t.prefix.toLowerCase() === 'country' && !t.negated);
-  const altitudeTags = tags.filter((t) => t.prefix.toLowerCase() === 'altitude' && !t.negated);
-  const speedTags = tags.filter((t) => t.prefix.toLowerCase() === 'speed' && !t.negated);
+  const sinceTags = tags.filter((t) => t.prefix.toLowerCase() === 'since');
+  const beforeTags = tags.filter((t) => t.prefix.toLowerCase() === 'before');
+  const countryTags = tags.filter((t) => t.prefix.toLowerCase() === 'country');
+  const actorTags = tags.filter((t) => t.prefix.toLowerCase() === 'actor');
+  const altitudeTags = tags.filter((t) => t.prefix.toLowerCase() === 'altitude');
+  const speedTags = tags.filter((t) => t.prefix.toLowerCase() === 'speed');
+  const callsignTags = tags.filter((t) => t.prefix.toLowerCase() === 'callsign');
+  const icaoTags = tags.filter((t) => t.prefix.toLowerCase() === 'icao');
+  const mmsiTags = tags.filter((t) => t.prefix.toLowerCase() === 'mmsi');
+  const shipnameTags = tags.filter((t) => t.prefix.toLowerCase() === 'shipname');
+  const cameoTags = tags.filter((t) => t.prefix.toLowerCase() === 'cameo');
+  const mentionsTags = tags.filter((t) => t.prefix.toLowerCase() === 'mentions');
+  const headingTags = tags.filter((t) => t.prefix.toLowerCase() === 'heading');
+  const severityTags = tags.filter((t) => t.prefix.toLowerCase() === 'severity');
+  const nearTags = tags.filter((t) => t.prefix.toLowerCase() === 'near');
 
   if (sinceTags.length > 0) {
     result.dateStart = parseTemporalValue(sinceTags[0].value, now);
@@ -293,8 +261,17 @@ export function deriveFiltersFromAST(
   if (beforeTags.length > 0) {
     result.dateEnd = parseTemporalValue(beforeTags[0].value, now);
   }
+  // country: syncs to BOTH flightCountries AND eventCountries
   if (countryTags.length > 0) {
-    result.countries = countryTags.map((t) => t.value);
+    const countries = countryTags.map((t) => t.value);
+    result.flightCountries = countries;
+    result.eventCountries = countries;
+  }
+  // actor: syncs to eventCountries
+  if (actorTags.length > 0) {
+    const actorCountries = actorTags.map((t) => t.value);
+    // Merge with any country: values already set
+    result.eventCountries = [...(result.eventCountries ?? []), ...actorCountries];
   }
   if (altitudeTags.length > 0) {
     const { min, max } = rangeToMinMax(altitudeTags[0].value);
@@ -305,6 +282,51 @@ export function deriveFiltersFromAST(
     const { min, max } = rangeToMinMax(speedTags[0].value);
     result.flightSpeedMin = min;
     result.flightSpeedMax = max;
+  }
+  if (callsignTags.length > 0) {
+    result.flightCallsign = callsignTags[0].value;
+  }
+  if (icaoTags.length > 0) {
+    result.flightIcao = icaoTags[0].value;
+  }
+  if (mmsiTags.length > 0) {
+    result.shipMmsi = mmsiTags[0].value;
+  }
+  if (shipnameTags.length > 0) {
+    result.shipNameFilter = shipnameTags[0].value;
+  }
+  if (cameoTags.length > 0) {
+    result.cameoCode = cameoTags[0].value;
+  }
+  if (mentionsTags.length > 0) {
+    const { min, max } = rangeToMinMax(mentionsTags[0].value);
+    result.mentionsMin = min;
+    result.mentionsMax = max;
+  }
+  if (headingTags.length > 0) {
+    const n = Number(headingTags[0].value);
+    result.headingAngle = isNaN(n) ? null : n;
+  }
+  if (severityTags.length > 0) {
+    // Reset all severity toggles then enable mentioned ones
+    result.showHighSeverity = false;
+    result.showMediumSeverity = false;
+    result.showLowSeverity = false;
+    for (const st of severityTags) {
+      const v = st.value.toLowerCase();
+      if (v === 'high') result.showHighSeverity = true;
+      if (v === 'medium') result.showMediumSeverity = true;
+      if (v === 'low') result.showLowSeverity = true;
+    }
+  }
+  if (nearTags.length > 0) {
+    // Look up site by label to get coordinates
+    const siteName = nearTags[0].value.toLowerCase();
+    const sites = useSiteStore.getState().sites;
+    const match = sites.find((s) => s.label.toLowerCase().includes(siteName));
+    if (match) {
+      result.proximityPin = { lat: match.lat, lng: match.lng };
+    }
   }
 
   return result;
@@ -334,6 +356,25 @@ export interface SyncableState {
   altitudeMax: number | null;
   flightSpeedMin: number | null;
   flightSpeedMax: number | null;
+  // Text search fields
+  flightCallsign: string;
+  flightIcao: string;
+  shipMmsi: string;
+  shipNameFilter: string;
+  cameoCode: string;
+  // New range fields
+  mentionsMin: number | null;
+  mentionsMax: number | null;
+  headingAngle: number | null;
+  // Severity toggles
+  showHighSeverity: boolean;
+  showMediumSeverity: boolean;
+  showLowSeverity: boolean;
+  // Country filters
+  flightCountries: string[];
+  eventCountries: string[];
+  // Proximity
+  proximityPin: { lat: number; lng: number } | null;
 }
 
 /**
@@ -352,7 +393,6 @@ export function buildASTFromToggles(
         type: 'tag',
         prefix: 'type',
         value: typeValues[0],
-        negated: false,
       });
     }
   }
@@ -364,7 +404,6 @@ export function buildASTFromToggles(
         type: 'tag',
         prefix: 'site',
         value: siteType,
-        negated: false,
       });
     }
   }
@@ -376,7 +415,6 @@ export function buildASTFromToggles(
         type: 'tag',
         prefix,
         value: trueValue,
-        negated: false,
       });
     }
   }
@@ -384,18 +422,85 @@ export function buildASTFromToggles(
   // Add range filter tags
   const altValue = minMaxToRangeValue(state.altitudeMin, state.altitudeMax);
   if (altValue) {
-    nodes.push({ type: 'tag', prefix: 'altitude', value: altValue, negated: false });
+    nodes.push({ type: 'tag', prefix: 'altitude', value: altValue });
   }
   const speedValue = minMaxToRangeValue(state.flightSpeedMin, state.flightSpeedMax);
   if (speedValue) {
-    nodes.push({ type: 'tag', prefix: 'speed', value: speedValue, negated: false });
+    nodes.push({ type: 'tag', prefix: 'speed', value: speedValue });
+  }
+
+  // Add text search field tags
+  if (state.flightCallsign) {
+    nodes.push({ type: 'tag', prefix: 'callsign', value: state.flightCallsign });
+  }
+  if (state.flightIcao) {
+    nodes.push({ type: 'tag', prefix: 'icao', value: state.flightIcao });
+  }
+  if (state.shipMmsi) {
+    nodes.push({ type: 'tag', prefix: 'mmsi', value: state.shipMmsi });
+  }
+  if (state.shipNameFilter) {
+    nodes.push({ type: 'tag', prefix: 'shipname', value: state.shipNameFilter });
+  }
+  if (state.cameoCode) {
+    nodes.push({ type: 'tag', prefix: 'cameo', value: state.cameoCode });
+  }
+
+  // Add new range filter tags
+  const mentionsValue = minMaxToRangeValue(state.mentionsMin, state.mentionsMax);
+  if (mentionsValue) {
+    nodes.push({ type: 'tag', prefix: 'mentions', value: mentionsValue });
+  }
+  if (state.headingAngle !== null) {
+    nodes.push({ type: 'tag', prefix: 'heading', value: String(state.headingAngle) });
+  }
+
+  // Add severity tags (only if not all enabled — all-enabled is default, no tag needed)
+  const allSeverity = state.showHighSeverity && state.showMediumSeverity && state.showLowSeverity;
+  if (!allSeverity) {
+    if (state.showHighSeverity) nodes.push({ type: 'tag', prefix: 'severity', value: 'high' });
+    if (state.showMediumSeverity) nodes.push({ type: 'tag', prefix: 'severity', value: 'medium' });
+    if (state.showLowSeverity) nodes.push({ type: 'tag', prefix: 'severity', value: 'low' });
+  }
+
+  // Add country tags (deduplicate flight + event countries)
+  const allCountries = new Set([...state.flightCountries, ...state.eventCountries]);
+  for (const country of allCountries) {
+    nodes.push({ type: 'tag', prefix: 'country', value: country });
+  }
+  // Actor tags for countries only in eventCountries (not in flightCountries)
+  const actorOnly = state.eventCountries.filter((c) => !state.flightCountries.includes(c));
+  for (const actor of actorOnly) {
+    nodes.push({ type: 'tag', prefix: 'actor', value: actor });
+  }
+
+  // Add proximity pin as near: tag (look up closest site label)
+  if (state.proximityPin) {
+    const sites = useSiteStore.getState().sites;
+    let closestLabel = `${state.proximityPin.lat.toFixed(2)},${state.proximityPin.lng.toFixed(2)}`;
+    let closestDist = Infinity;
+    for (const site of sites) {
+      const dlat = site.lat - state.proximityPin.lat;
+      const dlng = site.lng - state.proximityPin.lng;
+      const dist = dlat * dlat + dlng * dlng;
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestLabel = site.label;
+      }
+    }
+    // Only use site label if close enough (approx 0.05 degree ~= 5km)
+    if (closestDist < 0.05 * 0.05) {
+      nodes.push({ type: 'tag', prefix: 'near', value: closestLabel });
+    } else {
+      nodes.push({ type: 'tag', prefix: 'near', value: `${state.proximityPin.lat.toFixed(2)},${state.proximityPin.lng.toFixed(2)}` });
+    }
   }
 
   // Preserve non-synced tags from existing AST
   const nonSynced = extractNonSyncedNodes(existingAST);
   nodes.push(...nonSynced);
 
-  return buildAndChain(nodes);
+  return buildOrChain(nodes);
 }
 
 // ─── Hook ────────────────────────────────────────────────────
@@ -435,6 +540,30 @@ export function useQuerySync(): void {
   const flightSpeedMin = useFilterStore((s) => s.flightSpeedMin);
   const flightSpeedMax = useFilterStore((s) => s.flightSpeedMax);
 
+  // Subscribe to new text filter fields
+  const flightCallsign = useFilterStore((s) => s.flightCallsign);
+  const flightIcao = useFilterStore((s) => s.flightIcao);
+  const shipMmsi = useFilterStore((s) => s.shipMmsi);
+  const shipNameFilter = useFilterStore((s) => s.shipNameFilter);
+  const cameoCode = useFilterStore((s) => s.cameoCode);
+
+  // Subscribe to new range fields
+  const mentionsMin = useFilterStore((s) => s.mentionsMin);
+  const mentionsMax = useFilterStore((s) => s.mentionsMax);
+  const headingAngle = useFilterStore((s) => s.headingAngle);
+
+  // Subscribe to severity toggles
+  const showHighSeverity = useFilterStore((s) => s.showHighSeverity);
+  const showMediumSeverity = useFilterStore((s) => s.showMediumSeverity);
+  const showLowSeverity = useFilterStore((s) => s.showLowSeverity);
+
+  // Subscribe to country filters
+  const flightCountries = useFilterStore((s) => s.flightCountries);
+  const eventCountries = useFilterStore((s) => s.eventCountries);
+
+  // Subscribe to proximity pin
+  const proximityPin = useFilterStore((s) => s.proximityPin);
+
   // Track previous query to detect search-initiated changes
   const prevQueryRef = useRef<string>('');
 
@@ -473,8 +602,12 @@ export function useQuerySync(): void {
       );
       hasFilterUpdates = true;
     }
-    if (filterUpdates.countries !== undefined) {
-      useFilterStore.getState().setFlightCountries(filterUpdates.countries);
+    if (filterUpdates.flightCountries !== undefined) {
+      useFilterStore.getState().setFlightCountries(filterUpdates.flightCountries);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.eventCountries !== undefined) {
+      useFilterStore.getState().setEventCountries(filterUpdates.eventCountries);
       hasFilterUpdates = true;
     }
     if (filterUpdates.altitudeMin !== undefined || filterUpdates.altitudeMax !== undefined) {
@@ -489,6 +622,53 @@ export function useQuerySync(): void {
         filterUpdates.flightSpeedMin ?? useFilterStore.getState().flightSpeedMin,
         filterUpdates.flightSpeedMax ?? useFilterStore.getState().flightSpeedMax,
       );
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.flightCallsign !== undefined) {
+      useFilterStore.getState().setFlightCallsign(filterUpdates.flightCallsign);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.flightIcao !== undefined) {
+      useFilterStore.getState().setFlightIcao(filterUpdates.flightIcao);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.shipMmsi !== undefined) {
+      useFilterStore.getState().setShipMmsi(filterUpdates.shipMmsi);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.shipNameFilter !== undefined) {
+      useFilterStore.getState().setShipNameFilter(filterUpdates.shipNameFilter);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.cameoCode !== undefined) {
+      useFilterStore.getState().setCameoCode(filterUpdates.cameoCode);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.mentionsMin !== undefined || filterUpdates.mentionsMax !== undefined) {
+      useFilterStore.getState().setMentionsRange(
+        filterUpdates.mentionsMin ?? useFilterStore.getState().mentionsMin,
+        filterUpdates.mentionsMax ?? useFilterStore.getState().mentionsMax,
+      );
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.headingAngle !== undefined) {
+      useFilterStore.getState().setHeadingAngle(filterUpdates.headingAngle);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.showHighSeverity !== undefined) {
+      useFilterStore.getState().setShowHighSeverity(filterUpdates.showHighSeverity);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.showMediumSeverity !== undefined) {
+      useFilterStore.getState().setShowMediumSeverity(filterUpdates.showMediumSeverity);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.showLowSeverity !== undefined) {
+      useFilterStore.getState().setShowLowSeverity(filterUpdates.showLowSeverity);
+      hasFilterUpdates = true;
+    }
+    if (filterUpdates.proximityPin !== undefined) {
+      useFilterStore.getState().setProximityPin(filterUpdates.proximityPin);
       hasFilterUpdates = true;
     }
 
@@ -524,6 +704,20 @@ export function useQuerySync(): void {
     altitudeMax,
     flightSpeedMin,
     flightSpeedMax,
+    flightCallsign,
+    flightIcao,
+    shipMmsi,
+    shipNameFilter,
+    cameoCode,
+    mentionsMin,
+    mentionsMax,
+    headingAngle,
+    showHighSeverity,
+    showMediumSeverity,
+    showLowSeverity,
+    flightCountries,
+    eventCountries,
+    proximityPin,
   };
 
   // Sidebar -> Search sync
@@ -539,7 +733,20 @@ export function useQuerySync(): void {
     // Check if state actually changed
     const prev = prevSyncStateRef.current;
     const changed = (Object.keys(syncState) as (keyof SyncableState)[]).some(
-      (key) => syncState[key] !== prev[key],
+      (key) => {
+        const curr = syncState[key];
+        const prevVal = prev[key];
+        // Deep compare arrays
+        if (Array.isArray(curr) && Array.isArray(prevVal)) {
+          return curr.length !== prevVal.length || curr.some((v, i) => v !== (prevVal as unknown[])[i]);
+        }
+        // Deep compare objects (proximityPin)
+        if (curr !== null && typeof curr === 'object' && !Array.isArray(curr) &&
+            prevVal !== null && typeof prevVal === 'object' && !Array.isArray(prevVal)) {
+          return JSON.stringify(curr) !== JSON.stringify(prevVal);
+        }
+        return curr !== prevVal;
+      },
     );
 
     if (!changed) return;
@@ -583,5 +790,19 @@ export function useQuerySync(): void {
     altitudeMax,
     flightSpeedMin,
     flightSpeedMax,
+    flightCallsign,
+    flightIcao,
+    shipMmsi,
+    shipNameFilter,
+    cameoCode,
+    mentionsMin,
+    mentionsMax,
+    headingAngle,
+    showHighSeverity,
+    showMediumSeverity,
+    showLowSeverity,
+    flightCountries,
+    eventCountries,
+    proximityPin,
   ]);
 }
