@@ -703,6 +703,10 @@ export function useQuerySync(): void {
     if (filterUpdates.proximityPin !== undefined) {
       useFilterStore.getState().setProximityPin(filterUpdates.proximityPin);
       hasFilterUpdates = true;
+      // Open the filters panel so the user can see the proximity controls
+      if (filterUpdates.proximityPin !== null) {
+        useUIStore.setState({ isFiltersCollapsed: false });
+      }
     }
 
     if (hasFilterUpdates) {
