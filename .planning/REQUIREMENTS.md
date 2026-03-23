@@ -22,7 +22,7 @@ Requirements for the Intelligence Layer milestone. Each maps to roadmap phases.
 ### Notifications
 
 - [x] **NOTF-01**: User can see a bell icon with unread count badge in the top-right corner
-- [x] **NOTF-02**: User can open a notification drawer showing severity-scored conflict events (type weight × log mentions × log sources × recency decay)
+- [x] **NOTF-02**: User can open a notification drawer showing severity-scored conflict events (type weight x log mentions x log sources x recency decay)
 - [x] **NOTF-03**: User sees 1-3 matched news headlines on each notification card (temporal + geographic/keyword matching)
 - [x] **NOTF-04**: User receives proximity alerts when tracked entities (flights, ships) approach key sites within 50km
 - [x] **NOTF-05**: Map shows only last 24h of conflict events by default when no custom date filter is set
@@ -56,6 +56,14 @@ Requirements for the Intelligence Layer milestone. Each maps to roadmap phases.
 - [x] **CNTR-04**: Entities are sorted by proximity per category (flights/events from Tehran, ships from Strait of Hormuz, sites by attack count)
 - [x] **CNTR-05**: Zero-count counter rows are disabled and non-expandable; expanded rows that drop to 0 show empty state
 - [x] **CNTR-06**: Lists exceeding 8 items show a scrollable container with "Showing X-Y of Z" range indicator
+
+### Layer Purpose Refactor
+
+- [ ] **LREF-01**: All entities (flights, ships, events, sites) are always visible on the map -- entity toggle state is fully removed
+- [ ] **LREF-02**: New visualization layer store exists with on/off toggle state for 6 layer types (geographic, weather, threat, political, satellite, infrastructure)
+- [ ] **LREF-03**: Sidebar "Layers" section replaced with visualization layer toggles instead of entity visibility toggles
+- [ ] **LREF-04**: Inline legend framework renders color scale legends for active visualization layers in the bottom-left map corner
+- [ ] **LREF-05**: Search/filter system is the only mechanism to narrow visible entities on the map
 
 ## v1.2+ Requirements
 
@@ -123,12 +131,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CNTR-04 | Phase 19.2 | Complete |
 | CNTR-05 | Phase 19.2 | Complete |
 | CNTR-06 | Phase 19.2 | Complete |
+| LREF-01 | Phase 20 | Planned |
+| LREF-02 | Phase 20 | Planned |
+| LREF-03 | Phase 20 | Planned |
+| LREF-04 | Phase 20 | Planned |
+| LREF-05 | Phase 20 | Planned |
 
 **Coverage:**
-- v1.1 requirements: 29 total
-- Mapped to phases: 29
+- v1.1 requirements: 29 total, 29 complete
+- v1.2 (Phase 20) requirements: 5 total, 0 complete
+- Mapped to phases: 34
 - Complete: 29
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-22 — all v1.1 requirements complete*
+*Last updated: 2026-03-22 — Phase 20 requirements added*

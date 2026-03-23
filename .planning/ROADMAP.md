@@ -42,7 +42,7 @@
 - [x] **Phase 17: Notification Center** - Severity-scored conflict notifications with proximity alerts, news matching, and 24h event default (completed 2026-03-20)
 - [x] **Phase 18: Oil Markets Tracker** - Oil/energy price panel (Brent, WTI, XLE, USO, XOM) with sparkline trends (completed 2026-03-21)
 - [x] **Phase 19: Search, Filter & UI Cleanup** - Global search bar, Reset All, grouped filter sections, visual hierarchy (completed 2026-03-22)
-- [ ] **Phase 20: Layer Purpose Refactor** - Rethink layer toggle purposes and organization
+- [ ] **Phase 20: Layer Purpose Refactor** - Remove entity toggles, replace with visualization layer architecture, inline legend framework
 - [ ] **Phase 21: Production Review & Deploy Sync** - Full verification, integration testing, Vercel deployment, git tag v1.2
 
 ## Phase Details
@@ -161,11 +161,21 @@ Plans:
 - [ ] 19.2-02-PLAN.md -- UI layer: refactor CounterRow with expand/collapse dropdown, accordion in CountersContent, fly-to wiring, scroll range indicator
 
 ### Phase 20: Layer Purpose Refactor
-**Goal**: Rethink layer toggle purposes and organization
+**Goal**: Replace entity toggle system with stackable visualization layer architecture -- all entities always visible, layers become rendering overlays (geographic, weather, threat, etc.)
 **Depends on**: Phase 19
-**Requirements**: TBD
-**Success Criteria**: TBD
-**Plans**: TBD
+**Requirements**: LREF-01, LREF-02, LREF-03, LREF-04, LREF-05
+**Success Criteria** (what must be TRUE):
+  1. All entities (flights, ships, events, sites) are always rendered on the map -- no visibility toggle state exists
+  2. Sidebar "Layers" section shows 6 visualization layer toggles (geographic, weather, threat, political, satellite, infrastructure)
+  3. A layerStore manages visualization layer on/off state with no localStorage persistence
+  4. An inline legend framework renders in the bottom-left map corner when visualization layers are active
+  5. Search/filter is the only way to narrow visible entity data
+**Plans:** 3 plans
+
+Plans:
+- [ ] 20-01-PLAN.md -- State refactor: remove entity toggles from types/uiStore, create layerStore, simplify useEntityLayers/useCounterData/useProximityAlerts/useQuerySync
+- [ ] 20-02-PLAN.md -- UI components: update BaseMap/StatusDropdown/FilterPanelSlot, replace LayerTogglesSlot content, build MapLegend framework
+- [ ] 20-03-PLAN.md -- Test updates: update 8 existing test files, create layerStore.test.ts and MapLegend.test.tsx
 
 ### Phase 21: Production Review & Deploy Sync
 **Goal**: v1.2 is verified end-to-end and deployed to production
@@ -206,5 +216,5 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21
 | 19. Search, Filter & UI Cleanup | 4/4 | Complete    | 2026-03-22 | - |
 | 19.1. Advanced Search | 5/5 | Complete    | 2026-03-22 | - |
 | 19.2. Counter Entity Dropdowns | 2/2 | Complete    | 2026-03-22 | - |
-| 20. Layer Purpose Refactor | v1.2 | 0/TBD | Not started | - |
+| 20. Layer Purpose Refactor | v1.2 | 0/3 | Not started | - |
 | 21. Production Review & Deploy Sync | v1.2 | 0/TBD | Not started | - |
