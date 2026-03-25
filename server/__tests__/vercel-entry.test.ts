@@ -28,8 +28,13 @@ vi.mock('../config.js', () => ({
 }));
 
 // Mock rate limiter -- pass through
+const _passThrough = (_req: unknown, _res: unknown, next: () => void) => next();
 vi.mock('../middleware/rateLimit.js', () => ({
-  rateLimitMiddleware: (_req: unknown, _res: unknown, next: () => void) => next(),
+  rateLimitMiddleware: _passThrough,
+  rateLimiters: {
+    flights: _passThrough, ships: _passThrough, events: _passThrough, news: _passThrough,
+    markets: _passThrough, weather: _passThrough, sites: _passThrough, sources: _passThrough,
+  },
 }));
 
 // Mock adapters

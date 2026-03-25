@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { log } from '../lib/logger.js';
 
 export function errorHandler(
   err: Error,
@@ -6,6 +7,11 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+  log({
+    level: 'error',
+    message: err.message,
+    method: req.method,
+    path: req.path,
+  });
   res.status(500).json({ error: 'Internal server error' });
 }

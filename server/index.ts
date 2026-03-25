@@ -1,7 +1,10 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { errorHandler } from './middleware/errorHandler.js';
-import { rateLimitMiddleware } from './middleware/rateLimit.js';
+import { cacheControl } from './middleware/cacheControl.js';
+import { requestLogger } from './middleware/requestLogger.js';
+import { rateLimiters } from './middleware/rateLimit.js';
 import { flightsRouter } from './routes/flights.js';
 import { shipsRouter } from './routes/ships.js';
 import { eventsRouter } from './routes/events.js';
@@ -15,24 +18,55 @@ export function createApp() {
 
   app.use(cors({ origin: process.env.CORS_ORIGIN ?? '*' }));
   app.use(express.json());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://va.vercel-scripts.com',
+          ],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: [
+            "'self'",
+            'data:',
+            'blob:',
+            'https://*.tile.openstreetmap.org',
+            'https://*.amazonaws.com',
+            'https://server.arcgisonline.com',
+            'https://basemaps.cartocdn.com',
+          ],
+          connectSrc: [
+            "'self'",
+            'https://*.tile.openstreetmap.org',
+            'https://*.amazonaws.com',
+            'https://api.open-meteo.com',
+            'https://va.vercel-scripts.com',
+            'https://basemaps.cartocdn.com',
+          ],
+          workerSrc: ["'self'", 'blob:'],
+        },
+      },
+    }),
+  );
+  app.use(requestLogger);
 
-  // Health check
+  // Health check (no cache, no rate limit)
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
   });
 
-  // Rate limiting on API routes only (not /health)
-  app.use('/api', rateLimitMiddleware);
-
-  // Data source routes
-  app.use('/api/flights', flightsRouter);
-  app.use('/api/ships', shipsRouter);
-  app.use('/api/events', eventsRouter);
-  app.use('/api/sources', sourcesRouter);
-  app.use('/api/sites', sitesRouter);
-  app.use('/api/news', newsRouter);
-  app.use('/api/markets', marketsRouter);
-  app.use('/api/weather', weatherRouter);
+  // Data source routes with per-endpoint rate limits and cache-control
+  app.use('/api/flights', rateLimiters.flights, cacheControl(5, 25), flightsRouter);
+  app.use('/api/ships', rateLimiters.ships, cacheControl(10, 20), shipsRouter);
+  app.use('/api/events', rateLimiters.events, cacheControl(300, 600), eventsRouter);
+  app.use('/api/sources', rateLimiters.sources, cacheControl(60, 60), sourcesRouter);
+  app.use('/api/sites', rateLimiters.sites, cacheControl(3600, 82800), sitesRouter);
+  app.use('/api/news', rateLimiters.news, cacheControl(300, 600), newsRouter);
+  app.use('/api/markets', rateLimiters.markets, cacheControl(30, 30), marketsRouter);
+  app.use('/api/weather', rateLimiters.weather, cacheControl(600, 1200), weatherRouter);
 
   // Error handler -- must be after routes
   app.use(errorHandler);

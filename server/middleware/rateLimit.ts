@@ -2,29 +2,46 @@ import type { Request, Response, NextFunction } from 'express';
 import { Ratelimit } from '@upstash/ratelimit';
 import { redis } from '../cache/redis.js';
 
-const ratelimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(60, '60 s'),
-});
+export function createRateLimiter(maxRequests: number, windowSec: number) {
+  const limiter = new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(maxRequests, `${windowSec} s`),
+  });
 
-export async function rateLimitMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  const identifier =
-    req.ip ?? (req.headers['x-forwarded-for'] as string) ?? 'anonymous';
+  return async function rateLimitHandler(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    const identifier =
+      req.ip ?? (req.headers['x-forwarded-for'] as string) ?? 'anonymous';
 
-  const result = await ratelimit.limit(identifier);
+    const result = await limiter.limit(identifier);
 
-  res.set('X-RateLimit-Limit', String(result.limit));
-  res.set('X-RateLimit-Remaining', String(result.remaining));
-  res.set('X-RateLimit-Reset', String(result.reset));
+    res.set('X-RateLimit-Limit', String(result.limit));
+    res.set('X-RateLimit-Remaining', String(result.remaining));
+    res.set('X-RateLimit-Reset', String(result.reset));
 
-  if (!result.success) {
-    res.status(429).json({ error: 'Too many requests' });
-    return;
-  }
+    if (!result.success) {
+      res.status(429).json({ error: 'Too many requests' });
+      return;
+    }
 
-  next();
+    next();
+  };
 }
+
+/** Per-endpoint rate limiters with tuned limits */
+export const rateLimiters = {
+  flights: createRateLimiter(120, 60),
+  ships: createRateLimiter(60, 60),
+  events: createRateLimiter(20, 60),
+  news: createRateLimiter(20, 60),
+  markets: createRateLimiter(30, 60),
+  weather: createRateLimiter(10, 60),
+  sites: createRateLimiter(10, 60),
+  sources: createRateLimiter(30, 60),
+} as const;
+
+/** @deprecated Use rateLimiters[route] for per-endpoint limits */
+export const rateLimitMiddleware = createRateLimiter(60, 60);
