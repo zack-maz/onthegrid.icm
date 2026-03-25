@@ -17,7 +17,7 @@ interface EndpointSpec {
   path: string;
   /** Key expected in the JSON response */
   expectedKey: string;
-  /** Whether to check for Cache-Control s-maxage header */
+  /** Whether to check for Cache-Control header (Vercel CDN consumes s-maxage, so check max-age presence) */
   checkCache: boolean;
 }
 
@@ -29,7 +29,7 @@ const ENDPOINTS: EndpointSpec[] = [
   { path: '/api/markets', expectedKey: 'data', checkCache: true },
   { path: '/api/weather', expectedKey: 'data', checkCache: true },
   { path: '/api/sites', expectedKey: 'data', checkCache: true },
-  { path: '/api/sources', expectedKey: 'data', checkCache: true },
+  { path: '/api/sources', expectedKey: 'opensky', checkCache: true },
   { path: '/health', expectedKey: 'status', checkCache: false },
 ];
 
@@ -71,7 +71,8 @@ async function testEndpoint(spec: EndpointSpec): Promise<Result> {
     let cacheOk: boolean | null = null;
     if (spec.checkCache) {
       const cc = res.headers.get('cache-control') ?? '';
-      cacheOk = /s-maxage=\d+/.test(cc);
+      // Vercel CDN consumes s-maxage internally; check for max-age or s-maxage
+      cacheOk = /(?:s-)?max-age=\d+/.test(cc);
     }
 
     return { path: spec.path, pass: true, status: res.status, cacheOk };
@@ -95,7 +96,7 @@ async function main() {
   for (const r of results) {
     const icon = r.pass ? 'PASS' : 'FAIL';
     const cache =
-      r.cacheOk === null ? '' : r.cacheOk ? ' [cache: ok]' : ' [cache: MISSING s-maxage]';
+      r.cacheOk === null ? '' : r.cacheOk ? ' [cache: ok]' : ' [cache: MISSING]';
     const err = r.error ? ` (${r.error})` : '';
     console.log(`  ${icon}  ${r.path}  [${r.status}]${cache}${err}`);
     if (!r.pass) failures++;
