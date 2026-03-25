@@ -67,7 +67,7 @@ export function ExpandedChart({ quote }: ExpandedChartProps) {
   let bandPath = '';
   if (showBand) {
     const topPoints = highs.map((h, i) => `${i === 0 ? 'M' : 'L'}${scaleX(i).toFixed(1)},${scaleY(h).toFixed(1)}`).join(' ');
-    const bottomPoints = lows.map((l, i) => `${scaleX(lows.length - 1 - i).toFixed(1)},${scaleY(lows[lows.length - 1 - i]).toFixed(1)}`).map((p, i) => `${i === 0 ? 'L' : 'L'}${p}`).join(' ');
+    const bottomPoints = lows.map((_l, i) => `${scaleX(lows.length - 1 - i).toFixed(1)},${scaleY(lows[lows.length - 1 - i]).toFixed(1)}`).map((p, i) => `${i === 0 ? 'L' : 'L'}${p}`).join(' ');
     bandPath = topPoints + ' ' + bottomPoints + ' Z';
   }
 

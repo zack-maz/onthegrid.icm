@@ -12,7 +12,7 @@ interface SearchResultItemProps {
 function getEntityColor(entity: MapEntity | SiteEntity): string {
   if (entity.type === 'flight') return ENTITY_DOT_COLORS.flights;
   if (entity.type === 'ship') return ENTITY_DOT_COLORS.ships;
-  if (entity.type === 'site') return ENTITY_DOT_COLORS.sites;
+  if (entity.type === 'site') return ENTITY_DOT_COLORS.siteHealthy;
   if (entity.type === 'airstrike') return ENTITY_DOT_COLORS.airstrikes;
   if (entity.type === 'assassination' || entity.type === 'abduction') return ENTITY_DOT_COLORS.targeted;
   return ENTITY_DOT_COLORS.groundCombat;

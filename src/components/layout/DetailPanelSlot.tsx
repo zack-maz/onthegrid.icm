@@ -6,14 +6,14 @@ import { ShipDetail } from '@/components/detail/ShipDetail';
 import { EventDetail } from '@/components/detail/EventDetail';
 import { SiteDetail } from '@/components/detail/SiteDetail';
 import { ENTITY_DOT_COLORS } from '@/components/map/layers/constants';
-import { isConflictEventType, CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS, SITE_TYPE_LABELS } from '@/types/ui';
+import { isConflictEventType, CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS } from '@/types/ui';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
 
 /** Maps entity type to the ENTITY_DOT_COLORS key */
 function getDotColor(type: string): string {
   if (type === 'flight') return ENTITY_DOT_COLORS.flights;
   if (type === 'ship') return ENTITY_DOT_COLORS.ships;
-  if (type === 'site') return ENTITY_DOT_COLORS.sites;
+  if (type === 'site') return ENTITY_DOT_COLORS.siteHealthy;
   if (isConflictEventType(type)) {
     if ((CONFLICT_TOGGLE_GROUPS.showAirstrikes as readonly string[]).includes(type)) return ENTITY_DOT_COLORS.airstrikes;
     if ((CONFLICT_TOGGLE_GROUPS.showGroundCombat as readonly string[]).includes(type)) return ENTITY_DOT_COLORS.groundCombat;

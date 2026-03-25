@@ -39,33 +39,42 @@ function makeEvent(
 }
 
 describe('computeThreatWeight', () => {
-  it('returns full weight (close to typeWeight) for events with timestamp = now', () => {
+  // Formula: typeWeight * mediaFactor * fatalityFactor * goldsteinFactor * decay
+  // With default test event: numMentions=undefined(->1), numSources=undefined(->1),
+  // fatalities=0, goldsteinScale=-5
+  // mediaFactor = log2(2) * log2(2) = 1
+  // fatalityFactor = 1
+  // goldsteinFactor = 1.5 - (-5)/20 = 1.75
+  // For airstrike (typeWeight=10): 10 * 1 * 1 * 1.75 = 17.5
+
+  it('returns full weight for events with timestamp = now', () => {
     const event = makeEvent({ type: 'airstrike', timestamp: Date.now() });
     const weight = computeThreatWeight(event);
-    // airstrike weight = 10, decay at 0 hours = 1.0
-    expect(weight).toBeCloseTo(10, 0);
+    // airstrike=10, media=1, fatality=1, goldstein=1.75, decay=1.0
+    expect(weight).toBeCloseTo(17.5, 0);
   });
 
-  it('returns ~50% weight for events 6 hours old', () => {
+  it('returns ~50% weight for events 6 hours old (half-life)', () => {
     const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
     const event = makeEvent({ type: 'airstrike', timestamp: sixHoursAgo });
     const weight = computeThreatWeight(event);
-    // 10 * 0.5 = 5
-    expect(weight).toBeCloseTo(5, 0);
+    // 17.5 * 0.5 = 8.75
+    expect(weight).toBeCloseTo(8.75, 0);
   });
 
   it('returns ~25% weight for events 12 hours old', () => {
     const twelveHoursAgo = Date.now() - 12 * 60 * 60 * 1000;
     const event = makeEvent({ type: 'airstrike', timestamp: twelveHoursAgo });
     const weight = computeThreatWeight(event);
-    // 10 * 0.25 = 2.5
-    expect(weight).toBeCloseTo(2.5, 0);
+    // 17.5 * 0.25 = 4.375
+    expect(weight).toBeCloseTo(4.375, 0);
   });
 
   it('uses default weight of 3 for unknown event types', () => {
     const event = makeEvent({ type: 'unknown_type' as ConflictEventEntity['type'], timestamp: Date.now() });
     const weight = computeThreatWeight(event);
-    expect(weight).toBeCloseTo(3, 0);
+    // 3 * 1 * 1 * 1.75 = 5.25
+    expect(weight).toBeCloseTo(5.25, 0);
   });
 });
 
@@ -75,12 +84,13 @@ describe('aggregateToGrid', () => {
     expect(result).toEqual([]);
   });
 
-  it('groups events into 1-degree cells with count, dominant type, and latest timestamp', () => {
+  it('groups events into 0.75-degree cells with count, dominant type, and latest timestamp', () => {
     const now = Date.now();
+    // All events within the same 0.75-degree cell: floor(33.1/0.75)=44, floor(44.5/0.75)=59
     const events = [
-      makeEvent({ type: 'airstrike', lat: 33.2, lng: 44.3, timestamp: now - 1000 }),
-      makeEvent({ type: 'airstrike', lat: 33.7, lng: 44.8, timestamp: now }),
-      makeEvent({ type: 'shelling', lat: 33.5, lng: 44.1, timestamp: now - 5000 }),
+      makeEvent({ type: 'airstrike', lat: 33.1, lng: 44.5, timestamp: now - 1000 }),
+      makeEvent({ type: 'airstrike', lat: 33.6, lng: 44.6, timestamp: now }),
+      makeEvent({ type: 'shelling', lat: 33.4, lng: 44.7, timestamp: now - 5000 }),
     ];
     const result = aggregateToGrid(events);
     expect(result).toHaveLength(1);
@@ -177,29 +187,97 @@ describe('ThreatTooltip', () => {
     const fiveMinAgo = Date.now() - 5 * 60 * 1000;
     render(
       <ThreatTooltip
-        zone={{ lat: 33, lng: 44, eventCount: 12, dominantType: 'airstrike', latestTime: fiveMinAgo }}
+        zone={{
+          lat: 33, lng: 44, eventCount: 12, dominantType: 'airstrike', latestTime: fiveMinAgo,
+          totalFatalities: 0, totalMentions: 45, totalSources: 8, avgGoldstein: -5, clusterWeight: 50,
+        }}
         x={100}
         y={100}
       />,
     );
-    expect(screen.getByText('Threat Zone')).toBeTruthy();
+    expect(screen.getByText('Threat Cluster')).toBeTruthy();
     expect(screen.getByText('12 events')).toBeTruthy();
     expect(screen.getByText('Mostly Airstrike')).toBeTruthy();
     // Should show relative time (e.g. "5m ago")
     expect(screen.getByText(/\d+m ago/)).toBeTruthy();
+    // Should show hostility level and mentions
+    expect(screen.getByText(/hostility/)).toBeTruthy();
+    expect(screen.getByText('45 mentions')).toBeTruthy();
   });
 
   it('shows hours for older events', () => {
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
     render(
       <ThreatTooltip
-        zone={{ lat: 33, lng: 44, eventCount: 3, dominantType: 'ground_combat', latestTime: twoHoursAgo }}
+        zone={{
+          lat: 33, lng: 44, eventCount: 3, dominantType: 'ground_combat', latestTime: twoHoursAgo,
+          totalFatalities: 5, totalMentions: 10, totalSources: 3, avgGoldstein: -8, clusterWeight: 30,
+        }}
         x={50}
         y={50}
       />,
     );
     expect(screen.getByText('Mostly Ground Combat')).toBeTruthy();
     expect(screen.getByText(/\d+h ago/)).toBeTruthy();
+    // Should show fatalities when > 0
+    expect(screen.getByText('5 fatalities')).toBeTruthy();
+  });
+
+  it('renders fatalities row only when totalFatalities > 0', () => {
+    const recent = Date.now() - 60_000;
+    const { container } = render(
+      <ThreatTooltip
+        zone={{
+          lat: 33, lng: 44, eventCount: 2, dominantType: 'shelling', latestTime: recent,
+          totalFatalities: 0, totalMentions: 5, totalSources: 2, avgGoldstein: -3, clusterWeight: 10,
+        }}
+        x={0}
+        y={0}
+      />,
+    );
+    expect(container.textContent).not.toContain('fatalities');
+  });
+
+  it('shows extreme hostility for avgGoldstein <= -7', () => {
+    render(
+      <ThreatTooltip
+        zone={{
+          lat: 33, lng: 44, eventCount: 1, dominantType: 'airstrike', latestTime: Date.now(),
+          totalFatalities: 0, totalMentions: 1, totalSources: 1, avgGoldstein: -9, clusterWeight: 10,
+        }}
+        x={0}
+        y={0}
+      />,
+    );
+    expect(screen.getByText('Extreme hostility')).toBeTruthy();
+  });
+
+  it('shows elevated hostility for avgGoldstein between -4 and -1', () => {
+    render(
+      <ThreatTooltip
+        zone={{
+          lat: 33, lng: 44, eventCount: 1, dominantType: 'bombing', latestTime: Date.now(),
+          totalFatalities: 0, totalMentions: 1, totalSources: 1, avgGoldstein: -2, clusterWeight: 10,
+        }}
+        x={0}
+        y={0}
+      />,
+    );
+    expect(screen.getByText('Elevated hostility')).toBeTruthy();
+  });
+
+  it('shows moderate hostility for avgGoldstein > -1', () => {
+    render(
+      <ThreatTooltip
+        zone={{
+          lat: 33, lng: 44, eventCount: 1, dominantType: 'assault', latestTime: Date.now(),
+          totalFatalities: 0, totalMentions: 1, totalSources: 1, avgGoldstein: 0, clusterWeight: 5,
+        }}
+        x={0}
+        y={0}
+      />,
+    );
+    expect(screen.getByText('Moderate hostility')).toBeTruthy();
   });
 });
 

@@ -4,27 +4,6 @@ import { useWeatherStore, type WeatherGridPoint } from '@/stores/weatherStore';
 import { useLayerStore } from '@/stores/layerStore';
 import { getWindBarbIcon } from './windBarbs';
 
-/** Interpolate temperature (-5..45 C) to RGBA color */
-function tempToColor(temp: number): [number, number, number, number] {
-  const t = Math.max(0, Math.min(1, (temp - (-5)) / 50)); // 0..1
-  // Blue → Cyan → Green → Yellow → Red
-  let r: number, g: number, b: number;
-  if (t < 0.25) {
-    const s = t / 0.25;
-    r = 0; g = Math.round(100 * s); b = Math.round(255 * (1 - s * 0.4));
-  } else if (t < 0.5) {
-    const s = (t - 0.25) / 0.25;
-    r = 0; g = Math.round(100 + 155 * s); b = Math.round(153 * (1 - s));
-  } else if (t < 0.75) {
-    const s = (t - 0.5) / 0.25;
-    r = Math.round(255 * s); g = 255; b = 0;
-  } else {
-    const s = (t - 0.75) / 0.25;
-    r = 255; g = Math.round(255 * (1 - s)); b = 0;
-  }
-  return [r, g, b, 100];
-}
-
 /**
  * Returns deck.gl layers for weather visualization:
  * - ScatterplotLayer for temperature dots

@@ -3,8 +3,6 @@ import type {
   ShipEntity,
   ConflictEventEntity,
   SiteEntity,
-  ConflictEventType,
-  EntityType,
 } from '../../server/types';
 import { GEO_NAMES } from './geoNames';
 
