@@ -84,3 +84,103 @@ describe('Redis cache helpers', () => {
     expect(mod.redis).toBeDefined();
   });
 });
+
+describe('cacheGetSafe / cacheSetSafe (in-memory fallback)', () => {
+  let shouldThrow = false;
+
+  beforeEach(() => {
+    store.clear();
+    shouldThrow = false;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('cacheGetSafe returns Redis data and populates memCache on success', async () => {
+    const { cacheSetSafe, cacheGetSafe } = await import('../cache/redis.js');
+    await cacheSetSafe('safe:test', ['x', 'y'], 100);
+
+    const result = await cacheGetSafe<string[]>('safe:test', 10_000);
+    expect(result).not.toBeNull();
+    expect(result!.data).toEqual(['x', 'y']);
+    expect(result!.stale).toBe(false);
+    expect(result!.degraded).toBeUndefined();
+  });
+
+  it('cacheGetSafe returns memCache data with degraded:true when Redis throws', async () => {
+    const { cacheSetSafe, cacheGetSafe, redis: redisClient } = await import('../cache/redis.js');
+
+    // Populate via normal path first (writes to both Redis and memCache)
+    await cacheSetSafe('safe:fallback', { val: 42 }, 100);
+
+    // Now make Redis throw on get
+    const origGet = redisClient.get.bind(redisClient);
+    vi.spyOn(redisClient, 'get').mockRejectedValue(new Error('Connection refused'));
+
+    const result = await cacheGetSafe<{ val: number }>('safe:fallback', 10_000);
+    expect(result).not.toBeNull();
+    expect(result!.data).toEqual({ val: 42 });
+    expect(result!.degraded).toBe(true);
+    expect(result!.stale).toBe(true);
+
+    // Restore
+    vi.mocked(redisClient.get).mockImplementation(origGet);
+  });
+
+  it('cacheGetSafe returns null when both Redis and memCache miss', async () => {
+    const { cacheGetSafe, redis: redisClient } = await import('../cache/redis.js');
+
+    // Redis throws, memCache empty
+    vi.spyOn(redisClient, 'get').mockRejectedValue(new Error('Down'));
+
+    const result = await cacheGetSafe<string>('nonexistent:key', 10_000);
+    expect(result).toBeNull();
+
+    vi.restoreAllMocks();
+  });
+
+  it('cacheSetSafe writes to both Redis and memCache', async () => {
+    const { cacheSetSafe, cacheGetSafe, redis: redisClient } = await import('../cache/redis.js');
+
+    await cacheSetSafe('safe:dual', [1, 2, 3], 60);
+
+    // Verify Redis has it
+    const fromRedis = await cacheGetSafe<number[]>('safe:dual', 10_000);
+    expect(fromRedis!.data).toEqual([1, 2, 3]);
+
+    // Now make Redis fail -- should still get from memCache
+    vi.spyOn(redisClient, 'get').mockRejectedValue(new Error('Down'));
+    const fromMem = await cacheGetSafe<number[]>('safe:dual', 10_000);
+    expect(fromMem!.data).toEqual([1, 2, 3]);
+    expect(fromMem!.degraded).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it('cacheSetSafe survives Redis failure (memCache still updated)', async () => {
+    const { cacheSetSafe, cacheGetSafe, redis: redisClient } = await import('../cache/redis.js');
+
+    // Make Redis set throw
+    vi.spyOn(redisClient, 'set').mockRejectedValue(new Error('Down'));
+    vi.spyOn(redisClient, 'get').mockRejectedValue(new Error('Down'));
+
+    // Should NOT throw despite Redis being down
+    await expect(cacheSetSafe('safe:survive', 'data', 60)).resolves.toBeUndefined();
+
+    // memCache should have the data -- but since Redis.get also fails, we get degraded
+    const result = await cacheGetSafe<string>('safe:survive', 10_000);
+    expect(result).not.toBeNull();
+    expect(result!.data).toBe('data');
+    expect(result!.degraded).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it('module exports cacheGetSafe and cacheSetSafe', async () => {
+    const mod = await import('../cache/redis.js');
+    expect(typeof mod.cacheGetSafe).toBe('function');
+    expect(typeof mod.cacheSetSafe).toBe('function');
+  });
+});
