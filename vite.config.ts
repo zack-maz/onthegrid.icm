@@ -1,13 +1,39 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    visualizer({
+      open: false,
+      filename: 'dist/bundle-stats.html',
+      gzipSize: true,
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-maplibre': ['maplibre-gl'],
+          'vendor-deckgl': [
+            '@deck.gl/core',
+            '@deck.gl/layers',
+            '@deck.gl/mapbox',
+            '@deck.gl/react',
+            '@deck.gl/aggregation-layers',
+          ],
+        },
+      },
     },
   },
   server: {
