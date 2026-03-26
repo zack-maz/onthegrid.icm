@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: executing
-stopped_at: Completed 21-04-PLAN.md
-last_updated: "2026-03-25T16:57:04Z"
-last_activity: 2026-03-25 -- Completed Phase 21 Plan 04 (Codebase polish)
+status: completed
+stopped_at: Phase 21.1 context gathered
+last_updated: "2026-03-26T22:01:46.841Z"
+last_activity: 2026-03-26 -- Completed Phase 21 Plan 05 (Deploy verification)
 progress:
-  total_phases: 14
-  completed_phases: 9
+  total_phases: 15
+  completed_phases: 10
   total_plans: 34
-  completed_plans: 32
-  percent: 94
+  completed_plans: 33
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 21 Production Review & Deploy Sync
+**Current focus:** Phase 21 Production Review & Deploy Sync -- COMPLETE
 
 ## Current Position
 
 Phase: 21 (Production Review & Deploy Sync)
-Plan: 04 of 05 complete (01, 02, 03, 04 done)
-Status: In progress
-Last activity: 2026-03-25 -- Completed Phase 21 Plan 04 (Codebase polish)
+Plan: 05 of 05 complete (01, 02, 03, 04, 05 done)
+Status: Complete
+Last activity: 2026-03-26 -- Completed Phase 21 Plan 05 (Deploy verification)
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -77,6 +77,7 @@ Progress: [█████████░] 94%
 | Phase 21 P01 | 6min | 2 tasks | 14 files |
 | Phase 21 P02 | 8min | 2 tasks | 17 files |
 | Phase 21 P04 | 47min | 2 tasks | 29 files |
+| Phase 21 P05 | 5min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -203,6 +204,9 @@ Progress: [█████████░] 94%
 - [Phase 21]: degraded flag tracked per-store (flight/ship/event) rather than global UI flag
 - [Phase 21]: All 7 data routes use cacheGetSafe/cacheSetSafe; health route keeps cacheGet (diagnostic)
 - [Phase 21]: isMainModule console.log preserved (local dev only, not serverless)
+- [Phase 21-05]: Cron schedule set to daily (0 0 * * *) for Vercel Hobby plan (one daily invocation limit)
+- [Phase 21-05]: Smoke test checks /api/sources for {sources: object} shape (not {data: array})
+- [Phase 21-05]: CDN cache header check accepts Cache-Control or CDN-Cache-Control (Vercel edge variation)
 
 ### Roadmap Evolution
 
@@ -224,6 +228,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-25T16:57:04Z
-Stopped at: Completed 21-04-PLAN.md
-Resume file: None
+Last session: 2026-03-26T22:01:46.832Z
+Stopped at: Phase 21.1 context gathered
+Resume file: .planning/phases/21.1-gdelt-news-relevance-filtering/21.1-CONTEXT.md
