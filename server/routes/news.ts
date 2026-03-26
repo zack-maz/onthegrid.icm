@@ -3,7 +3,7 @@ import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { log } from '../lib/logger.js';
 import { fetchGdeltArticles } from '../adapters/gdelt-doc.js';
 import { fetchAllRssFeeds } from '../adapters/rss.js';
-import { filterConflictArticles } from '../lib/newsFilter.js';
+import { filterAndScoreArticles } from '../lib/newsFilter.js';
 import { deduplicateAndCluster } from '../lib/newsClustering.js';
 import {
   NEWS_CACHE_TTL,
@@ -41,8 +41,8 @@ newsRouter.get('/', async (req, res) => {
     // 3. Combine all articles
     const allArticles = [...gdeltArticles, ...rssArticles];
 
-    // 4. Apply keyword filter
-    const filtered = filterConflictArticles(allArticles);
+    // 4. Apply NLP-scored keyword filter
+    const filtered = filterAndScoreArticles(allArticles);
 
     // 5. Merge with any existing cached articles (by id, fresh overwrites)
     const articleMap = new Map<string, NewsArticle>();

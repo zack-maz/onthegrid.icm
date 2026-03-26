@@ -27,7 +27,7 @@ const gdeltArticle1 = makeArticle({
 const gdeltArticle2 = makeArticle({
   id: hashUrl('https://reuters.com/2'),
   url: 'https://reuters.com/2',
-  title: 'Tensions escalate as Iran deploys troops near border',
+  title: 'Iran launches drone strike near border military installations',
   source: 'GDELT',
   publishedAt: Date.now() - 3600_000,
 });
@@ -35,7 +35,7 @@ const gdeltArticle2 = makeArticle({
 const rssArticle1 = makeArticle({
   id: hashUrl('https://aljazeera.com/3'),
   url: 'https://aljazeera.com/3',
-  title: 'Syria conflict update from Al Jazeera correspondents',
+  title: 'Syria bombing kills dozens in Damascus airstrike campaign',
   source: 'Al Jazeera',
   publishedAt: Date.now() - 1800_000,
 });
@@ -43,7 +43,7 @@ const rssArticle1 = makeArticle({
 const oldArticle = makeArticle({
   id: hashUrl('https://example.com/old'),
   url: 'https://example.com/old',
-  title: 'Ancient conflict article about war in the region',
+  title: 'Airstrike casualties reported in war zone conflict region',
   source: 'GDELT',
   publishedAt: Date.now() - 8 * 86_400_000, // 8 days ago (beyond 7-day window)
 });
@@ -78,6 +78,7 @@ vi.mock('../../config.js', () => ({
     opensky: { clientId: 'test-id', clientSecret: 'test-secret' },
     aisstream: { apiKey: 'test-ais-key' },
     acled: { email: 'test@example.com', password: 'test-pass' },
+    newsRelevanceThreshold: 0.7,
   },
   loadConfig: () => ({
     port: 0,
@@ -85,6 +86,15 @@ vi.mock('../../config.js', () => ({
     opensky: { clientId: 'test-id', clientSecret: 'test-secret' },
     aisstream: { apiKey: 'test-ais-key' },
     acled: { email: 'test@example.com', password: 'test-pass' },
+    newsRelevanceThreshold: 0.7,
+  }),
+  getConfig: () => ({
+    port: 0,
+    corsOrigin: '*',
+    opensky: { clientId: 'test-id', clientSecret: 'test-secret' },
+    aisstream: { apiKey: 'test-ais-key' },
+    acled: { email: 'test@example.com', password: 'test-pass' },
+    newsRelevanceThreshold: 0.7,
   }),
 }));
 
@@ -316,6 +326,10 @@ describe('News Route (/api/news)', () => {
       expect(cluster).toHaveProperty('firstSeen');
       expect(cluster).toHaveProperty('lastUpdated');
       expect(cluster.primaryArticle).toHaveProperty('sourceCountry');
+
+      // Enriched fields from NLP scoring pipeline
+      expect(typeof cluster.primaryArticle.relevanceScore).toBe('number');
+      expect(cluster.primaryArticle.relevanceScore).toBeGreaterThanOrEqual(0.7);
     }
   });
 
