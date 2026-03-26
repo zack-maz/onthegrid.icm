@@ -266,19 +266,23 @@ Plans:
 
 ### Phase 21.1: GDELT News Relevance Filtering (INSERTED)
 
-**Goal:** Reduce false positive conflict news by improving filtering to distinguish actual conflict events from articles that merely mention conflict-related terms or locations
+**Goal:** Reduce false positive conflict news by replacing binary keyword filter with NLP-based relevance scoring that extracts actor-action-target triples and assigns confidence scores
 **Depends on:** Phase 16 (News Feed), Phase 21 (Production Review)
 **Requirements**: None (quality improvement)
 **Success Criteria** (what must be TRUE):
   1. Articles that mention a location (e.g., "Tehran") without describing a conflict event AT that location are filtered out or not geolocated there
   2. Keyword filter rejects articles where conflict terms appear only in passing context (e.g., "Tehran condemns attack in Yemen" does not mark Tehran)
   3. False positive rate for conflict news is meaningfully reduced compared to current keyword-only approach
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 21.1-01-PLAN.md -- Core engine: compromise NLP library, NewsArticle type extension, nlpExtractor (triple extraction), relevanceScorer (0-1 scoring), config threshold, unit tests
+- [ ] 21.1-02-PLAN.md -- Integration: keyword reclassification (7 non-ambiguous, all others ambiguous), newsFilter overhaul with NLP scoring pipeline, news route wiring, test updates
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.2 -> 20.3 -> 21
+Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.2 -> 20.3 -> 21 -> 21.1
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -309,3 +313,4 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.
 | 20.2. Threat Heatmap Layer | 1/1 | Complete    | 2026-03-23 | - |
 | 20.3. Political Boundaries Layer | v1.1 | 1/2 | In progress | - |
 | 21. Production Review & Deploy Sync | 4/5 | In Progress|  | - |
+| 21.1. GDELT News Relevance Filtering | v1.1 | 0/2 | Planned | - |
