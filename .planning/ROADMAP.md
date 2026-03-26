@@ -276,7 +276,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 21.1-01-PLAN.md -- Core engine: compromise NLP library, NewsArticle type extension, nlpExtractor (triple extraction), relevanceScorer (0-1 scoring), config threshold, unit tests
+- [x] 21.1-01-PLAN.md -- Core engine: compromise NLP library, NewsArticle type extension, nlpExtractor (triple extraction), relevanceScorer (0-1 scoring), config threshold, unit tests
 - [ ] 21.1-02-PLAN.md -- Integration: keyword reclassification (7 non-ambiguous, all others ambiguous), newsFilter overhaul with NLP scoring pipeline, news route wiring, test updates
 
 ## Progress
@@ -313,4 +313,4 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.
 | 20.2. Threat Heatmap Layer | 1/1 | Complete    | 2026-03-23 | - |
 | 20.3. Political Boundaries Layer | v1.1 | 1/2 | In progress | - |
 | 21. Production Review & Deploy Sync | 4/5 | In Progress|  | - |
-| 21.1. GDELT News Relevance Filtering | v1.1 | 0/2 | Planned | - |
+| 21.1. GDELT News Relevance Filtering | v1.1 | 1/2 | In Progress | - |

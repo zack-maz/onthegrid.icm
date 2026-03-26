@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
 status: completed
-stopped_at: Phase 21.1 context gathered
-last_updated: "2026-03-26T22:01:46.841Z"
-last_activity: 2026-03-26 -- Completed Phase 21 Plan 05 (Deploy verification)
+stopped_at: Completed 21.1-01-PLAN.md
+last_updated: "2026-03-26T22:33:28Z"
+last_activity: 2026-03-26 -- Completed Phase 21.1 Plan 01 (NLP extraction engine & relevance scoring)
 progress:
   total_phases: 15
   completed_phases: 10
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 21 Production Review & Deploy Sync -- COMPLETE
+**Current focus:** Phase 21.1 GDELT News Relevance Filtering -- In Progress
 
 ## Current Position
 
-Phase: 21 (Production Review & Deploy Sync)
-Plan: 05 of 05 complete (01, 02, 03, 04, 05 done)
-Status: Complete
-Last activity: 2026-03-26 -- Completed Phase 21 Plan 05 (Deploy verification)
+Phase: 21.1 (GDELT News Relevance Filtering)
+Plan: 01 of 02 complete (01 done)
+Status: In Progress
+Last activity: 2026-03-26 -- Completed Phase 21.1 Plan 01 (NLP extraction engine & relevance scoring)
 
 Progress: [██████████] 100%
 
@@ -78,6 +78,7 @@ Progress: [██████████] 100%
 | Phase 21 P02 | 8min | 2 tasks | 17 files |
 | Phase 21 P04 | 47min | 2 tasks | 29 files |
 | Phase 21 P05 | 5min | 2 tasks | 6 files |
+| Phase 21.1 P01 | 7min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -208,6 +209,12 @@ Progress: [██████████] 100%
 - [Phase 21-05]: Smoke test checks /api/sources for {sources: object} shape (not {data: array})
 - [Phase 21-05]: CDN cache header check accepts Cache-Control or CDN-Cache-Control (Vercel edge variation)
 
+- [Phase 21.1-01]: compromise NLP library chosen: self-contained (~250KB), pattern matching syntax, no model download
+- [Phase 21.1-01]: 3-factor additive scoring: triple completeness (0-0.45), negativity/conflict verbs (0-0.35), source reliability (0-0.20)
+- [Phase 21.1-01]: Source reliability 4-tier: major international (1.0), regional quality (0.9-0.95), state-affiliated (0.8), unknown GDELT (0.6)
+- [Phase 21.1-01]: 24 conflict verbs with compromise root normalization for negativity detection
+- [Phase 21.1-01]: 50+ exclusion patterns across 7 categories (historical, entertainment, sports, education, tech, weather, existing)
+
 ### Roadmap Evolution
 
 - Phase 19.1 inserted after Phase 19: Advanced search with tag and entity type filtering (URGENT)
@@ -228,6 +235,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-26T22:01:46.832Z
-Stopped at: Phase 21.1 context gathered
-Resume file: .planning/phases/21.1-gdelt-news-relevance-filtering/21.1-CONTEXT.md
+Last session: 2026-03-26T22:33:28Z
+Stopped at: Completed 21.1-01-PLAN.md
+Resume file: .planning/phases/21.1-gdelt-news-relevance-filtering/21.1-02-PLAN.md
