@@ -333,4 +333,4 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.
 | 20.3. Political Boundaries Layer | v1.1 | 1/2 | In progress | - |
 | 21. Production Review & Deploy Sync | 4/5 | In Progress|  | - |
 | 21.1. GDELT News Relevance Filtering | 2/2 | Complete    | 2026-03-26 | - |
-| 21.2. GDELT Event Quality Pipeline | 2/2 | Complete   | 2026-03-28 | - |
+| 21.2. GDELT Event Quality Pipeline | 2/2 | Complete    | 2026-03-28 | - |
