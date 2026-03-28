@@ -50,6 +50,7 @@
 - [ ] **Phase 20.5: Infrastructure Focus Layer** - Dims non-site entities, highlights sites with enhanced labels
 - [ ] **Phase 21: Production Review & Deploy Sync** - Full verification, integration testing, Vercel deployment, git tag v1.2
 - [x] **Phase 21.1: GDELT News Relevance Filtering** - Reduce false positive conflict news by improving filtering to distinguish actual conflict events from articles that merely mention conflict-related terms or locations (completed 2026-03-26)
+- [ ] **Phase 21.2: GDELT Event Quality Pipeline** - Geo-validation, expanded CAMEO classification, Goldstein sanity check, and composite confidence scoring for GDELT conflict events
 
 ## Phase Details
 
@@ -279,10 +280,24 @@ Plans:
 - [x] 21.1-01-PLAN.md -- Core engine: compromise NLP library, NewsArticle type extension, nlpExtractor (triple extraction), relevanceScorer (0-1 scoring), config threshold, unit tests
 - [ ] 21.1-02-PLAN.md -- Integration: keyword reclassification (7 non-ambiguous, all others ambiguous), newsFilter overhaul with NLP scoring pipeline, news route wiring, test updates
 
+### Phase 21.2: GDELT Event Quality Pipeline (INSERTED)
+
+**Goal:** Improve GDELT event data accuracy with geo-validation (discard misplaced events, detect city centroids), expanded CAMEO classification, Goldstein sanity checks, and composite confidence scoring
+**Depends on:** Phase 8.1 (GDELT Event Source), Phase 21 (Production Review)
+**Requirements**: None (quality improvement)
+**Success Criteria** (what must be TRUE):
+  1. Events geocoded to non-Middle-East countries (e.g., NYC assassination pinned to Israel) are discarded via text-geo cross-validation
+  2. Events at known city centroids are flagged with `geoPrecision: 'centroid'` for downstream use
+  3. All CAMEO base codes in the 180-200 range have explicit ConflictEventType mappings (no silent fallthrough to generic types)
+  4. Events with Goldstein scores inconsistent with their classified type are reclassified to a lower-severity type
+  5. Each event carries a 0-1 `confidence` score based on media coverage, source diversity, actor specificity, geo precision, and Goldstein consistency
+  6. Events below a configurable confidence threshold are discarded (default 0.15 — effectively no-op at launch)
+**Plans:** TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.2 -> 20.3 -> 21 -> 21.1
+Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.2 -> 20.3 -> 21 -> 21.1 -> 21.2
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -314,3 +329,4 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.
 | 20.3. Political Boundaries Layer | v1.1 | 1/2 | In progress | - |
 | 21. Production Review & Deploy Sync | 4/5 | In Progress|  | - |
 | 21.1. GDELT News Relevance Filtering | 2/2 | Complete    | 2026-03-26 | - |
+| 21.2. GDELT Event Quality Pipeline | 0/0 | Not started | - | - |
