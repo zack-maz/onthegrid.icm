@@ -65,6 +65,8 @@ export interface ConflictEventEntity extends MapEntityBase {
     cameoCode: string; // CAMEO event code (e.g. "190")
     numMentions?: number; // GDELT NumMentions (col 31) — optional for backward compat
     numSources?: number; // GDELT NumSources (col 32) — optional for backward compat
+    geoPrecision?: 'precise' | 'centroid'; // City-centroid detection result
+    confidence?: number; // 0-1 composite confidence score
   };
 }
 

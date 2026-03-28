@@ -15,6 +15,7 @@ export interface AppConfig {
     password: string;
   };
   newsRelevanceThreshold: number; // 0-1 threshold for NLP relevance scoring (default 0.7)
+  eventConfidenceThreshold: number; // 0-1 threshold for event confidence filtering (default 0.35)
 }
 
 let _config: AppConfig | null = null;
@@ -36,6 +37,9 @@ export function loadConfig(): AppConfig {
     },
     newsRelevanceThreshold: Math.min(1, Math.max(0,
       parseFloat(process.env.NEWS_RELEVANCE_THRESHOLD ?? '') || 0.7,
+    )),
+    eventConfidenceThreshold: Math.min(1, Math.max(0,
+      parseFloat(process.env.EVENT_CONFIDENCE_THRESHOLD ?? '') || 0.35,
     )),
   };
 }
