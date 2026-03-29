@@ -4,7 +4,28 @@ All notable changes to the Iran Conflict Monitor project.
 
 ## [Unreleased]
 
-## [v1.2.0] - 2026-03-25
+## [v1.2.1] - 2026-03-28
+
+### Phase 21.2: GDELT Event Quality Pipeline
+
+#### Added
+- Geo-validation module (`server/lib/geoValidation.ts`) — validates event coordinates against country polygons and FIPS mappings
+- Event scoring engine (`server/lib/eventScoring.ts`) — composite confidence scoring with CAMEO specificity, Goldstein sanity check, NumSources >= 2 filter
+- NLP extractor (`server/lib/nlpExtractor.ts`) — extracts structured data from GDELT event text
+- Dev-mode confidence and geoPrecision display in EventDetail panel
+- CAMEO 180 catch-all exclusion from conflict pipeline
+- NumSources >= 2 requirement to filter single-source noise
+
+### Phase 21.1: GDELT News Relevance Filtering
+
+#### Added
+- Relevance scoring engine (`server/lib/relevanceScorer.ts`) — multi-signal scoring for news article conflict relevance
+- Configurable `newsRelevanceThreshold` in server config
+- NLP-based keyword extraction for improved conflict detection
+
+#### Changed
+- News filter rewritten from keyword whitelist to relevance scoring approach
+- Reduced false positive conflict news articles significantly
 
 ### Phase 21: Production Hardening & Deploy
 
@@ -20,12 +41,16 @@ All notable changes to the Iran Conflict Monitor project.
 - Production smoke test script (`scripts/smoke-test.ts`) validating all 9 endpoints
 - Vercel Analytics and SpeedInsights integration
 - 4 vendor chunks (react, maplibre, deckgl, app) for independent browser cache invalidation
+- Rate limiter skips local dev (NODE_ENV !== production)
+- All polling hooks check `res.ok` before parsing JSON
+- ThreatHeatmapOverlay uses `useFilteredEntities` for consistent date/filter gating
+- Vitest tuned: 10s timeout, forks pool (maxForks 4)
 
 #### Changed
 - All 7 data routes migrated to `cacheGetSafe`/`cacheSetSafe` for Redis graceful degradation
 - All server adapter console calls replaced with structured `log()` calls
 - Bundle splitting: vendor-react (~200KB), vendor-maplibre (~800KB), vendor-deckgl (~700KB), app
-- 859 tests passing
+- 958 tests passing
 
 ### Phase 20: Visualization Layers & Filter Independence
 
