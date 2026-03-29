@@ -48,6 +48,13 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
+    testTimeout: 10000,
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        maxForks: 4,
+      },
+    },
     alias: {
       'maplibre-gl/dist/maplibre-gl.css': path.resolve(__dirname, './src/test/__mocks__/maplibre-gl-css.ts'),
       'maplibre-gl': path.resolve(__dirname, './src/test/__mocks__/maplibre-gl.ts'),

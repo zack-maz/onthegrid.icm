@@ -6,6 +6,7 @@ export function createRateLimiter(maxRequests: number, windowSec: number) {
   const limiter = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(maxRequests, `${windowSec} s`),
+    prefix: 'ratelimit:prod',
   });
 
   return async function rateLimitHandler(
@@ -13,6 +14,12 @@ export function createRateLimiter(maxRequests: number, windowSec: number) {
     res: Response,
     next: NextFunction,
   ): Promise<void> {
+    // Skip rate limiting in local development
+    if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+      next();
+      return;
+    }
+
     const identifier =
       req.ip ?? (req.headers['x-forwarded-for'] as string) ?? 'anonymous';
 

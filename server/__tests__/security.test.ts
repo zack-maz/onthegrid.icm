@@ -19,6 +19,7 @@ vi.mock('../config.js', () => ({
       email: 'SECRET_ACLED_EMAIL@example.com',
       password: 'SECRET_ACLED_PASSWORD',
     },
+    newsRelevanceThreshold: 0.7,
   },
   loadConfig: () => ({
     port: 0,
@@ -34,6 +35,23 @@ vi.mock('../config.js', () => ({
       email: 'SECRET_ACLED_EMAIL@example.com',
       password: 'SECRET_ACLED_PASSWORD',
     },
+    newsRelevanceThreshold: 0.7,
+  }),
+  getConfig: () => ({
+    port: 0,
+    corsOrigin: '*',
+    opensky: {
+      clientId: 'SECRET_OPENSKY_CLIENT_ID',
+      clientSecret: 'SECRET_OPENSKY_CLIENT_SECRET',
+    },
+    aisstream: {
+      apiKey: 'SECRET_AISSTREAM_API_KEY',
+    },
+    acled: {
+      email: 'SECRET_ACLED_EMAIL@example.com',
+      password: 'SECRET_ACLED_PASSWORD',
+    },
+    newsRelevanceThreshold: 0.7,
   }),
 }));
 

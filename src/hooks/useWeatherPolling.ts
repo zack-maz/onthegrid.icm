@@ -27,6 +27,7 @@ export function useWeatherPolling(): void {
         setLoading();
         const res = await fetch('/api/weather');
         if (cancelled) return;
+        if (!res.ok) throw new Error(`Weather API ${res.status}`);
         const data: CacheResponse<WeatherGridPoint[]> = await res.json();
         setWeatherData(data);
       } catch {

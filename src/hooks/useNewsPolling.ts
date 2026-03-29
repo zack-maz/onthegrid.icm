@@ -19,6 +19,7 @@ export function useNewsPolling(): void {
       try {
         const res = await fetch('/api/news');
         if (cancelled) return;
+        if (!res.ok) throw new Error(`News API ${res.status}`);
         const data: CacheResponse<NewsCluster[]> = await res.json();
         setNewsData(data);
       } catch {

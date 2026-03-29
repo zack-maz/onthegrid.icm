@@ -24,6 +24,7 @@ export function useFlightPolling(): void {
       try {
         const res = await fetch(url);
         if (cancelled) return;
+        if (!res.ok) throw new Error(`Flights API ${res.status}`);
         const data: CacheResponse<FlightEntity[]> & { rateLimited?: boolean } = await res.json();
         setFlightData(data);
       } catch {

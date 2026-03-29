@@ -19,6 +19,7 @@ export function useSiteFetch(): void {
       try {
         const res = await fetch('/api/sites');
         if (cancelled) return;
+        if (!res.ok) throw new Error(`Sites API ${res.status}`);
         const data: CacheResponse<SiteEntity[]> = await res.json();
         setSiteData(data);
       } catch (err) {

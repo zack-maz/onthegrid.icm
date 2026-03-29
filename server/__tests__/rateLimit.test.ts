@@ -21,6 +21,9 @@ vi.mock('../cache/redis.js', () => ({
   redis: { ping: vi.fn(async () => 'PONG') },
 }));
 
+// Force production mode so the rate limiter actually runs in tests
+vi.stubEnv('NODE_ENV', 'production');
+
 // Import after mocks
 const { rateLimitMiddleware } = await import('../middleware/rateLimit.js');
 

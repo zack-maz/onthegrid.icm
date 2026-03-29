@@ -20,6 +20,7 @@ export function useMarketPolling(): void {
       try {
         const res = await fetch(`/api/markets?range=${range}`);
         if (cancelled) return;
+        if (!res.ok) throw new Error(`Markets API ${res.status}`);
         const data: CacheResponse<MarketQuote[]> = await res.json();
         setMarketData(data);
       } catch {

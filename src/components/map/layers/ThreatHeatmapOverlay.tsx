@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { ScatterplotLayer } from '@deck.gl/layers';
-import { useEventStore } from '@/stores/eventStore';
 import { useLayerStore } from '@/stores/layerStore';
 import { useFilterStore } from '@/stores/filterStore';
+import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 
 import { TYPE_WEIGHTS } from '@/lib/severity';
 import { CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS } from '@/types/ui';
@@ -169,11 +169,11 @@ interface WeightedPoint {
 }
 
 export function useThreatHeatmapLayers() {
-  const events = useEventStore((s) => s.events);
+  // Consume events already filtered by useFilteredEntities (date, proximity, country, CAMEO, mentions, etc.)
+  const { events } = useFilteredEntities();
   const isActive = useLayerStore((s) => s.activeLayers.has('threat'));
-  const dateStart = useFilterStore((s) => s.dateStart);
-  const dateEnd = useFilterStore((s) => s.dateEnd);
 
+  // Visibility toggles (conflict category gating — not handled by useFilteredEntities)
   const showAirstrikes = useFilterStore((s) => s.showAirstrikes);
   const showGroundCombatToggle = useFilterStore((s) => s.showGroundCombat);
   const showTargetedToggle = useFilterStore((s) => s.showTargeted);
@@ -182,7 +182,6 @@ export function useThreatHeatmapLayers() {
     if (!isActive || events.length === 0) return [];
 
     const filtered = events.filter((e) => {
-      if (e.timestamp < dateStart || e.timestamp > dateEnd) return false;
       if ((CONFLICT_TOGGLE_GROUPS.showAirstrikes as readonly string[]).includes(e.type)) return showAirstrikes;
       if ((CONFLICT_TOGGLE_GROUPS.showGroundCombat as readonly string[]).includes(e.type)) return showGroundCombatToggle;
       if ((CONFLICT_TOGGLE_GROUPS.showTargeted as readonly string[]).includes(e.type)) return showTargetedToggle;
@@ -223,7 +222,7 @@ export function useThreatHeatmapLayers() {
     });
 
     return [heatmapLayer, pickerLayer];
-  }, [isActive, events, dateStart, dateEnd, showAirstrikes, showGroundCombatToggle, showTargetedToggle]);
+  }, [isActive, events, showAirstrikes, showGroundCombatToggle, showTargetedToggle]);
 }
 
 // --- Tooltip ---

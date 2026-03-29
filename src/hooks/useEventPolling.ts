@@ -19,6 +19,7 @@ export function useEventPolling(): void {
       try {
         const res = await fetch('/api/events');
         if (cancelled) return;
+        if (!res.ok) throw new Error(`Events API ${res.status}`);
         const data: CacheResponse<ConflictEventEntity[]> = await res.json();
         setEventData(data);
       } catch {

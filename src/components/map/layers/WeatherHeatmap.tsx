@@ -139,7 +139,7 @@ export function WeatherHeatmap() {
   const isActive = useLayerStore((s) => s.activeLayers.has('weather'));
 
   const dataUrl = useMemo(() => {
-    if (grid.length === 0) return null;
+    if (!grid || grid.length === 0) return null;
     return renderHeatmap(grid);
   }, [grid]);
 

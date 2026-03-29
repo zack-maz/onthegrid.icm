@@ -20,6 +20,7 @@ export function useShipPolling(): void {
       try {
         const res = await fetch('/api/ships');
         if (cancelled) return;
+        if (!res.ok) throw new Error(`Ships API ${res.status}`);
         const data: CacheResponse<ShipEntity[]> = await res.json();
         setShipData(data);
       } catch {

@@ -18,6 +18,7 @@ vi.mock('../config.js', () => ({
     opensky: { clientId: '', clientSecret: '' },
     aisstream: { apiKey: '' },
     acled: { email: '', password: '' },
+    newsRelevanceThreshold: 0.7,
   }),
   getConfig: () => ({
     port: 0,
@@ -25,6 +26,7 @@ vi.mock('../config.js', () => ({
     opensky: { clientId: '', clientSecret: '' },
     aisstream: { apiKey: '' },
     acled: { email: '', password: '' },
+    newsRelevanceThreshold: 0.7,
   }),
   config: {
     port: 0,
@@ -32,6 +34,7 @@ vi.mock('../config.js', () => ({
     opensky: { clientId: '', clientSecret: '' },
     aisstream: { apiKey: '' },
     acled: { email: '', password: '' },
+    newsRelevanceThreshold: 0.7,
   },
 }));
 
