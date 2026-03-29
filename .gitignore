@@ -36,3 +36,6 @@ dist-ssr
 *.sw?
 .vercel
 .env*.local
+
+# Load test results
+load-test-results/
