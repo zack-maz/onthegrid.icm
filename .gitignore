@@ -39,3 +39,10 @@ dist-ssr
 
 # Load test results
 load-test-results/
+
+# Test artifacts
+test-results/
+.playwright-mcp/
+
+# MCP config
+.mcp.json

@@ -1,6 +1,6 @@
 # Iran Conflict Monitor — Project Status
 
-**Last updated:** 2026-03-24
+**Last updated:** 2026-03-29
 
 ## Progress
 
@@ -8,7 +8,7 @@
 v0.9 MVP:              [████████████████████] 12/12 phases (shipped 2026-03-19)
 v1.0 Deployment:       [████████████████████]  2/2  phases (shipped 2026-03-20)
 v1.1 Intelligence Layer: [████████████████████]  8/8  phases (shipped 2026-03-22)
-v1.2 Visualization:    [████████████████████]  1/1  phases (shipped 2026-03-24)
+v1.2 Visualization:    [████████████████████]  7/7  phases (shipped 2026-03-29)
 ```
 
 ## Phase Status
@@ -38,10 +38,16 @@ v1.2 Visualization:    [██████████████████�
 | 19.1 | Advanced Search with Tag Filtering | v1.1 | Done | 2026-03-22 |
 | 19.2 | Counter Entity Dropdowns | v1.1 | Done | 2026-03-22 |
 | 20 | Visualization Layers & Filter Independence | v1.2 | Done | 2026-03-24 |
+| 20.1 | Geographical & Weather Layers | v1.2 | Done | 2026-03-23 |
+| 20.2 | Threat Heatmap Layer | v1.2 | Done | 2026-03-23 |
+| 21 | Production Review & Deploy Sync | v1.2 | Done | 2026-03-27 |
+| 21.1 | GDELT News Relevance Filtering | v1.2 | Done | 2026-03-26 |
+| 21.2 | GDELT Event Quality Pipeline | v1.2 | Done | 2026-03-28 |
+| 21.3 | Multi-User Load Testing | v1.2 | Done | 2026-03-29 |
 
 ## Current Focus
 
-Phase 20 (Visualization Layers & Filter Independence) complete. v1.2 milestone shipped.
+v1.2 milestone complete. All phases shipped.
 
 ## What's Been Built
 
@@ -91,9 +97,21 @@ Phase 20 (Visualization Layers & Filter Independence) complete. v1.2 milestone s
 
 **Phase 19.2: Counter Entity Dropdowns** — Click-to-expand counter rows showing individual entities with label + key metric, accordion behavior, fly-to-entity on click, proximity sorting, scrollable lists with range indicators. 851 tests passing.
 
-### v1.2 Visualization (Phase 20)
+### v1.2 Visualization & Production Hardening (Phases 20-21)
 
-**Phase 20: Visualization Layers & Filter Independence** — Toggleable visualization layers: geographic (elevation tinting, contour lines, feature labels), weather (temperature heatmap with bilinear interpolation, wind barbs, weather tooltips), threat density (HeatmapLayer with compound weight formula using type severity, media signal, fatalities, Goldstein hostility, and temporal decay). Layer stacking with threat tooltip priority over weather. Entity filter toggles (flights, ships, events, sites) operate independently from visualization layers. FilterButton and SliderToggle components for filter panel redesign. Political overlay planned but deferred.
+**Phase 20: Visualization Layers & Filter Independence** — Toggleable visualization layers: geographic (elevation tinting, contour lines, feature labels), weather (temperature heatmap with bilinear interpolation, wind barbs, weather tooltips), threat density (HeatmapLayer with compound weight formula using type severity, media signal, fatalities, Goldstein hostility, and temporal decay). Layer stacking with threat tooltip priority over weather. Entity filter toggles (flights, ships, events, sites) operate independently from visualization layers.
+
+**Phase 20.1: Geographical & Weather Layers** — Monochrome elevation tinting with maplibre-contour lines, geographic feature labels (deserts, ranges, seas). Open-Meteo temperature heatmap with bilinear interpolation draped onto terrain, wind barb icons, weather grid tooltips.
+
+**Phase 20.2: Threat Heatmap Layer** — deck.gl HeatmapLayer with compound threat weight formula (SUM aggregation, static radiusPixels: 40). Cluster tooltips with fatalities, mentions, hostility scores.
+
+**Phase 21: Production Review & Deploy Sync** — Helmet CSP, per-endpoint rate limiting, structured JSON logging, Redis graceful degradation with in-memory fallback, rich /health endpoint, cron health checks, production smoke test, Vercel Analytics/SpeedInsights, 4 vendor chunks for cache invalidation. 958 tests passing.
+
+**Phase 21.1: GDELT News Relevance Filtering** — NLP-based relevance scoring replacing keyword whitelist. 3-factor scoring (triple completeness, negativity/conflict verbs, source reliability). Dual gate: keyword match AND relevance threshold.
+
+**Phase 21.2: GDELT Event Quality Pipeline** — Geo-validation against country polygons, expanded CAMEO classification, Goldstein sanity check, 5-signal composite confidence scoring (media, sources, actors, geo, goldstein). NumSources >= 2 filter.
+
+**Phase 21.3: Multi-User Load Testing** — k6 load test (501 VUs, 6 scenarios, 5min) and Playwright browser validation (3 concurrent workers, 3min stability). All application checks 100%. Flights p95: 136ms, overall p95: 153ms.
 
 ## Blockers
 

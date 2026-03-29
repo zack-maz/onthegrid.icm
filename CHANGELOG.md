@@ -4,6 +4,21 @@ All notable changes to the Iran Conflict Monitor project.
 
 ## [Unreleased]
 
+## [v1.2.2] - 2026-03-29
+
+### Phase 21.3: Multi-User Load Testing
+
+#### Added
+- k6 load test script (`scripts/load-test.js`) with 6 scenarios (flights, ships, health, markets, slow-poll, static) ramping to 501 VUs over 5 minutes
+- Playwright browser validation test (`scripts/load-test.spec.ts`) with parallel mode for 3 concurrent browser workers
+- Pre/post-test health snapshots comparing Redis latency and source freshness
+
+#### Results (Production — https://irt-monitoring.vercel.app)
+- 100% application checks (9536/9536) across all endpoints
+- Flights p95: 136ms, Ships p95: 145ms, Overall p95: 153ms
+- 3/3 Playwright tests passed with 3 concurrent browser workers over 3-minute stability window
+- Production remained healthy post-test (Redis ok, 68ms latency, all sources active)
+
 ## [v1.2.1] - 2026-03-28
 
 ### Phase 21.2: GDELT Event Quality Pipeline
