@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Intelligence Layer
+milestone: v1.2
+milestone_name: Visualization & Hardening
 status: completed
-stopped_at: Completed 21.3-03-PLAN.md
-last_updated: "2026-03-29T21:29:30.054Z"
-last_activity: 2026-03-29 -- Completed Phase 21.3 Plan 03 (production load test gap closure)
+stopped_at: v1.2 milestone closed
+last_updated: "2026-03-29T22:00:00.000Z"
+last_activity: 2026-03-29 -- v1.2 milestone complete, all phases archived
 progress:
   total_phases: 17
   completed_phases: 13
@@ -21,14 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
-**Current focus:** Phase 21.3 Multi-User Load Testing -- Complete
+**Current focus:** v1.2 complete. All 4 milestones shipped (v0.9, v1.0, v1.1, v1.2).
 
 ## Current Position
 
-Phase: 21.3 (Multi-User Load Testing)
-Plan: 03 of 03 complete
-Status: Complete
-Last activity: 2026-03-29 -- Completed Phase 21.3 Plan 03 (production load test gap closure)
+Milestone: v1.2 Visualization & Hardening — SHIPPED 2026-03-29
+All phases complete. Phase directories archived to .planning/milestones/
 
 Progress: [██████████] 100%
 

@@ -4,7 +4,8 @@
 
 - ✅ **v0.9 MVP** -- Phases 1-12 (shipped 2026-03-19)
 - ✅ **v1.0 Deployment** -- Phases 13-14 (shipped 2026-03-20)
-- 🚧 **v1.1 Intelligence Layer** -- Phases 15-21 (in progress)
+- ✅ **v1.1 Intelligence Layer** -- Phases 15-19.2 (shipped 2026-03-22)
+- ✅ **v1.2 Visualization & Hardening** -- Phases 20-21.3 (shipped 2026-03-29)
 
 ## Phases
 
@@ -35,138 +36,69 @@
 
 </details>
 
-### v1.1 Intelligence Layer (Phases 15-21)
+<details>
+<summary>✅ v1.1 Intelligence Layer (Phases 15-19.2) -- SHIPPED 2026-03-22</summary>
 
-- [x] **Phase 15: Key Sites Overlay** - Infrastructure sites (nuclear, naval, oil, airbase, dam, port) on the map with per-type toggles and click-to-inspect (completed 2026-03-20)
-- [x] **Phase 16: News Feed** - Multi-source news pipeline (GDELT DOC + BBC RSS + Al Jazeera RSS) with conflict filtering and deduplication (completed 2026-03-20)
-- [x] **Phase 17: Notification Center** - Severity-scored conflict notifications with proximity alerts, news matching, and 24h event default (completed 2026-03-20)
-- [x] **Phase 18: Oil Markets Tracker** - Oil/energy price panel (Brent, WTI, XLE, USO, XOM) with sparkline trends (completed 2026-03-21)
-- [x] **Phase 19: Search, Filter & UI Cleanup** - Global search bar, Reset All, grouped filter sections, visual hierarchy (completed 2026-03-22)
-- [x] **Phase 20: Layer Purpose Refactor** - Remove entity toggles, replace with visualization layer architecture, inline legend framework (completed 2026-03-23)
-- [x] **Phase 20.1: Geographical & Weather Layers** - Monochrome elevation tinting with contour lines + real-time temperature overlay from Open-Meteo (completed 2026-03-23)
-- [x] **Phase 20.2: Threat Heatmap Layer** - Color-codes regions by GDELT conflict event density, hot zones glow red (completed 2026-03-23)
-- [ ] **Phase 20.3: Political Boundaries Layer** - Country borders, disputed territories, alliance/faction color-coding
-- [ ] **Phase 20.4: Satellite Imagery Layer** - ArcGIS World Imagery as semi-transparent overlay on Dark Matter basemap
-- [ ] **Phase 20.5: Infrastructure Focus Layer** - Dims non-site entities, highlights sites with enhanced labels
-- [ ] **Phase 21: Production Review & Deploy Sync** - Full verification, integration testing, Vercel deployment, git tag v1.2
-- [x] **Phase 21.1: GDELT News Relevance Filtering** - Reduce false positive conflict news by improving filtering to distinguish actual conflict events from articles that merely mention conflict-related terms or locations (completed 2026-03-26)
-- [x] **Phase 21.2: GDELT Event Quality Pipeline** - Geo-validation, expanded CAMEO classification, Goldstein sanity check, and composite confidence scoring for GDELT conflict events (completed 2026-03-28)
-- [x] **Phase 21.3: Multi-User Load Testing** - Test load balancing and performance with multiple concurrent users on production (completed 2026-03-29)
+- [x] Phase 15: Key Sites Overlay (2/2 plans) -- completed 2026-03-20
+- [x] Phase 16: News Feed (3/3 plans) -- completed 2026-03-20
+- [x] Phase 17: Notification Center (4/4 plans) -- completed 2026-03-20
+- [x] Phase 18: Oil Markets Tracker (2/2 plans) -- completed 2026-03-21
+- [x] Phase 19: Search, Filter & UI Cleanup (4/4 plans) -- completed 2026-03-22
+- [x] Phase 19.1: Advanced Search (5/5 plans) -- completed 2026-03-22
+- [x] Phase 19.2: Counter Entity Dropdowns (2/2 plans) -- completed 2026-03-22
+
+</details>
+
+<details>
+<summary>✅ v1.2 Visualization & Hardening (Phases 20-21.3) -- SHIPPED 2026-03-29</summary>
+
+- [x] Phase 20: Layer Purpose Refactor (3/3 plans) -- completed 2026-03-23
+- [x] Phase 20.1: Geographical & Weather Layers (3/3 plans) -- completed 2026-03-23
+- [x] Phase 20.2: Threat Heatmap Layer (1/1 plans) -- completed 2026-03-23
+- [ ] Phase 20.3: Political Boundaries Layer -- deferred
+- [ ] Phase 20.4: Satellite Imagery Layer -- deferred
+- [ ] Phase 20.5: Infrastructure Focus Layer -- deferred
+- [x] Phase 21: Production Review & Deploy Sync (5/5 plans) -- completed 2026-03-25
+- [x] Phase 21.1: GDELT News Relevance Filtering (2/2 plans) -- completed 2026-03-26
+- [x] Phase 21.2: GDELT Event Quality Pipeline (2/2 plans) -- completed 2026-03-28
+- [x] Phase 21.3: Multi-User Load Testing (3/3 plans) -- completed 2026-03-29
+
+</details>
 
 ## Phase Details
 
+<details>
+<summary>v1.1 Phase Details (Phases 15-19.2) — archived</summary>
+
 ### Phase 15: Key Sites Overlay
 **Goal**: Users can see and inspect key infrastructure sites across the Greater Middle East on the map
-**Depends on**: Phase 14
-**Requirements**: SITE-01, SITE-02, SITE-03
-**Success Criteria** (what must be TRUE):
-  1. User can see distinct icons for each site type (nuclear, naval, oil refinery, airbase, dam, port) on the map at their real-world positions
-  2. User can toggle site visibility with a parent toggle and 6 individual sub-toggles per site type
-  3. User can click any site marker and see its details (name, type, coordinates, operator, OSM link) in the detail panel
-  4. Sites persist across page reloads without re-fetching (24h cache)
-**Plans:** 2/2 plans complete
-Plans:
-- [ ] 15-01-PLAN.md -- Server data pipeline: SiteEntity types, Overpass adapter, /api/sites route with 24h Redis cache, siteStore, useSiteFetch hook
-- [ ] 15-02-PLAN.md -- Client rendering: icon atlas extension, site IconLayer with attack coloring, toggle controls, tooltip, SiteDetail panel
+**Plans:** 2/2 complete | **Requirements**: SITE-01, SITE-02, SITE-03
 
 ### Phase 16: News Feed
 **Goal**: System silently aggregates conflict-relevant news from three sources into a unified, deduplicated feed for downstream consumption
-**Depends on**: Phase 15
-**Requirements**: NEWS-01, NEWS-02, NEWS-03
-**Success Criteria** (what must be TRUE):
-  1. Server endpoint returns news articles merged from GDELT DOC API, BBC RSS, and Al Jazeera RSS
-  2. Non-conflict articles are filtered out by keyword whitelist (Iran, Israel, airstrike, military, etc.)
-  3. Duplicate articles (same URL across sources) appear only once in the feed
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 16-01-PLAN.md -- Server pipeline: NewsArticle/NewsCluster types, GDELT DOC adapter, RSS adapter, keyword filter, dedup/clustering, cache-first /api/news route
-- [x] 16-02-PLAN.md -- Client integration: newsStore, useNewsPolling hook, AppShell wiring
-- [ ] 16-03-PLAN.md -- Gap closure: add sourceCountry metadata to articles, filter GDELT to English-only
+**Plans:** 3/3 complete | **Requirements**: NEWS-01, NEWS-02, NEWS-03
 
 ### Phase 17: Notification Center
 **Goal**: Users receive proactive, severity-ranked intelligence alerts about conflict events, proximity threats, and correlated news
-**Depends on**: Phase 15, Phase 16
-**Requirements**: NOTF-01, NOTF-02, NOTF-03, NOTF-04, NOTF-05
-**Success Criteria** (what must be TRUE):
-  1. User sees a bell icon in the top-right corner with a badge showing unread notification count
-  2. User can open a notification drawer showing conflict events ranked by severity score (type weight x log mentions x log sources x recency decay)
-  3. Each notification card shows 1-3 matched news headlines from the news feed (temporal + geographic/keyword matching)
-  4. User receives proximity alerts when tracked flights or ships approach key sites within 50km
-  5. Map shows only the last 24 hours of conflict events by default when no custom date filter is active
-**Plans:** 4/4 plans complete
-Plans:
-- [x] 17-01-PLAN.md -- Data layer: GDELT numMentions/numSources extension, severity scoring, news matching, time grouping libs
-- [x] 17-02-PLAN.md -- 24h default event window in useFilteredEntities with "Showing last 24h" label
-- [x] 17-03-PLAN.md -- Notification UI: store, bell icon, dropdown drawer, time-grouped event cards with news matching
-- [x] 17-04-PLAN.md -- Proximity alerts: useProximityAlerts hook, map overlay with expand/collapse warning icons
+**Plans:** 4/4 complete | **Requirements**: NOTF-01, NOTF-02, NOTF-03, NOTF-04, NOTF-05
 
 ### Phase 18: Oil Markets Tracker
 **Goal**: Users can monitor oil and energy market prices alongside conflict data to draw their own correlations
-**Depends on**: Phase 14 (no dependency on 15-17)
-**Requirements**: MRKT-01, MRKT-02, MRKT-03
-**Success Criteria** (what must be TRUE):
-  1. User can see current prices for Brent Crude, WTI Crude, XLE, USO, and XOM in a collapsible overlay panel
-  2. Each instrument shows a 5-day sparkline trend chart with green (up) or red (down) color coding
-  3. Price changes trigger green delta animations matching the existing counter animation pattern
-**Plans:** 2/2 plans complete
-Plans:
-- [ ] 18-01-PLAN.md -- Server pipeline: MarketQuote types, Yahoo Finance v8 adapter, cache-first /api/markets route with 5-min Redis cache
-- [ ] 18-02-PLAN.md -- Client panel: marketStore, useMarketPolling hook, Sparkline/ExpandedChart SVG components, MarketRow with delta animation, MarketsSlot overlay panel, AppShell wiring
+**Plans:** 2/2 complete | **Requirements**: MRKT-01, MRKT-02, MRKT-03
 
 ### Phase 19: Search, Filter & UI Cleanup
 **Goal**: Users can quickly find any entity and manage filters with a clean, organized interface
-**Depends on**: Phase 15, Phase 16, Phase 17, Phase 18
-**Requirements**: SRCH-01, SRCH-02, SRCH-03
-**Success Criteria** (what must be TRUE):
-  1. User can press Cmd+K to open a global search bar, type a query, and see fuzzy-matched results across all entity types (flights, ships, events, sites)
-  2. User can select a search result and the map flies to that entity with the detail panel opening
-  3. User can reset all active filters (date range, proximity, nationality, speed, altitude) with a single "Reset All" button
-  4. Filter panel displays grouped sections with scrollable layer toggles and clear visual hierarchy
-**Plans:** 4/4 plans complete
-Plans:
-- [x] 19-01-PLAN.md -- Layout shell: Topbar (title, status dropdown, search hint, notification bell) + Sidebar (icon strip, counters/layers/filters sections) + AppShell restructure
-- [ ] 19-02-PLAN.md -- Search: searchStore, searchUtils, useSearchResults hook, Cmd+K SearchModal with grouped results and fly-to-entity
-- [ ] 19-03-PLAN.md -- Search/filter unification: entity dimming in useEntityLayers, FilterChip, Escape key priority
-- [ ] 19-04-PLAN.md -- Polish: draggable markets panel, ship color change to purple, visual consistency pass
+**Plans:** 4/4 complete | **Requirements**: SRCH-01, SRCH-02, SRCH-03
 
-### Phase 19.1: Advanced search with tag and entity type filtering (INSERTED)
+### Phase 19.1: Advanced Search
+**Goal**: Users can compose structured tag-based queries with boolean logic, autocomplete, and bidirectional sync
+**Plans:** 5/5 complete | **Requirements**: ASRCH-01 through ASRCH-06
 
-**Goal:** Users can compose structured tag-based queries with boolean logic, autocomplete, and bidirectional sync between the search bar and sidebar filter controls
-**Requirements**: ASRCH-01, ASRCH-02, ASRCH-03, ASRCH-04, ASRCH-05, ASRCH-06
-**Depends on:** Phase 19
-**Success Criteria** (what must be TRUE):
-  1. User can type tag-based queries (e.g., `type:flight AND country:iran`) with full boolean expression support (AND/OR/NOT/parentheses)
-  2. Tags are syntax-highlighted with per-prefix colors in the search input
-  3. Two-stage autocomplete suggests tag prefixes then known values with counts from live entity data
-  4. Search bar and sidebar filters sync bidirectionally (typing `type:flight` activates Flights toggle; toggling Flights ON adds `type:flight` to search)
-  5. Clickable chips [Events] [Sites] [Iran] [US] above the input provide quick access to common queries
-  6. Plain text queries still work as freeform substring search (backward compat with Phase 19)
-**Plans:** 4/5 plans executed
+### Phase 19.2: Counter Entity Dropdowns
+**Goal**: Each counter row expands to list individual entities with click-to-fly-to and detail panel integration
+**Plans:** 2/2 complete | **Requirements**: CNTR-01 through CNTR-06
 
-Plans:
-- [ ] 19.1-01-PLAN.md -- Core engine: query parser (tokenizer + recursive descent AST), evaluator (AST walker against entity data), serializer (AST to display string)
-- [ ] 19.1-02-PLAN.md -- Tag registry: centralized vocabulary with metadata, value extractors, display colors for all ~25 tag prefixes
-- [ ] 19.1-03-PLAN.md -- Data integration: extend searchStore with parsed AST, rewrite useSearchResults with evaluator, bidirectional useQuerySync hook
-- [ ] 19.1-04-PLAN.md -- Search UI: TagChipRow, SyntaxOverlay, AutocompleteDropdown, CheatSheet components integrated into SearchModal
-- [ ] 19.1-05-PLAN.md -- Wiring and verification: wire useQuerySync into AppShell, full integration test, visual checkpoint
-
-### Phase 19.2: Counter Entity Dropdowns (INSERTED)
-
-**Goal:** Each counter row in the Counters panel expands to list individual entities, with click-to-fly-to and detail panel integration
-**Requirements**: CNTR-01, CNTR-02, CNTR-03, CNTR-04, CNTR-05, CNTR-06
-**Depends on:** Phase 19
-**Success Criteria** (what must be TRUE):
-  1. User can click any counter row to expand a dropdown showing individual entities with label + key metric
-  2. Only one counter row can be expanded at a time (accordion)
-  3. Clicking an entity flies the map to it and opens the detail panel
-  4. Entities sorted by proximity per category
-  5. Zero-count rows are disabled; dropdown shows empty state if count drops to 0
-  6. Overflow lists show scrollable container with "Showing X-Y of Z" range indicator
-**Plans:** 2/2 plans complete
-
-Plans:
-- [ ] 19.2-01-PLAN.md -- Data layer: extend useCounterData to return entity arrays with proximity sorting, create EntityListItem component
-- [ ] 19.2-02-PLAN.md -- UI layer: refactor CounterRow with expand/collapse dropdown, accordion in CountersContent, fly-to wiring, scroll range indicator
+</details>
 
 ### Phase 20: Layer Purpose Refactor
 **Goal**: Replace entity toggle system with stackable visualization layer architecture -- all entities always visible, layers become rendering overlays (geographic, weather, threat, etc.)
@@ -318,11 +250,8 @@ Plans:
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.2 -> 20.3 -> 21 -> 21.1 -> 21.2 -> 21.3
-
-| Phase | Milestone | Plans Complete | Status | Completed |
-|-------|-----------|----------------|--------|-----------|
+| Phase | Milestone | Plans | Status | Completed |
+|-------|-----------|-------|--------|-----------|
 | 1. Project Scaffolding & Theme | v0.9 | 1/1 | Complete | 2026-03-14 |
 | 2. Base Map | v0.9 | 3/3 | Complete | 2026-03-14 |
 | 3. API Proxy | v0.9 | 3/3 | Complete | 2026-03-15 |
@@ -338,18 +267,20 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 20.1 -> 20.
 | 12. Analytics Dashboard | v0.9 | 1/1 | Complete | 2026-03-19 |
 | 13. Serverless Cache Migration | v1.0 | 4/4 | Complete | 2026-03-20 |
 | 14. Vercel Deployment | v1.0 | 2/2 | Complete | 2026-03-20 |
-| 15. Key Sites Overlay | 2/2 | Complete    | 2026-03-20 | - |
-| 16. News Feed | 3/3 | Complete    | 2026-03-20 | - |
-| 17. Notification Center | 4/4 | Complete    | 2026-03-20 | - |
-| 18. Oil Markets Tracker | 2/2 | Complete    | 2026-03-21 | - |
-| 19. Search, Filter & UI Cleanup | 4/4 | Complete    | 2026-03-22 | - |
-| 19.1. Advanced Search | 5/5 | Complete    | 2026-03-22 | - |
-| 19.2. Counter Entity Dropdowns | 2/2 | Complete    | 2026-03-22 | - |
-| 20. Layer Purpose Refactor | 3/3 | Complete    | 2026-03-23 | - |
-| 20.1. Geographical & Weather Layers | 3/3 | Complete   | 2026-03-23 | - |
-| 20.2. Threat Heatmap Layer | 1/1 | Complete    | 2026-03-23 | - |
-| 20.3. Political Boundaries Layer | v1.1 | 1/2 | In progress | - |
-| 21. Production Review & Deploy Sync | 4/5 | In Progress|  | - |
-| 21.1. GDELT News Relevance Filtering | 2/2 | Complete    | 2026-03-26 | - |
-| 21.2. GDELT Event Quality Pipeline | 2/2 | Complete    | 2026-03-28 | - |
-| 21.3. Multi-User Load Testing | 3/3 | Complete    | 2026-03-29 | - |
+| 15. Key Sites Overlay | v1.1 | 2/2 | Complete | 2026-03-20 |
+| 16. News Feed | v1.1 | 3/3 | Complete | 2026-03-20 |
+| 17. Notification Center | v1.1 | 4/4 | Complete | 2026-03-20 |
+| 18. Oil Markets Tracker | v1.1 | 2/2 | Complete | 2026-03-21 |
+| 19. Search, Filter & UI Cleanup | v1.1 | 4/4 | Complete | 2026-03-22 |
+| 19.1. Advanced Search | v1.1 | 5/5 | Complete | 2026-03-22 |
+| 19.2. Counter Entity Dropdowns | v1.1 | 2/2 | Complete | 2026-03-22 |
+| 20. Layer Purpose Refactor | v1.2 | 3/3 | Complete | 2026-03-23 |
+| 20.1. Geographical & Weather Layers | v1.2 | 3/3 | Complete | 2026-03-23 |
+| 20.2. Threat Heatmap Layer | v1.2 | 1/1 | Complete | 2026-03-23 |
+| 20.3. Political Boundaries Layer | v1.2 | 1/2 | Deferred | - |
+| 20.4. Satellite Imagery Layer | v1.2 | 0/0 | Deferred | - |
+| 20.5. Infrastructure Focus Layer | v1.2 | 0/0 | Deferred | - |
+| 21. Production Review & Deploy Sync | v1.2 | 5/5 | Complete | 2026-03-25 |
+| 21.1. GDELT News Relevance Filtering | v1.2 | 2/2 | Complete | 2026-03-26 |
+| 21.2. GDELT Event Quality Pipeline | v1.2 | 2/2 | Complete | 2026-03-28 |
+| 21.3. Multi-User Load Testing | v1.2 | 3/3 | Complete | 2026-03-29 |

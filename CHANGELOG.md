@@ -4,6 +4,11 @@ All notable changes to the Iran Conflict Monitor project.
 
 ## [Unreleased]
 
+## [v1.2.3] - 2026-03-29
+
+### Changed
+- Excluded CAMEO 192 (territorial occupation) from conflict event pipeline — reduces false positive ground combat events
+
 ## [v1.2.2] - 2026-03-29
 
 ### Phase 21.3: Multi-User Load Testing

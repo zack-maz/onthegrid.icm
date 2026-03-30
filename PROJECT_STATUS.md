@@ -47,7 +47,7 @@ v1.2 Visualization:    [██████████████████�
 
 ## Current Focus
 
-v1.2 milestone complete. All phases shipped.
+All 4 milestones shipped (v0.9 → v1.2). 958 tests passing. Production stable at p95 153ms.
 
 ## What's Been Built
 
@@ -111,7 +111,7 @@ v1.2 milestone complete. All phases shipped.
 
 **Phase 21.2: GDELT Event Quality Pipeline** — Geo-validation against country polygons, expanded CAMEO classification, Goldstein sanity check, 5-signal composite confidence scoring (media, sources, actors, geo, goldstein). NumSources >= 2 filter.
 
-**Phase 21.3: Multi-User Load Testing** — k6 load test (501 VUs, 6 scenarios, 5min) and Playwright browser validation (3 concurrent workers, 3min stability). All application checks 100%. Flights p95: 136ms, overall p95: 153ms.
+**Phase 21.3: Multi-User Load Testing** — k6 load test (501 VUs, 6 scenarios, 5min) and Playwright browser validation (3 concurrent workers, 3min stability). All application checks 100%. Flights p95: 136ms, overall p95: 153ms. CAMEO 192 (territorial occupation) excluded from conflict pipeline.
 
 ## Blockers
 
