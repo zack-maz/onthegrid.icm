@@ -19,7 +19,6 @@ export const CAMEO_SPECIFICITY: Record<string, number> = {
   // Medium — conflict-related but broader
   '184': 0.5, // Use as human shield
   '185': 0.5, // Assassination attempt
-  '192': 0.5, // Territorial occupation
   '193': 0.5, // Small arms / light weapons
   '200': 0.5, // Unconventional mass violence
   '201': 0.5, // Mass expulsion

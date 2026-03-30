@@ -92,7 +92,7 @@ import type { ConflictEventType } from '../types.js';
 // CAMEO base codes excluded from the conflict pipeline entirely.
 // 180 "unconventional violence NOS" is GDELT's catch-all for events it can't classify —
 // cyber ops, political demands, campus protests. Overwhelmingly false positives on a kinetic map.
-const EXCLUDED_BASE_CODES = new Set(['180']);
+const EXCLUDED_BASE_CODES = new Set(['180', '192']);
 
 const BASE_CODE_MAP: Record<string, ConflictEventType> = {
   '181': 'abduction',
@@ -103,7 +103,6 @@ const BASE_CODE_MAP: Record<string, ConflictEventType> = {
   '186': 'assassination',
   '190': 'ground_combat',
   '191': 'blockade',
-  '192': 'ground_combat',
   '193': 'ground_combat',
   '194': 'shelling',
   '195': 'airstrike',
@@ -152,7 +151,6 @@ const BASE_CODE_DESCRIPTIONS: Record<string, string> = {
   '186': 'Assassination',
   '190': 'Conventional military force',
   '191': 'Blockade / movement restriction',
-  '192': 'Territorial occupation',
   '193': 'Small arms / light weapons',
   '194': 'Artillery / tank support',
   '195': 'Aerial weapons',
