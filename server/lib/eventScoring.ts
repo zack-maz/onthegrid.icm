@@ -1,6 +1,22 @@
-// Event confidence scoring, Goldstein sanity checks, and CAMEO specificity for GDELT events
+// Event confidence scoring, Goldstein sanity checks, CAMEO specificity, and Bellingcat corroboration for GDELT events
 
 import type { ConflictEventEntity, ConflictEventType } from '../types.js';
+import { haversineKm } from '../../src/lib/geo.js';
+import { CITY_CENTROIDS } from './geoValidation.js';
+
+// --- Bellingcat Corroboration Constants ---
+const BELLINGCAT_TEMPORAL_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+const BELLINGCAT_GEO_RADIUS_KM = 200;
+const BELLINGCAT_MIN_KEYWORD_MATCHES = 2;
+
+/** Minimal article shape for Bellingcat corroboration checks */
+export interface BellingcatArticle {
+  title: string;
+  url: string;
+  publishedAt: number;
+  lat?: number;
+  lng?: number;
+}
 
 /**
  * CAMEO base code specificity tiers.
@@ -168,4 +184,66 @@ export function computeEventConfidence(
     0.10 * goldsteinConsistency +
     0.25 * cameoSpecificity
   );
+}
+
+/**
+ * Extract geographic coordinates from a Bellingcat article title by matching
+ * against known CITY_CENTROIDS names (case-insensitive).
+ * Returns the first matching city's lat/lng, or undefined if no match.
+ */
+export function extractBellingcatGeo(
+  title: string,
+): { lat: number; lng: number } | undefined {
+  const titleLower = title.toLowerCase();
+  for (const city of CITY_CENTROIDS) {
+    if (titleLower.includes(city.name.toLowerCase())) {
+      return { lat: city.lat, lng: city.lng };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Check if a GDELT event is corroborated by any Bellingcat article.
+ *
+ * Three gates must ALL pass:
+ * 1. Temporal: article publishedAt within +-24h of event timestamp
+ * 2. Geographic: article lat/lng within 200km of event (haversine distance)
+ * 3. Keyword: at least 2 words (>=3 chars) from event.data.locationName appear in article title
+ *
+ * Returns { matched: true, article } on first match, { matched: false } if none.
+ */
+export function checkBellingcatCorroboration(
+  event: ConflictEventEntity,
+  articles: BellingcatArticle[],
+): { matched: true; article: BellingcatArticle } | { matched: false } {
+  const locationWords = (event.data.locationName || '')
+    .split(/[\s,]+/)
+    .filter((w) => w.length >= 3)
+    .map((w) => w.toLowerCase());
+
+  for (const article of articles) {
+    // Gate 1: Temporal proximity (+-24h)
+    const timeDiff = Math.abs(article.publishedAt - event.timestamp);
+    if (timeDiff > BELLINGCAT_TEMPORAL_WINDOW_MS) continue;
+
+    // Gate 2: Geographic proximity (<=200km, requires coordinates)
+    if (article.lat == null || article.lng == null) continue;
+    const distKm = haversineKm(event.lat, event.lng, article.lat, article.lng);
+    if (distKm > BELLINGCAT_GEO_RADIUS_KM) continue;
+
+    // Gate 3: Keyword overlap (>=2 words from locationName in article title)
+    const titleLower = article.title.toLowerCase();
+    let keywordMatches = 0;
+    for (const word of locationWords) {
+      if (titleLower.includes(word)) {
+        keywordMatches++;
+      }
+    }
+    if (keywordMatches < BELLINGCAT_MIN_KEYWORD_MATCHES) continue;
+
+    return { matched: true, article };
+  }
+
+  return { matched: false };
 }
