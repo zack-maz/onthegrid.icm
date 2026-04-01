@@ -46,10 +46,14 @@ export const COL = {
   GoldsteinScale: 30,
   NumMentions: 31,
   NumSources: 32,
+  ActionGeo_Type: 51,
   ActionGeo_FullName: 52,
   ActionGeo_CountryCode: 53,
+  ActionGeo_ADM1Code: 54,
+  ActionGeo_ADM2Code: 55,
   ActionGeo_Lat: 56,
   ActionGeo_Long: 57,
+  ActionGeo_FeatureID: 58,
   SOURCEURL: 60,
 } as const;
 
@@ -86,6 +90,7 @@ async function downloadAndUnzip(url: string): Promise<string> {
 }
 
 import type { ConflictEventType } from '../types.js';
+import { disperseEvents } from '../lib/dispersion.js';
 
 // All valid CAMEO base codes in the 180-204 range are mapped below.
 // Codes 187-189, 197-199, 205+ do not exist in the CAMEO spec and correctly fall to ROOT_FALLBACK.
@@ -181,6 +186,7 @@ export function normalizeGdeltEvent(
   const eventRootCode = cols[COL.EventRootCode];
   const eventCode = cols[COL.EventCode];
   const sqlDate = cols[COL.SQLDATE];
+  const actionGeoType = parseInt(cols[COL.ActionGeo_Type], 10) || undefined;
 
   return {
     id: `gdelt-${cols[COL.GLOBALEVENTID]}`,
@@ -202,6 +208,7 @@ export function normalizeGdeltEvent(
       cameoCode: eventCode,
       numMentions: parseInt(cols[COL.NumMentions], 10) || undefined,
       numSources: parseInt(cols[COL.NumSources], 10) || undefined,
+      actionGeoType,
     },
   };
 }
@@ -216,6 +223,8 @@ export function normalizeGdeltEvent(
 export function parseAndFilter(csv: string): ConflictEventEntity[] {
   const lines = csv.trim().split('\n');
   const rawCount = lines.length;
+  const config = getConfig();
+  const excludedCameo = new Set(config.eventExcludedCameo);
 
   // --- Phase A: Raw row filtering ---
 
@@ -232,7 +241,7 @@ export function parseAndFilter(csv: string): ConflictEventEntity[] {
 
     if (!CONFLICT_ROOT_CODES.has(eventRootCode)) continue;
     const eventBaseCode = cols[COL.EventBaseCode];
-    if (EXCLUDED_BASE_CODES.has(eventBaseCode)) continue;
+    if (excludedCameo.has(eventBaseCode)) continue;
     if (!MIDDLE_EAST_FIPS.has(countryCode)) continue;
 
     // Geo cross-validation: discard events where FullName contradicts FIPS code
@@ -243,10 +252,10 @@ export function parseAndFilter(csv: string): ConflictEventEntity[] {
       continue;
     }
 
-    // Require at least 2 independent sources — single-source events are overwhelmingly
+    // Require at least N independent sources — single-source events are overwhelmingly
     // false positives (op-eds, niche sites). Real kinetic events get multi-source coverage fast.
     const numSources = parseInt(cols[COL.NumSources], 10) || 0;
-    if (numSources < 2) continue;
+    if (numSources < config.eventMinSources) continue;
 
     // Require at least one actor with a country code (filters non-state actors)
     const actor1Country = cols[COL.Actor1CountryCode]?.trim();
@@ -270,7 +279,7 @@ export function parseAndFilter(csv: string): ConflictEventEntity[] {
 
   // --- Phase B: Normalize, score, and threshold-filter ---
 
-  const { eventConfidenceThreshold } = getConfig();
+  const { eventConfidenceThreshold, eventCentroidPenalty } = config;
   let reclassifyCount = 0;
   let thresholdDiscardCount = 0;
   const results: ConflictEventEntity[] = [];
@@ -293,7 +302,14 @@ export function parseAndFilter(csv: string): ConflictEventEntity[] {
     entity = { ...entity, data: { ...entity.data, geoPrecision } };
 
     // Step 11: Confidence scoring
-    const confidence = computeEventConfidence(entity, geoPrecision);
+    let confidence = computeEventConfidence(entity, geoPrecision);
+
+    // Apply centroid penalty for city-center (type 3) and landmark (type 4) geocodes
+    const actionGeoType = entity.data.actionGeoType;
+    if (actionGeoType === 3 || actionGeoType === 4) {
+      confidence *= eventCentroidPenalty;
+    }
+
     entity = { ...entity, data: { ...entity.data, confidence } };
 
     // Step 12: Threshold filter
@@ -309,7 +325,8 @@ export function parseAndFilter(csv: string): ConflictEventEntity[] {
   // Pipeline summary
   log({ level: 'info', message: `[gdelt] pipeline: ${rawCount} raw -> ${geoValidCount} geo-valid -> ${reclassifyCount} reclassified -> ${geoValidCount - thresholdDiscardCount} above threshold -> ${results.length} final` });
 
-  return results;
+  // Apply dispersion to spread stacked centroid events into concentric rings
+  return disperseEvents(results);
 }
 
 /**

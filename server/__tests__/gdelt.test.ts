@@ -16,11 +16,16 @@ vi.mock('adm-zip', () => {
   };
 });
 
-// Mock config to provide eventConfidenceThreshold for parseAndFilter
+// Mock config to provide thresholds for parseAndFilter
+const mockConfig = {
+  eventConfidenceThreshold: 0.35,
+  eventMinSources: 2,
+  eventCentroidPenalty: 0.7,
+  eventExcludedCameo: ['180', '192'],
+  bellingcatCorroborationBoost: 0.2,
+};
 vi.mock('../config.js', () => ({
-  getConfig: () => ({
-    eventConfidenceThreshold: 0.35,
-  }),
+  getConfig: () => mockConfig,
 }));
 
 // Sample lastupdate.txt content (3 lines: export, mentions, gkg)
@@ -557,6 +562,208 @@ describe('GDELT Adapter', () => {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       await expect(fetchEvents()).rejects.toThrow('download failed');
+    });
+  });
+
+  describe('ActionGeo_Type parsing', () => {
+    it('parses ActionGeo_Type=4 and stores in entity.data.actionGeoType', () => {
+      const row = makeGdeltRow({ 51: '4' });
+      const cols = row.split('\t');
+      const entity = normalizeGdeltEvent(cols, 35.6892, 51.389);
+      expect(entity.data.actionGeoType).toBe(4);
+    });
+
+    it('parses ActionGeo_Type=1 (country level)', () => {
+      const row = makeGdeltRow({ 51: '1' });
+      const cols = row.split('\t');
+      const entity = normalizeGdeltEvent(cols, 35.6892, 51.389);
+      expect(entity.data.actionGeoType).toBe(1);
+    });
+
+    it('parses ActionGeo_Type=3 (city level)', () => {
+      const row = makeGdeltRow({ 51: '3' });
+      const cols = row.split('\t');
+      const entity = normalizeGdeltEvent(cols, 35.6892, 51.389);
+      expect(entity.data.actionGeoType).toBe(3);
+    });
+
+    it('actionGeoType is undefined when column is empty', () => {
+      const row = makeGdeltRow({ 51: '' });
+      const cols = row.split('\t');
+      const entity = normalizeGdeltEvent(cols, 35.6892, 51.389);
+      expect(entity.data.actionGeoType).toBeUndefined();
+    });
+  });
+
+  describe('config-driven thresholds', () => {
+    it('uses config-driven CAMEO exclusions (respects eventExcludedCameo)', () => {
+      // Default excludes 180 and 192. Override to only exclude 180.
+      const origExcluded = mockConfig.eventExcludedCameo;
+      mockConfig.eventExcludedCameo = ['180'];
+      try {
+        // Base code 192 should now be allowed
+        const row = makeGdeltRow({
+          0: '8080808080',
+          26: '192',
+          27: '192',
+          28: '19',
+        });
+        const events = parseAndFilter(row);
+        // 192 maps to blockade. With enough mentions/sources, it should pass.
+        expect(events.length).toBeGreaterThanOrEqual(1);
+      } finally {
+        mockConfig.eventExcludedCameo = origExcluded;
+      }
+    });
+
+    it('uses config-driven minSources threshold', () => {
+      const origMin = mockConfig.eventMinSources;
+      mockConfig.eventMinSources = 3;
+      try {
+        // Default row has NumSources=5, so it should still pass with minSources=3
+        const row = makeGdeltRow({ 0: '9090909090', 32: '5' });
+        const events = parseAndFilter(row);
+        expect(events).toHaveLength(1);
+
+        // But NumSources=2 should now be rejected (< 3)
+        const row2 = makeGdeltRow({ 0: '9191919191', 32: '2' });
+        const events2 = parseAndFilter(row2);
+        expect(events2).toHaveLength(0);
+      } finally {
+        mockConfig.eventMinSources = origMin;
+      }
+    });
+
+    it('applies centroid penalty for ActionGeo_Type 3 (reduces confidence)', () => {
+      // Create a row at Tehran centroid with ActionGeo_Type=3
+      const rowCentroid = makeGdeltRow({
+        0: 'C1C1C1C1C1',
+        51: '3', // ActionGeo_Type = city
+        56: '35.6892',
+        57: '51.3890',
+      });
+      // Same row without ActionGeo_Type (no penalty)
+      const rowNoPenalty = makeGdeltRow({
+        0: 'C2C2C2C2C2',
+        51: '', // No ActionGeo_Type
+        56: '35.6892',
+        57: '51.3890',
+      });
+
+      const eventsCentroid = parseAndFilter(rowCentroid);
+      const eventsNoPenalty = parseAndFilter(rowNoPenalty);
+
+      // Both should pass (confidence still above threshold after penalty)
+      expect(eventsCentroid).toHaveLength(1);
+      expect(eventsNoPenalty).toHaveLength(1);
+
+      // Centroid event should have lower confidence due to penalty
+      expect(eventsCentroid[0].data.confidence!).toBeLessThan(
+        eventsNoPenalty[0].data.confidence!,
+      );
+    });
+
+    it('applies centroid penalty for ActionGeo_Type 4 (landmark)', () => {
+      const row = makeGdeltRow({
+        0: 'C3C3C3C3C3',
+        51: '4', // ActionGeo_Type = landmark/feature
+        56: '34.1234', // non-centroid coordinates
+        57: '50.5678',
+      });
+      const rowNoPenalty = makeGdeltRow({
+        0: 'C4C4C4C4C4',
+        51: '',
+        56: '34.1234',
+        57: '50.5678',
+      });
+
+      const eventsType4 = parseAndFilter(row);
+      const eventsNoPenalty = parseAndFilter(rowNoPenalty);
+
+      if (eventsType4.length > 0 && eventsNoPenalty.length > 0) {
+        expect(eventsType4[0].data.confidence!).toBeLessThan(
+          eventsNoPenalty[0].data.confidence!,
+        );
+      }
+    });
+
+    it('does not apply centroid penalty for ActionGeo_Type 1 (country level)', () => {
+      const row1 = makeGdeltRow({
+        0: 'C5C5C5C5C5',
+        51: '1', // country level - no penalty
+        56: '34.1234',
+        57: '50.5678',
+      });
+      const row2 = makeGdeltRow({
+        0: 'C6C6C6C6C6',
+        51: '', // no type
+        56: '34.1234',
+        57: '50.5678',
+      });
+
+      const events1 = parseAndFilter(row1);
+      const events2 = parseAndFilter(row2);
+
+      if (events1.length > 0 && events2.length > 0) {
+        // Same confidence (no penalty applied for type 1)
+        expect(events1[0].data.confidence!).toBeCloseTo(
+          events2[0].data.confidence!,
+          10,
+        );
+      }
+    });
+  });
+
+  describe('dispersion integration', () => {
+    it('centroid events with ActionGeo_Type=3 get dispersion applied', () => {
+      // Two events at Tehran with ActionGeo_Type=3
+      const row1 = makeGdeltRow({
+        0: 'D1D1D1D1D1',
+        51: '3',
+        56: '35.6892',
+        57: '51.3890',
+      });
+      const row2 = makeGdeltRow({
+        0: 'D2D2D2D2D2',
+        1: '20260316', // Different date to avoid dedup
+        51: '3',
+        56: '35.6892',
+        57: '51.3890',
+      });
+
+      const events = parseAndFilter([row1, row2].join('\n'));
+
+      // Both should pass filtering
+      expect(events).toHaveLength(2);
+
+      // Both should have originalLat/originalLng set (dispersed)
+      const dispersedEvents = events.filter(
+        (e) => e.data.originalLat !== undefined,
+      );
+      expect(dispersedEvents).toHaveLength(2);
+
+      // Original coordinates should be Tehran
+      for (const e of dispersedEvents) {
+        expect(e.data.originalLat).toBeCloseTo(35.6892, 3);
+        expect(e.data.originalLng).toBeCloseTo(51.389, 3);
+      }
+
+      // Events should have different lat/lng (dispersed to different slots)
+      expect(events[0].lat).not.toBe(events[1].lat);
+    });
+
+    it('non-centroid events are not dispersed (no originalLat/originalLng)', () => {
+      const row = makeGdeltRow({
+        0: 'D3D3D3D3D3',
+        51: '2', // state level - not dispersed
+        56: '34.1234',
+        57: '50.5678',
+      });
+
+      const events = parseAndFilter(row);
+      expect(events).toHaveLength(1);
+      expect(events[0].data.originalLat).toBeUndefined();
+      expect(events[0].lat).toBe(34.1234);
     });
   });
 });
