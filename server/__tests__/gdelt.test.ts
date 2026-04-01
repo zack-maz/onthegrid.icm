@@ -766,4 +766,110 @@ describe('GDELT Adapter', () => {
       expect(events[0].lat).toBe(34.1234);
     });
   });
+
+  describe('Bellingcat corroboration pipeline', () => {
+    it('parseAndFilter with no bellingcatArticles arg works identically to before (backward compat)', () => {
+      const events = parseAndFilter(validIranMissileRow);
+      expect(events).toHaveLength(1);
+      // Confidence should be set but not boosted
+      expect(events[0].data.confidence).toBeDefined();
+      expect(events[0].data.confidence!).toBeLessThanOrEqual(1.0);
+    });
+
+    it('parseAndFilter with matching Bellingcat article boosts event confidence by 0.2', () => {
+      // Event is at Tehran (35.6892, 51.3890), locationName "Tehran, Tehran, Iran"
+      const articles = [{
+        title: 'Investigation reveals Tehran Iran military site activity',
+        url: 'https://www.bellingcat.com/article/1',
+        publishedAt: Date.UTC(2026, 2, 15, 12), // Same day as SQLDATE (20260315)
+        lat: 35.6892,
+        lng: 51.3890,
+      }];
+
+      const eventsWithout = parseAndFilter(validIranMissileRow);
+      const eventsWith = parseAndFilter(validIranMissileRow, articles);
+
+      expect(eventsWithout).toHaveLength(1);
+      expect(eventsWith).toHaveLength(1);
+
+      const confidenceWithout = eventsWithout[0].data.confidence!;
+      const confidenceWith = eventsWith[0].data.confidence!;
+
+      // Boosted confidence should be higher by the configured boost amount (0.2)
+      expect(confidenceWith).toBeCloseTo(
+        Math.min(1.0, confidenceWithout + mockConfig.bellingcatCorroborationBoost),
+        5,
+      );
+    });
+
+    it('parseAndFilter with non-matching Bellingcat articles does not boost confidence', () => {
+      // Article is nowhere near the event
+      const articles = [{
+        title: 'Unrelated investigation in London',
+        url: 'https://www.bellingcat.com/article/2',
+        publishedAt: Date.UTC(2026, 2, 15),
+        lat: 51.5074,
+        lng: -0.1278,
+      }];
+
+      const eventsWithout = parseAndFilter(validIranMissileRow);
+      const eventsWith = parseAndFilter(validIranMissileRow, articles);
+
+      expect(eventsWithout).toHaveLength(1);
+      expect(eventsWith).toHaveLength(1);
+
+      // Confidence should be identical (no boost applied)
+      expect(eventsWith[0].data.confidence).toBeCloseTo(
+        eventsWithout[0].data.confidence!,
+        5,
+      );
+    });
+
+    it('confidence is clamped to 1.0 max after boost', () => {
+      // Create a high-confidence event row with very high signals
+      const highSignalRow = makeGdeltRow({
+        0: 'BC_CLAMP_TEST',
+        6: 'ISRAEL',
+        7: 'ISR',
+        16: 'IRAN',
+        17: 'IRN',
+        26: '195',
+        27: '195',
+        28: '19',
+        30: '-10',
+        31: '100',
+        32: '50',
+        52: 'Tehran, Tehran, Iran',
+        53: 'IR',
+        56: '35.6892',
+        57: '51.3890',
+      });
+
+      // Matching article
+      const articles = [{
+        title: 'Tehran Iran conflict investigation',
+        url: 'https://www.bellingcat.com/article/3',
+        publishedAt: Date.UTC(2026, 2, 15, 12),
+        lat: 35.6892,
+        lng: 51.3890,
+      }];
+
+      const events = parseAndFilter(highSignalRow, articles);
+      expect(events).toHaveLength(1);
+      expect(events[0].data.confidence!).toBeLessThanOrEqual(1.0);
+    });
+
+    it('parseAndFilter with empty bellingcatArticles array applies no boost', () => {
+      const eventsWithout = parseAndFilter(validIranMissileRow);
+      const eventsWith = parseAndFilter(validIranMissileRow, []);
+
+      expect(eventsWithout).toHaveLength(1);
+      expect(eventsWith).toHaveLength(1);
+
+      expect(eventsWith[0].data.confidence).toBeCloseTo(
+        eventsWithout[0].data.confidence!,
+        5,
+      );
+    });
+  });
 });
