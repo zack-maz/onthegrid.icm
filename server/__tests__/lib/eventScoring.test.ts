@@ -6,7 +6,10 @@ import {
   GOLDSTEIN_CEILINGS,
   CAMEO_SPECIFICITY,
   getCameoSpecificity,
+  checkBellingcatCorroboration,
+  extractBellingcatGeo,
 } from '../../lib/eventScoring.js';
+import type { BellingcatArticle } from '../../lib/eventScoring.js';
 
 /** Helper to create a test ConflictEventEntity with configurable fields */
 function makeTestEvent(overrides: {
@@ -359,6 +362,109 @@ describe('eventScoring', () => {
     it('uses first 3 chars of 4-digit codes', () => {
       expect(getCameoSpecificity('1951')).toBe(1.0); // 195 -> high
       expect(getCameoSpecificity('1801')).toBe(0.1); // 180 -> low
+    });
+  });
+
+  describe('checkBellingcatCorroboration', () => {
+    const baseEvent: ConflictEventEntity = {
+      id: 'gdelt-corr-test',
+      type: 'airstrike',
+      lat: 33.3152, // Baghdad
+      lng: 44.3661,
+      timestamp: Date.UTC(2026, 2, 15), // March 15, 2026
+      label: 'Baghdad, Iraq: Aerial weapons',
+      data: {
+        eventType: 'Aerial weapons',
+        subEventType: 'CAMEO 195',
+        fatalities: 0,
+        actor1: 'ISRAEL',
+        actor2: 'IRAN',
+        notes: '',
+        source: 'http://example.com',
+        goldsteinScale: -7,
+        locationName: 'Baghdad, Iraq',
+        cameoCode: '195',
+      },
+    };
+
+    function makeArticle(overrides: Partial<BellingcatArticle> = {}): BellingcatArticle {
+      return {
+        title: 'Airstrike hits Baghdad military base in Iraq',
+        url: 'https://www.bellingcat.com/article/1',
+        publishedAt: Date.UTC(2026, 2, 15, 12), // Same day, 12h offset
+        lat: 33.3152,
+        lng: 44.3661,
+        ...overrides,
+      };
+    }
+
+    it('returns matched: true when article passes all 3 gates', () => {
+      const articles = [makeArticle()];
+      const result = checkBellingcatCorroboration(baseEvent, articles);
+      expect(result.matched).toBe(true);
+      expect(result.article).toBe(articles[0]);
+    });
+
+    it('returns matched: false when article is outside 24h temporal window', () => {
+      const articles = [makeArticle({ publishedAt: Date.UTC(2026, 2, 17) })]; // 2 days later
+      const result = checkBellingcatCorroboration(baseEvent, articles);
+      expect(result.matched).toBe(false);
+    });
+
+    it('returns matched: false when article is > 200km away (geographic gate)', () => {
+      // Tehran is ~450km from Baghdad
+      const articles = [makeArticle({ lat: 35.6892, lng: 51.3890 })];
+      const result = checkBellingcatCorroboration(baseEvent, articles);
+      expect(result.matched).toBe(false);
+    });
+
+    it('returns matched: false when article has only 1 keyword match (need >=2)', () => {
+      // Title only has "Baghdad" but not "Iraq"
+      const articles = [makeArticle({ title: 'Baghdad crisis deepens amid tensions' })];
+      const result = checkBellingcatCorroboration(baseEvent, articles);
+      expect(result.matched).toBe(false);
+    });
+
+    it('returns matched: false when article has no lat/lng (geographic gate requires coords)', () => {
+      const articles = [makeArticle({ lat: undefined, lng: undefined })];
+      const result = checkBellingcatCorroboration(baseEvent, articles);
+      expect(result.matched).toBe(false);
+    });
+
+    it('returns the second article when only it matches', () => {
+      const articles = [
+        makeArticle({ publishedAt: Date.UTC(2026, 2, 20) }), // Too old
+        makeArticle({ title: 'Investigation reveals Baghdad Iraq military operations' }),
+      ];
+      const result = checkBellingcatCorroboration(baseEvent, articles);
+      expect(result.matched).toBe(true);
+      expect(result.article).toBe(articles[1]);
+    });
+
+    it('returns matched: false for empty articles array', () => {
+      const result = checkBellingcatCorroboration(baseEvent, []);
+      expect(result.matched).toBe(false);
+    });
+  });
+
+  describe('extractBellingcatGeo', () => {
+    it('returns Baghdad centroid coords for title containing "Baghdad"', () => {
+      const geo = extractBellingcatGeo('Airstrike hits Baghdad military base');
+      expect(geo).toBeDefined();
+      expect(geo!.lat).toBeCloseTo(33.3152, 3);
+      expect(geo!.lng).toBeCloseTo(44.3661, 3);
+    });
+
+    it('returns undefined for title with no city name', () => {
+      const geo = extractBellingcatGeo('Global investigation into arms dealing');
+      expect(geo).toBeUndefined();
+    });
+
+    it('matches city names case-insensitively', () => {
+      const geo = extractBellingcatGeo('TEHRAN under fire as conflict escalates');
+      expect(geo).toBeDefined();
+      expect(geo!.lat).toBeCloseTo(35.6892, 3);
+      expect(geo!.lng).toBeCloseTo(51.3890, 3);
     });
   });
 });
