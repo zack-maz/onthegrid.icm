@@ -2,7 +2,8 @@ import AdmZip from 'adm-zip';
 import type { ConflictEventEntity } from '../types.js';
 import { log } from '../lib/logger.js';
 import { isGeoValid, detectCentroid } from '../lib/geoValidation.js';
-import { computeEventConfidence, applyGoldsteinSanity, GOLDSTEIN_CEILINGS } from '../lib/eventScoring.js';
+import { computeEventConfidence, applyGoldsteinSanity, GOLDSTEIN_CEILINGS, checkBellingcatCorroboration } from '../lib/eventScoring.js';
+import type { BellingcatArticle } from '../lib/eventScoring.js';
 import { getConfig } from '../config.js';
 
 // GDELT v2 lastupdate.txt endpoint (HTTP, NOT HTTPS -- TLS cert issues)
@@ -220,7 +221,7 @@ export function normalizeGdeltEvent(
  * Phase A: Raw row filtering (operates on string[] columns)
  * Phase B: Normalize, score, and threshold-filter (operates on entities)
  */
-export function parseAndFilter(csv: string): ConflictEventEntity[] {
+export function parseAndFilter(csv: string, bellingcatArticles?: BellingcatArticle[]): ConflictEventEntity[] {
   const lines = csv.trim().split('\n');
   const rawCount = lines.length;
   const config = getConfig();
@@ -319,6 +320,16 @@ export function parseAndFilter(csv: string): ConflictEventEntity[] {
       continue;
     }
 
+    // Step 13: Bellingcat corroboration boost (opportunistic)
+    if (bellingcatArticles && bellingcatArticles.length > 0) {
+      const corroboration = checkBellingcatCorroboration(entity, bellingcatArticles);
+      if (corroboration.matched) {
+        confidence = Math.min(1.0, confidence + config.bellingcatCorroborationBoost);
+        entity = { ...entity, data: { ...entity.data, confidence } };
+        log({ level: 'info', message: `[gdelt] Bellingcat corroboration boost for ${entity.id}: +${config.bellingcatCorroborationBoost} -> ${confidence.toFixed(3)} (article: ${corroboration.article.url})` });
+      }
+    }
+
     results.push(entity);
   }
 
@@ -332,13 +343,14 @@ export function parseAndFilter(csv: string): ConflictEventEntity[] {
 /**
  * Fetch the latest GDELT v2 events export, decompress, parse, filter,
  * and return normalized ConflictEventEntity[].
+ * Optionally accepts Bellingcat articles for confidence corroboration.
  */
-export async function fetchEvents(): Promise<ConflictEventEntity[]> {
+export async function fetchEvents(bellingcatArticles?: BellingcatArticle[]): Promise<ConflictEventEntity[]> {
   const start = Date.now();
 
   const exportUrl = await getExportUrl();
   const csv = await downloadAndUnzip(exportUrl);
-  const events = parseAndFilter(csv);
+  const events = parseAndFilter(csv, bellingcatArticles);
 
   log({ level: 'info', message: `[gdelt] fetched ${events.length} events in ${Date.now() - start}ms` });
   return events;
