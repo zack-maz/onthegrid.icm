@@ -65,6 +65,22 @@ Requirements for the Intelligence Layer milestone. Each maps to roadmap phases.
 - [x] **LREF-04**: Inline legend framework renders color scale legends for active visualization layers in the bottom-left map corner
 - [x] **LREF-05**: Search/filter system is the only mechanism to narrow visible entities on the map
 
+## v1.3 Requirements
+
+Requirements for the Data Quality & Layers milestone.
+
+### Event Quality & OSINT Integration
+
+- [ ] **EQ-01**: System parses ActionGeo_Type from GDELT CSV (column 51) and uses it to identify city-centroid events (type 3/4)
+- [ ] **EQ-02**: City-centroid events are dispersed into concentric rings (6 at 3km, 12 at 6km, 18 at 9km) with deterministic timestamp-sorted positioning
+- [ ] **EQ-03**: Both original centroid and dispersed coordinates are stored on each event for audit purposes
+- [ ] **EQ-04**: Event filtering thresholds (confidence, minSources, centroidPenalty, CAMEO exclusions) are config-driven via env vars with safe defaults
+- [ ] **EQ-05**: Bellingcat RSS feed is integrated as 6th news source and articles flow through existing keyword filter, relevance scoring, and dedup/clustering
+- [ ] **EQ-06**: GDELT events corroborated by Bellingcat articles receive +0.2 confidence boost (requires temporal AND geographic AND keyword overlap)
+- [ ] **EQ-07**: CLI audit script (`npx tsx scripts/audit-events.ts`) dumps all cached events with pipeline trace metadata to JSON
+- [ ] **EQ-08**: Audit output includes both accepted AND rejected events with specific rejection reasons and full pipeline trace
+- [ ] **EQ-09**: Known true/false positive GDELT fixtures are verified by automated tests (regression suite)
+
 ## v1.2+ Requirements
 
 Deferred to future releases. Tracked but not in current roadmap.
@@ -131,18 +147,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CNTR-04 | Phase 19.2 | Complete |
 | CNTR-05 | Phase 19.2 | Complete |
 | CNTR-06 | Phase 19.2 | Complete |
-| LREF-01 | Phase 20 | Planned |
-| LREF-02 | Phase 20 | Planned |
-| LREF-03 | Phase 20 | Planned |
-| LREF-04 | Phase 20 | Planned |
-| LREF-05 | Phase 20 | Planned |
+| LREF-01 | Phase 20 | Complete |
+| LREF-02 | Phase 20 | Complete |
+| LREF-03 | Phase 20 | Complete |
+| LREF-04 | Phase 20 | Complete |
+| LREF-05 | Phase 20 | Complete |
+| EQ-01 | Phase 22 | Planned |
+| EQ-02 | Phase 22 | Planned |
+| EQ-03 | Phase 22 | Planned |
+| EQ-04 | Phase 22 | Planned |
+| EQ-05 | Phase 22 | Planned |
+| EQ-06 | Phase 22 | Planned |
+| EQ-07 | Phase 22 | Planned |
+| EQ-08 | Phase 22 | Planned |
+| EQ-09 | Phase 22 | Planned |
 
 **Coverage:**
 - v1.1 requirements: 29 total, 29 complete
-- v1.2 (Phase 20) requirements: 5 total, 0 complete
-- Mapped to phases: 34
-- Complete: 29
+- v1.2 requirements: 5 total, 5 complete
+- v1.3 requirements: 9 total, 0 complete
+- Total: 43 mapped, 34 complete
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-22 — Phase 20 requirements added*
+*Last updated: 2026-04-01 — v1.3 requirements added*
