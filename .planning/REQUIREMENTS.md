@@ -77,9 +77,9 @@ Requirements for the Data Quality & Layers milestone.
 - [x] **EQ-04**: Event filtering thresholds (confidence, minSources, centroidPenalty, CAMEO exclusions) are config-driven via env vars with safe defaults
 - [x] **EQ-05**: Bellingcat RSS feed is integrated as 6th news source and articles flow through existing keyword filter, relevance scoring, and dedup/clustering
 - [x] **EQ-06**: GDELT events corroborated by Bellingcat articles receive +0.2 confidence boost (requires temporal AND geographic AND keyword overlap)
-- [ ] **EQ-07**: CLI audit script (`npx tsx scripts/audit-events.ts`) dumps all cached events with pipeline trace metadata to JSON
-- [ ] **EQ-08**: Audit output includes both accepted AND rejected events with specific rejection reasons and full pipeline trace
-- [ ] **EQ-09**: Known true/false positive GDELT fixtures are verified by automated tests (regression suite)
+- [x] **EQ-07**: CLI audit script (`npx tsx scripts/audit-events.ts`) dumps all cached events with pipeline trace metadata to JSON
+- [x] **EQ-08**: Audit output includes both accepted AND rejected events with specific rejection reasons and full pipeline trace
+- [x] **EQ-09**: Known true/false positive GDELT fixtures are verified by automated tests (regression suite)
 
 ## v1.2+ Requirements
 

@@ -55,7 +55,7 @@
 **Goal**: Eliminate false positives/negatives in the conflict event pipeline, add Bellingcat OSINT signal, fix location stacking, and produce a verified event audit trail
 **Depends on**: Phase 21.2 (existing quality pipeline)
 **Requirements:** [EQ-01, EQ-02, EQ-03, EQ-04, EQ-05, EQ-06, EQ-07, EQ-08, EQ-09]
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 22-01-PLAN.md -- ActionGeo_Type parsing, concentric ring dispersion, config-driven thresholds, pipeline trace types
