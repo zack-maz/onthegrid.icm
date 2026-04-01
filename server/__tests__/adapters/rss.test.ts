@@ -53,15 +53,23 @@ describe('RSS Adapter', () => {
   });
 
   describe('RSS_FEEDS', () => {
-    it('contains 5 feed configurations', () => {
-      expect(RSS_FEEDS).toHaveLength(5);
+    it('contains 6 feed configurations', () => {
+      expect(RSS_FEEDS).toHaveLength(6);
       const names = RSS_FEEDS.map((f) => f.name);
       expect(names).toContain('BBC');
       expect(names).toContain('Al Jazeera');
       expect(names).toContain('Tehran Times');
       expect(names).toContain('Times of Israel');
       expect(names).toContain('Middle East Eye');
+      expect(names).toContain('Bellingcat');
       expect(RSS_FEEDS.every((f) => 'country' in f)).toBe(true);
+    });
+
+    it('includes Bellingcat with correct URL and country', () => {
+      const bellingcat = RSS_FEEDS.find((f) => f.name === 'Bellingcat');
+      expect(bellingcat).toBeDefined();
+      expect(bellingcat!.url).toBe('https://www.bellingcat.com/feed/');
+      expect(bellingcat!.country).toBe('Netherlands');
     });
   });
 
@@ -143,8 +151,8 @@ describe('RSS Adapter', () => {
       });
 
       const articles = await fetchAllRssFeeds();
-      // 5 feeds * 1 item each = 5 articles
-      expect(articles).toHaveLength(5);
+      // 6 feeds * 1 item each = 6 articles
+      expect(articles).toHaveLength(6);
       expect(articles.every((a) => a.sourceCountry)).toBe(true);
     });
 
@@ -157,8 +165,8 @@ describe('RSS Adapter', () => {
       });
 
       const articles = await fetchAllRssFeeds();
-      // 1 failure + 4 successes = 4 articles
-      expect(articles).toHaveLength(4);
+      // 1 failure + 5 successes = 5 articles
+      expect(articles).toHaveLength(5);
     });
   });
 });
