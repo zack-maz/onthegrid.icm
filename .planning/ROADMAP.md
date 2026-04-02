@@ -74,15 +74,14 @@ Plans:
 - [x] 22.1-02-PLAN.md -- Ref-based fly-to deduplication guard in useQuerySync
 
 ### Phase 23: Threat Density Improvements
-**Goal**: Make the threat heatmap more accurate and visually useful with zoom-responsive radius, temporal emphasis, finer grid resolution, and regional normalization
+**Goal**: Transform the threat heatmap with military thermal palette, P90 normalization, 0.25-degree grid, connected-component cluster merging, and clickable cluster detail panel
 **Depends on**: Phase 22 (better event data feeds into heatmap)
-**Key deliverables:**
-- Zoom-responsive `radiusPixels` scaling with map zoom level
-- Temporal clustering: recent events pulse/glow distinctly from older ones
-- Grid resolution 0.75° → 0.25° for higher spatial fidelity in tooltips
-- Expanded color palette (5 → 8 stops with yellow/orange mid-range)
-- Percentile-based regional normalization (prevents Syria from dominating scale)
-- Zoom-responsive picker radius (meters-based instead of fixed pixels)
+**Requirements:** [P23-01, P23-02, P23-03, P23-04, P23-05, P23-06, P23-07, P23-08, P23-09]
+**Plans:** 2 plans
+
+Plans:
+- [ ] 23-01-PLAN.md -- Military thermal palette, decay removal, 0.25-deg grid, P90 normalization, legend update
+- [ ] 23-02-PLAN.md -- BFS cluster merging, ThreatClusterDetail component, detail panel + BaseMap wiring
 
 ### Phase 23.1: detail panel navigation stack (INSERTED)
 
