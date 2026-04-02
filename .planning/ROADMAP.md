@@ -99,10 +99,10 @@ Plans:
 **Goal:** Add browser-like back-navigation to the detail panel with a breadcrumb row, directional slide transitions, and universal history across all entity/cluster entry points
 **Depends on:** Phase 23
 **Requirements:** [NAV-01, NAV-02, NAV-03, NAV-04, NAV-05, NAV-06, NAV-07, NAV-08, NAV-09]
-**Plans:** 2 plans
+**Plans:** 1/2 plans complete
 
 Plans:
-- [ ] 23.1-01-PLAN.md -- PanelView type, UIState extension, store actions, label helper, CSS animations, and tests
+- [x] 23.1-01-PLAN.md -- PanelView type, UIState extension, store actions, label helper, CSS animations, and tests
 - [ ] 23.1-02-PLAN.md -- BreadcrumbRow component, DetailPanelSlot integration, call site wiring, visual checkpoint
 
 ### Phase 24: Political Boundaries Layer

@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Data Quality & Layers
 status: unknown
-last_updated: "2026-04-02T05:47:28.920Z"
+last_updated: "2026-04-02T07:43:40Z"
 progress:
   total_phases: 8
   completed_phases: 3
@@ -22,6 +22,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Phase 23.1 IN PROGRESS (1 of 2 plans done)
 Phase 23 COMPLETE (2 of 2 plans done)
 Phase 22.1 COMPLETE (2 of 2 plans done)
 Phase 22 COMPLETE (3 of 3 plans done)
@@ -34,6 +35,7 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 | 22 | GDELT Event Quality & OSINT Integration | COMPLETE (3/3 plans) |
 | 22.1 | Fixing Dispersion | COMPLETE (2/2 plans) |
 | 23 | Threat Density Improvements | COMPLETE (2/2 plans) |
+| 23.1 | Detail Panel Navigation Stack | IN PROGRESS (1/2 plans) |
 | 24 | Political Boundaries Layer | Planned |
 | 25 | Ethnic Distribution Layer | Planned |
 | 26 | Water Stress Layer | Planned |
@@ -61,6 +63,8 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - Integer grid indices (Math.round) for BFS neighbor lookup to avoid floating-point key mismatch
 - selectedCluster and selectedEntityId mutually exclusive in uiStore via cross-clearing
 - Cluster picker radius proportional to bounding box diagonal with 50km floor
+- goBack bypasses mutual exclusion by setting both selectedEntityId and selectedCluster atomically in one set() call
+- getTypeLabel/getEntityName extracted from DetailPanelSlot to shared panelLabel.ts for breadcrumb reuse
 
 ## Pending Todos
 
