@@ -48,6 +48,7 @@ import { ProximityAlertOverlay } from './ProximityAlertOverlay';
 import { MapLegend } from './MapLegend';
 import { GeographicOverlay } from './layers/GeographicOverlay';
 import { WeatherHeatmap } from './layers/WeatherHeatmap';
+import { PoliticalOverlay } from './layers/PoliticalOverlay';
 
 /** Watches notificationStore.flyToTarget and animates the map. Renders null. */
 function FlyToHandler() {
@@ -308,6 +309,7 @@ export function BaseMap() {
             'hillshade-highlight-color': '#444444',
           }}
         />
+        <PoliticalOverlay />
         <WeatherHeatmap />
         <GeographicOverlay />
         <NavigationControl
