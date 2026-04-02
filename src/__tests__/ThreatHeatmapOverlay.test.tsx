@@ -364,8 +364,8 @@ describe('useThreatHeatmapLayers', () => {
     expect(typeof picker.props.getFillColor).toBe('function');
     // Meter-based sizing to stay geographically anchored on zoom
     expect(picker.props.radiusUnits).toBe('meters');
-    expect(picker.props.radiusMinPixels).toBe(10);
-    expect(picker.props.radiusMaxPixels).toBe(150);
+    expect(picker.props.radiusMinPixels).toBe(20);
+    expect(picker.props.radiusMaxPixels).toBe(200);
   });
 
   it('cluster layer has RadialGradientExtension in extensions array', () => {

@@ -335,15 +335,15 @@ export function useThreatHeatmapLayers(hoveredClusterId: string | null = null) {
         const dLat = (maxLat - minLat) * 111_000; // ~111km per degree latitude
         const dLng = (maxLng - minLng) * 111_000 * Math.cos((d.centroidLat * Math.PI) / 180);
         const diagonal = Math.sqrt(dLat * dLat + dLng * dLng);
-        // Base: half the bounding box diagonal (so circle covers the cluster extent)
-        const baseRadius = Math.max(diagonal / 2, 15_000); // floor 15km for single-cell clusters
-        // Density boost: sqrt of event count scales up packed clusters
-        const densityFactor = 1 + Math.sqrt(d.eventCount) * 0.15;
+        // Base: full bounding box diagonal (generous coverage of cluster extent)
+        const baseRadius = Math.max(diagonal, 30_000); // floor 30km for single-cell clusters
+        // Density boost: sqrt of event count scales up packed clusters proportionally
+        const densityFactor = 1 + Math.sqrt(d.eventCount) * 0.3;
         return baseRadius * densityFactor;
       },
       radiusUnits: 'meters' as const,
-      radiusMinPixels: 10,
-      radiusMaxPixels: 150,
+      radiusMinPixels: 20,
+      radiusMaxPixels: 200,
       // Thermal color mapped from cluster weight via P90 normalization.
       // Alpha modulated by hover state: 255 (hovered), 102 (non-hovered when one is hovered), 180 (default).
       getFillColor: (d: ThreatCluster) => {

@@ -15,7 +15,7 @@ export class RadialGradientExtension extends LayerExtension {
       inject: {
         'fs:DECKGL_FILTER_COLOR': `
           float dist = length(geometry.uv);
-          float falloff = 1.0 - smoothstep(0.0, 1.0, dist);
+          float falloff = 1.0 - smoothstep(0.3, 1.0, dist);
           color.a *= falloff;
         `,
       },
