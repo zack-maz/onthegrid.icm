@@ -84,6 +84,16 @@ Plans:
 - Percentile-based regional normalization (prevents Syria from dominating scale)
 - Zoom-responsive picker radius (meters-based instead of fixed pixels)
 
+### Phase 23.1: detail panel navigation stack (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 23
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 23.1 to break down)
+
 ### Phase 24: Political Boundaries Layer
 **Goal**: Users can toggle a political overlay showing country borders color-coded by alliance/faction alignment
 **Depends on**: Phase 20 (layer architecture)
