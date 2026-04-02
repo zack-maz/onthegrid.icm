@@ -6,6 +6,7 @@ import { useEventStore } from '@/stores/eventStore';
 import { useNewsStore } from '@/stores/newsStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { entityPassesFilters } from '@/lib/filters';
+import { disperseEvents } from '@/lib/dispersion';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, NewsCluster } from '@/types/entities';
 
 /**
@@ -58,7 +59,10 @@ export function useFilteredEntities(): {
   );
 
   const events = useMemo(
-    () => rawEvents.filter((e) => entityPassesFilters(e, filters as Parameters<typeof entityPassesFilters>[1])),
+    () => {
+      const filtered = rawEvents.filter((e) => entityPassesFilters(e, filters as Parameters<typeof entityPassesFilters>[1]));
+      return disperseEvents(filtered);
+    },
     [rawEvents, filters],
   );
 

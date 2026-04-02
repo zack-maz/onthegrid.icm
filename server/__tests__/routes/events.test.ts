@@ -408,9 +408,8 @@ describe('Events Route (Redis accumulator)', () => {
     });
   });
 
-  describe('Post-merge dispersion', () => {
-    it('applies disperseEvents to merged result before caching so centroid events are spread', async () => {
-      // Two events at Tehran centroid from different sources (fetch + backfill)
+  describe('Raw coordinates (dispersion is client-side)', () => {
+    it('returns undispersed coordinates so client-side dispersion can dynamically adjust with filters', async () => {
       const tehranEvent1 = makeEvent({
         id: 'gdelt-DISP1',
         label: 'Tehran event 1',
@@ -455,7 +454,6 @@ describe('Events Route (Redis accumulator)', () => {
         },
       });
 
-      // fresh returns one, backfill returns the other
       mockFetchEvents.mockResolvedValue([tehranEvent1]);
       mockBackfillEvents.mockResolvedValue([tehranEvent2]);
 
@@ -465,16 +463,10 @@ describe('Events Route (Redis accumulator)', () => {
       expect(res.ok).toBe(true);
       expect(body.data).toHaveLength(2);
 
-      // Events should be dispersed (different coordinates, not stacking at centroid)
-      const coords = body.data.map((e: ConflictEventEntity) => `${e.lat},${e.lng}`);
-      expect(new Set(coords).size).toBe(2); // unique positions
-
-      // Both should have originalLat/originalLng from dispersion
+      // Server returns raw (undispersed) coordinates — dispersion is client-side
       for (const e of body.data) {
-        expect(e.data.originalLat).toBeCloseTo(35.6892, 3);
-        expect(e.data.originalLng).toBeCloseTo(51.389, 3);
-        // Dispersed coordinates should differ from centroid
-        expect(e.lat).not.toBe(35.6892);
+        expect(e.lat).toBe(35.6892);
+        expect(e.lng).toBe(51.389);
       }
     });
   });
