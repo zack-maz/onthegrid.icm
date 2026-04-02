@@ -216,13 +216,25 @@ describe('disperseEvents', () => {
     expect(result[0].data.originalLat).toBeUndefined();
   });
 
-  it('does not disperse events without actionGeoType', () => {
+  it('disperses centroid events even without actionGeoType', () => {
     const e1 = makeEvent('gdelt-4', 35.6892, 51.389, 1000);
 
     const result = disperseEvents([e1]);
 
     expect(result).toHaveLength(1);
-    expect(result[0].lat).toBe(35.6892);
+    // Should be dispersed since it matches Tehran centroid
+    expect(result[0].lat).not.toBe(35.6892);
+    expect(result[0].data.originalLat).toBe(35.6892);
+    expect(result[0].data.originalLng).toBe(51.389);
+  });
+
+  it('does not disperse events without actionGeoType at non-centroid coordinates', () => {
+    const e1 = makeEvent('gdelt-5', 34.1234, 50.5678, 1000);
+
+    const result = disperseEvents([e1]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].lat).toBe(34.1234);
     expect(result[0].data.originalLat).toBeUndefined();
   });
 
@@ -266,5 +278,49 @@ describe('disperseEvents', () => {
 
     expect(findById(result1, 'gdelt-early').lat).toBe(findById(result2, 'gdelt-early').lat);
     expect(findById(result1, 'gdelt-late').lat).toBe(findById(result2, 'gdelt-late').lat);
+  });
+
+  it('assigns unique slots when multi-batch events are dispersed together (no duplicate slot 0)', () => {
+    // Simulate the old bug: two "batches" of events at Tehran centroid
+    // When dispersed separately, batch A slot 0 == batch B slot 0 (stacking)
+    // When dispersed together, each gets a unique slot
+    const batchA = [
+      makeEvent('gdelt-a1', 35.6892, 51.389, 1000, { actionGeoType: 3 }),
+      makeEvent('gdelt-a2', 35.6892, 51.389, 2000, { actionGeoType: 3 }),
+      makeEvent('gdelt-a3', 35.6892, 51.389, 3000, { actionGeoType: 3 }),
+    ];
+    const batchB = [
+      makeEvent('gdelt-b1', 35.6892, 51.389, 4000, { actionGeoType: 3 }),
+      makeEvent('gdelt-b2', 35.6892, 51.389, 5000, { actionGeoType: 3 }),
+      makeEvent('gdelt-b3', 35.6892, 51.389, 6000, { actionGeoType: 3 }),
+    ];
+
+    // Single-pass dispersion over all events (the fix)
+    const allEvents = [...batchA, ...batchB];
+    const result = disperseEvents(allEvents);
+
+    expect(result).toHaveLength(6);
+
+    // All 6 events should have unique lat/lng coordinates (no stacking)
+    const coordSet = new Set(result.map(e => `${e.lat.toFixed(8)},${e.lng.toFixed(8)}`));
+    expect(coordSet.size).toBe(6);
+
+    // Verify they are not at the centroid (all dispersed)
+    for (const e of result) {
+      expect(e.data.originalLat).toBeCloseTo(35.6892, 3);
+      expect(e.data.originalLng).toBeCloseTo(51.389, 3);
+      // Each event's lat/lng should differ from centroid
+      const dist = haversineKm(35.6892, 51.389, e.lat, e.lng);
+      expect(dist).toBeGreaterThan(0.5); // At least 0.5km from centroid
+    }
+  });
+});
+
+describe('CENTROID_TOLERANCE shared constant', () => {
+  it('is imported from geoValidation and used in dispersion', async () => {
+    // Verify the constant is exported and accessible from both modules
+    const { CENTROID_TOLERANCE } = await import('../../lib/geoValidation.js');
+    expect(CENTROID_TOLERANCE).toBe(0.01);
+    expect(typeof CENTROID_TOLERANCE).toBe('number');
   });
 });

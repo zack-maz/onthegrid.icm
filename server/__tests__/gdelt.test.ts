@@ -540,12 +540,16 @@ describe('GDELT Adapter', () => {
       // First event: Iran ground_combat (base code 190)
       expect(events[0].id).toBe('gdelt-1234567890');
       expect(events[0].type).toBe('ground_combat');
+      // parseAndFilter no longer applies dispersion -- raw coordinates preserved
       expect(events[0].lat).toBe(35.6892);
+      expect(events[0].data.originalLat).toBeUndefined();
 
       // Second event: Syria bombing (base code 183)
       expect(events[1].id).toBe('gdelt-9876543210');
       expect(events[1].type).toBe('bombing');
+      // Raw Damascus centroid coordinates (no dispersion)
       expect(events[1].lat).toBe(33.5138);
+      expect(events[1].data.originalLat).toBeUndefined();
 
       // Verify fetch was called twice (lastupdate + ZIP download)
       expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -714,9 +718,9 @@ describe('GDELT Adapter', () => {
     });
   });
 
-  describe('dispersion integration', () => {
-    it('centroid events with ActionGeo_Type=3 get dispersion applied', () => {
-      // Two events at Tehran with ActionGeo_Type=3
+  describe('parseAndFilter returns undispersed events', () => {
+    it('returns centroid events with raw (undispersed) lat/lng matching the GDELT input', () => {
+      // Two events at Tehran centroid with ActionGeo_Type=3
       const row1 = makeGdeltRow({
         0: 'D1D1D1D1D1',
         51: '3',
@@ -736,34 +740,29 @@ describe('GDELT Adapter', () => {
       // Both should pass filtering
       expect(events).toHaveLength(2);
 
-      // Both should have originalLat/originalLng set (dispersed)
-      const dispersedEvents = events.filter(
-        (e) => e.data.originalLat !== undefined,
-      );
-      expect(dispersedEvents).toHaveLength(2);
-
-      // Original coordinates should be Tehran
-      for (const e of dispersedEvents) {
-        expect(e.data.originalLat).toBeCloseTo(35.6892, 3);
-        expect(e.data.originalLng).toBeCloseTo(51.389, 3);
+      // Events should have RAW coordinates (no dispersion applied by parseAndFilter)
+      for (const e of events) {
+        expect(e.lat).toBe(35.6892);
+        expect(e.lng).toBe(51.389);
+        // No originalLat/originalLng since dispersion is NOT applied here
+        expect(e.data.originalLat).toBeUndefined();
+        expect(e.data.originalLng).toBeUndefined();
       }
-
-      // Events should have different lat/lng (dispersed to different slots)
-      expect(events[0].lat).not.toBe(events[1].lat);
     });
 
-    it('non-centroid events are not dispersed (no originalLat/originalLng)', () => {
+    it('non-centroid events keep their raw coordinates', () => {
       const row = makeGdeltRow({
         0: 'D3D3D3D3D3',
-        51: '2', // state level - not dispersed
+        51: '2', // state level
         56: '34.1234',
         57: '50.5678',
       });
 
       const events = parseAndFilter(row);
       expect(events).toHaveLength(1);
-      expect(events[0].data.originalLat).toBeUndefined();
       expect(events[0].lat).toBe(34.1234);
+      expect(events[0].lng).toBe(50.5678);
+      expect(events[0].data.originalLat).toBeUndefined();
     });
   });
 
