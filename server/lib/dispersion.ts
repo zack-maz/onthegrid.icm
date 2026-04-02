@@ -2,7 +2,7 @@
 // Spreads stacked centroid events into visually distinguishable positions
 
 import type { ConflictEventEntity } from '../types.js';
-import { detectCentroid, CITY_CENTROIDS } from './geoValidation.js';
+import { detectCentroid, CITY_CENTROIDS, CENTROID_TOLERANCE } from './geoValidation.js';
 
 /**
  * Ring definitions: [slotCount, radiusKm]
@@ -105,9 +105,8 @@ export function dispersePosition(
  * Returns the centroid name or null if no match.
  */
 function findCentroidKey(lat: number, lng: number): string | null {
-  const TOLERANCE = 0.01;
   for (const city of CITY_CENTROIDS) {
-    if (Math.abs(lat - city.lat) <= TOLERANCE && Math.abs(lng - city.lng) <= TOLERANCE) {
+    if (Math.abs(lat - city.lat) <= CENTROID_TOLERANCE && Math.abs(lng - city.lng) <= CENTROID_TOLERANCE) {
       return city.name;
     }
   }
@@ -117,8 +116,9 @@ function findCentroidKey(lat: number, lng: number): string | null {
 /**
  * Disperse city-centroid events into concentric rings around their centroids.
  *
- * Only events with actionGeoType 3 (city) or 4 (landmark/feature) that match
- * a known city centroid are dispersed. All other events pass through unchanged.
+ * Events matching a known city centroid are dispersed. When actionGeoType is
+ * present, only types 3 (city) and 4 (landmark) are eligible. When absent
+ * (common in real GDELT data), centroid matching alone is sufficient.
  *
  * Within each centroid group, events are sorted by timestamp for deterministic
  * slot assignment. Each group gets independent slot numbering.
@@ -131,8 +131,9 @@ export function disperseEvents(events: ConflictEventEntity[]): ConflictEventEnti
   const passThrough: ConflictEventEntity[] = [];
 
   for (const event of events) {
+    // If actionGeoType is known and not city/landmark, skip dispersion
     const geoType = event.data.actionGeoType;
-    if (geoType !== 3 && geoType !== 4) {
+    if (geoType !== undefined && geoType !== 3 && geoType !== 4) {
       passThrough.push(event);
       continue;
     }

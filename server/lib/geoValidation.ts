@@ -169,13 +169,19 @@ export function isGeoValid(fullName: string, fipsCode: string): boolean {
 }
 
 /**
- * Detect if lat/lng falls within +/-0.01 degrees of a known city centroid.
+ * Shared tolerance for centroid detection: +/-0.01 degrees (~1.1 km).
+ * Used by both detectCentroid (geoValidation) and findCentroidKey (dispersion)
+ * to ensure consistent centroid matching across the pipeline.
+ */
+export const CENTROID_TOLERANCE = 0.01;
+
+/**
+ * Detect if lat/lng falls within +/-CENTROID_TOLERANCE degrees of a known city centroid.
  * Returns 'centroid' if near a known city center, 'precise' otherwise.
  */
 export function detectCentroid(lat: number, lng: number): 'precise' | 'centroid' {
-  const TOLERANCE = 0.01;
   for (const city of CITY_CENTROIDS) {
-    if (Math.abs(lat - city.lat) <= TOLERANCE && Math.abs(lng - city.lng) <= TOLERANCE) {
+    if (Math.abs(lat - city.lat) <= CENTROID_TOLERANCE && Math.abs(lng - city.lng) <= CENTROID_TOLERANCE) {
       return 'centroid';
     }
   }

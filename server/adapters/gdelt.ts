@@ -93,7 +93,6 @@ async function downloadAndUnzip(url: string): Promise<string> {
 }
 
 import type { ConflictEventType } from '../types.js';
-import { disperseEvents } from '../lib/dispersion.js';
 
 // All valid CAMEO base codes in the 180-204 range are mapped below.
 // Codes 187-189, 197-199, 205+ do not exist in the CAMEO spec and correctly fall to ROOT_FALLBACK.
@@ -338,8 +337,9 @@ export function parseAndFilter(csv: string, bellingcatArticles?: BellingcatArtic
   // Pipeline summary
   log({ level: 'info', message: `[gdelt] pipeline: ${rawCount} raw -> ${geoValidCount} geo-valid -> ${reclassifyCount} reclassified -> ${geoValidCount - thresholdDiscardCount} above threshold -> ${results.length} final` });
 
-  // Apply dispersion to spread stacked centroid events into concentric rings
-  return disperseEvents(results);
+  // Dispersion is applied downstream in the events route (after all merging)
+  // so that the full merged event set gets single-pass slot assignment.
+  return results;
 }
 
 /**
@@ -633,7 +633,7 @@ export function parseAndFilterWithTrace(csv: string, bellingcatArticles?: Bellin
 
     acceptedEntities.push(entity);
 
-    // Build accepted audit record (dispersion info added after disperseEvents)
+    // Build accepted audit record (raw undispersed coordinates for audit)
     records.push(buildAuditRecord({
       id: entity.id,
       status: 'accepted',
@@ -655,29 +655,9 @@ export function parseAndFilterWithTrace(csv: string, bellingcatArticles?: Bellin
     }));
   }
 
-  // Apply dispersion to accepted entities and update audit records
-  const dispersedEntities = disperseEvents(acceptedEntities);
-  const dispersedById = new Map(dispersedEntities.map(e => [e.id, e]));
-
-  for (const record of records) {
-    if (record.status === 'accepted' && record.event) {
-      const dispersed = dispersedById.get(record.id);
-      if (dispersed) {
-        record.event = dispersed;
-        if (dispersed.data.originalLat !== undefined) {
-          record.pipelineTrace.dispersion = {
-            originalLat: dispersed.data.originalLat!,
-            originalLng: dispersed.data.originalLng!,
-            dispersedLat: dispersed.lat,
-            dispersedLng: dispersed.lng,
-            ringIndex: 0, // Approximate -- dispersion doesn't expose ring index on entity
-            slotIndex: 0,
-          };
-        }
-      }
-    }
-  }
-
+  // Dispersion is applied downstream (in the events route after merging).
+  // Audit records intentionally contain raw undispersed coordinates
+  // so the audit script can inspect original GDELT geocoding.
   return records;
 }
 

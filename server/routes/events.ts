@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import { log } from '../lib/logger.js';
 import { fetchEvents, backfillEvents } from '../adapters/gdelt.js';
+import { disperseEvents } from '../lib/dispersion.js';
 import { extractBellingcatGeo } from '../lib/eventScoring.js';
 import { WAR_START, CACHE_TTL } from '../constants.js';
 import type { ConflictEventEntity, NewsCluster } from '../types.js';
@@ -104,8 +105,14 @@ eventsRouter.get('/', async (req, res) => {
     }
 
     const merged = Array.from(eventMap.values());
-    await cacheSetSafe(EVENTS_KEY, merged, REDIS_TTL_SEC);
-    res.json({ data: merged, stale: false, lastFresh: Date.now() });
+
+    // Apply dispersion once over the complete merged set (cached + backfill + fresh).
+    // Single-pass eliminates slot collisions that occurred when per-batch dispersion
+    // independently assigned slot 0 for the same city centroid.
+    const dispersed = disperseEvents(merged);
+
+    await cacheSetSafe(EVENTS_KEY, dispersed, REDIS_TTL_SEC);
+    res.json({ data: dispersed, stale: false, lastFresh: Date.now() });
   } catch (err) {
     log({ level: 'error', message: `[events] upstream error: ${(err as Error).message}` });
 
