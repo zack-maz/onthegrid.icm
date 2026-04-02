@@ -10,6 +10,7 @@ import {
   mergeClusters,
   THERMAL_COLOR_RANGE,
 } from '@/components/map/layers/ThreatHeatmapOverlay';
+import { RadialGradientExtension } from '@/components/map/layers/RadialGradientExtension';
 import type { ThreatCluster } from '@/types/ui';
 import { useEventStore } from '@/stores/eventStore';
 import { useLayerStore } from '@/stores/layerStore';
@@ -306,8 +307,8 @@ describe('mergeClusters', () => {
 });
 
 describe('THERMAL_COLOR_RANGE', () => {
-  it('has exactly 8 stops', () => {
-    expect(THERMAL_COLOR_RANGE).toHaveLength(8);
+  it('has exactly 4 stops', () => {
+    expect(THERMAL_COLOR_RANGE).toHaveLength(4);
   });
 
   it('contains RGB tuples', () => {
@@ -352,7 +353,7 @@ describe('useThreatHeatmapLayers', () => {
     expect(result.current[0].id).toBe('threat-cluster-picker');
   });
 
-  it('cluster layer has thermal-colored circles with meter-based radius matching events', () => {
+  it('cluster layer has thermal-colored circles with pixel-based radius', () => {
     const events = [makeEvent({ type: 'airstrike', lat: 33.0, lng: 44.0 })];
     useEventStore.setState({ events, eventCount: events.length });
     useLayerStore.getState().toggleLayer('threat');
@@ -361,10 +362,90 @@ describe('useThreatHeatmapLayers', () => {
     expect(picker.id).toBe('threat-cluster-picker');
     expect(picker.props.pickable).toBe(true);
     expect(typeof picker.props.getFillColor).toBe('function');
-    // Meter-based sizing syncs zoom with event icons
-    expect(picker.props.radiusUnits).toBe('meters');
-    expect(picker.props.radiusMinPixels).toBe(8);
-    expect(picker.props.radiusMaxPixels).toBe(50);
+    // Pixel-based sizing for consistent visual size across zoom
+    expect(picker.props.radiusUnits).toBe('pixels');
+    // No radiusMinPixels/radiusMaxPixels with pixel units
+    expect(picker.props.radiusMinPixels).toBeUndefined();
+    expect(picker.props.radiusMaxPixels).toBeUndefined();
+  });
+
+  it('cluster layer has RadialGradientExtension in extensions array', () => {
+    const events = [makeEvent({ type: 'airstrike', lat: 33.0, lng: 44.0 })];
+    useEventStore.setState({ events, eventCount: events.length });
+    useLayerStore.getState().toggleLayer('threat');
+    const { result } = renderHook(() => useThreatHeatmapLayers());
+    const picker = result.current[0];
+    expect(picker.props.extensions).toBeDefined();
+    expect(picker.props.extensions).toHaveLength(1);
+    expect(picker.props.extensions[0]).toBeInstanceOf(RadialGradientExtension);
+  });
+
+  it('cluster layer has additive blending parameters', () => {
+    const events = [makeEvent({ type: 'airstrike', lat: 33.0, lng: 44.0 })];
+    useEventStore.setState({ events, eventCount: events.length });
+    useLayerStore.getState().toggleLayer('threat');
+    const { result } = renderHook(() => useThreatHeatmapLayers());
+    const picker = result.current[0];
+    expect(picker.props.parameters).toBeDefined();
+    expect(picker.props.parameters.depthWriteEnabled).toBe(false);
+    expect(picker.props.parameters.blendColorDstFactor).toBe('one');
+    expect(picker.props.parameters.blendColorSrcFactor).toBe('src-alpha');
+    expect(picker.props.parameters.blendColorOperation).toBe('add');
+  });
+
+  it('getFillColor returns 40% alpha for non-hovered clusters when one is hovered', () => {
+    const events = [
+      makeEvent({ type: 'airstrike', lat: 33.0, lng: 44.0 }),
+      makeEvent({ type: 'airstrike', lat: 36.0, lng: 50.0 }),
+    ];
+    useEventStore.setState({ events, eventCount: events.length });
+    useLayerStore.getState().toggleLayer('threat');
+    const { result } = renderHook(() => useThreatHeatmapLayers('some-cluster-id'));
+    const picker = result.current[0];
+    // Create a mock cluster that doesn't match the hoveredClusterId
+    const mockCluster: ThreatCluster = {
+      id: 'other-cluster',
+      centroidLat: 33.0,
+      centroidLng: 44.0,
+      cells: [],
+      eventCount: 1,
+      totalWeight: 10,
+      dominantType: 'airstrike',
+      totalFatalities: 0,
+      latestTime: Date.now(),
+      boundingBox: { minLat: 33, maxLat: 33, minLng: 44, maxLng: 44 },
+      eventIds: [],
+    };
+    const color = picker.props.getFillColor(mockCluster);
+    expect(color[3]).toBe(102); // 40% alpha
+  });
+
+  it('getFillColor returns 255 alpha for hovered cluster', () => {
+    const events = [
+      makeEvent({ type: 'airstrike', lat: 33.0, lng: 44.0 }),
+    ];
+    useEventStore.setState({ events, eventCount: events.length });
+    useLayerStore.getState().toggleLayer('threat');
+    // First get the clusters to find the real cluster ID
+    const { result } = renderHook(() => useThreatHeatmapLayers());
+    const clusters = result.current[0]?.props.data as ThreatCluster[];
+    const clusterId = clusters[0].id;
+    // Re-render with the real cluster ID as hovered
+    const { result: hoveredResult } = renderHook(() => useThreatHeatmapLayers(clusterId));
+    const picker = hoveredResult.current[0];
+    const color = picker.props.getFillColor(clusters[0]);
+    expect(color[3]).toBe(255);
+  });
+
+  it('layer has updateTriggers for getFillColor keyed on hoveredClusterId', () => {
+    const events = [makeEvent({ type: 'airstrike', lat: 33.0, lng: 44.0 })];
+    useEventStore.setState({ events, eventCount: events.length });
+    useLayerStore.getState().toggleLayer('threat');
+    const hoveredId = 'test-hovered-id';
+    const { result } = renderHook(() => useThreatHeatmapLayers(hoveredId));
+    const picker = result.current[0];
+    expect(picker.props.updateTriggers).toBeDefined();
+    expect(picker.props.updateTriggers.getFillColor).toBe(hoveredId);
   });
 });
 
@@ -481,8 +562,8 @@ describe('LEGEND_REGISTRY threat entry', () => {
     // Should use thermal palette endpoint colors (not old red palette)
     expect(threatLegend!.colorStops[0].label).toBe('Low');
     expect(threatLegend!.colorStops[1].label).toBe('High');
-    // Colors should NOT be the old red palette
-    expect(threatLegend!.colorStops[0].color).not.toBe('#2d0000');
-    expect(threatLegend!.colorStops[1].color).not.toBe('#ff3b30');
+    // Colors match the new simplified thermal palette
+    expect(threatLegend!.colorStops[0].color).toBe('#501478');
+    expect(threatLegend!.colorStops[1].color).toBe('#ff281e');
   });
 });

@@ -8,6 +8,7 @@ import { TYPE_WEIGHTS } from '@/lib/severity';
 import { CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS } from '@/types/ui';
 import type { ThreatCluster } from '@/types/ui';
 import { LEGEND_REGISTRY } from '@/components/map/MapLegend';
+import { RadialGradientExtension } from './RadialGradientExtension';
 import type { ConflictEventEntity } from '@/types/entities';
 
 // --- Constants ---
@@ -16,19 +17,14 @@ import type { ConflictEventEntity } from '@/types/entities';
 const CELL_SIZE_DEG = 0.25;
 
 /**
- * 8-stop military thermal palette (FLIR Ironbow-inspired).
- * Deep indigo -> dark purple -> violet -> magenta/crimson ->
- * deep orange -> amber -> golden yellow -> bright red.
+ * 4-stop simplified thermal palette.
+ * Deep purple -> magenta -> orange -> bright red.
  */
 export const THERMAL_COLOR_RANGE: [number, number, number][] = [
-  [30, 15, 80],      // deep indigo
-  [60, 20, 120],     // dark purple
-  [120, 30, 140],    // violet
-  [180, 30, 100],    // magenta/crimson
-  [210, 60, 30],     // deep orange
-  [230, 150, 20],    // amber
-  [250, 220, 50],    // golden yellow
-  [255, 40, 30],     // bright red
+  [80, 20, 120],     // deep purple (low threat)
+  [180, 30, 100],    // magenta (moderate)
+  [230, 120, 30],    // orange (high)
+  [255, 40, 30],     // bright red (extreme)
 ];
 
 // --- Types ---
@@ -301,7 +297,7 @@ function formatRelativeTime(timestamp: number): string {
 
 // --- Hook ---
 
-export function useThreatHeatmapLayers() {
+export function useThreatHeatmapLayers(hoveredClusterId: string | null = null) {
   // Consume events already filtered by useFilteredEntities (date, proximity, country, CAMEO, mentions, etc.)
   const { events } = useFilteredEntities();
   const isActive = useLayerStore((s) => s.activeLayers.has('threat'));
@@ -325,33 +321,53 @@ export function useThreatHeatmapLayers() {
     const grid = aggregateToGrid(filtered);
     const clusters = mergeClusters(grid);
 
-    // Max cluster weight for color interpolation
-    const maxClusterWeight = Math.max(1, ...clusters.map((c) => c.totalWeight));
+    // P90 normalization for color interpolation
+    const p90Weight = computeP90(clusters.map((c) => c.totalWeight));
 
     const clusterPickerLayer = new ScatterplotLayer({
       id: 'threat-cluster-picker',
       data: clusters,
       getPosition: (d: ThreatCluster) => [d.centroidLng, d.centroidLat],
-      // Meter-based radius matching event icon sizing strategy so both
-      // scale together on zoom. Low threat = smaller, high threat = larger.
+      // Pixel-based radius encoding geographic spread (cell count).
+      // Single-cell = 12px, 20+ cells = 100px. Linear interpolation.
       getRadius: (d: ThreatCluster) => {
-        const t = Math.min(1, d.totalWeight / maxClusterWeight);
-        return 500 + t * 2500; // 500m (low) to 3000m (high)
+        const cellCount = d.cells.length;
+        const MIN_PX = 12;
+        const MAX_PX = 100;
+        const t = Math.min(1, (cellCount - 1) / 19);
+        return MIN_PX + t * (MAX_PX - MIN_PX);
       },
-      radiusUnits: 'meters' as const,
-      radiusMinPixels: 8,
-      radiusMaxPixels: 50,
-      // Thermal color mapped from cluster weight
+      radiusUnits: 'pixels' as const,
+      // Thermal color mapped from cluster weight via P90 normalization.
+      // Alpha modulated by hover state: 255 (hovered), 102 (non-hovered when one is hovered), 180 (default).
       getFillColor: (d: ThreatCluster) => {
-        const t = Math.min(1, d.totalWeight / maxClusterWeight);
-        const idx = Math.min(THERMAL_COLOR_RANGE.length - 1, Math.floor(t * THERMAL_COLOR_RANGE.length));
-        return [...THERMAL_COLOR_RANGE[idx], 180] as [number, number, number, number];
+        const t = Math.min(1, d.totalWeight / p90Weight);
+        const idx = Math.min(3, Math.floor(t * 4));
+        const baseColor = THERMAL_COLOR_RANGE[idx];
+        let alpha = 180;
+        if (hoveredClusterId != null) {
+          alpha = d.id === hoveredClusterId ? 255 : 102;
+        }
+        return [...baseColor, alpha] as [number, number, number, number];
       },
       pickable: true,
+      extensions: [new RadialGradientExtension()],
+      parameters: {
+        depthWriteEnabled: false,
+        blendColorSrcFactor: 'src-alpha' as const,
+        blendAlphaSrcFactor: 'src-alpha' as const,
+        blendColorDstFactor: 'one' as const,
+        blendAlphaDstFactor: 'one-minus-src-alpha' as const,
+        blendColorOperation: 'add' as const,
+        blendAlphaOperation: 'add' as const,
+      },
+      updateTriggers: {
+        getFillColor: hoveredClusterId,
+      },
     });
 
     return [clusterPickerLayer];
-  }, [isActive, events, showAirstrikes, showGroundCombatToggle, showTargetedToggle]);
+  }, [isActive, events, showAirstrikes, showGroundCombatToggle, showTargetedToggle, hoveredClusterId]);
 }
 
 // --- Tooltip ---
@@ -411,7 +427,7 @@ LEGEND_REGISTRY.push({
   layerId: 'threat',
   title: 'Threat Density',
   colorStops: [
-    { color: '#1e0f50', label: 'Low' },
-    { color: '#ff2820', label: 'High' },
+    { color: '#501478', label: 'Low' },
+    { color: '#ff281e', label: 'High' },
   ],
 });
