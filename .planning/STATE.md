@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Data Quality & Layers
 status: unknown
-last_updated: "2026-04-02T02:07:48.349Z"
+last_updated: "2026-04-02T05:20:57.071Z"
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
 ---
 
 # Project State
@@ -22,6 +22,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Phase 23: Plan 1 of 2 COMPLETE
 Phase 22.1 COMPLETE (2 of 2 plans done)
 Phase 22 COMPLETE (3 of 3 plans done)
 Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
@@ -32,7 +33,7 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 |-------|------|--------|
 | 22 | GDELT Event Quality & OSINT Integration | COMPLETE (3/3 plans) |
 | 22.1 | Fixing Dispersion | COMPLETE (2/2 plans) |
-| 23 | Threat Density Improvements | Planned |
+| 23 | Threat Density Improvements | IN PROGRESS (1/2 plans) |
 | 24 | Political Boundaries Layer | Planned |
 | 25 | Ethnic Distribution Layer | Planned |
 | 26 | Water Stress Layer | Planned |
@@ -53,6 +54,9 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - Added else-if branch to reset lastFlownPinRef when near: tag absent from query (deriveFiltersFromAST returns undefined, not null)
 - disperseEvents relocated from parseAndFilter to events route for single-pass slot assignment post-merge
 - CENTROID_TOLERANCE=0.01 extracted as shared constant between geoValidation.ts and dispersion.ts
+- Thermal palette: 8-stop FLIR Ironbow (indigo->purple->violet->magenta->orange->amber->yellow->red) for better threat intensity differentiation
+- P90 normalization: colorDomain=[0, p90] prevents high-activity zones from washing out lower-intensity areas
+- Temporal decay removed from computeThreatWeight -- age-independent scoring, date filtering handles recency
 
 ## Pending Todos
 

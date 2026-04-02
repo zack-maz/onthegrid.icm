@@ -77,7 +77,7 @@ Plans:
 **Goal**: Transform the threat heatmap with military thermal palette, P90 normalization, 0.25-degree grid, connected-component cluster merging, and clickable cluster detail panel
 **Depends on**: Phase 22 (better event data feeds into heatmap)
 **Requirements:** [P23-01, P23-02, P23-03, P23-04, P23-05, P23-06, P23-07, P23-08, P23-09]
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 23-01-PLAN.md -- Military thermal palette, decay removal, 0.25-deg grid, P90 normalization, legend update
