@@ -108,12 +108,12 @@ Plans:
 ### Phase 24: Political Boundaries Layer
 **Goal**: Users can toggle a political overlay showing country borders color-coded by alliance/faction alignment
 **Depends on**: Phase 20 (layer architecture)
-**Key deliverables:**
-- Natural Earth 110m country polygons (~50KB after coordinate rounding)
-- Faction color assignments: US-aligned (blue), Iran-aligned (red), neutral/contested (gray)
-- MapLibre fill layers with semi-transparent country fills + emphasized borders
-- Disputed territory hatching (Golan Heights, West Bank, Kurdish regions)
-- Discrete-swatch legend per faction
+**Requirements:** [POL-01, POL-02, POL-03, POL-04, POL-05, POL-06]
+**Plans:** 2 plans
+
+Plans:
+- [ ] 24-01-PLAN.md -- Data extraction, faction types, PoliticalOverlay component, legend registration, new tests
+- [ ] 24-02-PLAN.md -- BaseMap wiring, toggle activation, existing test updates, visual checkpoint
 
 ### Phase 25: Ethnic Distribution Layer
 **Goal**: Users can toggle an overlay showing major ethnic/sectarian zones as labeled hatched regions

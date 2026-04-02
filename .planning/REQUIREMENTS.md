@@ -81,6 +81,15 @@ Requirements for the Data Quality & Layers milestone.
 - [x] **EQ-08**: Audit output includes both accepted AND rejected events with specific rejection reasons and full pipeline trace
 - [x] **EQ-09**: Known true/false positive GDELT fixtures are verified by automated tests (regression suite)
 
+### Political Boundaries Layer
+
+- [ ] **POL-01**: User can toggle a political overlay showing country borders color-coded by faction alignment (US-aligned, Iran-aligned, Neutral)
+- [ ] **POL-02**: Countries are categorized into 3 factions with correct assignments (US-aligned: ISR, SAU, ARE, BHR, JOR, KWT, EGY; Iran-aligned: IRN, SYR, YEM; all others neutral)
+- [ ] **POL-03**: Disputed territories (Gaza, West Bank, Golan Heights) display with diagonal hatching in yellow/amber
+- [ ] **POL-04**: Disputed zones show zone name label on hover (only interactive element in the political layer)
+- [ ] **POL-05**: Discrete swatch legend with faction colors + disputed hatching visible when political layer is active
+- [ ] **POL-06**: Political layer renders below all other visualization layers and entity markers (background context only)
+
 ## v1.2+ Requirements
 
 Deferred to future releases. Tracked but not in current roadmap.
@@ -161,13 +170,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EQ-07 | Phase 22 | Planned |
 | EQ-08 | Phase 22 | Planned |
 | EQ-09 | Phase 22 | Planned |
+| POL-01 | Phase 24 | Planned |
+| POL-02 | Phase 24 | Planned |
+| POL-03 | Phase 24 | Planned |
+| POL-04 | Phase 24 | Planned |
+| POL-05 | Phase 24 | Planned |
+| POL-06 | Phase 24 | Planned |
 
 **Coverage:**
 - v1.1 requirements: 29 total, 29 complete
 - v1.2 requirements: 5 total, 5 complete
-- v1.3 requirements: 9 total, 0 complete
-- Total: 43 mapped, 34 complete
+- v1.3 requirements: 15 total, 0 complete
+- Total: 49 mapped, 34 complete
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-04-01 — v1.3 requirements added*
+*Last updated: 2026-04-02 -- Phase 24 requirements added*
