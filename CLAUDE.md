@@ -150,7 +150,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 - **Upstash Redis** — REST-based client (`@upstash/redis`) for serverless compatibility
 - **CacheEntry<T>** — stores `{data, fetchedAt}` for staleness computation; hard Redis TTL = 10x logical TTL
-- **Cache keys** — `flights:SOURCE`, `ships:ais`, `events:gdelt`, `sites:overpass`, `news:gdelt`, `markets:yahoo`
+- **Cache keys** — `flights:SOURCE`, `ships:ais`, `events:gdelt`, `sites:overpass`, `news:gdelt`, `markets:yahoo`, `geocode:LAT,LON`
 - **Redis module** — `server/cache/redis.ts` exports `cacheGet<T>`, `cacheSet<T>`, `redis` instance
 - **AISStream on-demand** — connect, collect for N ms, close per request (no persistent WebSocket)
 - **Ship merge/prune** — fresh ships merged with cached by MMSI, 10 min stale threshold
@@ -251,9 +251,9 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Geographic overlay** — `src/components/map/layers/GeographicOverlay.tsx`, elevation color-relief tinting, maplibre-contour lines, geographic feature labels (deserts, ranges, seas)
 - **Weather overlay** — `src/components/map/layers/WeatherOverlay.tsx`, Open-Meteo grid with wind barbs (deck.gl IconLayer) + invisible picker for tooltips
 - **WeatherHeatmap** — `src/components/map/layers/WeatherHeatmap.tsx`, MapLibre image source with bilinear-interpolated temperature canvas, drapes onto terrain
-- **Threat heatmap** — `src/components/map/layers/ThreatHeatmapOverlay.tsx`, deck.gl HeatmapLayer (SUM aggregation, static `radiusPixels: 40`) with invisible ScatterplotLayer picker for cluster tooltips
-- **Threat weight formula** — `computeThreatWeight`: typeWeight × log2(mentions) × log2(sources) × fatalityFactor × goldsteinHostility × temporalDecay
-- **Layer stacking** — `layers={[...weatherLayers, ...threatLayers, ...entityLayers]}` — threat picks supersede weather
+- **Threat clusters** — `src/components/map/layers/ThreatHeatmapOverlay.tsx`, ScatterplotLayer with RadialGradientExtension (custom GLSL shader), BFS cluster merging on 0.25° grid
+- **Threat weight formula** — `computeThreatWeight`: typeWeight × log2(mentions) × log2(sources) × fatalityFactor × goldsteinHostility (no temporal decay)
+- **Layer stacking** — zoom-dependent: `[...threatLayers, ...entityLayers]` below zoom 9, `[...entityLayers, ...threatLayers]` above zoom 9
 - **Filter independence** — entity toggles (flights, ships, events, sites) operate independently from visualization layer toggles
 - **FilterButton** — `src/components/filter/FilterButton.tsx`, pill toggle with color dot for entity category filters
 - **SliderToggle** — `src/components/filter/SliderToggle.tsx`, iOS-style switch for boolean filter options
@@ -274,3 +274,20 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Hi slider at "now"** — sends `null` dateEnd (NOW_THRESHOLD_MS = 60s snap)
 - **DateRangeFilter** — custom pointer-based dual-thumb slider with granularity toggle (Min/Hr/Day)
 - **Granularity** — `STEP_MS` record, `snapToStep` floors timestamps to step boundary
+
+## Threat Density Improvements (Phase 23+23.2)
+
+- **RadialGradientExtension** — `src/components/map/layers/RadialGradientExtension.ts`, deck.gl LayerExtension with GLSL fragment shader injecting radial alpha falloff via `fs:DECKGL_FILTER_COLOR`
+- **Gradient falloff** — `smoothstep(0.3, 1.0, dist)`: center 30% at full opacity, soft fade to transparent edge
+- **Additive blending** — `blendColorDstFactor: 'one'` makes overlapping clusters intensify naturally
+- **4-stop thermal palette** — deep purple → magenta → orange → bright red (simplified from 8-stop FLIR Ironbow)
+- **Dual-dimension encoding** — radius = geographic spread (bbox diagonal + sqrt(eventCount) density boost), color = threat weight (P90 normalized)
+- **Meter-based radius** — `radiusUnits: 'meters'` with `radiusMinPixels: 20`, `radiusMaxPixels: 200`; 30km floor for single-cell clusters
+- **Cluster centroid** — bounding box center (not weight-averaged) for visual centering on event dispersion
+- **Zoom z-order crossover** — clusters on top below zoom 9, behind event markers above zoom 9; `isBelowZoom9` boolean in mapStore with ref-based threshold crossing
+- **Hover dimming** — hovered cluster 255 alpha, non-hovered 102 (40%); managed as local state in BaseMap
+- **Cluster selection dimming** — selecting a cluster grays out all non-cluster events + flights/ships/sites via `clusterEventIds` Set in useEntityLayers
+- **ThreatClusterDetail enrichment** — type breakdown bars (horizontal, sorted by count), geographic context (site-in-bbox first → Nominatim fallback), events sorted by threat weight
+- **useGeoContext** — `src/hooks/useGeoContext.ts`, two-tier: synchronous siteStore bbox check → async `/api/geocode` Nominatim fallback
+- **Nominatim geocoding** — `server/adapters/nominatim.ts` + `server/routes/geocode.ts`, coordinate quantization (2 decimal places), Redis cache 30-day logical / 90-day hard TTL
+- **Cache key** — `geocode:${lat},${lon}` with quantized coordinates
