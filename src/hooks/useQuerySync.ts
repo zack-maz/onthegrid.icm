@@ -403,6 +403,15 @@ export function useQuerySync(): void {
   // Track previous query to detect search-initiated changes
   const prevQueryRef = useRef<string>('');
 
+  // Reset fly-to guard when proximity pin is actually cleared in the store.
+  // This is separate from the search→sidebar sync to avoid timing issues
+  // where sync cycles temporarily produce undefined proximityPin.
+  useEffect(() => {
+    if (proximityPin === null) {
+      lastFlownPinRef.current = null;
+    }
+  }, [proximityPin]);
+
   // Search -> Sidebar sync (filters only, no toggles)
   useEffect(() => {
     if (syncSourceRef.current === 'sidebar') {
@@ -515,14 +524,15 @@ export function useQuerySync(): void {
           });
           lastFlownPinRef.current = { lat: pin.lat, lng: pin.lng };
         }
-      } else {
-        // Clearing near: resets fly-to state
-        lastFlownPinRef.current = null;
       }
-    } else if (lastFlownPinRef.current !== null) {
-      // No near: tag in current query — reset fly-to state so re-entering
-      // the same near: location will trigger fly-to again
-      lastFlownPinRef.current = null;
+      // Ref reset is handled by the dedicated proximityPin effect below,
+      // NOT here — sync cycles can produce undefined proximityPin even
+      // when the pin is still active, which would incorrectly clear the guard.
+    } else if (useFilterStore.getState().proximityPin !== null) {
+      // Query no longer has a near: tag but filterStore still has a pin — clear it.
+      // The dedicated proximityPin effect will then reset lastFlownPinRef.
+      useFilterStore.getState().setProximityPin(null);
+      hasFilterUpdates = true;
     }
 
     if (hasFilterUpdates) {

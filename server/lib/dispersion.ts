@@ -2,7 +2,7 @@
 // Spreads stacked centroid events into visually distinguishable positions
 
 import type { ConflictEventEntity } from '../types.js';
-import { detectCentroid, CITY_CENTROIDS, CENTROID_TOLERANCE } from './geoValidation.js';
+import { detectCentroid, CITY_CENTROIDS } from './geoValidation.js';
 
 /**
  * Ring definitions: [slotCount, radiusKm]
@@ -100,15 +100,32 @@ export function dispersePosition(
   };
 }
 
+/** Max distance (km) to match an event to a city centroid for dispersion */
+const CENTROID_MATCH_RADIUS_KM = 15;
+
 /**
- * Find the matching city centroid for a given lat/lng.
- * Returns the centroid name or null if no match.
+ * Find the nearest city centroid within CENTROID_MATCH_RADIUS_KM.
+ * Uses nearest-neighbor matching instead of a tight tolerance box,
+ * because GDELT geocodes the same city to different GNS feature IDs
+ * with coordinates that can vary by 0.1°+ from canonical centroids.
  */
 function findCentroidKey(lat: number, lng: number): string | null {
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  let bestName: string | null = null;
+  let bestDistSqKm = Infinity;
+
   for (const city of CITY_CENTROIDS) {
-    if (Math.abs(lat - city.lat) <= CENTROID_TOLERANCE && Math.abs(lng - city.lng) <= CENTROID_TOLERANCE) {
-      return city.name;
+    const dLatKm = (lat - city.lat) * KM_PER_DEG_LAT;
+    const dLngKm = (lng - city.lng) * KM_PER_DEG_LAT * cosLat;
+    const distSqKm = dLatKm * dLatKm + dLngKm * dLngKm;
+    if (distSqKm < bestDistSqKm) {
+      bestDistSqKm = distSqKm;
+      bestName = city.name;
     }
+  }
+
+  if (bestDistSqKm <= CENTROID_MATCH_RADIUS_KM * CENTROID_MATCH_RADIUS_KM) {
+    return bestName;
   }
   return null;
 }
