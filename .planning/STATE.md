@@ -69,3 +69,4 @@ None.
 ### Roadmap Evolution
 
 - Phase 22.1 inserted after Phase 22: fixing dispersion (URGENT)
+- Phase 23.1 inserted after Phase 23: detail panel navigation stack (deferred from Phase 23 discussion)
