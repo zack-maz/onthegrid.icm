@@ -55,6 +55,26 @@ vi.mock('../config.js', () => ({
   }),
 }));
 
+// Mock rate limiter -- pass through for security tests
+const _passThrough = (_req: unknown, _res: unknown, next: () => void) => next();
+vi.mock('../middleware/rateLimit.js', () => ({
+  rateLimitMiddleware: _passThrough,
+  rateLimiters: {
+    flights: _passThrough, ships: _passThrough, events: _passThrough, news: _passThrough,
+    markets: _passThrough, weather: _passThrough, sites: _passThrough, sources: _passThrough,
+    geocode: _passThrough,
+  },
+}));
+
+// Mock Redis cache
+vi.mock('../cache/redis.js', () => ({
+  redis: { ping: vi.fn(async () => 'PONG'), get: vi.fn(async () => null), set: vi.fn(async () => {}) },
+  cacheGet: vi.fn(async () => null),
+  cacheSet: vi.fn(async () => {}),
+  cacheGetSafe: vi.fn(async () => null),
+  cacheSetSafe: vi.fn(async () => {}),
+}));
+
 // Mock the adapter modules to return test data without hitting upstream APIs
 vi.mock('../adapters/opensky.js', () => ({
   fetchFlights: vi.fn(async (): Promise<FlightEntity[]> => [
@@ -109,6 +129,15 @@ vi.mock('../adapters/aisstream.js', () => ({
   getLastMessageTime: vi.fn(() => 0),
   connectAISStream: vi.fn(),
 }));
+
+vi.mock('../adapters/adsb-lol.js', () => ({ fetchFlights: vi.fn(async () => []) }));
+vi.mock('../adapters/gdelt.js', () => ({ fetchEvents: vi.fn(async () => []), backfillEvents: vi.fn(async () => []) }));
+vi.mock('../adapters/overpass.js', () => ({ fetchSites: vi.fn(async () => []) }));
+vi.mock('../adapters/gdelt-doc.js', () => ({ fetchGdeltArticles: vi.fn(async () => []) }));
+vi.mock('../adapters/rss.js', () => ({ fetchAllRssFeeds: vi.fn(async () => []), RSS_FEEDS: [] }));
+vi.mock('../adapters/yahoo-finance.js', () => ({ fetchMarkets: vi.fn(async () => []), isValidRange: vi.fn(() => true) }));
+vi.mock('../adapters/open-meteo.js', () => ({ fetchWeather: vi.fn(async () => []) }));
+vi.mock('../adapters/nominatim.js', () => ({ reverseGeocode: vi.fn(async () => ({ display: 'Unknown location' })) }));
 
 vi.mock('../adapters/acled.js', () => ({
   fetchEvents: vi.fn(async (): Promise<ConflictEventEntity[]> => [

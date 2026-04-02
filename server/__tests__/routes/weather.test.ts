@@ -20,6 +20,7 @@ vi.mock('../../middleware/rateLimit.js', () => ({
   rateLimiters: {
     flights: _passThrough, ships: _passThrough, events: _passThrough, news: _passThrough,
     markets: _passThrough, weather: _passThrough, sites: _passThrough, sources: _passThrough,
+    geocode: _passThrough,
   },
 }));
 
@@ -86,6 +87,9 @@ vi.mock('../../adapters/rss.js', () => ({
 vi.mock('../../adapters/yahoo-finance.js', () => ({
   fetchMarkets: vi.fn(async () => []),
   isValidRange: vi.fn(() => true),
+}));
+vi.mock('../../adapters/nominatim.js', () => ({
+  reverseGeocode: vi.fn(async () => ({ display: 'Unknown location' })),
 }));
 
 // Mock Open-Meteo adapter
