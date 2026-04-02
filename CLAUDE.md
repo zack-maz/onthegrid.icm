@@ -303,3 +303,20 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **slideDirection** — `uiStore.slideDirection: 'forward' | 'back' | null`, drives CSS slide-in/slide-out animations
 - **CSS animations** — `@keyframes slide-in-right`, `slide-out-left`, `slide-in-left`, `slide-out-right` in `app.css`
 - **Escape key** — pops navigation stack if non-empty, otherwise closes panel (existing behavior)
+
+## Political Boundaries Layer (Phase 24)
+
+- **deck.gl GeoJsonLayer** — country fills rendered via `usePoliticalLayers` hook (not MapLibre fill layers — those are invisible with terrain)
+- **3-tier factions** — US-aligned (blue #3b82f6), Iran-aligned (red #dc2626), Neutral (gray #64748b)
+- **US-aligned** — ISR, SAU, ARE, BHR, JOR, KWT, EGY
+- **Iran-aligned** — IRN, SYR, YEM
+- **Neutral** — all others in region (TUR, QAT, OMN, PAK, AFG, IRQ, LBN, TKM, AZE, ARM, GEO, etc.)
+- **Faction data** — `src/lib/factions.ts`, `Record<string, Faction>` keyed by ISO A3 code, separate from GeoJSON
+- **GeoJSON sources** — Natural Earth 110m (countries) + 10m disputed areas, static imports via Vite
+- **Fill opacity** — ~15% (alpha 38/255), borders ~60% (alpha 153/255), faction-colored
+- **Disputed territories** — Gaza, West Bank, Golan Heights from Natural Earth `ne_10m_admin_0_disputed_areas`; amber fill (#f59e0b)
+- **Non-interactive** — no hover/click on country polygons; entity tooltips remain primary
+- **Layer stacking** — political layers first in DeckGLOverlay array (renders below all entity/weather/threat layers)
+- **Legend** — discrete swatch legend in bottom-left via LEGEND_REGISTRY (4 swatches: US, Iran, Neutral, Disputed)
+- **Toggle** — `comingSoon` removed from political entry in LayerTogglesSlot; instant toggle (no fade)
+- **Threat centroid fix** — cluster centroids now use mean of actual event coordinates (`realLatSum`/`realLngSum` in ThreatZoneData) instead of bounding box center of grid cells

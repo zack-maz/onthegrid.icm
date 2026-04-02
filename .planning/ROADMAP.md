@@ -109,7 +109,7 @@ Plans:
 **Goal**: Users can toggle a political overlay showing country borders color-coded by alliance/faction alignment
 **Depends on**: Phase 20 (layer architecture)
 **Requirements:** [POL-01, POL-02, POL-03, POL-04, POL-05, POL-06]
-**Plans:** 1/2 plans executed
+**Plans:** 1/2 plans complete
 
 Plans:
 - [ ] 24-01-PLAN.md -- Data extraction, faction types, PoliticalOverlay component, legend registration, new tests

@@ -1,6 +1,6 @@
 # Iran Conflict Monitor — Project Status
 
-**Last updated:** 2026-03-29
+**Last updated:** 2026-04-02
 
 ## Progress
 
@@ -9,6 +9,7 @@ v0.9 MVP:              [██████████████████�
 v1.0 Deployment:       [████████████████████]  2/2  phases (shipped 2026-03-20)
 v1.1 Intelligence Layer: [████████████████████]  8/8  phases (shipped 2026-03-22)
 v1.2 Visualization:    [████████████████████]  7/7  phases (shipped 2026-03-29)
+v1.3 Data Quality:     [██████████████░░░░░░]  5/9  phases
 ```
 
 ## Phase Status
@@ -44,10 +45,16 @@ v1.2 Visualization:    [██████████████████�
 | 21.1 | GDELT News Relevance Filtering | v1.2 | Done | 2026-03-26 |
 | 21.2 | GDELT Event Quality Pipeline | v1.2 | Done | 2026-03-28 |
 | 21.3 | Multi-User Load Testing | v1.2 | Done | 2026-03-29 |
+| 22 | GDELT Event Quality & OSINT | v1.3 | Done | 2026-03-30 |
+| 22.1 | Fixing Dispersion | v1.3 | Done | 2026-03-31 |
+| 23 | Threat Density Improvements | v1.3 | Done | 2026-03-31 |
+| 23.1 | Detail Panel Navigation Stack | v1.3 | Done | 2026-04-01 |
+| 23.2 | Threat Density Scatter Plots | v1.3 | Done | 2026-04-01 |
+| 24 | Political Boundaries Layer | v1.3 | Done | 2026-04-02 |
 
 ## Current Focus
 
-All 4 milestones shipped (v0.9 → v1.2). 958 tests passing. Production stable at p95 153ms.
+v1.3 milestone in progress — 5/9 phases complete. 1106 tests passing. Next up: Phase 25 (Ethnic Distribution Layer).
 
 ## What's Been Built
 
@@ -112,6 +119,20 @@ All 4 milestones shipped (v0.9 → v1.2). 958 tests passing. Production stable a
 **Phase 21.2: GDELT Event Quality Pipeline** — Geo-validation against country polygons, expanded CAMEO classification, Goldstein sanity check, 5-signal composite confidence scoring (media, sources, actors, geo, goldstein). NumSources >= 2 filter.
 
 **Phase 21.3: Multi-User Load Testing** — k6 load test (501 VUs, 6 scenarios, 5min) and Playwright browser validation (3 concurrent workers, 3min stability). All application checks 100%. Flights p95: 136ms, overall p95: 153ms. CAMEO 192 (territorial occupation) excluded from conflict pipeline.
+
+### v1.3 Data Quality & Layers (Phases 22-27, in progress)
+
+**Phase 22: GDELT Event Quality & OSINT Integration** — ActionGeo_Type parsing, concentric ring dispersion, config-driven thresholds, pipeline trace types. Bellingcat RSS feed integration for event confidence corroboration. CLI event audit dump script and fixture-based test suite.
+
+**Phase 22.1: Fixing Dispersion** — disperseEvents relocated to events route (post-merge, single-pass slot assignment). Ref-based fly-to deduplication guard in useQuerySync.
+
+**Phase 23: Threat Density Improvements** — Military thermal palette (4-stop), P90 normalization, 0.25° grid, BFS connected-component cluster merging, clickable ThreatClusterDetail panel with type breakdown bars and geographic context.
+
+**Phase 23.1: Detail Panel Navigation Stack** — Browser-like back navigation with PanelView stack, BreadcrumbRow component, directional slide-in/out CSS animations, universal history across all entity/cluster entry points.
+
+**Phase 23.2: Threat Density Scatter Plots** — RadialGradientExtension (custom GLSL shader), additive blending, dual-dimension encoding (radius=spread, color=weight), zoom-dependent z-ordering, hover dimming, Nominatim geocoding for cluster context.
+
+**Phase 24: Political Boundaries Layer** — deck.gl GeoJsonLayer for faction-colored country fills (US-aligned blue, Iran-aligned red, neutral gray at 15% opacity). Natural Earth 110m polygons + 10m disputed areas (Gaza, West Bank, Golan Heights with amber fill). Discrete swatch legend. Threat cluster centroids fixed to use mean of actual event coordinates. 1106 tests passing.
 
 ## Blockers
 
