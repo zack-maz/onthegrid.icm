@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Data Quality & Layers
-status: unknown
-last_updated: "2026-04-02T02:00:10.553Z"
+status: in_progress
+last_updated: "2026-04-02T02:00:22Z"
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -22,7 +22,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
-Phase 22.1 IN PROGRESS — Plan 02 of 2 complete (fly-to dedup done, dispersion pipeline pending)
+Phase 22.1 COMPLETE (2 of 2 plans done)
 Phase 22 COMPLETE (3 of 3 plans done)
 Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 
@@ -31,7 +31,7 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 | Phase | Name | Status |
 |-------|------|--------|
 | 22 | GDELT Event Quality & OSINT Integration | COMPLETE (3/3 plans) |
-| 22.1 | Fixing Dispersion | IN PROGRESS (1/2 plans) |
+| 22.1 | Fixing Dispersion | COMPLETE (2/2 plans) |
 | 23 | Threat Density Improvements | Planned |
 | 24 | Political Boundaries Layer | Planned |
 | 25 | Ethnic Distribution Layer | Planned |
@@ -51,6 +51,8 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - parseAndFilterWithTrace kept separate from parseAndFilter to preserve production performance
 - Fly-to dedup uses simple lat/lng !== equality (coordinates from lookup table, exact match correct)
 - Added else-if branch to reset lastFlownPinRef when near: tag absent from query (deriveFiltersFromAST returns undefined, not null)
+- disperseEvents relocated from parseAndFilter to events route for single-pass slot assignment post-merge
+- CENTROID_TOLERANCE=0.01 extracted as shared constant between geoValidation.ts and dispersion.ts
 
 ## Pending Todos
 

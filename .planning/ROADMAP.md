@@ -67,11 +67,11 @@ Plans:
 **Goal:** Fix dispersion pipeline so events visually spread instead of stacking, and fix camera fly-to to fire once per unique near: pin instead of continuously re-centering
 **Depends on:** Phase 22
 **Requirements:** [FIX-01, FIX-02, FIX-03, FIX-04, FIX-05, FIX-06]
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 22.1-01-PLAN.md -- Relocate disperseEvents to events route (post-merge), shared tolerance constant
-- [ ] 22.1-02-PLAN.md -- Ref-based fly-to deduplication guard in useQuerySync
+- [x] 22.1-01-PLAN.md -- Relocate disperseEvents to events route (post-merge), shared tolerance constant
+- [x] 22.1-02-PLAN.md -- Ref-based fly-to deduplication guard in useQuerySync
 
 ### Phase 23: Threat Density Improvements
 **Goal**: Make the threat heatmap more accurate and visually useful with zoom-responsive radius, temporal emphasis, finer grid resolution, and regional normalization
