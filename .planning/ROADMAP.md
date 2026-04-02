@@ -83,6 +83,16 @@ Plans:
 - [ ] 23-01-PLAN.md -- Military thermal palette, decay removal, 0.25-deg grid, P90 normalization, legend update
 - [ ] 23-02-PLAN.md -- BFS cluster merging, ThreatClusterDetail component, detail panel + BaseMap wiring
 
+### Phase 23.2: improving threat density scatter plots (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 23
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 23.2 to break down)
+
 ### Phase 23.1: detail panel navigation stack (INSERTED)
 
 **Goal:** [Urgent work - to be planned]
