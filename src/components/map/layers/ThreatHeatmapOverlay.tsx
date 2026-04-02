@@ -12,17 +12,23 @@ import type { ConflictEventEntity } from '@/types/entities';
 
 // --- Constants ---
 
-const HALF_LIFE_HOURS = 6;
+/** Grid cell size in degrees (~28km at equator) */
+const CELL_SIZE_DEG = 0.25;
 
-/** Grid cell size in degrees (~83km at equator) */
-const CELL_SIZE_DEG = 0.75;
-
-const THREAT_COLOR_RANGE: [number, number, number][] = [
-  [45, 0, 0],       // #2d0000 dark
-  [139, 30, 30],    // #8b1e1e crimson
-  [239, 68, 68],    // #ef4444 red
-  [255, 59, 48],    // #ff3b30 bright
-  [255, 107, 74],   // #ff6b4a white-hot core
+/**
+ * 8-stop military thermal palette (FLIR Ironbow-inspired).
+ * Deep indigo -> dark purple -> violet -> magenta/crimson ->
+ * deep orange -> amber -> golden yellow -> bright red.
+ */
+export const THERMAL_COLOR_RANGE: [number, number, number][] = [
+  [30, 15, 80],      // deep indigo
+  [60, 20, 120],     // dark purple
+  [120, 30, 140],    // violet
+  [180, 30, 100],    // magenta/crimson
+  [210, 60, 30],     // deep orange
+  [230, 150, 20],    // amber
+  [250, 220, 50],    // golden yellow
+  [255, 40, 30],     // bright red
 ];
 
 // --- Types ---
@@ -38,6 +44,7 @@ export interface ThreatZoneData {
   totalSources: number;
   avgGoldstein: number;
   clusterWeight: number;
+  eventIds: string[];
 }
 
 // --- Pure functions ---
@@ -45,7 +52,7 @@ export interface ThreatZoneData {
 /**
  * Compute a threat weight for a single event.
  * Compounds type severity, media signal (mentions/sources),
- * fatalities, Goldstein hostility, and temporal decay.
+ * fatalities, and Goldstein hostility. No temporal decay.
  */
 export function computeThreatWeight(event: ConflictEventEntity): number {
   const typeWeight = TYPE_WEIGHTS[event.type] ?? 3;
@@ -63,12 +70,18 @@ export function computeThreatWeight(event: ConflictEventEntity): number {
   // Goldstein hostility: -10 (max conflict) → 2.0x, 0 → 1.5x, +10 → 1.0x
   const goldsteinFactor = 1.5 - goldstein / 20;
 
-  // Temporal decay: exponential with 6h half-life
-  const ageMs = Math.max(0, Date.now() - event.timestamp);
-  const ageHours = ageMs / (1000 * 60 * 60);
-  const decay = Math.pow(0.5, ageHours / HALF_LIFE_HOURS);
+  return typeWeight * mediaFactor * fatalityFactor * goldsteinFactor;
+}
 
-  return typeWeight * mediaFactor * fatalityFactor * goldsteinFactor * decay;
+/**
+ * Compute the 90th percentile of an array of weights.
+ * Returns at least 1 (floor clamp) to prevent degenerate colorDomain.
+ */
+export function computeP90(weights: number[]): number {
+  if (weights.length === 0) return 1;
+  const sorted = [...weights].sort((a, b) => a - b);
+  const idx = Math.ceil(sorted.length * 0.9) - 1;
+  return Math.max(sorted[Math.max(0, idx)] ?? 1, 1);
 }
 
 /**
@@ -92,6 +105,7 @@ export function aggregateToGrid(
     sources: number;
     goldsteinSum: number;
     weightSum: number;
+    eventIds: string[];
   }
 
   const cells = new Map<string, CellAcc>();
@@ -106,7 +120,7 @@ export function aggregateToGrid(
       cell = {
         lat: cellLat, lng: cellLng, count: 0, types: new Map(),
         latest: 0, fatalities: 0, mentions: 0, sources: 0,
-        goldsteinSum: 0, weightSum: 0,
+        goldsteinSum: 0, weightSum: 0, eventIds: [],
       };
       cells.set(key, cell);
     }
@@ -119,6 +133,7 @@ export function aggregateToGrid(
     cell.sources += event.data.numSources ?? 0;
     cell.goldsteinSum += event.data.goldsteinScale ?? 0;
     cell.weightSum += computeThreatWeight(event);
+    cell.eventIds.push(event.id);
   }
 
   const result: ThreatZoneData[] = [];
@@ -143,6 +158,7 @@ export function aggregateToGrid(
       totalSources: cell.sources,
       avgGoldstein: cell.count > 0 ? cell.goldsteinSum / cell.count : 0,
       clusterWeight: cell.weightSum,
+      eventIds: cell.eventIds,
     });
   }
 
@@ -194,15 +210,17 @@ export function useThreatHeatmapLayers() {
       weight: computeThreatWeight(e),
     }));
 
+    const p90 = computeP90(weightedData.map((d) => d.weight));
+
     const heatmapLayer = new HeatmapLayer({
       id: 'threat-heatmap',
       data: weightedData,
       getPosition: (d: WeightedPoint) => d.position,
       getWeight: (d: WeightedPoint) => d.weight,
       radiusPixels: 40,
-      colorRange: THREAT_COLOR_RANGE,
+      colorRange: THERMAL_COLOR_RANGE,
+      colorDomain: [0, p90],
       intensity: 1,
-      threshold: 0.05,
       opacity: 0.45,
       aggregation: 'SUM',
       pickable: false,
@@ -282,7 +300,7 @@ LEGEND_REGISTRY.push({
   layerId: 'threat',
   title: 'Threat Density',
   colorStops: [
-    { color: '#2d0000', label: 'Low' },
-    { color: '#ff3b30', label: 'High' },
+    { color: '#1e0f50', label: 'Low' },
+    { color: '#ff2820', label: 'High' },
   ],
 });
