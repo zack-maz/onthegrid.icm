@@ -22,3 +22,23 @@ export class ScatterplotLayer {
     this.props = { ...props };
   }
 }
+
+export class GeoJsonLayer {
+  id: string;
+  props: Record<string, unknown>;
+
+  constructor(props: Record<string, unknown> = {}) {
+    this.id = (props.id as string) ?? '';
+    this.props = { ...props };
+  }
+}
+
+export class TextLayer {
+  id: string;
+  props: Record<string, unknown>;
+
+  constructor(props: Record<string, unknown> = {}) {
+    this.id = (props.id as string) ?? '';
+    this.props = { ...props };
+  }
+}

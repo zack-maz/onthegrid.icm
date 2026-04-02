@@ -7,7 +7,7 @@ const LAYER_CONFIGS: { id: VisualizationLayerId; label: string; color: string; c
   { id: 'weather', label: 'Climate', color: '#38bdf8' },
   { id: 'threat', label: 'Threat Density', color: '#ef4444' },
   { id: 'political', label: 'Political', color: '#a78bfa' },
-  { id: 'ethnic', label: 'Ethnic', color: '#c084fc', comingSoon: true },
+  { id: 'ethnic', label: 'Ethnic', color: '#c084fc' },
   { id: 'satellite', label: 'Satellite', color: '#22d3ee', comingSoon: true },
   { id: 'water', label: 'Water', color: '#4ade80', comingSoon: true },
 ];
