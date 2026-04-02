@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Map,
   Source,
@@ -89,9 +89,15 @@ export function BaseMap() {
   const isSettingPin = useFilterStore((s) => s.isSettingPin);
   const setProximityPin = useFilterStore((s) => s.setProximityPin);
   const setSettingPin = useFilterStore((s) => s.setSettingPin);
+  const isBelowZoom9 = useMapStore((s) => s.isBelowZoom9);
+  const setZoomRegion = useMapStore((s) => s.setZoomRegion);
+  const lastZoomRegionRef = useRef(true); // initial view is zoomed out (below zoom 9)
+
+  const [hoveredClusterId, setHoveredClusterId] = useState<string | null>(null);
+
   const entityLayers = useEntityLayers();
   const weatherLayers = useWeatherLayers();
-  const threatLayers = useThreatHeatmapLayers();
+  const threatLayers = useThreatHeatmapLayers(hoveredClusterId);
   const isWeatherActive = useLayerStore((s) => s.activeLayers.has('weather'));
   const isThreatActive = useLayerStore((s) => s.activeLayers.has('threat'));
 
@@ -109,14 +115,16 @@ export function BaseMap() {
         setHover(null);
         setThreatHover(null);
         setWeatherHover(null);
+        setHoveredClusterId(null);
         hoverEntity(null);
         return;
       }
 
-      // Threat cluster picker layer: show threat zone tooltip
+      // Threat cluster picker layer: show threat zone tooltip + hover dimming
       if (info.layer?.id === 'threat-cluster-picker' && isThreatActive) {
-        const zone = info.object as ThreatZoneData;
-        setThreatHover({ zone, x: info.x, y: info.y });
+        const cluster = info.object as ThreatCluster;
+        setThreatHover({ zone: cluster as unknown as ThreatZoneData, x: info.x, y: info.y });
+        setHoveredClusterId(cluster.id);
         setHover(null);
         setWeatherHover(null);
         hoverEntity(null);
@@ -136,6 +144,7 @@ export function BaseMap() {
       // Entity hover (existing behavior)
       setWeatherHover(null);
       setThreatHover(null);
+      setHoveredClusterId(null);
       const entity = info.object as MapEntity | SiteEntity;
       setHover({ entity, x: info.x, y: info.y });
       hoverEntity(entity.id);
@@ -235,6 +244,18 @@ export function BaseMap() {
     [setCursorPosition],
   );
 
+  const handleMove = useCallback(
+    (e: MapEvent) => {
+      const zoom = e.target.getZoom();
+      const currentRegion = zoom < 9;
+      if (currentRegion !== lastZoomRegionRef.current) {
+        lastZoomRegionRef.current = currentRegion;
+        setZoomRegion(zoom);
+      }
+    },
+    [setZoomRegion],
+  );
+
   const rawTooltipEntity = hover?.entity ?? null;
   // Suppress tooltip for non-matching entities during search filter
   const tooltipEntity = rawTooltipEntity && (
@@ -262,6 +283,7 @@ export function BaseMap() {
         cursor={isSettingPin ? 'crosshair' : undefined}
         onLoad={handleLoad}
         onMouseMove={handleMouseMove}
+        onMove={handleMove}
         onClick={(e) => {
           if (isSettingPin) {
             setProximityPin({ lat: e.lngLat.lat, lng: e.lngLat.lng });
@@ -296,7 +318,9 @@ export function BaseMap() {
         />
         <ScaleControl unit="metric" position="bottom-right" />
         <DeckGLOverlay
-          layers={[...weatherLayers, ...threatLayers, ...entityLayers]}
+          layers={isBelowZoom9
+            ? [...weatherLayers, ...entityLayers, ...threatLayers]
+            : [...weatherLayers, ...threatLayers, ...entityLayers]}
           onHover={handleDeckHover}
           onClick={handleDeckClick}
           pickingRadius={12}

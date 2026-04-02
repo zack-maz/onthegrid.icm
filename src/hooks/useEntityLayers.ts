@@ -106,6 +106,13 @@ export function useEntityLayers() {
 
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
   const hoveredEntityId = useUIStore((s) => s.hoveredEntityId);
+  const selectedCluster = useUIStore((s) => s.selectedCluster);
+
+  // Cluster event IDs for dimming non-cluster events when a cluster is selected
+  const clusterEventIds = useMemo(
+    () => selectedCluster ? new Set(selectedCluster.eventIds) : null,
+    [selectedCluster],
+  );
 
   // Search filter state
   const isFilterActive = useSearchStore((s) => s.isFilterMode && s.matchedIds.size > 0);
@@ -268,13 +275,14 @@ export function useEntityLayers() {
     getColor: (d: ShipEntity) => {
       const [r, g, b] = ENTITY_COLORS.ship;
       if (isFilterActive && !matchedIds.has(d.id)) return [r, g, b, SEARCH_DIM_ALPHA];
+      if (clusterEventIds) return [r, g, b, DIM_ALPHA];
       if (activeId && d.id !== activeId) return [r, g, b, DIM_ALPHA];
       return [r, g, b, 255];
     },
     billboard: false,
     pickable: true,
-    updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size] },
-  }), [filteredShips, activeId, isFilterActive, matchedIds]);
+    updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size, clusterEventIds] },
+  }), [filteredShips, activeId, isFilterActive, matchedIds, clusterEventIds]);
 
   // Airstrike layer (always visible)
   const airstrikeLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
@@ -292,13 +300,14 @@ export function useEntityLayers() {
     getColor: (d: ConflictEventEntity) => {
       const [r, g, b] = ENTITY_COLORS.airstrike;
       if (isFilterActive && !matchedIds.has(d.id)) return [r, g, b, SEARCH_DIM_ALPHA];
+      if (clusterEventIds && !clusterEventIds.has(d.id)) return [r, g, b, DIM_ALPHA];
       if (activeId && d.id !== activeId) return [r, g, b, DIM_ALPHA];
       return [r, g, b, 255];
     },
     billboard: false,
     pickable: true,
-    updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size] },
-  }), [airstrikeEvents, activeId, isFilterActive, matchedIds]);
+    updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size, clusterEventIds] },
+  }), [airstrikeEvents, activeId, isFilterActive, matchedIds, clusterEventIds]);
 
   // Ground combat layer (always visible)
   const groundCombatLayer = useMemo(() => new IconLayer<ConflictEventEntity>({
@@ -316,12 +325,13 @@ export function useEntityLayers() {
     getColor: (d: ConflictEventEntity) => {
       const [r, g, b] = ENTITY_COLORS.groundCombat;
       if (isFilterActive && !matchedIds.has(d.id)) return [r, g, b, SEARCH_DIM_ALPHA];
+      if (clusterEventIds && !clusterEventIds.has(d.id)) return [r, g, b, DIM_ALPHA];
       if (activeId && d.id !== activeId) return [r, g, b, DIM_ALPHA];
       return [r, g, b, 255];
     },
     billboard: false,
     pickable: true,
-    updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size] },
+    updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size, clusterEventIds] },
   }), [groundCombatEvents, activeId, isFilterActive, matchedIds]);
 
   // Targeted layer (always visible)
@@ -340,13 +350,14 @@ export function useEntityLayers() {
     getColor: (d: ConflictEventEntity) => {
       const [r, g, b] = ENTITY_COLORS.targeted;
       if (isFilterActive && !matchedIds.has(d.id)) return [r, g, b, SEARCH_DIM_ALPHA];
+      if (clusterEventIds && !clusterEventIds.has(d.id)) return [r, g, b, DIM_ALPHA];
       if (activeId && d.id !== activeId) return [r, g, b, DIM_ALPHA];
       return [r, g, b, 255];
     },
     billboard: false,
     pickable: true,
-    updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size] },
-  }), [targetedEvents, activeId, isFilterActive, matchedIds]);
+    updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size, clusterEventIds] },
+  }), [targetedEvents, activeId, isFilterActive, matchedIds, clusterEventIds]);
 
   // Flight layer (always visible)
   const flightLayer = useMemo(() => new IconLayer<FlightEntity>({
@@ -372,6 +383,7 @@ export function useEntityLayers() {
         ? ENTITY_COLORS.flightUnidentified
         : ENTITY_COLORS.flight;
       if (isFilterActive && !matchedIds.has(d.id)) return [r, g, b, SEARCH_DIM_ALPHA];
+      if (clusterEventIds) return [r, g, b, DIM_ALPHA];
       if (activeId && d.id !== activeId) return [r, g, b, DIM_ALPHA];
       const alpha = d.data.unidentified
         ? Math.round(pulseOpacity * 255)
@@ -381,10 +393,10 @@ export function useEntityLayers() {
     billboard: false,
     pickable: true,
     updateTriggers: {
-      getColor: [pulseOpacity, activeId, isFilterActive, matchedIds.size],
+      getColor: [pulseOpacity, activeId, isFilterActive, matchedIds.size, clusterEventIds],
       getSize: [pulseOpacity],
     },
-  }), [flights, pulseOpacity, activeId, isFilterActive, matchedIds]);
+  }), [flights, pulseOpacity, activeId, isFilterActive, matchedIds, clusterEventIds]);
 
   // Site layer (filtered by type + healthy/attacked toggles)
   const siteLayer = useMemo(() => new IconLayer<SiteEntity>({
@@ -403,13 +415,14 @@ export function useEntityLayers() {
       const attacked = siteAttackMap.get(d.id) ?? false;
       const [r, g, b] = attacked ? ENTITY_COLORS.siteAttacked : ENTITY_COLORS.siteHealthy;
       if (isFilterActive && !matchedIds.has(d.id)) return [r, g, b, SEARCH_DIM_ALPHA];
+      if (clusterEventIds) return [r, g, b, DIM_ALPHA];
       if (activeId && d.id !== activeId) return [r, g, b, DIM_ALPHA];
       return [r, g, b, 255];
     },
     billboard: false,
     pickable: true,
-    updateTriggers: { getColor: [activeId, siteAttackMap, isFilterActive, matchedIds.size] },
-  }), [displaySites, activeId, siteAttackMap, isFilterActive, matchedIds]);
+    updateTriggers: { getColor: [activeId, siteAttackMap, isFilterActive, matchedIds.size, clusterEventIds] },
+  }), [displaySites, activeId, siteAttackMap, isFilterActive, matchedIds, clusterEventIds]);
 
   // Find active entity across all data sources
   const activeEntity = useMemo<MapEntity | SiteEntity | null>(() => {

@@ -48,6 +48,7 @@ export const rateLimiters = {
   weather: createRateLimiter(10, 60),
   sites: createRateLimiter(10, 60),
   sources: createRateLimiter(30, 60),
+  geocode: createRateLimiter(10, 60),
 } as const;
 
 /** @deprecated Use rateLimiters[route] for per-endpoint limits */

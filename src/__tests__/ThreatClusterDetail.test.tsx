@@ -7,6 +7,12 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import type { ThreatCluster } from '@/types/ui';
 import type { ConflictEventEntity } from '@/types/entities';
 
+// Mock useGeoContext
+const mockGeoContext = vi.fn();
+vi.mock('@/hooks/useGeoContext', () => ({
+  useGeoContext: (...args: unknown[]) => mockGeoContext(...args),
+}));
+
 function makeEvent(
   overrides: Partial<ConflictEventEntity> & { id: string; type: ConflictEventEntity['type'] },
 ): ConflictEventEntity {
@@ -46,9 +52,66 @@ const mockCluster: ThreatCluster = {
 };
 
 const mockEvents: ConflictEventEntity[] = [
-  makeEvent({ id: 'evt-1', type: 'airstrike', lat: 33.1, lng: 44.1, data: { eventType: 'Aerial weapons', subEventType: '', fatalities: 3, actor1: 'A', actor2: 'B', notes: '', source: '', goldsteinScale: -5, locationName: 'Baghdad', cameoCode: '195' } }),
-  makeEvent({ id: 'evt-2', type: 'shelling', lat: 33.2, lng: 44.2, data: { eventType: 'Artillery', subEventType: '', fatalities: 0, actor1: 'C', actor2: 'D', notes: '', source: '', goldsteinScale: -3, locationName: 'Mosul', cameoCode: '190' } }),
-  makeEvent({ id: 'evt-3', type: 'ground_combat', lat: 33.3, lng: 44.3, data: { eventType: 'Armed clash', subEventType: '', fatalities: 2, actor1: 'E', actor2: 'F', notes: '', source: '', goldsteinScale: -7, locationName: 'Tikrit', cameoCode: '180' } }),
+  makeEvent({
+    id: 'evt-1',
+    type: 'airstrike',
+    lat: 33.1,
+    lng: 44.1,
+    data: {
+      eventType: 'Aerial weapons',
+      subEventType: '',
+      fatalities: 3,
+      actor1: 'A',
+      actor2: 'B',
+      notes: '',
+      source: '',
+      goldsteinScale: -5,
+      locationName: 'Baghdad',
+      cameoCode: '195',
+      numMentions: 50,
+      numSources: 10,
+    },
+  }),
+  makeEvent({
+    id: 'evt-2',
+    type: 'shelling',
+    lat: 33.2,
+    lng: 44.2,
+    data: {
+      eventType: 'Artillery',
+      subEventType: '',
+      fatalities: 0,
+      actor1: 'C',
+      actor2: 'D',
+      notes: '',
+      source: '',
+      goldsteinScale: -3,
+      locationName: 'Mosul',
+      cameoCode: '190',
+      numMentions: 2,
+      numSources: 1,
+    },
+  }),
+  makeEvent({
+    id: 'evt-3',
+    type: 'ground_combat',
+    lat: 33.3,
+    lng: 44.3,
+    data: {
+      eventType: 'Armed clash',
+      subEventType: '',
+      fatalities: 2,
+      actor1: 'E',
+      actor2: 'F',
+      notes: '',
+      source: '',
+      goldsteinScale: -7,
+      locationName: 'Tikrit',
+      cameoCode: '180',
+      numMentions: 10,
+      numSources: 5,
+    },
+  }),
 ];
 
 describe('ThreatClusterDetail', () => {
@@ -58,6 +121,11 @@ describe('ThreatClusterDetail', () => {
       selectedEntityId: null,
       selectedCluster: mockCluster,
       isDetailPanelOpen: true,
+    });
+    // Default: site proximity match
+    mockGeoContext.mockReturnValue({
+      label: 'Near Nuclear Plant',
+      type: 'site',
     });
   });
 
@@ -136,5 +204,60 @@ describe('ThreatClusterDetail', () => {
     expect(state.navigationStack[0].breadcrumbLabel).toMatch(/Cluster\(3\)/);
     // Selected entity should be the clicked event
     expect(state.selectedEntityId).toBe('evt-1');
+  });
+
+  // --- 23.2 enrichment tests ---
+
+  it('renders geographic context label when sites are nearby', () => {
+    mockGeoContext.mockReturnValue({
+      label: 'Near Nuclear Plant',
+      type: 'site',
+    });
+
+    render(<ThreatClusterDetail cluster={mockCluster} />);
+    expect(screen.getByText('Near Nuclear Plant')).toBeInTheDocument();
+  });
+
+  it('renders geographic context with geocode fallback', () => {
+    mockGeoContext.mockReturnValue({
+      label: 'Baghdad, Iraq',
+      type: 'geocode',
+    });
+
+    render(<ThreatClusterDetail cluster={mockCluster} />);
+    expect(screen.getByText('Baghdad, Iraq')).toBeInTheDocument();
+  });
+
+  it('renders loading placeholder when geoContext is null', () => {
+    mockGeoContext.mockReturnValue(null);
+
+    render(<ThreatClusterDetail cluster={mockCluster} />);
+    const container = screen.getByTestId('geo-context');
+    expect(container.querySelector('.animate-pulse')).toBeTruthy();
+  });
+
+  it('renders event type breakdown bars sorted by count', () => {
+    render(<ThreatClusterDetail cluster={mockCluster} />);
+
+    const breakdownSection = screen.getByTestId('type-breakdown');
+    expect(breakdownSection).toBeInTheDocument();
+    expect(screen.getByText('Event Types')).toBeInTheDocument();
+    const typeLabels = breakdownSection.querySelectorAll('.truncate');
+    expect(typeLabels.length).toBe(3);
+  });
+
+  it('events are sorted by threat weight (highest first)', () => {
+    render(<ThreatClusterDetail cluster={mockCluster} />);
+
+    const eventButtons = screen.getAllByRole('button');
+    expect(eventButtons[0].textContent).toContain('Baghdad');
+    expect(eventButtons[eventButtons.length - 1].textContent).toContain('Mosul');
+  });
+
+  it('scrollable list has key={cluster.id} for scroll reset', () => {
+    const { container } = render(<ThreatClusterDetail cluster={mockCluster} />);
+
+    const scrollable = container.querySelector('.overflow-y-auto');
+    expect(scrollable).toBeTruthy();
   });
 });

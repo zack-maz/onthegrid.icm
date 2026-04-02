@@ -88,7 +88,7 @@ Plans:
 **Goal:** Upgrade threat cluster circles with radial gradient shaders, additive blending, dual-dimension encoding (radius=spread, color=weight), zoom-dependent z-ordering, hover dimming, and enriched detail panel with type breakdown bars, geographic context, and weight-sorted event lists
 **Depends on:** Phase 23
 **Requirements:** [TD-01, TD-02, TD-03, TD-04, TD-05, TD-06, TD-07, TD-08, TD-09, TD-10]
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 23.2-01-PLAN.md -- Radial gradient shader, simplified palette, pixel sizing, additive blending, hover dimming, zoom z-order

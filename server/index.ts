@@ -13,6 +13,7 @@ import { sitesRouter } from './routes/sites.js';
 import { newsRouter } from './routes/news.js';
 import { marketsRouter } from './routes/markets.js';
 import { weatherRouter } from './routes/weather.js';
+import { geocodeRouter } from './routes/geocode.js';
 import { healthRouter } from './routes/health.js';
 import { cronHealthRouter } from './routes/cron-health.js';
 export function createApp() {
@@ -70,6 +71,7 @@ export function createApp() {
   app.use('/api/news', rateLimiters.news, cacheControl(300, 600), newsRouter);
   app.use('/api/markets', rateLimiters.markets, cacheControl(30, 30), marketsRouter);
   app.use('/api/weather', rateLimiters.weather, cacheControl(600, 1200), weatherRouter);
+  app.use('/api/geocode', rateLimiters.geocode, cacheControl(86400, 86400), geocodeRouter);
 
   // Error handler -- must be after routes
   app.use(errorHandler);
