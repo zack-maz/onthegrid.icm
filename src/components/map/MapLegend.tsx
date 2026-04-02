@@ -56,6 +56,19 @@ LEGEND_REGISTRY.push({
   ],
 });
 
+// Factions legend (Phase 24 - Political layer)
+LEGEND_REGISTRY.push({
+  layerId: 'political',
+  title: 'Factions',
+  mode: 'discrete',
+  colorStops: [
+    { color: '#3b82f6', label: 'US-aligned' },
+    { color: '#dc2626', label: 'Iran-aligned' },
+    { color: '#64748b', label: 'Neutral' },
+    { color: '#f59e0b', label: 'Disputed' },
+  ],
+});
+
 function LegendItem({ config }: { config: LegendConfig }) {
   if (config.mode === 'discrete') {
     return (

@@ -22,12 +22,12 @@ describe('LayerTogglesSlot', () => {
     expect(screen.getByText('Layers')).toBeTruthy();
   });
 
-  it('renders 3 active toggle rows and 4 coming-soon rows', () => {
+  it('renders 4 active toggle rows and 3 coming-soon rows', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
-    expect(switches).toHaveLength(3);
+    expect(switches).toHaveLength(4);
     // Coming-soon layers render as plain divs, not switches
-    expect(screen.getAllByText('soon')).toHaveLength(4);
+    expect(screen.getAllByText('soon')).toHaveLength(3);
   });
 
   it('renders toggle rows with correct labels', () => {
@@ -69,11 +69,11 @@ describe('LayerTogglesSlot', () => {
     expect(geoToggle.className).toContain('opacity-100');
   });
 
-  it('coming-soon layers are not clickable toggles', () => {
+  it('political layer is a clickable toggle (not coming-soon)', () => {
     render(<LayerTogglesSlot />);
-    // Political is now coming-soon, should not have a switch role
-    const switches = screen.getAllByRole('switch');
-    const switchLabels = switches.map((s) => s.getAttribute('aria-label'));
-    expect(switchLabels).not.toContain('Toggle Political layer');
+    const politicalToggle = screen.getByLabelText('Toggle Political layer');
+    expect(politicalToggle).toBeTruthy();
+    fireEvent.click(politicalToggle);
+    expect(useLayerStore.getState().activeLayers.has('political')).toBe(true);
   });
 });

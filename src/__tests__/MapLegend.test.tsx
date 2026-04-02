@@ -34,9 +34,13 @@ describe('MapLegend', () => {
     expect(LEGEND_REGISTRY.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders nothing when political layer is active (no legend registered)', () => {
+  it('renders discrete faction legend when political layer is active', () => {
     useLayerStore.setState({ activeLayers: new Set(['political']) });
-    const { container } = render(<MapLegend />);
-    expect(container.firstChild).toBeNull();
+    const { getByText } = render(<MapLegend />);
+    expect(getByText('Factions')).toBeTruthy();
+    expect(getByText('US-aligned')).toBeTruthy();
+    expect(getByText('Iran-aligned')).toBeTruthy();
+    expect(getByText('Neutral')).toBeTruthy();
+    expect(getByText('Disputed')).toBeTruthy();
   });
 });
