@@ -222,7 +222,6 @@ export function mergeClusters(
     const typeCounts = new Map<string, number>();
     let minLat = Infinity, maxLat = -Infinity;
     let minLng = Infinity, maxLng = -Infinity;
-    let weightedLatSum = 0, weightedLngSum = 0;
 
     for (const c of component) {
       totalWeight += c.clusterWeight;
@@ -240,9 +239,6 @@ export function mergeClusters(
       if (c.lng < minLng) minLng = c.lng;
       if (c.lng > maxLng) maxLng = c.lng;
 
-      // Weighted centroid
-      weightedLatSum += c.lat * c.clusterWeight;
-      weightedLngSum += c.lng * c.clusterWeight;
     }
 
     // Dominant type across all cells
@@ -267,8 +263,8 @@ export function mergeClusters(
 
     clusters.push({
       id: sortedKeys,
-      centroidLat: totalWeight > 0 ? weightedLatSum / totalWeight : component[0].lat,
-      centroidLng: totalWeight > 0 ? weightedLngSum / totalWeight : component[0].lng,
+      centroidLat: (minLat + maxLat) / 2,
+      centroidLng: (minLng + maxLng) / 2,
       cells: component,
       eventCount,
       totalWeight,

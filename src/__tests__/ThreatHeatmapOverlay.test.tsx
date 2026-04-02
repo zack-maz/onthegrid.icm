@@ -248,14 +248,14 @@ describe('mergeClusters', () => {
     expect(clusters[0].eventCount).toBe(8);
   });
 
-  it('computes weight-averaged centroid', () => {
+  it('computes bounding box center as centroid', () => {
     const cells = [
       makeCell(33.125, 44.125, { clusterWeight: 10 }),
       makeCell(33.375, 44.125, { clusterWeight: 30 }),
     ];
     const clusters = mergeClusters(cells, CELL_SIZE);
-    // Weighted average: (33.125*10 + 33.375*30) / 40 = (331.25 + 1001.25) / 40 = 33.3125
-    expect(clusters[0].centroidLat).toBeCloseTo(33.3125, 4);
+    // Bbox center: (33.125 + 33.375) / 2 = 33.25
+    expect(clusters[0].centroidLat).toBeCloseTo(33.25, 4);
     expect(clusters[0].centroidLng).toBeCloseTo(44.125, 4);
   });
 
