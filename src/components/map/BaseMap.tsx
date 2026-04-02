@@ -193,6 +193,9 @@ export function BaseMap() {
         return;
       }
 
+      // Ethnic/political zones are pickable for hover only — ignore clicks
+      if (info.layer?.id?.startsWith('ethnic-')) return;
+
       // Threat cluster picker: open cluster detail
       if (info.layer?.id === 'threat-cluster-picker') {
         const cluster = info.object as ThreatCluster;

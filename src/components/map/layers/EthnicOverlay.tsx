@@ -57,11 +57,11 @@ function createHatchAtlas(): HTMLCanvasElement | null {
 
   ctx.clearRect(0, 0, ATLAS_SIZE, ATLAS_SIZE);
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 4;
 
-  // Draw 45-degree diagonal lines with 8px spacing.
-  // Draw enough lines to cover the full tile, including wrapping.
-  const spacing = 8;
+  // Draw 45-degree diagonal lines with 10px spacing.
+  // Thicker lines + wider spacing = more visible hatching at all zooms.
+  const spacing = 10;
   for (let i = -ATLAS_SIZE; i < ATLAS_SIZE * 2; i += spacing) {
     ctx.beginPath();
     ctx.moveTo(i, 0);
@@ -115,16 +115,10 @@ function computeCentroid(geometry: Record<string, unknown>): [number, number] {
   return [sumLng / coords.length, sumLat / coords.length];
 }
 
-const centroidData: CentroidEntry[] = [
-  ...singleGroupFeatures.map((f) => ({
-    position: computeCentroid(f.geometry),
-    text: f.properties.label,
-  })),
-  ...overlapFeatures.map((f) => ({
-    position: computeCentroid(f.geometry),
-    text: f.properties.label,
-  })),
-];
+const centroidData: CentroidEntry[] = singleGroupFeatures.map((f) => ({
+  position: computeCentroid(f.geometry),
+  text: f.properties.label,
+}));
 
 // ---------------------------------------------------------------------------
 // Legend registration (module-level)
@@ -178,7 +172,7 @@ export function useEthnicLayers(): (GeoJsonLayer | TextLayer)[] {
               fillPatternAtlas: hatchAtlas,
               fillPatternMapping: HATCH_MAPPING,
               getFillPattern: () => 'hatch',
-              getFillPatternScale: 500,
+              getFillPatternScale: 200,
               fillPatternMask: true,
               extensions: [fillStyleExt],
             }
@@ -211,7 +205,7 @@ export function useEthnicLayers(): (GeoJsonLayer | TextLayer)[] {
                 fillPatternMapping: HATCH_MAPPING,
                 getFillPattern: () => 'hatch',
                 getFillPatternOffset: [i / overlapGroupIds.length, 0],
-                getFillPatternScale: 500,
+                getFillPatternScale: 200,
                 fillPatternMask: true,
                 extensions: [fillStyleExt],
               }
