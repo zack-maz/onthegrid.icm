@@ -3,6 +3,7 @@ import { useMap } from '@vis.gl/react-maplibre';
 import { useProximityAlerts } from '@/hooks/useProximityAlerts';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useUIStore } from '@/stores/uiStore';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import type { ProximityAlert } from '@/hooks/useProximityAlerts';
 
 function AlertIcon({
@@ -134,6 +135,10 @@ export function ProximityAlertOverlay() {
             onExpand={() => setExpandedSiteId(alert.siteId)}
             onCollapse={() => setExpandedSiteId(null)}
             onFlyTo={() => {
+              const currentView = getCurrentPanelView();
+              if (currentView) {
+                useUIStore.getState().pushView(currentView);
+              }
               useNotificationStore.getState().setFlyToTarget({
                 lng: alert.siteLng,
                 lat: alert.siteLat,

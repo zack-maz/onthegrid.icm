@@ -25,6 +25,7 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { useEntityLayers } from '@/hooks/useEntityLayers';
 import { useSearchStore } from '@/stores/searchStore';
 import { useLayerStore } from '@/stores/layerStore';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import type { MapEntity, SiteEntity } from '@/types/entities';
 import type { WeatherGridPoint } from '@/stores/weatherStore';
 import {
@@ -153,12 +154,17 @@ export function BaseMap() {
         selectEntity(null);
         setSelectedCluster(null);
         closeDetailPanel();
+        useUIStore.getState().clearStack();
         return;
       }
 
       // Threat cluster picker: open cluster detail
       if (info.layer?.id === 'threat-cluster-picker') {
         const cluster = info.object as ThreatCluster;
+        const currentView = getCurrentPanelView();
+        if (currentView) {
+          useUIStore.getState().pushView(currentView);
+        }
         setSelectedCluster(cluster);
         openDetailPanel();
         return;
@@ -170,7 +176,11 @@ export function BaseMap() {
         selectEntity(null);
         closeDetailPanel();
       } else {
-        // Click new entity: select, open panel, and fly to it
+        // Click new entity: push current view, then select, open panel, and fly to it
+        const currentView = getCurrentPanelView();
+        if (currentView) {
+          useUIStore.getState().pushView(currentView);
+        }
         selectEntity(entity.id);
         openDetailPanel();
         setFlyToTarget({ lng: entity.lng, lat: entity.lat, zoom: 10 });

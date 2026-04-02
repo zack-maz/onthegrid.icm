@@ -1,6 +1,7 @@
 import { useEventStore } from '@/stores/eventStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import { EVENT_TYPE_LABELS } from '@/types/ui';
 import type { ThreatCluster } from '@/types/ui';
 
@@ -37,6 +38,10 @@ export function ThreatClusterDetail({ cluster }: ThreatClusterDetailProps) {
   const dominantTypeLabel = EVENT_TYPE_LABELS[cluster.dominantType] ?? cluster.dominantType;
 
   const handleEventClick = (eventId: string, lat: number, lng: number) => {
+    const currentView = getCurrentPanelView();
+    if (currentView) {
+      useUIStore.getState().pushView(currentView);
+    }
     selectEntity(eventId);
     openDetailPanel();
     setFlyToTarget({ lng, lat, zoom: 10 });

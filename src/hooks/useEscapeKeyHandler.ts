@@ -52,6 +52,7 @@ export function useEscapeKeyHandler() {
       if (useUIStore.getState().isDetailPanelOpen) {
         useUIStore.getState().closeDetailPanel();
         useUIStore.getState().selectEntity(null);
+        useUIStore.getState().clearStack();
         return;
       }
 

@@ -5,6 +5,7 @@
 import { useState, useCallback } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
 import { useCounterData } from '@/components/counters/useCounterData';
 import { CounterRow } from '@/components/counters/CounterRow';
@@ -22,6 +23,10 @@ export function CountersSlot() {
   }, []);
 
   const handleEntityClick = useCallback((entity: CounterEntity) => {
+    const currentView = getCurrentPanelView();
+    if (currentView) {
+      useUIStore.getState().pushView(currentView);
+    }
     useNotificationStore.getState().setFlyToTarget({
       lng: entity.lng,
       lat: entity.lat,

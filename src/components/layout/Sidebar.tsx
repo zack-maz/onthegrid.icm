@@ -3,6 +3,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useSearchStore } from '@/stores/searchStore';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import { SidebarSection } from '@/components/layout/SidebarSection';
 import { useCounterData } from '@/components/counters/useCounterData';
 import { CounterRow } from '@/components/counters/CounterRow';
@@ -57,6 +58,10 @@ function CountersContent() {
   }, []);
 
   const handleEntityClick = useCallback((entity: CounterEntity) => {
+    const currentView = getCurrentPanelView();
+    if (currentView) {
+      useUIStore.getState().pushView(currentView);
+    }
     useNotificationStore.getState().setFlyToTarget({
       lng: entity.lng,
       lat: entity.lat,

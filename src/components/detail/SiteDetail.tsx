@@ -4,6 +4,7 @@ import { SITE_TYPE_LABELS, EVENT_TYPE_LABELS } from '@/types/ui';
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useUIStore } from '@/stores/uiStore';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import { computeAttackStatus } from '@/lib/attackStatus';
 import { useSiteImage } from '@/hooks/useSiteImage';
 import { DetailValue } from './DetailValue';
@@ -97,6 +98,10 @@ export function SiteDetail({ entity }: SiteDetailProps) {
                 <button
                   key={evt.id}
                   onClick={() => {
+                    const currentView = getCurrentPanelView();
+                    if (currentView) {
+                      useUIStore.getState().pushView(currentView);
+                    }
                     selectEntity(evt.id);
                     openDetailPanel();
                   }}

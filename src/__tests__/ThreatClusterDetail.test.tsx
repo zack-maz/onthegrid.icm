@@ -111,4 +111,30 @@ describe('ThreatClusterDetail', () => {
     render(<ThreatClusterDetail cluster={mockCluster} />);
     expect(screen.getByText(/2 of 3 events visible/)).toBeInTheDocument();
   });
+
+  it('clicking event card pushes current cluster view to navigation stack before selecting event', () => {
+    // Ensure panel is open with a selected cluster and empty stack
+    useUIStore.setState({
+      selectedEntityId: null,
+      selectedCluster: mockCluster,
+      isDetailPanelOpen: true,
+      navigationStack: [],
+    });
+
+    render(<ThreatClusterDetail cluster={mockCluster} />);
+
+    // Click the first event (Baghdad)
+    const baghdadCard = screen.getByText('Baghdad').closest('button');
+    expect(baghdadCard).toBeTruthy();
+    fireEvent.click(baghdadCard!);
+
+    const state = useUIStore.getState();
+    // Navigation stack should have the cluster view pushed
+    expect(state.navigationStack).toHaveLength(1);
+    expect(state.navigationStack[0].cluster).toEqual(mockCluster);
+    expect(state.navigationStack[0].entityId).toBeNull();
+    expect(state.navigationStack[0].breadcrumbLabel).toMatch(/Cluster\(3\)/);
+    // Selected entity should be the clicked event
+    expect(state.selectedEntityId).toBe('evt-1');
+  });
 });

@@ -3,6 +3,7 @@ import { useSearchStore } from '@/stores/searchStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useSiteStore } from '@/stores/siteStore';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import { useSearchResults } from '@/hooks/useSearchResults';
 import { useAutocomplete, type AutocompleteSuggestion } from '@/hooks/useAutocomplete';
 import { SearchResultGroup } from '@/components/search/SearchResultGroup';
@@ -159,6 +160,10 @@ export function SearchModal() {
 
   // --- Entity selection ---
   const handleSelect = useCallback((entity: MapEntity | SiteEntity) => {
+    const currentView = getCurrentPanelView();
+    if (currentView) {
+      useUIStore.getState().pushView(currentView);
+    }
     useNotificationStore.getState().setFlyToTarget({
       lng: entity.lng,
       lat: entity.lat,
