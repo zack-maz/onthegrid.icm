@@ -92,9 +92,9 @@ Requirements for the Data Quality & Layers milestone.
 
 ### Ethnic Distribution Layer
 
-- [ ] **ETH-01**: Static GeoJSON ethnic-zones.json contains ethnic boundary polygons extracted from GeoEPR 2021 dataset filtered to Middle East bbox
-- [ ] **ETH-02**: Cross-border ethnic groups (Kurdish, Arab, Baloch, Turkmen, Pashtun) are merged into single MultiPolygon features per group
-- [ ] **ETH-03**: Ethnic group config (ethnicGroups.ts) defines all 10 zones with distinct colors, rgba values, population estimates, and context descriptions
+- [x] **ETH-01**: Static GeoJSON ethnic-zones.json contains ethnic boundary polygons extracted from GeoEPR 2021 dataset filtered to Middle East bbox
+- [x] **ETH-02**: Cross-border ethnic groups (Kurdish, Arab, Baloch, Turkmen, Pashtun) are merged into single MultiPolygon features per group
+- [x] **ETH-03**: Ethnic group config (ethnicGroups.ts) defines all 10 zones with distinct colors, rgba values, population estimates, and context descriptions
 - [ ] **ETH-04**: User can toggle ethnic overlay showing diagonal-hatched polygons color-coded per ethnic group using FillStyleExtension with fillPatternMask
 - [ ] **ETH-05**: Zone labels rendered at polygon centroids are always visible when ethnic layer is active with zoom-responsive sizing (10-24px)
 - [ ] **ETH-06**: Hover tooltip on ethnic zones shows group name, approximate population, and brief geographic context (only when no entity/threat is hovered)

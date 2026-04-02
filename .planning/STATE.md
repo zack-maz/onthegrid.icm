@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Data Quality & Layers
 status: unknown
-last_updated: "2026-04-02T21:14:51.776Z"
+last_updated: "2026-04-02T22:52:00Z"
 progress:
   total_phases: 9
   completed_phases: 4
@@ -22,6 +22,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Phase 25: Plan 01 COMPLETE (1 of 2 plans done)
 Phase 24: Plan 01 COMPLETE (1 of 2 plans done)
 Phase 23.2: Plan 01 COMPLETE (1 of 2 plans done)
 Phase 23 COMPLETE (2 of 2 plans done)
@@ -38,7 +39,7 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 | 23 | Threat Density Improvements | COMPLETE (2/2 plans) |
 | 23.2 | Improving Threat Density Scatter Plots | IN PROGRESS (1/2 plans) |
 | 24 | Political Boundaries Layer | IN PROGRESS (1/2 plans) |
-| 25 | Ethnic Distribution Layer | Planned |
+| 25 | Ethnic Distribution Layer | IN PROGRESS (1/2 plans) |
 | 26 | Water Stress Layer | Planned |
 | 27 | Performance & Load Testing | Planned |
 
@@ -73,6 +74,10 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - Extended filter bbox (lat 0-50, lng 20-80) captures 57 countries for political overlay
 - Canvas-generated 16x16 hatching pattern (8px spacing, amber #f59e0b) for disputed territories
 - Disputed hover labels via MapLibre feature-state (preferred over always-visible)
+- GeoEPR-2021 from ETH Zurich as ethnic boundary data source (1685 features, 596 in ME bbox)
+- Douglas-Peucker simplification at epsilon=0.05 degrees reduces ethnic-zones.json from 580KB to 139KB
+- Yazidi absent from GeoEPR (mapped as Kurds/Yezidis -> Kurdish); not hand-drawn per CONTEXT.md policy
+- Grid-based overlap detection at 0.5-degree resolution identifies 23 overlap zones
 
 ## Pending Todos
 

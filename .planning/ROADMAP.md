@@ -119,7 +119,7 @@ Plans:
 **Goal**: Users can toggle an overlay showing 10 major ethnic/sectarian zones as labeled hatched regions with per-group colors, hover tooltips, and a discrete legend
 **Depends on**: Phase 24 (political layer patterns)
 **Requirements:** [ETH-01, ETH-02, ETH-03, ETH-04, ETH-05, ETH-06, ETH-07, ETH-08]
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 25-01-PLAN.md -- GeoEPR data extraction, ethnic group config, @deck.gl/extensions install, test mock setup
