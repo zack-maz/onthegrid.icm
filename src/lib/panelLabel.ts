@@ -40,7 +40,7 @@ export function getEntityName(entity: { type: string; [key: string]: unknown }):
 }
 
 /** Cross-store entity lookup (non-reactive, for imperative use) */
-function findEntityById(id: string): MapEntity | SiteEntity | null {
+export function findEntityById(id: string): MapEntity | SiteEntity | null {
   const flights = useFlightStore.getState().flights;
   const ships = useShipStore.getState().ships;
   const events = useEventStore.getState().events;

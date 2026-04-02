@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
+import type { PanelView } from '@/types/ui';
 import type { FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/entities';
 
 const mockFlight: FlightEntity = {
@@ -234,5 +235,132 @@ describe('DetailPanelSlot', () => {
     });
 
     expect(screen.getByText(/Updated \d+s ago/)).toBeInTheDocument();
+  });
+
+  describe('navigation stack UI', () => {
+    const mockStackEntry: PanelView = {
+      entityId: 'flight-abc',
+      cluster: null,
+      breadcrumbLabel: 'FLIGHT QTR123',
+    };
+
+    it('BreadcrumbRow does not render when stack is empty', () => {
+      useFlightStore.setState({ flights: [mockFlight] });
+      useUIStore.setState({
+        selectedEntityId: 'flight-abc',
+        isDetailPanelOpen: true,
+        navigationStack: [],
+      });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.queryByTestId('breadcrumb-row')).not.toBeInTheDocument();
+    });
+
+    it('BreadcrumbRow renders when stack has entries', () => {
+      useFlightStore.setState({ flights: [mockFlight] });
+      useUIStore.setState({
+        selectedEntityId: 'flight-abc',
+        isDetailPanelOpen: true,
+        navigationStack: [mockStackEntry],
+      });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.getByTestId('breadcrumb-row')).toBeInTheDocument();
+    });
+
+    it('BreadcrumbRow shows correct labels from stack entries', () => {
+      const stackEntries: PanelView[] = [
+        { entityId: 'ship-123', cluster: null, breadcrumbLabel: 'SHIP EVER GIVEN' },
+        { entityId: 'flight-abc', cluster: null, breadcrumbLabel: 'FLIGHT QTR123' },
+      ];
+
+      useFlightStore.setState({ flights: [mockFlight] });
+      useShipStore.setState({ ships: [mockShip] });
+      useUIStore.setState({
+        selectedEntityId: 'flight-abc',
+        isDetailPanelOpen: true,
+        navigationStack: stackEntries,
+      });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.getByText('SHIP EVER GIVEN')).toBeInTheDocument();
+      expect(screen.getByText('FLIGHT QTR123')).toBeInTheDocument();
+    });
+
+    it('Back button in breadcrumb calls goBack (verify store state changes)', () => {
+      const stackEntry: PanelView = {
+        entityId: 'ship-123',
+        cluster: null,
+        breadcrumbLabel: 'SHIP EVER GIVEN',
+      };
+
+      useFlightStore.setState({ flights: [mockFlight] });
+      useShipStore.setState({ ships: [mockShip] });
+      useUIStore.setState({
+        selectedEntityId: 'flight-abc',
+        isDetailPanelOpen: true,
+        navigationStack: [stackEntry],
+      });
+
+      render(<DetailPanelSlot />);
+
+      const backBtn = screen.getByTestId('breadcrumb-back');
+      fireEvent.click(backBtn);
+
+      const state = useUIStore.getState();
+      expect(state.navigationStack).toHaveLength(0);
+      expect(state.selectedEntityId).toBe('ship-123');
+    });
+
+    it('Close button clears the navigation stack', () => {
+      useFlightStore.setState({ flights: [mockFlight] });
+      useUIStore.setState({
+        selectedEntityId: 'flight-abc',
+        isDetailPanelOpen: true,
+        navigationStack: [mockStackEntry],
+      });
+
+      render(<DetailPanelSlot />);
+
+      const closeBtn = screen.getByRole('button', { name: /close/i });
+      fireEvent.click(closeBtn);
+
+      const state = useUIStore.getState();
+      expect(state.navigationStack).toHaveLength(0);
+      expect(state.isDetailPanelOpen).toBe(false);
+    });
+
+    it('Slide direction class applied to content area on forward navigation', () => {
+      useFlightStore.setState({ flights: [mockFlight] });
+      useUIStore.setState({
+        selectedEntityId: 'flight-abc',
+        isDetailPanelOpen: true,
+        navigationStack: [mockStackEntry],
+        slideDirection: 'forward',
+      });
+
+      render(<DetailPanelSlot />);
+
+      const content = screen.getByTestId('detail-content');
+      expect(content.className).toContain('animate-slide-in-right');
+    });
+
+    it('Slide direction class applied to content area on back navigation', () => {
+      useFlightStore.setState({ flights: [mockFlight] });
+      useUIStore.setState({
+        selectedEntityId: 'flight-abc',
+        isDetailPanelOpen: true,
+        navigationStack: [],
+        slideDirection: 'back',
+      });
+
+      render(<DetailPanelSlot />);
+
+      const content = screen.getByTestId('detail-content');
+      expect(content.className).toContain('animate-slide-in-left');
+    });
   });
 });

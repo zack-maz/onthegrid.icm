@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { useSelectedEntity } from '@/hooks/useSelectedEntity';
 import { FlightDetail } from '@/components/detail/FlightDetail';
 import { ShipDetail } from '@/components/detail/ShipDetail';
 import { EventDetail } from '@/components/detail/EventDetail';
 import { SiteDetail } from '@/components/detail/SiteDetail';
 import { ThreatClusterDetail } from '@/components/detail/ThreatClusterDetail';
+import { BreadcrumbRow } from '@/components/detail/BreadcrumbRow';
 import { ENTITY_DOT_COLORS } from '@/components/map/layers/constants';
 import { isConflictEventType, CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
-import { getTypeLabel, getEntityName } from '@/lib/panelLabel';
+import { getTypeLabel, getEntityName, findEntityById } from '@/lib/panelLabel';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
 
 /** Maps entity type to the ENTITY_DOT_COLORS key */
@@ -53,6 +55,11 @@ export function DetailPanelSlot() {
   const selectEntity = useUIStore((s) => s.selectEntity);
   const selectedCluster = useUIStore((s) => s.selectedCluster);
   const setSelectedCluster = useUIStore((s) => s.setSelectedCluster);
+  const navigationStack = useUIStore((s) => s.navigationStack);
+  const slideDirection = useUIStore((s) => s.slideDirection);
+  const goBack = useUIStore((s) => s.goBack);
+  const clearStack = useUIStore((s) => s.clearStack);
+  const setFlyToTarget = useNotificationStore((s) => s.setFlyToTarget);
   const { entity, isLost } = useSelectedEntity();
   const [copied, setCopied] = useState(false);
 
@@ -62,7 +69,26 @@ export function DetailPanelSlot() {
     closeDetailPanel();
     selectEntity(null);
     setSelectedCluster(null);
-  }, [closeDetailPanel, selectEntity, setSelectedCluster]);
+    clearStack();
+  }, [closeDetailPanel, selectEntity, setSelectedCluster, clearStack]);
+
+  const handleGoBack = useCallback(() => {
+    // Read the entry we're about to restore BEFORE calling goBack
+    const stack = useUIStore.getState().navigationStack;
+    const prev = stack[stack.length - 1];
+    goBack();
+    // Fly to the restored view's coordinates
+    if (prev) {
+      if (prev.cluster) {
+        setFlyToTarget({ lng: prev.cluster.centroidLng, lat: prev.cluster.centroidLat, zoom: 8 });
+      } else if (prev.entityId) {
+        const restoredEntity = findEntityById(prev.entityId);
+        if (restoredEntity) {
+          setFlyToTarget({ lng: restoredEntity.lng, lat: restoredEntity.lat, zoom: 10 });
+        }
+      }
+    }
+  }, [goBack, setFlyToTarget]);
 
   // Escape key handling moved to centralized useEscapeKeyHandler (priority stack)
 
@@ -113,8 +139,23 @@ export function DetailPanelSlot() {
               </button>
             </div>
 
-            {/* Cluster content */}
-            <div className="p-4">
+            {/* Breadcrumb row */}
+            {navigationStack.length > 0 && (
+              <BreadcrumbRow stack={navigationStack} onBack={handleGoBack} />
+            )}
+
+            {/* Cluster content with directional slide */}
+            <div
+              key={selectedCluster.id}
+              data-testid="detail-content"
+              className={`p-4 ${
+                slideDirection === 'forward'
+                  ? 'animate-slide-in-right'
+                  : slideDirection === 'back'
+                  ? 'animate-slide-in-left'
+                  : ''
+              }`}
+            >
               <ThreatClusterDetail cluster={selectedCluster} />
             </div>
           </>
@@ -155,8 +196,23 @@ export function DetailPanelSlot() {
               </button>
             </div>
 
-            {/* Content area - dims on lost contact */}
-            <div className={`p-4 ${isLost ? 'opacity-50 grayscale' : ''}`}>
+            {/* Breadcrumb row */}
+            {navigationStack.length > 0 && (
+              <BreadcrumbRow stack={navigationStack} onBack={handleGoBack} />
+            )}
+
+            {/* Content area with directional slide - dims on lost contact */}
+            <div
+              key={entity.id}
+              data-testid="detail-content"
+              className={`p-4 ${isLost ? 'opacity-50 grayscale' : ''} ${
+                slideDirection === 'forward'
+                  ? 'animate-slide-in-right'
+                  : slideDirection === 'back'
+                  ? 'animate-slide-in-left'
+                  : ''
+              }`}
+            >
               {/* Per-type content */}
               {entity.type === 'flight' && (
                 <FlightDetail entity={entity as FlightEntity} />
