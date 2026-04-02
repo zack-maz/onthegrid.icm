@@ -51,10 +51,8 @@ export default defineConfig({
     globals: true,
     testTimeout: 10000,
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        maxForks: 4,
-      },
+    forks: {
+      maxForks: 4,
     },
     alias: {
       'maplibre-gl/dist/maplibre-gl.css': path.resolve(__dirname, './src/test/__mocks__/maplibre-gl-css.ts'),
