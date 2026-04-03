@@ -122,6 +122,5 @@ export const SITE_TYPE_LABELS: Record<string, string> = {
   naval: 'Naval',
   oil: 'Oil Refinery',
   airbase: 'Airbase',
-  desalination: 'Desalination',
   port: 'Port',
 };

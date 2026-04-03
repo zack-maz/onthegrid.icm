@@ -40,7 +40,6 @@ const SITE_ICON_MAP: Record<string, string> = {
   naval: 'siteNaval',
   oil: 'siteOil',
   airbase: 'siteAirbase',
-  desalination: 'siteDesalination',
   port: 'sitePort',
 };
 

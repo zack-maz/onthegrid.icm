@@ -31,7 +31,6 @@ export const SITE_SUBTYPE_COLORS: Record<string, string> = {
   naval: '#3b82f6',
   oil: '#f59e0b',
   airbase: '#64748b',
-  desalination: '#06b6d4',
   port: '#8b5cf6',
 } as const;
 

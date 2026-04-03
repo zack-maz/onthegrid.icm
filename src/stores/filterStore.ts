@@ -3,7 +3,7 @@ import { useSearchStore } from '@/stores/searchStore';
 import { WAR_START, STEP_MS, LOOKBACK_MS, snapToStep } from '@/lib/constants';
 import type { SiteType } from '@/types/entities';
 
-export const ALL_SITE_TYPES: SiteType[] = ['nuclear', 'naval', 'oil', 'airbase', 'desalination', 'port'];
+export const ALL_SITE_TYPES: SiteType[] = ['nuclear', 'naval', 'oil', 'airbase', 'port'];
 const DEFAULT_SITE_TYPES: SiteType[] = ['nuclear', 'oil'];
 
 /** Full default range for a given granularity (thumbs at both ends) */

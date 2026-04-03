@@ -14,7 +14,6 @@ export interface SiteCounts {
   naval: number;
   oil: number;
   airbase: number;
-  desalination: number;
   port: number;
   total: number;
 }
@@ -166,9 +165,9 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
     const targeted = showTargetedToggle ? countByGroup(severityFilteredEvents, TARGETED_TYPES) : 0;
 
     // Sites: per-type counts + entity collection with proximity filtering
-    const siteCounts: SiteCounts = { nuclear: 0, naval: 0, oil: 0, airbase: 0, desalination: 0, port: 0, total: 0 };
+    const siteCounts: SiteCounts = { nuclear: 0, naval: 0, oil: 0, airbase: 0, port: 0, total: 0 };
     const siteEntities: Record<SiteType, CounterEntity[]> = {
-      nuclear: [], naval: [], oil: [], airbase: [], desalination: [], port: [],
+      nuclear: [], naval: [], oil: [], airbase: [], port: [],
     };
 
     // Sites filtered by enabled types and proximity

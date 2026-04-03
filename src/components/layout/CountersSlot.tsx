@@ -158,15 +158,6 @@ export function CountersSlot() {
                 selectedEntityId={selectedEntityId}
               />
               <CounterRow
-                label="Desalination"
-                value={counters.sites.desalination}
-                entities={counters.entities.sites.desalination}
-                isExpanded={expandedKey === 'site-desalination'}
-                onToggle={() => handleToggle('site-desalination')}
-                onEntityClick={handleEntityClick}
-                selectedEntityId={selectedEntityId}
-              />
-              <CounterRow
                 label="Port"
                 value={counters.sites.port}
                 entities={counters.entities.sites.port}

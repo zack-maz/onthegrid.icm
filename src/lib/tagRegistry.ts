@@ -313,7 +313,7 @@ export const TAG_REGISTRY: Record<string, TagDefinition> = {
   site: {
     prefix: 'site',
     label: 'Site Type',
-    description: 'Filter sites by type (nuclear, naval, oil, airbase, desalination, port)',
+    description: 'Filter sites by type (nuclear, naval, oil, airbase, port)',
     color: 'text-green-400',
     entityTypes: ['site'],
     examples: ['site:nuclear', 'site:oil', 'site:airbase'],
