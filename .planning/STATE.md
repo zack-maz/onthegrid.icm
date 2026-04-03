@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Data Quality & Layers
 status: unknown
-last_updated: "2026-04-03T05:35:26.243Z"
+last_updated: "2026-04-03T05:47:33.232Z"
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 20
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Project State
@@ -87,6 +87,9 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - PrecipitationData defined locally in waterStore.ts (not server/types.ts) since 26-03 server plan not yet executed
 - Water facility icons use existing atlas placeholders (diamond, siteDesalination) pending dedicated water icons
 - River labels use serif italic font to distinguish from ethnic overlay sans-serif labels
+- Country-centroid basin lookup: WRI Aqueduct lacks lat/lng, so basinLookup uses haversine to nearest country centroid then median-stress basin
+- Regional precipitation normals: 20mm/month arid default, 50mm/month Fertile Crescent (lat 30-40, lng 35-50)
+- Water API dual-cache: water:facilities (24h) + water:precip (6h) as separate Redis keys
 
 ## Pending Todos
 

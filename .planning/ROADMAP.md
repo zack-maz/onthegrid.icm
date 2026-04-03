@@ -129,7 +129,7 @@ Plans:
 **Goal**: Users can toggle a water stress overlay showing point-based resource scarcity at water infrastructure facilities (dams, reservoirs, treatment plants, canals, desalination) with stress-colored markers, major river line features, precipitation integration, and full entity treatment (detail panel, counters, search, proximity alerts)
 **Depends on**: Phase 20 (layer architecture)
 **Requirements:** [WAT-01, WAT-02, WAT-03, WAT-04, WAT-05, WAT-06, WAT-07, WAT-08, WAT-09, WAT-10, WAT-11]
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 - [ ] 26-01-PLAN.md -- WaterFacility types, stress utilities, data extraction scripts (rivers + Aqueduct basins)
