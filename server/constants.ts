@@ -46,6 +46,12 @@ export const WEATHER_CACHE_TTL = 1_800_000;      // 30 min logical TTL
 export const WEATHER_REDIS_TTL_SEC = 18_000;      // 5h hard TTL (10x logical)
 export const WEATHER_CACHE_KEY = 'weather:open-meteo';
 
+// Water infrastructure cache TTLs
+export const WATER_CACHE_TTL = 86_400_000;       // 24h logical TTL
+export const WATER_REDIS_TTL_SEC = 259_200;       // 3 days hard TTL
+export const WATER_PRECIP_CACHE_TTL = 21_600_000; // 6h logical TTL
+export const WATER_PRECIP_REDIS_TTL_SEC = 86_400; // 1 day hard TTL
+
 // News aggregation constants
 export const NEWS_CACHE_TTL = 900_000; // 15 min logical TTL
 export const NEWS_REDIS_TTL_SEC = 9000; // 2.5h hard TTL (10x logical)

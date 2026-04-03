@@ -52,6 +52,7 @@ vi.mock('../middleware/rateLimit.js', () => ({
     sites: passThrough,
     sources: passThrough,
     geocode: passThrough,
+    water: passThrough,
   },
 }));
 
@@ -87,6 +88,8 @@ vi.mock('../adapters/rss.js', () => ({ fetchAllRssFeeds: vi.fn(async () => []), 
 vi.mock('../adapters/yahoo-finance.js', () => ({ fetchMarkets: vi.fn(async () => []), isValidRange: vi.fn(() => true) }));
 vi.mock('../adapters/open-meteo.js', () => ({ fetchWeather: vi.fn(async () => []) }));
 vi.mock('../adapters/nominatim.js', () => ({ reverseGeocode: vi.fn(async () => ({ display: 'Unknown location' })) }));
+vi.mock('../adapters/overpass-water.js', () => ({ fetchWaterFacilities: vi.fn(async () => []) }));
+vi.mock('../adapters/open-meteo-precip.js', () => ({ fetchPrecipitation: vi.fn(async () => []) }));
 
 // Mock Redis cache module with in-memory store
 const _mockCacheGet = vi.fn(async <T>(key: string, logicalTtlMs: number): Promise<CacheResponse<T> | null> => {
