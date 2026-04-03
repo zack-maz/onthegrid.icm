@@ -163,6 +163,38 @@ export interface WeatherGridPoint {
   windDirection: number;    // degrees (0-360)
 }
 
+// ---------- Water Stress Types ----------
+
+export type WaterFacilityType = 'dam' | 'reservoir' | 'treatment_plant' | 'canal' | 'desalination';
+
+export interface WaterStressIndicators {
+  bws_raw: number;    // baseline water stress raw value
+  bws_score: number;  // 0-5 normalized score
+  bws_label: string;  // human label
+  drr_score: number;  // drought risk 0-5
+  gtd_score: number;  // groundwater table decline 0-5
+  sev_score: number;  // seasonal variability 0-5
+  iav_score: number;  // interannual variability 0-5
+  compositeHealth: number; // 0-1 (0=worst, 1=best)
+}
+
+export interface WaterFacility {
+  id: string;           // "water-{osmId}"
+  type: 'water';
+  facilityType: WaterFacilityType;
+  lat: number;
+  lng: number;
+  label: string;
+  operator?: string;
+  osmId: number;
+  stress: WaterStressIndicators;
+  precipitation?: {
+    last30DaysMm: number;
+    anomalyRatio: number;
+    updatedAt: number;
+  };
+}
+
 export class RateLimitError extends Error {
   name: string;
   constructor(message: string) {
