@@ -4,7 +4,7 @@ import { log } from '../lib/logger.js';
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const OVERPASS_FALLBACK = 'https://overpass.private.coffee/api/interpreter';
-const TIMEOUT_MS = 60_000;
+const TIMEOUT_MS = 120_000;
 
 // Allowed countries (ISO 3166-1 alpha-2) -- same as overpass.ts
 const ALLOWED_COUNTRIES = [
@@ -19,13 +19,13 @@ const ALLOWED_COUNTRIES = [
 const areaUnion = ALLOWED_COUNTRIES.map(c => `area["ISO3166-1"="${c}"]`).join(';');
 
 const QUERY = `
-[out:json][timeout:60];
+[out:json][timeout:120];
 (${areaUnion};)->.searchArea;
 (
-  nwr["waterway"="dam"](area.searchArea);
-  nwr["natural"="water"]["water"="reservoir"](area.searchArea);
-  nwr["man_made"="water_works"](area.searchArea);
-  nwr["waterway"="canal"]["name"](area.searchArea);
+  nwr["waterway"="dam"]["name"](area.searchArea);
+  nwr["natural"="water"]["water"="reservoir"]["name"](area.searchArea);
+  nwr["man_made"="water_works"]["name"](area.searchArea);
+  nwr["waterway"="canal"]["name"]["canal"!~"irrigation_ditch"](area.searchArea);
   nwr["man_made"="desalination_plant"](area.searchArea);
   nwr["water_works"="desalination"](area.searchArea);
 );
