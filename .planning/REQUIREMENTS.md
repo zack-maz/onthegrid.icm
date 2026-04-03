@@ -101,6 +101,20 @@ Requirements for the Data Quality & Layers milestone.
 - [x] **ETH-07**: Discrete legend with 10 ethnic group color swatches appears in bottom-left when ethnic layer is active
 - [x] **ETH-08**: Ethnic layer stacks on top of political layer but below weather/entity/threat layers in DeckGLOverlay
 
+### Water Stress Layer
+
+- [ ] **WAT-01**: Overpass water infrastructure query returns dams, reservoirs, treatment plants, named canals, and desalination plants from Middle East countries
+- [ ] **WAT-02**: Each water facility is assigned WRI Aqueduct 4.0 basin-level stress indicators (baseline water stress, drought risk, groundwater decline, seasonal variability) via coordinate-to-basin lookup
+- [ ] **WAT-03**: Open-Meteo 30-day precipitation anomaly is polled every 6 hours and feeds into composite water health score
+- [ ] **WAT-04**: Composite water health score combines WRI baseline (75% weight) with precipitation anomaly (25% weight) into a 0-1 scale
+- [ ] **WAT-05**: Water facilities render as type-specific icon markers (dam, reservoir, plant, canal, desalination) tinted by stress color on the black-to-light-blue gradient
+- [ ] **WAT-06**: Six major rivers (Tigris, Euphrates, Nile, Jordan, Karun, Litani) render as stress-colored line features with italic serif labels when water layer is active
+- [ ] **WAT-07**: Desalination plants are migrated entirely from the Sites overlay to the Water layer (removed from SiteType, Overpass sites query, site toggles, and site counters)
+- [ ] **WAT-08**: Clicking a water facility opens WaterFacilityDetail panel showing all WRI indicators, precipitation anomaly, composite health, attack status, and coordinates
+- [ ] **WAT-09**: Water facilities appear in counters, are searchable (type:dam, stress:high, name:, near:), and trigger proximity alerts -- all gated by water layer being active
+- [ ] **WAT-10**: Continuous gradient legend (black = extreme stress to light blue = healthy) appears in bottom-left when water layer is active
+- [ ] **WAT-11**: Water layer toggle in LayerTogglesSlot is functional (no longer "coming soon")
+
 ## v1.2+ Requirements
 
 Deferred to future releases. Tracked but not in current roadmap.
@@ -195,13 +209,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ETH-06 | Phase 25 | Planned |
 | ETH-07 | Phase 25 | Planned |
 | ETH-08 | Phase 25 | Planned |
+| WAT-01 | Phase 26 | Planned |
+| WAT-02 | Phase 26 | Planned |
+| WAT-03 | Phase 26 | Planned |
+| WAT-04 | Phase 26 | Planned |
+| WAT-05 | Phase 26 | Planned |
+| WAT-06 | Phase 26 | Planned |
+| WAT-07 | Phase 26 | Planned |
+| WAT-08 | Phase 26 | Planned |
+| WAT-09 | Phase 26 | Planned |
+| WAT-10 | Phase 26 | Planned |
+| WAT-11 | Phase 26 | Planned |
 
 **Coverage:**
 - v1.1 requirements: 29 total, 29 complete
 - v1.2 requirements: 5 total, 5 complete
-- v1.3 requirements: 23 total, 0 complete
-- Total: 57 mapped, 34 complete
+- v1.3 requirements: 34 total, 0 complete
+- Total: 68 mapped, 34 complete
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-04-02 -- Phase 25 ethnic distribution requirements added*
+*Last updated: 2026-04-02 -- Phase 26 water stress layer requirements added*
