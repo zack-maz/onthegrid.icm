@@ -109,7 +109,7 @@ Requirements for the Data Quality & Layers milestone.
 - [ ] **WAT-04**: Composite water health score combines WRI baseline (75% weight) with precipitation anomaly (25% weight) into a 0-1 scale
 - [ ] **WAT-05**: Water facilities render as type-specific icon markers (dam, reservoir, plant, canal, desalination) tinted by stress color on the black-to-light-blue gradient
 - [ ] **WAT-06**: Six major rivers (Tigris, Euphrates, Nile, Jordan, Karun, Litani) render as stress-colored line features with italic serif labels when water layer is active
-- [ ] **WAT-07**: Desalination plants are migrated entirely from the Sites overlay to the Water layer (removed from SiteType, Overpass sites query, site toggles, and site counters)
+- [x] **WAT-07**: Desalination plants are migrated entirely from the Sites overlay to the Water layer (removed from SiteType, Overpass sites query, site toggles, and site counters)
 - [ ] **WAT-08**: Clicking a water facility opens WaterFacilityDetail panel showing all WRI indicators, precipitation anomaly, composite health, attack status, and coordinates
 - [ ] **WAT-09**: Water facilities appear in counters, are searchable (type:dam, stress:high, name:, near:), and trigger proximity alerts -- all gated by water layer being active
 - [ ] **WAT-10**: Continuous gradient legend (black = extreme stress to light blue = healthy) appears in bottom-left when water layer is active
