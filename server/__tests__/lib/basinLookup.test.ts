@@ -41,9 +41,9 @@ describe('assignBasinStress', () => {
     expect(stress.compositeHealth).toBe(0.5);
   });
 
-  it('returns default indicators for coordinates in the open ocean (e.g., 20N, 60E)', () => {
-    // Arabian Sea - no country match
-    const stress = assignBasinStress(20, 60);
+  it('returns default indicators for coordinates far from any country (e.g., -30S, 0E)', () => {
+    // Southern Atlantic Ocean -- well beyond 2000km from any ME country centroid
+    const stress = assignBasinStress(-30, 0);
     expect(stress.bws_label).toBe('No Data');
     expect(stress.compositeHealth).toBe(0.5);
   });

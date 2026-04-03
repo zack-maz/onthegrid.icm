@@ -119,6 +119,6 @@ describe('normalizeWaterElement', () => {
     };
     const result = normalizeWaterElement(el, stressLookup);
     expect(result).not.toBeNull();
-    expect(result!.operator).toBe('Iraqi Ministry of Water Resources');
+    expect(result!.operator).toBe('Iraqi Ministry Of Water Resources');
   });
 });
