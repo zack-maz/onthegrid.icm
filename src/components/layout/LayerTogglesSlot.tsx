@@ -9,7 +9,7 @@ const LAYER_CONFIGS: { id: VisualizationLayerId; label: string; color: string; c
   { id: 'political', label: 'Political', color: '#a78bfa' },
   { id: 'ethnic', label: 'Ethnic', color: '#c084fc' },
   { id: 'satellite', label: 'Satellite', color: '#22d3ee', comingSoon: true },
-  { id: 'water', label: 'Water', color: '#4ade80', comingSoon: true },
+  { id: 'water', label: 'Water', color: '#4ade80' },
 ];
 
 function LoadingSpinner() {

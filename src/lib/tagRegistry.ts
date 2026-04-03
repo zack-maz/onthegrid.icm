@@ -3,6 +3,7 @@ import type {
   ShipEntity,
   ConflictEventEntity,
   SiteEntity,
+  WaterFacility,
 } from '../../server/types';
 import { GEO_NAMES } from './geoNames';
 
@@ -19,9 +20,10 @@ export interface EntityDataSources {
   ships: ShipEntity[];
   events: ConflictEventEntity[];
   sites: SiteEntity[];
+  water?: WaterFacility[];
 }
 
-type TagEntityCategory = 'flight' | 'ship' | 'event' | 'site';
+type TagEntityCategory = 'flight' | 'ship' | 'event' | 'site' | 'water';
 
 export interface TagDefinition {
   prefix: string;
@@ -105,6 +107,12 @@ function getNearValues(data: EntityDataSources): TagValue[] {
   for (const s of data.sites) {
     if (s.label) names.push({ value: s.label, count: 1 });
   }
+  // Water facilities (with count 1 to rank above cities)
+  if (data.water) {
+    for (const w of data.water) {
+      if (w.label) names.push({ value: w.label, count: 1 });
+    }
+  }
   // Then cities (count 0)
   for (const g of GEO_NAMES) {
     names.push({ value: g.name, count: 0 });
@@ -129,10 +137,10 @@ export const TAG_REGISTRY: Record<string, TagDefinition> = {
   type: {
     prefix: 'type',
     label: 'Entity Type',
-    description: 'Filter by entity type (flight, ship, event types, site)',
+    description: 'Filter by entity type (flight, ship, event types, site, water facility types)',
     color: 'text-blue-400',
-    entityTypes: ['flight', 'ship', 'event', 'site'],
-    examples: ['type:flight', 'type:airstrike', 'type:ship'],
+    entityTypes: ['flight', 'ship', 'event', 'site', 'water'],
+    examples: ['type:flight', 'type:airstrike', 'type:dam', 'type:reservoir'],
     getValues: getTypeValues,
   },
   country: {
@@ -307,6 +315,17 @@ export const TAG_REGISTRY: Record<string, TagDefinition> = {
     color: 'text-purple-400',
     entityTypes: ['event'],
     examples: ['date:2026-03-20', 'date:2026-03-15'],
+  },
+
+  // Water-specific tags
+  stress: {
+    prefix: 'stress',
+    label: 'Water Stress',
+    description: 'Filter water facilities by stress level',
+    color: 'text-cyan-400',
+    entityTypes: ['water'],
+    examples: ['stress:high', 'stress:low', 'stress:extreme'],
+    getValues: () => staticValues(['low', 'medium', 'high', 'extreme']),
   },
 
   // Site-specific tags

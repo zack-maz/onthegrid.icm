@@ -31,6 +31,11 @@ export function getSearchableFields(entity: MapEntity | SiteEntity): string[] {
     if (e.label) fields.push(e.label.toLowerCase());
     if (e.siteType) fields.push(e.siteType.toLowerCase());
     if (e.operator) fields.push(e.operator.toLowerCase());
+  } else if (entity.type === 'water') {
+    const e = entity as unknown as { label: string; facilityType: string; operator?: string };
+    if (e.label) fields.push(e.label.toLowerCase());
+    if (e.facilityType) fields.push(e.facilityType.toLowerCase());
+    if (e.operator) fields.push(e.operator.toLowerCase());
   } else {
     // ConflictEventEntity (all other types are conflict event types)
     const e = entity as ConflictEventEntity;
@@ -52,6 +57,8 @@ function getFieldNames(entity: MapEntity | SiteEntity): string[] {
     return ['name', 'mmsi', 'shipName'];
   } else if (entity.type === 'site') {
     return ['name', 'siteType', 'operator'];
+  } else if (entity.type === 'water') {
+    return ['name', 'facilityType', 'operator'];
   } else {
     return ['label', 'type', 'actor1', 'actor2', 'location'];
   }

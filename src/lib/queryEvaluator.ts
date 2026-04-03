@@ -155,6 +155,15 @@ export function evaluateTag(
       if (entity.type === 'site') {
         return ciEq((entity as SiteEntity).siteType, value);
       }
+      // For water facilities, also match facilityType
+      if (entity.type === 'water') {
+        const wf = entity as unknown as { facilityType: string };
+        // Allow 'plant' as shorthand for 'treatment_plant'
+        if (ciEq(value, 'plant') || ciEq(value, 'treatment_plant')) {
+          return ciEq(wf.facilityType, 'treatment_plant');
+        }
+        return ciEq(wf.facilityType, value);
+      }
       return false;
     }
 
@@ -200,10 +209,17 @@ export function evaluateTag(
       if (entity.type === 'site') {
         return ciIncludes((entity as SiteEntity).label, value);
       }
+      if (entity.type === 'water') {
+        return ciIncludes(entity.label, value);
+      }
       if (entity.type !== 'ship' && entity.type !== 'flight') {
         return ciIncludes((entity as ConflictEventEntity).data.locationName, value);
       }
       return false;
+    }
+
+    case 'name': {
+      return ciIncludes(entity.label, value);
     }
 
     case 'cameo': {
@@ -289,6 +305,18 @@ export function evaluateTag(
           return dist <= NEAR_RADIUS_KM;
         }
       }
+      return false;
+    }
+
+    case 'stress': {
+      if (entity.type !== 'water') return false;
+      const wf = entity as unknown as { stress: { compositeHealth: number } };
+      const health = wf.stress.compositeHealth;
+      const v = value.toLowerCase();
+      if (v === 'extreme') return health < 0.1;
+      if (v === 'high') return health < 0.3;
+      if (v === 'medium') return health >= 0.3 && health <= 0.7;
+      if (v === 'low') return health > 0.7;
       return false;
     }
 

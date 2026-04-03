@@ -221,6 +221,7 @@ export function SearchModal() {
           for (const r of results.ships) ids.add(r.entity.id);
           for (const r of results.events) ids.add(r.entity.id);
           for (const r of results.sites) ids.add(r.entity.id);
+          for (const r of results.water) ids.add(r.entity.id);
           useSearchStore.getState().setMatchedIds(ids);
           useSearchStore.getState().applyAsFilter();
         }
@@ -359,6 +360,11 @@ export function SearchModal() {
                 <SearchResultGroup
                   type="Sites"
                   results={results.sites}
+                  onSelect={handleSelect}
+                />
+                <SearchResultGroup
+                  type="Water"
+                  results={results.water}
                   onSelect={handleSelect}
                 />
               </>

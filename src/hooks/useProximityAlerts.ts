@@ -2,8 +2,11 @@ import { useMemo } from 'react';
 import type { FlightEntity, SiteEntity } from '@/types/entities';
 import { useFlightStore } from '@/stores/flightStore';
 import { useSiteStore } from '@/stores/siteStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useLayerStore } from '@/stores/layerStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { haversineKm } from '@/lib/geo';
+import type { WaterFacility } from '../../server/types';
 
 const PROXIMITY_THRESHOLD_KM = 25;
 const COARSE_DEG = 0.25; // ~25km coarse bbox pre-filter
@@ -70,16 +73,40 @@ export function computeProximityAlerts(
   );
 }
 
-/** React hook that computes proximity alerts from toggled-on sites only */
+/** Convert water facilities to site-like shape for proximity check */
+function waterToSiteLike(facilities: WaterFacility[]): SiteEntity[] {
+  return facilities.map((w) => ({
+    id: w.id,
+    type: 'site' as const,
+    siteType: w.facilityType as unknown as SiteEntity['siteType'],
+    lat: w.lat,
+    lng: w.lng,
+    label: w.label,
+    operator: w.operator,
+    osmId: w.osmId,
+  }));
+}
+
+/** React hook that computes proximity alerts from toggled-on sites + water facilities */
 export function useProximityAlerts(): ProximityAlert[] {
   const flights = useFlightStore((s) => s.flights);
   const sites = useSiteStore((s) => s.sites);
   const enabledSiteTypes = useFilterStore((s) => s.enabledSiteTypes);
+  const waterFacilities = useWaterStore((s) => s.facilities);
+  const isWaterActive = useLayerStore((s) => s.activeLayers.has('water'));
 
   const filteredSites = useMemo(
     () => sites.filter((s) => enabledSiteTypes.includes(s.siteType)),
     [sites, enabledSiteTypes],
   );
 
-  return useMemo(() => computeProximityAlerts(flights, filteredSites), [flights, filteredSites]);
+  const allTargets = useMemo(() => {
+    const combined = [...filteredSites];
+    if (isWaterActive) {
+      combined.push(...waterToSiteLike(waterFacilities));
+    }
+    return combined;
+  }, [filteredSites, waterFacilities, isWaterActive]);
+
+  return useMemo(() => computeProximityAlerts(flights, allTargets), [flights, allTargets]);
 }

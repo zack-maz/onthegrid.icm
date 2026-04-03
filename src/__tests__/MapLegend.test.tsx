@@ -43,4 +43,12 @@ describe('MapLegend', () => {
     expect(getByText('Neutral')).toBeTruthy();
     expect(getByText('Disputed')).toBeTruthy();
   });
+
+  it('renders water health legend when water layer is active', () => {
+    useLayerStore.setState({ activeLayers: new Set(['water']) });
+    const { getByText } = render(<MapLegend />);
+    expect(getByText('Water Health')).toBeTruthy();
+    expect(getByText('Extreme Stress')).toBeTruthy();
+    expect(getByText('Healthy')).toBeTruthy();
+  });
 });

@@ -56,6 +56,18 @@ LEGEND_REGISTRY.push({
   ],
 });
 
+// Water Health legend (Phase 26 - Water layer)
+LEGEND_REGISTRY.push({
+  layerId: 'water',
+  title: 'Water Health',
+  colorStops: [
+    { color: '#000000', label: 'Extreme Stress' },
+    { color: '#1e3a5f', label: '' },
+    { color: '#3b82b4', label: '' },
+    { color: '#7dd3fc', label: 'Healthy' },
+  ],
+});
+
 // Factions legend (Phase 24 - Political layer)
 LEGEND_REGISTRY.push({
   layerId: 'political',

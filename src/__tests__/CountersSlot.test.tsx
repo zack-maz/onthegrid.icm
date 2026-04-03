@@ -6,9 +6,12 @@ import { useShipStore } from '@/stores/shipStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useWaterStore } from '@/stores/waterStore';
 import { CountersSlot } from '@/components/layout/CountersSlot';
 import type { FlightEntity, ConflictEventEntity } from '@/types/entities';
 import type { ConflictEventType } from '@/types/ui';
+import type { WaterFacility } from '../../server/types';
 
 function makeFlight(id: string, country: string, unidentified = false): FlightEntity {
   return {
@@ -224,5 +227,41 @@ describe('CountersSlot', () => {
     expect(setFlyToTargetSpy).toHaveBeenCalledWith(
       expect.objectContaining({ lat: 32, lng: 51, zoom: 10 }),
     );
+  });
+
+  // --- Water section ---
+
+  it('does not show Water section when water layer is inactive', () => {
+    useLayerStore.setState({ activeLayers: new Set() });
+    render(<CountersSlot />);
+    expect(screen.queryByText('Water')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dams')).not.toBeInTheDocument();
+  });
+
+  it('shows Water section when water layer is active', () => {
+    useLayerStore.setState({ activeLayers: new Set(['water']) });
+    const mockFacility: WaterFacility = {
+      id: 'water-123',
+      type: 'water',
+      facilityType: 'dam',
+      lat: 36.6,
+      lng: 42.8,
+      label: 'Mosul Dam',
+      osmId: 123,
+      stress: {
+        bws_raw: 3.0,
+        bws_score: 3.0,
+        bws_label: 'Medium-High',
+        drr_score: 2.0,
+        gtd_score: 1.5,
+        sev_score: 2.5,
+        iav_score: 1.0,
+        compositeHealth: 0.4,
+      },
+    };
+    useWaterStore.setState({ facilities: [mockFacility], connectionStatus: 'connected' });
+    render(<CountersSlot />);
+    expect(screen.getByText('Water')).toBeInTheDocument();
+    expect(screen.getByText('Dams')).toBeInTheDocument();
   });
 });

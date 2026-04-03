@@ -6,6 +6,7 @@ import { useState, useCallback } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getCurrentPanelView } from '@/lib/panelLabel';
+import { useLayerStore } from '@/stores/layerStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
 import { useCounterData } from '@/components/counters/useCounterData';
 import { CounterRow } from '@/components/counters/CounterRow';
@@ -17,6 +18,7 @@ export function CountersSlot() {
   const counters = useCounterData();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
+  const isWaterActive = useLayerStore((s) => s.activeLayers.has('water'));
 
   const handleToggle = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -167,6 +169,63 @@ export function CountersSlot() {
                 selectedEntityId={selectedEntityId}
               />
             </div>
+
+            {isWaterActive && (
+              <>
+                <div className="border-t border-border my-1.5" />
+
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Water
+                </div>
+                <div className="mt-0.5 space-y-0.5">
+                  <CounterRow
+                    label="Dams"
+                    value={counters.water.dam}
+                    entities={counters.entities.water.dam}
+                    isExpanded={expandedKey === 'water-dam'}
+                    onToggle={() => handleToggle('water-dam')}
+                    onEntityClick={handleEntityClick}
+                    selectedEntityId={selectedEntityId}
+                  />
+                  <CounterRow
+                    label="Reservoirs"
+                    value={counters.water.reservoir}
+                    entities={counters.entities.water.reservoir}
+                    isExpanded={expandedKey === 'water-reservoir'}
+                    onToggle={() => handleToggle('water-reservoir')}
+                    onEntityClick={handleEntityClick}
+                    selectedEntityId={selectedEntityId}
+                  />
+                  <CounterRow
+                    label="Plants"
+                    value={counters.water.treatment_plant}
+                    entities={counters.entities.water.treatment_plant}
+                    isExpanded={expandedKey === 'water-plant'}
+                    onToggle={() => handleToggle('water-plant')}
+                    onEntityClick={handleEntityClick}
+                    selectedEntityId={selectedEntityId}
+                  />
+                  <CounterRow
+                    label="Canals"
+                    value={counters.water.canal}
+                    entities={counters.entities.water.canal}
+                    isExpanded={expandedKey === 'water-canal'}
+                    onToggle={() => handleToggle('water-canal')}
+                    onEntityClick={handleEntityClick}
+                    selectedEntityId={selectedEntityId}
+                  />
+                  <CounterRow
+                    label="Desalination"
+                    value={counters.water.desalination}
+                    entities={counters.entities.water.desalination}
+                    isExpanded={expandedKey === 'water-desalination'}
+                    onToggle={() => handleToggle('water-desalination')}
+                    onEntityClick={handleEntityClick}
+                    selectedEntityId={selectedEntityId}
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
       </OverlayPanel>

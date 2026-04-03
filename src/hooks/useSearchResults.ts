@@ -4,10 +4,13 @@ import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useSiteStore } from '@/stores/siteStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useLayerStore } from '@/stores/layerStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { evaluateQuery, type EvaluationContext } from '@/lib/queryEvaluator';
 import { haversineKm } from '@/lib/geo';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
+import type { WaterFacility } from '../../server/types';
 
 const MAX_PER_TYPE = 10;
 
@@ -22,6 +25,7 @@ export interface GroupedSearchResults {
   ships: SearchResult<ShipEntity>[];
   events: SearchResult<ConflictEventEntity>[];
   sites: SearchResult<SiteEntity>[];
+  water: SearchResult<WaterFacility>[];
   totalCount: number;
 }
 
@@ -41,16 +45,20 @@ export function useSearchResults(): GroupedSearchResults {
   const ships = useShipStore((s) => s.ships);
   const events = useEventStore((s) => s.events);
   const sites = useSiteStore((s) => s.sites);
+  const waterFacilities = useWaterStore((s) => s.facilities);
+  const isWaterLayerActive = useLayerStore((s) => s.activeLayers.has('water'));
 
   // Keep latest entity refs to avoid recomputing on every poll
   const flightsRef = useRef(flights);
   const shipsRef = useRef(ships);
   const eventsRef = useRef(events);
   const sitesRef = useRef(sites);
+  const waterRef = useRef(waterFacilities);
   flightsRef.current = flights;
   shipsRef.current = ships;
   eventsRef.current = events;
   sitesRef.current = sites;
+  waterRef.current = waterFacilities;
 
   // Proximity pin for scoping search results
   const proximityPin = useFilterStore((s) => s.proximityPin);
@@ -82,17 +90,22 @@ export function useSearchResults(): GroupedSearchResults {
     for (const si of sites) {
       if (evaluateQuery(parsedQuery, si, ctx)) ids.add(si.id);
     }
+    if (isWaterLayerActive) {
+      for (const w of waterFacilities) {
+        if (evaluateQuery(parsedQuery, w as any, ctx)) ids.add(w.id);
+      }
+    }
 
     // Only update if changed to avoid needless Set creation
     const current = useSearchStore.getState().matchedIds;
     if (ids.size !== current.size || [...ids].some((id) => !current.has(id))) {
       useSearchStore.getState().setMatchedIds(ids);
     }
-  }, [isFilterMode, parsedQuery, flights, ships, events, sites]);
+  }, [isFilterMode, parsedQuery, flights, ships, events, sites, waterFacilities, isWaterLayerActive]);
 
   return useMemo(() => {
     if (!query.trim() || !parsedQuery) {
-      return { flights: [], ships: [], events: [], sites: [], totalCount: 0 };
+      return { flights: [], ships: [], events: [], sites: [], water: [], totalCount: 0 };
     }
 
     const ctx: EvaluationContext = {
@@ -147,12 +160,22 @@ export function useSearchResults(): GroupedSearchResults {
       if (r) si.push(r);
     }
 
+    const wa: SearchResult<WaterFacility>[] = [];
+    if (isWaterLayerActive) {
+      for (const w of waterRef.current) {
+        if (wa.length >= MAX_PER_TYPE) break;
+        const r = matchEntity(w as any);
+        if (r) wa.push(r as unknown as SearchResult<WaterFacility>);
+      }
+    }
+
     return {
       flights: f,
       ships: sh,
       events: ev,
       sites: si,
-      totalCount: f.length + sh.length + ev.length + si.length,
+      water: wa,
+      totalCount: f.length + sh.length + ev.length + si.length + wa.length,
     };
   }, [query, parsedQuery, proximityPin, proximityRadiusKm]);
 }

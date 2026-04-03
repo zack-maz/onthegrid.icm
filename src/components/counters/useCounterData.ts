@@ -3,11 +3,14 @@ import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 import { useSiteStore } from '@/stores/siteStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useLayerStore } from '@/stores/layerStore';
 import { computeAttackStatus } from '@/lib/attackStatus';
 import { haversineKm } from '@/lib/geo';
 import { classifySeverity } from '@/lib/severity';
 import { CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS } from '@/types/ui';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity, SiteType } from '@/types/entities';
+import type { WaterFacility, WaterFacilityType } from '../../../server/types';
 
 export interface SiteCounts {
   nuclear: number;
@@ -18,6 +21,15 @@ export interface SiteCounts {
   total: number;
 }
 
+export interface WaterCounts {
+  dam: number;
+  reservoir: number;
+  treatment_plant: number;
+  canal: number;
+  desalination: number;
+  total: number;
+}
+
 export interface CounterValues {
   totalFlights: number;
   iranianFlights: number;
@@ -25,6 +37,7 @@ export interface CounterValues {
   groundCombat: number;
   targeted: number;
   sites: SiteCounts;
+  water: WaterCounts;
 }
 
 export interface CounterEntity {
@@ -43,6 +56,7 @@ export interface CounterEntities {
   groundCombatEvents: CounterEntity[];
   targetedEvents: CounterEntity[];
   sites: Record<SiteType, CounterEntity[]>;
+  water: Record<WaterFacilityType, CounterEntity[]>;
 }
 
 const AIRSTRIKE_TYPES: readonly string[] = CONFLICT_TOGGLE_GROUPS.showAirstrikes;
@@ -111,6 +125,20 @@ function toSiteEntity(s: SiteEntity, attackCount: number): CounterEntity {
   return { id: s.id, label: s.label, metric, lat: s.lat, lng: s.lng, type: s.siteType };
 }
 
+const WATER_TYPE_LABELS: Record<WaterFacilityType, string> = {
+  dam: 'Dam',
+  reservoir: 'Reservoir',
+  treatment_plant: 'Treatment Plant',
+  canal: 'Canal',
+  desalination: 'Desalination',
+};
+
+function toWaterEntity(w: WaterFacility): CounterEntity {
+  const healthPct = Math.round(w.stress.compositeHealth * 100);
+  const metric = `${healthPct}% health`;
+  return { id: w.id, label: w.label || WATER_TYPE_LABELS[w.facilityType], metric, lat: w.lat, lng: w.lng, type: w.facilityType };
+}
+
 export function useCounterData(): CounterValues & { entities: CounterEntities } {
   const showHighSeverity = useFilterStore((s) => s.showHighSeverity);
   const showMediumSeverity = useFilterStore((s) => s.showMediumSeverity);
@@ -136,6 +164,9 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
   const proximityPin = useFilterStore((s) => s.proximityPin);
   const proximityRadiusKm = useFilterStore((s) => s.proximityRadiusKm);
   const enabledSiteTypes = useFilterStore((s) => s.enabledSiteTypes);
+
+  const waterFacilities = useWaterStore((s) => s.facilities);
+  const isWaterLayerActive = useLayerStore((s) => s.activeLayers.has('water'));
 
   return useMemo(() => {
     // Apply independent flight visibility toggles (matching useEntityLayers)
@@ -195,6 +226,28 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
       });
     }
 
+    // --- Water facilities (gated by layer active) ---
+    const waterCounts: WaterCounts = { dam: 0, reservoir: 0, treatment_plant: 0, canal: 0, desalination: 0, total: 0 };
+    const waterEntities: Record<WaterFacilityType, CounterEntity[]> = {
+      dam: [], reservoir: [], treatment_plant: [], canal: [], desalination: [],
+    };
+
+    if (isWaterLayerActive) {
+      for (const wf of waterFacilities) {
+        waterCounts[wf.facilityType]++;
+        waterCounts.total++;
+        waterEntities[wf.facilityType].push(toWaterEntity(wf));
+      }
+      // Sort each type by health ascending (most stressed first)
+      for (const key of Object.keys(waterEntities) as WaterFacilityType[]) {
+        waterEntities[key].sort((a, b) => {
+          const aHealth = parseInt(a.metric) || 0;
+          const bHealth = parseInt(b.metric) || 0;
+          return aHealth - bHealth;
+        });
+      }
+    }
+
     // --- Entity arrays ---
 
     // Flights (already visibility-filtered)
@@ -228,6 +281,7 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
       groundCombatEvents: groundCombatEventEntities,
       targetedEvents: targetedEventEntities,
       sites: siteEntities,
+      water: waterEntities,
     };
 
     return {
@@ -237,7 +291,8 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
       groundCombat: groundCombatCount,
       targeted,
       sites: siteCounts,
+      water: waterCounts,
       entities,
     };
-  }, [filteredFlights, filteredShips, filteredEvents, sites, allEvents, dateEnd, showHighSeverity, showMediumSeverity, showLowSeverity, proximityPin, proximityRadiusKm, enabledSiteTypes, showFlights, showShips, showAirstrikes, showGroundCombatToggle, showTargetedToggle, showUnidentified, showGroundTraffic, showHealthySites, showAttackedSites]);
+  }, [filteredFlights, filteredShips, filteredEvents, sites, allEvents, dateEnd, showHighSeverity, showMediumSeverity, showLowSeverity, proximityPin, proximityRadiusKm, enabledSiteTypes, showFlights, showShips, showAirstrikes, showGroundCombatToggle, showTargetedToggle, showUnidentified, showGroundTraffic, showHealthySites, showAttackedSites, waterFacilities, isWaterLayerActive]);
 }
