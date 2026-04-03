@@ -1,7 +1,7 @@
 /**
  * Water stress color interpolation and composite health formula.
  *
- * Color ramp: black (extreme stress, health=0) -> light blue (healthy, health=1)
+ * Color ramp: dark purple (extreme stress, health=0) -> light blue (healthy, health=1)
  * 4 stops for smooth gradient across the range.
  */
 
@@ -12,11 +12,11 @@ export type { WaterStressIndicators };
 
 // ---------- Color Stops ----------
 
-/** 4-stop gradient: black -> dark blue -> medium blue -> light blue */
+/** 4-stop gradient: dark purple -> dark blue -> medium blue -> light blue */
 export const STRESS_COLORS: [number, number, number][] = [
-  [0, 0, 0],         // health=0: black (extreme stress)
-  [30, 58, 95],      // health=0.33: dark blue
-  [59, 130, 180],    // health=0.66: medium blue
+  [40, 20, 60],      // health=0: dark purple (extreme stress) -- visible on dark terrain
+  [30, 58, 138],     // health=0.33: dark blue
+  [59, 130, 200],    // health=0.66: medium blue
   [125, 211, 252],   // health=1.0: light blue (healthy)
 ];
 
@@ -92,8 +92,8 @@ export function bwsScoreToLabel(score: number): string {
 
 /** Color stops for legend registration */
 export const WATER_STRESS_LEGEND_STOPS: { color: string; label: string }[] = [
-  { color: '#000000', label: 'Extreme Stress' },
-  { color: '#1e3a5f', label: '' },
-  { color: '#3b82b4', label: '' },
+  { color: '#28143c', label: 'Extreme Stress' },
+  { color: '#1e3a8a', label: '' },
+  { color: '#3b82c8', label: '' },
   { color: '#7dd3fc', label: 'Healthy' },
 ];

@@ -4,22 +4,24 @@ import { log } from '../lib/logger.js';
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const OVERPASS_FALLBACK = 'https://overpass.private.coffee/api/interpreter';
-const TIMEOUT_MS = 120_000;
+const TIMEOUT_MS = 60_000;
 
-// Allowed countries (ISO 3166-1 alpha-2) -- same as overpass.ts
-const ALLOWED_COUNTRIES = [
+// Core batch: immediate region (12 countries)
+const CORE_COUNTRIES = [
   'IR', 'IQ', 'SY', 'LB', 'IL', 'PS', 'JO',
-  'SA', 'AE', 'OM', 'KW', 'BH', 'QA', 'YE',
-  'TR', 'EG',
-  'AF', 'PK',
-  'AM', 'AZ', 'GE', 'TM',
-  'DJ',
+  'SA', 'AE', 'KW', 'BH', 'QA',
 ];
 
-const areaUnion = ALLOWED_COUNTRIES.map(c => `area["ISO3166-1"="${c}"]`).join(';');
+// Extended batch: surrounding region (11 countries)
+const EXTENDED_COUNTRIES = [
+  'YE', 'TR', 'EG', 'AF', 'PK',
+  'AM', 'AZ', 'GE', 'TM', 'OM', 'DJ',
+];
 
-const QUERY = `
-[out:json][timeout:120];
+function buildQuery(countries: string[]): string {
+  const areaUnion = countries.map(c => `area["ISO3166-1"="${c}"]`).join(';');
+  return `
+[out:json][timeout:60];
 (${areaUnion};)->.searchArea;
 (
   nwr["waterway"="dam"]["name"](area.searchArea);
@@ -31,6 +33,7 @@ const QUERY = `
 );
 out center tags;
 `;
+}
 
 export interface OverpassElement {
   type: 'node' | 'way' | 'relation';
@@ -119,36 +122,67 @@ export function normalizeWaterElement(
 }
 
 /**
- * Fetch water infrastructure facilities from Overpass API.
- * Each facility is enriched with WRI basin stress indicators via assignBasinStress.
+ * Fetch a batch of water facilities from Overpass, trying primary then fallback URL.
+ * Returns facilities array on success, null on failure.
  */
-export async function fetchWaterFacilities(): Promise<WaterFacility[]> {
+async function fetchBatch(
+  countries: string[],
+  batchLabel: string,
+): Promise<WaterFacility[] | null> {
+  const query = buildQuery(countries);
   for (const url of [OVERPASS_URL, OVERPASS_FALLBACK]) {
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(QUERY)}`,
+        body: `data=${encodeURIComponent(query)}`,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (!res.ok) {
-        log({ level: 'warn', message: `[overpass-water] ${url} returned ${res.status}` });
+        log({ level: 'warn', message: `[overpass-water] ${batchLabel} ${url} returned ${res.status}` });
         continue;
       }
       const json = (await res.json()) as { elements: OverpassElement[] };
 
-      // Normalize and deduplicate by OSM ID
       const facilityMap = new Map<number, WaterFacility>();
       for (const el of json.elements) {
         const facility = normalizeWaterElement(el, assignBasinStress);
         if (facility) facilityMap.set(el.id, facility);
       }
 
-      log({ level: 'info', message: `[overpass-water] Fetched ${facilityMap.size} water facilities` });
+      log({ level: 'info', message: `[overpass-water] ${batchLabel}: ${facilityMap.size} facilities` });
       return Array.from(facilityMap.values());
     } catch (err) {
-      log({ level: 'warn', message: `[overpass-water] ${url} failed: ${(err as Error).message}` });
+      log({ level: 'warn', message: `[overpass-water] ${batchLabel} ${url} failed: ${(err as Error).message}` });
     }
   }
-  throw new Error('All Overpass API instances failed for water facilities');
+  return null;
+}
+
+/**
+ * Fetch water infrastructure facilities from Overpass API.
+ * Splits into two batches (core 12 + extended 11 countries) to reduce per-request load.
+ * Each facility is enriched with WRI basin stress indicators via assignBasinStress.
+ */
+export async function fetchWaterFacilities(): Promise<WaterFacility[]> {
+  // Core batch must succeed; extended batch is best-effort
+  const coreFacilities = await fetchBatch(CORE_COUNTRIES, 'core');
+  if (!coreFacilities) {
+    throw new Error('All Overpass API instances failed for water facilities (core batch)');
+  }
+
+  const extendedFacilities = await fetchBatch(EXTENDED_COUNTRIES, 'extended');
+  if (!extendedFacilities) {
+    log({ level: 'warn', message: '[overpass-water] Extended batch failed, returning core results only' });
+    return coreFacilities;
+  }
+
+  // Deduplicate by OSM ID across batches
+  const combined = new Map<string, WaterFacility>();
+  for (const f of [...coreFacilities, ...extendedFacilities]) {
+    combined.set(f.id, f);
+  }
+
+  log({ level: 'info', message: `[overpass-water] Total: ${combined.size} water facilities (core + extended)` });
+  return Array.from(combined.values());
 }

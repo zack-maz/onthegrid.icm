@@ -18,6 +18,9 @@ const FACILITIES_KEY = 'water:facilities';
 /** Redis key for cached precipitation data */
 const PRECIP_KEY = 'water:precip';
 
+/** Route-level timeout to prevent indefinite hangs when Overpass is slow */
+const ROUTE_TIMEOUT_MS = 30_000;
+
 export const waterRouter = Router();
 
 /**
@@ -34,7 +37,12 @@ waterRouter.get('/', async (req, res) => {
   }
 
   try {
-    const facilities = await fetchWaterFacilities();
+    const facilities = await Promise.race([
+      fetchWaterFacilities(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Route timeout')), ROUTE_TIMEOUT_MS),
+      ),
+    ]);
     await cacheSetSafe(FACILITIES_KEY, facilities, WATER_REDIS_TTL_SEC);
     res.json({ data: facilities, stale: false, lastFresh: Date.now() });
   } catch (err) {
@@ -42,7 +50,8 @@ waterRouter.get('/', async (req, res) => {
     if (cached) {
       res.json({ data: cached.data, stale: true, lastFresh: cached.lastFresh });
     } else {
-      throw err;
+      log({ level: 'warn', message: '[water] Overpass timed out at route level, returning empty' });
+      res.json({ data: [], stale: true, lastFresh: 0 });
     }
   }
 });

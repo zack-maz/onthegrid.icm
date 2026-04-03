@@ -194,11 +194,16 @@ describe('Water Routes (/api/water)', () => {
       expect(body.data).toHaveLength(1);
     });
 
-    it('returns 500 when upstream fails and no cache exists', async () => {
+    it('returns empty array with stale:true when upstream fails and no cache exists', async () => {
       mockFetchWaterFacilities.mockRejectedValue(new Error('Overpass down'));
 
       const res = await fetch(`${baseUrl}/api/water`);
-      expect(res.status).toBe(500);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.stale).toBe(true);
+      expect(body.data).toEqual([]);
+      expect(body.lastFresh).toBe(0);
     });
   });
 
