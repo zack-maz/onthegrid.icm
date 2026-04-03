@@ -8,8 +8,8 @@ import {
 } from '../lib/waterStress';
 
 describe('stressToRGBA', () => {
-  it('returns black at health=0 (extreme stress)', () => {
-    expect(stressToRGBA(0)).toEqual([0, 0, 0, 200]);
+  it('returns dark purple at health=0 (extreme stress)', () => {
+    expect(stressToRGBA(0)).toEqual([40, 20, 60, 200]);
   });
 
   it('returns light blue at health=1 (healthy)', () => {
@@ -20,13 +20,13 @@ describe('stressToRGBA', () => {
     const result = stressToRGBA(0.5);
     // health=0.5 is halfway through the 4-stop gradient
     // segment = 0.5 * 3 = 1.5, so i=1, f=0.5
-    // c0 = [30, 58, 95], c1 = [59, 130, 180]
-    // lerp: [45, 94, 138, 200]
-    expect(result).toEqual([45, 94, 138, 200]);
+    // c0 = [30, 58, 138], c1 = [59, 130, 200]
+    // lerp: [45, 94, 169, 200]
+    expect(result).toEqual([45, 94, 169, 200]);
   });
 
   it('clamps values below 0', () => {
-    expect(stressToRGBA(-0.1)).toEqual([0, 0, 0, 200]);
+    expect(stressToRGBA(-0.1)).toEqual([40, 20, 60, 200]);
   });
 
   it('clamps values above 1', () => {
@@ -132,8 +132,8 @@ describe('STRESS_COLORS', () => {
     expect(STRESS_COLORS).toHaveLength(4);
   });
 
-  it('starts with black', () => {
-    expect(STRESS_COLORS[0]).toEqual([0, 0, 0]);
+  it('starts with dark purple (visible on dark terrain)', () => {
+    expect(STRESS_COLORS[0]).toEqual([40, 20, 60]);
   });
 
   it('ends with light blue', () => {
