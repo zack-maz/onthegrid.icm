@@ -13,6 +13,7 @@ const WATER_ICON_MAP: Record<WaterFacilityType, string> = {
   dam: 'diamond',
   reservoir: 'siteDesalination',
   desalination: 'siteDesalination',
+  treatment_plant: 'diamond',
 };
 
 interface RiverFeature {

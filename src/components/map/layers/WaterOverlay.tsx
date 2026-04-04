@@ -14,6 +14,7 @@ const WATER_TYPE_LABELS: Record<WaterFacilityType, string> = {
   dam: 'Dam',
   reservoir: 'Reservoir',
   desalination: 'Desalination Plant',
+  treatment_plant: 'Treatment Plant',
 };
 
 interface WaterTooltipProps {

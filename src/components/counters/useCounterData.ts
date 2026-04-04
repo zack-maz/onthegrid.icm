@@ -26,6 +26,7 @@ export interface WaterCounts {
   dam: number;
   reservoir: number;
   desalination: number;
+  treatment_plant: number;
   total: number;
 }
 
@@ -128,6 +129,7 @@ const WATER_TYPE_LABELS: Record<WaterFacilityType, string> = {
   dam: 'Dam',
   reservoir: 'Reservoir',
   desalination: 'Desalination',
+  treatment_plant: 'Treatment Plant',
 };
 
 function toWaterEntity(w: WaterFacility): CounterEntity {
@@ -224,9 +226,9 @@ export function useCounterData(): CounterValues & { entities: CounterEntities } 
     }
 
     // --- Water facilities (gated by layer active) ---
-    const waterCounts: WaterCounts = { dam: 0, reservoir: 0, desalination: 0, total: 0 };
+    const waterCounts: WaterCounts = { dam: 0, reservoir: 0, desalination: 0, treatment_plant: 0, total: 0 };
     const waterEntities: Record<WaterFacilityType, CounterEntity[]> = {
-      dam: [], reservoir: [], desalination: [],
+      dam: [], reservoir: [], desalination: [], treatment_plant: [],
     };
 
     if (isWaterLayerActive) {
