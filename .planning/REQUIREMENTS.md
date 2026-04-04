@@ -120,8 +120,8 @@ Requirements for the Data Quality & Layers milestone.
 - [ ] **WR-01**: Overpass queries include treatment_plant (man_made=water_works) for priority countries (IL, JO, LB, SY, IQ, IR, AF) and filter non-priority countries to notable-only dams/reservoirs (require wikidata/wikipedia tags)
 - [ ] **WR-02**: Desalination facilities pass through unfiltered for all countries regardless of priority tier
 - [ ] **WR-03**: Vercel cron hits /api/water?refresh=true daily at 06:00 UTC; route-level Promise.race timeout removed; Redis hard TTL extended to 7 days
-- [ ] **WR-04**: Water stress score scale expanded to 0-10 with score 0 = "Destroyed" triggered by destructive GDELT events (airstrike, bombing, shelling, wmd) within 5km; destroyed facilities render solid black
-- [ ] **WR-05**: Icon atlas expanded with 4 type-specific water facility icons (dam trapezoid, reservoir pool, treatment plant industrial, desalination factory+droplet) at 32x32 white mask mode
+- [x] **WR-04**: Water stress score scale expanded to 0-10 with score 0 = "Destroyed" triggered by destructive GDELT events (airstrike, bombing, shelling, wmd) within 5km; destroyed facilities render solid black
+- [x] **WR-05**: Icon atlas expanded with 4 type-specific water facility icons (dam trapezoid, reservoir pool, treatment plant industrial, desalination factory+droplet) at 32x32 white mask mode
 - [ ] **WR-06**: WaterFacilityType includes treatment_plant; all WATER_TYPE_LABELS maps updated across tooltip, detail panel, and counters
 - [ ] **WR-07**: Desalination audit cross-references known major Gulf plants against Overpass results and reports coverage gaps (report-only, no manual data addition)
 

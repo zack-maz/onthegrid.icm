@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-04T01:10:22.109Z"
+last_updated: "2026-04-04T06:29:14.968Z"
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 5
-  total_plans: 21
-  completed_plans: 18
+  total_plans: 24
+  completed_plans: 19
 ---
 
 # Project State
@@ -22,6 +22,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Phase 26.1: Plan 02 COMPLETE (2 of 3 plans done)
 Phase 26: Plan 06 COMPLETE (6 of 6 plans done, gap closure complete)
 Phase 25: Plan 01 COMPLETE (1 of 2 plans done)
 Phase 24: Plan 01 COMPLETE (1 of 2 plans done)
@@ -42,6 +43,7 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 | 24 | Political Boundaries Layer | IN PROGRESS (1/2 plans) |
 | 25 | Ethnic Distribution Layer | IN PROGRESS (1/2 plans) |
 | 26 | Water Stress Layer | IN PROGRESS (6/6 plans, gap closure complete) |
+| 26.1 | Water Layer Refinements | IN PROGRESS (2/3 plans) |
 | 27 | Performance & Load Testing | Planned |
 
 ## Key Decisions
@@ -85,7 +87,7 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - Country matching for basin filtering uses exact equality (substring "Romania" matching "Oman" was a bug)
 - compositeHealth: baseline dominates (75%), precipitation modifier adjusts (25%), clamped [0,1]
 - PrecipitationData defined locally in waterStore.ts (not server/types.ts) since 26-03 server plan not yet executed
-- Water facility icons use existing atlas placeholders (diamond, siteDesalination) pending dedicated water icons
+- Water facility icons now have dedicated shapes: waterDam (trapezoid), waterReservoir (oval), waterTreatment (building+tank), waterDesalination (factory+droplet)
 - River labels use serif italic font to distinguish from ethnic overlay sans-serif labels
 - Country-centroid basin lookup: WRI Aqueduct lacks lat/lng, so basinLookup uses haversine to nearest country centroid then median-stress basin
 - Regional precipitation normals: 20mm/month arid default, 50mm/month Fertile Crescent (lat 30-40, lng 35-50)
@@ -96,6 +98,8 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - Dark purple [40,20,60] as water stress color floor -- visible on dark terrain while still reading as stressed
 - Core/extended Overpass batch split: core 12 countries must succeed, extended 11 is best-effort (partial data > none)
 - Route-level 30s timeout returns empty array with stale:true (not 500) -- client degrades gracefully on Overpass failure
+- Score 0 (Destroyed) applied externally by useWaterLayers, not by healthToScore -- keeps scoring pure and destruction as separate concern
+- STRESS_COLORS array unchanged at 5 stops -- score 0 black is handled separately in legend, not in gradient interpolation
 
 ## Pending Todos
 

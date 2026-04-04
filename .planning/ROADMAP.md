@@ -140,7 +140,7 @@ Plans:
 **Goal:** Refine the water stress overlay: add tiered Overpass queries (~1000 facility target with priority country coverage), expand score to 0-10 with destroyed state, create type-specific canvas icons, set up Vercel cron for daily cache refresh, and audit desalination coverage
 **Depends on:** Phase 26
 **Requirements:** [WR-01, WR-02, WR-03, WR-04, WR-05, WR-06, WR-07]
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 - [ ] 26.1-01-PLAN.md -- Tiered Overpass queries, treatment_plant type, Vercel cron, route timeout removal
