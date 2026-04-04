@@ -127,3 +127,4 @@ None.
 - Phase 22.1 inserted after Phase 22: fixing dispersion (URGENT)
 - Phase 23.1 inserted after Phase 23: detail panel navigation stack (deferred from Phase 23 discussion)
 - Phase 26.1 inserted after Phase 26: Water layer refinements (URGENT)
+- Phase 26.2 inserted after Phase 26: Conflict geolocation improvement (URGENT)

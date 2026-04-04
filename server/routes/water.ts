@@ -84,7 +84,10 @@ waterRouter.get('/precip', async (req, res) => {
     const locations = facilities.map(f => ({ lat: f.lat, lng: f.lng }));
     const precipData = await fetchPrecipitation(locations);
 
-    await cacheSetSafe(PRECIP_KEY, precipData, WATER_PRECIP_REDIS_TTL_SEC);
+    // Only cache non-empty results — empty means all batches failed
+    if (precipData.length > 0) {
+      await cacheSetSafe(PRECIP_KEY, precipData, WATER_PRECIP_REDIS_TTL_SEC);
+    }
     res.json({ data: precipData, stale: false, lastFresh: Date.now() });
   } catch (err) {
     log({ level: 'error', message: `[water/precip] Error: ${(err as Error).message}` });

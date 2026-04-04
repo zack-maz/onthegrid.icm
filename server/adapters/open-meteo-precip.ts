@@ -69,40 +69,45 @@ export async function fetchPrecipitation(
         `latitude=${lats}&longitude=${lngs}&` +
         `daily=precipitation_sum&past_days=30&forecast_days=0&timezone=UTC`;
 
-      const res = await fetch(url, {
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-
-      if (!res.ok) {
-        log({ level: 'warn', message: `[open-meteo-precip] API returned ${res.status}` });
-        return [];
-      }
-
-      const json = await res.json();
-
-      // Open-Meteo returns array for multi-location, single object for 1 location
-      const responses: OpenMeteoDailyResponse[] = Array.isArray(json) ? json : [json];
-
-      for (let j = 0; j < responses.length; j++) {
-        const loc = batch[j];
-        const data = responses[j];
-        if (!data?.daily?.precipitation_sum) continue;
-
-        const total = data.daily.precipitation_sum.reduce(
-          (sum: number, v: number | null) => sum + (v ?? 0),
-          0,
-        );
-
-        const normalMm = estimateNormalMm(loc.lat, loc.lng);
-        const anomalyRatio = normalMm > 0 ? total / normalMm : 1.0;
-
-        results.push({
-          lat: loc.lat,
-          lng: loc.lng,
-          last30DaysMm: Math.round(total * 10) / 10, // 1 decimal
-          anomalyRatio: Math.round(anomalyRatio * 100) / 100, // 2 decimals
-          updatedAt: Date.now(),
+      try {
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(TIMEOUT_MS),
         });
+
+        if (!res.ok) {
+          log({ level: 'warn', message: `[open-meteo-precip] Batch ${Math.floor(i / BATCH_SIZE)} returned ${res.status}, skipping` });
+          continue;
+        }
+
+        const json = await res.json();
+
+        // Open-Meteo returns array for multi-location, single object for 1 location
+        const responses: OpenMeteoDailyResponse[] = Array.isArray(json) ? json : [json];
+
+        for (let j = 0; j < responses.length; j++) {
+          const loc = batch[j];
+          const data = responses[j];
+          if (!data?.daily?.precipitation_sum) continue;
+
+          const total = data.daily.precipitation_sum.reduce(
+            (sum: number, v: number | null) => sum + (v ?? 0),
+            0,
+          );
+
+          const normalMm = estimateNormalMm(loc.lat, loc.lng);
+          const anomalyRatio = normalMm > 0 ? total / normalMm : 1.0;
+
+          results.push({
+            lat: loc.lat,
+            lng: loc.lng,
+            last30DaysMm: Math.round(total * 10) / 10, // 1 decimal
+            anomalyRatio: Math.round(anomalyRatio * 100) / 100, // 2 decimals
+            updatedAt: Date.now(),
+          });
+        }
+      } catch (batchErr) {
+        log({ level: 'warn', message: `[open-meteo-precip] Batch ${Math.floor(i / BATCH_SIZE)} failed: ${(batchErr as Error).message}, skipping` });
+        continue;
       }
     }
 
