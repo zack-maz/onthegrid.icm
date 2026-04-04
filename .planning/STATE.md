@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-04T06:29:14.968Z"
+last_updated: "2026-04-04T06:35:34.133Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 24
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -23,6 +23,7 @@ See: .planning/PROJECT.md
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
 Phase 26.1: Plan 02 COMPLETE (2 of 3 plans done)
+Phase 26.1: Plan 01 COMPLETE (1 of 3 plans done)
 Phase 26: Plan 06 COMPLETE (6 of 6 plans done, gap closure complete)
 Phase 25: Plan 01 COMPLETE (1 of 2 plans done)
 Phase 24: Plan 01 COMPLETE (1 of 2 plans done)
@@ -100,6 +101,10 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - Route-level 30s timeout returns empty array with stale:true (not 500) -- client degrades gracefully on Overpass failure
 - Score 0 (Destroyed) applied externally by useWaterLayers, not by healthToScore -- keeps scoring pure and destruction as separate concern
 - STRESS_COLORS array unchanged at 5 stops -- score 0 black is handled separately in legend, not in gradient interpolation
+- isPriorityCountry uses full 29-country COUNTRY_CENTROIDS_FULL (duplicated from basinLookup.ts to avoid circular dep)
+- isExcludedLocation upgraded to use full centroids -- sparse 5-entry array was falsely excluding Iran/Pakistan/etc.
+- Cron refresh=true guarded by vercel-cron user-agent in production; dev always allows refresh
+- treatment_plant uses diamond icon placeholder pending dedicated water icons
 
 ## Pending Todos
 
