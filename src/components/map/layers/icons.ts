@@ -9,37 +9,41 @@ interface IconEntry {
   mask: boolean;
 }
 
-/** Icon mapping for the 13 entity shapes */
+/** Icon mapping for the 17 entity shapes */
 export const ICON_MAPPING: Record<string, IconEntry> = {
-  chevron:        { x: 0,   y: 0, width: 32, height: 32, mask: true },
-  diamond:        { x: 32,  y: 0, width: 32, height: 32, mask: true },
-  starburst:      { x: 64,  y: 0, width: 32, height: 32, mask: true },
-  xmark:          { x: 96,  y: 0, width: 32, height: 32, mask: true },
-  chevronGround:  { x: 128, y: 0, width: 32, height: 32, mask: true },
-  explosion:      { x: 160, y: 0, width: 32, height: 32, mask: true },
-  crosshair:      { x: 192, y: 0, width: 32, height: 32, mask: true },
-  siteNuclear:    { x: 224, y: 0, width: 32, height: 32, mask: true },
-  siteNaval:      { x: 256, y: 0, width: 32, height: 32, mask: true },
-  siteOil:        { x: 288, y: 0, width: 32, height: 32, mask: true },
-  siteAirbase:    { x: 320, y: 0, width: 32, height: 32, mask: true },
-  siteDesalination: { x: 352, y: 0, width: 32, height: 32, mask: true },
-  sitePort:       { x: 384, y: 0, width: 32, height: 32, mask: true },
+  chevron:           { x: 0,   y: 0, width: 32, height: 32, mask: true },
+  diamond:           { x: 32,  y: 0, width: 32, height: 32, mask: true },
+  starburst:         { x: 64,  y: 0, width: 32, height: 32, mask: true },
+  xmark:             { x: 96,  y: 0, width: 32, height: 32, mask: true },
+  chevronGround:     { x: 128, y: 0, width: 32, height: 32, mask: true },
+  explosion:         { x: 160, y: 0, width: 32, height: 32, mask: true },
+  crosshair:         { x: 192, y: 0, width: 32, height: 32, mask: true },
+  siteNuclear:       { x: 224, y: 0, width: 32, height: 32, mask: true },
+  siteNaval:         { x: 256, y: 0, width: 32, height: 32, mask: true },
+  siteOil:           { x: 288, y: 0, width: 32, height: 32, mask: true },
+  siteAirbase:       { x: 320, y: 0, width: 32, height: 32, mask: true },
+  siteDesalination:  { x: 352, y: 0, width: 32, height: 32, mask: true },
+  sitePort:          { x: 384, y: 0, width: 32, height: 32, mask: true },
+  waterDam:          { x: 416, y: 0, width: 32, height: 32, mask: true },
+  waterReservoir:    { x: 448, y: 0, width: 32, height: 32, mask: true },
+  waterTreatment:    { x: 480, y: 0, width: 32, height: 32, mask: true },
+  waterDesalination: { x: 512, y: 0, width: 32, height: 32, mask: true },
 };
 
 /** Cached atlas canvas */
 let atlas: HTMLCanvasElement | null = null;
 
 /**
- * Lazily generates a 416x32 canvas icon atlas with 13 white shapes.
+ * Lazily generates a 544x32 canvas icon atlas with 17 white shapes.
  * All shapes drawn white -- Deck.gl mask mode tints via getColor.
  */
 export function getIconAtlas(): HTMLCanvasElement {
-  // Guard against stale cache in dev HMR (old atlas was 224px)
-  if (atlas && atlas.width === 416) return atlas;
+  // Guard against stale cache in dev HMR (old atlas was 416px)
+  if (atlas && atlas.width === 544) return atlas;
   atlas = null;
 
   const canvas = document.createElement('canvas');
-  canvas.width = 416;
+  canvas.width = 544;
   canvas.height = 32;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
@@ -286,6 +290,72 @@ export function getIconAtlas(): HTMLCanvasElement {
   ctx.fillRect(cx12 - 4, 10, 8, 12);
   // Base plate
   ctx.fillRect(cx12 - 8, 22, 16, 4);
+
+  // Reset styles for water facility icons
+  ctx.fillStyle = 'white';
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'butt';
+
+  // Icon 13 (offset 416): Dam -- trapezoid wall cross-section
+  // Wide base (~24px), narrow top (~16px), ~22px tall
+  ctx.beginPath();
+  ctx.moveTo(424, 5);    // top-left
+  ctx.lineTo(440, 5);    // top-right
+  ctx.lineTo(444, 27);   // bottom-right
+  ctx.lineTo(420, 27);   // bottom-left
+  ctx.closePath();
+  ctx.fill();
+
+  // Icon 14 (offset 448): Reservoir -- oval lake shape with wave line
+  const cx14 = 464;
+  const cy14 = 16;
+  // Main ellipse body
+  ctx.beginPath();
+  ctx.ellipse(cx14, cy14, 11, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Wavy line across upper third to suggest water surface
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx14 - 9, cy14 - 2);
+  ctx.quadraticCurveTo(cx14 - 4, cy14 - 5, cx14, cy14 - 2);
+  ctx.quadraticCurveTo(cx14 + 4, cy14 + 1, cx14 + 9, cy14 - 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'white';
+
+  // Icon 15 (offset 480): Treatment plant -- rectangular base with circular tank
+  ctx.fillStyle = 'white';
+  // Rectangular base building
+  ctx.fillRect(487, 18, 18, 10);
+  // Circular tank on top
+  ctx.beginPath();
+  ctx.arc(496, 14, 6, 0, Math.PI * 2);
+  ctx.fill();
+  // Small chimney/pipe on left side
+  ctx.fillRect(488, 6, 3, 8);
+
+  // Icon 16 (offset 512): Desalination -- factory building + water droplet
+  ctx.fillStyle = 'white';
+  // Left: factory/building silhouette with angled roof
+  ctx.beginPath();
+  ctx.moveTo(514, 8);    // roof peak
+  ctx.lineTo(520, 14);   // roof right
+  ctx.lineTo(520, 28);   // bottom right
+  ctx.lineTo(514, 28);   // bottom left (narrower)
+  ctx.lineTo(514, 14);   // wall left
+  ctx.closePath();
+  ctx.fill();
+  // Factory body
+  ctx.fillRect(514, 14, 6, 14);
+  // Right: water droplet
+  const cx16d = 530;
+  const cy16d = 20;
+  ctx.beginPath();
+  ctx.arc(cx16d, cy16d + 2, 5, 0.2 * Math.PI, 0.8 * Math.PI, false);
+  ctx.lineTo(cx16d, 10);
+  ctx.closePath();
+  ctx.fill();
 
   atlas = canvas;
   return canvas;
