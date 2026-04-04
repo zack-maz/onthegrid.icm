@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Data Quality & Layers
+milestone: v0.9
+milestone_name: milestone
 status: unknown
-last_updated: "2026-04-03T17:55:19.230Z"
+last_updated: "2026-04-04T01:10:22.109Z"
 progress:
   total_phases: 9
   completed_phases: 5
@@ -113,3 +113,4 @@ None.
 
 - Phase 22.1 inserted after Phase 22: fixing dispersion (URGENT)
 - Phase 23.1 inserted after Phase 23: detail panel navigation stack (deferred from Phase 23 discussion)
+- Phase 26.1 inserted after Phase 26: Water layer refinements (URGENT)
