@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { PathLayer, IconLayer, TextLayer } from '@deck.gl/layers';
 import { useWaterStore } from '@/stores/waterStore';
 import { useLayerStore } from '@/stores/layerStore';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
 import { stressToRGBA } from '@/lib/waterStress';
 import { getIconAtlas, ICON_MAPPING } from '@/components/map/layers/icons';
 import riversGeoJson from '@/data/rivers.json';
@@ -10,11 +12,14 @@ import type { Layer } from '@deck.gl/core';
 
 /** Maps water facility type to icon atlas key */
 const WATER_ICON_MAP: Record<WaterFacilityType, string> = {
-  dam: 'diamond',
-  reservoir: 'siteDesalination',
-  desalination: 'siteDesalination',
-  treatment_plant: 'diamond',
+  dam: 'waterDam',
+  reservoir: 'waterReservoir',
+  desalination: 'waterDesalination',
+  treatment_plant: 'waterTreatment',
 };
+
+/** Event types that indicate facility destruction */
+const DESTRUCTIVE_EVENT_TYPES = new Set(['airstrike', 'bombing', 'shelling', 'wmd']);
 
 interface RiverFeature {
   type: 'Feature';
@@ -115,9 +120,35 @@ export interface WaterLayerGroup {
 export function useWaterLayers(): WaterLayerGroup {
   const isActive = useLayerStore((s) => s.activeLayers.has('water'));
   const facilities = useWaterStore((s) => s.facilities);
+  const events = useEventStore((s) => s.events);
+  const dateEnd = useFilterStore((s) => s.dateEnd) ?? Date.now();
 
   return useMemo(() => {
     if (!isActive) return { riverLayers: [], facilityLayers: [] };
+
+    // Pre-compute destroyed set (O(facilities * destructiveEvents))
+    const destructiveEvents = events.filter(
+      (e) => DESTRUCTIVE_EVENT_TYPES.has(e.type) && e.timestamp <= dateEnd,
+    );
+    const destroyedIds = new Set<string>();
+    const COARSE_DEG = 0.05;
+    for (const f of facilities) {
+      for (const e of destructiveEvents) {
+        if (Math.abs(e.lat - f.lat) > COARSE_DEG || Math.abs(e.lng - f.lng) > COARSE_DEG) continue;
+        const dLat = ((e.lat - f.lat) * Math.PI) / 180;
+        const dLng = ((e.lng - f.lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((f.lat * Math.PI) / 180) *
+            Math.cos((e.lat * Math.PI) / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        if (dist <= 5) {
+          destroyedIds.add(f.id);
+          break;
+        }
+      }
+    }
 
     // River lines with per-vertex gradient coloring
     const riverLayer = new PathLayer<RiverSegment>({
@@ -166,7 +197,10 @@ export function useWaterLayers(): WaterLayerGroup {
       sizeUnits: 'meters' as const,
       sizeMinPixels: 12,
       sizeMaxPixels: 80,
-      getColor: (d: WaterFacility) => stressToRGBA(d.stress.compositeHealth),
+      getColor: (d: WaterFacility) => {
+        if (destroyedIds.has(d.id)) return [0, 0, 0, 255] as [number, number, number, number];
+        return stressToRGBA(d.stress.compositeHealth);
+      },
       pickable: true,
       iconAtlas: getIconAtlas(),
       iconMapping: ICON_MAPPING,
@@ -176,5 +210,5 @@ export function useWaterLayers(): WaterLayerGroup {
       riverLayers: [riverLayer, riverLabelLayer],
       facilityLayers: [facilityLayer],
     };
-  }, [isActive, facilities]);
+  }, [isActive, facilities, events, dateEnd]);
 }
