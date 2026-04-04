@@ -165,7 +165,7 @@ export interface WeatherGridPoint {
 
 // ---------- Water Stress Types ----------
 
-export type WaterFacilityType = 'dam' | 'reservoir' | 'desalination';
+export type WaterFacilityType = 'dam' | 'reservoir' | 'desalination' | 'treatment_plant';
 
 export interface WaterStressIndicators {
   bws_raw: number;    // baseline water stress raw value

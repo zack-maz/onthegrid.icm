@@ -23,6 +23,71 @@ const CENTROIDS: [string, number, number][] = [
   ['Kazakhstan', 48.0, 67.0],
 ];
 
+// ---------- Priority Country & Notability Filters ----------
+
+/** Full country centroids for priority-country classification (from basinLookup.ts, duplicated to avoid circular dep) */
+const COUNTRY_CENTROIDS_FULL: [string, number, number][] = [
+  ['Afghanistan', 33.9, 67.7],
+  ['Armenia', 40.1, 45.0],
+  ['Azerbaijan', 40.1, 47.6],
+  ['Bahrain', 26.1, 50.6],
+  ['Cyprus', 35.1, 33.4],
+  ['Djibouti', 11.6, 43.2],
+  ['Egypt', 26.8, 30.8],
+  ['Eritrea', 15.2, 39.8],
+  ['Georgia', 42.3, 43.4],
+  ['Iran', 32.4, 53.7],
+  ['Iraq', 33.2, 43.7],
+  ['Israel', 31.0, 34.9],
+  ['Jordan', 31.2, 36.5],
+  ['Kuwait', 29.3, 47.5],
+  ['Lebanon', 33.9, 35.9],
+  ['Libya', 26.3, 17.2],
+  ['Northern Cyprus', 35.3, 33.6],
+  ['Oman', 21.5, 55.9],
+  ['Pakistan', 30.4, 69.3],
+  ['Qatar', 25.4, 51.2],
+  ['Saudi Arabia', 23.9, 45.1],
+  ['Somalia', 5.2, 46.2],
+  ['Sudan', 12.9, 30.2],
+  ['Syria', 35.0, 38.0],
+  ['Turkey', 39.0, 35.2],
+  ['Turkmenistan', 38.5, 58.4],
+  ['United Arab Emirates', 23.4, 53.8],
+  ['Uzbekistan', 41.4, 64.6],
+  ['Yemen', 15.6, 48.5],
+];
+
+/** Countries where all facility types are kept (conflict zones with strategic water infrastructure) */
+const PRIORITY_COUNTRIES = new Set([
+  'Israel', 'Jordan', 'Lebanon', 'Syria', 'Iraq', 'Iran', 'Afghanistan',
+]);
+
+/**
+ * Returns true if coordinates fall within a priority country (conflict zone).
+ * Priority countries keep all facility types; non-priority apply notability filters.
+ */
+export function isPriorityCountry(lat: number, lng: number): boolean {
+  let minDist = Infinity;
+  let nearest = '';
+  for (const [name, clat, clng] of COUNTRY_CENTROIDS_FULL) {
+    const d = haversine(lat, lng, clat, clng);
+    if (d < minDist) { minDist = d; nearest = name; }
+  }
+  return PRIORITY_COUNTRIES.has(nearest);
+}
+
+/**
+ * Returns true if OSM tags indicate a notable facility (has wikidata or wikipedia reference).
+ * Used to filter non-priority country dams/reservoirs to only significant facilities.
+ */
+export function isNotable(tags: Record<string, string>): boolean {
+  if (tags.wikidata) return true;
+  if (tags.wikipedia) return true;
+  if (Object.keys(tags).some(k => k.startsWith('wikipedia:'))) return true;
+  return false;
+}
+
 /** Countries to fully exclude */
 const EXCLUDED_COUNTRIES = new Set(['Uzbekistan', 'Tajikistan', 'Kyrgyzstan', 'Kazakhstan']);
 
@@ -50,10 +115,10 @@ function isExcludedLocation(lat: number, lng: number): boolean {
     if (distFromSE > 600) return true;
   }
 
-  // Check if nearest centroid is an excluded country
+  // Check if nearest centroid is an excluded country (using full centroid set for accuracy)
   let minDist = Infinity;
   let nearest = '';
-  for (const [name, clat, clng] of CENTROIDS) {
+  for (const [name, clat, clng] of COUNTRY_CENTROIDS_FULL) {
     const d = haversine(lat, lng, clat, clng);
     if (d < minDist) { minDist = d; nearest = name; }
   }
@@ -64,14 +129,14 @@ function isExcludedLocation(lat: number, lng: number): boolean {
 
 /**
  * Split into separate queries per facility type to keep each request light.
- * Only strategically significant types: dams (notable only), reservoirs, desalination.
- * Treatment plants and canals dropped — too many low-value results.
+ * Dams, reservoirs, desalination, and treatment plants (man_made=water_works).
+ * Treatment plants only kept in priority countries; non-priority dams/reservoirs require notability.
  */
 const FACILITY_QUERIES: { label: string; nwr: string }[] = [
-  // All named dams — geographic exclusion filter handles noise
   { label: 'dams', nwr: 'nwr["waterway"="dam"]["name"]' },
   { label: 'reservoirs', nwr: 'nwr["natural"="water"]["water"="reservoir"]["name"]' },
   { label: 'desalination', nwr: '(nwr["man_made"="desalination_plant"];nwr["water_works"="desalination"];)' },
+  { label: 'treatment_plants', nwr: 'nwr["man_made"="water_works"]["name"]' },
 ];
 
 function buildQuery(nwr: string): string {
@@ -111,6 +176,7 @@ export function classifyWaterType(tags: Record<string, string>): WaterFacilityTy
   if (tags['natural'] === 'water' && tags['water'] === 'reservoir') return 'reservoir';
   if (tags['man_made'] === 'desalination_plant') return 'desalination';
   if (tags['water_works'] === 'desalination') return 'desalination';
+  if (tags['man_made'] === 'water_works') return 'treatment_plant';
   return null;
 }
 
@@ -118,6 +184,7 @@ const FACILITY_TYPE_LABELS: Record<WaterFacilityType, string> = {
   dam: 'Dam',
   reservoir: 'Reservoir',
   desalination: 'Desalination Plant',
+  treatment_plant: 'Treatment Plant',
 };
 
 /** Extract an English label from OSM tags */
@@ -148,6 +215,13 @@ export function normalizeWaterElement(
 
   // Geographic exclusion: western Turkey, Uzbekistan, Tajikistan, etc.
   if (isExcludedLocation(lat, lon)) return null;
+
+  // Tiered country filtering: priority countries keep all, non-priority apply notability checks
+  if (!isPriorityCountry(lat, lon)) {
+    if (facilityType === 'treatment_plant') return null; // Always excluded in non-priority
+    if ((facilityType === 'dam' || facilityType === 'reservoir') && !isNotable(el.tags)) return null;
+    // desalination always passes through
+  }
 
   return {
     id: `water-${el.id}`,
