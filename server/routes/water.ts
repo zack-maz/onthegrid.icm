@@ -18,19 +18,22 @@ const FACILITIES_KEY = 'water:facilities';
 /** Redis key for cached precipitation data */
 const PRECIP_KEY = 'water:precip';
 
-/** Route-level timeout — allows 23 sequential country queries at ~6s each + 1s delays */
-const ROUTE_TIMEOUT_MS = 180_000;
-
 export const waterRouter = Router();
 
 /**
  * GET /api/water
  * Returns water infrastructure facilities with WRI stress indicators.
  * Cache-first with 24h logical TTL.
+ *
+ * ?refresh=true triggers a forced cache refresh. In production, only Vercel cron
+ * (identified by user-agent) can trigger this. In dev, it always works.
+ * The Vercel function timeout (60s maxDuration) provides the hard cap in production;
+ * in local dev, the 90s per-query Overpass timeout handles it.
  */
 waterRouter.get('/', async (req, res) => {
   log({ level: 'info', message: '[water] GET /api/water hit' });
-  const forceRefresh = req.query.refresh === 'true';
+  const isCron = req.headers['user-agent']?.includes('vercel-cron');
+  const forceRefresh = req.query.refresh === 'true' && (isCron || process.env.NODE_ENV !== 'production');
   const cached = await cacheGetSafe<WaterFacility[]>(FACILITIES_KEY, WATER_CACHE_TTL);
   log({ level: 'info', message: `[water] cache result: ${cached ? `${cached.data.length} facilities, stale=${cached.stale}` : 'miss'}` });
 
@@ -39,12 +42,7 @@ waterRouter.get('/', async (req, res) => {
   }
 
   try {
-    const facilities = await Promise.race([
-      fetchWaterFacilities(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Route timeout')), ROUTE_TIMEOUT_MS),
-      ),
-    ]);
+    const facilities = await fetchWaterFacilities();
     await cacheSetSafe(FACILITIES_KEY, facilities, WATER_REDIS_TTL_SEC);
     res.json({ data: facilities, stale: false, lastFresh: Date.now() });
   } catch (err) {
@@ -52,7 +50,7 @@ waterRouter.get('/', async (req, res) => {
     if (cached) {
       res.json({ data: cached.data, stale: true, lastFresh: cached.lastFresh });
     } else {
-      log({ level: 'warn', message: '[water] Overpass timed out at route level, returning empty' });
+      log({ level: 'warn', message: '[water] Overpass failed, returning empty' });
       res.json({ data: [], stale: true, lastFresh: 0 });
     }
   }

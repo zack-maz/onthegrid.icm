@@ -48,7 +48,7 @@ export const WEATHER_CACHE_KEY = 'weather:open-meteo';
 
 // Water infrastructure cache TTLs
 export const WATER_CACHE_TTL = 86_400_000;       // 24h logical TTL
-export const WATER_REDIS_TTL_SEC = 259_200;       // 3 days hard TTL
+export const WATER_REDIS_TTL_SEC = 604_800;       // 7 days hard TTL
 export const WATER_PRECIP_CACHE_TTL = 21_600_000; // 6h logical TTL
 export const WATER_PRECIP_REDIS_TTL_SEC = 86_400; // 1 day hard TTL
 
