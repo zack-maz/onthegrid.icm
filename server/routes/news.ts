@@ -9,7 +9,7 @@ import {
   NEWS_CACHE_TTL,
   NEWS_REDIS_TTL_SEC,
   NEWS_SLIDING_WINDOW_MS,
-} from '../constants.js';
+} from '../config.js';
 import type { NewsArticle, NewsCluster } from '../types.js';
 
 /** Redis key for the merged news feed */

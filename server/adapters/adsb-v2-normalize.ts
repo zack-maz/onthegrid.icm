@@ -3,7 +3,7 @@ import {
   KNOTS_TO_MS,
   FEET_TO_METERS,
   FPM_TO_MS,
-} from '../constants.js';
+} from '../config.js';
 import { icaoToCountry } from '../lib/icaoCountry.js';
 
 export interface AdsbAircraft {

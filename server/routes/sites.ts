@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { log } from '../lib/logger.js';
 import { fetchSites } from '../adapters/overpass.js';
-import { SITES_CACHE_TTL } from '../constants.js';
+import { SITES_CACHE_TTL } from '../config.js';
 import type { SiteEntity } from '../types.js';
 
 /** Redis key for all cached infrastructure sites */

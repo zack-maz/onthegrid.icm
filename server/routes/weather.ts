@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { log } from '../lib/logger.js';
 import { fetchWeather } from '../adapters/open-meteo.js';
-import { WEATHER_CACHE_TTL, WEATHER_REDIS_TTL_SEC, WEATHER_CACHE_KEY } from '../constants.js';
+import { WEATHER_CACHE_TTL, WEATHER_REDIS_TTL_SEC, WEATHER_CACHE_KEY } from '../config.js';
 import type { WeatherGridPoint } from '../types.js';
 
 export const weatherRouter = Router();

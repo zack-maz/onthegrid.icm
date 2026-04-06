@@ -3,7 +3,7 @@ import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import { log } from '../lib/logger.js';
 import { fetchEvents, backfillEvents } from '../adapters/gdelt.js';
 import { extractBellingcatGeo } from '../lib/eventScoring.js';
-import { WAR_START, CACHE_TTL } from '../constants.js';
+import { WAR_START, CACHE_TTL } from '../config.js';
 import type { ConflictEventEntity, NewsCluster } from '../types.js';
 
 /** Redis key for accumulated GDELT events */

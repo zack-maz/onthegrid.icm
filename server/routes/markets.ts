@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { log } from '../lib/logger.js';
 import { fetchMarkets, isValidRange } from '../adapters/yahoo-finance.js';
-import { MARKETS_CACHE_TTL, MARKETS_REDIS_TTL_SEC } from '../constants.js';
+import { MARKETS_CACHE_TTL, MARKETS_REDIS_TTL_SEC } from '../config.js';
 import type { MarketQuote } from '../types.js';
 
 export const marketsRouter = Router();

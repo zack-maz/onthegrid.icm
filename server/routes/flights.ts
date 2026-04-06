@@ -3,7 +3,7 @@ import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { log } from '../lib/logger.js';
 import { fetchFlights as fetchOpenSky } from '../adapters/opensky.js';
 import { fetchFlights as fetchAdsbLol } from '../adapters/adsb-lol.js';
-import { IRAN_BBOX, CACHE_TTL } from '../constants.js';
+import { IRAN_BBOX, CACHE_TTL } from '../config.js';
 import { RateLimitError } from '../types.js';
 import type { FlightEntity, FlightSource } from '../types.js';
 

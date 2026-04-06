@@ -8,7 +8,7 @@ import {
   WATER_REDIS_TTL_SEC,
   WATER_PRECIP_CACHE_TTL,
   WATER_PRECIP_REDIS_TTL_SEC,
-} from '../constants.js';
+} from '../config.js';
 import type { WaterFacility } from '../types.js';
 import type { PrecipitationData } from '../adapters/open-meteo-precip.js';
 

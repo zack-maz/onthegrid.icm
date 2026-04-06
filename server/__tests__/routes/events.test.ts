@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Server } from 'http';
 import type { ConflictEventEntity, CacheResponse } from '../../types.js';
-import { WAR_START } from '../../constants.js';
+import { WAR_START } from '../../config.js';
 
 // Sample event fixtures
 const makeEvent = (

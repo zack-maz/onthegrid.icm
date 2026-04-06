@@ -1,6 +1,6 @@
 import { RateLimitError } from '../types.js';
 import type { FlightEntity } from '../types.js';
-import { IRAN_CENTER, ADSB_RADIUS_NM } from '../constants.js';
+import { IRAN_CENTER, ADSB_RADIUS_NM } from '../config.js';
 import { normalizeAircraft } from './adsb-v2-normalize.js';
 import type { AdsbResponse } from './adsb-v2-normalize.js';
 import { log } from '../lib/logger.js';

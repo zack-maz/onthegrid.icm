@@ -3,7 +3,7 @@ import { cacheSetSafe } from '../cache/redis.js';
 import { log } from '../lib/logger.js';
 import { fetchSites } from '../adapters/overpass.js';
 import { fetchWaterFacilities } from '../adapters/overpass-water.js';
-import { WATER_REDIS_TTL_SEC } from '../constants.js';
+import { WATER_REDIS_TTL_SEC } from '../config.js';
 
 /** Hard Redis TTL for sites (3 days) */
 const SITES_REDIS_TTL_SEC = 259_200;

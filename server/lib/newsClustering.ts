@@ -3,7 +3,7 @@ import {
   NEWS_CLUSTER_WINDOW_MS,
   NEWS_JACCARD_THRESHOLD,
   NEWS_MIN_TOKENS_FOR_FUZZY,
-} from '../constants.js';
+} from '../config.js';
 import type { NewsArticle, NewsCluster } from '../types.js';
 
 /**

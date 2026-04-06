@@ -1,5 +1,5 @@
 import type { ShipEntity } from '../types.js';
-import { IRAN_BBOX } from '../constants.js';
+import { IRAN_BBOX } from '../config.js';
 
 const DEFAULT_COLLECT_MS = 5000;
 
