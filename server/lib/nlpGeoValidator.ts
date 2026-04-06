@@ -33,7 +33,7 @@ const CAMEO_TO_FIPS: Record<string, string> = {
 
 // ─── NLP-extracted actor keywords -> expected FIPS codes ───────────────────
 
-const ACTOR_COUNTRY_MAP: Record<string, string[]> = {
+export const ACTOR_COUNTRY_MAP: Record<string, string[]> = {
   iran: ['IR'],
   iranian: ['IR'],
   tehran: ['IR'],
@@ -85,6 +85,8 @@ const ACTOR_COUNTRY_MAP: Record<string, string[]> = {
   uae: ['AE'],
   emirates: ['AE'],
   emirati: ['AE'],
+  dubai: ['AE'],
+  'abu dhabi': ['AE'],
   'west bank': ['WE', 'IS'],
   gaza: ['GZ', 'IS'],
   palestinian: ['GZ', 'WE'],

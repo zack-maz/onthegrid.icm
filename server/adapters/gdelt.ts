@@ -8,7 +8,7 @@ import type { BellingcatArticle } from '../lib/eventScoring.js';
 import { getConfig } from '../config.js';
 import { buildAuditRecord } from '../lib/eventAudit.js';
 import type { AuditRecord, PipelineTrace, PhaseAChecks, PhaseCChecks, ConfidenceSubScores } from '../lib/eventAudit.js';
-import { validateEventGeo } from '../lib/nlpGeoValidator.js';
+import { validateEventGeo, ACTOR_COUNTRY_MAP as ACTOR_COUNTRY_MAP_IMPORT } from '../lib/nlpGeoValidator.js';
 import { extractActorsAndPlaces, lookupCityCoords } from '../lib/nlpExtractor.js';
 import { batchFetchTitles } from '../lib/titleFetcher.js';
 
@@ -431,6 +431,26 @@ export async function parseAndFilter(csv: string, bellingcatArticles?: Bellingca
           if (dist > 200) {
             log({ level: 'info', message: `[gdelt] label-coord fix: ${entity.id} "${firstPart}" coords ${dist.toFixed(0)}km away, relocating to ${cityCoords.lat.toFixed(4)},${cityCoords.lng.toFixed(4)}` });
             entity = { ...entity, lat: cityCoords.lat, lng: cityCoords.lng };
+          }
+        }
+      }
+    }
+
+    // Actor1Name-vs-location check: if Actor1Name is a known ME city/country
+    // that doesn't match the geocoded country, the event is likely misplaced.
+    // E.g., Actor1="DUBAI" geocoded to Iran → Dubai is AE, not IR.
+    if (nlpResult.status === 'skipped' || nlpResult.status === 'verified') {
+      const actor1Name = (cols[COL.Actor1Name] || '').toLowerCase().trim();
+      if (actor1Name) {
+        const actorCountryCodes = ACTOR_COUNTRY_MAP_IMPORT[actor1Name];
+        if (actorCountryCodes && !actorCountryCodes.includes(cols[COL.ActionGeo_CountryCode])) {
+          // Actor1 is a known ME entity but geocoded to a different country
+          const cityMatch = lookupCityCoords(actor1Name, entity.lat, entity.lng);
+          if (cityMatch) {
+            log({ level: 'info', message: `[gdelt] actor-name fix: ${entity.id} Actor1="${cols[COL.Actor1Name]}" doesn't match geo ${cols[COL.ActionGeo_CountryCode]}, relocating to ${cityMatch.lat.toFixed(4)},${cityMatch.lng.toFixed(4)}` });
+            entity = { ...entity, lat: cityMatch.lat, lng: cityMatch.lng };
+          } else {
+            confidence *= 0.4;
           }
         }
       }

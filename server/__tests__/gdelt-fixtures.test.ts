@@ -40,6 +40,7 @@ vi.mock('../lib/titleFetcher.js', () => ({
 // Mock nlpGeoValidator -- return 'skipped' for all events so Phase C doesn't interfere
 vi.mock('../lib/nlpGeoValidator.js', () => ({
   validateEventGeo: vi.fn().mockReturnValue({ status: 'skipped', reason: 'no_actor_data' }),
+  ACTOR_COUNTRY_MAP: {},
 }));
 
 /**
