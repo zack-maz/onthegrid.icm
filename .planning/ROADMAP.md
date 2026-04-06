@@ -137,15 +137,33 @@ Plans:
 
 ### Phase 26.2: Conflict Geolocation Improvement (INSERTED)
 
-**Goal:** Reduce misplaced conflict events by adding NLP-based cross-validation to the GDELT pipeline -- extract actors and locations from article titles using compromise, cross-check against GDELT geocoded coordinates, reject mismatches, and relocate centroid events to specific cities when NLP identifies a place name
-**Depends on:** Phase 26
-**Requirements:** [NLP-01, NLP-02, GEO-01, GEO-02, GEO-03, GEO-04, TITLE-01, TITLE-02, PIPE-01, PIPE-02, PIPE-03, SCRIPT-01]
-**Plans:** 3/3 plans complete
+**Goal:** Redo the GDELT event extraction pipeline — fix source deduplication, location accuracy, event type labeling, and remove hardcoding. Fresh approach after code cleanup.
+**Depends on:** Phase 26.4
+**Requirements:** TBD (redo after cleanup phases)
+**Plans:** 0 plans (previous plans scrapped — approach was wrong)
 
 Plans:
-- [ ] 26.2-01-PLAN.md -- GeoNames extraction script, NLP extractor place extraction, CITY_CENTROIDS expansion
-- [ ] 26.2-02-PLAN.md -- Title fetcher with Redis caching and batch concurrency
-- [ ] 26.2-03-PLAN.md -- NLP geo cross-validator, pipeline Phase C wiring, CAMEO exclusion updates, audit trace
+- [ ] TBD (run /gsd:discuss-phase 26.2 after 26.3 + 26.4 complete)
+
+### Phase 26.3: Production Code Cleanup (INSERTED)
+
+**Goal:** Portfolio-grade internal code quality: security audit, type safety (eliminate `any`), dead code removal, error handling consistency, dependency audit, config externalization, test quality pass, fetch/polling/rate limit review. Remove NLP pipeline wiring from 26.2 (keep infrastructure). Strip hardcoded tables where possible.
+**Depends on:** Phase 26
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 26.3 to break down)
+
+### Phase 26.4: Documentation & External Presentation (INSERTED)
+
+**Goal:** Portfolio-grade external presentation: professional README with architecture diagram, API documentation, setup guide, screenshots, architecture decision records (ADRs), CI/CD pipeline, pre-commit hooks, performance baselines, graceful degradation documentation.
+**Depends on:** Phase 26.3
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 26.4 to break down)
 
 ### Phase 26.1: Water Layer Refinements (INSERTED)
 

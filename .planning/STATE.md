@@ -141,3 +141,7 @@ None.
 - Phase 23.1 inserted after Phase 23: detail panel navigation stack (deferred from Phase 23 discussion)
 - Phase 26.1 inserted after Phase 26: Water layer refinements (URGENT)
 - Phase 26.2 inserted after Phase 26: Conflict geolocation improvement (URGENT)
+- Phase 26.2 SCRAPPED and deferred — NLP approach was wrong, patching bad geocoding with more code didn't work
+- Phase 26.3 inserted after Phase 26: Production Code Cleanup — portfolio-grade internal quality (URGENT)
+- Phase 26.4 inserted after Phase 26.3: Documentation & External Presentation — portfolio-grade external polish
+- Phase 26.2 now depends on 26.4 — GDELT redo on clean foundation
