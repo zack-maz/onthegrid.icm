@@ -37,8 +37,8 @@ function getFetcher(source: FlightSource): () => Promise<FlightEntity[]> {
 
 export const flightsRouter = Router();
 
-flightsRouter.get('/', validateQuery(flightsQuerySchema), async (req, res) => {
-  const { source } = req.query as unknown as z.infer<typeof flightsQuerySchema>;
+flightsRouter.get('/', validateQuery(flightsQuerySchema), async (_req, res) => {
+  const { source } = res.locals.validatedQuery as z.infer<typeof flightsQuerySchema>;
   const cacheKey = CACHE_KEYS[source];
   const logicalTtl = LOGICAL_TTLS[source];
   const redisTtl = Math.ceil((logicalTtl * 10) / 1000); // 10x multiplier, ms → seconds

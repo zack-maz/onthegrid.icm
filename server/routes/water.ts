@@ -42,7 +42,7 @@ export const waterRouter = Router();
 waterRouter.get('/', validateQuery(waterQuerySchema), async (req, res) => {
   log.info('GET /api/water hit');
   const isCron = req.headers['user-agent']?.includes('vercel-cron');
-  const { refresh } = req.query as unknown as z.infer<typeof waterQuerySchema>;
+  const { refresh } = res.locals.validatedQuery as z.infer<typeof waterQuerySchema>;
   const forceRefresh = refresh && (isCron || process.env.NODE_ENV !== 'production');
   const cached = await cacheGetSafe<WaterFacility[]>(FACILITIES_KEY, WATER_CACHE_TTL);
   log.info({ cacheHit: !!cached, count: cached?.data.length, stale: cached?.stale }, 'cache result');
@@ -71,8 +71,8 @@ waterRouter.get('/', validateQuery(waterQuerySchema), async (req, res) => {
  * Returns 30-day precipitation data for cached water facilities.
  * Cache-first with 6h logical TTL.
  */
-waterRouter.get('/precip', validateQuery(waterQuerySchema), async (req, res) => {
-  const { refresh: forceRefresh } = req.query as unknown as z.infer<typeof waterQuerySchema>;
+waterRouter.get('/precip', validateQuery(waterQuerySchema), async (_req, res) => {
+  const { refresh: forceRefresh } = res.locals.validatedQuery as z.infer<typeof waterQuerySchema>;
   const cachedPrecip = await cacheGetSafe<PrecipitationData[]>(PRECIP_KEY, WATER_PRECIP_CACHE_TTL);
 
   if (cachedPrecip && !cachedPrecip.stale && !forceRefresh) {

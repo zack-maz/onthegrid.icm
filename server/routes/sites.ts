@@ -25,8 +25,8 @@ const REDIS_TTL_SEC = 259_200;
 
 export const sitesRouter = Router();
 
-sitesRouter.get('/', validateQuery(sitesQuerySchema), async (req, res) => {
-  const { refresh: forceRefresh } = req.query as unknown as z.infer<typeof sitesQuerySchema>;
+sitesRouter.get('/', validateQuery(sitesQuerySchema), async (_req, res) => {
+  const { refresh: forceRefresh } = res.locals.validatedQuery as z.infer<typeof sitesQuerySchema>;
   const cached = await cacheGetSafe<SiteEntity[]>(SITES_KEY, LOGICAL_TTL_MS);
 
   if (cached && !cached.stale && !forceRefresh) {

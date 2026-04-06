@@ -22,8 +22,8 @@ const GEOCODE_REDIS_TTL_SEC = 90 * 24 * 60 * 60;
 
 export const geocodeRouter = Router();
 
-geocodeRouter.get('/', validateQuery(geocodeQuerySchema), async (req, res) => {
-  const { lat, lon } = req.query as unknown as z.infer<typeof geocodeQuerySchema>;
+geocodeRouter.get('/', validateQuery(geocodeQuerySchema), async (_req, res) => {
+  const { lat, lon } = res.locals.validatedQuery as z.infer<typeof geocodeQuerySchema>;
 
   // Quantize to 2 decimal places for cache key consistency
   const qLat = Math.round(lat * 100) / 100;

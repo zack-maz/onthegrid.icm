@@ -202,14 +202,14 @@ describe('Flight Route Dispatch', () => {
     expect(body.data[0].data.icao24).toBe('lol789');
   });
 
-  it('GET /api/flights?source=invalid falls back to adsblol', async () => {
+  it('GET /api/flights?source=invalid returns 400 validation error', async () => {
     const res = await fetch(`${baseUrl}/api/flights?source=invalid`);
     const body = await res.json();
 
-    expect(res.ok).toBe(true);
-    expect(mockFetchAdsbLol).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(mockFetchAdsbLol).not.toHaveBeenCalled();
     expect(mockFetchOpenSky).not.toHaveBeenCalled();
-    expect(body.data[0].data.icao24).toBe('lol789');
   });
 
   it('uses separate caches per source', async () => {

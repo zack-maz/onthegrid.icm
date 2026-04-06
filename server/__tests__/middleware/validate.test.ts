@@ -9,11 +9,13 @@ function mockReq(query: Record<string, string> = {}): Request {
   return { query } as unknown as Request;
 }
 
-/** Create a minimal mock Response that captures status and json output */
+/** Create a minimal mock Response that captures status, json, and locals */
 function mockRes() {
   let statusCode = 200;
   let body: unknown = undefined;
+  const locals: Record<string, unknown> = {};
   const res = {
+    locals,
     status(code: number) {
       statusCode = code;
       return res;
@@ -29,7 +31,7 @@ function mockRes() {
       return body;
     },
   };
-  return res as unknown as Response & { statusCode: number; body: unknown };
+  return res as unknown as Response & { statusCode: number; body: unknown; locals: Record<string, unknown> };
 }
 
 describe('validateQuery middleware', () => {
@@ -37,7 +39,7 @@ describe('validateQuery middleware', () => {
     source: z.enum(['opensky', 'adsblol']).default('adsblol'),
   });
 
-  it('passes valid params and populates req.query with parsed values', () => {
+  it('passes valid params and populates res.locals.validatedQuery with parsed values', () => {
     const req = mockReq({ source: 'opensky' });
     const res = mockRes();
     let nextCalled = false;
@@ -47,7 +49,7 @@ describe('validateQuery middleware', () => {
     });
 
     expect(nextCalled).toBe(true);
-    expect(req.query).toEqual({ source: 'opensky' });
+    expect(res.locals.validatedQuery).toEqual({ source: 'opensky' });
   });
 
   it('returns 400 with VALIDATION_ERROR for invalid params', () => {
@@ -81,7 +83,7 @@ describe('validateQuery middleware', () => {
     });
 
     expect(nextCalled).toBe(true);
-    expect((req.query as Record<string, unknown>).refresh).toBe(true);
+    expect((res.locals.validatedQuery as Record<string, unknown>).refresh).toBe(true);
   });
 
   it('uses schema defaults for missing optional params', () => {
@@ -94,7 +96,7 @@ describe('validateQuery middleware', () => {
     });
 
     expect(nextCalled).toBe(true);
-    expect(req.query).toEqual({ source: 'adsblol' });
+    expect(res.locals.validatedQuery).toEqual({ source: 'adsblol' });
   });
 
   it('validates numeric params with coercion', () => {
@@ -112,8 +114,8 @@ describe('validateQuery middleware', () => {
     });
 
     expect(nextCalled).toBe(true);
-    expect((req.query as Record<string, unknown>).lat).toBe(33.5);
-    expect((req.query as Record<string, unknown>).lon).toBe(51.2);
+    expect((res.locals.validatedQuery as Record<string, unknown>).lat).toBe(33.5);
+    expect((res.locals.validatedQuery as Record<string, unknown>).lon).toBe(51.2);
   });
 
   it('rejects out-of-range numeric params', () => {

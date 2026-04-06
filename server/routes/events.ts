@@ -42,8 +42,8 @@ async function shouldBackfill(): Promise<boolean> {
 
 export const eventsRouter = Router();
 
-eventsRouter.get('/', validateQuery(eventsQuerySchema), async (req, res) => {
-  const { backfill: forceBackfill } = req.query as unknown as z.infer<typeof eventsQuerySchema>;
+eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
+  const { backfill: forceBackfill } = res.locals.validatedQuery as z.infer<typeof eventsQuerySchema>;
 
   // Check cache first (skip on forced backfill)
   const cached = forceBackfill

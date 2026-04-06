@@ -16,8 +16,8 @@ const marketsQuerySchema = z.object({
 
 export const marketsRouter = Router();
 
-marketsRouter.get('/', validateQuery(marketsQuerySchema), async (req, res) => {
-  const { range } = req.query as unknown as z.infer<typeof marketsQuerySchema>;
+marketsRouter.get('/', validateQuery(marketsQuerySchema), async (_req, res) => {
+  const { range } = res.locals.validatedQuery as z.infer<typeof marketsQuerySchema>;
 
   const cacheKey = `markets:yahoo:${range}`;
 

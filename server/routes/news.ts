@@ -26,8 +26,8 @@ const NEWS_FEED_KEY = 'news:feed';
 
 export const newsRouter = Router();
 
-newsRouter.get('/', validateQuery(newsQuerySchema), async (req, res) => {
-  const { refresh: forceRefresh } = req.query as unknown as z.infer<typeof newsQuerySchema>;
+newsRouter.get('/', validateQuery(newsQuerySchema), async (_req, res) => {
+  const { refresh: forceRefresh } = res.locals.validatedQuery as z.infer<typeof newsQuerySchema>;
 
   // 1. Check cache first (skip on force refresh)
   const cached = forceRefresh
