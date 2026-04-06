@@ -22,7 +22,8 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
-Phase 26.3: Plan 01 COMPLETE (1 of 4 plans done)
+Phase 26.3: Plan 02 COMPLETE (2 of 6 plans done)
+Phase 26.3: Plan 01 COMPLETE (1 of 6 plans done)
 Phase 26.2 COMPLETE (3 of 3 plans done)
 Phase 26.2: Plan 03 COMPLETE (3 of 3 plans done)
 Phase 26.2: Plan 02 COMPLETE (2 of 3 plans done)
@@ -126,6 +127,11 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - CAMEO exclusion reverted to pre-26.2: ['180','192'] only (182/190 exclusions were 26.2-specific)
 - Confidence threshold reverted to 0.35 (from 26.2's 0.38)
 - Pre-existing tsc errors fixed alongside 26.2 reversion (unused imports, compromise typing)
+- Pino logger with level:'silent' in test mode, pino-pretty in dev, raw JSON in production
+- Module-level child loggers (not request-scoped) for adapter files lacking req context
+- genReqId accepts client-provided X-Request-ID or generates UUID via crypto.randomUUID
+- autoLogging ignores /health endpoint to reduce noise
+- ParsedQs to Zod inferred type cast uses 'as unknown as' double-cast pattern
 
 ## Pending Todos
 
