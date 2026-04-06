@@ -15,13 +15,10 @@ describe('GeographicOverlay', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('renders layers when geographic layer is active', () => {
-    useLayerStore.setState({ activeLayers: new Set(['geographic']) });
-    const { container } = render(<GeographicOverlay />);
-    // Component renders content (Source/Layer stubs render as null in mock,
-    // but the fragment wrapper should still render)
-    expect(container).toBeTruthy();
-  });
+  // Note: when active, GeographicOverlay returns a Fragment of MapLibre Source/Layer
+  // components. Those are mocked to null in jsdom (no WebGL), so the rendered
+  // container is also empty -- there is no DOM-level distinction to assert here.
+  // The hook/layer wiring is covered by integration tests in BaseMap.test.tsx.
 });
 
 describe('GEO_FEATURES', () => {
