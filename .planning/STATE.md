@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-06T00:41:00Z"
+last_updated: "2026-04-06T01:11:45.766Z"
 progress:
   total_phases: 11
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 27
-  completed_plans: 23
+  completed_plans: 24
 ---
 
 # Project State
@@ -22,8 +22,10 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
-Phase 26.2: Plan 01 COMPLETE (plans 01+02 done, 1 remaining)
+Phase 26.2 COMPLETE (3 of 3 plans done)
+Phase 26.2: Plan 03 COMPLETE (3 of 3 plans done)
 Phase 26.2: Plan 02 COMPLETE (2 of 3 plans done)
+Phase 26.2: Plan 01 COMPLETE (plans 01+02 done, 1 remaining)
 Phase 26.1 COMPLETE (3 of 3 plans done)
 Phase 26.1: Plan 02 COMPLETE (2 of 3 plans done)
 Phase 26.1: Plan 01 COMPLETE (1 of 3 plans done)
@@ -48,7 +50,7 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 | 25 | Ethnic Distribution Layer | IN PROGRESS (1/2 plans) |
 | 26 | Water Stress Layer | IN PROGRESS (6/6 plans, gap closure complete) |
 | 26.1 | Water Layer Refinements | COMPLETE (3/3 plans) |
-| 26.2 | Conflict Geolocation Improvement | IN PROGRESS (2/3 plans) |
+| 26.2 | Conflict Geolocation Improvement | COMPLETE (3/3 plans) |
 | 27 | Performance & Load Testing | Planned |
 
 ## Key Decisions
@@ -116,6 +118,10 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - GeoNames population threshold 200k (not 50k) to stay in 100-300 city target range; 22 ME country ISO codes for filtering
 - Multi-word city substring fallback for names compromise tokenizes (Deir ez-Zor, Mazar-i-Sharif); conflict actor lexicon for Houthi/Hamas/etc.
 - me-cities.json as single source of truth for both NLP lexicon and CITY_CENTROIDS (replaces 42 hardcoded entries)
+- Cross-border events validated by NLP place country match (not actor country); CAMEO 182/190 hard-excluded; threshold raised 0.35->0.38
+- CAMEO_TO_FIPS includes both YMN and YEM mappings for Yemen (GDELT uses both actor codes)
+- ISO_TO_FIPS mapping bridges lookupCityCoords ISO codes to FIPS geo codes for NLP validation
+- parseAndFilter now async (Phase C NLP validation requires title fetching); all callers updated to await
 
 ## Pending Todos
 

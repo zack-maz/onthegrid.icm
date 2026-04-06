@@ -140,7 +140,7 @@ Plans:
 **Goal:** Reduce misplaced conflict events by adding NLP-based cross-validation to the GDELT pipeline -- extract actors and locations from article titles using compromise, cross-check against GDELT geocoded coordinates, reject mismatches, and relocate centroid events to specific cities when NLP identifies a place name
 **Depends on:** Phase 26
 **Requirements:** [NLP-01, NLP-02, GEO-01, GEO-02, GEO-03, GEO-04, TITLE-01, TITLE-02, PIPE-01, PIPE-02, PIPE-03, SCRIPT-01]
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 26.2-01-PLAN.md -- GeoNames extraction script, NLP extractor place extraction, CITY_CENTROIDS expansion
