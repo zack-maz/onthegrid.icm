@@ -238,7 +238,7 @@ export function extractActorsAndPlaces(title: string): NlpExtraction {
   const seenPlaces = new Set<string>();
   const places: string[] = [];
   for (const p of rawPlaces) {
-    const clean = p.replace(/[^a-zA-Z\s'-]+$/g, '').trim();
+    const clean = p.replace(/'s$/i, '').replace(/[^a-zA-Z\s'-]+$/g, '').trim();
     if (!clean) continue;
     const key = clean.toLowerCase();
     if (!seenPlaces.has(key)) {
