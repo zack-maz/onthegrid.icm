@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-06T01:16:56.280Z"
+last_updated: "2026-04-06T22:28:11.218Z"
 progress:
-  total_phases: 11
+  total_phases: 13
   completed_phases: 7
-  total_plans: 27
-  completed_plans: 24
+  total_plans: 33
+  completed_plans: 25
 ---
 
 # Project State
@@ -22,6 +22,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Phase 26.3: Plan 01 COMPLETE (1 of 4 plans done)
 Phase 26.2 COMPLETE (3 of 3 plans done)
 Phase 26.2: Plan 03 COMPLETE (3 of 3 plans done)
 Phase 26.2: Plan 02 COMPLETE (2 of 3 plans done)
@@ -121,7 +122,10 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - Cross-border events validated by NLP place country match (not actor country); CAMEO 182/190 hard-excluded; threshold raised 0.35->0.38
 - CAMEO_TO_FIPS includes both YMN and YEM mappings for Yemen (GDELT uses both actor codes)
 - ISO_TO_FIPS mapping bridges lookupCityCoords ISO codes to FIPS geo codes for NLP validation
-- parseAndFilter now async (Phase C NLP validation requires title fetching); all callers updated to await
+- parseAndFilter reverted to synchronous (Phase 26.2 removed) -- was async only for title fetching
+- CAMEO exclusion reverted to pre-26.2: ['180','192'] only (182/190 exclusions were 26.2-specific)
+- Confidence threshold reverted to 0.35 (from 26.2's 0.38)
+- Pre-existing tsc errors fixed alongside 26.2 reversion (unused imports, compromise typing)
 
 ## Pending Todos
 
