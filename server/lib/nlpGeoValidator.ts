@@ -105,7 +105,7 @@ const ISO_TO_FIPS: Record<string, string> = {
   AF: 'AF',
   PK: 'PK',
   EG: 'EG',
-  PS: 'GZ', // Palestine -> Gaza
+  PS: 'GZ', // Palestine -> Gaza (also matches WE for West Bank)
 };
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -114,6 +114,7 @@ export type NlpValidationResult =
   | { status: 'verified' }
   | { status: 'mismatch'; reason: string }
   | { status: 'relocated'; newLat: number; newLng: number; cityName: string }
+  | { status: 'penalized'; confidenceMultiplier: number; reason: string }
   | { status: 'skipped'; reason: string };
 
 // ─── Main Validation Function ──────────────────────────────────────────────
@@ -162,6 +163,13 @@ export function validateEventGeo(params: {
     if (fips) actorFips.add(fips);
   }
 
+  // Non-ME Actor1 check: if Actor1 has a country code but it's NOT a ME country,
+  // this is likely diplomatic reporting ABOUT the conflict (e.g., "US attacks Iran"),
+  // not a kinetic event IN the region. Penalize rather than reject since some are real.
+  if (actorCountryCodes.actor1 && !CAMEO_TO_FIPS[actorCountryCodes.actor1]) {
+    return { status: 'penalized', confidenceMultiplier: 0.3, reason: 'non_me_actor1' };
+  }
+
   // From NLP-extracted actors
   for (const actor of nlp.actors) {
     const codes = ACTOR_COUNTRY_MAP[actor.toLowerCase()];
@@ -179,6 +187,10 @@ export function validateEventGeo(params: {
     if (coords) {
       const fips = ISO_TO_FIPS[coords.countryCode] ?? coords.countryCode;
       placeFips.add(fips);
+      // Palestine (PS) maps to both GZ and WE — add both so either geocode matches
+      if (coords.countryCode === 'PS') { placeFips.add('GZ'); placeFips.add('WE'); }
+      // Israel covers IS/WE/GZ in GDELT geocoding
+      if (coords.countryCode === 'IL') { placeFips.add('IS'); placeFips.add('WE'); placeFips.add('GZ'); }
       placeCoords.push({ name: place, lat: coords.lat, lng: coords.lng, fips });
     }
     // Also check if the place name itself is an actor keyword (e.g., "Damascus" -> SY)
@@ -212,8 +224,21 @@ export function validateEventGeo(params: {
     return { status: 'verified' };
   }
 
-  // Step h: NLP extracted places but NONE match geo, AND actor countries don't include geo
-  if (placeFips.size > 0 && !placeFips.has(geoCountryCode) && !actorFips.has(geoCountryCode)) {
+  // Step h: NLP extracted places but NONE match geo — title-extracted places
+  // are a stronger signal than GDELT's actor fields (which are often wrong).
+  // Reject even if actorFips matches, because the article title explicitly names
+  // a different country than where GDELT geocoded the event.
+  if (placeFips.size > 0 && !placeFips.has(geoCountryCode)) {
+    // Try relocation: if we have coordinates for an NLP place, move the event there
+    if (placeCoords.length > 0) {
+      const best = placeCoords[0];
+      return {
+        status: 'relocated',
+        newLat: best.lat,
+        newLng: best.lng,
+        cityName: best.name,
+      };
+    }
     return {
       status: 'mismatch',
       reason: `NLP places suggest ${Array.from(placeFips).join(',')} but event geocoded to ${geoCountryCode}`,

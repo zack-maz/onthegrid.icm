@@ -254,8 +254,8 @@ describe('validateEventGeo', () => {
         lat: 35.69,
         lng: 51.42,
       });
-      // XXX doesn't map to any FIPS, no places found -- should be skipped due to insufficient signal
-      expect(result.status).toBe('skipped');
+      // XXX doesn't map to any ME FIPS -- penalized as non-ME actor1
+      expect(result.status).toBe('penalized');
     });
 
     it('does not relocate non-centroid events even with NLP city', () => {

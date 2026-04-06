@@ -11,6 +11,15 @@ import { validateEventGeo } from '../lib/nlpGeoValidator.js';
 import { extractActorsAndPlaces } from '../lib/nlpExtractor.js';
 import { batchFetchTitles } from '../lib/titleFetcher.js';
 
+/** Clean GDELT location strings: strip replacement chars, fix orphaned punctuation */
+function sanitizeLocation(raw: string): string {
+  return raw
+    .replace(/\uFFFD/g, '')       // Unicode replacement character
+    .replace(/\?(?=[a-z])/gi, '') // Literal ? before a letter (encoding artifact)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // GDELT v2 lastupdate.txt endpoint (HTTP, NOT HTTPS -- TLS cert issues)
 const GDELT_LASTUPDATE_URL =
   'http://data.gdeltproject.org/gdeltv2/lastupdate.txt';
@@ -30,6 +39,8 @@ export const MIDDLE_EAST_FIPS = new Set([
   'KU', // Kuwait
   'JO', // Jordan
   'IS', // Israel (FIPS, not ISO "IL")
+  'WE', // West Bank
+  'GZ', // Gaza Strip
   'LE', // Lebanon
   'AF', // Afghanistan
   'PK', // Pakistan
@@ -199,7 +210,7 @@ export function normalizeGdeltEvent(
     lat,
     lng,
     timestamp: parseSqlDate(sqlDate),
-    label: `${cols[COL.ActionGeo_FullName]}: ${describeEvent(eventBaseCode)}`,
+    label: `${sanitizeLocation(cols[COL.ActionGeo_FullName])}: ${describeEvent(eventBaseCode)}`,
     data: {
       eventType: describeEvent(eventBaseCode),
       subEventType: `CAMEO ${eventCode}`,
@@ -209,7 +220,7 @@ export function normalizeGdeltEvent(
       notes: '',
       source: cols[COL.SOURCEURL] ?? '',
       goldsteinScale: parseFloat(cols[COL.GoldsteinScale]) || 0,
-      locationName: cols[COL.ActionGeo_FullName] || '',
+      locationName: sanitizeLocation(cols[COL.ActionGeo_FullName] || ''),
       cameoCode: eventCode,
       numMentions: parseInt(cols[COL.NumMentions], 10) || undefined,
       numSources: parseInt(cols[COL.NumSources], 10) || undefined,
@@ -387,6 +398,10 @@ export async function parseAndFilter(csv: string, bellingcatArticles?: Bellingca
         log({ level: 'info', message: `[gdelt] NLP relocated ${entity.id} to ${nlpResult.cityName} (${nlpResult.newLat.toFixed(4)}, ${nlpResult.newLng.toFixed(4)})` });
         break;
       }
+
+      case 'penalized':
+        confidence *= nlpResult.confidenceMultiplier;
+        break;
 
       case 'skipped':
         // Title fetch failure -> 0.7x penalty
@@ -737,6 +752,8 @@ export async function parseAndFilterWithTrace(csv: string, bellingcatArticles?: 
       validationStatus: nlpResult.status,
       relocatedTo: nlpResult.status === 'relocated' ? { lat: nlpResult.newLat, lng: nlpResult.newLng, cityName: nlpResult.cityName } : undefined,
       mismatchReason: nlpResult.status === 'mismatch' ? nlpResult.reason : undefined,
+      penaltyReason: nlpResult.status === 'penalized' ? nlpResult.reason : undefined,
+      penaltyMultiplier: nlpResult.status === 'penalized' ? nlpResult.confidenceMultiplier : undefined,
       skipReason: nlpResult.status === 'skipped' ? nlpResult.reason : undefined,
     };
 
@@ -779,6 +796,10 @@ export async function parseAndFilterWithTrace(csv: string, bellingcatArticles?: 
           confidence = confidence / eventCentroidPenalty;
         }
         geoPrecision = 'precise';
+        break;
+
+      case 'penalized':
+        confidence *= nlpResult.confidenceMultiplier;
         break;
 
       case 'skipped':

@@ -73,6 +73,8 @@ export const FIPS_TO_EXPECTED_COUNTRY: Record<string, string[]> = {
   KU: ['Kuwait'],
   JO: ['Jordan'],
   IS: ['Israel', 'West Bank', 'Gaza Strip', 'Palestinian Territory'],
+  WE: ['West Bank', 'Palestinian Territory', 'Israel'],
+  GZ: ['Gaza Strip', 'Gaza', 'Palestinian Territory', 'Israel'],
   LE: ['Lebanon'],
   AF: ['Afghanistan'],
   PK: ['Pakistan'],
