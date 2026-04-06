@@ -2,13 +2,14 @@ import AdmZip from 'adm-zip';
 import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 import { log } from '../lib/logger.js';
 import { isGeoValid, detectCentroid } from '../lib/geoValidation.js';
+import { haversineKm } from '../../src/lib/geo.js';
 import { computeEventConfidence, applyGoldsteinSanity, GOLDSTEIN_CEILINGS, checkBellingcatCorroboration, getCameoSpecificity } from '../lib/eventScoring.js';
 import type { BellingcatArticle } from '../lib/eventScoring.js';
 import { getConfig } from '../config.js';
 import { buildAuditRecord } from '../lib/eventAudit.js';
 import type { AuditRecord, PipelineTrace, PhaseAChecks, PhaseCChecks, ConfidenceSubScores } from '../lib/eventAudit.js';
 import { validateEventGeo } from '../lib/nlpGeoValidator.js';
-import { extractActorsAndPlaces } from '../lib/nlpExtractor.js';
+import { extractActorsAndPlaces, lookupCityCoords } from '../lib/nlpExtractor.js';
 import { batchFetchTitles } from '../lib/titleFetcher.js';
 
 /** Clean GDELT location strings: strip replacement chars, fix orphaned punctuation */
@@ -348,6 +349,7 @@ export async function parseAndFilter(csv: string, bellingcatArticles?: Bellingca
   }
 
   const titleMap = await batchFetchTitles(urlsToFetch);
+  log({ level: 'info', message: `[gdelt] Phase C: fetched ${titleMap.size} titles for ${urlsToFetch.length} URLs (${[...titleMap.values()].filter(t => t !== null).length} non-null)` });
 
   const results: ConflictEventEntity[] = [];
 
@@ -410,6 +412,24 @@ export async function parseAndFilter(csv: string, bellingcatArticles?: Bellingca
         }
         // Other skip reasons: no penalty
         break;
+    }
+
+    // Coordinate-label sanity check: if GDELT's locationName contains a known city
+    // but coords are >200km away, relocate to the named city. This catches GDELT bugs
+    // like "Baghdad" at Tehran's coordinates, even when title fetch fails.
+    if (nlpResult.status === 'skipped' || nlpResult.status === 'verified') {
+      const locName = entity.data.locationName || '';
+      const firstPart = locName.split(',')[0].trim();
+      if (firstPart) {
+        const cityCoords = lookupCityCoords(firstPart, entity.lat, entity.lng);
+        if (cityCoords) {
+          const dist = haversineKm(entity.lat, entity.lng, cityCoords.lat, cityCoords.lng);
+          if (dist > 200) {
+            log({ level: 'info', message: `[gdelt] label-coord fix: ${entity.id} "${firstPart}" coords ${dist.toFixed(0)}km away, relocating to ${cityCoords.lat.toFixed(4)},${cityCoords.lng.toFixed(4)}` });
+            entity = { ...entity, lat: cityCoords.lat, lng: cityCoords.lng };
+          }
+        }
+      }
     }
 
     // Update entity with final confidence

@@ -9,8 +9,8 @@ import { cacheGet, cacheSet } from '../cache/redis.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const CONCURRENCY = 10;
-const FETCH_TIMEOUT_MS = 5000;
+const CONCURRENCY = 5;
+const FETCH_TIMEOUT_MS = 8000;
 const MAX_BYTES = 10240; // 10KB — enough for <head> section
 const CACHE_PREFIX = 'title:';
 const LOGICAL_TTL_MS = 7 * 86_400_000;  // 7 days
