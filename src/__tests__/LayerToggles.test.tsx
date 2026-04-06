@@ -22,23 +22,22 @@ describe('LayerTogglesSlot', () => {
     expect(screen.getByText('Layers')).toBeTruthy();
   });
 
-  it('renders 6 active toggle rows and 1 coming-soon row', () => {
+  it('renders 6 active toggle rows and no coming-soon rows', () => {
     render(<LayerTogglesSlot />);
     const switches = screen.getAllByRole('switch');
     expect(switches).toHaveLength(6);
-    // Coming-soon layers render as plain divs, not switches (only Satellite remains)
-    expect(screen.getAllByText('soon')).toHaveLength(1);
+    // No layers are coming-soon in current config (Satellite was removed)
+    expect(screen.queryAllByText('soon')).toHaveLength(0);
   });
 
   it('renders toggle rows with correct labels', () => {
     render(<LayerTogglesSlot />);
     expect(screen.getByText('Geographic')).toBeTruthy();
     expect(screen.getByText('Climate')).toBeTruthy();
+    expect(screen.getByText('Water')).toBeTruthy();
     expect(screen.getByText('Threat Density')).toBeTruthy();
     expect(screen.getByText('Political')).toBeTruthy();
     expect(screen.getByText('Ethnic')).toBeTruthy();
-    expect(screen.getByText('Satellite')).toBeTruthy();
-    expect(screen.getByText('Water')).toBeTruthy();
   });
 
   it('clicking a toggle calls toggleLayer', () => {

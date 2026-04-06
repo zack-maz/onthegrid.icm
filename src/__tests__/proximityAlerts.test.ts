@@ -178,15 +178,16 @@ describe('computeProximityAlerts', () => {
   });
 
   it('returns alerts sorted by distanceKm ascending', () => {
+    // PROXIMITY_THRESHOLD_KM is 5km, so both sites must be within 5km of the flight
     const sites = [
       makeSite({ id: 'site-near', lat: 32.0, lng: 51.0, label: 'Near Site' }),
-      makeSite({ id: 'site-far', lat: 32.2, lng: 51.0, label: 'Far Site' }),
+      makeSite({ id: 'site-far', lat: 32.03, lng: 51.0, label: 'Far Site' }),
     ];
-    // Flight at 32.05 is ~5.5km from site-near, ~16.7km from site-far
+    // Flight at 32.01 is ~1.1km from site-near, ~2.2km from site-far -- both within 5km
     const flights = [
       makeFlight({
         id: 'uid-1',
-        lat: 32.05,
+        lat: 32.01,
         lng: 51.0,
         label: 'ALERT',
         data: { unidentified: true, heading: 0 },

@@ -449,7 +449,11 @@ describe('useThreatHeatmapLayers', () => {
     const { result } = renderHook(() => useThreatHeatmapLayers(hoveredId));
     const picker = result.current[0];
     expect(picker.props.updateTriggers).toBeDefined();
-    expect(picker.props.updateTriggers.getFillColor).toBe(hoveredId);
+    // updateTriggers is a tuple of [hoveredClusterId, isBelowCrossover]
+    // so re-renders happen on hover changes AND zoom-crossover changes
+    expect(picker.props.updateTriggers.getFillColor).toEqual(
+      expect.arrayContaining([hoveredId])
+    );
   });
 });
 

@@ -355,6 +355,7 @@ export function useThreatHeatmapLayers(hoveredClusterId: string | null = null, i
       },
       radiusUnits: 'meters' as const,
       radiusMinPixels: 20,
+      radiusMaxPixels: 200,
       // Thermal color mapped from cluster weight via P90 normalization.
       // Alpha modulated by hover state: 255 (hovered), 102 (non-hovered when one is hovered), 180 (default).
       getFillColor: (d: ThreatCluster) => {

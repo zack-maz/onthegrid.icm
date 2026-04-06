@@ -43,6 +43,7 @@ load-test-results/
 # Test artifacts
 test-results/
 .playwright-mcp/
+coverage/
 
 # MCP config
 .mcp.json
