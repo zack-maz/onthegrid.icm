@@ -238,7 +238,7 @@ export function normalizeGdeltEvent(
  * Phase B: Normalize, score, and centroid detection (operates on entities)
  * Phase C: NLP geo cross-validation (async -- fetches article titles)
  */
-export async function parseAndFilter(csv: string, bellingcatArticles?: BellingcatArticle[]): Promise<ConflictEventEntity[]> {
+export async function parseAndFilter(csv: string, bellingcatArticles?: BellingcatArticle[], options?: { skipTitleFetch?: boolean }): Promise<ConflictEventEntity[]> {
   const lines = csv.trim().split('\n');
   const rawCount = lines.length;
   const config = getConfig();
@@ -348,8 +348,12 @@ export async function parseAndFilter(csv: string, bellingcatArticles?: Bellingca
     if (url) urlsToFetch.push(url);
   }
 
-  const titleMap = await batchFetchTitles(urlsToFetch);
-  log({ level: 'info', message: `[gdelt] Phase C: fetched ${titleMap.size} titles for ${urlsToFetch.length} URLs (${[...titleMap.values()].filter(t => t !== null).length} non-null)` });
+  const titleMap = options?.skipTitleFetch
+    ? new Map<string, string | null>()
+    : await batchFetchTitles(urlsToFetch);
+  if (!options?.skipTitleFetch) {
+    log({ level: 'info', message: `[gdelt] Phase C: fetched ${titleMap.size} titles for ${urlsToFetch.length} URLs (${[...titleMap.values()].filter(t => t !== null).length} non-null)` });
+  }
 
   const results: ConflictEventEntity[] = [];
 
@@ -964,7 +968,7 @@ export async function backfillEvents(days: number): Promise<ConflictEventEntity[
     const results = await Promise.allSettled(
       batch.map(async (url) => {
         const csv = await downloadAndUnzip(url);
-        return await parseAndFilter(csv);
+        return await parseAndFilter(csv, undefined, { skipTitleFetch: true });
       }),
     );
 
