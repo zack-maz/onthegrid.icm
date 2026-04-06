@@ -2,7 +2,7 @@
 // Spreads stacked centroid events into visually distinguishable positions
 
 import type { ConflictEventEntity } from '../types.js';
-import { detectCentroid, CITY_CENTROIDS } from './geoValidation.js';
+import { CITY_CENTROIDS } from './geoValidation.js';
 
 /**
  * Ring definitions: [slotCount, radiusKm]

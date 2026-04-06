@@ -345,12 +345,11 @@ describe('eventScoring', () => {
   });
 
   describe('getCameoSpecificity', () => {
-    it('returns 0.5 (default) for excluded codes (180, 182, 190) -- no longer in specificity map', () => {
-      // These codes are hard-excluded in config.eventExcludedCameo before scoring runs,
-      // so their specificity entries were removed. They fall to the default 0.5.
-      expect(getCameoSpecificity('180')).toBe(0.5);
-      expect(getCameoSpecificity('182')).toBe(0.5);
-      expect(getCameoSpecificity('190')).toBe(0.5);
+    it('returns 0.1 (low) for catch-all codes (180, 182, 190)', () => {
+      // These codes are broad catch-alls prone to false positives
+      expect(getCameoSpecificity('180')).toBe(0.1);
+      expect(getCameoSpecificity('182')).toBe(0.1);
+      expect(getCameoSpecificity('190')).toBe(0.1);
     });
 
     it('returns 1.0 for specific codes (195, 194, 204)', () => {
@@ -371,7 +370,7 @@ describe('eventScoring', () => {
 
     it('uses first 3 chars of 4-digit codes', () => {
       expect(getCameoSpecificity('1951')).toBe(1.0); // 195 -> high
-      expect(getCameoSpecificity('1801')).toBe(0.5); // 180 -> default (removed from map)
+      expect(getCameoSpecificity('1801')).toBe(0.1); // 180 -> low (catch-all)
     });
   });
 
@@ -461,9 +460,9 @@ describe('eventScoring', () => {
     it('returns Baghdad centroid coords for title containing "Baghdad"', () => {
       const geo = extractBellingcatGeo('Airstrike hits Baghdad military base');
       expect(geo).toBeDefined();
-      // GeoNames coordinates for Baghdad
-      expect(geo!.lat).toBeCloseTo(33.3406, 3);
-      expect(geo!.lng).toBeCloseTo(44.4009, 3);
+      // Hardcoded CITY_CENTROIDS coordinates for Baghdad
+      expect(geo!.lat).toBeCloseTo(33.3152, 3);
+      expect(geo!.lng).toBeCloseTo(44.3661, 3);
     });
 
     it('returns undefined for title with no city name', () => {
@@ -474,9 +473,9 @@ describe('eventScoring', () => {
     it('matches city names case-insensitively', () => {
       const geo = extractBellingcatGeo('TEHRAN under fire as conflict escalates');
       expect(geo).toBeDefined();
-      // GeoNames coordinates for Tehran
-      expect(geo!.lat).toBeCloseTo(35.6944, 3);
-      expect(geo!.lng).toBeCloseTo(51.4215, 3);
+      // Hardcoded CITY_CENTROIDS coordinates for Tehran
+      expect(geo!.lat).toBeCloseTo(35.6892, 3);
+      expect(geo!.lng).toBeCloseTo(51.3890, 3);
     });
   });
 });

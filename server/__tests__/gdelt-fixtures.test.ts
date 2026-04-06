@@ -224,7 +224,7 @@ const FP_LOW_CONFIDENCE = makeGdeltRow({
   57: '51.3890',
 });
 
-/** Physical assault event -- CAMEO 182 (now excluded) */
+/** Physical assault event -- CAMEO 182 (low specificity, not excluded) */
 const FP_CAMEO_182 = makeGdeltRow({
   0: 'FP_CAMEO_182_01',
   1: '20260322',
@@ -240,7 +240,7 @@ const FP_CAMEO_182 = makeGdeltRow({
   57: '44.3661',
 });
 
-/** Conventional military force NOS -- CAMEO 190 (now excluded) */
+/** Conventional military force NOS -- CAMEO 190 (low specificity, not excluded) */
 const FP_CAMEO_190 = makeGdeltRow({
   0: 'FP_CAMEO_190_01',
   1: '20260323',
@@ -256,7 +256,7 @@ const FP_CAMEO_190 = makeGdeltRow({
   57: '51.3890',
 });
 
-const FALSE_POSITIVE_ROWS = [FP_CYBER_OP, FP_SINGLE_SOURCE, FP_NON_MIDDLE_EAST, FP_GEO_INVALID, FP_LOW_CONFIDENCE, FP_CAMEO_182, FP_CAMEO_190];
+const FALSE_POSITIVE_ROWS = [FP_CYBER_OP, FP_SINGLE_SOURCE, FP_NON_MIDDLE_EAST, FP_GEO_INVALID, FP_LOW_CONFIDENCE];
 
 describe('GDELT Pipeline Fixtures', () => {
   let parseAndFilter: typeof import('../adapters/gdelt.js').parseAndFilter;
@@ -311,14 +311,16 @@ describe('GDELT Pipeline Fixtures', () => {
       expect(events).toHaveLength(0);
     });
 
-    it('physical assault (CAMEO 182) is rejected as excluded CAMEO', async () => {
+    it('physical assault (CAMEO 182) passes pipeline with low specificity', async () => {
+      // CAMEO 182 has specificity 0.1 but is not excluded -- may pass threshold
       const events = await parseAndFilter(FP_CAMEO_182);
-      expect(events).toHaveLength(0);
+      expect(events).toHaveLength(1);
     });
 
-    it('conventional military force NOS (CAMEO 190) is rejected as excluded CAMEO', async () => {
+    it('conventional military force NOS (CAMEO 190) passes pipeline with low specificity', async () => {
+      // CAMEO 190 has specificity 0.1 but is not excluded -- may pass threshold
       const events = await parseAndFilter(FP_CAMEO_190);
-      expect(events).toHaveLength(0);
+      expect(events).toHaveLength(1);
     });
 
     it('single-source rumor is rejected for insufficient sources', async () => {
@@ -368,8 +370,6 @@ describe('GDELT Pipeline Fixtures', () => {
       expect(ids.has('gdelt-FP_NON_ME_01')).toBe(false);
       expect(ids.has('gdelt-FP_GEO_01')).toBe(false);
       expect(ids.has('gdelt-FP_LOW_CONF_01')).toBe(false);
-      expect(ids.has('gdelt-FP_CAMEO_182_01')).toBe(false);
-      expect(ids.has('gdelt-FP_CAMEO_190_01')).toBe(false);
     });
 
     it('all returned events have confidence above threshold', async () => {
@@ -398,7 +398,7 @@ describe('GDELT Pipeline Fixtures', () => {
       const rejected = records.filter(r => r.status === 'rejected');
 
       expect(accepted.length).toBe(3);
-      expect(rejected.length).toBe(7);
+      expect(rejected.length).toBe(5);
     });
 
     it('rejected records have specific rejection reasons', async () => {

@@ -12,17 +12,6 @@ const TIMEOUT_MS = 90_000;
  */
 const ME_BBOX = '15,30,42,70'; // south,west,north,east
 
-// ---------- Geographic Exclusion Filter ----------
-
-/** Approximate country centroids [lat, lng] for nearest-match filtering */
-const CENTROIDS: [string, number, number][] = [
-  ['Turkey', 39.0, 35.2],
-  ['Uzbekistan', 41.4, 64.6],
-  ['Tajikistan', 38.9, 71.3],
-  ['Kyrgyzstan', 41.2, 74.8],
-  ['Kazakhstan', 48.0, 67.0],
-];
-
 // ---------- Priority Country & Notability Filters ----------
 
 /** Full country centroids for priority-country classification (from basinLookup.ts, duplicated to avoid circular dep) */
