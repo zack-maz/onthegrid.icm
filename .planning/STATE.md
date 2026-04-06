@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-06T22:28:11.218Z"
+last_updated: "2026-04-06T22:54:21.518Z"
 progress:
   total_phases: 13
   completed_phases: 7
   total_plans: 33
-  completed_plans: 25
+  completed_plans: 27
 ---
 
 # Project State
@@ -22,6 +22,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Phase 26.3: Plan 03 COMPLETE (3 of 6 plans done)
 Phase 26.3: Plan 02 COMPLETE (2 of 6 plans done)
 Phase 26.3: Plan 01 COMPLETE (1 of 6 plans done)
 Phase 26.2 COMPLETE (3 of 3 plans done)
@@ -127,6 +128,10 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - CAMEO exclusion reverted to pre-26.2: ['180','192'] only (182/190 exclusions were 26.2-specific)
 - Confidence threshold reverted to 0.35 (from 26.2's 0.38)
 - Pre-existing tsc errors fixed alongside 26.2 reversion (unused imports, compromise typing)
+- Express 5 req.query is read-only getter -- validateQuery middleware stores parsed data on res.locals.validatedQuery
+- Zod v3 pinned (v4 has breaking changes: ZodTypeAny removed, different module structure)
+- importOriginal pattern for config mocks to preserve constant re-exports after constants.ts consolidation
+- parseEnv test defaults use explicit if-checks (not spread) to avoid env var override order bugs
 - Pino logger with level:'silent' in test mode, pino-pretty in dev, raw JSON in production
 - Module-level child loggers (not request-scoped) for adapter files lacking req context
 - genReqId accepts client-provided X-Request-ID or generates UUID via crypto.randomUUID
