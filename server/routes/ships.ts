@@ -52,7 +52,7 @@ shipsRouter.get('/', async (_req, res) => {
     if (cached) {
       res.json({ ...cached, stale: true });
     } else {
-      res.status(500).json({ error: 'Ship data unavailable' });
+      res.status(500).json({ error: 'Ship data unavailable', code: 'UPSTREAM_ERROR', statusCode: 500 });
     }
   }
 });

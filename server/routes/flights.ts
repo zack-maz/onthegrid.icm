@@ -45,7 +45,7 @@ flightsRouter.get('/', validateQuery(flightsQuerySchema), async (_req, res) => {
 
   // Credential checks for sources that require API keys
   if (source === 'opensky' && !(process.env.OPENSKY_CLIENT_ID && process.env.OPENSKY_CLIENT_SECRET)) {
-    return res.status(503).json({ error: 'OpenSky credentials not configured' });
+    return res.status(503).json({ error: 'OpenSky credentials not configured', code: 'UPSTREAM_ERROR', statusCode: 503 });
   }
 
   // Check cache first -- avoid unnecessary upstream calls (API credit conservation)
@@ -67,7 +67,7 @@ flightsRouter.get('/', validateQuery(flightsQuerySchema), async (_req, res) => {
       if (cached) {
         return res.json({ ...cached, rateLimited: true });
       }
-      return res.status(429).json({ error: 'Rate limited', rateLimited: true });
+      return res.status(429).json({ error: 'Rate limited', code: 'RATE_LIMITED', statusCode: 429, rateLimited: true });
     }
 
     if (cached) {

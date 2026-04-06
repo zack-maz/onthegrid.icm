@@ -30,7 +30,7 @@ export function createRateLimiter(maxRequests: number, windowSec: number) {
     res.set('X-RateLimit-Reset', String(result.reset));
 
     if (!result.success) {
-      res.status(429).json({ error: 'Too many requests' });
+      res.status(429).json({ error: 'Too many requests', code: 'RATE_LIMITED', statusCode: 429 });
       return;
     }
 

@@ -50,7 +50,7 @@ marketsRouter.get('/', validateQuery(marketsQuerySchema), async (_req, res) => {
     } else {
       // No data at all
       log.error('all tickers failed with no cache available');
-      res.status(502).json({ error: 'No market data available' });
+      res.status(502).json({ error: 'No market data available', code: 'UPSTREAM_ERROR', statusCode: 502 });
     }
   } catch (err) {
     log.error({ err }, 'upstream error');

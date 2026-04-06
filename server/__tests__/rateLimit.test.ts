@@ -93,7 +93,7 @@ describe('rateLimitMiddleware', () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(res._status).toBe(429);
-    expect(res._json).toEqual({ error: 'Too many requests' });
+    expect(res._json).toEqual({ error: 'Too many requests', code: 'RATE_LIMITED', statusCode: 429 });
   });
 
   it('sets X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset headers', async () => {
