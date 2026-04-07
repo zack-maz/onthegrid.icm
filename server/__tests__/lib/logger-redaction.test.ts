@@ -106,22 +106,23 @@ describe('Pino logger redaction', () => {
     expect(line).not.toContain('AXXXupstash-token-leak');
   });
 
-  it('wildcard *.OPENSKY_CLIENT_SECRET catches OpenSky credentials', () => {
+  it('wildcard *.OPENSKY_CLIENT_SECRET catches OpenSky credentials at one level deep', () => {
+    // Pino redact wildcards (`*.x`) match at exactly one level of nesting.
+    // Adapter logs should put the secret one level under a context object
+    // (e.g. `upstream`, `env`, `cfg`) — not deeper.
     logger.info(
       {
         upstream: {
-          opensky: {
-            OPENSKY_CLIENT_SECRET: 'opensky-shhh-secret',
-            OPENSKY_CLIENT_ID: 'public-client-id',
-          },
+          OPENSKY_CLIENT_SECRET: 'opensky-shhh-secret',
+          OPENSKY_CLIENT_ID: 'public-client-id',
         },
       },
       'opensky auth',
     );
     const line = getLines()[0]!;
     const parsed = JSON.parse(line);
-    expect(parsed.upstream.opensky.OPENSKY_CLIENT_SECRET).toBe('[REDACTED]');
-    expect(parsed.upstream.opensky.OPENSKY_CLIENT_ID).toBe('public-client-id');
+    expect(parsed.upstream.OPENSKY_CLIENT_SECRET).toBe('[REDACTED]');
+    expect(parsed.upstream.OPENSKY_CLIENT_ID).toBe('public-client-id');
     expect(line).not.toContain('opensky-shhh-secret');
   });
 
