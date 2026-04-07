@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# husky v9 pre-commit — fast format/lint + secret scan
+set -e
+
+# 1. Format + lint staged files only (target runtime < 2s)
+npx lint-staged
+
+# 2. Scan staged files for leaked secrets (fails open if gitleaks not installed)
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --verbose
+else
+  echo "WARNING: gitleaks not installed — skipping secret scan."
+  echo "   install: brew install gitleaks    (macOS)"
+  echo "            scoop install gitleaks   (Windows)"
+  echo "            go install github.com/gitleaks/gitleaks/v8@latest"
+fi
