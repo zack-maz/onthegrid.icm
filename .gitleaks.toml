@@ -1,0 +1,36 @@
+# .gitleaks.toml — repo-local allowlist for gitleaks pre-commit scan
+#
+# This file extends the default gitleaks ruleset by whitelisting paths and
+# literal strings we know are safe (test fixtures, placeholder env values,
+# planning docs, etc). See https://github.com/gitleaks/gitleaks for the
+# full config reference.
+#
+# Rules of thumb:
+#   - Test fixtures with fake/shaped secrets → path allowlist
+#   - Real secrets (actual API keys, tokens) → NEVER allowlist, rotate instead
+#   - Placeholder patterns like YOUR_KEY_HERE → regex allowlist
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for test fixtures and known non-secrets"
+
+paths = [
+  '''server/__tests__/fixtures/.*''',
+  '''server/__tests__/.*\.test\.ts$''',
+  '''src/test/__mocks__/.*''',
+  '''docs/screenshots/.*''',
+  '''docs/hero\.gif$''',
+  '''package-lock\.json$''',
+  '''\.planning/.*''',
+  '''\.env\.example$''',
+]
+
+regexes = [
+  '''(?i)KEY\s*=\s*["']?your[_-]?key[_-]?here["']?''',
+  '''(?i)TOKEN\s*=\s*["']?(replace[_-]?me|changeme|placeholder)["']?''',
+  '''(?i)SECRET\s*=\s*["']?(your[_-]?secret|placeholder)["']?''',
+  '''AKIAIOSFODNN7EXAMPLE''',
+  '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
+]
