@@ -156,6 +156,68 @@ Requirements for the Data Quality & Layers milestone.
 - [x] **CLN-12**: Hand-written OpenAPI 3.0.3 spec at `server/openapi.yaml` documents all 14 `/api/*` endpoints with request/response schemas, consistent error responses, and the `CacheResponse<T>` wrapper shape
 - [x] **CLN-13**: Server TypeScript compiles with zero unused-import or unused-variable warnings; dead code from deleted Phase 26.2 modules is fully purged from the import graph
 
+### Production Presentation
+
+Phase 26.4 — portfolio-grade external artifacts and Palantir-grade engineering gap closure. IDs are non-contiguous (gaps reflect plan-internal grouping with room to grow).
+
+**Plan 01 — Final code cleanup pass**
+
+- [ ] **PRES-01**: Repository is fully Prettier-formatted with `eslint --fix` applied repo-wide; flat ESLint config (`eslint.config.js`) and `.prettierrc.json` committed
+- [ ] **PRES-02**: Zero `TODO`/`FIXME` comments remain except explicitly preserved `TODO(26.2)` GDELT-redo flags and any `TODO(coverage)` placeholders
+- [ ] **PRES-03**: Zero `console.log`/`console.warn`/`console.error` calls remain in client production code
+- [ ] **PRES-04**: `knip` reports zero unused files, exports, and devDependencies (or all whitelisted with rationale)
+- [ ] **PRES-05**: `.env.example` matches every key in `server/config.ts` Zod schema, verified by `scripts/check-env-example.ts`
+- [ ] **PRES-06**: Tracked file scan finds no `.DS_Store`/`.env.local`/`coverage/`/`dist/` stragglers committed to the repo
+- [ ] **PRES-07**: `package.json` exposes `lint`, `lint:fix`, `format`, `format:check`, `knip`, `type-coverage` scripts as new entries
+
+**Plan 02 — CI/CD + husky + gitleaks**
+
+- [ ] **PRES-10**: `.github/workflows/ci.yml` runs on every PR with lint, typecheck, full vitest suite, npm audit, and codecov upload jobs
+- [ ] **PRES-11**: `.github/workflows/codeql.yml` runs CodeQL JS/TS analysis on every PR and on a weekly schedule
+- [ ] **PRES-12**: Codecov badge renders in README from CI uploads; coverage delta is visible on PRs
+- [ ] **PRES-13**: `gitleaks` pre-commit hook blocks commits containing planted fake API keys; verified by a removable fixture test
+- [ ] **PRES-14**: `husky` v9 pre-commit hook runs `lint-staged` (Prettier + ESLint) on staged files only and completes in under 2 seconds
+- [ ] **PRES-15**: Vercel preview deploys are documented as a manual GitHub-integration step (no custom YAML required) in the CI README or repo docs
+
+**Plan 03 — Palantir-grade gap closure**
+
+- [ ] **PRES-20**: Pino logger redacts `authorization` headers, `x-api-key`, cookies, `set-cookie`, and known upstream tokens (Upstash, OpenSky, AISStream, ADSB) before any sink output
+- [ ] **PRES-21**: `server/__tests__/lib/logger-redaction.test.ts` verifies known sensitive paths appear as `[REDACTED]` in captured pino write-stream output
+- [ ] **PRES-22**: `type-coverage` CLI installed; baseline measured; CI gate set at `floor(baseline)` with TODO note for the 99% target
+- [ ] **PRES-23**: Type coverage badge renders in README from a static shields.io badge sourced from the latest measurement
+- [ ] **PRES-24**: Chaos test `server/__tests__/chaos-redis.test.ts` proves all cached routes return 200 (with `degraded: true`) or 503 (never 500) when `@upstash/redis` throws on every call; `/health` reports `redis: false`
+- [ ] **PRES-25**: A `sendValidated` helper parses outbound API responses through Zod schemas before `res.json()`; dev mode throws on mismatch, prod mode logs warn and sends anyway
+- [ ] **PRES-26**: At least three representative routes (flights, events, water) are wired to `sendValidated` with response schemas matching `server/openapi.yaml`
+
+**Plan 04 — README + visuals + live demo hardening**
+
+- [ ] **PRES-30**: `README.md` is rewritten as a portfolio-grade hero document with hero block, ToC, structured sections, engineering badges, retrospective, and is at least 200 lines
+- [ ] **PRES-31**: `docs/hero.gif` exists, is under 3 MB, and demonstrates a Strait of Hormuz zoom with all visualization layers active
+- [ ] **PRES-32**: `docs/screenshots/` contains 4–6 PNG screenshots of distinct visualization layers
+- [ ] **PRES-33**: `rateLimiters.public` tier exists with stricter per-IP throttle than per-endpoint limits, JSDoc-documented, with a passing rate-limit test verifying 429 response
+- [ ] **PRES-34**: `public/robots.txt` disallows `/api/*` and `/health`; live demo URL is published in README with a "please be gentle" callout
+
+**Plan 05 — Mermaid architecture diagrams + ontology deep dive**
+
+- [ ] **PRES-40**: `docs/architecture/README.md` indexes all architecture documents with one-line descriptions
+- [ ] **PRES-41**: `docs/architecture/system-context.md` contains a Mermaid C4Context (or flowchart fallback) diagram of browser → Vercel edge → Express API → Upstash + 8 upstream APIs
+- [ ] **PRES-42**: `docs/architecture/data-flows.md` contains at least 8 Mermaid `sequenceDiagram` blocks, one per data source (flights, ships, events, news, sites, water, markets, weather), each naming its adapter file and cache key
+- [ ] **PRES-43**: `docs/architecture/frontend.md` documents map layer stacking, Zustand store dependency graph, polling hook ownership, and cross-store interactions
+- [ ] **PRES-44**: `docs/architecture/deployment.md` documents Vercel functions, build pipeline, CDN cache strategy, cron jobs, env vars, and failover behavior
+- [ ] **PRES-45**: `docs/architecture/ontology/types.md` catalogs every TypeScript discriminated union and entity type with relationships and source pointers
+- [ ] **PRES-46**: `docs/architecture/ontology/algorithms.md` documents at least 8 hot-path algorithms (threat clustering, GDELT dispersion, severity scoring, news clustering, news matching, basin lookup, water health, time grouping) with rationale
+- [ ] **PRES-47**: `docs/architecture/ontology/state-machines.md` documents connection lifecycle, polling lifecycle, navigation stack, and cache freshness state machines as Mermaid `stateDiagram-v2` blocks
+- [ ] **PRES-48**: `docs/architecture/ontology/complexity.md` documents runtime and space complexity for at least 7 hot-path operations in a complexity table
+
+**Plan 06 — ADRs + runbook + degradation contract**
+
+- [ ] **PRES-50**: `docs/adr/template.md` provides a Michael Nygard short-format ADR template; `docs/adr/README.md` indexes all ADRs and documents conventions (status values, immutability rule, numbering scheme)
+- [ ] **PRES-51**: ADRs 0001–0004 document infrastructure decisions (Upstash Redis, Vercel serverless, GDELT v2, threat density shader) each at least 40 lines following the template structure
+- [ ] **PRES-52**: ADR-0005 documents the Phase 26.2 NLP scrap honestly with Context, Decision, Consequences, and a "What I Learned" section; status `Superseded`; at least 60 lines
+- [ ] **PRES-53**: ADRs 0006–0008 document later infrastructure decisions (pino + Zod hardening, water stress as point facilities, ethnic distribution via GeoEPR) each at least 40 lines following the template
+- [ ] **PRES-54**: `docs/runbook.md` documents at least 9 failure modes (Upstash unreachable, GDELT 404, Overpass timeout, AISStream disconnect, Yahoo throttle, Vercel function timeout, Upstash budget exhausted, CORS misconfig, cron failure) each with Symptom/Detection/Cause/Remediation/Prevention; at least 150 lines
+- [ ] **PRES-55**: `docs/degradation.md` documents the graceful degradation contract for cache, data sources, response validation, and frontend layers with a summary table; at least 60 lines; `README.md` Engineering section links all new artifacts
+
 ## v1.2+ Requirements
 
 Deferred to future releases. Tracked but not in current roadmap.
@@ -293,13 +355,53 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLN-11 | Phase 26.3 | Complete |
 | CLN-12 | Phase 26.3 | Complete |
 | CLN-13 | Phase 26.3 | Complete |
+| PRES-01 | Phase 26.4 | Planned |
+| PRES-02 | Phase 26.4 | Planned |
+| PRES-03 | Phase 26.4 | Planned |
+| PRES-04 | Phase 26.4 | Planned |
+| PRES-05 | Phase 26.4 | Planned |
+| PRES-06 | Phase 26.4 | Planned |
+| PRES-07 | Phase 26.4 | Planned |
+| PRES-10 | Phase 26.4 | Planned |
+| PRES-11 | Phase 26.4 | Planned |
+| PRES-12 | Phase 26.4 | Planned |
+| PRES-13 | Phase 26.4 | Planned |
+| PRES-14 | Phase 26.4 | Planned |
+| PRES-15 | Phase 26.4 | Planned |
+| PRES-20 | Phase 26.4 | Planned |
+| PRES-21 | Phase 26.4 | Planned |
+| PRES-22 | Phase 26.4 | Planned |
+| PRES-23 | Phase 26.4 | Planned |
+| PRES-24 | Phase 26.4 | Planned |
+| PRES-25 | Phase 26.4 | Planned |
+| PRES-26 | Phase 26.4 | Planned |
+| PRES-30 | Phase 26.4 | Planned |
+| PRES-31 | Phase 26.4 | Planned |
+| PRES-32 | Phase 26.4 | Planned |
+| PRES-33 | Phase 26.4 | Planned |
+| PRES-34 | Phase 26.4 | Planned |
+| PRES-40 | Phase 26.4 | Planned |
+| PRES-41 | Phase 26.4 | Planned |
+| PRES-42 | Phase 26.4 | Planned |
+| PRES-43 | Phase 26.4 | Planned |
+| PRES-44 | Phase 26.4 | Planned |
+| PRES-45 | Phase 26.4 | Planned |
+| PRES-46 | Phase 26.4 | Planned |
+| PRES-47 | Phase 26.4 | Planned |
+| PRES-48 | Phase 26.4 | Planned |
+| PRES-50 | Phase 26.4 | Planned |
+| PRES-51 | Phase 26.4 | Planned |
+| PRES-52 | Phase 26.4 | Planned |
+| PRES-53 | Phase 26.4 | Planned |
+| PRES-54 | Phase 26.4 | Planned |
+| PRES-55 | Phase 26.4 | Planned |
 
 **Coverage:**
 - v1.1 requirements: 29 total, 29 complete
 - v1.2 requirements: 5 total, 5 complete
-- v1.3 requirements: 66 total, 13 complete
-- Total: 100 mapped, 47 complete
+- v1.3 requirements: 106 total, 13 complete (66 prior + 40 PRES-* Phase 26.4)
+- Total: 140 mapped, 47 complete
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-04-07 -- Phase 26.3 production cleanup requirements (CLN-01..CLN-13) backfilled*
+*Last updated: 2026-04-07 -- Phase 26.4 production presentation requirements (PRES-01..PRES-55) added during planning*
