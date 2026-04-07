@@ -14,5 +14,4 @@ export type {
   NewsArticle,
   NewsCluster,
   MarketQuote,
-  MarketSnapshot,
 } from '../../server/types.js';

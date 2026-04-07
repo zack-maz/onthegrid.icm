@@ -29,10 +29,6 @@ const RANGE_CONFIG: Record<MarketRange, { range: string; interval: string }> = {
   ytd: { range: 'ytd', interval: '1d' },
 };
 
-export function isValidRange(value: string): value is MarketRange {
-  return value in RANGE_CONFIG;
-}
-
 /** Shape of the Yahoo Finance v8 chart API response */
 interface YahooChartResponse {
   chart: {

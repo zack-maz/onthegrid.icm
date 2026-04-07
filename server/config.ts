@@ -8,7 +8,7 @@ import type { BoundingBox } from './types.js';
 // Env schema — Zod validates at module load (fail-fast on bad config)
 // ---------------------------------------------------------------------------
 
-const envSchema = z.object({
+export const envSchema = z.object({
   // Required (crash if missing in non-test environments)
   UPSTASH_REDIS_REST_URL: z.string().url(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
@@ -173,6 +173,3 @@ export const NEWS_SLIDING_WINDOW_MS = 7 * 86_400_000; // 7 days
 export const NEWS_CLUSTER_WINDOW_MS = 86_400_000; // 24h fuzzy match window
 export const NEWS_JACCARD_THRESHOLD = 0.8;
 export const NEWS_MIN_TOKENS_FOR_FUZZY = 5;
-
-// ADS-B Exchange polling interval (260s for paid API)
-export const ADSB_POLL_INTERVAL = 260_000;

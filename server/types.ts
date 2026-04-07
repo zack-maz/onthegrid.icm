@@ -150,11 +150,6 @@ export interface MarketQuote {
   };
 }
 
-export interface MarketSnapshot {
-  quotes: MarketQuote[];
-  fetchedAt: number;
-}
-
 export interface WeatherGridPoint {
   lat: number;
   lng: number;

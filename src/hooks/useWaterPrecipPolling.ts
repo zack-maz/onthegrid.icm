@@ -30,11 +30,8 @@ export function useWaterPrecipPolling(): void {
         if (!res.ok) throw new Error(`Water precip API ${res.status}`);
         const data: PrecipResponse = await res.json();
         updatePrecipitation(data.data);
-      } catch (err) {
-        if (!cancelled) {
-          console.warn('[water-precip] fetch error:', err);
-          // Don't clear facilities -- stale precip is fine
-        }
+      } catch {
+        // Silently swallow — stale precipitation data is acceptable; do not clear facilities.
       }
     };
 

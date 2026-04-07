@@ -1,15 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": [
-    "src/main.tsx",
-    "server/index.ts",
-    "server/vercel-entry.ts",
-    "scripts/**/*.ts",
-    "vite.config.ts"
-  ],
+  "entry": ["scripts/**/*.ts"],
   "project": ["src/**/*.{ts,tsx}", "server/**/*.ts", "scripts/**/*.ts"],
-  "ignore": ["src/test/**", "server/__tests__/**", "**/*.test.{ts,tsx}", "src/data/**", "api/**"],
-  "ignoreBinaries": ["vercel"],
+  "ignoreDependencies": ["tailwindcss", "pino-pretty", "@types/pino-http"],
   "ignoreExportsUsedInFile": true,
   "vitest": true,
   "vite": true

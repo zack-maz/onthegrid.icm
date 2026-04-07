@@ -22,9 +22,9 @@ export function useWaterFetch(): void {
         if (!res.ok) throw new Error(`Water API ${res.status}`);
         const data: CacheResponse<WaterFacility[]> = await res.json();
         setWaterData(data);
-      } catch (err) {
+      } catch {
         if (!cancelled) {
-          console.warn('[water] fetch error:', err);
+          // Silently mark error — connection status surfaces in StatusPanel.
           setError();
         }
       }

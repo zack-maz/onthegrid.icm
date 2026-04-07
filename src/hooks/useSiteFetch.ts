@@ -22,9 +22,9 @@ export function useSiteFetch(): void {
         if (!res.ok) throw new Error(`Sites API ${res.status}`);
         const data: CacheResponse<SiteEntity[]> = await res.json();
         setSiteData(data);
-      } catch (err) {
+      } catch {
         if (!cancelled) {
-          console.warn('[sites] fetch error:', err);
+          // Silently mark error — connection status surfaces in StatusPanel.
           setError();
         }
       }

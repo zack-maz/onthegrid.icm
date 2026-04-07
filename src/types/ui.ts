@@ -20,8 +20,6 @@ export const CONFLICT_TOGGLE_GROUPS = {
   showTargeted: ['assassination', 'abduction'] as const,
 } as const;
 
-export type ConflictToggleKey = keyof typeof CONFLICT_TOGGLE_GROUPS;
-
 // Derived from toggle groups — single source of truth
 const CONFLICT_EVENT_TYPES = new Set<string>(Object.values(CONFLICT_TOGGLE_GROUPS).flat());
 

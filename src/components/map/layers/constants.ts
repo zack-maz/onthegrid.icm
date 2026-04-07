@@ -51,17 +51,6 @@ export const PULSE_CONFIG = {
   periodMs: 800,
 } as const;
 
-/** Temperature color stops for weather heatmap (RGBA with alpha for transparency) */
-export const WEATHER_COLORS = {
-  cold: [0, 100, 255, 70] as [number, number, number, number], // blue
-  cool: [0, 200, 100, 70] as [number, number, number, number], // green
-  warm: [255, 220, 0, 70] as [number, number, number, number], // yellow
-  hot: [255, 50, 0, 70] as [number, number, number, number], // red
-};
-
-/** Temperature range in Celsius for Middle East weather display */
-export const WEATHER_TEMP_DOMAIN: [number, number] = [-5, 45];
-
 /** Altitude ceiling for opacity mapping (meters) */
 const ALT_CEILING = 13000;
 /** Minimum opacity at ground level */
