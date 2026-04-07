@@ -1,0 +1,1164 @@
+openapi: 3.0.3
+
+info:
+  title: Iran Conflict Monitor API
+  version: 1.0.0
+  description: |
+    Real-time intelligence API for monitoring Iran conflict data.
+
+    All `/api/*` data endpoints follow a common cache-first pattern and return a
+    `CacheResponse<T>` envelope containing the `data` payload, a `stale` flag,
+    and `lastFresh` timestamp. Upstream failures degrade gracefully: the server
+    falls back to the most recent cached data (with `stale: true`) instead of
+    propagating the error when possible.
+
+    All error responses use a consistent envelope:
+    ```
+    { "error": string, "code": string, "statusCode": number, "requestId"?: string, "stack"?: string }
+    ```
+
+    Each `/api/*` endpoint has its own sliding-window rate limit applied per
+    client IP. See `server/middleware/rateLimit.ts` for the per-endpoint limits
+    and rationale.
+  contact:
+    name: Iran Conflict Monitor
+    url: https://github.com/zacharymaz/iran-conflict-monitor
+  license:
+    name: Private
+    url: https://example.com/license
+
+servers:
+  - url: https://iran-conflict-monitor.vercel.app
+    description: Production (Vercel serverless)
+  - url: http://localhost:3001
+    description: Local development
+
+tags:
+  - name: Flights
+    description: Live ADS-B flight telemetry around Iran.
+  - name: Ships
+    description: AIS ship position data (AISStream.io).
+  - name: Events
+    description: Conflict events from GDELT with CAMEO classification.
+  - name: News
+    description: Conflict-relevant news clusters from GDELT DOC and RSS feeds.
+  - name: Markets
+    description: Oil & energy market quotes (Yahoo Finance).
+  - name: Weather
+    description: Open-Meteo weather grid covering the Middle East.
+  - name: Sites
+    description: Infrastructure sites (OpenStreetMap via Overpass).
+  - name: Water
+    description: Water infrastructure with WRI Aqueduct stress indicators.
+  - name: Geocode
+    description: Reverse geocoding via Nominatim.
+  - name: Sources
+    description: Runtime data source configuration status.
+  - name: Health
+    description: Service health probes and cron endpoints.
+
+paths:
+
+  # ---------- Flights ----------
+  /api/flights:
+    get:
+      summary: Get live flight data
+      description: |
+        Returns live ADS-B flight telemetry filtered to the Middle East bounding
+        box. Results are served from Redis cache when fresh; on upstream errors
+        the server falls back to stale cache.
+
+        `source=opensky` requires `OPENSKY_CLIENT_ID` + `OPENSKY_CLIENT_SECRET`
+        environment variables. `adsblol` is the default (free, no auth).
+      tags: [Flights]
+      parameters:
+        - name: source
+          in: query
+          required: false
+          description: Flight data provider.
+          schema:
+            type: string
+            enum: [opensky, adsblol]
+            default: adsblol
+      responses:
+        '200':
+          description: Cache response with flight entities.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FlightEntity'
+                      rateLimited:
+                        type: boolean
+                        description: Present and true when served from cache due to upstream 429.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/UpstreamError'
+
+  # ---------- Ships ----------
+  /api/ships:
+    get:
+      summary: Get live ship data
+      description: |
+        Returns live ship positions from AISStream.io. The server connects,
+        collects for a short window, then closes the socket (no persistent
+        connection). Cached ships are merged with fresh ships by MMSI and
+        pruned at a 10-minute stale threshold.
+      tags: [Ships]
+      responses:
+        '200':
+          description: Cache response with ship entities.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ShipEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------- Events ----------
+  /api/events:
+    get:
+      summary: Get conflict events
+      description: |
+        Returns conflict events from GDELT v2 with CAMEO classification.
+        On cache miss the server merges fresh events with cached data and may
+        lazily backfill historical events since WAR_START (rate-limited by a
+        1-hour cooldown stored in Redis).
+      tags: [Events]
+      parameters:
+        - name: backfill
+          in: query
+          required: false
+          description: Force a GDELT historical backfill (bypasses cooldown).
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Cache response with conflict event entities.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ConflictEventEntity'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------- News ----------
+  /api/news:
+    get:
+      summary: Get conflict news clusters
+      description: |
+        Returns clustered news articles from GDELT DOC 2.0 and RSS feeds
+        (BBC, Al Jazeera, Tehran Times, Times of Israel, Middle East Eye,
+        Bellingcat). Articles are filtered by conflict keywords, deduplicated
+        via Jaccard similarity, and pruned to a 7-day sliding window.
+      tags: [News]
+      parameters:
+        - name: refresh
+          in: query
+          required: false
+          description: Force a cache refresh (bypasses freshness check).
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Cache response with news clusters.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/NewsCluster'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------- Markets ----------
+  /api/markets:
+    get:
+      summary: Get oil & energy market quotes
+      description: |
+        Returns market data for Brent Crude (BZ=F), WTI (CL=F), and energy
+        equities (XLE, USO, XOM) from Yahoo Finance. Includes historical
+        sparkline data for the requested range.
+      tags: [Markets]
+      parameters:
+        - name: range
+          in: query
+          required: false
+          description: Sparkline history range.
+          schema:
+            type: string
+            enum: [1d, 5d, 1mo, ytd]
+            default: 1d
+      responses:
+        '200':
+          description: Cache response with market quotes.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MarketQuote'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  # ---------- Weather ----------
+  /api/weather:
+    get:
+      summary: Get weather grid
+      description: |
+        Returns a grid of weather observations across the Middle East from
+        Open-Meteo. Each grid point includes temperature (°C), wind speed
+        (knots), and wind direction (degrees).
+      tags: [Weather]
+      responses:
+        '200':
+          description: Cache response with weather grid points.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/WeatherGridPoint'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------- Sites ----------
+  /api/sites:
+    get:
+      summary: Get infrastructure sites
+      description: |
+        Returns infrastructure sites (nuclear, naval, oil, airbase, port)
+        across the Middle East from OpenStreetMap via the Overpass API.
+        Cached for 24 hours since sites are essentially static.
+      tags: [Sites]
+      parameters:
+        - name: refresh
+          in: query
+          required: false
+          description: Force a cache refresh.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Cache response with infrastructure sites.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SiteEntity'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------- Water facilities ----------
+  /api/water:
+    get:
+      summary: Get water infrastructure facilities
+      description: |
+        Returns water infrastructure facilities (dams, reservoirs, desalination
+        plants, treatment plants) with WRI Aqueduct 4.0 stress indicators
+        (baseline water stress, drought risk, groundwater decline, seasonal
+        variability, composite health). In production, `refresh=true` is only
+        honored when the request carries a `vercel-cron` user agent.
+      tags: [Water]
+      parameters:
+        - name: refresh
+          in: query
+          required: false
+          description: Force a cache refresh (cron-only in production).
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Cache response with water facilities.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/WaterFacility'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  # ---------- Water precipitation ----------
+  /api/water/precip:
+    get:
+      summary: Get water facility precipitation data
+      description: |
+        Returns 30-day precipitation data keyed to the currently cached water
+        facility coordinates, fetched from Open-Meteo in batches. Cached for
+        6 hours.
+      tags: [Water]
+      parameters:
+        - name: refresh
+          in: query
+          required: false
+          description: Force a cache refresh.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Cache response with precipitation data.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PrecipitationData'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------- Geocode ----------
+  /api/geocode:
+    get:
+      summary: Reverse geocode a coordinate
+      description: |
+        Returns a human-readable place name for a latitude/longitude pair via
+        Nominatim. Coordinates are quantized to 2 decimal places before cache
+        lookup to maximize hit rate. Results cached 30 days (logical) / 90 days
+        (hard Redis TTL).
+      tags: [Geocode]
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Latitude (-90 to 90).
+          schema:
+            type: number
+            format: double
+            minimum: -90
+            maximum: 90
+        - name: lon
+          in: query
+          required: true
+          description: Longitude (-180 to 180).
+          schema:
+            type: number
+            format: double
+            minimum: -180
+            maximum: 180
+      responses:
+        '200':
+          description: Cache response with geocoded location.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CacheResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/GeocodedLocation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------- Sources ----------
+  /api/sources:
+    get:
+      summary: Get data source configuration
+      description: |
+        Returns a lightweight status object indicating which flight providers
+        have their credentials configured on the server. Used by the frontend
+        StatusPanel to gate the source selector.
+      tags: [Sources]
+      responses:
+        '200':
+          description: Source configuration status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceConfig'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  # ---------- Health ----------
+  /health:
+    get:
+      summary: Service health check
+      description: |
+        Pings Redis and reports per-source cache freshness. This endpoint is
+        not rate-limited and is excluded from access logging to reduce noise.
+      tags: [Health]
+      responses:
+        '200':
+          description: Health payload with Redis status and per-source freshness.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReport'
+
+  /api/cron/health:
+    get:
+      summary: Cron health check
+      description: |
+        Detailed health probe for Vercel cron. Logs warnings for any source
+        whose cached data is older than 1 hour. Not rate-limited.
+      tags: [Health]
+      responses:
+        '200':
+          description: Cron health payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronHealthReport'
+
+  /api/cron/warm:
+    get:
+      summary: Pre-warm Redis caches
+      description: |
+        Pre-warms Redis caches for sites and water facilities. Called by
+        Vercel cron every 12 hours to keep end users off cold Overpass
+        fetches. Runs both fetches in parallel to fit the 60s function
+        timeout. Not rate-limited.
+      tags: [Health]
+      responses:
+        '200':
+          description: Warm result summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarmResult'
+
+components:
+
+  # ----------------------------------------------------------------
+  # Shared response templates
+  # ----------------------------------------------------------------
+  responses:
+    ValidationError:
+      description: Request query validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Invalid query: lat must be >= -90"
+            code: VALIDATION_ERROR
+            statusCode: 400
+            requestId: "req_abc123"
+
+    RateLimited:
+      description: Rate limit exceeded for this endpoint.
+      headers:
+        X-RateLimit-Limit:
+          description: Maximum requests allowed in the current window.
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Requests remaining in the current window.
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: Unix ms timestamp when the window resets.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Too many requests"
+            code: RATE_LIMITED
+            statusCode: 429
+
+    InternalError:
+      description: Unhandled server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Internal server error"
+            code: INTERNAL_ERROR
+            statusCode: 500
+            requestId: "req_xyz789"
+
+    UpstreamError:
+      description: Upstream data provider failure (no stale cache available).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "OpenSky credentials not configured"
+            code: UPSTREAM_ERROR
+            statusCode: 503
+
+  # ----------------------------------------------------------------
+  # Shared schemas
+  # ----------------------------------------------------------------
+  schemas:
+
+    # -- Error envelope --
+    ErrorResponse:
+      type: object
+      required: [error, code, statusCode]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+        code:
+          type: string
+          description: Machine-readable error code.
+          enum:
+            - VALIDATION_ERROR
+            - RATE_LIMITED
+            - UPSTREAM_ERROR
+            - INTERNAL_ERROR
+            - NOT_FOUND
+        statusCode:
+          type: integer
+          description: HTTP status code (mirrors the response status).
+        requestId:
+          type: string
+          description: Correlation ID echoed in the `X-Request-ID` response header.
+        stack:
+          type: string
+          description: Stack trace (only included outside production).
+
+    # -- Cache envelope --
+    CacheResponseBase:
+      type: object
+      required: [data, stale, lastFresh]
+      properties:
+        data:
+          description: Payload. Shape varies per endpoint.
+        stale:
+          type: boolean
+          description: True when served from cache beyond its logical TTL.
+        lastFresh:
+          type: integer
+          format: int64
+          description: Unix ms timestamp of the last successful upstream fetch.
+        degraded:
+          type: boolean
+          description: True when serving from in-memory fallback because Redis is unavailable.
+
+    # -- Entity: Flight --
+    FlightEntity:
+      type: object
+      required: [id, type, lat, lng, timestamp, label, data]
+      properties:
+        id:
+          type: string
+          description: Stable identifier (ICAO24 hex).
+        type:
+          type: string
+          enum: [flight]
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix ms of the position fix.
+        label:
+          type: string
+          description: Callsign or hex code.
+        data:
+          type: object
+          required: [icao24, callsign, originCountry, onGround, unidentified]
+          properties:
+            icao24:
+              type: string
+            callsign:
+              type: string
+            originCountry:
+              type: string
+            velocity:
+              type: number
+              nullable: true
+              description: Ground speed (m/s).
+            heading:
+              type: number
+              nullable: true
+              description: True heading (degrees).
+            altitude:
+              type: number
+              nullable: true
+              description: Altitude (meters).
+            onGround:
+              type: boolean
+            verticalRate:
+              type: number
+              nullable: true
+              description: Vertical speed (m/s).
+            unidentified:
+              type: boolean
+              description: True for hex-only (no callsign) flights, often military.
+
+    # -- Entity: Ship --
+    ShipEntity:
+      type: object
+      required: [id, type, lat, lng, timestamp, label, data]
+      properties:
+        id:
+          type: string
+          description: Stable identifier (derived from MMSI).
+        type:
+          type: string
+          enum: [ship]
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        timestamp:
+          type: integer
+          format: int64
+        label:
+          type: string
+        data:
+          type: object
+          required: [mmsi, shipName, speedOverGround, courseOverGround, trueHeading]
+          properties:
+            mmsi:
+              type: integer
+            shipName:
+              type: string
+            speedOverGround:
+              type: number
+              description: Knots.
+            courseOverGround:
+              type: number
+              description: Degrees.
+            trueHeading:
+              type: number
+              description: Degrees.
+
+    # -- Entity: Conflict Event --
+    ConflictEventEntity:
+      type: object
+      required: [id, type, lat, lng, timestamp, label, data]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - airstrike
+            - ground_combat
+            - shelling
+            - bombing
+            - assassination
+            - abduction
+            - assault
+            - blockade
+            - ceasefire_violation
+            - mass_violence
+            - wmd
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        timestamp:
+          type: integer
+          format: int64
+        label:
+          type: string
+        data:
+          type: object
+          required: [eventType, subEventType, fatalities, actor1, actor2, notes, source, goldsteinScale, locationName, cameoCode]
+          properties:
+            eventType:
+              type: string
+              description: Human-readable CAMEO description.
+            subEventType:
+              type: string
+              description: CAMEO code label.
+            fatalities:
+              type: integer
+            actor1:
+              type: string
+            actor2:
+              type: string
+            notes:
+              type: string
+            source:
+              type: string
+              description: Data source ("GDELT v2").
+            goldsteinScale:
+              type: number
+              description: GDELT Goldstein conflict scale (-10 to +10).
+            locationName:
+              type: string
+            cameoCode:
+              type: string
+              description: CAMEO event code (e.g. "190").
+            numMentions:
+              type: integer
+            numSources:
+              type: integer
+            geoPrecision:
+              type: string
+              enum: [precise, centroid]
+            confidence:
+              type: number
+              description: 0-1 composite confidence score.
+            actionGeoType:
+              type: integer
+              description: GDELT ActionGeo_Type (1=country, 2=state, 3=city, 4=landmark).
+            originalLat:
+              type: number
+            originalLng:
+              type: number
+
+    # -- Entity: Site --
+    SiteEntity:
+      type: object
+      required: [id, type, siteType, lat, lng, label, osmId]
+      properties:
+        id:
+          type: string
+          description: "\"site-{osmId}\""
+        type:
+          type: string
+          enum: [site]
+        siteType:
+          type: string
+          enum: [nuclear, naval, oil, airbase, port]
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        label:
+          type: string
+          description: OSM name tag.
+        operator:
+          type: string
+          description: OSM operator tag.
+        wikidata:
+          type: string
+          description: Wikidata QID.
+        osmId:
+          type: integer
+
+    # -- Entity: WaterFacility --
+    WaterFacility:
+      type: object
+      required: [id, type, facilityType, lat, lng, label, osmId, stress]
+      properties:
+        id:
+          type: string
+          description: "\"water-{osmId}\""
+        type:
+          type: string
+          enum: [water]
+        facilityType:
+          type: string
+          enum: [dam, reservoir, desalination, treatment_plant]
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        label:
+          type: string
+        operator:
+          type: string
+        osmId:
+          type: integer
+        stress:
+          $ref: '#/components/schemas/WaterStressIndicators'
+        precipitation:
+          type: object
+          properties:
+            last30DaysMm:
+              type: number
+            anomalyRatio:
+              type: number
+            updatedAt:
+              type: integer
+              format: int64
+
+    WaterStressIndicators:
+      type: object
+      required: [bws_raw, bws_score, bws_label, drr_score, gtd_score, sev_score, iav_score, compositeHealth]
+      properties:
+        bws_raw:
+          type: number
+        bws_score:
+          type: number
+          description: Baseline water stress normalized to 0-5.
+        bws_label:
+          type: string
+        drr_score:
+          type: number
+          description: Drought risk 0-5.
+        gtd_score:
+          type: number
+          description: Groundwater table decline 0-5.
+        sev_score:
+          type: number
+          description: Seasonal variability 0-5.
+        iav_score:
+          type: number
+          description: Interannual variability 0-5.
+        compositeHealth:
+          type: number
+          description: 0 (worst) to 1 (best).
+
+    PrecipitationData:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        last30DaysMm:
+          type: number
+        anomalyRatio:
+          type: number
+
+    # -- News --
+    NewsCluster:
+      type: object
+      required: [id, primaryArticle, articles, firstSeen, lastUpdated]
+      properties:
+        id:
+          type: string
+          description: Same as primaryArticle.id.
+        primaryArticle:
+          $ref: '#/components/schemas/NewsArticle'
+        articles:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewsArticle'
+        firstSeen:
+          type: integer
+          format: int64
+        lastUpdated:
+          type: integer
+          format: int64
+
+    NewsArticle:
+      type: object
+      required: [id, title, url, source, publishedAt, keywords]
+      properties:
+        id:
+          type: string
+          description: SHA-256 hash of URL (hex, truncated).
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        source:
+          type: string
+          description: "GDELT, BBC, Al Jazeera, Tehran Times, Times of Israel, Middle East Eye, Bellingcat."
+        sourceCountry:
+          type: string
+        publishedAt:
+          type: integer
+          format: int64
+        summary:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+        lat:
+          type: number
+        lng:
+          type: number
+        keywords:
+          type: array
+          items:
+            type: string
+        actor:
+          type: string
+        action:
+          type: string
+        target:
+          type: string
+        relevanceScore:
+          type: number
+
+    # -- Markets --
+    MarketQuote:
+      type: object
+      required: [symbol, displayName, price, previousClose, change, changePercent, currency, marketOpen, lastTradeTime, history]
+      properties:
+        symbol:
+          type: string
+          description: "Yahoo Finance symbol (BZ=F, CL=F, XLE, USO, XOM)."
+        displayName:
+          type: string
+        price:
+          type: number
+        previousClose:
+          type: number
+        change:
+          type: number
+        changePercent:
+          type: number
+        currency:
+          type: string
+          example: USD
+        marketOpen:
+          type: boolean
+        lastTradeTime:
+          type: integer
+          format: int64
+        history:
+          type: object
+          required: [timestamps, closes, highs, lows]
+          properties:
+            timestamps:
+              type: array
+              items:
+                type: integer
+                format: int64
+            closes:
+              type: array
+              items:
+                type: number
+            highs:
+              type: array
+              items:
+                type: number
+            lows:
+              type: array
+              items:
+                type: number
+
+    # -- Weather --
+    WeatherGridPoint:
+      type: object
+      required: [lat, lng, temperature, windSpeed, windDirection]
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        temperature:
+          type: number
+          description: Celsius.
+        windSpeed:
+          type: number
+          description: Knots.
+        windDirection:
+          type: number
+          description: Degrees (0-360).
+
+    # -- Geocode --
+    GeocodedLocation:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        displayName:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        countryCode:
+          type: string
+
+    # -- Sources --
+    SourceConfig:
+      type: object
+      properties:
+        opensky:
+          type: object
+          properties:
+            configured:
+              type: boolean
+        adsblol:
+          type: object
+          properties:
+            configured:
+              type: boolean
+
+    # -- Health --
+    HealthReport:
+      type: object
+      required: [status, redis, uptime, timestamp, latencyMs, sources, estimatedDailyCommands]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        redis:
+          type: boolean
+        uptime:
+          type: number
+          description: Seconds since process start.
+        timestamp:
+          type: string
+          format: date-time
+        latencyMs:
+          type: integer
+          description: Redis ping round-trip time.
+        sources:
+          type: object
+          additionalProperties:
+            type: integer
+            nullable: true
+            description: Unix ms of last fresh fetch, or null.
+        estimatedDailyCommands:
+          type: integer
+
+    CronHealthReport:
+      type: object
+      required: [status, redis, timestamp, sources, warnings]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        redis:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+        sources:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              lastFresh:
+                type: integer
+                format: int64
+                nullable: true
+              stale:
+                type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+
+    WarmResult:
+      type: object
+      required: [status, sites, water, durationMs]
+      properties:
+        status:
+          type: string
+          enum: [ok, partial]
+        sites:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            count:
+              type: integer
+            error:
+              type: string
+        water:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            count:
+              type: integer
+            error:
+              type: string
+        durationMs:
+          type: integer
