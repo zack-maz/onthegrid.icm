@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-06T23:29:38.018Z"
+last_updated: "2026-04-07T03:23:58.609Z"
 progress:
   total_phases: 13
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 33
-  completed_plans: 29
+  completed_plans: 30
 ---
 
 # Project State
@@ -22,6 +22,8 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Phase 26.3 COMPLETE (6 of 6 plans done)
+Phase 26.3: Plan 05 COMPLETE (strict TS + OpenAPI, closes the phase)
 Phase 26.3: Plan 06 COMPLETE (5 of 6 plans done; Plan 05 still pending)
 Phase 26.3: Plan 04 COMPLETE (4 of 6 plans done)
 Phase 26.3: Plan 03 COMPLETE (3 of 6 plans done)
@@ -147,6 +149,12 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - Coverage thresholds pinned at current baseline (lines 66 / functions 69 / branches 53 / statements 65) as a regression ratchet -- ratchet upward as new tests land toward 80% target
 - WAR_START defined locally in src/lib/constants.ts (was re-exported from removed server/constants.js); duplicates server/config.ts to keep frontend tier independent
 - vi.useFakeTimers() pattern for tests that compare two computeSeverityScore() calls (eliminates Date.now() microsecond drift between back-to-back invocations)
+- noUncheckedIndexedAccess enabled on server tsconfig only — client-side would cascade through deck.gl/maplibre layers where runtime types are looser than declared
+- getCol() helper centralizes bounds-checked CSV column reads in GDELT adapter rather than scattering non-null assertions
+- Cast-with-comment pattern for deck.gl v9 GeoJsonLayer/IconLayer types (runtime accepts FeatureCollection/HTMLCanvasElement but v9 type defs are stricter)
+- Rate limit test fixture swap: rateLimiters.flights aliased locally instead of preserving deprecated rateLimitMiddleware export purely for tests
+- OpenAPI 3.0.3 spec hand-written (not zod-to-openapi generated) to avoid code-gen runtime dep and keep editorial descriptions for portfolio review
+- allOf composition in OpenAPI for CacheResponse&lt;T&gt; pattern (OpenAPI 3.0 has no generics)
 
 ## Pending Todos
 
