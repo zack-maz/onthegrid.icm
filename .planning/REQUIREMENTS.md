@@ -199,15 +199,15 @@ Phase 26.4 — portfolio-grade external artifacts and Palantir-grade engineering
 
 **Plan 05 — Mermaid architecture diagrams + ontology deep dive**
 
-- [ ] **PRES-40**: `docs/architecture/README.md` indexes all architecture documents with one-line descriptions
-- [ ] **PRES-41**: `docs/architecture/system-context.md` contains a Mermaid C4Context (or flowchart fallback) diagram of browser → Vercel edge → Express API → Upstash + 8 upstream APIs
-- [ ] **PRES-42**: `docs/architecture/data-flows.md` contains at least 8 Mermaid `sequenceDiagram` blocks, one per data source (flights, ships, events, news, sites, water, markets, weather), each naming its adapter file and cache key
-- [ ] **PRES-43**: `docs/architecture/frontend.md` documents map layer stacking, Zustand store dependency graph, polling hook ownership, and cross-store interactions
-- [ ] **PRES-44**: `docs/architecture/deployment.md` documents Vercel functions, build pipeline, CDN cache strategy, cron jobs, env vars, and failover behavior
-- [ ] **PRES-45**: `docs/architecture/ontology/types.md` catalogs every TypeScript discriminated union and entity type with relationships and source pointers
-- [ ] **PRES-46**: `docs/architecture/ontology/algorithms.md` documents at least 8 hot-path algorithms (threat clustering, GDELT dispersion, severity scoring, news clustering, news matching, basin lookup, water health, time grouping) with rationale
-- [ ] **PRES-47**: `docs/architecture/ontology/state-machines.md` documents connection lifecycle, polling lifecycle, navigation stack, and cache freshness state machines as Mermaid `stateDiagram-v2` blocks
-- [ ] **PRES-48**: `docs/architecture/ontology/complexity.md` documents runtime and space complexity for at least 7 hot-path operations in a complexity table
+- [x] **PRES-40**: `docs/architecture/README.md` indexes all architecture documents with one-line descriptions
+- [x] **PRES-41**: `docs/architecture/system-context.md` contains a Mermaid C4Context (or flowchart fallback) diagram of browser → Vercel edge → Express API → Upstash + 8 upstream APIs
+- [x] **PRES-42**: `docs/architecture/data-flows.md` contains at least 8 Mermaid `sequenceDiagram` blocks, one per data source (flights, ships, events, news, sites, water, markets, weather), each naming its adapter file and cache key
+- [x] **PRES-43**: `docs/architecture/frontend.md` documents map layer stacking, Zustand store dependency graph, polling hook ownership, and cross-store interactions
+- [x] **PRES-44**: `docs/architecture/deployment.md` documents Vercel functions, build pipeline, CDN cache strategy, cron jobs, env vars, and failover behavior
+- [x] **PRES-45**: `docs/architecture/ontology/types.md` catalogs every TypeScript discriminated union and entity type with relationships and source pointers
+- [x] **PRES-46**: `docs/architecture/ontology/algorithms.md` documents at least 8 hot-path algorithms (threat clustering, GDELT dispersion, severity scoring, news clustering, news matching, basin lookup, water health, time grouping) with rationale
+- [x] **PRES-47**: `docs/architecture/ontology/state-machines.md` documents connection lifecycle, polling lifecycle, navigation stack, and cache freshness state machines as Mermaid `stateDiagram-v2` blocks
+- [x] **PRES-48**: `docs/architecture/ontology/complexity.md` documents runtime and space complexity for at least 7 hot-path operations in a complexity table
 
 **Plan 06 — ADRs + runbook + degradation contract**
 

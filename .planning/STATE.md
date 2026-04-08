@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: milestone
 status: unknown
-last_updated: '2026-04-08T21:15:24.458Z'
+last_updated: '2026-04-08T21:38:13.942Z'
 progress:
   total_phases: 13
   completed_phases: 8
   total_plans: 39
-  completed_plans: 33
+  completed_plans: 34
 ---
 
 # Project State
@@ -22,6 +22,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Phase 26.4: Plan 05 COMPLETE (Mermaid architecture docs — 10 files, 21 diagrams, ontology deep dive)
 Phase 26.4: Plan 03 COMPLETE (Palantir gap closure — redaction, type-coverage gate, chaos test, sendValidated)
 Phase 26.4: Plan 02 COMPLETE (CI/CD workflows, husky pre-commit, gitleaks)
 Phase 26.4: Plan 01 COMPLETE (final code grooming pass, tooling installed)
@@ -178,6 +179,14 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 - sendValidated wired into flights, events, water routes as proof-of-concept (3 of 14 cached routes); remaining 11 deferred to future maintenance pass per plan scope (26.4-03)
 - Sites route needed no code changes under chaos — its failure was purely the hung cacheGetSafe call which the timeout wrapper closes (26.4-03)
 - Stripped 9 debug console.log('[EVENTS] ...') tracer lines from events.ts that were left uncommitted at end of previous session; pre-empted via grep check before commit (26.4-03)
+- Mermaid inline architecture docs over committed SVG/PNG — renders natively on GitHub, diffs cleanly in PRs, no build step, evolves with code (26.4-05)
+- Ontology documentation split into 4 focused files (types/algorithms/state-machines/complexity) to prevent unreadable monolith; single file approach rejected (26.4-05)
+- As-built honesty principle: TODO(26.2) tech debt labeled inline in architecture diagrams (hardcoded CAMEO table in gdelt.ts, centroid dispersion gaps in dispersion.ts, NLP extraction fields in NewsArticle, coarse nearest-country-centroid basin lookup) rather than hidden in issues section (26.4-05)
+- C4Context block with plain flowchart fallback in system-context.md because older Mermaid renderers don't support C4 syntax (26.4-05)
+- 9 sequenceDiagrams in data-flows.md (plan required 8+) — geocode added as 9th with distinct two-tier lookup pattern (synchronous siteStore bbox check → async Nominatim) (26.4-05)
+- Source pointers in architecture docs use relative repo paths so links work both in GitHub rendering and in local editors; no absolute github.com URLs (26.4-05)
+- classDiagram mermaid syntax used only for MapEntity discriminated union (the single most important ontology concept); other type catalogs are prose + code blocks to reduce edit burden (26.4-05)
+- stateDiagram-v2 preferred over flowchart for lifecycle state machines — semantically correct for finite-state behavior and renders the state transitions more clearly on GitHub (26.4-05)
 
 ## Pending Todos
 
