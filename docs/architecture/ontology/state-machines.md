@@ -205,13 +205,18 @@ without a push, so there's no flash).
 
 ### Escape key behavior
 
-`useEscapeKeyHandler` binds `Escape` to:
+`useEscapeKeyHandler` has a 9-step priority stack where the detail
+panel is priority 5. When the detail panel is open, Escape always
+closes it and calls `clearStack()` — it does **not** walk the
+navigation stack one frame at a time. Within-panel "back" navigation
+is handled by the back arrow button in the breadcrumb row; Escape is
+"close the whole thing."
 
-1. If `navigationStack.length > 0`, pop one view (back behavior).
-2. Otherwise call `closeDetailPanel()`.
-
-So `Escape` acts like a browser back button within the panel and
-falls through to close on the root view.
+Priorities before the detail panel (search modal, search filter,
+notifications dropdown, proximity alerts) and after it (proximity
+pin, sidebar, markets panel, camera reset) are handled sequentially
+and never fire more than one action per keypress. See
+[`src/hooks/useEscapeKeyHandler.ts`](../../../src/hooks/useEscapeKeyHandler.ts).
 
 ## Cache freshness
 
