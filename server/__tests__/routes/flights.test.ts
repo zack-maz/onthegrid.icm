@@ -74,6 +74,7 @@ vi.mock('../../middleware/rateLimit.js', () => ({
     sources: _passThrough,
     geocode: _passThrough,
     water: _passThrough,
+    public: _passThrough,
   },
 }));
 

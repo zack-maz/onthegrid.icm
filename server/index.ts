@@ -84,6 +84,13 @@ export function createApp() {
   app.use('/api/cron/health', cronHealthRouter);
   app.use('/api/cron/warm', cronWarmRouter);
 
+  // Portfolio demo baseline rate limit — runs on every /api/* request
+  // BEFORE the per-endpoint limiters below. 6 req/min per IP. Prevents
+  // scraper abuse of the public demo URL without affecting legitimate
+  // browser traffic (which polls at 5-60s cadences). See JSDoc on
+  // rateLimiters.public for rationale.
+  app.use('/api', rateLimiters.public);
+
   // Data source routes with per-endpoint rate limits and cache-control
   app.use('/api/flights', rateLimiters.flights, cacheControl(5, 25), flightsRouter);
   app.use('/api/ships', rateLimiters.ships, cacheControl(10, 20), shipsRouter);

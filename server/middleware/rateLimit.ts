@@ -17,12 +17,22 @@ import { redis } from '../cache/redis.js';
  *   ```json
  *   { "error": "Too many requests", "code": "RATE_LIMITED", "statusCode": 429 }
  *   ```
+ *
+ * @param maxRequests Max requests per window per caller.
+ * @param windowSec Sliding window duration in seconds.
+ * @param prefix Redis key prefix (defaults to `'ratelimit:prod'`). Pass a
+ *   dedicated prefix like `'ratelimit:public'` when namespacing a baseline
+ *   tier separately from per-endpoint tiers so their counters don't collide.
  */
-export function createRateLimiter(maxRequests: number, windowSec: number) {
+export function createRateLimiter(
+  maxRequests: number,
+  windowSec: number,
+  prefix: string = 'ratelimit:prod',
+) {
   const limiter = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(maxRequests, `${windowSec} s`),
-    prefix: 'ratelimit:prod',
+    prefix,
   });
 
   return async function rateLimitHandler(
@@ -87,4 +97,24 @@ export const rateLimiters = {
   geocode: createRateLimiter(10, 60),
   /** 10 req/min — water facilities are static, fetched once on mount. */
   water: createRateLimiter(10, 60),
+  /**
+   * 6 req/min — portfolio demo baseline tier.
+   *
+   * Applied as a _global_ pre-filter across all `/api/*` routes in
+   * `server/index.ts`, running _before_ the per-endpoint limiters above.
+   * Its job is to protect the live demo URL (published in the README hero
+   * after Phase 26.4-04) from scraper abuse. The Redis command budget is
+   * already at ~92% per `.planning/STATE.md`; a single aggressive crawler
+   * could otherwise tip it over.
+   *
+   * Why 6 and not 10? The smallest per-endpoint tier (sites/weather/water/
+   * geocode) is 10 req/min, so 6 is strictly tighter. A legitimate browser
+   * session that respects the UI polling cadence will never touch this
+   * ceiling — it only bites scrapers and `curl` loops. A user who bumps
+   * into it gets the canonical 429 envelope and can back off politely.
+   *
+   * Key prefix `'ratelimit:public'` namespaces this tier's counters so they
+   * don't collide with per-endpoint counters under `'ratelimit:prod'`.
+   */
+  public: createRateLimiter(6, 60, 'ratelimit:public'),
 } as const;
