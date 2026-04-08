@@ -36,11 +36,34 @@ const BACKFILL_COOLDOWN_MS = 3_600_000;
 /**
  * Check whether a backfill should run.
  * Returns true if never backfilled or cooldown has expired.
+ *
+ * Resilient to Redis death: if the redis client throws (e.g. Upstash REST is
+ * down), we allow the backfill attempt rather than crashing the request. The
+ * backfill itself is wrapped in its own try/catch by the caller, so a
+ * subsequent redis.set failure is also non-fatal.
  */
 async function shouldBackfill(): Promise<boolean> {
-  const lastTs = await redis.get<number>(BACKFILL_KEY);
-  if (lastTs === null || lastTs === undefined) return true;
-  return Date.now() - lastTs > BACKFILL_COOLDOWN_MS;
+  try {
+    const lastTs = await redis.get<number>(BACKFILL_KEY);
+    if (lastTs === null || lastTs === undefined) return true;
+    return Date.now() - lastTs > BACKFILL_COOLDOWN_MS;
+  } catch {
+    // Redis unreachable -- allow backfill, it has its own error handling
+    return true;
+  }
+}
+
+/**
+ * Persist the backfill timestamp without throwing on Redis failure.
+ * Best-effort: if Redis is dead, the next request will simply re-attempt
+ * the backfill (rate-limited by GDELT itself, not catastrophic).
+ */
+async function recordBackfillTimestamp(): Promise<void> {
+  try {
+    await redis.set(BACKFILL_KEY, Date.now(), { ex: REDIS_TTL_SEC });
+  } catch {
+    // Swallow: cooldown tracking is non-critical
+  }
 }
 
 export const eventsRouter = Router();
@@ -105,7 +128,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
         for (const event of backfillData) {
           eventMap.set(event.id, event);
         }
-        await redis.set(BACKFILL_KEY, Date.now(), { ex: REDIS_TTL_SEC });
+        await recordBackfillTimestamp();
         log.info({ count: backfillData.length }, 'backfill: merged historical events');
       } catch (backfillErr) {
         log.warn({ err: backfillErr }, 'backfill failed (non-fatal)');
