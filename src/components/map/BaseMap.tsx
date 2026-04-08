@@ -76,6 +76,27 @@ function FlyToHandler() {
   return null;
 }
 
+/**
+ * Dev-only: exposes the underlying MapLibre map instance on `window.__map`
+ * so Playwright capture scripts (scripts/capture-hero.ts) can drive the
+ * map programmatically without UI interaction. Gated by import.meta.env.DEV,
+ * so production builds never see this code. Renders null.
+ */
+function MapDevExposer() {
+  const { current: map } = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+    const w = window as unknown as { __map?: unknown };
+    w.__map = map.getMap();
+    return () => {
+      delete w.__map;
+    };
+  }, [map]);
+
+  return null;
+}
+
 interface HoverState {
   entity: MapEntity | SiteEntity;
   x: number;
@@ -427,6 +448,7 @@ export function BaseMap() {
         <CompassControl />
         <ProximityAlertOverlay />
         <FlyToHandler />
+        {import.meta.env.DEV && <MapDevExposer />}
       </Map>
       <MapVignette />
       <MapLegend />
