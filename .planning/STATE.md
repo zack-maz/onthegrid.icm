@@ -21,7 +21,8 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Milestone: v1.3 Data Quality & Layers — IN PROGRESS
+Milestone: v1.3 Data Quality & Layers — CLOSING (all primary phases shipped; 26.2 GDELT-redo and 27 Performance moved to v1.4 on 2026-04-08)
+Milestone: v1.4 GDELT Redo & Performance — PLANNED (Phase 27 = GDELT redo, was 26.2; Phase 28 = Performance & Load Testing, was 27)
 Phase 26.4: Plan 04 COMPLETE (6 of 6 plans done — phase execution complete; README 564-line portfolio rewrite, 1354 KB Playwright-captured hero GIF, 6 layer screenshots, rateLimiters.public tier wired globally on /api/\*, public/robots.txt, permanent scripts/capture-hero.ts agentic tooling)
 Phase 26.4: Plan 06 COMPLETE (ADRs + runbook + degradation contract + README link closure — 12 new doc files, 2672 lines, ADR-0005 at 300 lines is the highest portfolio signal)
 Phase 26.4: Plan 05 COMPLETE (Mermaid architecture docs — 10 files, 21 diagrams, ontology deep dive)
@@ -35,10 +36,7 @@ Phase 26.3: Plan 04 COMPLETE (4 of 6 plans done)
 Phase 26.3: Plan 03 COMPLETE (3 of 6 plans done)
 Phase 26.3: Plan 02 COMPLETE (2 of 6 plans done)
 Phase 26.3: Plan 01 COMPLETE (1 of 6 plans done)
-Phase 26.2 COMPLETE (3 of 3 plans done)
-Phase 26.2: Plan 03 COMPLETE (3 of 3 plans done)
-Phase 26.2: Plan 02 COMPLETE (2 of 3 plans done)
-Phase 26.2: Plan 01 COMPLETE (plans 01+02 done, 1 remaining)
+Phase 26.2 SCRAPPED (3 of 3 plans originally executed then fully reverted in Phase 26.3 — NLP approach was wrong; artifacts archived at .planning/phases/archive-26.2-nlp-scrapped/; redo renumbered to Phase 27 under v1.4)
 Phase 26.1 COMPLETE (3 of 3 plans done)
 Phase 26.1: Plan 02 COMPLETE (2 of 3 plans done)
 Phase 26.1: Plan 01 COMPLETE (1 of 3 plans done)
@@ -53,18 +51,27 @@ Previous: v0.9-v1.2 all shipped (958 tests, p95 153ms)
 
 ## v1.3 Phases
 
-| Phase | Name                                    | Status                                        |
-| ----- | --------------------------------------- | --------------------------------------------- |
-| 22    | GDELT Event Quality & OSINT Integration | COMPLETE (3/3 plans)                          |
-| 22.1  | Fixing Dispersion                       | COMPLETE (2/2 plans)                          |
-| 23    | Threat Density Improvements             | COMPLETE (2/2 plans)                          |
-| 23.2  | Improving Threat Density Scatter Plots  | IN PROGRESS (1/2 plans)                       |
-| 24    | Political Boundaries Layer              | IN PROGRESS (1/2 plans)                       |
-| 25    | Ethnic Distribution Layer               | IN PROGRESS (1/2 plans)                       |
-| 26    | Water Stress Layer                      | IN PROGRESS (6/6 plans, gap closure complete) |
-| 26.1  | Water Layer Refinements                 | COMPLETE (3/3 plans)                          |
-| 26.2  | Conflict Geolocation Improvement        | COMPLETE (3/3 plans)                          |
-| 27    | Performance & Load Testing              | Planned                                       |
+| Phase | Name                                    | Status                                     |
+| ----- | --------------------------------------- | ------------------------------------------ |
+| 22    | GDELT Event Quality & OSINT Integration | COMPLETE (3/3 plans)                       |
+| 22.1  | Fixing Dispersion                       | COMPLETE (2/2 plans)                       |
+| 23    | Threat Density Improvements             | COMPLETE (2/2 plans)                       |
+| 23.2  | Improving Threat Density Scatter Plots  | IN PROGRESS (1/2 plans)                    |
+| 24    | Political Boundaries Layer              | IN PROGRESS (1/2 plans)                    |
+| 25    | Ethnic Distribution Layer               | IN PROGRESS (1/2 plans)                    |
+| 26    | Water Stress Layer                      | COMPLETE (6/6 plans, gap closure complete) |
+| 26.1  | Water Layer Refinements                 | COMPLETE (3/3 plans)                       |
+| 26.3  | Production Code Cleanup                 | COMPLETE (6/6 plans)                       |
+| 26.4  | Documentation & External Presentation   | COMPLETE (6/6 plans)                       |
+
+_Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Original Phase 27 (Performance & Load Testing) was also moved to v1.4 as Phase 28 on the same date._
+
+## v1.4 Phases (planned)
+
+| Phase | Name                                          | Status  |
+| ----- | --------------------------------------------- | ------- |
+| 27    | Conflict Geolocation Improvement (GDELT Redo) | Planned |
+| 28    | Performance & Load Testing                    | Planned |
 
 ## Key Decisions
 
@@ -231,3 +238,4 @@ None.
 - Phase 26.3 inserted after Phase 26: Production Code Cleanup — portfolio-grade internal quality (URGENT)
 - Phase 26.4 inserted after Phase 26.3: Documentation & External Presentation — portfolio-grade external polish
 - Phase 26.2 now depends on 26.4 — GDELT redo on clean foundation
+- Milestone v1.4 created (2026-04-08): Phase 26.2 renumbered to Phase 27 (Conflict Geolocation Improvement / GDELT Redo) and original Phase 27 renumbered to Phase 28 (Performance & Load Testing). Both moved out of v1.3 so v1.3 can close with its delivered phases (26.3 code cleanup and 26.4 documentation shipped as planned). Scrapped 26.2 artifacts archived to .planning/phases/archive-26.2-nlp-scrapped/. Historical references (ADR-0005, SUMMARY.md files, TODO(26.2) code markers) preserve the old number intentionally.
