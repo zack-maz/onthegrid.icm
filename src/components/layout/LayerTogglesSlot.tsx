@@ -1,8 +1,6 @@
 import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
 import { useLayerStore, type VisualizationLayerId } from '@/stores/layerStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
-import { EVENT_TYPE_COLORS } from '@/lib/eventColors';
 
 const LAYER_CONFIGS: {
   id: VisualizationLayerId;
@@ -16,50 +14,6 @@ const LAYER_CONFIGS: {
   { id: 'threat', label: 'Threat Density', color: '#ef4444' },
   { id: 'political', label: 'Political', color: '#a78bfa' },
   { id: 'ethnic', label: 'Ethnic', color: '#c084fc' },
-];
-
-/** Event sub-toggle configuration: label, filterStore key, toggle action, color */
-const EVENT_SUB_TOGGLES: {
-  label: string;
-  stateKey: 'showAirstrikes' | 'showOnGround' | 'showExplosions' | 'showTargeted' | 'showOther';
-  toggleKey:
-    | 'toggleShowAirstrikes'
-    | 'toggleShowOnGround'
-    | 'toggleShowExplosions'
-    | 'toggleShowTargeted'
-    | 'toggleShowOther';
-  color: string;
-}[] = [
-  {
-    label: 'Airstrikes',
-    stateKey: 'showAirstrikes',
-    toggleKey: 'toggleShowAirstrikes',
-    color: EVENT_TYPE_COLORS.airstrike,
-  },
-  {
-    label: 'Ground Combat',
-    stateKey: 'showOnGround',
-    toggleKey: 'toggleShowOnGround',
-    color: EVENT_TYPE_COLORS.on_ground,
-  },
-  {
-    label: 'Explosions',
-    stateKey: 'showExplosions',
-    toggleKey: 'toggleShowExplosions',
-    color: EVENT_TYPE_COLORS.explosion,
-  },
-  {
-    label: 'Targeted',
-    stateKey: 'showTargeted',
-    toggleKey: 'toggleShowTargeted',
-    color: EVENT_TYPE_COLORS.targeted,
-  },
-  {
-    label: 'Other',
-    stateKey: 'showOther',
-    toggleKey: 'toggleShowOther',
-    color: EVENT_TYPE_COLORS.other,
-  },
 ];
 
 function LoadingSpinner() {
@@ -113,90 +67,12 @@ function LayerToggleRow({
   );
 }
 
-/** Master events toggle row */
-function EventMasterToggle() {
-  const showEvents = useFilterStore((s) => s.showEvents);
-
-  return (
-    <button
-      role="switch"
-      aria-checked={showEvents}
-      aria-label="Toggle Events"
-      onClick={() => useFilterStore.getState().toggleShowEvents()}
-      className={`flex w-full items-center gap-2 text-xs transition-opacity ${
-        showEvents ? 'opacity-100' : 'opacity-40'
-      }`}
-    >
-      <span
-        className="inline-block h-2 w-2 rounded-full"
-        style={{ backgroundColor: '#ef4444' }}
-      />
-      <span className="text-text-secondary">Events</span>
-    </button>
-  );
-}
-
-/** Individual event sub-toggle row */
-function EventSubToggle({
-  label,
-  stateKey,
-  toggleKey,
-  color,
-  masterOff,
-}: {
-  label: string;
-  stateKey: 'showAirstrikes' | 'showOnGround' | 'showExplosions' | 'showTargeted' | 'showOther';
-  toggleKey:
-    | 'toggleShowAirstrikes'
-    | 'toggleShowOnGround'
-    | 'toggleShowExplosions'
-    | 'toggleShowTargeted'
-    | 'toggleShowOther';
-  color: string;
-  masterOff: boolean;
-}) {
-  const active = useFilterStore((s) => s[stateKey]);
-
-  return (
-    <button
-      role="switch"
-      aria-checked={active}
-      aria-label={`Toggle ${label}`}
-      onClick={() => useFilterStore.getState()[toggleKey]()}
-      className={`flex w-full items-center gap-2 pl-4 text-xs transition-opacity ${
-        masterOff ? 'opacity-40' : active ? 'opacity-100' : 'opacity-40'
-      }`}
-    >
-      <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-text-secondary">{label}</span>
-    </button>
-  );
-}
-
 /** Inner content of layer toggles, reusable in Sidebar */
 export function LayerTogglesContent() {
-  const showEvents = useFilterStore((s) => s.showEvents);
-
   return (
     <div className="flex flex-col gap-1">
       {LAYER_CONFIGS.map(({ id, label, color, comingSoon }) => (
         <LayerToggleRow key={id} id={id} label={label} color={color} comingSoon={comingSoon} />
-      ))}
-
-      {/* Separator */}
-      <div className="my-1 border-t border-white/10" />
-
-      {/* Event toggles: master + 5 sub-toggles */}
-      <EventMasterToggle />
-      {EVENT_SUB_TOGGLES.map(({ label, stateKey, toggleKey, color }) => (
-        <EventSubToggle
-          key={stateKey}
-          label={label}
-          stateKey={stateKey}
-          toggleKey={toggleKey}
-          color={color}
-          masterOff={!showEvents}
-        />
       ))}
 
       <button
