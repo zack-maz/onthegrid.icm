@@ -297,47 +297,47 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LREF-03     | Phase 20   | Complete |
 | LREF-04     | Phase 20   | Complete |
 | LREF-05     | Phase 20   | Complete |
-| EQ-01       | Phase 22   | Planned  |
-| EQ-02       | Phase 22   | Planned  |
-| EQ-03       | Phase 22   | Planned  |
-| EQ-04       | Phase 22   | Planned  |
-| EQ-05       | Phase 22   | Planned  |
-| EQ-06       | Phase 22   | Planned  |
-| EQ-07       | Phase 22   | Planned  |
-| EQ-08       | Phase 22   | Planned  |
-| EQ-09       | Phase 22   | Planned  |
-| POL-01      | Phase 24   | Planned  |
-| POL-02      | Phase 24   | Planned  |
-| POL-03      | Phase 24   | Planned  |
-| POL-04      | Phase 24   | Planned  |
-| POL-05      | Phase 24   | Planned  |
-| POL-06      | Phase 24   | Planned  |
-| ETH-01      | Phase 25   | Planned  |
-| ETH-02      | Phase 25   | Planned  |
-| ETH-03      | Phase 25   | Planned  |
-| ETH-04      | Phase 25   | Planned  |
-| ETH-05      | Phase 25   | Planned  |
-| ETH-06      | Phase 25   | Planned  |
-| ETH-07      | Phase 25   | Planned  |
-| ETH-08      | Phase 25   | Planned  |
-| WAT-01      | Phase 26   | Planned  |
-| WAT-02      | Phase 26   | Planned  |
-| WAT-03      | Phase 26   | Planned  |
-| WAT-04      | Phase 26   | Planned  |
-| WAT-05      | Phase 26   | Planned  |
-| WAT-06      | Phase 26   | Planned  |
-| WAT-07      | Phase 26   | Planned  |
-| WAT-08      | Phase 26   | Planned  |
-| WAT-09      | Phase 26   | Planned  |
-| WAT-10      | Phase 26   | Planned  |
-| WAT-11      | Phase 26   | Planned  |
-| WR-01       | Phase 26.1 | Planned  |
-| WR-02       | Phase 26.1 | Planned  |
-| WR-03       | Phase 26.1 | Planned  |
-| WR-04       | Phase 26.1 | Planned  |
-| WR-05       | Phase 26.1 | Planned  |
-| WR-06       | Phase 26.1 | Planned  |
-| WR-07       | Phase 26.1 | Planned  |
+| EQ-01       | Phase 22   | Complete |
+| EQ-02       | Phase 22   | Complete |
+| EQ-03       | Phase 22   | Complete |
+| EQ-04       | Phase 22   | Complete |
+| EQ-05       | Phase 22   | Complete |
+| EQ-06       | Phase 22   | Complete |
+| EQ-07       | Phase 22   | Complete |
+| EQ-08       | Phase 22   | Complete |
+| EQ-09       | Phase 22   | Complete |
+| POL-01      | Phase 24   | Complete |
+| POL-02      | Phase 24   | Complete |
+| POL-03      | Phase 24   | Complete |
+| POL-04      | Phase 24   | Complete |
+| POL-05      | Phase 24   | Complete |
+| POL-06      | Phase 24   | Complete |
+| ETH-01      | Phase 25   | Complete |
+| ETH-02      | Phase 25   | Complete |
+| ETH-03      | Phase 25   | Complete |
+| ETH-04      | Phase 25   | Complete |
+| ETH-05      | Phase 25   | Complete |
+| ETH-06      | Phase 25   | Complete |
+| ETH-07      | Phase 25   | Complete |
+| ETH-08      | Phase 25   | Complete |
+| WAT-01      | Phase 26   | Complete |
+| WAT-02      | Phase 26   | Complete |
+| WAT-03      | Phase 26   | Complete |
+| WAT-04      | Phase 26   | Complete |
+| WAT-05      | Phase 26   | Complete |
+| WAT-06      | Phase 26   | Complete |
+| WAT-07      | Phase 26   | Complete |
+| WAT-08      | Phase 26   | Complete |
+| WAT-09      | Phase 26   | Complete |
+| WAT-10      | Phase 26   | Complete |
+| WAT-11      | Phase 26   | Complete |
+| WR-01       | Phase 26.1 | Complete |
+| WR-02       | Phase 26.1 | Complete |
+| WR-03       | Phase 26.1 | Complete |
+| WR-04       | Phase 26.1 | Complete |
+| WR-05       | Phase 26.1 | Complete |
+| WR-06       | Phase 26.1 | Complete |
+| WR-07       | Phase 26.1 | Complete |
 | NLP-01      | Phase 27   | Planned  |
 | NLP-02      | Phase 27   | Planned  |
 | GEO-01      | Phase 27   | Planned  |
@@ -408,11 +408,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 - v1.1 requirements: 29 total, 29 complete
 - v1.2 requirements: 5 total, 5 complete
-- v1.3 requirements: 94 total, 34 complete (54 prior + 40 PRES-\* Phase 26.4; the 12 NLP/GEO/TITLE/PIPE/SCRIPT entries moved to v1.4 with the GDELT redo renumber)
+- v1.3 requirements: 94 total, 82 complete, 12 scrapped → v1.4 (EQ-01..09, POL-01..06, ETH-01..08, WAT-01..11, WR-01..07, CLN-01..13, PRES-01..55 all shipped; NLP/GEO/TITLE/PIPE/SCRIPT retargeted to Phase 27 under v1.4)
 - v1.4 requirements: 12 total, 0 complete (historical IDs retargeted to Phase 27; will likely be redefined when Phase 27 is discussed)
-- Total: 140 mapped, 68 complete
+- Total: 140 mapped, 116 complete
 
 ---
 
 _Requirements defined: 2026-03-19_
-_Last updated: 2026-04-08 -- Phase 26.2 GDELT-redo requirements (NLP-01..02, GEO-01..04, TITLE-01..02, PIPE-01..03, SCRIPT-01) retargeted to Phase 27 under new milestone v1.4; these requirement IDs are historical — Phase 27 will re-discuss the approach and may redefine them_
+_Last updated: 2026-04-09 -- v1.3 traceability flipped from Planned to Complete for EQ/POL/ETH/WAT/WR families (41 rows); coverage counter corrected from 34→82 complete_
