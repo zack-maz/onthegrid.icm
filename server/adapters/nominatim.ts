@@ -1,4 +1,48 @@
-/** Nominatim reverse geocode adapter with coordinate quantization */
+/** Nominatim geocode adapter — reverse (existing) + forward (Phase 27) */
+
+export interface ForwardGeocodedLocation {
+  lat: number;
+  lng: number;
+  displayName: string;
+  type: string; // Nominatim place type (city, town, village, etc.)
+}
+
+/**
+ * Forward-geocode a place name via OpenStreetMap Nominatim Search API.
+ *
+ * Returns the top result as { lat, lng, displayName, type }, or null on failure.
+ * Rate limit: callers must enforce 1 req/s (Nominatim usage policy).
+ */
+export async function forwardGeocode(
+  placeName: string,
+  countryCode?: string,
+): Promise<ForwardGeocodedLocation | null> {
+  const params = new URLSearchParams({
+    q: placeName,
+    format: 'jsonv2',
+    limit: '1',
+    'accept-language': 'en',
+  });
+  if (countryCode) params.set('countrycodes', countryCode);
+
+  const url = `https://nominatim.openstreetmap.org/search?${params}`;
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'IranConflictMonitor/1.0 (personal project)' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data) || !data[0]) return null;
+    return {
+      lat: parseFloat(data[0].lat),
+      lng: parseFloat(data[0].lon),
+      displayName: data[0].display_name,
+      type: data[0].type ?? 'unknown',
+    };
+  } catch {
+    return null;
+  }
+}
 
 export interface GeocodedLocation {
   city?: string;
