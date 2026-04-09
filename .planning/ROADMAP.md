@@ -6,7 +6,8 @@
 - **v1.0 Deployment** -- Phases 13-14 (shipped 2026-03-20)
 - **v1.1 Intelligence Layer** -- Phases 15-19.2 (shipped 2026-03-22)
 - **v1.2 Visualization & Hardening** -- Phases 20-21.3 (shipped 2026-03-29)
-- **v1.3 Data Quality & Layers** -- Phases 22-27 (active)
+- **v1.3 Data Quality & Layers** -- Phases 22-26.4 (closing — all primary phases shipped)
+- **v1.4 GDELT Redo & Performance** -- Phases 27-28 (planned)
 
 ## Phase Summary
 
@@ -148,17 +149,6 @@ Plans:
 - [ ] 26-05-PLAN.md -- Detail panel, BaseMap wiring, counters, search, proximity, legend, toggle UI, visual checkpoint
 - [ ] 26-06-PLAN.md -- Gap closure: API timeout fix, color floor adjustment, river compositeHealth + line width
 
-### Phase 26.2: Conflict Geolocation Improvement (INSERTED)
-
-**Goal:** Redo the GDELT event extraction pipeline — fix source deduplication, location accuracy, event type labeling, and remove hardcoding. Fresh approach after code cleanup.
-**Depends on:** Phase 26.4
-**Requirements:** TBD (redo after cleanup phases)
-**Plans:** 0 plans (previous plans scrapped — approach was wrong)
-
-Plans:
-
-- [ ] TBD (run /gsd:discuss-phase 26.2 after 26.3 + 26.4 complete)
-
 ### Phase 26.3: Production Code Cleanup (INSERTED)
 
 **Goal:** Portfolio-grade internal code quality: security audit, type safety (eliminate `any`), dead code removal, error handling consistency, dependency audit, config externalization, test quality pass, fetch/polling/rate limit review. Remove NLP pipeline wiring from 26.2 (keep infrastructure). Strip hardcoded tables where possible.
@@ -199,10 +189,33 @@ Plans:
 - [ ] 26.1-02-PLAN.md -- Score 0-10 with destroyed state, 4 new water facility canvas icons
 - [ ] 26.1-03-PLAN.md -- useWaterLayers icon wiring + destroyed rendering, label updates, desalination audit
 
-### Phase 27: Performance & Load Testing
+## Milestone v1.4: GDELT Redo & Performance
 
-**Goal**: Optimize initial load time and validate production handles 250 concurrent users
-**Depends on**: All other v1.3 phases complete
+New milestone covering the GDELT pipeline redo (fresh approach after the NLP
+scrap) and the performance & load testing work deferred from v1.3. The
+renumbering happened on 2026-04-08 after v1.3 closed out — see STATE.md
+Roadmap Evolution for the full history.
+
+### Phase 27: Conflict Geolocation Improvement (GDELT Redo) — was Phase 26.2
+
+**Goal:** Redo the GDELT event extraction pipeline on the clean v1.3 foundation — fix source deduplication, location accuracy, event type labeling, and remove hardcoding. The NLP-based attempt was scrapped in Phase 26.3; the redo should investigate upstream NumSources + noisy-CAMEO filtering, GDELT's actionGeo_FeatureID vs eventGeo_FeatureID discrimination, and ACLED as a ground-truth cross-validation source.
+**Depends on:** v1.3 closeout (Phases 26.3 + 26.4 complete)
+**Requirements:** TBD (re-discuss approach — previous NLP decisions in `.planning/phases/archive-26.2-nlp-scrapped/` are NOT binding)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run `/gsd:discuss-phase 27` to capture fresh context, then `/gsd:plan-phase 27`)
+
+**Historical note:** This phase was originally numbered 26.2 and attempted an NLP-based approach (title fetching + me-cities lexicon + NLP extraction wired into the GDELT adapter). That approach was scrapped in Phase 26.3 after roughly two weeks of work because it was patching downstream of a bad signal rather than fixing the input. See `docs/adr/0005-phase-26-2-nlp-approach-scrapped.md` for the honest retrospective and `.planning/phases/archive-26.2-nlp-scrapped/` for the preserved historical artifacts.
+
+### Phase 28: Performance & Load Testing — was Phase 27
+
+**Goal:** Optimize initial load time and validate production handles 250 concurrent users.
+**Depends on:** Phase 27 (GDELT redo — to ensure load tests hit a stable event pipeline)
+**Requirements:** TBD
+**Plans:** 0 plans
+
 **Key deliverables:**
 
 - Staggered API calls on mount (priority: flights -> ships/events -> rest)
@@ -212,6 +225,8 @@ Plans:
 - Request coalescing for concurrent identical requests (flights especially)
 - CDN cache tuning (s-maxage optimization per endpoint)
 - Vercel warm-up cron frequency evaluation
+
+**Historical note:** This phase was originally numbered 27 under v1.3. It was deferred to v1.4 on 2026-04-08 alongside the GDELT redo so both can run against the stabilized v1.3 codebase.
 
 ## Deferred Work
 
