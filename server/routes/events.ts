@@ -7,6 +7,7 @@ const log = logger.child({ module: 'events' });
 import { fetchEvents, backfillEvents } from '../adapters/gdelt.js';
 import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { extractBellingcatGeo } from '../lib/eventScoring.js';
+import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
 import { groupGdeltRows } from '../lib/eventGrouping.js';
 import { processEventGroups, geocodeEnrichedEvents } from '../lib/llmEventExtractor.js';
 import { WAR_START, CACHE_TTL } from '../config.js';
@@ -162,6 +163,21 @@ function enrichedToEntities(
   return results;
 }
 
+/**
+ * Wrap sendValidated to normalize event types before Zod validation.
+ * Remaps old 11-type taxonomy (ground_combat, shelling, etc.) cached in Redis
+ * to the new 5-type system so conflictEventEntitySchema doesn't reject them.
+ */
+function sendNormalizedEvents(
+  res: import('express').Response,
+  payload: { data: ConflictEventEntity[]; stale: boolean; lastFresh: number; rateLimited?: boolean; degraded?: boolean },
+): void {
+  sendValidated(res, eventsResponseSchema, {
+    ...payload,
+    data: normalizeEventTypes(payload.data),
+  });
+}
+
 export const eventsRouter = Router();
 
 eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
@@ -172,7 +188,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   // --- LLM cache check (highest priority: serve enriched events if fresh) ---
   const llmCached = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY, LLM_LOGICAL_TTL_MS);
   if (llmCached && !llmCached.stale) {
-    return sendValidated(res, eventsResponseSchema, llmCached);
+    return sendNormalizedEvents(res, llmCached);
   }
 
   // Check raw GDELT cache (skip on forced backfill)
@@ -181,7 +197,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     : await cacheGetSafe<ConflictEventEntity[]>(EVENTS_KEY, LOGICAL_TTL_MS);
 
   if (cached && !cached.stale && !isLLMConfigured()) {
-    return sendValidated(res, eventsResponseSchema, cached);
+    return sendNormalizedEvents(res, cached);
   }
 
   try {
@@ -296,7 +312,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
               await recordLLMTimestamp();
               log.info({ count: llmEntities.length, total: llmMerged.length }, 'LLM: processed and cached enriched events');
 
-              return sendValidated(res, eventsResponseSchema, {
+              return sendNormalizedEvents(res, {
                 data: llmMerged,
                 stale: false,
                 lastFresh: Date.now(),
@@ -306,7 +322,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
             // No new groups to process — re-serve cached LLM data if available
             if (llmCached?.data) {
               await recordLLMTimestamp();
-              return sendValidated(res, eventsResponseSchema, {
+              return sendNormalizedEvents(res, {
                 data: llmCached.data,
                 stale: false,
                 lastFresh: Date.now(),
@@ -318,7 +334,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
           log.warn('LLM processing returned null — falling back to raw GDELT');
         } else if (llmCached?.data) {
           // Cooldown not expired — serve stale LLM cache
-          return sendValidated(res, eventsResponseSchema, {
+          return sendNormalizedEvents(res, {
             data: llmCached.data,
             stale: true,
             lastFresh: llmCached.lastFresh,
@@ -331,7 +347,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     }
 
     // Serve raw GDELT events (default path / fallback)
-    sendValidated(res, eventsResponseSchema, {
+    sendNormalizedEvents(res, {
       data: merged,
       stale: false,
       lastFresh: Date.now(),
@@ -342,7 +358,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     if (cached) {
       // Prune stale entries even on error
       const pruned = cached.data.filter((e) => e.timestamp >= WAR_START);
-      sendValidated(res, eventsResponseSchema, {
+      sendNormalizedEvents(res, {
         data: pruned,
         stale: true,
         lastFresh: cached.lastFresh,
