@@ -135,11 +135,14 @@ sequenceDiagram
 
 ---
 
-## 3. Conflict Events (GDELT v2)
+## 3. Conflict Events (GDELT v2 + LLM enrichment)
 
-**Adapter:** [`server/adapters/gdelt.ts`](../../server/adapters/gdelt.ts)
+**Adapters:** [`server/adapters/gdelt.ts`](../../server/adapters/gdelt.ts),
+[`server/adapters/llm-provider.ts`](../../server/adapters/llm-provider.ts),
+[`server/adapters/nominatim.ts`](../../server/adapters/nominatim.ts)
 **Route:** [`server/routes/events.ts`](../../server/routes/events.ts)
-**Cache key:** `events:gdelt` (15min logical TTL, 2.5h hard TTL)
+**Cache keys:** `events:llm` (LLM-enriched, preferred), `events:gdelt` (raw fallback) — both 15min logical TTL, 2.5h hard TTL
+**LLM cooldown key:** `events:llm-process-ts` (15 min cooldown)
 **Backfill key:** `events:backfill-ts` (1 hour cooldown)
 **Polling cadence:** 15 min, via
 [`useEventPolling`](../../src/hooks/useEventPolling.ts)
@@ -151,30 +154,54 @@ sequenceDiagram
     participant API as Express API
     participant Cache as Upstash Redis
     participant GDELT as GDELT v2 master list
+    participant LLM as Cerebras / Groq
+    participant Nominatim as OSM Nominatim
 
     Browser->>API: GET /api/events
-    API->>Cache: cacheGetSafe("events:gdelt", 900_000)
-    alt Cache hit fresh
+    API->>Cache: cacheGetSafe("events:llm", 900_000)
+    alt LLM cache hit fresh
         Cache-->>API: {data, stale:false}
         API-->>Browser: 200 (sendValidated via zod output schema)
-    else Cache miss OR empty
-        API->>Cache: shouldBackfill() reads events:backfill-ts
-        alt Backfill cooldown expired
-            note over API,GDELT: Lazy backfill path
-            API->>GDELT: GET /gdeltv2/lastupdate.txt (HTTP, not HTTPS — TLS cert issues)
-            GDELT-->>API: latest zipped export URL
-            API->>GDELT: GET {zip} (concurrent batch, ~4 files/day)
-            GDELT-->>API: zip bytes
-            API->>API: adm-zip unzip -> CSV parse -> filter FIPS -> classify CAMEO
-            API->>API: disperseEvents() for city-centroid rows
+    else LLM cache miss — try raw fallback
+        API->>Cache: cacheGetSafe("events:gdelt", 900_000)
+        alt Raw cache hit fresh
+            Cache-->>API: {data, stale:false}
+        else Raw cache miss OR empty
+            API->>Cache: shouldBackfill() reads events:backfill-ts
+            alt Backfill cooldown expired
+                note over API,GDELT: Lazy backfill path
+                API->>GDELT: GET /gdeltv2/lastupdate.txt (HTTP, not HTTPS)
+                GDELT-->>API: latest zipped export URL
+                API->>GDELT: GET {zip} (concurrent batch, ~4 files/day)
+                GDELT-->>API: zip bytes
+                API->>API: adm-zip unzip -> CSV parse -> filter FIPS -> classify CAMEO
+                API->>API: disperseEvents() for city-centroid rows
+                API->>Cache: cacheSetSafe("events:gdelt", merged, 9000s)
+                API->>Cache: recordBackfillTimestamp()
+            end
+            API->>GDELT: fetchEvents() [last window]
+            GDELT-->>API: rows
+            API->>API: merge by GlobalEventID, drop pre-WAR_START, apply confidence
             API->>Cache: cacheSetSafe("events:gdelt", merged, 9000s)
-            API->>Cache: recordBackfillTimestamp()
         end
-        API->>GDELT: fetchEvents() [last window]
-        GDELT-->>API: rows
-        API->>API: merge by GlobalEventID, drop pre-WAR_START, apply confidence
-        API->>Cache: cacheSetSafe("events:gdelt", merged, 9000s)
-        API-->>Browser: 200 {data, stale:false}
+
+        note over API,LLM: LLM enrichment path (when configured + cooldown expired)
+        alt LLM keys configured AND cooldown expired
+            API->>API: groupGdeltRows() — cluster by date + CAMEO root + 50km proximity
+            API->>LLM: batch groups (8/call) via OpenAI SDK
+            LLM-->>API: JSON (type, summary, casualties, precision, actors)
+            API->>API: Zod safeParse — drop invalid entries
+            loop For each extracted location name
+                API->>Nominatim: forwardGeocode(locationName) — 1 req/s
+                Nominatim-->>API: {lat, lng}
+            end
+            API->>API: merge enriched events with llmProcessed:true
+            API->>Cache: cacheSetSafe("events:llm", enriched, 9000s)
+            API->>Cache: record LLM cooldown timestamp
+            API-->>Browser: 200 {data: enriched, stale:false}
+        else LLM unavailable or cooldown active
+            API-->>Browser: 200 {data: raw GDELT, stale:false}
+        end
     end
 ```
 
@@ -192,14 +219,25 @@ sequenceDiagram
   request.
 - **`?backfill=true`.** A query param forces a fresh backfill regardless of
   cooldown — used by the warm cron.
-- `TODO(26.2)`: The CAMEO → ConflictEventType mapping and the FIPS-10-4
-  country code table in `gdelt.ts` are hand-maintained. Phase 26.2 will
-  replace these with a data-driven config. Until then, new CAMEO codes
-  are silently dropped.
-- `TODO(26.2)`: The city-centroid dispersion step in
-  [`server/lib/dispersion.ts`](../../server/lib/dispersion.ts) relies on a
-  hardcoded centroid table (`CITY_CENTROIDS`). Centroid events not matched
-  to a known city are pass-through and may stack visually.
+- **Dual cache (Phase 27).** The route checks `events:llm` first (LLM-enriched
+  events with summaries, precise geocoding, and 5-type classification). On miss,
+  it falls back to `events:gdelt` (raw GDELT with CAMEO-based classification and
+  centroid dispersion). If both miss, it fetches fresh from GDELT upstream.
+- **LLM enrichment (Phase 27).** When Cerebras/Groq API keys are configured and
+  the 15-minute cooldown has expired, raw GDELT rows are grouped by
+  [`eventGrouping.ts`](../../server/lib/eventGrouping.ts), sent through the LLM
+  via [`llmEventExtractor.ts`](../../server/lib/llmEventExtractor.ts), validated
+  by Zod, geocoded via Nominatim, and cached to `events:llm`.
+- **Graceful degradation.** If LLM keys are not configured, the LLM is down, or
+  the response fails Zod validation, the route serves raw GDELT events — the same
+  behavior as pre-Phase-27. The map never goes blank.
+- **CAMEO classification retained.** The `classifyByBaseCode` map in `gdelt.ts`
+  still maps raw CAMEO codes into the 5-type taxonomy as a fallback for when
+  LLM enrichment is unavailable. The FIPS-10-4 country code table is also retained.
+- **City-centroid dispersion retained.** The dispersion step in
+  [`server/lib/dispersion.ts`](../../server/lib/dispersion.ts) still runs on raw
+  GDELT events. LLM-processed events get per-event `precision` indicators and
+  Nominatim coordinates instead, making dispersion unnecessary for enriched events.
 - **Validated response.** The events route runs its payload through
   `sendValidated(res, eventsResponseSchema, payload)` before sending so
   any drift between implementation and `server/openapi.yaml` is caught
@@ -386,11 +424,11 @@ sequenceDiagram
   11-country "extended" batch (best-effort). Partial data beats no data.
 - **Desalination lives here.** Originally a `SiteType`, desalination
   moved to Water in Phase 26 — see the site diagram above.
-- `TODO(26.2)`: Basin assignment uses nearest-country-centroid matching
-  because WRI Aqueduct basins don't ship with lat/lng centroids. This is
-  coarse. A spatial index over basin polygons would be more accurate but
-  the basin polygon file is ~50 MB, which doesn't fit comfortably in a
-  serverless bundle. Tracked for the Phase 27 performance pass.
+- **Known limitation:** Basin assignment uses nearest-country-centroid
+  matching because WRI Aqueduct basins don't ship with lat/lng centroids.
+  This is coarse. A spatial index over basin polygons would be more
+  accurate but the ~50 MB polygon file doesn't fit in a serverless bundle.
+  Tracked for a future performance phase.
 
 ---
 

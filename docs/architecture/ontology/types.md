@@ -79,6 +79,14 @@ classDiagram
         +string geoPrecision
         +number confidence
         +number actionGeoType
+        +number originalLat
+        +number originalLng
+        +string summary
+        +object casualties
+        +string precision
+        +string[] actors
+        +number sourceCount
+        +boolean llmProcessed
     }
 
     MapEntityBase <|-- FlightEntity
@@ -104,32 +112,24 @@ classDiagram
 - `label` is a short human-readable string for the tooltip; longer
   descriptions live in `data`.
 
-**`ConflictEventType`** expands the `type` discriminator into 11
-CAMEO-derived values:
+**`ConflictEventType`** expands the `type` discriminator into 5
+attack-vector categories:
 
 ```ts
-type ConflictEventType =
-  | 'airstrike'
-  | 'ground_combat'
-  | 'shelling'
-  | 'bombing'
-  | 'assassination'
-  | 'abduction'
-  | 'assault'
-  | 'blockade'
-  | 'ceasefire_violation'
-  | 'mass_violence'
-  | 'wmd';
+type ConflictEventType = 'airstrike' | 'on_ground' | 'explosion' | 'targeted' | 'other';
 ```
 
-See [`server/types.ts#EntityType`](../../../server/types.ts) for the
-literal union definition and
-[`server/lib/eventScoring.ts`](../../../server/lib/eventScoring.ts) for
-the CAMEO classification logic.
+Phase 27 replaced the original 11-member CAMEO-derived union with this
+simplified 5-type taxonomy. The GDELT adapter's `classifyByBaseCode`
+still maps raw CAMEO codes into these 5 buckets as a fallback, but the
+primary classification path is now LLM-based: grouped GDELT rows are
+sent through Cerebras/Groq, which returns a structured classification
+validated by Zod. See [`server/lib/llmEventExtractor.ts`](../../../server/lib/llmEventExtractor.ts)
+for the extraction logic and [`server/adapters/llm-provider.ts`](../../../server/adapters/llm-provider.ts)
+for the provider adapter.
 
-`TODO(26.2)`: the `classifyByBaseCode` map in the GDELT adapter is
-hand-curated. Phase 26.2 will replace it with a data-driven config
-and the type union here may grow.
+See [`server/types.ts#EntityType`](../../../server/types.ts) for the
+literal union definition.
 
 ## `SiteEntity` — NOT in `MapEntity` union
 
@@ -252,9 +252,10 @@ interface NewsCluster {
 }
 ```
 
-`TODO(26.2)`: `actor` / `action` / `target` are populated by an
-NLP extraction pass that Phase 26.2 is planning to improve. They're
-currently `undefined` for most articles.
+**Note:** `actor` / `action` / `target` fields are populated from
+GDELT metadata when available. Phase 27's LLM pipeline enriches
+*events* (not news articles) with structured actor and summary data
+via the `ConflictEventData.actors` and `summary` fields instead.
 
 ## `NotificationItem` (frontend-derived)
 
@@ -387,7 +388,7 @@ Source:
 | `FlightEntity`, `FlightData`                                  | `server/types.ts`                          | Flight discriminator         |
 | `ShipEntity`, `ShipData`                                      | `server/types.ts`                          | Ship discriminator           |
 | `ConflictEventEntity`                                         | `server/types.ts`                          | Event discriminator          |
-| `ConflictEventType`                                           | `server/types.ts`                          | 11-member CAMEO union        |
+| `ConflictEventType`                                           | `server/types.ts`                          | 5-member attack-vector union |
 | `SiteEntity`, `SiteType`                                      | `server/types.ts`                          | Key sites (separate)         |
 | `WaterFacility`, `WaterFacilityType`, `WaterStressIndicators` | `server/types.ts`                          | Water layer (separate)       |
 | `NewsArticle`, `NewsCluster`                                  | `server/types.ts`                          | News feed                    |

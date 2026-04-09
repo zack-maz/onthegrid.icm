@@ -128,12 +128,13 @@ s-maxage=<N>, stale-while-revalidate=<M>` header via the
   [`server/openapi.yaml`](../../server/openapi.yaml) for the documented
   ceilings.
 
-- **Tech debt, honestly labeled.** The GDELT event pipeline still relies
-  on several hardcoded tables (CAMEO → event type, FIPS country codes,
-  city centroids) that are out of date whenever CAMEO updates.
-  `TODO(26.2)` markers are attached wherever those tables show up in the
-  data-flow diagrams. Phase 26.2 will fold these into a data-driven
-  configuration; Phase 26.4 (this one) just documents the current state.
+- **LLM enrichment pipeline (Phase 27).** The GDELT event pipeline now
+  includes an optional LLM enrichment path: raw GDELT rows are grouped,
+  sent through Cerebras/Groq for classification into a 5-type taxonomy
+  (`airstrike`, `on_ground`, `explosion`, `targeted`, `other`), validated
+  by Zod, and geocoded via Nominatim. The raw CAMEO classification tables
+  and city-centroid dispersion logic are retained as a graceful fallback
+  when the LLM is unavailable.
 
 ## Next steps
 

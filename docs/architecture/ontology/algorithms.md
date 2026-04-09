@@ -65,7 +65,7 @@ clusterWeight = typeWeight × log2(mentions + 1) × log2(sources + 1)
 ```
 
 - `typeWeight`: same weights as `computeSeverityScore` (airstrike=10,
-  wmd=10, ground_combat=6, etc.).
+  explosion=8, on_ground=6, targeted=7, other=3).
 - `log2` of mentions and sources dampens outliers from single
   high-coverage events.
 - `fatalityFactor` boosts events with reported casualties.
@@ -82,6 +82,13 @@ clusterWeight = typeWeight × log2(mentions + 1) × log2(sources + 1)
 **File:** [`server/lib/dispersion.ts`](../../../server/lib/dispersion.ts)
 **Purpose:** Stop city-centroid GDELT events from stacking on top of
 each other at the same lat/lng.
+
+**Status (Phase 27):** Dispersion is retained for the raw-GDELT
+fallback path only. LLM-processed events have per-event `precision`
+indicators (`exact` | `neighborhood` | `city` | `region`) and
+Nominatim-geocoded coordinates, making centroid dispersion unnecessary
+for enriched events. When the LLM is unavailable, dispersion still
+runs on the raw GDELT path to prevent stacking.
 
 **Input:** Array of `ConflictEventEntity` fresh from the GDELT parse.
 **Output:** Same array with city-centroid events spread into
@@ -125,8 +132,9 @@ stay circular on the mercator projection.
   honestly.
 - **Pass-through when no centroid matches.** Events without a
   matching city centroid in `CITY_CENTROIDS` are left untouched.
-  `TODO(26.2)`: this means we still stack for cities outside the
-  hardcoded table.
+  For LLM-processed events this is less of an issue because each
+  event has a per-event `precision` indicator and Nominatim-geocoded
+  coordinates, so stacking is visible to the user via precision rings.
 - **15 km match radius** is nearest-neighbor, not a tolerance box.
   GDELT re-geocodes the same city to slightly different coordinates
   from poll to poll, so a strict box would miss matches that a
@@ -320,10 +328,11 @@ too big to bundle in a serverless function.
 - **200 km fallback radius.** A facility in the middle of the
   Gulf is still matched to Iran or Saudi Arabia rather than
   returning "No Data."
-- `TODO(26.2)`: This is lossy. A dam on the Turkish-Syrian border
-  gets a country-level stress value when it really sits on a
-  specific basin with known stress. Phase 27 may index actual
-  basin polygons if the memory budget allows.
+- **Known limitation:** This is lossy. A dam on the Turkish-Syrian
+  border gets a country-level stress value when it really sits on a
+  specific basin with known stress. Indexing actual basin polygons
+  would be more accurate but the ~50 MB polygon file doesn't fit
+  in a serverless bundle. Tracked for a future performance phase.
 
 ---
 
@@ -381,6 +390,68 @@ A straight-line `if / else if` chain against 1h / 6h / 24h
 thresholds. The bucket function runs once per notification at
 render time and is memoized by the calling hook; the complexity
 is O(n) for n notifications and O(1) per item.
+
+---
+
+## 9. LLM event extraction (Phase 27)
+
+**Files:**
+[`server/lib/eventGrouping.ts`](../../../server/lib/eventGrouping.ts),
+[`server/lib/llmEventExtractor.ts`](../../../server/lib/llmEventExtractor.ts)
+**Supporting:**
+[`server/adapters/llm-provider.ts`](../../../server/adapters/llm-provider.ts),
+[`server/adapters/nominatim.ts`](../../../server/adapters/nominatim.ts)
+**Purpose:** Transform raw GDELT CSV rows into structured, precisely
+geocoded conflict events with human-readable summaries.
+
+**Input:** Array of raw `ConflictEventEntity` from the GDELT parse.
+**Output:** Array of enriched `ConflictEventEntity` with `summary`,
+`casualties`, `precision`, `actors`, `sourceCount`, and
+`llmProcessed: true`.
+
+### Pipeline
+
+1. **Grouping.** Raw GDELT rows are clustered by
+   `groupGdeltRows()`: same SQLDATE + same CAMEO root code + within
+   50 km geographic proximity. Each group represents a single
+   real-world incident reported by multiple GDELT rows.
+2. **Batch LLM call.** Groups are batched (8 per call) and sent to
+   Cerebras (primary) or Groq (fallback) via the OpenAI SDK with a
+   `baseURL` swap. The prompt asks the LLM to classify each group
+   into one of the 5 `ConflictEventType` values and extract
+   structured data.
+3. **Zod validation.** The LLM response is parsed as JSON and
+   validated against a Zod schema. Invalid entries are silently
+   dropped; valid entries proceed.
+4. **Forward geocoding.** Location names extracted by the LLM are
+   geocoded via Nominatim's `/search` endpoint
+   (`forwardGeocode()` in `nominatim.ts`), respecting 1 req/s rate
+   limits. Results are Redis-cached for 30 days.
+5. **Enrichment.** Each validated event is merged back into the
+   entity format with the new fields populated and
+   `llmProcessed: true` set.
+
+### Decisions
+
+- **Cerebras primary, Groq fallback.** Cerebras offers 1M tokens/day
+  free with the `gpt-oss-120b` model; Groq offers 200K tokens/day
+  free. Both use OpenAI-compatible APIs, so the adapter is a single
+  file with a `baseURL` swap.
+- **8 groups per batch.** Empirically, larger batches hit context
+  limits on the free tiers. 8 keeps the prompt under ~4K tokens.
+- **Zod over manual parsing.** The LLM output is unpredictable.
+  Zod's `safeParse` gives typed, validated output or a clean
+  rejection — no runtime surprises.
+- **15-minute cooldown.** LLM processing is triggered lazily on
+  `/api/events` cache miss, with a 15-minute cooldown
+  (`events:llm-process-ts` Redis key) to avoid hammering the free
+  tier on rapid cache invalidation.
+- **Graceful degradation.** If the LLM is down, unconfigured, or
+  returns garbage, the route falls back to raw GDELT events — the
+  same behavior as pre-Phase-27. The map never goes blank.
+- **Dual cache.** `events:llm` stores LLM-enriched events (preferred);
+  `events:gdelt` stores raw GDELT (fallback). The route checks
+  `events:llm` first.
 
 ---
 

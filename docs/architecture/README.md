@@ -42,9 +42,12 @@ aspect of ontology" so this goes further than a typical project would:
 ## As-built honesty
 
 These diagrams reflect what ships **today**, not a polished idealization.
-Where tech debt exists it's labeled inline, typically with a `TODO(26.2)`
-annotation pointing at the GDELT geolocation redo phase. Reviewers spotting
-undisclosed warts is worse than disclosed warts; honesty is a portfolio signal.
+Where known limitations exist they're labeled inline. Phase 27 resolved
+the GDELT geolocation issues that were previously tracked as `TODO(26.2)`
+markers by adding an LLM enrichment pipeline with Nominatim geocoding.
+Remaining limitations (e.g., basin lookup coarseness) are documented as
+"Known limitation" notes. Reviewers spotting undisclosed warts is worse
+than disclosed warts; honesty is a portfolio signal.
 
 ## Authoritative sources
 

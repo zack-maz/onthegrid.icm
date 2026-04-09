@@ -97,19 +97,36 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **ACLED** — adapter preserved in `server/adapters/acled.ts` but not active (requires account approval)
 - **GDELT adapter** — `server/adapters/gdelt.ts`, fetches lastupdate.txt → downloads ZIP → parses CSV → filters Middle East conflicts
 - **GDELT endpoint** — `http://data.gdeltproject.org/gdeltv2/lastupdate.txt` (HTTP, not HTTPS — TLS cert issues)
-- **ConflictEventType** — 11 CAMEO-based types: `airstrike`, `ground_combat`, `shelling`, `bombing`, `assassination`, `abduction`, `assault`, `blockade`, `ceasefire_violation`, `mass_violence`, `wmd`
-- **classifyByBaseCode** — maps CAMEO EventBaseCode (3-digit) → ConflictEventType, with root code fallback
-- **CONFLICT_TOGGLE_GROUPS** — 4 groups: showAirstrikes (`airstrike`), showGroundCombat (`ground_combat`, `shelling`, `bombing`), showTargeted (`assassination`, `abduction`), showOtherConflict (rest)
+- **ConflictEventType** — 5 attack-vector types: `airstrike`, `on_ground`, `explosion`, `targeted`, `other` (Phase 27 replaced 11 CAMEO types)
+- **classifyByBaseCode** — maps CAMEO EventBaseCode (3-digit) → ConflictEventType, retained as fallback when LLM unavailable
+- **CONFLICT_TOGGLE_GROUPS** — 5 groups: showAirstrikes (`airstrike`), showGroundCombat (`on_ground`), showExplosions (`explosion`), showTargeted (`targeted`), showOther (`other`)
 - **isConflictEventType** — type guard derived from CONFLICT_TOGGLE_GROUPS (single source of truth)
-- **EVENT_TYPE_LABELS** — human-readable display labels for all 11 types
+- **EVENT_TYPE_LABELS** — human-readable display labels for all 5 types
 - **FIPS codes** — GDELT uses FIPS 10-4 (IZ=Iraq, TU=Turkey, IS=Israel), not ISO
 - **adm-zip** — required for ZIP decompression (Node zlib only handles gzip/deflate)
 - **Deduplication** — GDELT rows deduplicated by date+CAMEO+lat/lng, keeping highest NumMentions row
 
+## LLM Event Pipeline (Phase 27)
+
+- **Providers** — Cerebras primary (gpt-oss-120b, 1M TPD free), Groq fallback (openai/gpt-oss-120b, 200K TPD free)
+- **LLM adapter** — `server/adapters/llm-provider.ts`, OpenAI SDK with baseURL swap for both providers
+- **Event grouping** — `server/lib/eventGrouping.ts`, clusters GDELT rows by date + CAMEO root + 50km proximity
+- **LLM extractor** — `server/lib/llmEventExtractor.ts`, batch processing (8 groups/call), Zod-validated output
+- **Forward geocoding** — Nominatim search API via `server/adapters/nominatim.ts` `forwardGeocode()`, 1 req/s, Redis-cached 30d
+- **Processing trigger** — Lazy on `/api/events` cache miss, 15-min cooldown (`events:llm-process-ts` Redis key)
+- **Dual cache** — `events:llm` (LLM-enriched, preferred) + `events:gdelt` (raw fallback)
+- **Graceful degradation** — LLM down -> serve raw GDELT -> same as pre-Phase-27 behavior. Map never goes blank.
+- **5-type ontology** — `airstrike`, `on_ground`, `explosion`, `targeted`, `other` (replaces 11 CAMEO types)
+- **Precision** — `exact` | `neighborhood` | `city` | `region`, shown as radius rings on map
+- **PrecisionRingLayer** — `src/components/map/PrecisionRingLayer.tsx`, ScatterplotLayer with radiusUnits: 'meters'
+- **Toggle system** — master `showEvents` + 5 sub-toggles (one per type) in filterStore
+- **Event colors** — red spectrum: airstrike bright red (#ff3b30), on_ground dark red (#c0392b), explosion orange-red (#e74c3c), targeted crimson (#dc143c), other maroon (#800000)
+- **EVENT_TYPE_COLORS** — `src/lib/eventColors.ts`, shared color constants for layers/toggles/icons
+
 ## Layer Controls & Tooltips (Phase 9-10)
 
 - **LayerTogglesSlot** — `src/components/layout/LayerTogglesSlot.tsx`, toggle rows in OverlayPanel
-- **Toggle rows** — Flights, Ground (indented), Unidentified (indented), Ships, Airstrikes, Ground Combat, Targeted, Sites, Nuclear/Naval/Oil/Airbase/Desalination/Port (indented), Hit Only (indented)
+- **Toggle rows** — Flights, Ground (indented), Unidentified (indented), Ships, Events (master) + 5 sub-toggles (Airstrikes, Ground Combat, Explosions, Targeted, Other), Sites, Nuclear/Naval/Oil/Airbase/Port (indented), Hit Only (indented)
 - **Toggle behavior** — opacity dims to 40% when OFF, smooth transition, persisted to localStorage
 - **Layer visibility** — `useEntityLayers` sets `visible` prop per toggle; ground/airborne filtering in `useMemo`
 - **Unidentified filter precedence** — unidentified flights stay visible when Ground is OFF (if pulse toggle ON)
