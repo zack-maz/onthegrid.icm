@@ -97,6 +97,14 @@ function ShipContent({ entity }: { entity: ShipEntity }) {
   );
 }
 
+/** Precision indicator dot color coding */
+const PRECISION_DOT_STYLES: Record<string, string> = {
+  exact: '#22c55e', // green
+  neighborhood: '#eab308', // yellow
+  city: '#f97316', // orange
+  region: '#ef4444', // red
+};
+
 function EventContent({ entity }: { entity: ConflictEventEntity }) {
   const d = entity.data;
   const date = new Date(entity.timestamp).toISOString().slice(0, 10);
@@ -119,6 +127,31 @@ function EventContent({ entity }: { entity: ConflictEventEntity }) {
         <>
           <br />
           Location: {d.locationName}
+        </>
+      )}
+      {d.precision && (
+        <>
+          <br />
+          <span
+            style={{
+              display: 'inline-block',
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: PRECISION_DOT_STYLES[d.precision] ?? '#9ca3af',
+              marginRight: '4px',
+              verticalAlign: 'middle',
+            }}
+          />
+          <span style={{ fontSize: '10px', verticalAlign: 'middle' }}>
+            {d.precision === 'exact'
+              ? 'Precise'
+              : d.precision === 'neighborhood'
+                ? '~1km'
+                : d.precision === 'city'
+                  ? '~5km'
+                  : '~25km'}
+          </span>
         </>
       )}
       {d.actor1 && (

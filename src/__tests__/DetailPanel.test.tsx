@@ -65,6 +65,32 @@ const mockAirstrike: ConflictEventEntity = {
   },
 };
 
+const mockEnrichedAirstrike: ConflictEventEntity = {
+  id: 'event-enriched-1',
+  type: 'airstrike',
+  lat: 35.123456,
+  lng: 44.654321,
+  timestamp: Date.now(),
+  label: 'Aerial weapons',
+  data: {
+    eventType: 'Aerial weapons',
+    subEventType: 'CAMEO 195',
+    fatalities: 3,
+    actor1: 'Unknown',
+    actor2: 'Iran',
+    notes: '',
+    source: 'https://example.com/article',
+    goldsteinScale: -7.0,
+    locationName: 'Deir ez-Zor, eastern Syria',
+    cameoCode: '195',
+    summary: 'Coalition forces conducted an airstrike near Deir ez-Zor targeting militia positions.',
+    casualties: { killed: 3, injured: 5 },
+    precision: 'neighborhood',
+    sourceCount: 4,
+    llmProcessed: true,
+  },
+};
+
 describe('DetailPanelSlot', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -235,6 +261,70 @@ describe('DetailPanelSlot', () => {
     });
 
     expect(screen.getByText(/Updated \d+s ago/)).toBeInTheDocument();
+  });
+
+  describe('LLM-enriched event detail', () => {
+    it('renders summary when LLM-enriched event is selected', () => {
+      useEventStore.setState({ events: [mockEnrichedAirstrike] });
+      useUIStore.setState({ selectedEntityId: 'event-enriched-1', isDetailPanelOpen: true });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.getByText('Summary')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Coalition forces conducted an airstrike near Deir ez-Zor targeting militia positions.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('renders casualties when present', () => {
+      useEventStore.setState({ events: [mockEnrichedAirstrike] });
+      useUIStore.setState({ selectedEntityId: 'event-enriched-1', isDetailPanelOpen: true });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.getByText('Casualties')).toBeInTheDocument();
+      expect(screen.getByText('3')).toBeInTheDocument(); // killed
+      expect(screen.getByText('5')).toBeInTheDocument(); // injured
+    });
+
+    it('renders precision indicator for enriched events', () => {
+      useEventStore.setState({ events: [mockEnrichedAirstrike] });
+      useUIStore.setState({ selectedEntityId: 'event-enriched-1', isDetailPanelOpen: true });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.getByText('Neighborhood-level (~1km)')).toBeInTheDocument();
+    });
+
+    it('renders AI-enriched badge when llmProcessed is true', () => {
+      useEventStore.setState({ events: [mockEnrichedAirstrike] });
+      useUIStore.setState({ selectedEntityId: 'event-enriched-1', isDetailPanelOpen: true });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.getByText('AI-enriched')).toBeInTheDocument();
+    });
+
+    it('renders source count when sourceCount is present', () => {
+      useEventStore.setState({ events: [mockEnrichedAirstrike] });
+      useUIStore.setState({ selectedEntityId: 'event-enriched-1', isDetailPanelOpen: true });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.getByText('Reported by 4 sources')).toBeInTheDocument();
+    });
+
+    it('does not render summary for non-enriched events', () => {
+      useEventStore.setState({ events: [mockAirstrike] });
+      useUIStore.setState({ selectedEntityId: 'event-airstrike-1', isDetailPanelOpen: true });
+
+      render(<DetailPanelSlot />);
+
+      expect(screen.queryByText('Summary')).not.toBeInTheDocument();
+      expect(screen.queryByText('AI-enriched')).not.toBeInTheDocument();
+    });
   });
 
   describe('navigation stack UI', () => {

@@ -53,6 +53,7 @@ import { PoliticalOverlay, usePoliticalLayers } from './layers/PoliticalOverlay'
 import { useEthnicLayers, EthnicTooltip } from './layers/EthnicOverlay';
 import { useWaterLayers } from '@/hooks/useWaterLayers';
 import { WaterTooltip } from './layers/WaterOverlay';
+import { usePrecisionRingLayer } from './PrecisionRingLayer';
 import type { WaterFacility } from '../../../server/types';
 
 /** Watches notificationStore.flyToTarget and animates the map. Renders null. */
@@ -128,6 +129,7 @@ export function BaseMap() {
   const politicalLayers = usePoliticalLayers();
   const ethnicLayers = useEthnicLayers();
   const { riverLayers, facilityLayers, destroyedIds: waterDestroyedIds } = useWaterLayers();
+  const precisionRingLayers = usePrecisionRingLayer();
   const isWeatherActive = useLayerStore((s) => s.activeLayers.has('weather'));
   const isThreatActive = useLayerStore((s) => s.activeLayers.has('threat'));
   const isEthnicActive = useLayerStore((s) => s.activeLayers.has('ethnic'));
@@ -425,6 +427,7 @@ export function BaseMap() {
                   ...ethnicLayers,
                   ...riverLayers,
                   ...weatherLayers,
+                  ...precisionRingLayers,
                   ...conflictLayers,
                   ...threatLayers,
                   ...entityLayers,
@@ -435,6 +438,7 @@ export function BaseMap() {
                   ...ethnicLayers,
                   ...riverLayers,
                   ...weatherLayers,
+                  ...precisionRingLayers,
                   ...threatLayers,
                   ...conflictLayers,
                   ...entityLayers,
