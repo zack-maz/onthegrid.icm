@@ -29,6 +29,10 @@ export const envSchema = z.object({
   CEREBRAS_API_KEY: z.string().default(''),
   GROQ_API_KEY: z.string().default(''),
 
+  // LLM provider API keys (Phase 27 — graceful degradation, empty string means unconfigured)
+  CEREBRAS_API_KEY: z.string().default(''),
+  GROQ_API_KEY: z.string().default(''),
+
   // Tuning parameters
   EVENT_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
   EVENT_MIN_SOURCES: z.coerce.number().int().min(1).default(2),
