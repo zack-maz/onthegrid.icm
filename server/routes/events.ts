@@ -276,7 +276,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
           if (newGroups.length > 0) {
             const enriched = await processEventGroups(newGroups);
 
-            if (enriched) {
+            if (enriched && enriched.length > 0) {
               const geocoded = await geocodeEnrichedEvents(enriched, newGroups);
               const llmEntities = enrichedToEntities(geocoded, newGroups);
 
