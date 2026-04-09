@@ -1,62 +1,70 @@
 # Iran Conflict Monitor — Project Status
 
-**Last updated:** 2026-04-02
+**Last updated:** 2026-04-08
 
 ## Progress
 
 ```
-v0.9 MVP:              [████████████████████] 12/12 phases (shipped 2026-03-19)
-v1.0 Deployment:       [████████████████████]  2/2  phases (shipped 2026-03-20)
+v0.9 MVP:                [████████████████████] 12/12 phases (shipped 2026-03-19)
+v1.0 Deployment:         [████████████████████]  2/2  phases (shipped 2026-03-20)
 v1.1 Intelligence Layer: [████████████████████]  8/8  phases (shipped 2026-03-22)
-v1.2 Visualization:    [████████████████████]  7/7  phases (shipped 2026-03-29)
-v1.3 Data Quality:     [██████████████████░░]  7/9  phases
+v1.2 Visualization:      [████████████████████]  7/7  phases (shipped 2026-03-29)
+v1.3 Data Quality:       [████████████████████] 11/11 phases (closing — all primary phases shipped)
+v1.4 GDELT & Perf:       [░░░░░░░░░░░░░░░░░░░░]  0/2  phases (planned)
 ```
 
 ## Phase Status
 
-| Phase | Name                                       | Milestone | Status | Date       |
-| ----- | ------------------------------------------ | --------- | ------ | ---------- |
-| 1     | Project Scaffolding & Theme                | v0.9      | Done   | 2026-03-14 |
-| 2     | Base Map                                   | v0.9      | Done   | 2026-03-14 |
-| 3     | API Proxy                                  | v0.9      | Done   | 2026-03-15 |
-| 4     | Flight Data Feed                           | v0.9      | Done   | 2026-03-15 |
-| 5     | Entity Rendering                           | v0.9      | Done   | 2026-03-15 |
-| 6     | Multi-Source Flight Data                   | v0.9      | Done   | 2026-03-16 |
-| 7     | StatusPanel & Source Config                | v0.9      | Done   | 2026-03-16 |
-| 8     | Ship & Conflict Data                       | v0.9      | Done   | 2026-03-16 |
-| 8.1   | GDELT Conflict Events                      | v0.9      | Done   | 2026-03-17 |
-| 9     | Layer Controls & News Toggle               | v0.9      | Done   | 2026-03-17 |
-| 10    | Detail Panel & Event Reclassification      | v0.9      | Done   | 2026-03-18 |
-| 11    | Smart Filters                              | v0.9      | Done   | 2026-03-18 |
-| 12    | Analytics Dashboard                        | v0.9      | Done   | 2026-03-18 |
-| 13    | Serverless Cache Migration                 | v1.0      | Done   | 2026-03-20 |
-| 14    | Vercel Deployment                          | v1.0      | Done   | 2026-03-20 |
-| 15    | Key Sites Overlay                          | v1.1      | Done   | 2026-03-20 |
-| 16    | News Feed                                  | v1.1      | Done   | 2026-03-20 |
-| 17    | Notification Center                        | v1.1      | Done   | 2026-03-20 |
-| 18    | Oil Markets Tracker                        | v1.1      | Done   | 2026-03-21 |
-| 19    | Search, Filter & UI Cleanup                | v1.1      | Done   | 2026-03-22 |
-| 19.1  | Advanced Search with Tag Filtering         | v1.1      | Done   | 2026-03-22 |
-| 19.2  | Counter Entity Dropdowns                   | v1.1      | Done   | 2026-03-22 |
-| 20    | Visualization Layers & Filter Independence | v1.2      | Done   | 2026-03-24 |
-| 20.1  | Geographical & Weather Layers              | v1.2      | Done   | 2026-03-23 |
-| 20.2  | Threat Heatmap Layer                       | v1.2      | Done   | 2026-03-23 |
-| 21    | Production Review & Deploy Sync            | v1.2      | Done   | 2026-03-27 |
-| 21.1  | GDELT News Relevance Filtering             | v1.2      | Done   | 2026-03-26 |
-| 21.2  | GDELT Event Quality Pipeline               | v1.2      | Done   | 2026-03-28 |
-| 21.3  | Multi-User Load Testing                    | v1.2      | Done   | 2026-03-29 |
-| 22    | GDELT Event Quality & OSINT                | v1.3      | Done   | 2026-03-30 |
-| 22.1  | Fixing Dispersion                          | v1.3      | Done   | 2026-03-31 |
-| 23    | Threat Density Improvements                | v1.3      | Done   | 2026-03-31 |
-| 23.1  | Detail Panel Navigation Stack              | v1.3      | Done   | 2026-04-01 |
-| 23.2  | Threat Density Scatter Plots               | v1.3      | Done   | 2026-04-01 |
-| 24    | Political Boundaries Layer                 | v1.3      | Done   | 2026-04-02 |
-| 25    | Ethnic Distribution Layer                  | v1.3      | Done   | 2026-04-02 |
-| 26    | Water Stress Layer                         | v1.3      | Done   | 2026-04-03 |
+| Phase | Name                                       | Milestone | Status  | Date       |
+| ----- | ------------------------------------------ | --------- | ------- | ---------- |
+| 1     | Project Scaffolding & Theme                | v0.9      | Done    | 2026-03-14 |
+| 2     | Base Map                                   | v0.9      | Done    | 2026-03-14 |
+| 3     | API Proxy                                  | v0.9      | Done    | 2026-03-15 |
+| 4     | Flight Data Feed                           | v0.9      | Done    | 2026-03-15 |
+| 5     | Entity Rendering                           | v0.9      | Done    | 2026-03-15 |
+| 6     | Multi-Source Flight Data                   | v0.9      | Done    | 2026-03-16 |
+| 7     | StatusPanel & Source Config                | v0.9      | Done    | 2026-03-16 |
+| 8     | Ship & Conflict Data                       | v0.9      | Done    | 2026-03-16 |
+| 8.1   | GDELT Conflict Events                      | v0.9      | Done    | 2026-03-17 |
+| 9     | Layer Controls & News Toggle               | v0.9      | Done    | 2026-03-17 |
+| 10    | Detail Panel & Event Reclassification      | v0.9      | Done    | 2026-03-18 |
+| 11    | Smart Filters                              | v0.9      | Done    | 2026-03-18 |
+| 12    | Analytics Dashboard                        | v0.9      | Done    | 2026-03-18 |
+| 13    | Serverless Cache Migration                 | v1.0      | Done    | 2026-03-20 |
+| 14    | Vercel Deployment                          | v1.0      | Done    | 2026-03-20 |
+| 15    | Key Sites Overlay                          | v1.1      | Done    | 2026-03-20 |
+| 16    | News Feed                                  | v1.1      | Done    | 2026-03-20 |
+| 17    | Notification Center                        | v1.1      | Done    | 2026-03-20 |
+| 18    | Oil Markets Tracker                        | v1.1      | Done    | 2026-03-21 |
+| 19    | Search, Filter & UI Cleanup                | v1.1      | Done    | 2026-03-22 |
+| 19.1  | Advanced Search with Tag Filtering         | v1.1      | Done    | 2026-03-22 |
+| 19.2  | Counter Entity Dropdowns                   | v1.1      | Done    | 2026-03-22 |
+| 20    | Visualization Layers & Filter Independence | v1.2      | Done    | 2026-03-24 |
+| 20.1  | Geographical & Weather Layers              | v1.2      | Done    | 2026-03-23 |
+| 20.2  | Threat Heatmap Layer                       | v1.2      | Done    | 2026-03-23 |
+| 21    | Production Review & Deploy Sync            | v1.2      | Done    | 2026-03-27 |
+| 21.1  | GDELT News Relevance Filtering             | v1.2      | Done    | 2026-03-26 |
+| 21.2  | GDELT Event Quality Pipeline               | v1.2      | Done    | 2026-03-28 |
+| 21.3  | Multi-User Load Testing                    | v1.2      | Done    | 2026-03-29 |
+| 22    | GDELT Event Quality & OSINT                | v1.3      | Done    | 2026-03-30 |
+| 22.1  | Fixing Dispersion                          | v1.3      | Done    | 2026-03-31 |
+| 23    | Threat Density Improvements                | v1.3      | Done    | 2026-03-31 |
+| 23.1  | Detail Panel Navigation Stack              | v1.3      | Done    | 2026-04-01 |
+| 23.2  | Threat Density Scatter Plots               | v1.3      | Done    | 2026-04-01 |
+| 24    | Political Boundaries Layer                 | v1.3      | Done    | 2026-04-02 |
+| 25    | Ethnic Distribution Layer                  | v1.3      | Done    | 2026-04-02 |
+| 26    | Water Stress Layer                         | v1.3      | Done    | 2026-04-03 |
+| 26.1  | Water Layer Refinements                    | v1.3      | Done    | 2026-04-04 |
+| 26.3  | Production Code Cleanup                    | v1.3      | Done    | 2026-04-07 |
+| 26.4  | Documentation & External Presentation      | v1.3      | Done    | 2026-04-08 |
+| 27    | Conflict Geolocation Improvement (GDELT)   | v1.4      | Planned | —          |
+| 28    | Performance & Load Testing                 | v1.4      | Planned | —          |
+
+_Phase 26.2 (Conflict Geolocation Improvement, NLP attempt) was scrapped in Phase 26.3 and renumbered to Phase 27 under v1.4 on 2026-04-08. Original Phase 27 (Performance & Load Testing) was renumbered to Phase 28 under v1.4 on the same date. Historical artifacts from the scrapped 26.2 attempt are preserved at `.planning/phases/archive-26.2-nlp-scrapped/`._
 
 ## Current Focus
 
-v1.3 milestone in progress — 7/9 phases complete. 1186 tests passing. Next up: Phase 27 (Performance & Load Testing).
+v1.3 closing — all 11 primary phases shipped (22, 22.1, 23, 23.1, 23.2, 24, 25, 26, 26.1, 26.3, 26.4). 1277 tests passing, type-coverage 97.05%. Next milestone is v1.4, starting with Phase 27 (GDELT Redo — fresh approach after the scrapped NLP attempt).
 
 ## What's Been Built
 
@@ -122,7 +130,7 @@ v1.3 milestone in progress — 7/9 phases complete. 1186 tests passing. Next up:
 
 **Phase 21.3: Multi-User Load Testing** — k6 load test (501 VUs, 6 scenarios, 5min) and Playwright browser validation (3 concurrent workers, 3min stability). All application checks 100%. Flights p95: 136ms, overall p95: 153ms. CAMEO 192 (territorial occupation) excluded from conflict pipeline.
 
-### v1.3 Data Quality & Layers (Phases 22-27, in progress)
+### v1.3 Data Quality & Layers (Phases 22-26.4, closing)
 
 **Phase 22: GDELT Event Quality & OSINT Integration** — ActionGeo_Type parsing, concentric ring dispersion, config-driven thresholds, pipeline trace types. Bellingcat RSS feed integration for event confidence corroboration. CLI event audit dump script and fixture-based test suite.
 
@@ -139,6 +147,12 @@ v1.3 milestone in progress — 7/9 phases complete. 1186 tests passing. Next up:
 **Phase 25: Ethnic Distribution Layer** — deck.gl GeoJsonLayer + FillStyleExtension hatched fills for 10 ethnic zones (Kurdish, Arab, Persian, Baloch, Turkmen, Druze, Alawite, Yazidi, Assyrian, Pashtun). GeoEPR 2021 dataset from ETH Zurich. 23 overlap zones with stacked interleaved stripe hatching. Canvas-generated 32x32 hatch atlas. Centroid labels on single-group zones only. Hover tooltips with group info and population. 1113 tests passing.
 
 **Phase 26: Water Stress Layer** — Point-based water stress at named facilities (dams, reservoirs, treatment plants, canals, desalination) via Overpass. WRI Aqueduct 4.0 basin stress lookup (6377 basins). Open-Meteo 30-day precipitation anomaly (6h polling). Composite health formula. 6 major rivers (Tigris, Euphrates, Nile, Jordan, Karun, Litani) as stress-colored line features. Desalination migrated from Sites to Water layer. Full entity integration (detail panel, counters, search, proximity). 1186 tests passing.
+
+**Phase 26.1: Water Layer Refinements** — Tiered Overpass queries (~1000 facility target with priority country coverage), score expanded to 0-10 with destroyed state, 4 type-specific canvas icons (dam, reservoir, treatment plant, desalination), Vercel cron for daily cache refresh, desalination coverage audit.
+
+**Phase 26.3: Production Code Cleanup** — Portfolio-grade internal quality: pino structured logging with X-Request-ID tracing, Zod config consolidation + query validation, AppError envelope with graceful SIGTERM shutdown, `noUncheckedIndexedAccess` strict TypeScript across server, 1164-line hand-written OpenAPI 3.0 spec, vitest coverage gates. Phase 26.2 NLP dead code fully removed.
+
+**Phase 26.4: Documentation & External Presentation** — Portfolio hero README (564 lines) with agentic Playwright-captured Hormuz GIF and 6 layer screenshots, 10 Mermaid architecture docs with 21 diagrams (+ exhaustive ontology deep dive), 8 ADRs including a 300-line retrospective on the scrapped Phase 26.2 NLP approach, 9-failure-mode runbook, graceful degradation contract. Palantir-grade gap closure: pino log redaction, type-coverage CI gate at 97% floor, chaos test proving graceful Redis-death degradation (exposed + fixed a real `Promise.race` gap in `cacheGetSafe`), Zod response schema validation. CI/CD pipeline (GitHub Actions + CodeQL + husky + gitleaks). 1277 tests passing.
 
 ## Blockers
 
