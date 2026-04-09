@@ -59,6 +59,7 @@
     "helmet": "^8.1.0",
     "maplibre-contour": "^0.1.0",
     "maplibre-gl": "^5.20.1",
+    "openai": "^6.34.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "react": "^19.1.0",
