@@ -290,11 +290,13 @@ describe('Events Route (Redis accumulator)', () => {
     expect(body.data[0].id).toBe('gdelt-A');
   });
 
-  it('returns 500 when fetchEvents throws and no cache exists', async () => {
+  it('returns 502 when fetchEvents throws and no cache exists', async () => {
     mockFetchEvents.mockRejectedValue(new Error('GDELT down'));
 
     const res = await fetch(`${baseUrl}/api/events`);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.code).toBe('UPSTREAM_FAIL');
   });
 
   it('has no module-level backfill code (no fs access, no GDELT fetch at import time)', async () => {

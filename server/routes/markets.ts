@@ -7,6 +7,7 @@ const log = logger.child({ module: 'markets' });
 import { fetchMarkets } from '../adapters/yahoo-finance.js';
 import { MARKETS_CACHE_TTL, MARKETS_REDIS_TTL_SEC } from '../config.js';
 import { validateQuery } from '../middleware/validate.js';
+import { AppError } from '../middleware/errorHandler.js';
 import type { MarketQuote } from '../types.js';
 
 /** Zod schema for /api/markets query params */
@@ -68,7 +69,11 @@ marketsRouter.get('/', validateQuery(marketsQuerySchema), async (_req, res) => {
         lastFresh: cached.lastFresh,
       });
     } else {
-      throw err; // Express catches and forwards to errorHandler
+      throw new AppError(
+        502,
+        'UPSTREAM_FAIL',
+        `yahoo-finance fetch failed: ${(err as Error).message}`,
+      );
     }
   }
 });

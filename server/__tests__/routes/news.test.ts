@@ -284,11 +284,13 @@ describe('News Route (/api/news)', () => {
     expect(body.data).toHaveLength(1);
   });
 
-  it('GDELT failure with no cache returns 500', async () => {
+  it('GDELT failure with no cache returns 502 UPSTREAM_FAIL', async () => {
     mockFetchGdeltArticles.mockRejectedValue(new Error('GDELT DOC API down'));
 
     const res = await fetch(`${baseUrl}/api/news`);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.code).toBe('UPSTREAM_FAIL');
   });
 
   it('RSS failure does not block response (best-effort)', async () => {

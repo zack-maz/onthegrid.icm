@@ -7,6 +7,7 @@ const log = logger.child({ module: 'sites' });
 import { fetchSites } from '../adapters/overpass.js';
 import { SITES_CACHE_TTL } from '../config.js';
 import { validateQuery } from '../middleware/validate.js';
+import { AppError } from '../middleware/errorHandler.js';
 import type { SiteEntity } from '../types.js';
 
 /** Zod schema for /api/sites query params */
@@ -45,7 +46,7 @@ sitesRouter.get('/', validateQuery(sitesQuerySchema), async (_req, res) => {
     if (cached) {
       res.json({ data: cached.data, stale: true, lastFresh: cached.lastFresh });
     } else {
-      throw err; // Express 5 catches and forwards to errorHandler
+      throw new AppError(502, 'UPSTREAM_FAIL', `overpass fetch failed: ${(err as Error).message}`);
     }
   }
 });

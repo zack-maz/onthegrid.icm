@@ -9,6 +9,7 @@ import { extractBellingcatGeo } from '../lib/eventScoring.js';
 import { WAR_START, CACHE_TTL } from '../config.js';
 import { validateQuery } from '../middleware/validate.js';
 import { sendValidated } from '../middleware/validateResponse.js';
+import { AppError } from '../middleware/errorHandler.js';
 import { eventsResponseSchema } from '../schemas/cacheResponse.js';
 import type { ConflictEventEntity, NewsCluster } from '../types.js';
 
@@ -170,7 +171,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
         lastFresh: cached.lastFresh,
       });
     } else {
-      throw err; // Express 5 catches and forwards to errorHandler
+      throw new AppError(502, 'UPSTREAM_FAIL', `gdelt fetch failed: ${(err as Error).message}`);
     }
   }
 });

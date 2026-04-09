@@ -10,6 +10,7 @@ import { filterAndScoreArticles } from '../lib/newsFilter.js';
 import { deduplicateAndCluster } from '../lib/newsClustering.js';
 import { NEWS_CACHE_TTL, NEWS_REDIS_TTL_SEC, NEWS_SLIDING_WINDOW_MS } from '../config.js';
 import { validateQuery } from '../middleware/validate.js';
+import { AppError } from '../middleware/errorHandler.js';
 import type { NewsArticle, NewsCluster } from '../types.js';
 
 /** Zod schema for /api/news query params */
@@ -89,7 +90,7 @@ newsRouter.get('/', validateQuery(newsQuerySchema), async (_req, res) => {
     if (cached) {
       res.json({ data: cached.data, stale: true, lastFresh: cached.lastFresh });
     } else {
-      throw err; // Express 5 catches and forwards to errorHandler
+      throw new AppError(502, 'UPSTREAM_FAIL', `news fetch failed: ${(err as Error).message}`);
     }
   }
 });

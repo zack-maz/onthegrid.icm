@@ -209,10 +209,12 @@ describe('Weather Route (/api/weather)', () => {
     expect(body.data).toHaveLength(2);
   });
 
-  it('returns 500 when upstream fails and no cache exists', async () => {
+  it('returns 502 UPSTREAM_FAIL when upstream fails and no cache exists', async () => {
     mockFetchWeather.mockRejectedValue(new Error('Open-Meteo API down'));
 
     const res = await fetch(`${baseUrl}/api/weather`);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.code).toBe('UPSTREAM_FAIL');
   });
 });

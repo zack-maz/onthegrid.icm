@@ -5,6 +5,7 @@ import { logger } from '../lib/logger.js';
 const log = logger.child({ module: 'weather' });
 import { fetchWeather } from '../adapters/open-meteo.js';
 import { WEATHER_CACHE_TTL, WEATHER_REDIS_TTL_SEC, WEATHER_CACHE_KEY } from '../config.js';
+import { AppError } from '../middleware/errorHandler.js';
 import type { WeatherGridPoint } from '../types.js';
 
 export const weatherRouter = Router();
@@ -38,7 +39,11 @@ weatherRouter.get('/', async (_req, res) => {
         lastFresh: cached.lastFresh,
       });
     } else {
-      throw err; // Express catches and forwards to errorHandler
+      throw new AppError(
+        502,
+        'UPSTREAM_FAIL',
+        `open-meteo fetch failed: ${(err as Error).message}`,
+      );
     }
   }
 });
