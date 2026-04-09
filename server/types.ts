@@ -9,18 +9,7 @@ export interface MapEntityBase {
   label: string;
 }
 
-export type ConflictEventType =
-  | 'airstrike'
-  | 'ground_combat'
-  | 'shelling'
-  | 'bombing'
-  | 'assassination'
-  | 'abduction'
-  | 'assault'
-  | 'blockade'
-  | 'ceasefire_violation'
-  | 'mass_violence'
-  | 'wmd';
+export type ConflictEventType = 'airstrike' | 'on_ground' | 'explosion' | 'targeted' | 'other';
 
 export type EntityType = 'flight' | 'ship' | ConflictEventType;
 
@@ -70,6 +59,13 @@ export interface ConflictEventEntity extends MapEntityBase {
     actionGeoType?: number; // GDELT ActionGeo_Type (1=country, 2=state, 3=city, 4=landmark)
     originalLat?: number; // Pre-dispersion centroid latitude (set for dispersed events)
     originalLng?: number; // Pre-dispersion centroid longitude (set for dispersed events)
+    // LLM-enriched fields (present when LLM processed the event)
+    summary?: string; // 2-3 sentence situation summary
+    casualties?: { killed?: number; injured?: number; unknown?: boolean };
+    precision?: 'exact' | 'neighborhood' | 'city' | 'region';
+    actors?: string[]; // All actors (richer than actor1/actor2)
+    sourceCount?: number; // Number of independent sources
+    llmProcessed?: boolean; // true when LLM enriched this event
   };
 }
 

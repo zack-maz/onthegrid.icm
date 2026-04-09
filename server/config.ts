@@ -26,6 +26,8 @@ export const envSchema = z.object({
   AISSTREAM_API_KEY: z.string().default(''),
   ACLED_EMAIL: z.string().default(''),
   ACLED_PASSWORD: z.string().default(''),
+  CEREBRAS_API_KEY: z.string().default(''),
+  GROQ_API_KEY: z.string().default(''),
 
   // Tuning parameters
   EVENT_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
@@ -74,6 +76,8 @@ export interface AppConfig {
   opensky: { clientId: string; clientSecret: string };
   aisstream: { apiKey: string };
   acled: { email: string; password: string };
+  cerebras: { apiKey: string };
+  groq: { apiKey: string };
   newsRelevanceThreshold: number;
   eventConfidenceThreshold: number;
   eventMinSources: number;
@@ -95,6 +99,12 @@ export const config: AppConfig = {
   acled: {
     email: env.ACLED_EMAIL,
     password: env.ACLED_PASSWORD,
+  },
+  cerebras: {
+    apiKey: env.CEREBRAS_API_KEY,
+  },
+  groq: {
+    apiKey: env.GROQ_API_KEY,
   },
   newsRelevanceThreshold: env.NEWS_RELEVANCE_THRESHOLD,
   eventConfidenceThreshold: env.EVENT_CONFIDENCE_THRESHOLD,

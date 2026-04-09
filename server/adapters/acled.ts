@@ -48,12 +48,12 @@ async function getACLEDToken(): Promise<string> {
 function classifyEventType(subEventType: string): ConflictEventType {
   const lower = subEventType.toLowerCase();
   if (lower.includes('drone') || lower.includes('air')) return 'airstrike';
-  if (lower.includes('shelling') || lower.includes('artillery')) return 'shelling';
-  if (lower.includes('missile')) return 'ground_combat';
-  if (lower.includes('assassination')) return 'assassination';
-  if (lower.includes('abduction') || lower.includes('kidnap')) return 'abduction';
-  // Default to assault for other conflict types
-  return 'assault';
+  if (lower.includes('shelling') || lower.includes('artillery')) return 'explosion';
+  if (lower.includes('missile')) return 'on_ground';
+  if (lower.includes('assassination')) return 'targeted';
+  if (lower.includes('abduction') || lower.includes('kidnap')) return 'targeted';
+  // Default to on_ground for other conflict types
+  return 'on_ground';
 }
 
 function normalizeEvent(event: Record<string, unknown>): ConflictEventEntity {

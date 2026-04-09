@@ -59,19 +59,7 @@ export const flightEntitySchema = z
 export const conflictEventEntitySchema = z
   .object({
     id: z.string(),
-    type: z.enum([
-      'airstrike',
-      'ground_combat',
-      'shelling',
-      'bombing',
-      'assassination',
-      'abduction',
-      'assault',
-      'blockade',
-      'ceasefire_violation',
-      'mass_violence',
-      'wmd',
-    ]),
+    type: z.enum(['airstrike', 'on_ground', 'explosion', 'targeted', 'other']),
     lat: z.number(),
     lng: z.number(),
     timestamp: z.number(),
@@ -82,6 +70,19 @@ export const conflictEventEntitySchema = z
         subEventType: z.string(),
         fatalities: z.number(),
         cameoCode: z.string(),
+        // LLM-enriched fields (all optional, present when LLM processed)
+        summary: z.string().optional(),
+        casualties: z
+          .object({
+            killed: z.number().optional(),
+            injured: z.number().optional(),
+            unknown: z.boolean().optional(),
+          })
+          .optional(),
+        precision: z.enum(['exact', 'neighborhood', 'city', 'region']).optional(),
+        actors: z.array(z.string()).optional(),
+        sourceCount: z.number().optional(),
+        llmProcessed: z.boolean().optional(),
       })
       .passthrough(),
   })

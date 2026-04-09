@@ -122,29 +122,29 @@ function getCol(cols: string[], idx: number): string {
 // Note: CAMEO base code exclusion is handled via config.eventExcludedCameo (not hardcoded here).
 
 const BASE_CODE_MAP: Record<string, ConflictEventType> = {
-  '181': 'abduction',
-  '182': 'assault',
-  '183': 'bombing',
-  '184': 'assault',
-  '185': 'assassination',
-  '186': 'assassination',
-  '190': 'ground_combat',
-  '191': 'blockade',
-  '193': 'ground_combat',
-  '194': 'shelling',
-  '195': 'airstrike',
-  '196': 'ceasefire_violation',
-  '200': 'mass_violence',
-  '201': 'mass_violence',
-  '202': 'mass_violence',
-  '203': 'mass_violence',
-  '204': 'wmd',
+  '181': 'targeted', // Abduction / hostage-taking
+  '182': 'on_ground', // Physical assault
+  '183': 'explosion', // Bombing
+  '184': 'on_ground', // Use as human shield
+  '185': 'targeted', // Assassination attempt
+  '186': 'targeted', // Assassination
+  '190': 'on_ground', // Conventional military force
+  '191': 'other', // Blockade
+  '193': 'on_ground', // Small arms / light weapons
+  '194': 'explosion', // Artillery / tank support (shelling)
+  '195': 'airstrike', // Aerial weapons
+  '196': 'other', // Ceasefire violation
+  '200': 'other', // Unconventional mass violence
+  '201': 'other', // Mass expulsion
+  '202': 'other', // Mass killings
+  '203': 'other', // Ethnic cleansing
+  '204': 'other', // WMD
 };
 
 const ROOT_FALLBACK: Record<string, ConflictEventType> = {
-  '18': 'assault',
-  '19': 'ground_combat',
-  '20': 'mass_violence',
+  '18': 'on_ground',
+  '19': 'on_ground',
+  '20': 'other',
 };
 
 /**
@@ -155,7 +155,7 @@ export function classifyByBaseCode(
   eventBaseCode: string,
   eventRootCode: string,
 ): ConflictEventType {
-  return BASE_CODE_MAP[eventBaseCode] ?? ROOT_FALLBACK[eventRootCode] ?? 'assault';
+  return BASE_CODE_MAP[eventBaseCode] ?? ROOT_FALLBACK[eventRootCode] ?? 'on_ground';
 }
 
 /**
@@ -571,7 +571,7 @@ export function parseAndFilterWithTrace(
   for (const rej of phaseARejections) {
     const id = `gdelt-${getCol(rej.cols, COL.GLOBALEVENTID)}`;
     const defaultPhaseB = {
-      originalType: 'assault' as const,
+      originalType: 'on_ground' as const,
       reclassified: false,
       geoPrecision: 'precise' as const,
       confidenceSubScores: {
@@ -620,7 +620,7 @@ export function parseAndFilterWithTrace(
   for (const sup of superseded) {
     const id = `gdelt-${getCol(sup.cols, COL.GLOBALEVENTID)}`;
     const defaultPhaseB = {
-      originalType: 'assault' as const,
+      originalType: 'on_ground' as const,
       reclassified: false,
       geoPrecision: 'precise' as const,
       confidenceSubScores: {

@@ -26,7 +26,6 @@ export interface BellingcatArticle {
  * Low (0.1): Catch-all / vague codes that GDELT frequently misapplies to non-conflict articles —
  *            "unconventional violence NOS", "physical assault", "conventional military force NOS".
  */
-// TODO(26.2): Review CAMEO exclusion list in GDELT redo
 export const CAMEO_SPECIFICITY: Record<string, number> = {
   // Low — catch-all codes prone to false positives
   '180': 0.1, // Unconventional violence, not specified below
@@ -71,17 +70,11 @@ export const GOLDSTEIN_CEILINGS: Record<
   ConflictEventType,
   { ceiling: number; downgrade: ConflictEventType | null }
 > = {
-  mass_violence: { ceiling: -7, downgrade: 'assault' },
-  wmd: { ceiling: -7, downgrade: 'assault' },
-  airstrike: { ceiling: -5, downgrade: 'shelling' },
-  bombing: { ceiling: -5, downgrade: 'shelling' },
-  ground_combat: { ceiling: -4, downgrade: 'assault' },
-  shelling: { ceiling: -4, downgrade: 'assault' },
-  assassination: { ceiling: -3, downgrade: 'assault' },
-  abduction: { ceiling: -3, downgrade: 'assault' },
-  assault: { ceiling: -1, downgrade: null },
-  blockade: { ceiling: -1, downgrade: 'assault' },
-  ceasefire_violation: { ceiling: -1, downgrade: 'assault' },
+  airstrike: { ceiling: -5, downgrade: 'on_ground' },
+  explosion: { ceiling: -5, downgrade: 'on_ground' },
+  on_ground: { ceiling: -3, downgrade: 'other' },
+  targeted: { ceiling: -3, downgrade: 'other' },
+  other: { ceiling: -1, downgrade: null },
 };
 
 /**

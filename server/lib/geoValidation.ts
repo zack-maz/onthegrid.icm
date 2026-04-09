@@ -41,7 +41,6 @@ export const NON_ME_FULLNAME_COUNTRIES = new Set([
  * FIPS 10-4 code to expected country name suffixes in ActionGeo_FullName.
  * Covers all 16 MIDDLE_EAST_FIPS codes.
  */
-// TODO(26.2): Externalize FIPS lookup tables
 export const FIPS_TO_EXPECTED_COUNTRY: Record<string, string[]> = {
   IR: ['Iran'],
   IZ: ['Iraq'],
@@ -66,7 +65,6 @@ export const FIPS_TO_EXPECTED_COUNTRY: Record<string, string[]> = {
  * Events at these exact coordinates are likely geocoded to city center
  * rather than the actual event location.
  */
-// TODO(26.2): Replace hardcoded 42-entry table with GeoNames-sourced data
 export const CITY_CENTROIDS: Array<{ name: string; lat: number; lng: number }> = [
   { name: 'Tehran', lat: 35.6892, lng: 51.389 },
   { name: 'Baghdad', lat: 33.3152, lng: 44.3661 },
