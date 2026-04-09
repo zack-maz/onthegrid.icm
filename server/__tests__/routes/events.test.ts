@@ -571,7 +571,7 @@ describe('Events Route (Redis accumulator)', () => {
       mockFetchEvents.mockResolvedValue([eventA]);
       mockGroupGdeltRows.mockReturnValue([{ key: 'grp-1', entities: [eventA], centroidLat: 33.3, centroidLng: 44.4, primaryCameo: '195', timestamp: Date.now(), totalMentions: 10, totalSources: 3, sourceUrls: [] }]);
       mockProcessEventGroups.mockResolvedValue([{ groupKey: 'grp-1', location: { name: 'Baghdad', precision: 'city' }, type: 'airstrike', actors: ['US Air Force'], severity: 'high', summary: 'Airstrike on Baghdad', casualties: { killed: 2, injured: 5, unknown: false }, sourceCount: 3 }]);
-      mockGeocodeEnrichedEvents.mockResolvedValue([llmEvent]);
+      mockGeocodeEnrichedEvents.mockResolvedValue([{ groupKey: 'grp-1', resolvedLat: 33.3, resolvedLng: 44.4, location: { name: 'Baghdad', precision: 'city' }, type: 'airstrike', actors: ['US Air Force'], severity: 'high', summary: 'Airstrike on Baghdad', casualties: { killed: 2, injured: 5, unknown: false }, sourceCount: 3 }]);
 
       const res = await fetch(`${baseUrl}/api/events`);
       const body = await res.json();
@@ -639,7 +639,7 @@ describe('Events Route (Redis accumulator)', () => {
       mockFetchEvents.mockResolvedValue([eventA]);
       mockGroupGdeltRows.mockReturnValue([{ key: 'grp-1', entities: [eventA], centroidLat: 33.3, centroidLng: 44.4, primaryCameo: '195', timestamp: Date.now(), totalMentions: 10, totalSources: 3, sourceUrls: [] }]);
       mockProcessEventGroups.mockResolvedValue([{ groupKey: 'grp-1', location: { name: 'Baghdad', precision: 'city' }, type: 'airstrike', actors: ['US Air Force'], severity: 'high', summary: 'Airstrike on Baghdad', casualties: { killed: 2, injured: 5, unknown: false }, sourceCount: 3 }]);
-      mockGeocodeEnrichedEvents.mockResolvedValue([llmEvent]);
+      mockGeocodeEnrichedEvents.mockResolvedValue([{ groupKey: 'grp-1', resolvedLat: 33.3, resolvedLng: 44.4, location: { name: 'Baghdad', precision: 'city' }, type: 'airstrike', actors: ['US Air Force'], severity: 'high', summary: 'Airstrike on Baghdad', casualties: { killed: 2, injured: 5, unknown: false }, sourceCount: 3 }]);
 
       const res = await fetch(`${baseUrl}/api/events`);
       expect(res.ok).toBe(true);
@@ -672,12 +672,7 @@ describe('Events Route (Redis accumulator)', () => {
       const newEnriched = { groupKey: 'grp-new', location: { name: 'Mosul', precision: 'city' }, type: 'on_ground', actors: ['Iraqi forces'], severity: 'medium', summary: 'Ground operation in Mosul', casualties: { killed: 0, injured: 0, unknown: true }, sourceCount: 2 };
       mockProcessEventGroups.mockResolvedValue([newEnriched]);
 
-      const newGeocodedEvent = makeEvent({
-        id: 'llm-new-1',
-        label: 'Mosul operation',
-        data: { ...newEvent.data, llmProcessed: true, summary: 'Ground operation in Mosul', precision: 'city' as const },
-      });
-      mockGeocodeEnrichedEvents.mockResolvedValue([newGeocodedEvent]);
+      mockGeocodeEnrichedEvents.mockResolvedValue([{ ...newEnriched, resolvedLat: 34.0, resolvedLng: 45.0 }]);
 
       const res = await fetch(`${baseUrl}/api/events`);
       const body = await res.json();

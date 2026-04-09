@@ -26,9 +26,6 @@ export const envSchema = z.object({
   AISSTREAM_API_KEY: z.string().default(''),
   ACLED_EMAIL: z.string().default(''),
   ACLED_PASSWORD: z.string().default(''),
-  CEREBRAS_API_KEY: z.string().default(''),
-  GROQ_API_KEY: z.string().default(''),
-
   // LLM provider API keys (Phase 27 — graceful degradation, empty string means unconfigured)
   CEREBRAS_API_KEY: z.string().default(''),
   GROQ_API_KEY: z.string().default(''),
