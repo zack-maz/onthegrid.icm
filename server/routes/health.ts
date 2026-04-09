@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { redis, cacheGet } from '../cache/redis.js';
+import { redis, cacheGetSafe } from '../cache/redis.js';
 
 export const healthRouter = Router();
 
@@ -42,7 +42,7 @@ healthRouter.get('/', async (_req, res) => {
   await Promise.all(
     Object.entries(SOURCE_KEYS).map(async ([name, key]) => {
       try {
-        const entry = await cacheGet(key, 999_999_999);
+        const entry = await cacheGetSafe(key, 999_999_999);
         sources[name] = entry?.lastFresh ?? null;
       } catch {
         sources[name] = null;

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { redis, cacheGet } from '../cache/redis.js';
+import { redis, cacheGetSafe } from '../cache/redis.js';
 import { logger } from '../lib/logger.js';
 
 const log = logger.child({ module: 'cron-health' });
@@ -40,7 +40,7 @@ cronHealthRouter.get('/', async (_req, res) => {
   await Promise.all(
     Object.entries(SOURCE_KEYS).map(async ([name, key]) => {
       try {
-        const entry = await cacheGet(key, 999_999_999);
+        const entry = await cacheGetSafe(key, 999_999_999);
         const lastFresh = entry?.lastFresh ?? null;
         const stale = lastFresh !== null && now - lastFresh > STALE_THRESHOLD_MS;
 
