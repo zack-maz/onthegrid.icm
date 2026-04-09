@@ -87,7 +87,7 @@ describe('ACLED Adapter', () => {
     expect(events).toHaveLength(1);
     const event = events[0];
     expect(event.id).toBe('event-IRN12345');
-    expect(event.type).toBe('shelling');
+    expect(event.type).toBe('explosion');
     expect(event.lat).toBe(35.6892);
     expect(event.lng).toBe(51.389);
     expect(event.label).toContain('Explosions/Remote violence');
@@ -100,7 +100,7 @@ describe('ACLED Adapter', () => {
     expect(event.data.source).toBe('Reuters');
   });
 
-  it('classifies "Shelling/artillery/missile attack" as shelling type', async () => {
+  it('classifies "Shelling/artillery/missile attack" as explosion type', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ access_token: 'acled-token', expires_in: 86400 }),
@@ -111,7 +111,7 @@ describe('ACLED Adapter', () => {
     });
 
     const events = await fetchEvents();
-    expect(events[0].type).toBe('shelling');
+    expect(events[0].type).toBe('explosion');
   });
 
   it('classifies "Air/drone strike" as airstrike type', async () => {

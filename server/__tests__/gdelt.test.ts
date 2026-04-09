@@ -290,8 +290,8 @@ describe('GDELT Adapter', () => {
       expect(events[0].data.geoPrecision).toBe('precise');
     });
 
-    it('reclassifies airstrike with Goldstein=-1 to shelling', async () => {
-      // Airstrike (base code 195) with Goldstein=-1: ceiling is -5, diff = -1 - (-5) = 4 > 3 -> reclassify to shelling
+    it('reclassifies airstrike with Goldstein=-1 to on_ground', async () => {
+      // Airstrike (base code 195) with Goldstein=-1: ceiling is -5, diff = -1 - (-5) = 4 > 3 -> reclassify to on_ground
       const row = makeGdeltRow({
         0: '5050505050',
         26: '195',
@@ -303,7 +303,7 @@ describe('GDELT Adapter', () => {
       });
       const events = await parseAndFilter(row);
       expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('shelling');
+      expect(events[0].type).toBe('on_ground');
     });
 
     it('attaches confidence score (0 < confidence <= 1) to all returned events', async () => {
@@ -341,64 +341,68 @@ describe('GDELT Adapter', () => {
       expect(classifyByBaseCode('195', '19')).toBe('airstrike');
     });
 
-    it('returns ground_combat for base code 190', () => {
-      expect(classifyByBaseCode('190', '19')).toBe('ground_combat');
+    it('returns on_ground for base code 190', () => {
+      expect(classifyByBaseCode('190', '19')).toBe('on_ground');
     });
 
-    it('returns ground_combat for base code 193', () => {
-      expect(classifyByBaseCode('193', '19')).toBe('ground_combat');
+    it('returns on_ground for base code 193', () => {
+      expect(classifyByBaseCode('193', '19')).toBe('on_ground');
     });
 
-    it('returns shelling for base code 194', () => {
-      expect(classifyByBaseCode('194', '19')).toBe('shelling');
+    it('returns explosion for base code 194', () => {
+      expect(classifyByBaseCode('194', '19')).toBe('explosion');
     });
 
-    it('returns bombing for base code 183', () => {
-      expect(classifyByBaseCode('183', '18')).toBe('bombing');
+    it('returns explosion for base code 183', () => {
+      expect(classifyByBaseCode('183', '18')).toBe('explosion');
     });
 
-    it('returns assassination for base code 185', () => {
-      expect(classifyByBaseCode('185', '18')).toBe('assassination');
+    it('returns targeted for base code 185', () => {
+      expect(classifyByBaseCode('185', '18')).toBe('targeted');
     });
 
-    it('returns abduction for base code 181', () => {
-      expect(classifyByBaseCode('181', '18')).toBe('abduction');
+    it('returns targeted for base code 181', () => {
+      expect(classifyByBaseCode('181', '18')).toBe('targeted');
     });
 
-    it('returns assault for base code 180', () => {
-      expect(classifyByBaseCode('180', '18')).toBe('assault');
+    it('returns targeted for base code 186', () => {
+      expect(classifyByBaseCode('186', '18')).toBe('targeted');
     });
 
-    it('returns blockade for base code 191', () => {
-      expect(classifyByBaseCode('191', '19')).toBe('blockade');
+    it('returns on_ground for base code 180 (via root fallback)', () => {
+      expect(classifyByBaseCode('180', '18')).toBe('on_ground');
     });
 
-    it('returns ceasefire_violation for base code 196', () => {
-      expect(classifyByBaseCode('196', '19')).toBe('ceasefire_violation');
+    it('returns other for base code 191', () => {
+      expect(classifyByBaseCode('191', '19')).toBe('other');
     });
 
-    it('returns mass_violence for base code 200', () => {
-      expect(classifyByBaseCode('200', '20')).toBe('mass_violence');
+    it('returns other for base code 196', () => {
+      expect(classifyByBaseCode('196', '19')).toBe('other');
     });
 
-    it('returns wmd for base code 204', () => {
-      expect(classifyByBaseCode('204', '20')).toBe('wmd');
+    it('returns other for base code 200', () => {
+      expect(classifyByBaseCode('200', '20')).toBe('other');
     });
 
-    it('falls back to assault for unmapped root 18 codes', () => {
-      expect(classifyByBaseCode('187', '18')).toBe('assault');
+    it('returns other for base code 204', () => {
+      expect(classifyByBaseCode('204', '20')).toBe('other');
     });
 
-    it('falls back to ground_combat for unmapped root 19 codes', () => {
-      expect(classifyByBaseCode('199', '19')).toBe('ground_combat');
+    it('falls back to on_ground for unmapped root 18 codes', () => {
+      expect(classifyByBaseCode('187', '18')).toBe('on_ground');
     });
 
-    it('falls back to mass_violence for unmapped root 20 codes', () => {
-      expect(classifyByBaseCode('209', '20')).toBe('mass_violence');
+    it('falls back to on_ground for unmapped root 19 codes', () => {
+      expect(classifyByBaseCode('199', '19')).toBe('on_ground');
     });
 
-    it('falls back to assault for completely unknown codes', () => {
-      expect(classifyByBaseCode('990', '99')).toBe('assault');
+    it('falls back to other for unmapped root 20 codes', () => {
+      expect(classifyByBaseCode('209', '20')).toBe('other');
+    });
+
+    it('falls back to on_ground for completely unknown codes', () => {
+      expect(classifyByBaseCode('990', '99')).toBe('on_ground');
     });
   });
 
@@ -543,9 +547,9 @@ describe('GDELT Adapter', () => {
       expect(events[0].lat).toBe(35.6892);
       expect(events[0].data.originalLat).toBeUndefined();
 
-      // Second event: Syria bombing (base code 183)
+      // Second event: Syria explosion (base code 183)
       expect(events[1].id).toBe('gdelt-9876543210');
-      expect(events[1].type).toBe('bombing');
+      expect(events[1].type).toBe('explosion');
       // Raw Damascus centroid coordinates (no dispersion)
       expect(events[1].lat).toBe(33.5138);
       expect(events[1].data.originalLat).toBeUndefined();
@@ -612,7 +616,7 @@ describe('GDELT Adapter', () => {
           28: '19',
         });
         const events = await parseAndFilter(row);
-        // 192 maps to blockade. With enough mentions/sources, it should pass.
+        // 192 maps to on_ground (via root fallback). With enough mentions/sources, it should pass.
         expect(events.length).toBeGreaterThanOrEqual(1);
       } finally {
         mockConfig.eventExcludedCameo = origExcluded;

@@ -285,17 +285,17 @@ describe('GDELT Pipeline Fixtures', () => {
       expect(events[0].id).toBe('gdelt-TP_AIRSTRIKE_01');
     });
 
-    it('Yemen shelling passes the pipeline', async () => {
+    it('Yemen explosion (shelling) passes the pipeline', async () => {
       const events = await parseAndFilter(TP_YEMEN_SHELLING);
       expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('shelling');
+      expect(events[0].type).toBe('explosion');
       expect(events[0].id).toBe('gdelt-TP_SHELLING_01');
     });
 
-    it('Syria bombing passes the pipeline', async () => {
+    it('Syria explosion (bombing) passes the pipeline', async () => {
       const events = await parseAndFilter(TP_SYRIA_BOMBING);
       expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('bombing');
+      expect(events[0].type).toBe('explosion');
       expect(events[0].id).toBe('gdelt-TP_BOMBING_01');
     });
 

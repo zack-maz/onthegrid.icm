@@ -49,23 +49,26 @@ function makeTestEvent(
 
 describe('eventScoring', () => {
   describe('GOLDSTEIN_CEILINGS', () => {
-    it('has entries for all 11 ConflictEventTypes', () => {
+    it('has entries for all 5 ConflictEventTypes', () => {
       const expectedTypes: ConflictEventType[] = [
         'airstrike',
-        'ground_combat',
-        'shelling',
-        'bombing',
-        'assassination',
-        'abduction',
-        'assault',
-        'blockade',
-        'ceasefire_violation',
-        'mass_violence',
-        'wmd',
+        'on_ground',
+        'explosion',
+        'targeted',
+        'other',
       ];
       for (const type of expectedTypes) {
         expect(GOLDSTEIN_CEILINGS).toHaveProperty(type);
       }
+      expect(Object.keys(GOLDSTEIN_CEILINGS)).toHaveLength(5);
+    });
+
+    it('has correct ceiling values for each type', () => {
+      expect(GOLDSTEIN_CEILINGS.airstrike.ceiling).toBe(-5);
+      expect(GOLDSTEIN_CEILINGS.explosion.ceiling).toBe(-5);
+      expect(GOLDSTEIN_CEILINGS.on_ground.ceiling).toBe(-3);
+      expect(GOLDSTEIN_CEILINGS.targeted.ceiling).toBe(-3);
+      expect(GOLDSTEIN_CEILINGS.other.ceiling).toBe(-1);
     });
   });
 
@@ -82,11 +85,11 @@ describe('eventScoring', () => {
       expect(result.type).toBe('airstrike');
     });
 
-    it('reclassifies airstrike with Goldstein=-1 (exceeds -5 ceiling by 4 > 3) to shelling', () => {
+    it('reclassifies airstrike with Goldstein=-1 (exceeds -5 ceiling by 4 > 3) to on_ground', () => {
       // ceiling=-5, goldstein=-1, diff = -1 - (-5) = 4 > 3 --> reclassify
       const event = makeTestEvent({ type: 'airstrike', goldsteinScale: -1 });
       const result = applyGoldsteinSanity(event);
-      expect(result.type).toBe('shelling');
+      expect(result.type).toBe('on_ground');
     });
 
     it('does NOT reclassify airstrike with Goldstein=-3 (exceeds -5 ceiling by 2, within 3 tolerance)', () => {
@@ -96,17 +99,23 @@ describe('eventScoring', () => {
       expect(result.type).toBe('airstrike');
     });
 
-    it('does NOT reclassify assault (no downgrade target)', () => {
-      const event = makeTestEvent({ type: 'assault', goldsteinScale: -0.5 });
+    it('does NOT reclassify other (no downgrade target)', () => {
+      const event = makeTestEvent({ type: 'other', goldsteinScale: -0.5 });
       const result = applyGoldsteinSanity(event);
-      expect(result.type).toBe('assault');
+      expect(result.type).toBe('other');
     });
 
-    it('reclassifies mass_violence with Goldstein=-2 to assault', () => {
-      // ceiling=-7, goldstein=-2, diff = -2 - (-7) = 5 > 3 --> reclassify to assault
-      const event = makeTestEvent({ type: 'mass_violence', goldsteinScale: -2 });
+    it('reclassifies on_ground with Goldstein=-0.5 (exceeds -3 ceiling by 2.5, within 3 tolerance) stays on_ground', () => {
+      // ceiling=-3, goldstein=-0.5, diff = -0.5 - (-3) = 2.5 <= 3 --> no reclassify
+      const event = makeTestEvent({ type: 'on_ground', goldsteinScale: -0.5 });
       const result = applyGoldsteinSanity(event);
-      expect(result.type).toBe('assault');
+      expect(result.type).toBe('on_ground');
+    });
+
+    it('reclassifies targeted with Goldstein=0.5 (positive, skip) stays targeted', () => {
+      const event = makeTestEvent({ type: 'targeted', goldsteinScale: 0.5 });
+      const result = applyGoldsteinSanity(event);
+      expect(result.type).toBe('targeted');
     });
 
     it('boundary: exact ceiling+3 does NOT trigger reclassification (strictly > 3)', () => {
@@ -150,7 +159,7 @@ describe('eventScoring', () => {
       // Using 180 here still works -- it falls through to default 0.5 (medium).
       // With all-low signals + default specificity, score is ~0.29.
       const event = makeTestEvent({
-        type: 'assault',
+        type: 'on_ground',
         actor1: '',
         actor2: '',
         goldsteinScale: 0,
@@ -349,7 +358,7 @@ describe('eventScoring', () => {
       // But with no actors (0.0), 1 mention, 1 source, centroid, Goldstein 0 (unknown),
       // the score is still low enough to be rejected.
       const event = makeTestEvent({
-        type: 'assault',
+        type: 'on_ground',
         actor1: '',
         actor2: '',
         goldsteinScale: 0,

@@ -30,7 +30,7 @@ const makeEvent = (overrides: Partial<ConflictEventEntity> = {}): ConflictEventE
 });
 
 const eventA = makeEvent({ id: 'gdelt-A', label: 'Event A' });
-const eventB = makeEvent({ id: 'gdelt-B', label: 'Event B', type: 'ground_combat' });
+const eventB = makeEvent({ id: 'gdelt-B', label: 'Event B', type: 'on_ground' });
 const eventC = makeEvent({
   id: 'gdelt-C',
   label: 'Event C (old)',
@@ -78,6 +78,8 @@ vi.mock('../../config.js', async (importOriginal) => {
     opensky: { clientId: 'test-id', clientSecret: 'test-secret' },
     aisstream: { apiKey: 'test-ais-key' },
     acled: { email: 'test@example.com', password: 'test-pass' },
+    cerebras: { apiKey: '' },
+    groq: { apiKey: '' },
     newsRelevanceThreshold: 0.7,
     eventConfidenceThreshold: 0.35,
     eventMinSources: 2,
@@ -310,12 +312,12 @@ describe('Events Route (Redis accumulator)', () => {
     const backfillEvent1 = makeEvent({
       id: 'gdelt-BF1',
       label: 'Backfill Event 1',
-      type: 'shelling',
+      type: 'explosion',
     });
     const backfillEvent2 = makeEvent({
       id: 'gdelt-BF2',
       label: 'Backfill Event 2',
-      type: 'bombing',
+      type: 'targeted',
     });
 
     it('triggers backfill on cache miss and merges results into response', async () => {
