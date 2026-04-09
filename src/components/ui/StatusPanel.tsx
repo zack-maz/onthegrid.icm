@@ -3,6 +3,8 @@ import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useSiteStore } from '@/stores/siteStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useLayerStore } from '@/stores/layerStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
@@ -50,6 +52,13 @@ export function StatusPanel() {
   const siteConnectionStatus = useSiteStore((s) => s.connectionStatus);
   const siteStatus: FeedStatus = siteConnectionStatus === 'idle' ? 'loading' : siteConnectionStatus;
 
+  const waterLayerActive = useLayerStore((s) => s.activeLayers.has('water'));
+  const waterConnectionStatus = useWaterStore((s) => s.connectionStatus);
+  const waterStatus: FeedStatus =
+    waterConnectionStatus === 'idle' ? 'loading' : waterConnectionStatus;
+  const waterFacilities = useWaterStore((s) => s.facilities);
+  const visibleWater = waterFacilities.length;
+
   const flightDegraded = useFlightStore((s) => s.degraded);
   const shipDegraded = useShipStore((s) => s.degraded);
   const eventDegraded = useEventStore((s) => s.degraded);
@@ -95,6 +104,7 @@ export function StatusPanel() {
           <FeedLine status={shipStatus} count={visibleShips} label="ships" />
           <FeedLine status={eventStatus} count={visibleEvents} label="events" />
           <FeedLine status={siteStatus} count={visibleSites} label="sites" />
+          {waterLayerActive && <FeedLine status={waterStatus} count={visibleWater} label="water" />}
         </div>
       )}
     </OverlayPanel>
