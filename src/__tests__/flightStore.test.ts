@@ -118,6 +118,83 @@ describe('flightStore', () => {
     expect(state.connectionStatus).toBe('error');
   });
 
+  describe('observability fields', () => {
+    it('setError() with no args sets lastError to "Unknown error" (backward compat)', () => {
+      useFlightStore.getState().setError();
+
+      const state = useFlightStore.getState();
+      expect(state.connectionStatus).toBe('error');
+      expect(state.lastError).toBe('Unknown error');
+    });
+
+    it('setError("Flights API 503") sets lastError to "Flights API 503"', () => {
+      useFlightStore.getState().setError('Flights API 503');
+
+      expect(useFlightStore.getState().lastError).toBe('Flights API 503');
+    });
+
+    it('setFlightData clears lastError to null', () => {
+      // First put the store in error state
+      useFlightStore.getState().setError('Some error');
+      expect(useFlightStore.getState().lastError).toBe('Some error');
+
+      // Then successful data clears it
+      const response: CacheResponse<FlightEntity[]> = {
+        data: [mockFlight()],
+        stale: false,
+        lastFresh: Date.now(),
+      };
+      useFlightStore.getState().setFlightData(response);
+
+      expect(useFlightStore.getState().lastError).toBeNull();
+    });
+
+    it('recordFetch appends to recentFetches', () => {
+      useFlightStore.getState().recordFetch(true, 150);
+
+      const state = useFlightStore.getState();
+      expect(state.recentFetches).toHaveLength(1);
+      expect(state.recentFetches[0]).toMatchObject({
+        ok: true,
+        durationMs: 150,
+      });
+      expect(state.recentFetches[0].timestamp).toBeTypeOf('number');
+    });
+
+    it('recordFetch caps at 10 entries (call 12 times, assert length === 10)', () => {
+      const { recordFetch } = useFlightStore.getState();
+      for (let i = 0; i < 12; i++) {
+        recordFetch(i % 2 === 0, i * 10);
+      }
+
+      const state = useFlightStore.getState();
+      expect(state.recentFetches).toHaveLength(10);
+      // First two dropped, so oldest remaining should have durationMs = 20
+      expect(state.recentFetches[0].durationMs).toBe(20);
+    });
+
+    it('setNextPollAt sets nextPollAt', () => {
+      const ts = Date.now() + 5000;
+      useFlightStore.getState().setNextPollAt(ts);
+
+      expect(useFlightStore.getState().nextPollAt).toBe(ts);
+    });
+
+    it('setNextPollAt(null) clears nextPollAt', () => {
+      useFlightStore.getState().setNextPollAt(Date.now() + 5000);
+      useFlightStore.getState().setNextPollAt(null);
+
+      expect(useFlightStore.getState().nextPollAt).toBeNull();
+    });
+
+    it('initial observability fields are correct', () => {
+      const state = useFlightStore.getState();
+      expect(state.lastError).toBeNull();
+      expect(state.nextPollAt).toBeNull();
+      expect(state.recentFetches).toEqual([]);
+    });
+  });
+
   describe('rate limited status', () => {
     it('ConnectionStatus includes rate_limited as valid value', () => {
       useFlightStore.setState({ connectionStatus: 'rate_limited' });

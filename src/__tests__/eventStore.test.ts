@@ -106,4 +106,70 @@ describe('eventStore', () => {
     const state = useEventStore.getState();
     expect('clearStaleData' in state).toBe(false);
   });
+
+  describe('observability fields', () => {
+    it('setError() with no args sets lastError to "Unknown error"', () => {
+      useEventStore.getState().setError();
+
+      const state = useEventStore.getState();
+      expect(state.connectionStatus).toBe('error');
+      expect(state.lastError).toBe('Unknown error');
+    });
+
+    it('setError("Events API 503") sets lastError to "Events API 503"', () => {
+      useEventStore.getState().setError('Events API 503');
+
+      expect(useEventStore.getState().lastError).toBe('Events API 503');
+    });
+
+    it('setEventData clears lastError to null', () => {
+      useEventStore.getState().setError('Some error');
+      expect(useEventStore.getState().lastError).toBe('Some error');
+
+      const response: CacheResponse<ConflictEventEntity[]> = {
+        data: [mockAirstrikeEvent],
+        stale: false,
+        lastFresh: Date.now(),
+      };
+      useEventStore.getState().setEventData(response);
+
+      expect(useEventStore.getState().lastError).toBeNull();
+    });
+
+    it('recordFetch appends to recentFetches', () => {
+      useEventStore.getState().recordFetch(true, 200);
+
+      const state = useEventStore.getState();
+      expect(state.recentFetches).toHaveLength(1);
+      expect(state.recentFetches[0]).toMatchObject({
+        ok: true,
+        durationMs: 200,
+      });
+    });
+
+    it('recordFetch caps at 10 entries', () => {
+      const { recordFetch } = useEventStore.getState();
+      for (let i = 0; i < 12; i++) {
+        recordFetch(true, i * 10);
+      }
+
+      const state = useEventStore.getState();
+      expect(state.recentFetches).toHaveLength(10);
+      expect(state.recentFetches[0].durationMs).toBe(20);
+    });
+
+    it('setNextPollAt sets nextPollAt', () => {
+      const ts = Date.now() + 900_000;
+      useEventStore.getState().setNextPollAt(ts);
+
+      expect(useEventStore.getState().nextPollAt).toBe(ts);
+    });
+
+    it('initial observability fields are correct', () => {
+      const state = useEventStore.getState();
+      expect(state.lastError).toBeNull();
+      expect(state.nextPollAt).toBeNull();
+      expect(state.recentFetches).toEqual([]);
+    });
+  });
 });
