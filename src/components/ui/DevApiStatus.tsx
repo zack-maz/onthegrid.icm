@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useEventStore } from '@/stores/eventStore';
@@ -230,36 +231,42 @@ export function DevApiStatus() {
 
   const llmStatus = useLLMStatusPolling();
 
-  // Store selectors
-  const flights = useFlightStore((s) => ({
-    status: s.connectionStatus,
-    count: s.flightCount,
-    lastFetch: s.lastFetchAt,
-    lastError: s.lastError,
-    nextPollAt: s.nextPollAt,
-    recentFetches: s.recentFetches,
-    unidentifiedCount: s.flights.filter((f) => f.data.unidentified).length,
-    groundCount: s.flights.filter((f) => (f.data.altitude ?? 0) <= 0).length,
-  }));
+  // Store selectors — useShallow prevents infinite re-render from new object refs
+  const flights = useFlightStore(
+    useShallow((s) => ({
+      status: s.connectionStatus,
+      count: s.flightCount,
+      lastFetch: s.lastFetchAt,
+      lastError: s.lastError,
+      nextPollAt: s.nextPollAt,
+      recentFetches: s.recentFetches,
+      unidentifiedCount: s.flights.filter((f) => f.data.unidentified).length,
+      groundCount: s.flights.filter((f) => (f.data.altitude ?? 0) <= 0).length,
+    })),
+  );
 
-  const ships = useShipStore((s) => ({
-    status: s.connectionStatus,
-    count: s.shipCount,
-    lastFetch: s.lastFetchAt,
-    lastError: s.lastError,
-    nextPollAt: s.nextPollAt,
-    recentFetches: s.recentFetches,
-  }));
+  const ships = useShipStore(
+    useShallow((s) => ({
+      status: s.connectionStatus,
+      count: s.shipCount,
+      lastFetch: s.lastFetchAt,
+      lastError: s.lastError,
+      nextPollAt: s.nextPollAt,
+      recentFetches: s.recentFetches,
+    })),
+  );
 
-  const eventsRaw = useEventStore((s) => ({
-    status: s.connectionStatus,
-    count: s.eventCount,
-    lastFetch: s.lastFetchAt,
-    lastError: s.lastError,
-    nextPollAt: s.nextPollAt,
-    recentFetches: s.recentFetches,
-    events: s.events,
-  }));
+  const eventsRaw = useEventStore(
+    useShallow((s) => ({
+      status: s.connectionStatus,
+      count: s.eventCount,
+      lastFetch: s.lastFetchAt,
+      lastError: s.lastError,
+      nextPollAt: s.nextPollAt,
+      recentFetches: s.recentFetches,
+      events: s.events,
+    })),
+  );
 
   const eventQuality = useMemo(() => {
     const evts = eventsRaw.events;
@@ -271,52 +278,62 @@ export function DevApiStatus() {
     return { llmCount, rawCount, exact, city, region };
   }, [eventsRaw.events]);
 
-  const sites = useSiteStore((s) => ({
-    status: s.connectionStatus,
-    count: s.siteCount,
-    lastFetch: null as number | null,
-    lastError: s.lastError,
-    nextPollAt: s.nextPollAt,
-    recentFetches: s.recentFetches,
-    sites: s.sites,
-  }));
+  const sites = useSiteStore(
+    useShallow((s) => ({
+      status: s.connectionStatus,
+      count: s.siteCount,
+      lastFetch: null as number | null,
+      lastError: s.lastError,
+      nextPollAt: s.nextPollAt,
+      recentFetches: s.recentFetches,
+      sites: s.sites,
+    })),
+  );
 
-  const news = useNewsStore((s) => ({
-    status: s.connectionStatus,
-    count: s.clusterCount,
-    lastFetch: s.lastFetchAt,
-    lastError: s.lastError,
-    nextPollAt: s.nextPollAt,
-    recentFetches: s.recentFetches,
-    articleCount: s.articleCount,
-  }));
+  const news = useNewsStore(
+    useShallow((s) => ({
+      status: s.connectionStatus,
+      count: s.clusterCount,
+      lastFetch: s.lastFetchAt,
+      lastError: s.lastError,
+      nextPollAt: s.nextPollAt,
+      recentFetches: s.recentFetches,
+      articleCount: s.articleCount,
+    })),
+  );
 
-  const markets = useMarketStore((s) => ({
-    status: s.connectionStatus,
-    count: s.quotes.length,
-    lastFetch: s.lastFetchAt,
-    lastError: s.lastError,
-    nextPollAt: s.nextPollAt,
-    recentFetches: s.recentFetches,
-  }));
+  const markets = useMarketStore(
+    useShallow((s) => ({
+      status: s.connectionStatus,
+      count: s.quotes.length,
+      lastFetch: s.lastFetchAt,
+      lastError: s.lastError,
+      nextPollAt: s.nextPollAt,
+      recentFetches: s.recentFetches,
+    })),
+  );
 
-  const weather = useWeatherStore((s) => ({
-    status: s.connectionStatus,
-    count: s.grid.length,
-    lastFetch: s.lastFetchAt,
-    lastError: s.lastError,
-    nextPollAt: s.nextPollAt,
-    recentFetches: s.recentFetches,
-  }));
+  const weather = useWeatherStore(
+    useShallow((s) => ({
+      status: s.connectionStatus,
+      count: s.grid.length,
+      lastFetch: s.lastFetchAt,
+      lastError: s.lastError,
+      nextPollAt: s.nextPollAt,
+      recentFetches: s.recentFetches,
+    })),
+  );
 
-  const water = useWaterStore((s) => ({
-    status: s.connectionStatus,
-    count: s.facilities.length,
-    lastFetch: null as number | null,
-    lastError: s.lastError,
-    nextPollAt: s.nextPollAt,
-    recentFetches: s.recentFetches,
-  }));
+  const water = useWaterStore(
+    useShallow((s) => ({
+      status: s.connectionStatus,
+      count: s.facilities.length,
+      lastFetch: null as number | null,
+      lastError: s.lastError,
+      nextPollAt: s.nextPollAt,
+      recentFetches: s.recentFetches,
+    })),
+  );
 
   const rows: ApiRow[] = [
     {
