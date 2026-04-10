@@ -101,12 +101,12 @@ Plans:
 **Goal:** Enhance dev-only API status overlay with real-time LLM pipeline progress, per-source health metrics, error diagnostics, data quality indicators, and copy diagnostics. Server-side progress via dedicated endpoint.
 **Requirements:** OBS-01 through OBS-17
 **Depends on:** Phase 27
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 
 - [x] 27.1-01-PLAN.md -- Server-side LLM progress tracking + /api/events/llm-status endpoint + callback injection
-- [ ] 27.1-02-PLAN.md -- Store instrumentation (8 stores + 9 hooks with observability fields)
+- [x] 27.1-02-PLAN.md -- Store instrumentation (8 stores + 9 hooks with observability fields)
 - [ ] 27.1-03-PLAN.md -- useLLMStatusPolling hook + DevApiStatus rewrite with full metrics
 
 ### Phase 28: Performance & Load Testing — was Phase 27
