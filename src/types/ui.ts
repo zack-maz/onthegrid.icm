@@ -75,6 +75,7 @@ export interface UIState {
   isShipFiltersOpen: boolean;
   isEventFiltersOpen: boolean;
   isSiteFiltersOpen: boolean;
+  isWaterFiltersOpen: boolean;
   isSidebarOpen: boolean;
   activeSidebarSection: SidebarSection | null;
   isMarketsCollapsed: boolean;
@@ -94,6 +95,7 @@ export interface UIState {
   toggleShipFilters: () => void;
   toggleEventFilters: () => void;
   toggleSiteFilters: () => void;
+  toggleWaterFilters: () => void;
   selectEntity: (id: string | null) => void;
   setSelectedCluster: (cluster: ThreatCluster | null) => void;
   hoverEntity: (id: string | null) => void;
@@ -115,4 +117,11 @@ export const SITE_TYPE_LABELS: Record<string, string> = {
   oil: 'Oil Refinery',
   airbase: 'Airbase',
   port: 'Port',
+};
+
+export const WATER_TYPE_LABELS: Record<string, string> = {
+  dam: 'Dam',
+  reservoir: 'Reservoir',
+  desalination: 'Desalination',
+  treatment_plant: 'Treatment',
 };

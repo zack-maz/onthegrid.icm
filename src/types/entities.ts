@@ -14,4 +14,5 @@ export type {
   NewsArticle,
   NewsCluster,
   MarketQuote,
+  WaterFacilityType,
 } from '../../server/types.js';

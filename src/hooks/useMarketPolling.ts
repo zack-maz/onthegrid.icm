@@ -11,25 +11,40 @@ export function useMarketPolling(): void {
   const setMarketData = useMarketStore((s) => s.setMarketData);
   const setError = useMarketStore((s) => s.setError);
   const setLoading = useMarketStore((s) => s.setLoading);
+  const recordFetch = useMarketStore((s) => s.recordFetch);
+  const setNextPollAt = useMarketStore((s) => s.setNextPollAt);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchMarkets = async (): Promise<void> => {
       if (cancelled) return;
+      const start = Date.now();
       try {
         const res = await fetch(`/api/markets?range=${range}`);
         if (cancelled) return;
-        if (!res.ok) throw new Error(`Markets API ${res.status}`);
+        if (!res.ok) {
+          const msg = `Markets API ${res.status}`;
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+          return;
+        }
         const data: CacheResponse<MarketQuote[]> = await res.json();
         setMarketData(data);
-      } catch {
-        if (!cancelled) setError();
+        recordFetch(true, Date.now() - start);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Network error';
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+        }
       }
     };
 
     const schedulePoll = (): void => {
       if (cancelled) return;
+      const nextTs = Date.now() + MARKET_POLL_INTERVAL;
+      setNextPollAt(nextTs);
       timeoutRef.current = setTimeout(async () => {
         await fetchMarkets();
         schedulePoll();
@@ -42,6 +57,7 @@ export function useMarketPolling(): void {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
+        setNextPollAt(null);
       } else {
         fetchMarkets().then(schedulePoll);
       }
@@ -59,7 +75,8 @@ export function useMarketPolling(): void {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      setNextPollAt(null);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [range, setMarketData, setError, setLoading]);
+  }, [range, setMarketData, setError, setLoading, recordFetch, setNextPollAt]);
 }

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
 status: 'Phase 27 shipped — PR #5'
-last_updated: '2026-04-09T23:59:14.113Z'
+last_updated: '2026-04-10T04:52:57.728Z'
 progress:
-  total_phases: 2
+  total_phases: 3
   completed_phases: 0
-  total_plans: 9
-  completed_plans: 8
-  percent: 89
+  total_plans: 12
+  completed_plans: 10
+  percent: 83
 ---
 
 # Project State
@@ -24,6 +24,7 @@ See: .planning/PROJECT.md
 
 Milestone: v1.3 Data Quality & Layers — CLOSING (all primary phases shipped; 26.2 GDELT-redo and 27 Performance moved to v1.4 on 2026-04-08)
 Milestone: v1.4 GDELT Redo & Performance — PLANNED (Phase 27 = GDELT redo, was 26.2; Phase 28 = Performance & Load Testing, was 27)
+Phase 27.1: Plan 01 COMPLETE (1 of 3 plans done — server-side LLM progress module, /api/events/llm-status endpoint, callback-instrumented pipeline, concurrent guard, Redis summary persistence)
 Phase 26.4: Plan 04 COMPLETE (6 of 6 plans done — phase execution complete; README 564-line portfolio rewrite, 1354 KB Playwright-captured hero GIF, 6 layer screenshots, rateLimiters.public tier wired globally on /api/\*, public/robots.txt, permanent scripts/capture-hero.ts agentic tooling)
 Phase 26.4: Plan 06 COMPLETE (ADRs + runbook + degradation contract + README link closure — 12 new doc files, 2672 lines, ADR-0005 at 300 lines is the highest portfolio signal)
 Phase 26.4: Plan 05 COMPLETE (Mermaid architecture docs — 10 files, 21 diagrams, ontology deep dive)
@@ -76,6 +77,9 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- Callback injection pattern for LLM pipeline progress instrumentation — keeps processEventGroups/geocodeEnrichedEvents pure and testable without module-level state mocks
+- Module-level singleton for LLM progress (not Map) — simpler API, single pipeline per Vercel instance, warm-start persistence
+- /api/events/llm-status gated by NODE_ENV !== 'production' — returns 404 in prod per threat model T-27.1-01
 - GDELT stays on CSV export (no BigQuery) — tune existing pipeline instead
 - Bellingcat RSS as sole OSINT gap-filter (no Telegram/GramJS)
 - Ethnic layer: hatched overlay regions (Option C) — not solid fills
@@ -241,3 +245,4 @@ None.
 - Phase 26.4 inserted after Phase 26.3: Documentation & External Presentation — portfolio-grade external polish
 - Phase 26.2 now depends on 26.4 — GDELT redo on clean foundation
 - Milestone v1.4 created (2026-04-08): Phase 26.2 renumbered to Phase 27 (Conflict Geolocation Improvement / GDELT Redo) and original Phase 27 renumbered to Phase 28 (Performance & Load Testing). Both moved out of v1.3 so v1.3 can close with its delivered phases (26.3 code cleanup and 26.4 documentation shipped as planned). Scrapped 26.2 artifacts archived to .planning/phases/archive-26.2-nlp-scrapped/. Historical references (ADR-0005, SUMMARY.md files, TODO(26.2) code markers) preserve the old number intentionally.
+- Phase 27.1 inserted after Phase 27: Dev Observability and LLM Pipeline Status (URGENT) — server-side LLM progress tracking, /api/events/llm-status endpoint, granular DevApiStatus panel with completion %, ETA, historical success rates

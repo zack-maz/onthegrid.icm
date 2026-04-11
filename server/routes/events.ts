@@ -10,6 +10,8 @@ import { extractBellingcatGeo } from '../lib/eventScoring.js';
 import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
 import { groupGdeltRows } from '../lib/eventGrouping.js';
 import { processEventGroups, geocodeEnrichedEvents } from '../lib/llmEventExtractor.js';
+import { llmProgress, resetProgress, updateProgress, buildSummary } from '../lib/llmProgress.js';
+import type { LLMRunSummary } from '../lib/llmProgress.js';
 import { WAR_START, CACHE_TTL } from '../config.js';
 import { validateQuery } from '../middleware/validate.js';
 import { sendValidated } from '../middleware/validateResponse.js';
@@ -54,6 +56,12 @@ const LLM_LOGICAL_TTL_MS = 900_000;
 
 /** Hard Redis TTL for LLM cache — 2.5 hours (same as raw GDELT) */
 const LLM_REDIS_TTL_SEC = 9000;
+
+/** Redis key for LLM pipeline run summary (persisted on completion) */
+const LLM_SUMMARY_KEY = 'events:llm-summary';
+
+/** 24-hour TTL for LLM summary — retained across multiple pipeline runs */
+const LLM_SUMMARY_TTL_SEC = 86_400;
 
 /**
  * Check whether a backfill should run.
@@ -197,6 +205,35 @@ function sendNormalizedEvents(
 
 export const eventsRouter = Router();
 
+/**
+ * DEV-ONLY: LLM pipeline status endpoint.
+ * Returns live in-memory progress when pipeline is active, or Redis summary
+ * from the last completed run when idle. Gated by NODE_ENV in production.
+ */
+eventsRouter.get('/llm-status', async (_req, res) => {
+  // DEV-ONLY: return 404 in production
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  // If in-memory progress is active (not idle), return it directly
+  if (llmProgress.stage !== 'idle') {
+    return res.json(llmProgress);
+  }
+
+  // Otherwise, fall back to Redis summary from last completed run
+  try {
+    const summary = await cacheGetSafe<LLMRunSummary>(LLM_SUMMARY_KEY, 0);
+    if (summary?.data) {
+      return res.json({ stage: 'idle' as const, lastRun: summary.data });
+    }
+  } catch {
+    // Redis failure — return idle with no history
+  }
+
+  res.json({ stage: 'idle' as const, lastRun: null });
+});
+
 eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   const { backfill: forceBackfill } = res.locals.validatedQuery as z.infer<
     typeof eventsQuerySchema
@@ -298,8 +335,21 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
       // Fire-and-forget: don't await — runs after response is sent
       const llmCachedRef = llmCached;
       void (async () => {
+        // Prevent concurrent pipeline runs corrupting shared progress state
+        if (
+          llmProgress.stage !== 'idle' &&
+          llmProgress.stage !== 'done' &&
+          llmProgress.stage !== 'error'
+        ) {
+          log.info('LLM pipeline already running, skipping');
+          return;
+        }
+
+        resetProgress(); // sets stage='grouping', startedAt=now
+
         try {
           const groups = groupGdeltRows(merged);
+          updateProgress({ totalGroups: groups.length, stage: 'grouping' });
 
           // Diff: only process groups whose key doesn't match a cached LLM event
           const cachedLlmKeys = new Set<string>();
@@ -311,18 +361,57 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
           const newGroups =
             cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
 
+          updateProgress({ newGroups: newGroups.length });
+
           if (newGroups.length === 0) {
             log.info('LLM: no new groups to process');
+            updateProgress({
+              stage: 'done',
+              completedAt: Date.now(),
+              durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+            });
+            try {
+              await cacheSetSafe(LLM_SUMMARY_KEY, buildSummary(), LLM_SUMMARY_TTL_SEC);
+            } catch {
+              /* best-effort */
+            }
             return;
           }
 
-          const enriched = await processEventGroups(newGroups);
+          updateProgress({
+            stage: 'llm-processing',
+            totalBatches: Math.ceil(newGroups.length / 8),
+          });
+
+          const enriched = await processEventGroups(newGroups, (completed, total) => {
+            updateProgress({ completedBatches: completed, totalBatches: total });
+          });
+
           if (!enriched || enriched.length === 0) {
             log.warn('LLM processing returned null — raw GDELT serving continues');
+            updateProgress({
+              stage: 'error',
+              errorMessage: 'LLM returned null for all batches',
+              completedAt: Date.now(),
+              durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+            });
+            try {
+              await cacheSetSafe(LLM_SUMMARY_KEY, buildSummary(), LLM_SUMMARY_TTL_SEC);
+            } catch {
+              /* best-effort */
+            }
             return;
           }
 
-          const geocoded = await geocodeEnrichedEvents(enriched, newGroups);
+          updateProgress({
+            stage: 'geocoding',
+            enrichedCount: enriched.length,
+            totalGeocodes: enriched.length,
+          });
+
+          const geocoded = await geocodeEnrichedEvents(enriched, newGroups, (completed, total) => {
+            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+          });
           const llmEntities = enrichedToEntities(geocoded, newGroups);
 
           // Merge newly processed LLM events with existing cached LLM events
@@ -342,7 +431,29 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
             { count: llmEntities.length, total: llmMerged.length },
             'LLM: processed and cached enriched events (background)',
           );
+
+          updateProgress({
+            stage: 'done',
+            completedAt: Date.now(),
+            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+          });
+          try {
+            await cacheSetSafe(LLM_SUMMARY_KEY, buildSummary(), LLM_SUMMARY_TTL_SEC);
+          } catch {
+            /* best-effort */
+          }
         } catch (llmErr) {
+          updateProgress({
+            stage: 'error',
+            errorMessage: llmErr instanceof Error ? llmErr.message : 'Unknown LLM error',
+            completedAt: Date.now(),
+            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+          });
+          try {
+            await cacheSetSafe(LLM_SUMMARY_KEY, buildSummary(), LLM_SUMMARY_TTL_SEC);
+          } catch {
+            /* best-effort */
+          }
           log.warn({ err: llmErr }, 'LLM background processing failed');
         }
       })();

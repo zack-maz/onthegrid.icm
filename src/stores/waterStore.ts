@@ -13,13 +13,24 @@ export interface PrecipitationData {
   updatedAt: number;
 }
 
+export interface FetchRecord {
+  ok: boolean;
+  durationMs: number;
+  timestamp: number;
+}
+
 interface WaterState {
   facilities: WaterFacility[];
   connectionStatus: WaterConnectionStatus;
+  lastError: string | null;
+  nextPollAt: number | null;
+  recentFetches: FetchRecord[];
   setWaterData: (response: CacheResponse<WaterFacility[]>) => void;
   updatePrecipitation: (data: PrecipitationData[]) => void;
-  setError: () => void;
+  setError: (message?: string) => void;
   setLoading: () => void;
+  recordFetch: (ok: boolean, durationMs: number) => void;
+  setNextPollAt: (ts: number | null) => void;
 }
 
 /** Max lat/lng distance in degrees to match a precipitation entry to a facility */
@@ -28,11 +39,15 @@ const COORD_MATCH_THRESHOLD = 0.01;
 export const useWaterStore = create<WaterState>()((set) => ({
   facilities: [],
   connectionStatus: 'idle',
+  lastError: null,
+  nextPollAt: null,
+  recentFetches: [],
 
   setWaterData: (response) =>
     set({
       facilities: response.data,
       connectionStatus: response.stale ? 'stale' : 'connected',
+      lastError: null,
     }),
 
   updatePrecipitation: (data) =>
@@ -62,7 +77,15 @@ export const useWaterStore = create<WaterState>()((set) => ({
       return { facilities: updated };
     }),
 
-  setError: () => set({ connectionStatus: 'error' }),
+  setError: (message?: string) =>
+    set({ connectionStatus: 'error', lastError: message ?? 'Unknown error' }),
 
   setLoading: () => set({ connectionStatus: 'loading' }),
+
+  recordFetch: (ok, durationMs) =>
+    set((state) => ({
+      recentFetches: [...state.recentFetches.slice(-9), { ok, durationMs, timestamp: Date.now() }],
+    })),
+
+  setNextPollAt: (ts) => set({ nextPollAt: ts }),
 }));

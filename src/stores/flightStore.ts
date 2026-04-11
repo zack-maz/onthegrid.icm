@@ -4,6 +4,12 @@ import type { FlightSource } from '@/types/ui';
 
 export type ConnectionStatus = 'connected' | 'stale' | 'error' | 'loading' | 'rate_limited';
 
+export interface FetchRecord {
+  ok: boolean;
+  durationMs: number;
+  timestamp: number;
+}
+
 interface FlightState {
   flights: FlightEntity[];
   connectionStatus: ConnectionStatus;
@@ -12,11 +18,16 @@ interface FlightState {
   lastFresh: number | null;
   flightCount: number;
   activeSource: FlightSource;
+  lastError: string | null;
+  nextPollAt: number | null;
+  recentFetches: FetchRecord[];
   setFlightData: (response: CacheResponse<FlightEntity[]> & { rateLimited?: boolean }) => void;
   setActiveSource: (source: FlightSource) => void;
-  setError: () => void;
+  setError: (message?: string) => void;
   setLoading: () => void;
   clearStaleData: () => void;
+  recordFetch: (ok: boolean, durationMs: number) => void;
+  setNextPollAt: (ts: number | null) => void;
 }
 
 export const useFlightStore = create<FlightState>()((set, get) => ({
@@ -27,6 +38,9 @@ export const useFlightStore = create<FlightState>()((set, get) => ({
   lastFresh: null,
   flightCount: 0,
   activeSource: 'adsblol' as const,
+  lastError: null,
+  nextPollAt: null,
+  recentFetches: [],
 
   setFlightData: (response) =>
     set({
@@ -40,14 +54,23 @@ export const useFlightStore = create<FlightState>()((set, get) => ({
       degraded: response.degraded ?? false,
       lastFetchAt: Date.now(),
       lastFresh: response.stale ? get().lastFresh : Date.now(),
+      lastError: null,
     }),
 
   setActiveSource: (source) =>
     set({ activeSource: source, flights: [], flightCount: 0, connectionStatus: 'loading' }),
 
-  setError: () => set({ connectionStatus: 'error' }),
+  setError: (message?: string) =>
+    set({ connectionStatus: 'error', lastError: message ?? 'Unknown error' }),
 
   setLoading: () => set({ connectionStatus: 'loading' }),
 
   clearStaleData: () => set({ flights: [], flightCount: 0, connectionStatus: 'error' }),
+
+  recordFetch: (ok, durationMs) =>
+    set((state) => ({
+      recentFetches: [...state.recentFetches.slice(-9), { ok, durationMs, timestamp: Date.now() }],
+    })),
+
+  setNextPollAt: (ts) => set({ nextPollAt: ts }),
 }));

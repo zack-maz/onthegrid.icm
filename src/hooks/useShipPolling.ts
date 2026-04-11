@@ -11,20 +11,33 @@ export function useShipPolling(): void {
   const setError = useShipStore((s) => s.setError);
   const setLoading = useShipStore((s) => s.setLoading);
   const clearStaleData = useShipStore((s) => s.clearStaleData);
+  const recordFetch = useShipStore((s) => s.recordFetch);
+  const setNextPollAt = useShipStore((s) => s.setNextPollAt);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchShips = async (): Promise<void> => {
       if (cancelled) return;
+      const start = Date.now();
       try {
         const res = await fetch('/api/ships');
         if (cancelled) return;
-        if (!res.ok) throw new Error(`Ships API ${res.status}`);
+        if (!res.ok) {
+          const msg = `Ships API ${res.status}`;
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+          return;
+        }
         const data: CacheResponse<ShipEntity[]> = await res.json();
         setShipData(data);
-      } catch {
-        if (!cancelled) setError();
+        recordFetch(true, Date.now() - start);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Network error';
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+        }
       }
     };
 
@@ -37,6 +50,8 @@ export function useShipPolling(): void {
 
     const schedulePoll = (): void => {
       if (cancelled) return;
+      const nextTs = Date.now() + SHIP_POLL_INTERVAL;
+      setNextPollAt(nextTs);
       timeoutRef.current = setTimeout(async () => {
         await fetchShips();
         checkStaleness();
@@ -50,6 +65,7 @@ export function useShipPolling(): void {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
+        setNextPollAt(null);
       } else {
         fetchShips().then(schedulePoll);
       }
@@ -67,7 +83,8 @@ export function useShipPolling(): void {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      setNextPollAt(null);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [setShipData, setError, setLoading, clearStaleData]);
+  }, [setShipData, setError, setLoading, clearStaleData, recordFetch, setNextPollAt]);
 }

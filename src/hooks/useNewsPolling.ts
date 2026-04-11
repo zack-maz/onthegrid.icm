@@ -10,25 +10,40 @@ export function useNewsPolling(): void {
   const setNewsData = useNewsStore((s) => s.setNewsData);
   const setError = useNewsStore((s) => s.setError);
   const setLoading = useNewsStore((s) => s.setLoading);
+  const recordFetch = useNewsStore((s) => s.recordFetch);
+  const setNextPollAt = useNewsStore((s) => s.setNextPollAt);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchNews = async (): Promise<void> => {
       if (cancelled) return;
+      const start = Date.now();
       try {
         const res = await fetch('/api/news');
         if (cancelled) return;
-        if (!res.ok) throw new Error(`News API ${res.status}`);
+        if (!res.ok) {
+          const msg = `News API ${res.status}`;
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+          return;
+        }
         const data: CacheResponse<NewsCluster[]> = await res.json();
         setNewsData(data);
-      } catch {
-        if (!cancelled) setError();
+        recordFetch(true, Date.now() - start);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Network error';
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+        }
       }
     };
 
     const schedulePoll = (): void => {
       if (cancelled) return;
+      const nextTs = Date.now() + NEWS_POLL_INTERVAL;
+      setNextPollAt(nextTs);
       timeoutRef.current = setTimeout(async () => {
         await fetchNews();
         schedulePoll();
@@ -41,6 +56,7 @@ export function useNewsPolling(): void {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
+        setNextPollAt(null);
       } else {
         fetchNews().then(schedulePoll);
       }
@@ -58,7 +74,8 @@ export function useNewsPolling(): void {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      setNextPollAt(null);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [setNewsData, setError, setLoading]);
+  }, [setNewsData, setError, setLoading, recordFetch, setNextPollAt]);
 }

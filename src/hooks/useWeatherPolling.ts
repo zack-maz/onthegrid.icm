@@ -16,27 +16,42 @@ export function useWeatherPolling(): void {
   const setWeatherData = useWeatherStore((s) => s.setWeatherData);
   const setError = useWeatherStore((s) => s.setError);
   const setLoading = useWeatherStore((s) => s.setLoading);
+  const recordFetch = useWeatherStore((s) => s.recordFetch);
+  const setNextPollAt = useWeatherStore((s) => s.setNextPollAt);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchWeather = async (): Promise<void> => {
       if (cancelled) return;
+      const start = Date.now();
 
       try {
         setLoading();
         const res = await fetch('/api/weather');
         if (cancelled) return;
-        if (!res.ok) throw new Error(`Weather API ${res.status}`);
+        if (!res.ok) {
+          const msg = `Weather API ${res.status}`;
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+          return;
+        }
         const data: CacheResponse<WeatherGridPoint[]> = await res.json();
         setWeatherData(data);
-      } catch {
-        if (!cancelled) setError();
+        recordFetch(true, Date.now() - start);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Network error';
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+        }
       }
     };
 
     const schedulePoll = (): void => {
       if (cancelled) return;
+      const nextTs = Date.now() + WEATHER_POLL_INTERVAL;
+      setNextPollAt(nextTs);
       timeoutRef.current = setTimeout(async () => {
         await fetchWeather();
         schedulePoll();
@@ -49,6 +64,7 @@ export function useWeatherPolling(): void {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
+        setNextPollAt(null);
       } else {
         fetchWeather().then(schedulePoll);
       }
@@ -65,7 +81,8 @@ export function useWeatherPolling(): void {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      setNextPollAt(null);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [setWeatherData, setError, setLoading]);
+  }, [setWeatherData, setError, setLoading, recordFetch, setNextPollAt]);
 }

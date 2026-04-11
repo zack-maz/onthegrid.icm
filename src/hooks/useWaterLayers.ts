@@ -124,9 +124,15 @@ export function useWaterLayers(): WaterLayerGroup {
   const facilities = useWaterStore((s) => s.facilities);
   const events = useEventStore((s) => s.events);
   const dateEnd = useFilterStore((s) => s.dateEnd) ?? Date.now();
+  const showWater = useFilterStore((s) => s.showWater);
+  const enabledWaterTypes = useFilterStore((s) => s.enabledWaterTypes);
 
   return useMemo(() => {
-    if (!isActive) return { riverLayers: [], facilityLayers: [], destroyedIds: new Set<string>() };
+    if (!isActive || !showWater)
+      return { riverLayers: [], facilityLayers: [], destroyedIds: new Set<string>() };
+
+    // Filter facilities by enabled water types
+    const filteredFacilities = facilities.filter((f) => enabledWaterTypes.includes(f.facilityType));
 
     // Pre-compute destroyed set (O(facilities * destructiveEvents))
     const destructiveEvents = events.filter(
@@ -134,7 +140,7 @@ export function useWaterLayers(): WaterLayerGroup {
     );
     const destroyedIds = new Set<string>();
     const COARSE_DEG = 0.05;
-    for (const f of facilities) {
+    for (const f of filteredFacilities) {
       for (const e of destructiveEvents) {
         if (Math.abs(e.lat - f.lat) > COARSE_DEG || Math.abs(e.lng - f.lng) > COARSE_DEG) continue;
         const dLat = ((e.lat - f.lat) * Math.PI) / 180;
@@ -192,7 +198,7 @@ export function useWaterLayers(): WaterLayerGroup {
     // Facility markers tinted by composite health
     const facilityLayer = new IconLayer<WaterFacility>({
       id: 'water-facility-icons',
-      data: facilities,
+      data: filteredFacilities,
       getPosition: (d: WaterFacility) => [d.lng, d.lat],
       getIcon: (d: WaterFacility) => WATER_ICON_MAP[d.facilityType] ?? 'diamond',
       getSize: 2000,
@@ -215,5 +221,5 @@ export function useWaterLayers(): WaterLayerGroup {
       facilityLayers: [facilityLayer],
       destroyedIds,
     };
-  }, [isActive, facilities, events, dateEnd]);
+  }, [isActive, facilities, events, dateEnd, showWater, enabledWaterTypes]);
 }

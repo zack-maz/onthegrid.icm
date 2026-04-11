@@ -10,22 +10,31 @@ export function useWaterFetch(): void {
   const setWaterData = useWaterStore((s) => s.setWaterData);
   const setError = useWaterStore((s) => s.setError);
   const setLoading = useWaterStore((s) => s.setLoading);
+  const recordFetch = useWaterStore((s) => s.recordFetch);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchWater = async (): Promise<void> => {
       setLoading();
+      const start = Date.now();
       try {
         const res = await fetch('/api/water');
         if (cancelled) return;
-        if (!res.ok) throw new Error(`Water API ${res.status}`);
+        if (!res.ok) {
+          const msg = `Water API ${res.status}`;
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+          return;
+        }
         const data: CacheResponse<WaterFacility[]> = await res.json();
         setWaterData(data);
-      } catch {
+        recordFetch(true, Date.now() - start);
+      } catch (err) {
         if (!cancelled) {
-          // Silently mark error — connection status surfaces in StatusPanel.
-          setError();
+          const msg = err instanceof Error ? err.message : 'Network error';
+          setError(msg);
+          recordFetch(false, Date.now() - start);
         }
       }
     };
@@ -35,5 +44,5 @@ export function useWaterFetch(): void {
     return () => {
       cancelled = true;
     };
-  }, [setWaterData, setError, setLoading]);
+  }, [setWaterData, setError, setLoading, recordFetch]);
 }

@@ -1,10 +1,23 @@
 import { create } from 'zustand';
 import { useSearchStore } from '@/stores/searchStore';
 import { WAR_START, STEP_MS, LOOKBACK_MS, snapToStep } from '@/lib/constants';
-import type { SiteType } from '@/types/entities';
+import type { SiteType, WaterFacilityType } from '@/types/entities';
 
 export const ALL_SITE_TYPES: SiteType[] = ['nuclear', 'naval', 'oil', 'airbase', 'port'];
 const DEFAULT_SITE_TYPES: SiteType[] = ['nuclear', 'naval', 'oil', 'airbase', 'port'];
+
+export const ALL_WATER_TYPES: WaterFacilityType[] = [
+  'dam',
+  'reservoir',
+  'desalination',
+  'treatment_plant',
+];
+const DEFAULT_WATER_TYPES: WaterFacilityType[] = [
+  'dam',
+  'reservoir',
+  'desalination',
+  'treatment_plant',
+];
 
 /** Full default range for a given granularity (thumbs at both ends) */
 function defaultRange(g: Granularity): { dateStart: number; dateEnd: number } {
@@ -74,6 +87,10 @@ export interface FilterState {
   // Site type toggles
   enabledSiteTypes: SiteType[];
 
+  // Water facility type toggles
+  enabledWaterTypes: WaterFacilityType[];
+  showWater: boolean;
+
   // Visibility toggles (independent — each one gates its category independently)
   showFlights: boolean;
   showShips: boolean;
@@ -119,6 +136,9 @@ export interface FilterState {
   setShowLowSeverity: (v: boolean) => void;
   setEnabledSiteTypes: (types: SiteType[]) => void;
   toggleSiteType: (type: SiteType) => void;
+  setEnabledWaterTypes: (types: WaterFacilityType[]) => void;
+  toggleWaterType: (type: WaterFacilityType) => void;
+  toggleShowWater: () => void;
 
   // Visibility toggle actions
   toggleShowFlights: () => void;
@@ -167,6 +187,10 @@ const DEFAULTS = {
 
   // Site type toggles
   enabledSiteTypes: DEFAULT_SITE_TYPES as SiteType[],
+
+  // Water facility type toggles
+  enabledWaterTypes: DEFAULT_WATER_TYPES as WaterFacilityType[],
+  showWater: true,
 
   // Visibility toggles (all default ON)
   showFlights: true,
@@ -314,6 +338,17 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
           : [...s.enabledSiteTypes, type],
       };
     }),
+  setEnabledWaterTypes: (types) => set({ enabledWaterTypes: types }),
+  toggleWaterType: (type) =>
+    set((s) => {
+      const enabled = s.enabledWaterTypes.includes(type);
+      return {
+        enabledWaterTypes: enabled
+          ? s.enabledWaterTypes.filter((t) => t !== type)
+          : [...s.enabledWaterTypes, type],
+      };
+    }),
+  toggleShowWater: () => set((s) => ({ showWater: !s.showWater })),
 
   // Visibility toggles
   toggleShowFlights: () => set((s) => ({ showFlights: !s.showFlights })),

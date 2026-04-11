@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore, ALL_SITE_TYPES } from '@/stores/filterStore';
+import { useFilterStore, ALL_SITE_TYPES, ALL_WATER_TYPES } from '@/stores/filterStore';
 import { useEventStore } from '@/stores/eventStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
 import { RangeSlider } from '@/components/filter/RangeSlider';
@@ -12,8 +12,12 @@ import { HeadingSlider } from '@/components/filter/HeadingSlider';
 import { SeverityToggles } from '@/components/filter/SeverityToggles';
 import { FilterButton } from '@/components/filter/FilterButton';
 import { SliderToggle } from '@/components/filter/SliderToggle';
-import { ENTITY_DOT_COLORS, SITE_SUBTYPE_COLORS } from '@/components/map/layers/constants';
-import { SITE_TYPE_LABELS } from '@/types/ui';
+import {
+  ENTITY_DOT_COLORS,
+  SITE_SUBTYPE_COLORS,
+  WATER_TYPE_COLORS,
+} from '@/components/map/layers/constants';
+import { SITE_TYPE_LABELS, WATER_TYPE_LABELS } from '@/types/ui';
 import type { FilterKey } from '@/stores/filterStore';
 
 function SectionHeader({
@@ -74,10 +78,12 @@ export function FilterPanelContent() {
   const isShipFiltersOpen = useUIStore((s) => s.isShipFiltersOpen);
   const isEventFiltersOpen = useUIStore((s) => s.isEventFiltersOpen);
   const isSiteFiltersOpen = useUIStore((s) => s.isSiteFiltersOpen);
+  const isWaterFiltersOpen = useUIStore((s) => s.isWaterFiltersOpen);
   const toggleFlightFilters = useUIStore((s) => s.toggleFlightFilters);
   const toggleShipFilters = useUIStore((s) => s.toggleShipFilters);
   const toggleEventFilters = useUIStore((s) => s.toggleEventFilters);
   const toggleSiteFilters = useUIStore((s) => s.toggleSiteFilters);
+  const toggleWaterFilters = useUIStore((s) => s.toggleWaterFilters);
 
   // Visibility toggles
   const showFlights = useFilterStore((s) => s.showFlights);
@@ -93,6 +99,8 @@ export function FilterPanelContent() {
   const showHealthySites = useFilterStore((s) => s.showHealthySites);
   const showAttackedSites = useFilterStore((s) => s.showAttackedSites);
   const enabledSiteTypes = useFilterStore((s) => s.enabledSiteTypes);
+  const showWater = useFilterStore((s) => s.showWater);
+  const enabledWaterTypes = useFilterStore((s) => s.enabledWaterTypes);
 
   // Filter store — country filters
   const eventCountries = useFilterStore((s) => s.eventCountries);
@@ -471,6 +479,39 @@ export function FilterPanelContent() {
                 onChange={() => useFilterStore.getState().toggleShowAttackedSites()}
                 color={ENTITY_DOT_COLORS.siteAttacked}
               />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Water section */}
+      <div>
+        <EntitySectionHeader
+          label="Water"
+          isOpen={isWaterFiltersOpen}
+          onToggle={toggleWaterFilters}
+        />
+        {isWaterFiltersOpen && (
+          <div className="mt-1.5 flex flex-col gap-2 pl-3">
+            {/* Master water toggle */}
+            <FilterButton
+              label="All Water"
+              active={showWater}
+              color="#3b82f6"
+              onToggle={() => useFilterStore.getState().toggleShowWater()}
+            />
+            {/* Water facility type buttons */}
+            <div className="flex flex-wrap gap-1">
+              {ALL_WATER_TYPES.map((type) => (
+                <FilterButton
+                  key={type}
+                  label={WATER_TYPE_LABELS[type] ?? type}
+                  active={enabledWaterTypes.includes(type)}
+                  color={WATER_TYPE_COLORS[type] ?? '#9ca3af'}
+                  onToggle={() => useFilterStore.getState().toggleWaterType(type)}
+                  compact
+                />
+              ))}
             </div>
           </div>
         )}

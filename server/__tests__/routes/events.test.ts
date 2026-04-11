@@ -57,6 +57,50 @@ const mockGroupGdeltRows = vi.fn(() => []);
 const mockProcessEventGroups = vi.fn(async () => null);
 const mockGeocodeEnrichedEvents = vi.fn(async () => []);
 
+// LLM progress mock — mutable singleton object for test manipulation
+const mockLlmProgress = {
+  stage: 'idle' as string,
+  startedAt: null as number | null,
+  completedAt: null as number | null,
+  totalGroups: 0,
+  newGroups: 0,
+  totalBatches: 0,
+  completedBatches: 0,
+  totalGeocodes: 0,
+  completedGeocodes: 0,
+  enrichedCount: 0,
+  errorMessage: null as string | null,
+  durationMs: null as number | null,
+};
+vi.mock('../../lib/llmProgress.js', () => ({
+  llmProgress: mockLlmProgress,
+  resetProgress: vi.fn(),
+  updateProgress: vi.fn(),
+  buildSummary: vi.fn(() => ({
+    lastRun: Date.now(),
+    groupCount: 0,
+    batchCount: 0,
+    geocodeCount: 0,
+    enrichedCount: 0,
+    durationMs: 0,
+    error: null,
+  })),
+  INITIAL_PROGRESS: {
+    stage: 'idle',
+    startedAt: null,
+    completedAt: null,
+    totalGroups: 0,
+    newGroups: 0,
+    totalBatches: 0,
+    completedBatches: 0,
+    totalGeocodes: 0,
+    completedGeocodes: 0,
+    enrichedCount: 0,
+    errorMessage: null,
+    durationMs: null,
+  },
+}));
+
 // Mock rate limiter -- pass through for route tests
 const _passThrough = (_req: unknown, _res: unknown, next: () => void) => next();
 vi.mock('../../middleware/rateLimit.js', () => ({
@@ -195,6 +239,22 @@ describe('Events Route (Redis accumulator)', () => {
     mockRedisSet.mockClear();
     // Re-wire mockRedisGet default to use rawRedisStore
     mockRedisGet.mockImplementation(async (key: string) => rawRedisStore.get(key) ?? null);
+
+    // Reset LLM progress singleton to idle
+    Object.assign(mockLlmProgress, {
+      stage: 'idle',
+      startedAt: null,
+      completedAt: null,
+      totalGroups: 0,
+      newGroups: 0,
+      totalBatches: 0,
+      completedBatches: 0,
+      totalGeocodes: 0,
+      completedGeocodes: 0,
+      enrichedCount: 0,
+      errorMessage: null,
+      durationMs: null,
+    });
 
     // Reset LLM mocks
     mockIsLLMConfigured.mockClear();
@@ -569,9 +629,45 @@ describe('Events Route (Redis accumulator)', () => {
       // Set up: LLM configured, no LLM cooldown set, stale LLM cache
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
-      mockGroupGdeltRows.mockReturnValue([{ key: 'grp-1', entities: [eventA], centroidLat: 33.3, centroidLng: 44.4, primaryCameo: '195', timestamp: Date.now(), totalMentions: 10, totalSources: 3, sourceUrls: [] }]);
-      mockProcessEventGroups.mockResolvedValue([{ groupKey: 'grp-1', location: { name: 'Baghdad', precision: 'city' }, type: 'airstrike', actors: ['US Air Force'], severity: 'high', summary: 'Airstrike on Baghdad', casualties: { killed: 2, injured: 5, unknown: false }, sourceCount: 3 }]);
-      mockGeocodeEnrichedEvents.mockResolvedValue([{ groupKey: 'grp-1', resolvedLat: 33.3, resolvedLng: 44.4, location: { name: 'Baghdad', precision: 'city' }, type: 'airstrike', actors: ['US Air Force'], severity: 'high', summary: 'Airstrike on Baghdad', casualties: { killed: 2, injured: 5, unknown: false }, sourceCount: 3 }]);
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-1',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+      mockProcessEventGroups.mockResolvedValue([
+        {
+          groupKey: 'grp-1',
+          location: { name: 'Baghdad', precision: 'city' },
+          type: 'airstrike',
+          actors: ['US Air Force'],
+          severity: 'high',
+          summary: 'Airstrike on Baghdad',
+          casualties: { killed: 2, injured: 5, unknown: false },
+          sourceCount: 3,
+        },
+      ]);
+      mockGeocodeEnrichedEvents.mockResolvedValue([
+        {
+          groupKey: 'grp-1',
+          resolvedLat: 33.3,
+          resolvedLng: 44.4,
+          location: { name: 'Baghdad', precision: 'city' },
+          type: 'airstrike',
+          actors: ['US Air Force'],
+          severity: 'high',
+          summary: 'Airstrike on Baghdad',
+          casualties: { killed: 2, injured: 5, unknown: false },
+          sourceCount: 3,
+        },
+      ]);
 
       const res = await fetch(`${baseUrl}/api/events`);
       const body = await res.json();
@@ -607,7 +703,19 @@ describe('Events Route (Redis accumulator)', () => {
     it('falls back to raw GDELT when LLM processing fails (returns null)', async () => {
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA, eventB]);
-      mockGroupGdeltRows.mockReturnValue([{ key: 'grp-1', entities: [eventA], centroidLat: 33.3, centroidLng: 44.4, primaryCameo: '195', timestamp: Date.now(), totalMentions: 10, totalSources: 3, sourceUrls: [] }]);
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-1',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
       mockProcessEventGroups.mockResolvedValue(null); // LLM failed
 
       const res = await fetch(`${baseUrl}/api/events`);
@@ -637,9 +745,45 @@ describe('Events Route (Redis accumulator)', () => {
     it('sets cooldown key after successful LLM processing', async () => {
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
-      mockGroupGdeltRows.mockReturnValue([{ key: 'grp-1', entities: [eventA], centroidLat: 33.3, centroidLng: 44.4, primaryCameo: '195', timestamp: Date.now(), totalMentions: 10, totalSources: 3, sourceUrls: [] }]);
-      mockProcessEventGroups.mockResolvedValue([{ groupKey: 'grp-1', location: { name: 'Baghdad', precision: 'city' }, type: 'airstrike', actors: ['US Air Force'], severity: 'high', summary: 'Airstrike on Baghdad', casualties: { killed: 2, injured: 5, unknown: false }, sourceCount: 3 }]);
-      mockGeocodeEnrichedEvents.mockResolvedValue([{ groupKey: 'grp-1', resolvedLat: 33.3, resolvedLng: 44.4, location: { name: 'Baghdad', precision: 'city' }, type: 'airstrike', actors: ['US Air Force'], severity: 'high', summary: 'Airstrike on Baghdad', casualties: { killed: 2, injured: 5, unknown: false }, sourceCount: 3 }]);
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-1',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+      mockProcessEventGroups.mockResolvedValue([
+        {
+          groupKey: 'grp-1',
+          location: { name: 'Baghdad', precision: 'city' },
+          type: 'airstrike',
+          actors: ['US Air Force'],
+          severity: 'high',
+          summary: 'Airstrike on Baghdad',
+          casualties: { killed: 2, injured: 5, unknown: false },
+          sourceCount: 3,
+        },
+      ]);
+      mockGeocodeEnrichedEvents.mockResolvedValue([
+        {
+          groupKey: 'grp-1',
+          resolvedLat: 33.3,
+          resolvedLng: 44.4,
+          location: { name: 'Baghdad', precision: 'city' },
+          type: 'airstrike',
+          actors: ['US Air Force'],
+          severity: 'high',
+          summary: 'Airstrike on Baghdad',
+          casualties: { killed: 2, injured: 5, unknown: false },
+          sourceCount: 3,
+        },
+      ]);
 
       const res = await fetch(`${baseUrl}/api/events`);
       expect(res.ok).toBe(true);
@@ -665,21 +809,122 @@ describe('Events Route (Redis accumulator)', () => {
       mockFetchEvents.mockResolvedValue([eventA, newEvent]);
 
       // groupGdeltRows returns 2 groups
-      const group1 = { key: 'grp-existing', entities: [eventA], centroidLat: 33.3, centroidLng: 44.4, primaryCameo: '195', timestamp: Date.now(), totalMentions: 10, totalSources: 3, sourceUrls: [] };
-      const group2 = { key: 'grp-new', entities: [newEvent], centroidLat: 34.0, centroidLng: 45.0, primaryCameo: '190', timestamp: Date.now(), totalMentions: 5, totalSources: 2, sourceUrls: [] };
+      const group1 = {
+        key: 'grp-existing',
+        entities: [eventA],
+        centroidLat: 33.3,
+        centroidLng: 44.4,
+        primaryCameo: '195',
+        timestamp: Date.now(),
+        totalMentions: 10,
+        totalSources: 3,
+        sourceUrls: [],
+      };
+      const group2 = {
+        key: 'grp-new',
+        entities: [newEvent],
+        centroidLat: 34.0,
+        centroidLng: 45.0,
+        primaryCameo: '190',
+        timestamp: Date.now(),
+        totalMentions: 5,
+        totalSources: 2,
+        sourceUrls: [],
+      };
       mockGroupGdeltRows.mockReturnValue([group1, group2]);
 
-      const newEnriched = { groupKey: 'grp-new', location: { name: 'Mosul', precision: 'city' }, type: 'on_ground', actors: ['Iraqi forces'], severity: 'medium', summary: 'Ground operation in Mosul', casualties: { killed: 0, injured: 0, unknown: true }, sourceCount: 2 };
+      const newEnriched = {
+        groupKey: 'grp-new',
+        location: { name: 'Mosul', precision: 'city' },
+        type: 'on_ground',
+        actors: ['Iraqi forces'],
+        severity: 'medium',
+        summary: 'Ground operation in Mosul',
+        casualties: { killed: 0, injured: 0, unknown: true },
+        sourceCount: 2,
+      };
       mockProcessEventGroups.mockResolvedValue([newEnriched]);
 
-      mockGeocodeEnrichedEvents.mockResolvedValue([{ ...newEnriched, resolvedLat: 34.0, resolvedLng: 45.0 }]);
+      mockGeocodeEnrichedEvents.mockResolvedValue([
+        { ...newEnriched, resolvedLat: 34.0, resolvedLng: 45.0 },
+      ]);
 
       const res = await fetch(`${baseUrl}/api/events`);
-      const body = await res.json();
+      await res.json();
 
       expect(res.ok).toBe(true);
       // processEventGroups should receive only the new groups (not already-cached ones)
       expect(mockProcessEventGroups).toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/events/llm-status', () => {
+    it('returns idle with null lastRun when no pipeline has run and no Redis summary', async () => {
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.stage).toBe('idle');
+      expect(body.lastRun).toBeNull();
+    });
+
+    it('returns live progress object when pipeline is active (non-idle stage)', async () => {
+      // Simulate an active pipeline
+      Object.assign(mockLlmProgress, {
+        stage: 'llm-processing',
+        startedAt: Date.now() - 2000,
+        totalGroups: 50,
+        newGroups: 30,
+        totalBatches: 4,
+        completedBatches: 2,
+      });
+
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.stage).toBe('llm-processing');
+      expect(body.totalBatches).toBe(4);
+      expect(body.completedBatches).toBe(2);
+    });
+
+    it('returns Redis summary fallback when pipeline is idle and summary exists', async () => {
+      const summary = {
+        lastRun: Date.now() - 60000,
+        groupCount: 25,
+        batchCount: 4,
+        geocodeCount: 20,
+        enrichedCount: 20,
+        durationMs: 8000,
+        error: null,
+      };
+      redisStore.set('events:llm-summary', {
+        data: summary,
+        fetchedAt: Date.now(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.stage).toBe('idle');
+      expect(body.lastRun).toBeDefined();
+      expect(body.lastRun.groupCount).toBe(25);
+      expect(body.lastRun.durationMs).toBe(8000);
+    });
+
+    it('returns 404 when NODE_ENV is production', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      try {
+        const res = await fetch(`${baseUrl}/api/events/llm-status`);
+        expect(res.status).toBe(404);
+        const body = await res.json();
+        expect(body.error).toBe('Not found');
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
     });
   });
 });

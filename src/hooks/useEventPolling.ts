@@ -10,25 +10,40 @@ export function useEventPolling(): void {
   const setEventData = useEventStore((s) => s.setEventData);
   const setError = useEventStore((s) => s.setError);
   const setLoading = useEventStore((s) => s.setLoading);
+  const recordFetch = useEventStore((s) => s.recordFetch);
+  const setNextPollAt = useEventStore((s) => s.setNextPollAt);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchEvents = async (): Promise<void> => {
       if (cancelled) return;
+      const start = Date.now();
       try {
         const res = await fetch('/api/events');
         if (cancelled) return;
-        if (!res.ok) throw new Error(`Events API ${res.status}`);
+        if (!res.ok) {
+          const msg = `Events API ${res.status}`;
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+          return;
+        }
         const data: CacheResponse<ConflictEventEntity[]> = await res.json();
         setEventData(data);
-      } catch {
-        if (!cancelled) setError();
+        recordFetch(true, Date.now() - start);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Network error';
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+        }
       }
     };
 
     const schedulePoll = (): void => {
       if (cancelled) return;
+      const nextTs = Date.now() + EVENT_POLL_INTERVAL;
+      setNextPollAt(nextTs);
       timeoutRef.current = setTimeout(async () => {
         await fetchEvents();
         schedulePoll();
@@ -41,6 +56,7 @@ export function useEventPolling(): void {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
+        setNextPollAt(null);
       } else {
         fetchEvents().then(schedulePoll);
       }
@@ -58,7 +74,8 @@ export function useEventPolling(): void {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      setNextPollAt(null);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [setEventData, setError, setLoading]);
+  }, [setEventData, setError, setLoading, recordFetch, setNextPollAt]);
 }

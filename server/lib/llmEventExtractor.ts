@@ -167,15 +167,18 @@ function buildBatchUserPrompt(groups: EventGroup[]): string {
  */
 export async function processEventGroups(
   groups: EventGroup[],
+  onBatchComplete?: (completedBatches: number, totalBatches: number) => void,
 ): Promise<EnrichedEvent[] | null> {
   if (groups.length === 0) return [];
 
   const results: EnrichedEvent[] = [];
   let allFailed = true;
+  const totalBatches = Math.ceil(groups.length / BATCH_SIZE);
 
   // Chunk groups into batches
   for (let i = 0; i < groups.length; i += BATCH_SIZE) {
     const batch = groups.slice(i, i + BATCH_SIZE);
+    const batchIndex = Math.floor(i / BATCH_SIZE);
     const userPrompt = buildBatchUserPrompt(batch);
 
     const content = await callLLM(
@@ -187,7 +190,8 @@ export async function processEventGroups(
     );
 
     if (content === null) {
-      log.warn({ batchIndex: Math.floor(i / BATCH_SIZE) }, 'LLM returned null for batch');
+      log.warn({ batchIndex }, 'LLM returned null for batch');
+      onBatchComplete?.(batchIndex + 1, totalBatches);
       continue;
     }
 
@@ -200,16 +204,19 @@ export async function processEventGroups(
 
       if (!validated.success) {
         log.warn(
-          { errors: validated.error.issues, batchIndex: Math.floor(i / BATCH_SIZE) },
+          { errors: validated.error.issues, batchIndex },
           'Zod validation failed for LLM batch response',
         );
+        onBatchComplete?.(batchIndex + 1, totalBatches);
         continue;
       }
 
       results.push(...validated.data.events);
     } catch (err) {
-      log.warn({ err, batchIndex: Math.floor(i / BATCH_SIZE) }, 'Failed to parse LLM response JSON');
+      log.warn({ err, batchIndex }, 'Failed to parse LLM response JSON');
     }
+
+    onBatchComplete?.(batchIndex + 1, totalBatches);
   }
 
   if (allFailed) return null;
@@ -225,6 +232,7 @@ export async function processEventGroups(
 export async function geocodeEnrichedEvents(
   events: EnrichedEvent[],
   groups: EventGroup[],
+  onGeocodeComplete?: (completedGeocodes: number, totalGeocodes: number) => void,
 ): Promise<Array<EnrichedEvent & { resolvedLat: number; resolvedLng: number }>> {
   // Build a map from groupKey to EventGroup for fallback coordinates
   const groupMap = new Map<string, EventGroup>();
@@ -251,6 +259,7 @@ export async function geocodeEnrichedEvents(
         resolvedLat: cached.data.lat,
         resolvedLng: cached.data.lng,
       });
+      onGeocodeComplete?.(i + 1, events.length);
       continue;
     }
 
@@ -288,9 +297,14 @@ export async function geocodeEnrichedEvents(
         });
       } else {
         // No fallback available — skip event
-        log.warn({ placeName, groupKey: event.groupKey }, 'No geocoding fallback available, skipping event');
+        log.warn(
+          { placeName, groupKey: event.groupKey },
+          'No geocoding fallback available, skipping event',
+        );
       }
     }
+
+    onGeocodeComplete?.(i + 1, events.length);
   }
 
   return results;

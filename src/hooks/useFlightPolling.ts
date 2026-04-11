@@ -14,6 +14,8 @@ export function useFlightPolling(): void {
   const setError = useFlightStore((s) => s.setError);
   const setLoading = useFlightStore((s) => s.setLoading);
   const clearStaleData = useFlightStore((s) => s.clearStaleData);
+  const recordFetch = useFlightStore((s) => s.recordFetch);
+  const setNextPollAt = useFlightStore((s) => s.setNextPollAt);
 
   useEffect(() => {
     const url = `/api/flights?source=${activeSource}`;
@@ -21,14 +23,25 @@ export function useFlightPolling(): void {
 
     const fetchFlights = async (): Promise<void> => {
       if (cancelled) return;
+      const start = Date.now();
       try {
         const res = await fetch(url);
         if (cancelled) return;
-        if (!res.ok) throw new Error(`Flights API ${res.status}`);
+        if (!res.ok) {
+          const msg = `Flights API ${res.status}`;
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+          return;
+        }
         const data: CacheResponse<FlightEntity[]> & { rateLimited?: boolean } = await res.json();
         setFlightData(data);
-      } catch {
-        if (!cancelled) setError();
+        recordFetch(true, Date.now() - start);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Network error';
+          setError(msg);
+          recordFetch(false, Date.now() - start);
+        }
       }
     };
 
@@ -41,6 +54,8 @@ export function useFlightPolling(): void {
 
     const schedulePoll = (): void => {
       if (cancelled) return;
+      const nextTs = Date.now() + POLL_INTERVAL;
+      setNextPollAt(nextTs);
       timeoutRef.current = setTimeout(async () => {
         await fetchFlights();
         checkStaleness();
@@ -54,6 +69,7 @@ export function useFlightPolling(): void {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
+        setNextPollAt(null);
       } else {
         fetchFlights().then(schedulePoll);
       }
@@ -71,6 +87,7 @@ export function useFlightPolling(): void {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      setNextPollAt(null);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
