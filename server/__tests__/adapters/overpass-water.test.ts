@@ -1793,6 +1793,193 @@ describe('Phase 27.3.1 R-06 — computeAdmissionDecision', () => {
   });
 });
 
+// ---------- Phase 27.3.2 admission tightening — no_resolved_name + desal synthesis ----------
+//
+// Phase 27.3.2 extended computeAdmissionDecision (Plan 04) and extractLabel
+// (Plan 05) with two coordinated changes:
+//
+//   Plan 04 (admission, step 3b):
+//     Non-desal facilities whose OSM tags fail `hasLatinLabel` now reject to
+//     the new `no_resolved_name` bucket — inserted strictly between the
+//     existing `no_name` (step 3) and `not_notable` (step 4) gates.
+//     Desalination is unconditionally exempt per D-03 (sparse OSM coverage).
+//     D-02 "river-rescue kill": `linkedRiver` is NO LONGER consulted at
+//     admission — it remains only as post-admission enrichment.
+//
+//   Plan 05 (extractLabel, desal-only synthesis branches 4 + 5):
+//     extractLabel grew from 2 args to 5 args — (tags, facilityType, lat, lng,
+//     nearestCity). When a desal passes admission without a Latin name, the
+//     label is synthesized server-side:
+//       - branch 4: `Desalination Plant near ${nearestCity.name}` when a
+//         nearestCity resolved.
+//       - branch 5: `Desalination Plant at ${|lat|}°N/S, ${|lng|}°E/W`
+//         byte-identical to src/lib/waterLabel.ts lines 87-89 pre-Plan-07.
+//
+// Tests below cover D-16:
+//   1-2. Non-desal dam admission behavior (Latin name:en vs Persian-only name).
+//   3.   D-02 river-rescue kill — non-Latin reservoir with river proximity
+//        still rejects (linkedRiver is irrelevant to admission now).
+//   4-5. Desal synthesis branches — non-Latin name admits, label synthesized
+//        by coord (no nearestCity) or city (nearestCity=Jeddah). Cases 4+5
+//        also invoke normalizeWaterElement to assert the exact synthesized
+//        label string (route-through path per PATTERNS.md Pattern 3 note).
+//   6-7. Ordering locks — no_name beats no_resolved_name (empty tags win),
+//        and no_resolved_name beats not_notable (non-Latin tag beats the
+//        compound gate even when the compound would also have rejected).
+
+describe('Phase 27.3.2 admission tightening — no_resolved_name + desal synthesis', () => {
+  // Helper to build a nearestCity result without duplicating findNearestCity
+  // plumbing — matches the shape used in the Phase 27.3.1 R-06 block above.
+  const withCity = (name: string, distanceKm = 50, population = 1_000_000) => ({
+    name,
+    distanceKm,
+    population,
+  });
+
+  // Shared mock stress lookup for normalizeWaterElement routes (cases 4 + 5).
+  const mockStress: WaterStressIndicators = {
+    bws_raw: 3.5,
+    bws_score: 3.5,
+    bws_label: 'High',
+    drr_score: 2.0,
+    gtd_score: 1.5,
+    sev_score: 2.5,
+    iav_score: 3.0,
+    compositeHealth: 0.5,
+  };
+  const stressLookup = () => mockStress;
+
+  // D-16 case 1: non-desal dam with Latin name:en → admits.
+  it('admits non-desal dam with Latin name:en', () => {
+    const d = computeAdmissionDecision(
+      { name: 'Karkheh', 'name:en': 'Karkheh Dam', waterway: 'dam', wikidata: 'Q1' },
+      32.0,
+      48.1,
+      'dam',
+      true,
+      60,
+      withCity('Ahvaz'),
+    );
+    expect(d).toEqual({ verdict: 'admit' });
+  });
+
+  // D-16 case 2: non-desal dam with Persian-only name → rejects to no_resolved_name.
+  it('rejects non-desal dam with Persian-only name to no_resolved_name', () => {
+    const d = computeAdmissionDecision(
+      { name: 'سد کرخه', waterway: 'dam', wikidata: 'Q1' },
+      32.0,
+      48.1,
+      'dam',
+      true,
+      60,
+      withCity('Ahvaz'),
+    );
+    expect(d).toEqual({ verdict: 'reject', bucket: 'no_resolved_name' });
+  });
+
+  // D-16 case 3: D-02 river-rescue kill verification — reservoir with non-Latin
+  // name near the Tigris would previously have been rescued via linkedRiver.
+  // Plan 04 cemented the kill: linkedRiver is not consulted at admission, so
+  // the Latin-label check rejects regardless of river proximity.
+  it('rejects non-Latin reservoir even when linkedRiver would have resolved (D-02 kill)', () => {
+    const d = computeAdmissionDecision(
+      { name: 'خزان دجلة', natural: 'water', water: 'reservoir', wikidata: 'Q2' },
+      34.6,
+      43.8,
+      'reservoir',
+      true,
+      50,
+      withCity('Mosul'),
+    );
+    expect(d).toEqual({ verdict: 'reject', bucket: 'no_resolved_name' });
+  });
+
+  // D-16 case 4: desal with non-Latin name + no nearestCity → admits, coord synthesis.
+  // (22.5, 37.5) is offshore Red Sea — no CITY_DATA entry within 150km, so
+  // findNearestCity returns null and branch 5 of extractLabel fires.
+  it('admits desal with non-Latin name and no nearestCity (coord synthesis)', () => {
+    const d = computeAdmissionDecision(
+      { name: 'محطة تحلية', man_made: 'desalination_plant' },
+      22.5,
+      37.5,
+      'desalination',
+      false,
+      20,
+      null,
+    );
+    expect(d).toEqual({ verdict: 'admit' });
+
+    // Route through normalizeWaterElement to exercise the Plan 05 coord
+    // synthesis branch (extractLabel branch 5) and assert the exact label
+    // string — byte-identical format to src/lib/waterLabel.ts pre-Plan-07.
+    const el = {
+      type: 'node' as const,
+      id: 9001,
+      lat: 22.5,
+      lon: 37.5,
+      tags: { name: 'محطة تحلية', man_made: 'desalination_plant' },
+    };
+    const result = normalizeWaterElement(el, stressLookup);
+    expect(result).not.toBeNull();
+    expect(result!.label).toBe('Desalination Plant at 22.50°N, 37.50°E');
+    expect(result!.facilityType).toBe('desalination');
+  });
+
+  // D-16 case 5: desal with non-Latin name + Jeddah nearestCity → admits, city synthesis.
+  // (21.5, 39.1) is ~5km from Jeddah (21.4858, 39.1925) in CITY_DATA, so
+  // findNearestCity returns Jeddah and branch 4 of extractLabel fires.
+  it('admits desal with non-Latin name and nearestCity=Jeddah (city synthesis)', () => {
+    const d = computeAdmissionDecision(
+      { name: 'محطة جدة', man_made: 'desalination_plant' },
+      21.5,
+      39.1,
+      'desalination',
+      true,
+      20,
+      withCity('Jeddah'),
+    );
+    expect(d).toEqual({ verdict: 'admit' });
+
+    // Route through normalizeWaterElement to exercise the Plan 05 city
+    // synthesis branch (extractLabel branch 4) and assert the exact label
+    // string — "Desalination Plant near {city}".
+    const el = {
+      type: 'node' as const,
+      id: 9002,
+      lat: 21.5,
+      lon: 39.1,
+      tags: { name: 'محطة جدة', man_made: 'desalination_plant' },
+    };
+    const result = normalizeWaterElement(el, stressLookup);
+    expect(result).not.toBeNull();
+    expect(result!.label).toBe('Desalination Plant near Jeddah');
+    expect(result!.facilityType).toBe('desalination');
+  });
+
+  // Ordering lock 1: no_name fires before no_resolved_name when tags are empty.
+  // hasName at step 3 must short-circuit before step 3b is reached.
+  it('no_name fires before no_resolved_name (missing tags wins)', () => {
+    const d = computeAdmissionDecision({ waterway: 'dam' }, 35.7, 51.4, 'dam', true, 15, null);
+    expect(d).toEqual({ verdict: 'reject', bucket: 'no_name' });
+  });
+
+  // Ordering lock 2: no_resolved_name fires before not_notable when the facility
+  // has a non-Latin name in a non-priority country with no other signals (would
+  // also fail the compound gate at step 4). Step 3b must fire first.
+  it('no_resolved_name fires before not_notable (non-Latin tag beats compound gate)', () => {
+    const d = computeAdmissionDecision(
+      { name: 'سد محلی', waterway: 'dam' },
+      21.5,
+      55.9,
+      'dam',
+      false,
+      15,
+      null,
+    );
+    expect(d).toEqual({ verdict: 'reject', bucket: 'no_resolved_name' });
+  });
+});
+
 // ---------- Phase 27.3.1 Plan 10 — G1 + G2 gap closure ----------
 //
 // Plan 10 closes two UAT gaps:
