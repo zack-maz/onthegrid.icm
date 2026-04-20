@@ -905,7 +905,7 @@ export function normalizeWaterElement(
     facilityType,
     lat,
     lng: lon,
-    label: extractLabel(el.tags, facilityType),
+    label: extractLabel(el.tags, facilityType, lat, lon, nearestCity),
     operator:
       el.tags.operator && isLatin(el.tags.operator) ? toTitleCase(el.tags.operator) : undefined,
     osmId: el.id,
