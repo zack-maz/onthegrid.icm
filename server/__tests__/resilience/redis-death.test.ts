@@ -122,6 +122,7 @@ vi.mock('../../adapters/overpass-water.js', () => ({
         excluded_turkey: 0, // Phase 27.3.1 Plan 10 (G2)
         not_notable: 0,
         no_name: 0,
+        no_resolved_name: 0, // Phase 27.3.2 D-04
         duplicate: 0,
         low_score: 0,
         no_city: 0,

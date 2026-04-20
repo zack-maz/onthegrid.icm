@@ -72,7 +72,7 @@
       "facilityType": "dam",
       "lat": 41.19924,
       "lng": 43.113987,
-      "label": "Kayabeyi Barajı",
+      "label": "Kayabeyi Baraj\u0131",
       "osmId": 1009557862,
       "stress": {
         "bws_raw": 0.037588368646213,
@@ -533,7 +533,7 @@
       "facilityType": "dam",
       "lat": 37.713618,
       "lng": 39.191927,
-      "label": "HacıHıDıR Dam",
+      "label": "Hac\u0131H\u0131D\u0131R Dam",
       "osmId": 114375373,
       "stress": {
         "bws_raw": 0.0647079636558532,
@@ -1587,7 +1587,7 @@
       "facilityType": "dam",
       "lat": 36.868406,
       "lng": 38.033102,
-      "label": "Karkamış Barajı",
+      "label": "Karkam\u0131\u015f Baraj\u0131",
       "osmId": 128497237,
       "stress": {
         "bws_raw": -1,
@@ -1942,7 +1942,7 @@
       "facilityType": "dam",
       "lat": 36.960162,
       "lng": 37.891462,
-      "label": "HancağıZ Barajı",
+      "label": "Hanca\u011f\u0131Z Baraj\u0131",
       "osmId": 132454090,
       "stress": {
         "bws_raw": 2.735768778701382,
@@ -2173,7 +2173,7 @@
       "label": "Dam",
       "osmId": 1386642560,
       "stress": {
-        "bws_raw": 5.458615788184198e-8,
+        "bws_raw": 5.458615788184198e-08,
         "bws_score": 0,
         "bws_label": "Low",
         "drr_score": -1,
@@ -2245,7 +2245,7 @@
       "label": "Taleghan Dam",
       "osmId": 1393764997,
       "stress": {
-        "bws_raw": 0.000002645080349535607,
+        "bws_raw": 2.645080349535607e-06,
         "bws_score": 0,
         "bws_label": "Low",
         "drr_score": -1,
@@ -2390,7 +2390,7 @@
       "facilityType": "reservoir",
       "lat": 37.063102,
       "lng": 37.168723,
-      "label": "Burç GöLeti",
+      "label": "Bur\u00e7 G\u00f6Leti",
       "osmId": 144867360,
       "stress": {
         "bws_raw": 0.0647079636558532,
@@ -2465,7 +2465,7 @@
       "facilityType": "dam",
       "lat": 36.194487,
       "lng": 36.326548,
-      "label": "Yarseli Barajı",
+      "label": "Yarseli Baraj\u0131",
       "osmId": 152735562,
       "stress": {
         "bws_raw": 1,
@@ -2665,7 +2665,7 @@
       "facilityType": "dam",
       "lat": 39.657282,
       "lng": 41.021726,
-      "label": "PalandöKen Dam",
+      "label": "Paland\u00f6Ken Dam",
       "osmId": 174523617,
       "stress": {
         "bws_raw": 0.1451476156351329,
@@ -2685,7 +2685,7 @@
       "facilityType": "dam",
       "lat": 36.735619,
       "lng": 37.241721,
-      "label": "Seve Barajı",
+      "label": "Seve Baraj\u0131",
       "osmId": 174871924,
       "stress": {
         "bws_raw": 0.0225896964212243,
@@ -2710,7 +2710,7 @@
       "facilityType": "reservoir",
       "lat": 38.047701,
       "lng": 39.93269,
-      "label": "DevegeçIdi Barajı",
+      "label": "Devege\u00e7Idi Baraj\u0131",
       "osmId": 1748801,
       "stress": {
         "bws_raw": 0.0647079636558532,
@@ -2763,7 +2763,7 @@
       "facilityType": "dam",
       "lat": 35.945211,
       "lng": 36.060474,
-      "label": "Yayladağı Dam",
+      "label": "Yaylada\u011f\u0131 Dam",
       "osmId": 177959585,
       "stress": {
         "bws_raw": 0.3158159881015764,
@@ -3076,7 +3076,7 @@
       "facilityType": "dam",
       "lat": 40.2344,
       "lng": 39.630312,
-      "label": "KöSe Barajı",
+      "label": "K\u00f6Se Baraj\u0131",
       "osmId": 194185445,
       "stress": {
         "bws_raw": 0.0533354705360755,
@@ -3353,7 +3353,7 @@
       "facilityType": "dam",
       "lat": 40.521846,
       "lng": 41.021535,
-      "label": "GüLlüBağ Dam",
+      "label": "G\u00fcLl\u00fcBa\u011f Dam",
       "osmId": 221217072,
       "stress": {
         "bws_raw": 0.0301250018142043,
@@ -3393,7 +3393,7 @@
       "facilityType": "dam",
       "lat": 40.130039,
       "lng": 39.899622,
-      "label": "DemiröZü Barajı",
+      "label": "Demir\u00f6Z\u00fc Baraj\u0131",
       "osmId": 221458953,
       "stress": {
         "bws_raw": 0.0016015057013056,
@@ -3503,7 +3503,7 @@
       "facilityType": "dam",
       "lat": 37.094981,
       "lng": 37.175295,
-      "label": "ZüLfikar Barajı",
+      "label": "Z\u00fcLfikar Baraj\u0131",
       "osmId": 231370418,
       "stress": {
         "bws_raw": 0.0589335078588069,
@@ -3713,7 +3713,7 @@
       "facilityType": "dam",
       "lat": 38.159525,
       "lng": 41.20281,
-      "label": "Batman Barajı",
+      "label": "Batman Baraj\u0131",
       "osmId": 274295756,
       "stress": {
         "bws_raw": 0.1451476156351329,
@@ -3820,7 +3820,7 @@
       "facilityType": "dam",
       "lat": 38.347676,
       "lng": 40.021935,
-      "label": "KralkıZı Dam",
+      "label": "Kralk\u0131Z\u0131 Dam",
       "osmId": 27615332,
       "stress": {
         "bws_raw": 1,
@@ -4024,7 +4024,7 @@
       "facilityType": "reservoir",
       "lat": 36.962567,
       "lng": 37.970276,
-      "label": "Karkamış Baraj GöLü",
+      "label": "Karkam\u0131\u015f Baraj G\u00f6L\u00fc",
       "osmId": 2874388,
       "stress": {
         "bws_raw": 1,
@@ -4247,7 +4247,7 @@
       "lat": 37.531561,
       "lng": 41.846895,
       "label": "Illisu Dam",
-      "operator": "Devlet Su İşLeri Genel MüDüRlüğü",
+      "operator": "Devlet Su \u0130\u015fLeri Genel M\u00fcD\u00fcRl\u00fc\u011f\u00fc",
       "osmId": 288882668,
       "stress": {
         "bws_raw": 0.2780391957192415,
@@ -4345,7 +4345,7 @@
       "facilityType": "dam",
       "lat": 38.918138,
       "lng": 40.684279,
-      "label": "GüLbahar Dam",
+      "label": "G\u00fcLbahar Dam",
       "osmId": 305370100,
       "stress": {
         "bws_raw": 0.1451476156351329,
@@ -4370,7 +4370,7 @@
       "facilityType": "dam",
       "lat": 36.348456,
       "lng": 36.561468,
-      "label": "Reyhanlı Dam",
+      "label": "Reyhanl\u0131 Dam",
       "osmId": 305392313,
       "stress": {
         "bws_raw": 3.3136651096810263,
@@ -5549,7 +5549,7 @@
       "facilityType": "dam",
       "lat": 40.676155,
       "lng": 41.290203,
-      "label": "Arkun Barajı",
+      "label": "Arkun Baraj\u0131",
       "osmId": 364218337,
       "stress": {
         "bws_raw": 0.1853690869270622,
@@ -5698,7 +5698,7 @@
       "facilityType": "reservoir",
       "lat": 37.800606,
       "lng": 38.753226,
-      "label": "AtatüRk Reservoir",
+      "label": "Atat\u00fcRk Reservoir",
       "osmId": 370829,
       "stress": {
         "bws_raw": 1,
@@ -6147,7 +6147,7 @@
       "label": "Sonbol Dam",
       "osmId": 410655206,
       "stress": {
-        "bws_raw": 0.0000015281176049831564,
+        "bws_raw": 1.5281176049831564e-06,
         "bws_score": 0,
         "bws_label": "Low",
         "drr_score": 3.29,
@@ -6386,7 +6386,7 @@
       "label": "Alborz Dam",
       "osmId": 441884759,
       "stress": {
-        "bws_raw": 0.000002645080349535607,
+        "bws_raw": 2.645080349535607e-06,
         "bws_score": 0,
         "bws_label": "Low",
         "drr_score": -1,
@@ -6514,7 +6514,7 @@
       "facilityType": "dam",
       "lat": 37.480487,
       "lng": 38.317638,
-      "label": "AtatüRk Dam",
+      "label": "Atat\u00fcRk Dam",
       "osmId": 45183487,
       "stress": {
         "bws_raw": 3.3136651096810263,
@@ -6707,7 +6707,7 @@
       "facilityType": "dam",
       "lat": 37.428354,
       "lng": 46.25086,
-      "label": "AlaviāN Dam",
+      "label": "Alavi\u0101N Dam",
       "osmId": 475588784,
       "stress": {
         "bws_raw": 0.1611787391667522,
@@ -6772,7 +6772,7 @@
       "facilityType": "dam",
       "lat": 35.328781,
       "lng": 33.071107,
-      "label": "GeçItköY Barajı",
+      "label": "Ge\u00e7Itk\u00f6Y Baraj\u0131",
       "osmId": 494145157,
       "stress": {
         "bws_raw": 2.950878652002709,
@@ -7373,7 +7373,7 @@
       "facilityType": "dam",
       "lat": 38.207017,
       "lng": 40.432338,
-      "label": "Ambar Barajı",
+      "label": "Ambar Baraj\u0131",
       "osmId": 615605703,
       "stress": {
         "bws_raw": 0.9695822792242832,
@@ -7487,7 +7487,7 @@
       "facilityType": "dam",
       "lat": 38.814039,
       "lng": 41.042514,
-      "label": "Upper KaleköY Dam",
+      "label": "Upper Kalek\u00f6Y Dam",
       "osmId": 624118217,
       "stress": {
         "bws_raw": 0.1451476156351329,
@@ -7891,7 +7891,7 @@
       "facilityType": "dam",
       "lat": 37.756412,
       "lng": 39.170596,
-      "label": "ÇAmurlu Barajı",
+      "label": "\u00c7Amurlu Baraj\u0131",
       "osmId": 717059418,
       "stress": {
         "bws_raw": 0.0589335078588069,
@@ -7966,7 +7966,7 @@
       "facilityType": "dam",
       "lat": 37.923201,
       "lng": 42.061338,
-      "label": "KirazlıK Dam",
+      "label": "Kirazl\u0131K Dam",
       "osmId": 722412983,
       "stress": {
         "bws_raw": 0.1816053353254506,
@@ -8026,7 +8026,7 @@
       "facilityType": "dam",
       "lat": 37.44099,
       "lng": 42.733641,
-      "label": "ŞıRnak Dam",
+      "label": "\u015e\u0131Rnak Dam",
       "osmId": 739582924,
       "stress": {
         "bws_raw": 0.1611787391667522,
@@ -8545,7 +8545,7 @@
       "facilityType": "dam",
       "lat": 38.831254,
       "lng": 40.710765,
-      "label": "Lower KaleköY Dam",
+      "label": "Lower Kalek\u00f6Y Dam",
       "osmId": 783723049,
       "stress": {
         "bws_raw": 0.2000095715567507,
@@ -8601,7 +8601,7 @@
       "facilityType": "dam",
       "lat": 37.415646,
       "lng": 40.141735,
-      "label": "Damluca Barajı",
+      "label": "Damluca Baraj\u0131",
       "osmId": 787193624,
       "stress": {
         "bws_raw": 1,
@@ -8626,7 +8626,7 @@
       "facilityType": "dam",
       "lat": 37.974258,
       "lng": 42.376837,
-      "label": "ÇEtin Barajı",
+      "label": "\u00c7Etin Baraj\u0131",
       "operator": "Limak Enerji",
       "osmId": 788280035,
       "stress": {
@@ -8869,7 +8869,7 @@
       "label": "Dam",
       "osmId": 807607953,
       "stress": {
-        "bws_raw": 4.320740299055504e-7,
+        "bws_raw": 4.320740299055504e-07,
         "bws_score": 0,
         "bws_label": "Low",
         "drr_score": -1,
@@ -8886,7 +8886,7 @@
       "facilityType": "reservoir",
       "lat": 37.778794,
       "lng": 38.445577,
-      "label": "HasancıK GöLeti",
+      "label": "Hasanc\u0131K G\u00f6Leti",
       "osmId": 812789993,
       "stress": {
         "bws_raw": 0.1441543551414529,
@@ -8974,7 +8974,7 @@
       "facilityType": "dam",
       "lat": 36.856065,
       "lng": 36.688498,
-      "label": "TahtaköPrü Dam",
+      "label": "Tahtak\u00f6Pr\u00fc Dam",
       "osmId": 82536454,
       "stress": {
         "bws_raw": 0.9695822792242832,
@@ -9642,7 +9642,7 @@
       "facilityType": "dam",
       "lat": 37.100095,
       "lng": 36.893551,
-      "label": "Hamidiye Barajı",
+      "label": "Hamidiye Baraj\u0131",
       "osmId": 903011992,
       "stress": {
         "bws_raw": 1.247720673217758,
@@ -9892,7 +9892,7 @@
       "facilityType": "dam",
       "lat": 36.822381,
       "lng": 37.568744,
-      "label": "KayacıK Dam",
+      "label": "Kayac\u0131K Dam",
       "osmId": 91897725,
       "stress": {
         "bws_raw": 1,
@@ -10040,7 +10040,7 @@
       "facilityType": "dam",
       "lat": 37.68428,
       "lng": 40.445209,
-      "label": "GöKsu Dam",
+      "label": "G\u00f6Ksu Dam",
       "osmId": 93292618,
       "stress": {
         "bws_raw": 0.0225896964212243,
@@ -10628,6 +10628,7 @@
       "excluded_turkey": 1662,
       "not_notable": 1828,
       "no_name": 17769,
+      "no_resolved_name": 0,
       "duplicate": 1,
       "low_score": 0,
       "no_city": 0
@@ -10638,6 +10639,7 @@
         "excluded_turkey": 822,
         "not_notable": 1033,
         "no_name": 5334,
+        "no_resolved_name": 0,
         "duplicate": 0,
         "low_score": 0,
         "no_city": 0
@@ -10647,6 +10649,7 @@
         "excluded_turkey": 840,
         "not_notable": 795,
         "no_name": 12387,
+        "no_resolved_name": 0,
         "duplicate": 0,
         "low_score": 0,
         "no_city": 0
@@ -10656,6 +10659,7 @@
         "excluded_turkey": 0,
         "not_notable": 0,
         "no_name": 48,
+        "no_resolved_name": 0,
         "duplicate": 0,
         "low_score": 0,
         "no_city": 0

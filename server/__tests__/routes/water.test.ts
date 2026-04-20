@@ -30,6 +30,8 @@ const emptyStats = {
     excluded_turkey: 0,
     not_notable: 0,
     no_name: 0,
+    // Phase 27.3.2 D-04 — Latin-script admission bucket.
+    no_resolved_name: 0,
     duplicate: 0,
     low_score: 0,
     no_city: 0,
@@ -41,11 +43,12 @@ const emptyStats = {
       excluded_turkey: number; // Phase 27.3.1 Plan 10 (G2)
       not_notable: number;
       no_name: number;
+      no_resolved_name: number; // Phase 27.3.2 D-04
       duplicate: number;
       low_score: number;
       no_city: number;
     }
-  >, // Phase 27.3.1 R-08 D-31 (Plan 10 G2 added excluded_turkey)
+  >, // Phase 27.3.1 R-08 D-31 (Plan 10 G2 added excluded_turkey, Plan 27.3.2 added no_resolved_name)
   byCountry: {} as Record<string, Record<string, number>>, // Phase 27.3.1 R-08 D-28
   overpass: [] as {
     facilityType: string;
@@ -451,6 +454,7 @@ describe('Water Routes (/api/water)', () => {
         excluded_turkey: 165,
         not_notable: 1100,
         no_name: 139,
+        no_resolved_name: 0,
         duplicate: 87,
         low_score: 0,
         no_city: 12,
@@ -461,6 +465,7 @@ describe('Water Routes (/api/water)', () => {
           excluded_turkey: 100,
           not_notable: 700,
           no_name: 90,
+          no_resolved_name: 0,
           duplicate: 50,
           low_score: 0,
           no_city: 6,
@@ -470,6 +475,7 @@ describe('Water Routes (/api/water)', () => {
           excluded_turkey: 65,
           not_notable: 400,
           no_name: 49,
+          no_resolved_name: 0,
           duplicate: 37,
           low_score: 0,
           no_city: 6,
