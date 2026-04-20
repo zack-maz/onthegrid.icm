@@ -583,6 +583,15 @@ export interface WaterFilterStats {
     excluded_turkey: number;
     not_notable: number;
     no_name: number;
+    /**
+     * Phase 27.3.2 D-04 — non-desalination facility whose OSM tags fail the
+     * Latin-script label check (`hasLatinLabel`). Admitted via `hasName` but
+     * none of `name:en` / `name` / `operator` passes `isLatin`. Desal is
+     * exempt (sparse OSM coverage — server synthesizes a label in
+     * `extractLabel`). Placed between `no_name` and `duplicate` so the
+     * rejection buckets read as progressive strictness.
+     */
+    no_resolved_name: number;
     duplicate: number;
     low_score: number;
     /** Rejected for failing the "notability via city proximity" check: no wikidata, no wikipedia, and no nearestCity within 150km. See Phase 27.3 Plan 04 / UAT Test 3. */
@@ -605,6 +614,8 @@ export interface WaterFilterStats {
       excluded_turkey: number;
       not_notable: number;
       no_name: number;
+      /** Phase 27.3.2 D-04 — per-type Latin-label rejection. Always 0 for desalination (D-03 exemption). */
+      no_resolved_name: number;
       duplicate: number;
       low_score: number;
       no_city: number;
@@ -868,6 +879,8 @@ async function fetchFacilityType(
     excluded_turkey: 0,
     not_notable: 0,
     no_name: 0,
+    // Phase 27.3.2 D-04 — lock-step with WaterFilterStats.byTypeRejections inner shape.
+    no_resolved_name: 0,
     duplicate: 0,
     low_score: 0,
     no_city: 0,
@@ -990,6 +1003,8 @@ export async function fetchWaterFacilities(): Promise<{
       excluded_turkey: 0,
       not_notable: 0,
       no_name: 0,
+      // Phase 27.3.2 D-04 — lock-step with WaterFilterStats.rejections shape.
+      no_resolved_name: 0,
       duplicate: 0,
       low_score: 0,
       no_city: 0,

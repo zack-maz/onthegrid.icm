@@ -82,6 +82,8 @@ function buildEmptyFilterStats(
       excluded_turkey: 0,
       not_notable: 0,
       no_name: 0,
+      // Phase 27.3.2 D-04 — lock-step with WaterFilterStats.rejections shape.
+      no_resolved_name: 0,
       duplicate: 0,
       low_score: 0,
       no_city: 0,
