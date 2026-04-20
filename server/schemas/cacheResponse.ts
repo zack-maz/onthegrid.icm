@@ -141,6 +141,7 @@ const rejectionsSchema = z
     excluded_turkey: z.number(),
     not_notable: z.number(),
     no_name: z.number(),
+    no_resolved_name: z.number().int().nonnegative(),
     duplicate: z.number(),
     low_score: z.number(),
     no_city: z.number(),
