@@ -267,10 +267,10 @@ describe('Water Routes (/api/water)', () => {
     });
 
     it('returns cached data when cache is fresh (does not call fetchWaterFacilities)', async () => {
-      // Phase 27.3.1 Plan 11 G3 — Redis key bumped to water:facilities:v2 and
+      // Phase 27.3.1 Plan 11 G3 — Redis key bumped to water:facilities:v3 and
       // payload is now the envelope `{ facilities, filterStats }`, not a bare
       // array.
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: emptyStats },
         fetchedAt: Date.now(),
       });
@@ -286,7 +286,7 @@ describe('Water Routes (/api/water)', () => {
 
     it('returns stale cache when upstream fails but cache exists', async () => {
       // Phase 27.3.1 Plan 11 G3 — envelope shape under the bumped key.
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: emptyStats },
         fetchedAt: Date.now() - 90_000_000, // stale (>24h)
       });
@@ -436,7 +436,7 @@ describe('Water Routes (/api/water)', () => {
    * cache-hit response synthesized zero-filterStats via buildEmptyFilterStats.
    * Post-Plan-11 both the facilities AND the filterStats travel together
    * inside a `{ facilities, filterStats }` envelope under the bumped key
-   * `water:facilities:v2`. Cache-hit responses spread the cached filterStats
+   * `water:facilities:v3`. Cache-hit responses spread the cached filterStats
    * and overwrite `source: 'redis'` + `generatedAt: ISO(lastFresh)` so
    * DevApiStatus renders populated byCountry / byTypeRejections / overpass
    * tallies with accurate provenance.
@@ -498,7 +498,7 @@ describe('Water Routes (/api/water)', () => {
     };
 
     it('cache-hit response returns populated byCountry from cached payload', async () => {
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: populatedStats },
         fetchedAt: Date.now(),
       });
@@ -513,7 +513,7 @@ describe('Water Routes (/api/water)', () => {
     });
 
     it('cache-hit response overrides source to "redis" regardless of persisted value', async () => {
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: populatedStats },
         fetchedAt: Date.now(),
       });
@@ -528,7 +528,7 @@ describe('Water Routes (/api/water)', () => {
       // Use a fresh lastFresh so the cache entry is NOT stale; the route's
       // cache-hit branch is what we're testing.
       const lastFreshMs = Date.now() - 1000;
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: populatedStats },
         fetchedAt: lastFreshMs,
       });
@@ -540,7 +540,7 @@ describe('Water Routes (/api/water)', () => {
     });
 
     it('cache-hit preserves rejections counts from cached payload', async () => {
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: populatedStats },
         fetchedAt: Date.now(),
       });
@@ -554,7 +554,7 @@ describe('Water Routes (/api/water)', () => {
     });
 
     it('cache-hit preserves byTypeRejections + overpass[] from cached payload', async () => {
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: populatedStats },
         fetchedAt: Date.now(),
       });
@@ -579,7 +579,7 @@ describe('Water Routes (/api/water)', () => {
       expect(res.ok).toBe(true);
 
       // Inspect what the in-memory Redis mock received.
-      const stored = redisStore.get('water:facilities:v2');
+      const stored = redisStore.get('water:facilities:v3');
       expect(stored).toBeDefined();
       expect(stored!.data).toMatchObject({
         facilities: expect.any(Array),
@@ -597,7 +597,7 @@ describe('Water Routes (/api/water)', () => {
 
       await fetch(`${baseUrl}/api/water`);
 
-      const stored = redisStore.get('water:facilities:v2');
+      const stored = redisStore.get('water:facilities:v3');
       expect(stored).toBeDefined();
       expect(stored!.data).toMatchObject({
         facilities: expect.any(Array),
@@ -612,7 +612,7 @@ describe('Water Routes (/api/water)', () => {
     });
 
     it('error path with stale cached payload returns stats from cache with source=redis', async () => {
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: populatedStats },
         fetchedAt: Date.now() - 90_000_000, // stale (>24h)
       });
@@ -640,7 +640,7 @@ describe('Water Routes (/api/water)', () => {
       expect(body.filterStats.byCountry).toEqual({});
     });
 
-    it('Redis key is water:facilities:v2 (regression guard for operator grep)', async () => {
+    it('Redis key is water:facilities:v3 (regression guard for operator grep)', async () => {
       mockFetchWaterFacilities.mockResolvedValue({
         facilities: [sampleFacility],
         stats: { ...emptyStats, source: 'overpass' as const },
@@ -650,7 +650,7 @@ describe('Water Routes (/api/water)', () => {
       await fetch(`${baseUrl}/api/water?refresh=true`);
 
       // v2 key must exist; old key must not.
-      expect(redisStore.has('water:facilities:v2')).toBe(true);
+      expect(redisStore.has('water:facilities:v3')).toBe(true);
       expect(redisStore.has('water:facilities')).toBe(false);
     });
 
@@ -662,7 +662,7 @@ describe('Water Routes (/api/water)', () => {
         lat: 32.1,
         lng: 45.6,
       };
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility, f2], filterStats: emptyStats },
         fetchedAt: Date.now(),
       });
@@ -688,7 +688,7 @@ describe('Water Routes (/api/water)', () => {
     it('returns precipitation data for cached facilities', async () => {
       // Phase 27.3.1 Plan 11 G3 — envelope shape under the bumped key so the
       // precip handler's cached-facilities read unwraps .facilities correctly.
-      redisStore.set('water:facilities:v2', {
+      redisStore.set('water:facilities:v3', {
         data: { facilities: [sampleFacility], filterStats: emptyStats },
         fetchedAt: Date.now(),
       });

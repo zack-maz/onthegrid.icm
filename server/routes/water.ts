@@ -109,8 +109,13 @@ const waterQuerySchema = z.object({
  * 'water:facilities:v2' so post-deploy reads cold-miss and write the new
  * envelope shape from scratch. The old key orphans and expires naturally
  * under its 72h hard Redis TTL.
+ *
+ * Phase 27.3.2 D-11 — bumped v2→v3 to force cold-fill of the new
+ * `rejections.no_resolved_name` / `byTypeRejections[*].no_resolved_name`
+ * bucket. Stale v2 entries fail the `.strict()` Zod parse (missing key)
+ * and fall through to snapshot tier on the first post-deploy request.
  */
-const FACILITIES_KEY = 'water:facilities:v2';
+const FACILITIES_KEY = 'water:facilities:v3';
 
 /** Redis key for cached precipitation data */
 const PRECIP_KEY = 'water:precip';
