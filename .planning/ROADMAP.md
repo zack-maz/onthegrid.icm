@@ -155,12 +155,21 @@ Plans:
 
 ### Phase 27.3.2: Water Facility Admission Tightening — Drop City/Coord Fallbacks
 
-**Goal:** Tighten water facility admission so the snapshot contains only real-named or river-resolved facilities. Drop any OSM element whose (`name` / `name:en` / `operator` / river-match) chain all return empty — currently such elements are admitted with a city-fallback ("Dam near Mosul") or coord-fallback ("Dam at 36.12°N, 43.00°E") label derived client-side. After this phase, the `GENERIC_TYPE_RE` client-side sentinel fallback in `src/lib/waterLabel.ts` becomes effectively unreachable and can be kept only as a safety net.
+**Goal:** Tighten water facility admission so every admitted non-desalination facility carries a real Latin OSM name. Drop any OSM element whose `name` / `name:en` / `operator` chain all fail the `isLatin` script check (kills river-match rescue too — rule is dead-simple). Desalination exempt (sparse OSM coverage; server synthesizes `"Desalination Plant near {city}"` / `"at {lat}°,{lng}°"` for the 5 non-Latin exempt desal). Client-side fallback chain in `src/lib/waterLabel.ts` collapsed to a single one-liner read — server owns all label synthesis. Redis key bumps `water:facilities:v2` → `v3` to flush stale caches on deploy.
 **Depends on:** Phase 27.3.1 merged to main
-**Requirements:** TBD — forward-looking tightening queued from 27.3.1-HUMAN-UAT.md Gap 2 (severity: minor, scope_change classification)
+**Requirements:** D-01 through D-18 (from 27.3.2-CONTEXT.md)
 **Plans:** 0 plans (to author)
 **Source:** 27.3.1-HUMAN-UAT.md → Gap 2. User feedback: "I want to remove city and coord fallbacks and just drop those facilities."
-**Expected impact:** Snapshot admission count drops below current 436 by removing the subset of the 137 bare-label facilities that resolve only to city/coord rather than to a river. Adds a new rejection bucket (e.g. `no_resolved_name`) to `WaterFilterStats.rejections`.
+**Expected impact:** Snapshot drops from 436 → ~304 (240 dams + 49 reservoirs + 15 desalination). New `no_resolved_name` bucket added to `WaterFilterStats.rejections` + `byTypeRejections`. Romanization of dropped Persian/Arabic names deferred to Phase 27.3.3.
+
+### Phase 27.3.3: Romanize Non-Latin Water Facility Names
+
+**Goal:** Re-admit water facility OSM elements that Phase 27.3.2 dropped because their only usable name tags are non-Latin (Persian, Arabic, Georgian, Cyrillic). Add a transliteration step to `extractLabel` in `server/adapters/overpass-water.ts` so `سد سعد` becomes `Saad Dam` and clears the `hasLatinLabel` gate. Transliteration candidates: ICU4C (`full-icu` wrapper), `@sindresorhus/transliterate`, or a Cerebras/Groq LLM call during snapshot refresh for highest-quality Arabic/Persian proper-noun romanization.
+**Depends on:** Phase 27.3.2 merged to main
+**Requirements:** TBD — queued during 27.3.2 discussion per user directive ("deferring romanization of persian/arabic names and readding those facilities in pipeline for phase 27.3.3")
+**Plans:** 0 plans (to author)
+**Source:** 27.3.2 CONTEXT discussion — user explicitly deferred transliteration to a dedicated phase rather than synthesizing non-Latin-language labels client-side.
+**Expected impact:** Snapshot admission count climbs from ~304 back toward ~430 as romanized names enter the filter under the existing D-01 Latin-label gate. `no_resolved_name` rejection counts drop as transliteration covers each script.
 
 ### Phase 27.4: LLM Enrichment Improvements
 
