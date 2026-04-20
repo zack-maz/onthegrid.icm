@@ -158,7 +158,7 @@ Plans:
 **Goal:** Tighten water facility admission so every admitted non-desalination facility carries a real Latin OSM name. Drop any OSM element whose `name` / `name:en` / `operator` chain all fail the `isLatin` script check (kills river-match rescue too — rule is dead-simple). Desalination exempt (sparse OSM coverage; server synthesizes `"Desalination Plant near {city}"` / `"at {lat}°,{lng}°"` for the 5 non-Latin exempt desal). Client-side fallback chain in `src/lib/waterLabel.ts` collapsed to a single one-liner read — server owns all label synthesis. Redis key bumps `water:facilities:v2` → `v3` to flush stale caches on deploy.
 **Depends on:** Phase 27.3.1 merged to main
 **Requirements:** D-01 through D-18 (from 27.3.2-CONTEXT.md)
-**Plans:** 0 plans (to author)
+**Plans:** 10/10 plans complete
 **Source:** 27.3.1-HUMAN-UAT.md → Gap 2. User feedback: "I want to remove city and coord fallbacks and just drop those facilities."
 **Expected impact:** Snapshot drops from 436 → ~304 (240 dams + 49 reservoirs + 15 desalination). New `no_resolved_name` bucket added to `WaterFilterStats.rejections` + `byTypeRejections`. Romanization of dropped Persian/Arabic names deferred to Phase 27.3.3.
 
