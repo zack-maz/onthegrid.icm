@@ -377,3 +377,9 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Legend** — gradient bar from black to light blue via LEGEND_REGISTRY
 - **Click guard** — `handleDeckClick` returns early for `water-river*` layer IDs
 - **Layer stacking** — rivers after ethnic, water facilities at same z-level as entities
+- **Phase 27.3.2 Latin-label admission gate** — Non-desalination facilities must carry a Latin-script value in `name:en` / `name` / `operator`. `hasLatinLabel(tags)` helper + new `no_resolved_name` rejection bucket in `WaterFilterStats.rejections` and `byTypeRejections`. Desalination exempt (sparse OSM coverage; ~63 raw elements).
+- **Server-owned label synthesis for desalination** — `extractLabel(tags, facilityType, lat, lng, nearestCity)` synthesizes `"Desalination Plant near {city}"` (150km city lookup) or `"Desalination Plant at {lat}°{N|S}, {lng}°{E|W}"` fallback for the non-Latin exempt desal. Non-desal never reaches synthesis — rejected at admission.
+- **Client label collapsed to one-liner** — `src/lib/waterLabel.ts` `getWaterFacilityDisplayName` returns `facility.label?.trim() || FACILITY_TYPE_LABELS[facility.facilityType]`. `WATER_TYPE_LABELS`, `NEAR_UNKNOWN_RE`, `GENERIC_TYPE_RE` and the 3-branch river/city/coord fallback chain are all deleted.
+- **Redis key v3 bump** — `water:facilities:v2` → `water:facilities:v3` (server/routes/water.ts) forces cold-fill of the new `no_resolved_name` bucket. Sites key (`sites:v3`) unchanged.
+- **Snapshot regenerated to ~305 facilities** — 436 → 305 (241 dams + 49 reservoirs + 15 desalination) under the tightened admission rules. `no_resolved_name` bucket caught 979 non-Latin non-desal elements.
+- **Phase 27.3.3 deferred — romanization of non-Latin names** — Per 27.3.2 D-18, a dedicated phase will add transliteration to `extractLabel` so `سد سعد` → `Saad Dam` and re-admits under the Latin gate. Expected impact: snapshot climbs from ~305 back toward ~430.

@@ -1,26 +1,6 @@
 {
-  "generatedAt": "2026-04-19T22:33:22.751Z",
+  "generatedAt": "2026-04-20T22:29:12.554Z",
   "facilities": [
-    {
-      "id": "water-1000096845",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 31.087207,
-      "lng": 41.026665,
-      "label": "Dam",
-      "osmId": 1000096845,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.3,
-        "iav_score": 1.88,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70
-    },
     {
       "id": "water-1000593380",
       "type": "water",
@@ -42,37 +22,12 @@
       "notabilityScore": 75
     },
     {
-      "id": "water-1001396249",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.073937,
-      "lng": 46.335968,
-      "label": "Dam",
-      "osmId": 1001396249,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.15,
-        "gtd_score": -1,
-        "sev_score": 0.11,
-        "iav_score": 1.88,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 53,
-        "population": 7600000
-      }
-    },
-    {
       "id": "water-1009557862",
       "type": "water",
       "facilityType": "dam",
       "lat": 41.19924,
       "lng": 43.113987,
-      "label": "Kayabeyi Baraj\u0131",
+      "label": "Kayabeyi Barajı",
       "osmId": 1009557862,
       "stress": {
         "bws_raw": 0.037588368646213,
@@ -85,181 +40,6 @@
         "compositeHealth": 1
       },
       "notabilityScore": 55
-    },
-    {
-      "id": "water-1018404834",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 31.618895,
-      "lng": 65.583901,
-      "label": "Dam",
-      "osmId": 1018404834,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.72,
-        "gtd_score": -1,
-        "sev_score": 0.82,
-        "iav_score": 1.35,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Kandahar",
-        "distanceKm": 15,
-        "population": 600000
-      }
-    },
-    {
-      "id": "water-10255492169",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 35.597749,
-      "lng": 43.192819,
-      "label": "Dam",
-      "osmId": 10255492169,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.38,
-        "gtd_score": -1,
-        "sev_score": 0.89,
-        "iav_score": 3.12,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 50,
-      "capacity": {
-        "height": 1.5
-      },
-      "nearestCity": {
-        "name": "Mosul",
-        "distanceKm": 82,
-        "population": 1800000
-      },
-      "linkedRiver": {
-        "name": "Tigris",
-        "distanceKm": 7
-      }
-    },
-    {
-      "id": "water-1033315625",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.126654,
-      "lng": 46.164481,
-      "label": "Dam",
-      "osmId": 1033315625,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.65,
-        "iav_score": 4.54,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 69,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-1034916762",
-      "type": "water",
-      "facilityType": "reservoir",
-      "lat": 29.31338,
-      "lng": 47.677967,
-      "label": "Reservoir",
-      "osmId": 1034916762,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.49,
-        "iav_score": 1.82,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 40,
-      "capacity": {
-        "height": 2
-      },
-      "nearestCity": {
-        "name": "Kuwait City",
-        "distanceKm": 30,
-        "population": 3100000
-      }
-    },
-    {
-      "id": "water-1052699712",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 26.815462,
-      "lng": 44.208456,
-      "label": "Dam",
-      "osmId": 1052699712,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.63,
-        "iav_score": 2.54,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-1053657884",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 35.786173,
-      "lng": 44.561197,
-      "label": "Dam",
-      "osmId": 1053657884,
-      "stress": {
-        "bws_raw": 0.0652124439220714,
-        "bws_score": 0.38,
-        "bws_label": "Low",
-        "drr_score": 3.11,
-        "gtd_score": -1,
-        "sev_score": 2.07,
-        "iav_score": 2.24,
-        "compositeHealth": 0.9612491872558333
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Kirkuk",
-        "distanceKm": 38,
-        "population": 1000000
-      }
-    },
-    {
-      "id": "water-1059349800",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.848403,
-      "lng": 43.014877,
-      "label": "Dam",
-      "osmId": 1059349800,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 3.35,
-        "sev_score": 0.11,
-        "iav_score": 4.17,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-107601965",
@@ -287,40 +67,12 @@
       }
     },
     {
-      "id": "water-1093394402",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 21.725044,
-      "lng": 39.828073,
-      "label": "Dam",
-      "osmId": 1093394402,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.2,
-        "iav_score": 1.77,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 80,
-      "capacity": {
-        "height": 441
-      },
-      "nearestCity": {
-        "name": "Jeddah",
-        "distanceKm": 71,
-        "population": 4700000
-      }
-    },
-    {
       "id": "water-1093515327",
       "type": "water",
       "facilityType": "desalination",
       "lat": 20.683269,
       "lng": 39.533104,
-      "label": "Desalination Plant",
+      "label": "Desalination Plant near Jeddah",
       "osmId": 1093515327,
       "stress": {
         "bws_raw": 0.0041132360372845,
@@ -385,26 +137,6 @@
       }
     },
     {
-      "id": "water-11059360",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 19.696304,
-      "lng": 42.487453,
-      "label": "Dam",
-      "osmId": 11059360,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.34,
-        "iav_score": 2.48,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 80
-    },
-    {
       "id": "water-1115858023",
       "type": "water",
       "facilityType": "dam",
@@ -428,54 +160,6 @@
         "distanceKm": 70,
         "population": 1900000
       }
-    },
-    {
-      "id": "water-11175980334",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.232064,
-      "lng": 52.145629,
-      "label": "Dam",
-      "osmId": 11175980334,
-      "stress": {
-        "bws_raw": 6.121769612441762,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.48,
-        "gtd_score": 1.6,
-        "sev_score": 1.71,
-        "iav_score": 3.11,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 50,
-      "capacity": {
-        "height": 5
-      },
-      "nearestCity": {
-        "name": "Isfahan",
-        "distanceKm": 65,
-        "population": 2200000
-      }
-    },
-    {
-      "id": "water-11200897",
-      "type": "water",
-      "facilityType": "reservoir",
-      "lat": 30.800609,
-      "lng": 61.713154,
-      "label": "Reservoir",
-      "osmId": 11200897,
-      "stress": {
-        "bws_raw": 0.1304998620428934,
-        "bws_score": 1.38,
-        "bws_label": "Low-Medium",
-        "drr_score": 3,
-        "gtd_score": -1,
-        "sev_score": 1.95,
-        "iav_score": 3.66,
-        "compositeHealth": 0.8508818954473059
-      },
-      "notabilityScore": 70
     },
     {
       "id": "water-1142386",
@@ -533,7 +217,7 @@
       "facilityType": "dam",
       "lat": 37.713618,
       "lng": 39.191927,
-      "label": "Hac\u0131H\u0131D\u0131R Dam",
+      "label": "HacıHıDıR Dam",
       "osmId": 114375373,
       "stress": {
         "bws_raw": 0.0647079636558532,
@@ -854,34 +538,6 @@
       "notabilityScore": 60
     },
     {
-      "id": "water-1206045700",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.230232,
-      "lng": 52.144063,
-      "label": "Dam",
-      "osmId": 1206045700,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.52,
-        "gtd_score": -1,
-        "sev_score": 1.38,
-        "iav_score": 2.95,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 50,
-      "capacity": {
-        "height": 3
-      },
-      "nearestCity": {
-        "name": "Isfahan",
-        "distanceKm": 65,
-        "population": 2200000
-      }
-    },
-    {
       "id": "water-1212394743",
       "type": "water",
       "facilityType": "dam",
@@ -1030,38 +686,6 @@
         "name": "Fallujah",
         "distanceKm": 61,
         "population": 350000
-      }
-    },
-    {
-      "id": "water-1227611833",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 30.922671,
-      "lng": 47.27175,
-      "label": "Dam",
-      "osmId": 1227611833,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 40,
-      "capacity": {
-        "height": 2
-      },
-      "nearestCity": {
-        "name": "Basra",
-        "distanceKm": 67,
-        "population": 2800000
-      },
-      "linkedRiver": {
-        "name": "Tigris",
-        "distanceKm": 19
       }
     },
     {
@@ -1431,76 +1055,6 @@
       }
     },
     {
-      "id": "water-1268617696",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.128479,
-      "lng": 45.386952,
-      "label": "Dam",
-      "osmId": 1268617696,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 4.76,
-        "gtd_score": -1,
-        "sev_score": 0.45,
-        "iav_score": 3.2,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 138,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-1268617697",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.126558,
-      "lng": 45.371731,
-      "label": "Dam",
-      "osmId": 1268617697,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.14,
-        "iav_score": 3.86,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 139,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-1268930193",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.287559,
-      "lng": 45.174258,
-      "label": "Dam",
-      "osmId": 1268930193,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.16,
-        "iav_score": 2,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-1272054376",
       "type": "water",
       "facilityType": "dam",
@@ -1587,7 +1141,7 @@
       "facilityType": "dam",
       "lat": 36.868406,
       "lng": 38.033102,
-      "label": "Karkam\u0131\u015f Baraj\u0131",
+      "label": "Karkamış Barajı",
       "osmId": 128497237,
       "stress": {
         "bws_raw": -1,
@@ -1682,67 +1236,6 @@
         "name": "Ramadi",
         "distanceKm": 4,
         "population": 300000
-      }
-    },
-    {
-      "id": "water-1294867412",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 36.327775,
-      "lng": 44.171383,
-      "label": "Dam",
-      "osmId": 1294867412,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.47,
-        "gtd_score": -1,
-        "sev_score": 0.68,
-        "iav_score": 2.31,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 50,
-      "capacity": {
-        "height": 20,
-        "volume": 20000000
-      },
-      "nearestCity": {
-        "name": "Dukan",
-        "distanceKm": 82,
-        "population": 50000
-      }
-    },
-    {
-      "id": "water-13046471331",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 30.936485,
-      "lng": 46.542263,
-      "label": "Dam",
-      "osmId": 13046471331,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 40,
-      "capacity": {
-        "height": 4
-      },
-      "nearestCity": {
-        "name": "Basra",
-        "distanceKm": 128,
-        "population": 2800000
-      },
-      "linkedRiver": {
-        "name": "Euphrates",
-        "distanceKm": 7
       }
     },
     {
@@ -1942,7 +1435,7 @@
       "facilityType": "dam",
       "lat": 36.960162,
       "lng": 37.891462,
-      "label": "Hanca\u011f\u0131Z Baraj\u0131",
+      "label": "HancağıZ Barajı",
       "osmId": 132454090,
       "stress": {
         "bws_raw": 2.735768778701382,
@@ -2086,31 +1579,6 @@
       }
     },
     {
-      "id": "water-13827222",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.143347,
-      "lng": 46.240703,
-      "label": "Dam",
-      "osmId": 13827222,
-      "stress": {
-        "bws_raw": 2.37142272149483,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 1.74,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 65,
-        "population": 7600000
-      }
-    },
-    {
       "id": "water-138545624",
       "type": "water",
       "facilityType": "reservoir",
@@ -2163,26 +1631,6 @@
         "distanceKm": 33,
         "population": 1900000
       }
-    },
-    {
-      "id": "water-1386642560",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 20.126866,
-      "lng": 41.357981,
-      "label": "Dam",
-      "osmId": 1386642560,
-      "stress": {
-        "bws_raw": 5.458615788184198e-08,
-        "bws_score": 0,
-        "bws_label": "Low",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.32,
-        "iav_score": 1.96,
-        "compositeHealth": 1
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-1391686340",
@@ -2245,7 +1693,7 @@
       "label": "Taleghan Dam",
       "osmId": 1393764997,
       "stress": {
-        "bws_raw": 2.645080349535607e-06,
+        "bws_raw": 0.000002645080349535607,
         "bws_score": 0,
         "bws_label": "Low",
         "drr_score": -1,
@@ -2337,29 +1785,6 @@
       }
     },
     {
-      "id": "water-1421814086",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.070054,
-      "lng": 47.608648,
-      "label": "Dam",
-      "osmId": 1421814086,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 40,
-      "capacity": {
-        "height": 3
-      }
-    },
-    {
       "id": "water-14243316",
       "type": "water",
       "facilityType": "reservoir",
@@ -2390,7 +1815,7 @@
       "facilityType": "reservoir",
       "lat": 37.063102,
       "lng": 37.168723,
-      "label": "Bur\u00e7 G\u00f6Leti",
+      "label": "Burç GöLeti",
       "osmId": 144867360,
       "stress": {
         "bws_raw": 0.0647079636558532,
@@ -2415,7 +1840,7 @@
       "facilityType": "desalination",
       "lat": 30.056353,
       "lng": 47.870161,
-      "label": "Desalination Plant",
+      "label": "Desalination Plant near Basra",
       "osmId": 1481941662,
       "stress": {
         "bws_raw": 1,
@@ -2465,7 +1890,7 @@
       "facilityType": "dam",
       "lat": 36.194487,
       "lng": 36.326548,
-      "label": "Yarseli Baraj\u0131",
+      "label": "Yarseli Barajı",
       "osmId": 152735562,
       "stress": {
         "bws_raw": 1,
@@ -2665,7 +2090,7 @@
       "facilityType": "dam",
       "lat": 39.657282,
       "lng": 41.021726,
-      "label": "Paland\u00f6Ken Dam",
+      "label": "PalandöKen Dam",
       "osmId": 174523617,
       "stress": {
         "bws_raw": 0.1451476156351329,
@@ -2685,7 +2110,7 @@
       "facilityType": "dam",
       "lat": 36.735619,
       "lng": 37.241721,
-      "label": "Seve Baraj\u0131",
+      "label": "Seve Barajı",
       "osmId": 174871924,
       "stress": {
         "bws_raw": 0.0225896964212243,
@@ -2710,7 +2135,7 @@
       "facilityType": "reservoir",
       "lat": 38.047701,
       "lng": 39.93269,
-      "label": "Devege\u00e7Idi Baraj\u0131",
+      "label": "DevegeçIdi Barajı",
       "osmId": 1748801,
       "stress": {
         "bws_raw": 0.0647079636558532,
@@ -2763,7 +2188,7 @@
       "facilityType": "dam",
       "lat": 35.945211,
       "lng": 36.060474,
-      "label": "Yaylada\u011f\u0131 Dam",
+      "label": "Yayladağı Dam",
       "osmId": 177959585,
       "stress": {
         "bws_raw": 0.3158159881015764,
@@ -2888,31 +2313,6 @@
         "compositeHealth": 0
       },
       "notabilityScore": 75
-    },
-    {
-      "id": "water-183834576",
-      "type": "water",
-      "facilityType": "reservoir",
-      "lat": 32.486441,
-      "lng": 34.936501,
-      "label": "Reservoir",
-      "osmId": 183834576,
-      "stress": {
-        "bws_raw": 2.404678789044797,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.62,
-        "gtd_score": 2.2,
-        "sev_score": 2.39,
-        "iav_score": 2.01,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Haifa",
-        "distanceKm": 35,
-        "population": 300000
-      }
     },
     {
       "id": "water-184977714",
@@ -3076,7 +2476,7 @@
       "facilityType": "dam",
       "lat": 40.2344,
       "lng": 39.630312,
-      "label": "K\u00f6Se Baraj\u0131",
+      "label": "KöSe Barajı",
       "osmId": 194185445,
       "stress": {
         "bws_raw": 0.0533354705360755,
@@ -3353,7 +2753,7 @@
       "facilityType": "dam",
       "lat": 40.521846,
       "lng": 41.021535,
-      "label": "G\u00fcLl\u00fcBa\u011f Dam",
+      "label": "GüLlüBağ Dam",
       "osmId": 221217072,
       "stress": {
         "bws_raw": 0.0301250018142043,
@@ -3393,7 +2793,7 @@
       "facilityType": "dam",
       "lat": 40.130039,
       "lng": 39.899622,
-      "label": "Demir\u00f6Z\u00fc Baraj\u0131",
+      "label": "DemiröZü Barajı",
       "osmId": 221458953,
       "stress": {
         "bws_raw": 0.0016015057013056,
@@ -3406,31 +2806,6 @@
         "compositeHealth": 1
       },
       "notabilityScore": 55
-    },
-    {
-      "id": "water-226850923",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.736046,
-      "lng": 36.197107,
-      "label": "Dam",
-      "osmId": 226850923,
-      "stress": {
-        "bws_raw": 1.6847678633686702,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.39,
-        "gtd_score": -1,
-        "sev_score": 2.17,
-        "iav_score": 1.63,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Homs",
-        "distanceKm": 47,
-        "population": 800000
-      }
     },
     {
       "id": "water-22745378",
@@ -3503,7 +2878,7 @@
       "facilityType": "dam",
       "lat": 37.094981,
       "lng": 37.175295,
-      "label": "Z\u00fcLfikar Baraj\u0131",
+      "label": "ZüLfikar Barajı",
       "osmId": 231370418,
       "stress": {
         "bws_raw": 0.0589335078588069,
@@ -3713,7 +3088,7 @@
       "facilityType": "dam",
       "lat": 38.159525,
       "lng": 41.20281,
-      "label": "Batman Baraj\u0131",
+      "label": "Batman Barajı",
       "osmId": 274295756,
       "stress": {
         "bws_raw": 0.1451476156351329,
@@ -3820,7 +3195,7 @@
       "facilityType": "dam",
       "lat": 38.347676,
       "lng": 40.021935,
-      "label": "Kralk\u0131Z\u0131 Dam",
+      "label": "KralkıZı Dam",
       "osmId": 27615332,
       "stress": {
         "bws_raw": 1,
@@ -3974,26 +3349,6 @@
       "notabilityScore": 75
     },
     {
-      "id": "water-28428982",
-      "type": "water",
-      "facilityType": "reservoir",
-      "lat": 30.835141,
-      "lng": 61.689078,
-      "label": "Reservoir",
-      "osmId": 28428982,
-      "stress": {
-        "bws_raw": 1.0376247036608977,
-        "bws_score": 4.38,
-        "bws_label": "Extremely High",
-        "drr_score": 2.77,
-        "gtd_score": -1,
-        "sev_score": 1.64,
-        "iav_score": 2.54,
-        "compositeHealth": 0.35213633723318016
-      },
-      "notabilityScore": 70
-    },
-    {
       "id": "water-28429335",
       "type": "water",
       "facilityType": "dam",
@@ -4024,7 +3379,7 @@
       "facilityType": "reservoir",
       "lat": 36.962567,
       "lng": 37.970276,
-      "label": "Karkam\u0131\u015f Baraj G\u00f6L\u00fc",
+      "label": "Karkamış Baraj GöLü",
       "osmId": 2874388,
       "stress": {
         "bws_raw": 1,
@@ -4196,26 +3551,6 @@
       }
     },
     {
-      "id": "water-288522582",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.544921,
-      "lng": 45.75069,
-      "label": "Dam",
-      "osmId": 288522582,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.38,
-        "gtd_score": -1,
-        "sev_score": 0.89,
-        "iav_score": 3.12,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-288636124",
       "type": "water",
       "facilityType": "dam",
@@ -4247,7 +3582,7 @@
       "lat": 37.531561,
       "lng": 41.846895,
       "label": "Illisu Dam",
-      "operator": "Devlet Su \u0130\u015fLeri Genel M\u00fcD\u00fcRl\u00fc\u011f\u00fc",
+      "operator": "Devlet Su İşLeri Genel MüDüRlüğü",
       "osmId": 288882668,
       "stress": {
         "bws_raw": 0.2780391957192415,
@@ -4345,7 +3680,7 @@
       "facilityType": "dam",
       "lat": 38.918138,
       "lng": 40.684279,
-      "label": "G\u00fcLbahar Dam",
+      "label": "GüLbahar Dam",
       "osmId": 305370100,
       "stress": {
         "bws_raw": 0.1451476156351329,
@@ -4370,7 +3705,7 @@
       "facilityType": "dam",
       "lat": 36.348456,
       "lng": 36.561468,
-      "label": "Reyhanl\u0131 Dam",
+      "label": "Reyhanlı Dam",
       "osmId": 305392313,
       "stress": {
         "bws_raw": 3.3136651096810263,
@@ -4408,26 +3743,6 @@
         "compositeHealth": 0.8944271909999159
       },
       "notabilityScore": 75
-    },
-    {
-      "id": "water-310415894",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 35.723839,
-      "lng": 53.384138,
-      "label": "Dam",
-      "osmId": 310415894,
-      "stress": {
-        "bws_raw": 0.2138047964887543,
-        "bws_score": 2.1,
-        "bws_label": "Medium-High",
-        "drr_score": 3.19,
-        "gtd_score": -1,
-        "sev_score": 2.61,
-        "iav_score": 2.37,
-        "compositeHealth": 0.7615773105863908
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-315325143",
@@ -4508,31 +3823,6 @@
       }
     },
     {
-      "id": "water-317309866",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.898807,
-      "lng": 50.141501,
-      "label": "Dam",
-      "osmId": 317309866,
-      "stress": {
-        "bws_raw": 1.5460922006575917,
-        "bws_score": 4.95,
-        "bws_label": "Extremely High",
-        "drr_score": 3.12,
-        "gtd_score": 1.39,
-        "sev_score": 2.34,
-        "iav_score": 2.65,
-        "compositeHealth": 0.10000000000000005
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Tehran",
-        "distanceKm": 143,
-        "population": 9000000
-      }
-    },
-    {
       "id": "water-320859708",
       "type": "water",
       "facilityType": "dam",
@@ -4605,76 +3895,6 @@
         "name": "Baghdad",
         "distanceKm": 105,
         "population": 7500000
-      }
-    },
-    {
-      "id": "water-3249083083",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.47023,
-      "lng": 51.012988,
-      "label": "Dam",
-      "osmId": 3249083083,
-      "stress": {
-        "bws_raw": 5.074890385976426,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.68,
-        "gtd_score": -1,
-        "sev_score": 1.51,
-        "iav_score": 1.67,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Tehran",
-        "distanceKm": 140,
-        "population": 9000000
-      }
-    },
-    {
-      "id": "water-328052840",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 27.244115,
-      "lng": 41.404323,
-      "label": "Dam",
-      "osmId": 328052840,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 3.35,
-        "sev_score": 1.36,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-332096539",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.657867,
-      "lng": 46.608975,
-      "label": "Dam",
-      "osmId": 332096539,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.98,
-        "iav_score": 2.81,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 9,
-        "population": 7600000
       }
     },
     {
@@ -5549,7 +4769,7 @@
       "facilityType": "dam",
       "lat": 40.676155,
       "lng": 41.290203,
-      "label": "Arkun Baraj\u0131",
+      "label": "Arkun Barajı",
       "osmId": 364218337,
       "stress": {
         "bws_raw": 0.1853690869270622,
@@ -5698,7 +4918,7 @@
       "facilityType": "reservoir",
       "lat": 37.800606,
       "lng": 38.753226,
-      "label": "Atat\u00fcRk Reservoir",
+      "label": "AtatüRk Reservoir",
       "osmId": 370829,
       "stress": {
         "bws_raw": 1,
@@ -5740,35 +4960,6 @@
         "name": "Homs",
         "distanceKm": 23,
         "population": 800000
-      }
-    },
-    {
-      "id": "water-376670901",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.702077,
-      "lng": 35.562902,
-      "label": "Dam",
-      "osmId": 376670901,
-      "stress": {
-        "bws_raw": 1.6847678633686702,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.39,
-        "gtd_score": -1,
-        "sev_score": 2.17,
-        "iav_score": 1.63,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Haifa",
-        "distanceKm": 55,
-        "population": 300000
-      },
-      "linkedRiver": {
-        "name": "Jordan",
-        "distanceKm": 2
       }
     },
     {
@@ -5819,31 +5010,6 @@
         "name": "Tabqa",
         "distanceKm": 5,
         "population": 100000
-      }
-    },
-    {
-      "id": "water-385642432",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 33.785051,
-      "lng": 45.593416,
-      "label": "Dam",
-      "osmId": 385642432,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.58,
-        "iav_score": 4.53,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Baghdad",
-        "distanceKm": 125,
-        "population": 7500000
       }
     },
     {
@@ -5945,31 +5111,6 @@
       }
     },
     {
-      "id": "water-389708963",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 35.737113,
-      "lng": 36.071193,
-      "label": "Dam",
-      "osmId": 389708963,
-      "stress": {
-        "bws_raw": 2.735768778701382,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.24,
-        "gtd_score": 1.07,
-        "sev_score": 0.94,
-        "iav_score": 2.46,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Idlib",
-        "distanceKm": 55,
-        "population": 165000
-      }
-    },
-    {
       "id": "water-3902087",
       "type": "water",
       "facilityType": "reservoir",
@@ -6032,31 +5173,6 @@
         "name": "Kabul",
         "distanceKm": 97,
         "population": 4400000
-      }
-    },
-    {
-      "id": "water-396025546",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 36.10182,
-      "lng": 44.600721,
-      "label": "Dam",
-      "osmId": 396025546,
-      "stress": {
-        "bws_raw": 0.2080897565234382,
-        "bws_score": 2.06,
-        "bws_label": "Medium-High",
-        "drr_score": 2.75,
-        "gtd_score": -1,
-        "sev_score": 0.91,
-        "iav_score": 1.5,
-        "compositeHealth": 0.7668115805072325
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Dukan",
-        "distanceKm": 36,
-        "population": 50000
       }
     },
     {
@@ -6147,7 +5263,7 @@
       "label": "Sonbol Dam",
       "osmId": 410655206,
       "stress": {
-        "bws_raw": 1.5281176049831564e-06,
+        "bws_raw": 0.0000015281176049831564,
         "bws_score": 0,
         "bws_label": "Low",
         "drr_score": 3.29,
@@ -6161,31 +5277,6 @@
         "name": "Tehran",
         "distanceKm": 146,
         "population": 9000000
-      }
-    },
-    {
-      "id": "water-410659163",
-      "type": "water",
-      "facilityType": "reservoir",
-      "lat": 32.567583,
-      "lng": 35.069336,
-      "label": "Reservoir",
-      "osmId": 410659163,
-      "stress": {
-        "bws_raw": 1.6847678633686702,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.39,
-        "gtd_score": -1,
-        "sev_score": 2.17,
-        "iav_score": 1.63,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Haifa",
-        "distanceKm": 26,
-        "population": 300000
       }
     },
     {
@@ -6211,31 +5302,6 @@
         "name": "Haifa",
         "distanceKm": 26,
         "population": 300000
-      }
-    },
-    {
-      "id": "water-4112661",
-      "type": "water",
-      "facilityType": "reservoir",
-      "lat": 35.610849,
-      "lng": 51.785867,
-      "label": "Reservoir",
-      "osmId": 4112661,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.83,
-        "iav_score": 4.38,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Tehran",
-        "distanceKm": 37,
-        "population": 9000000
       }
     },
     {
@@ -6386,7 +5452,7 @@
       "label": "Alborz Dam",
       "osmId": 441884759,
       "stress": {
-        "bws_raw": 2.645080349535607e-06,
+        "bws_raw": 0.000002645080349535607,
         "bws_score": 0,
         "bws_label": "Low",
         "drr_score": -1,
@@ -6514,7 +5580,7 @@
       "facilityType": "dam",
       "lat": 37.480487,
       "lng": 38.317638,
-      "label": "Atat\u00fcRk Dam",
+      "label": "AtatüRk Dam",
       "osmId": 45183487,
       "stress": {
         "bws_raw": 3.3136651096810263,
@@ -6527,111 +5593,6 @@
         "compositeHealth": 0
       },
       "notabilityScore": 75
-    },
-    {
-      "id": "water-453004347",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 29.249667,
-      "lng": 56.964839,
-      "label": "Dam",
-      "osmId": 453004347,
-      "stress": {
-        "bws_raw": 0.0045263198331525,
-        "bws_score": 0,
-        "bws_label": "Low",
-        "drr_score": 2.11,
-        "gtd_score": -1,
-        "sev_score": 2.66,
-        "iav_score": 5,
-        "compositeHealth": 1
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-453004349",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 29.251845,
-      "lng": 56.963535,
-      "label": "Dam",
-      "osmId": 453004349,
-      "stress": {
-        "bws_raw": 0.2835634142595079,
-        "bws_score": 2.5,
-        "bws_label": "Medium-High",
-        "drr_score": 2.54,
-        "gtd_score": 1.39,
-        "sev_score": 2.94,
-        "iav_score": 2.99,
-        "compositeHealth": 0.7071067811865476
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-460069264",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 35.546128,
-      "lng": 44.472878,
-      "label": "Dam",
-      "osmId": 460069264,
-      "stress": {
-        "bws_raw": 0.008780945552171,
-        "bws_score": 0,
-        "bws_label": "Low",
-        "drr_score": 2.82,
-        "gtd_score": -1,
-        "sev_score": 1.25,
-        "iav_score": 2.05,
-        "compositeHealth": 1
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Kirkuk",
-        "distanceKm": 11,
-        "population": 1000000
-      }
-    },
-    {
-      "id": "water-460321330",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 33.328006,
-      "lng": 55.048874,
-      "label": "Dam",
-      "osmId": 460321330,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.36,
-        "iav_score": 2.4,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-460323352",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 33.514547,
-      "lng": 54.782441,
-      "label": "Dam",
-      "osmId": 460323352,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.79,
-        "gtd_score": 1.6,
-        "sev_score": 0.65,
-        "iav_score": 2.23,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-467571237",
@@ -6674,40 +5635,12 @@
       "notabilityScore": 60
     },
     {
-      "id": "water-470719793",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 30.642089,
-      "lng": 52.081594,
-      "label": "Dam",
-      "osmId": 470719793,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.64,
-        "iav_score": 3.61,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 80,
-      "capacity": {
-        "height": 72
-      },
-      "nearestCity": {
-        "name": "Shiraz",
-        "distanceKm": 126,
-        "population": 1900000
-      }
-    },
-    {
       "id": "water-475588784",
       "type": "water",
       "facilityType": "dam",
       "lat": 37.428354,
       "lng": 46.25086,
-      "label": "Alavi\u0101N Dam",
+      "label": "AlaviāN Dam",
       "osmId": 475588784,
       "stress": {
         "bws_raw": 0.1611787391667522,
@@ -6727,52 +5660,12 @@
       }
     },
     {
-      "id": "water-482243261",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 27.529988,
-      "lng": 56.89825,
-      "label": "Dam",
-      "osmId": 482243261,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 1.83,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-492574105",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 27.711332,
-      "lng": 55.996567,
-      "label": "Dam",
-      "osmId": 492574105,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.47,
-        "sev_score": 1.57,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-494145157",
       "type": "water",
       "facilityType": "dam",
       "lat": 35.328781,
       "lng": 33.071107,
-      "label": "Ge\u00e7Itk\u00f6Y Baraj\u0131",
+      "label": "GeçItköY Barajı",
       "osmId": 494145157,
       "stress": {
         "bws_raw": 2.950878652002709,
@@ -6828,26 +5721,6 @@
         "compositeHealth": 0
       },
       "notabilityScore": 35
-    },
-    {
-      "id": "water-499060720",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 28.098817,
-      "lng": 56.3221,
-      "label": "Dam",
-      "osmId": 499060720,
-      "stress": {
-        "bws_raw": 10.090659047056237,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.94,
-        "gtd_score": -1,
-        "sev_score": 3,
-        "iav_score": 2.52,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-5047035",
@@ -6962,26 +5835,6 @@
         "distanceKm": 105,
         "population": 3400000
       }
-    },
-    {
-      "id": "water-520299669",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 28.087966,
-      "lng": 56.340634,
-      "label": "Dam",
-      "osmId": 520299669,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.54,
-        "gtd_score": 1.6,
-        "sev_score": 1.26,
-        "iav_score": 2.1,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-530725561",
@@ -7164,76 +6017,6 @@
       "notabilityScore": 75
     },
     {
-      "id": "water-584944297",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.016706,
-      "lng": 39.05086,
-      "label": "Dam",
-      "osmId": 584944297,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.7,
-        "gtd_score": -1,
-        "sev_score": 1.6,
-        "iav_score": 3.39,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Medina",
-        "distanceKm": 75,
-        "population": 1500000
-      }
-    },
-    {
-      "id": "water-587125240",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.164224,
-      "lng": 40.329778,
-      "label": "Dam",
-      "osmId": 587125240,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.79,
-        "gtd_score": 1.1,
-        "sev_score": 1.58,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Medina",
-        "distanceKm": 107,
-        "population": 1500000
-      }
-    },
-    {
-      "id": "water-587350922",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.917725,
-      "lng": 40.759667,
-      "label": "Dam",
-      "osmId": 587350922,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.19,
-        "iav_score": 1.37,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-598412319",
       "type": "water",
       "facilityType": "dam",
@@ -7303,26 +6086,6 @@
       "notabilityScore": 75
     },
     {
-      "id": "water-6117611687",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 27.518796,
-      "lng": 53.53981,
-      "label": "Dam",
-      "osmId": 6117611687,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.61,
-        "iav_score": 3.43,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70
-    },
-    {
       "id": "water-612242337",
       "type": "water",
       "facilityType": "dam",
@@ -7373,7 +6136,7 @@
       "facilityType": "dam",
       "lat": 38.207017,
       "lng": 40.432338,
-      "label": "Ambar Baraj\u0131",
+      "label": "Ambar Barajı",
       "osmId": 615605703,
       "stress": {
         "bws_raw": 0.9695822792242832,
@@ -7391,26 +6154,6 @@
         "distanceKm": 37,
         "population": 1100000
       }
-    },
-    {
-      "id": "water-6156984",
-      "type": "water",
-      "facilityType": "reservoir",
-      "lat": 30.777564,
-      "lng": 61.663739,
-      "label": "Reservoir",
-      "osmId": 6156984,
-      "stress": {
-        "bws_raw": 0.949889183397054,
-        "bws_score": 4.25,
-        "bws_label": "Extremely High",
-        "drr_score": 3.11,
-        "gtd_score": -1,
-        "sev_score": 1.22,
-        "iav_score": 1.25,
-        "compositeHealth": 0.3872983346207417
-      },
-      "notabilityScore": 70
     },
     {
       "id": "water-621714390",
@@ -7462,32 +6205,12 @@
       "notabilityScore": 20
     },
     {
-      "id": "water-622107576",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.493156,
-      "lng": 42.809784,
-      "label": "Dam",
-      "osmId": 622107576,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.3,
-        "gtd_score": -1,
-        "sev_score": 1.04,
-        "iav_score": 3.55,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-624118217",
       "type": "water",
       "facilityType": "dam",
       "lat": 38.814039,
       "lng": 41.042514,
-      "label": "Upper Kalek\u00f6Y Dam",
+      "label": "Upper KaleköY Dam",
       "osmId": 624118217,
       "stress": {
         "bws_raw": 0.1451476156351329,
@@ -7537,26 +6260,6 @@
         "distanceKm": 111,
         "population": 3400000
       }
-    },
-    {
-      "id": "water-6283492346",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.057138,
-      "lng": 48.387845,
-      "label": "Dam",
-      "osmId": 6283492346,
-      "stress": {
-        "bws_raw": 0.0446395597193956,
-        "bws_score": 0,
-        "bws_label": "Low",
-        "drr_score": 3.73,
-        "gtd_score": -1,
-        "sev_score": 1.09,
-        "iav_score": 1.93,
-        "compositeHealth": 1
-      },
-      "notabilityScore": 70
     },
     {
       "id": "water-6307665",
@@ -7627,116 +6330,6 @@
       }
     },
     {
-      "id": "water-655865742",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 22.179754,
-      "lng": 39.571059,
-      "label": "Dam",
-      "osmId": 655865742,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.1,
-        "sev_score": 1.87,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Jeddah",
-        "distanceKm": 86,
-        "population": 4700000
-      }
-    },
-    {
-      "id": "water-658396951",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 33.849607,
-      "lng": 46.447149,
-      "label": "Dam",
-      "osmId": 658396951,
-      "stress": {
-        "bws_raw": 0.001926833353188,
-        "bws_score": 0,
-        "bws_label": "Low",
-        "drr_score": 3.3,
-        "gtd_score": 0.65,
-        "sev_score": 1.08,
-        "iav_score": 1.92,
-        "compositeHealth": 1
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-665174817",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.592412,
-      "lng": 48.278745,
-      "label": "Dam",
-      "osmId": 665174817,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-665553306",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 27.172811,
-      "lng": 57.527055,
-      "label": "Dam",
-      "osmId": 665553306,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.47,
-        "sev_score": 1.57,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-671199520",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.766003,
-      "lng": 51.008125,
-      "label": "Dam",
-      "osmId": 671199520,
-      "stress": {
-        "bws_raw": 2.57089852884951,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.57,
-        "gtd_score": 1.39,
-        "sev_score": 1.64,
-        "iav_score": 1.98,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Isfahan",
-        "distanceKm": 63,
-        "population": 2200000
-      }
-    },
-    {
       "id": "water-68405184",
       "type": "water",
       "facilityType": "reservoir",
@@ -7763,31 +6356,6 @@
       "linkedRiver": {
         "name": "Jordan",
         "distanceKm": 18
-      }
-    },
-    {
-      "id": "water-692019969",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 35.346239,
-      "lng": 44.636073,
-      "label": "Dam",
-      "osmId": 692019969,
-      "stress": {
-        "bws_raw": 0.1370458741892938,
-        "bws_score": 1.45,
-        "bws_label": "Low-Medium",
-        "drr_score": 2.93,
-        "gtd_score": -1,
-        "sev_score": 1.92,
-        "iav_score": 2.01,
-        "compositeHealth": 0.8426149773176358
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Kirkuk",
-        "distanceKm": 26,
-        "population": 1000000
       }
     },
     {
@@ -7891,7 +6459,7 @@
       "facilityType": "dam",
       "lat": 37.756412,
       "lng": 39.170596,
-      "label": "\u00c7Amurlu Baraj\u0131",
+      "label": "ÇAmurlu Barajı",
       "osmId": 717059418,
       "stress": {
         "bws_raw": 0.0589335078588069,
@@ -7966,7 +6534,7 @@
       "facilityType": "dam",
       "lat": 37.923201,
       "lng": 42.061338,
-      "label": "Kirazl\u0131K Dam",
+      "label": "KirazlıK Dam",
       "osmId": 722412983,
       "stress": {
         "bws_raw": 0.1816053353254506,
@@ -7979,26 +6547,6 @@
         "compositeHealth": 0.792464510246358
       },
       "notabilityScore": 60
-    },
-    {
-      "id": "water-724728899",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.02771,
-      "lng": 49.398974,
-      "label": "Dam",
-      "osmId": 724728899,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.8,
-        "iav_score": 4.4,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70
     },
     {
       "id": "water-73909637",
@@ -8026,7 +6574,7 @@
       "facilityType": "dam",
       "lat": 37.44099,
       "lng": 42.733641,
-      "label": "\u015e\u0131Rnak Dam",
+      "label": "ŞıRnak Dam",
       "osmId": 739582924,
       "stress": {
         "bws_raw": 0.1611787391667522,
@@ -8129,146 +6677,6 @@
       }
     },
     {
-      "id": "water-753701400",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.657704,
-      "lng": 48.243611,
-      "label": "Dam",
-      "osmId": 753701400,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-754257321",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.59595,
-      "lng": 48.279608,
-      "label": "Dam",
-      "osmId": 754257321,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-754267651",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.673164,
-      "lng": 48.239837,
-      "label": "Dam",
-      "osmId": 754267651,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.49,
-        "iav_score": 1.82,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-754824710",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.672105,
-      "lng": 48.2505,
-      "label": "Dam",
-      "osmId": 754824710,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.49,
-        "iav_score": 1.82,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-755423949",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.661339,
-      "lng": 48.250145,
-      "label": "Dam",
-      "osmId": 755423949,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-756825439",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.665208,
-      "lng": 48.242463,
-      "label": "Dam",
-      "osmId": 756825439,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-756825574",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 32.672931,
-      "lng": 48.236258,
-      "label": "Dam",
-      "osmId": 756825574,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.67,
-        "iav_score": 3.73,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-759593323",
       "type": "water",
       "facilityType": "reservoir",
@@ -8363,86 +6771,6 @@
       }
     },
     {
-      "id": "water-774537881",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.697595,
-      "lng": 45.435376,
-      "label": "Dam",
-      "osmId": 774537881,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.77,
-        "iav_score": 3.74,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-774539937",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 23.991355,
-      "lng": 43.332604,
-      "label": "Dam",
-      "osmId": 774539937,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.47,
-        "iav_score": 3.17,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-774540970",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.157707,
-      "lng": 43.449863,
-      "label": "Dam",
-      "osmId": 774540970,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 1.72,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 25
-    },
-    {
-      "id": "water-775471653",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 23.832494,
-      "lng": 45.203042,
-      "label": "Dam",
-      "osmId": 775471653,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.53,
-        "iav_score": 2.57,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-781647455",
       "type": "water",
       "facilityType": "dam",
@@ -8515,37 +6843,12 @@
       }
     },
     {
-      "id": "water-782624589",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 35.39911,
-      "lng": 45.109363,
-      "label": "Dam",
-      "osmId": 782624589,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.47,
-        "gtd_score": -1,
-        "sev_score": 0.68,
-        "iav_score": 2.31,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Dukan",
-        "distanceKm": 63,
-        "population": 50000
-      }
-    },
-    {
       "id": "water-783723049",
       "type": "water",
       "facilityType": "dam",
       "lat": 38.831254,
       "lng": 40.710765,
-      "label": "Lower Kalek\u00f6Y Dam",
+      "label": "Lower KaleköY Dam",
       "osmId": 783723049,
       "stress": {
         "bws_raw": 0.2000095715567507,
@@ -8601,7 +6904,7 @@
       "facilityType": "dam",
       "lat": 37.415646,
       "lng": 40.141735,
-      "label": "Damluca Baraj\u0131",
+      "label": "Damluca Barajı",
       "osmId": 787193624,
       "stress": {
         "bws_raw": 1,
@@ -8626,7 +6929,7 @@
       "facilityType": "dam",
       "lat": 37.974258,
       "lng": 42.376837,
-      "label": "\u00c7Etin Baraj\u0131",
+      "label": "ÇEtin Barajı",
       "operator": "Limak Enerji",
       "osmId": 788280035,
       "stress": {
@@ -8642,79 +6945,6 @@
       "notabilityScore": 75,
       "capacity": {
         "height": 165
-      }
-    },
-    {
-      "id": "water-789804752",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.609166,
-      "lng": 45.510179,
-      "label": "Dam",
-      "osmId": 789804752,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 1.17,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-790978869",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.720246,
-      "lng": 44.973658,
-      "label": "Dam",
-      "osmId": 790978869,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.49,
-        "iav_score": 4.23,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 40,
-      "capacity": {
-        "height": 100
-      },
-      "nearestCity": {
-        "name": "Kirkuk",
-        "distanceKm": 98,
-        "population": 1000000
-      }
-    },
-    {
-      "id": "water-791146261",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.802552,
-      "lng": 45.154406,
-      "label": "Dam",
-      "osmId": 791146261,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.98,
-        "gtd_score": 0.65,
-        "sev_score": 0.91,
-        "iav_score": 1.62,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Kirkuk",
-        "distanceKm": 101,
-        "population": 1000000
       }
     },
     {
@@ -8796,97 +7026,12 @@
       }
     },
     {
-      "id": "water-800763960",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 23.626915,
-      "lng": 46.632414,
-      "label": "Dam",
-      "osmId": 800763960,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.61,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 121,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-807586843",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 26.792765,
-      "lng": 41.733516,
-      "label": "Dam",
-      "osmId": 807586843,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.62,
-        "iav_score": 2.67,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70
-    },
-    {
-      "id": "water-807597848",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.986585,
-      "lng": 45.01487,
-      "label": "Dam",
-      "osmId": 807597848,
-      "stress": {
-        "bws_raw": 0.158286246509364,
-        "bws_score": 1.66,
-        "bws_label": "Low-Medium",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 1.68,
-        "iav_score": 5,
-        "compositeHealth": 0.817312669668102
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-807607953",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.945504,
-      "lng": 45.254045,
-      "label": "Dam",
-      "osmId": 807607953,
-      "stress": {
-        "bws_raw": 4.320740299055504e-07,
-        "bws_score": 0,
-        "bws_label": "Low",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.85,
-        "iav_score": 5,
-        "compositeHealth": 1
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-812789993",
       "type": "water",
       "facilityType": "reservoir",
       "lat": 37.778794,
       "lng": 38.445577,
-      "label": "Hasanc\u0131K G\u00f6Leti",
+      "label": "HasancıK GöLeti",
       "osmId": 812789993,
       "stress": {
         "bws_raw": 0.1441543551414529,
@@ -8899,29 +7044,6 @@
         "compositeHealth": 0.8330666239863411
       },
       "notabilityScore": 70
-    },
-    {
-      "id": "water-822827920",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.496684,
-      "lng": 50.312452,
-      "label": "Dam",
-      "osmId": 822827920,
-      "stress": {
-        "bws_raw": 11.491505948333122,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.61,
-        "gtd_score": -1,
-        "sev_score": 2.43,
-        "iav_score": 2.11,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 40,
-      "capacity": {
-        "height": 25
-      }
     },
     {
       "id": "water-8233700",
@@ -8974,7 +7096,7 @@
       "facilityType": "dam",
       "lat": 36.856065,
       "lng": 36.688498,
-      "label": "Tahtak\u00f6Pr\u00fc Dam",
+      "label": "TahtaköPrü Dam",
       "osmId": 82536454,
       "stress": {
         "bws_raw": 0.9695822792242832,
@@ -8992,26 +7114,6 @@
         "distanceKm": 83,
         "population": 2100000
       }
-    },
-    {
-      "id": "water-829191883",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 37.875633,
-      "lng": 68.837052,
-      "label": "Dam",
-      "osmId": 829191883,
-      "stress": {
-        "bws_raw": 1.6080342182957303,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.59,
-        "gtd_score": -1,
-        "sev_score": 3.47,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-8344701",
@@ -9057,66 +7159,6 @@
         "distanceKm": 36,
         "population": 1000000
       }
-    },
-    {
-      "id": "water-849385356",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 28.26226,
-      "lng": 36.571223,
-      "label": "Dam",
-      "osmId": 849385356,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.81,
-        "iav_score": 4.32,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-849385358",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 28.216143,
-      "lng": 36.623708,
-      "label": "Dam",
-      "osmId": 849385358,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 0.65,
-        "sev_score": 1,
-        "iav_score": 3.32,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-849385359",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 28.214657,
-      "lng": 36.625735,
-      "label": "Dam",
-      "osmId": 849385359,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 2.28,
-        "iav_score": 3.5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-849944949",
@@ -9223,49 +7265,6 @@
         "name": "Dukan",
         "distanceKm": 29,
         "population": 50000
-      }
-    },
-    {
-      "id": "water-871817917",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 26.541373,
-      "lng": 42.380218,
-      "label": "Dam",
-      "osmId": 871817917,
-      "stress": {
-        "bws_raw": 2.5743073257713776,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 1.15,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-880787438",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.609666,
-      "lng": 49.784442,
-      "label": "Dam",
-      "osmId": 880787438,
-      "stress": {
-        "bws_raw": 1.3404733146184211,
-        "bws_score": 4.74,
-        "bws_label": "Extremely High",
-        "drr_score": 2.77,
-        "gtd_score": -1,
-        "sev_score": 2.24,
-        "iav_score": 2.93,
-        "compositeHealth": 0.22803508501982744
-      },
-      "notabilityScore": 50,
-      "capacity": {
-        "height": 5
       }
     },
     {
@@ -9377,272 +7376,12 @@
       }
     },
     {
-      "id": "water-894662937",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 23.951172,
-      "lng": 45.075682,
-      "label": "Dam",
-      "osmId": 894662937,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.3,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-894673521",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 23.985929,
-      "lng": 46.248057,
-      "label": "Dam",
-      "osmId": 894673521,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 4.12,
-        "gtd_score": -1,
-        "sev_score": 0.86,
-        "iav_score": 3.16,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 92,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-896263750",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.049363,
-      "lng": 45.467158,
-      "label": "Dam",
-      "osmId": 896263750,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.45,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 127,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-897499643",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.67791,
-      "lng": 46.109157,
-      "label": "Dam",
-      "osmId": 897499643,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 1.34,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 57,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-897704631",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 21.013023,
-      "lng": 41.504692,
-      "label": "Dam",
-      "osmId": 897704631,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.15,
-        "iav_score": 2.35,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-897706708",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 21.068441,
-      "lng": 42.575088,
-      "label": "Dam",
-      "osmId": 897706708,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 4.72,
-        "gtd_score": 2.43,
-        "sev_score": 0.7,
-        "iav_score": 4.21,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-897708997",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 20.549679,
-      "lng": 41.117107,
-      "label": "Dam",
-      "osmId": 897708997,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 3.35,
-        "sev_score": 0.1,
-        "iav_score": 3.45,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-898485212",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.420672,
-      "lng": 39.980948,
-      "label": "Dam",
-      "osmId": 898485212,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.23,
-        "iav_score": 1.28,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Medina",
-        "distanceKm": 39,
-        "population": 1500000
-      }
-    },
-    {
-      "id": "water-898492830",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.480609,
-      "lng": 45.379587,
-      "label": "Dam",
-      "osmId": 898492830,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.62,
-        "iav_score": 2.67,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-898599883",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 23.968994,
-      "lng": 44.909365,
-      "label": "Dam",
-      "osmId": 898599883,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 1.44,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-899267208",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 30.804693,
-      "lng": 40.695756,
-      "label": "Dam",
-      "osmId": 899267208,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.25,
-        "iav_score": 1.75,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-901357652",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 20.196235,
-      "lng": 41.402009,
-      "label": "Dam",
-      "osmId": 901357652,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.72,
-        "iav_score": 4.83,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-903011992",
       "type": "water",
       "facilityType": "dam",
       "lat": 37.100095,
       "lng": 36.893551,
-      "label": "Hamidiye Baraj\u0131",
+      "label": "Hamidiye Barajı",
       "osmId": 903011992,
       "stress": {
         "bws_raw": 1.247720673217758,
@@ -9683,136 +7422,6 @@
       "capacity": {
         "height": 16
       }
-    },
-    {
-      "id": "water-905544122",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 21.254974,
-      "lng": 40.216472,
-      "label": "Dam",
-      "osmId": 905544122,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 3.35,
-        "sev_score": 0.46,
-        "iav_score": 2.65,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Jeddah",
-        "distanceKm": 109,
-        "population": 4700000
-      }
-    },
-    {
-      "id": "water-906148752",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.858204,
-      "lng": 45.275713,
-      "label": "Dam",
-      "osmId": 906148752,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 1.34,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-906148753",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.863535,
-      "lng": 45.283246,
-      "label": "Dam",
-      "osmId": 906148753,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.3,
-        "gtd_score": -1,
-        "sev_score": 1.04,
-        "iav_score": 3.55,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-907039609",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 22.382818,
-      "lng": 39.95746,
-      "label": "Dam",
-      "osmId": 907039609,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.12,
-        "gtd_score": -1,
-        "sev_score": 1.17,
-        "iav_score": 3.25,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Jeddah",
-        "distanceKm": 127,
-        "population": 4700000
-      }
-    },
-    {
-      "id": "water-907084188",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 22.863352,
-      "lng": 40.459478,
-      "label": "Dam",
-      "osmId": 907084188,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.79,
-        "iav_score": 2.65,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-907307809",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 22.949277,
-      "lng": 39.775104,
-      "label": "Dam",
-      "osmId": 907307809,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.22,
-        "iav_score": 3.08,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-910733174",
@@ -9892,7 +7501,7 @@
       "facilityType": "dam",
       "lat": 36.822381,
       "lng": 37.568744,
-      "label": "Kayac\u0131K Dam",
+      "label": "KayacıK Dam",
       "osmId": 91897725,
       "stress": {
         "bws_raw": 1,
@@ -9937,34 +7546,6 @@
       }
     },
     {
-      "id": "water-923021142",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 31.637503,
-      "lng": 65.606092,
-      "label": "Dam",
-      "osmId": 923021142,
-      "stress": {
-        "bws_raw": 1.4887545045889912,
-        "bws_score": 4.9,
-        "bws_label": "Extremely High",
-        "drr_score": 3.08,
-        "gtd_score": -1,
-        "sev_score": 1.94,
-        "iav_score": 1.42,
-        "compositeHealth": 0.14142135623730917
-      },
-      "notabilityScore": 80,
-      "capacity": {
-        "height": 2
-      },
-      "nearestCity": {
-        "name": "Kandahar",
-        "distanceKm": 12,
-        "population": 600000
-      }
-    },
-    {
       "id": "water-92482196",
       "type": "water",
       "facilityType": "dam",
@@ -9990,57 +7571,12 @@
       }
     },
     {
-      "id": "water-926057871",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 19.322109,
-      "lng": 43.387466,
-      "label": "Dam",
-      "osmId": 926057871,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 1.66,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-926712844",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 36.332208,
-      "lng": 52.515731,
-      "label": "Dam",
-      "osmId": 926712844,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 1.86,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Tehran",
-        "distanceKm": 124,
-        "population": 9000000
-      }
-    },
-    {
       "id": "water-93292618",
       "type": "water",
       "facilityType": "dam",
       "lat": 37.68428,
       "lng": 40.445209,
-      "label": "G\u00f6Ksu Dam",
+      "label": "GöKsu Dam",
       "osmId": 93292618,
       "stress": {
         "bws_raw": 0.0225896964212243,
@@ -10058,386 +7594,6 @@
         "distanceKm": 32,
         "population": 1100000
       }
-    },
-    {
-      "id": "water-964616751",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 20.236757,
-      "lng": 41.570753,
-      "label": "Dam",
-      "osmId": 964616751,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.33,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-964616752",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 20.157398,
-      "lng": 41.721367,
-      "label": "Dam",
-      "osmId": 964616752,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 1.54,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-964635738",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 19.954531,
-      "lng": 42.145037,
-      "label": "Dam",
-      "osmId": 964635738,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 1.57,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-965172938",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 21.217911,
-      "lng": 40.455292,
-      "label": "Dam",
-      "osmId": 965172938,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 3.35,
-        "sev_score": 0.19,
-        "iav_score": 3.31,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 70,
-      "nearestCity": {
-        "name": "Jeddah",
-        "distanceKm": 134,
-        "population": 4700000
-      }
-    },
-    {
-      "id": "water-965214242",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 21.166251,
-      "lng": 40.48654,
-      "label": "Dam",
-      "osmId": 965214242,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 2.43,
-        "sev_score": 0.41,
-        "iav_score": 2.51,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Jeddah",
-        "distanceKm": 139,
-        "population": 4700000
-      }
-    },
-    {
-      "id": "water-965325116",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 21.23886,
-      "lng": 40.383641,
-      "label": "Dam",
-      "osmId": 965325116,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.36,
-        "iav_score": 3.24,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Jeddah",
-        "distanceKm": 126,
-        "population": 4700000
-      }
-    },
-    {
-      "id": "water-965936538",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.620887,
-      "lng": 46.605185,
-      "label": "Dam",
-      "osmId": 965936538,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.84,
-        "iav_score": 3.09,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 13,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-965936540",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 20.344237,
-      "lng": 45.373383,
-      "label": "Dam",
-      "osmId": 965936540,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.18,
-        "iav_score": 4.66,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-965936541",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 20.340041,
-      "lng": 45.39526,
-      "label": "Dam",
-      "osmId": 965936541,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.33,
-        "iav_score": 2.75,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-967373635",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.777654,
-      "lng": 45.265652,
-      "label": "Dam",
-      "osmId": 967373635,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.23,
-        "iav_score": 1.28,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-967373642",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.352436,
-      "lng": 45.163037,
-      "label": "Dam",
-      "osmId": 967373642,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 0.23,
-        "iav_score": 1.28,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-967375010",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.634546,
-      "lng": 45.693508,
-      "label": "Dam",
-      "osmId": 967375010,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 1.64,
-        "iav_score": 5,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 142,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-968541761",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.819011,
-      "lng": 45.673764,
-      "label": "Dam",
-      "osmId": 968541761,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.21,
-        "gtd_score": -1,
-        "sev_score": 0.69,
-        "iav_score": 2.88,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-968908234",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.710556,
-      "lng": 45.827765,
-      "label": "Dam",
-      "osmId": 968908234,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 4.63,
-        "gtd_score": 2.43,
-        "sev_score": 1.01,
-        "iav_score": 3.66,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 140,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-970608174",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 30.336921,
-      "lng": 52.563958,
-      "label": "Dam",
-      "osmId": 970608174,
-      "stress": {
-        "bws_raw": 6.969814835583559,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.34,
-        "gtd_score": 1.07,
-        "sev_score": 2.09,
-        "iav_score": 1.76,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Shiraz",
-        "distanceKm": 83,
-        "population": 1900000
-      }
-    },
-    {
-      "id": "water-971328819",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.916806,
-      "lng": 46.180877,
-      "label": "Dam",
-      "osmId": 971328819,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 2.69,
-        "gtd_score": -1,
-        "sev_score": 0.28,
-        "iav_score": 3.13,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Riyadh",
-        "distanceKm": 55,
-        "population": 7600000
-      }
-    },
-    {
-      "id": "water-974337425",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 28.011981,
-      "lng": 45.506885,
-      "label": "Dam",
-      "osmId": 974337425,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.49,
-        "iav_score": 1.82,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
     },
     {
       "id": "water-9761598",
@@ -10462,104 +7618,6 @@
         "name": "Kabul",
         "distanceKm": 16,
         "population": 4400000
-      }
-    },
-    {
-      "id": "water-979776888",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 25.822634,
-      "lng": 44.189237,
-      "label": "Dam",
-      "osmId": 979776888,
-      "stress": {
-        "bws_raw": -1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.82,
-        "iav_score": 3.81,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30
-    },
-    {
-      "id": "water-988867507",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.062282,
-      "lng": 39.571485,
-      "label": "Dam",
-      "osmId": 988867507,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.26,
-        "iav_score": 1.51,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Medina",
-        "distanceKm": 45,
-        "population": 1500000
-      }
-    },
-    {
-      "id": "water-989113832",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 24.37002,
-      "lng": 39.28931,
-      "label": "Dam",
-      "osmId": 989113832,
-      "stress": {
-        "bws_raw": 1,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": -1,
-        "gtd_score": 1.52,
-        "sev_score": 0.15,
-        "iav_score": 2.47,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 30,
-      "nearestCity": {
-        "name": "Medina",
-        "distanceKm": 33,
-        "population": 1500000
-      }
-    },
-    {
-      "id": "water-991279236",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 34.7734,
-      "lng": 36.345574,
-      "label": "Dam",
-      "osmId": 991279236,
-      "stress": {
-        "bws_raw": 1.6847678633686702,
-        "bws_score": 5,
-        "bws_label": "Extremely High",
-        "drr_score": 3.39,
-        "gtd_score": -1,
-        "sev_score": 2.17,
-        "iav_score": 1.63,
-        "compositeHealth": 0
-      },
-      "notabilityScore": 40,
-      "capacity": {
-        "height": 76
-      },
-      "nearestCity": {
-        "name": "Homs",
-        "distanceKm": 34,
-        "population": 800000
       }
     },
     {
@@ -10590,46 +7648,26 @@
         "distanceKm": 66,
         "population": 50000
       }
-    },
-    {
-      "id": "water-998322918",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 28.989795,
-      "lng": 56.634079,
-      "label": "Dam",
-      "osmId": 998322918,
-      "stress": {
-        "bws_raw": 0.0073851344013908,
-        "bws_score": 0,
-        "bws_label": "Low",
-        "drr_score": -1,
-        "gtd_score": -1,
-        "sev_score": 1.72,
-        "iav_score": 4.29,
-        "compositeHealth": 1
-      },
-      "notabilityScore": 30
     }
   ],
   "stats": {
     "rawCounts": {
-      "dams": 8700,
+      "dams": 8702,
       "reservoirs": 15356,
       "desalination": 63
     },
     "filteredCounts": {
-      "dams": 365,
-      "reservoirs": 57,
+      "dams": 240,
+      "reservoirs": 50,
       "desalination": 15
     },
     "rejections": {
       "excluded_location": 2423,
       "excluded_turkey": 1662,
-      "not_notable": 1828,
-      "no_name": 17769,
-      "no_resolved_name": 0,
-      "duplicate": 1,
+      "not_notable": 985,
+      "no_name": 17767,
+      "no_resolved_name": 979,
+      "duplicate": 0,
       "low_score": 0,
       "no_city": 0
     },
@@ -10637,9 +7675,9 @@
       "dams": {
         "excluded_location": 1146,
         "excluded_turkey": 822,
-        "not_notable": 1033,
-        "no_name": 5334,
-        "no_resolved_name": 0,
+        "not_notable": 418,
+        "no_name": 5332,
+        "no_resolved_name": 744,
         "duplicate": 0,
         "low_score": 0,
         "no_city": 0
@@ -10647,9 +7685,9 @@
       "reservoirs": {
         "excluded_location": 1277,
         "excluded_turkey": 840,
-        "not_notable": 795,
+        "not_notable": 567,
         "no_name": 12387,
-        "no_resolved_name": 0,
+        "no_resolved_name": 235,
         "duplicate": 0,
         "low_score": 0,
         "no_city": 0
@@ -10668,24 +7706,11 @@
     "byCountry": {
       "Israel": {
         "dam": 2,
-        "reservoir": 8
-      },
-      "Iran": {
-        "dam": 51,
-        "reservoir": 6
-      },
-      "Qatar": {
-        "dam": 1,
-        "desalination": 1
+        "reservoir": 7
       },
       "Iraq": {
-        "dam": 46,
+        "dam": 31,
         "reservoir": 11
-      },
-      "Kuwait": {
-        "dam": 19,
-        "reservoir": 1,
-        "desalination": 1
       },
       "Egypt": {
         "dam": 4,
@@ -10696,37 +7721,45 @@
         "desalination": 4
       },
       "Syria": {
-        "dam": 23,
+        "dam": 22,
         "reservoir": 8
       },
       "Afghanistan": {
-        "dam": 25,
-        "reservoir": 6
+        "dam": 22,
+        "reservoir": 3
+      },
+      "Iran": {
+        "dam": 33,
+        "reservoir": 5
       },
       "Lebanon": {
-        "dam": 7,
-        "reservoir": 12
+        "dam": 4,
+        "reservoir": 11
       },
       "Yemen": {
         "dam": 1
       },
       "Jordan": {
-        "dam": 5
+        "dam": 2
       },
       "Armenia": {
         "dam": 14
       },
       "United Arab Emirates": {
-        "dam": 74,
+        "dam": 71,
         "reservoir": 3,
         "desalination": 1
       },
       "Saudi Arabia": {
-        "dam": 68,
+        "dam": 4,
         "desalination": 1
       },
       "Georgia": {
         "dam": 11
+      },
+      "Kuwait": {
+        "dam": 6,
+        "desalination": 1
       },
       "Oman": {
         "dam": 1
@@ -10752,6 +7785,9 @@
       },
       "Bahrain": {
         "desalination": 3
+      },
+      "Qatar": {
+        "desalination": 1
       }
     },
     "overpass": [
@@ -10759,7 +7795,7 @@
         "facilityType": "dams",
         "mirror": "primary",
         "status": 200,
-        "durationMs": 9838,
+        "durationMs": 11012,
         "attempts": 1,
         "ok": true
       },
@@ -10767,7 +7803,7 @@
         "facilityType": "reservoirs",
         "mirror": "primary",
         "status": 200,
-        "durationMs": 28514,
+        "durationMs": 27612,
         "attempts": 1,
         "ok": true
       },
@@ -10775,26 +7811,26 @@
         "facilityType": "desalination",
         "mirror": "primary",
         "status": 200,
-        "durationMs": 472,
+        "durationMs": 14355,
         "attempts": 1,
         "ok": true
       }
     ],
     "source": "snapshot",
-    "generatedAt": "2026-04-19T22:33:22.751Z",
+    "generatedAt": "2026-04-20T22:29:12.554Z",
     "enrichment": {
-      "withCapacity": 111,
-      "withCity": 275,
-      "withRiver": 27
+      "withCapacity": 96,
+      "withCity": 219,
+      "withRiver": 23
     },
     "scoreHistogram": [
       {
         "bucket": "25-39",
-        "count": 126
+        "count": 28
       },
       {
         "bucket": "40-54",
-        "count": 80
+        "count": 68
       },
       {
         "bucket": "55-69",
@@ -10802,7 +7838,7 @@
       },
       {
         "bucket": "70-84",
-        "count": 181
+        "count": 160
       },
       {
         "bucket": "85-100",
