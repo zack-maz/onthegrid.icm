@@ -189,13 +189,27 @@ export function hasCapacityData(tags: Record<string, string>): boolean {
  * Desalination callers bypass this check (see D-03 exemption in
  * computeAdmissionDecision).
  */
+/**
+ * Phase 27.3.2 post-ship micro-patch — Latin script alone is insufficient when
+ * the name tag is literally the bare facility type ("Dam", "Reservoir"). Such
+ * names pass isLatin trivially but carry no real identity. Bare generics are
+ * treated as missing so `computeAdmissionDecision` rejects into the
+ * `no_resolved_name` bucket for non-desal facilities.
+ *
+ * Desalination admission bypasses hasLatinLabel (D-03 exemption), so the 3
+ * bare "Desalination Plant" entries in the current snapshot are unaffected.
+ */
+const GENERIC_OSM_NAME_RE = /^(dam|reservoir|desalination(?:\s+plant)?)$/i;
+
 export function hasLatinLabel(tags: Record<string, string>): boolean {
+  const isRealLatin = (s: string | undefined): s is string =>
+    !!s && isLatin(s) && !GENERIC_OSM_NAME_RE.test(s);
   const en = tags['name:en']?.trim();
-  if (en && isLatin(en)) return true;
+  if (isRealLatin(en)) return true;
   const name = tags['name']?.trim();
-  if (name && isLatin(name)) return true;
+  if (isRealLatin(name)) return true;
   const op = tags['operator']?.trim();
-  if (op && isLatin(op)) return true;
+  if (isRealLatin(op)) return true;
   return false;
 }
 

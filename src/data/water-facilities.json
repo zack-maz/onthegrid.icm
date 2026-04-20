@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-20T22:29:12.554Z",
+  "generatedAt": "2026-04-20T22:49:47.899Z",
   "facilities": [
     {
       "id": "water-1000593380",
@@ -5595,26 +5595,6 @@
       "notabilityScore": 75
     },
     {
-      "id": "water-467571237",
-      "type": "water",
-      "facilityType": "dam",
-      "lat": 29.451644,
-      "lng": 57.08051,
-      "label": "Dam",
-      "osmId": 467571237,
-      "stress": {
-        "bws_raw": 0.2181280415850707,
-        "bws_score": 2.13,
-        "bws_label": "Medium-High",
-        "drr_score": 3.15,
-        "gtd_score": -1,
-        "sev_score": 1.72,
-        "iav_score": 1.89,
-        "compositeHealth": 0.7576278769950325
-      },
-      "notabilityScore": 30
-    },
-    {
       "id": "water-467733390",
       "type": "water",
       "facilityType": "dam",
@@ -7657,16 +7637,16 @@
       "desalination": 63
     },
     "filteredCounts": {
-      "dams": 240,
+      "dams": 239,
       "reservoirs": 50,
       "desalination": 15
     },
     "rejections": {
       "excluded_location": 2423,
       "excluded_turkey": 1662,
-      "not_notable": 985,
+      "not_notable": 978,
       "no_name": 17767,
-      "no_resolved_name": 979,
+      "no_resolved_name": 987,
       "duplicate": 0,
       "low_score": 0,
       "no_city": 0
@@ -7675,9 +7655,9 @@
       "dams": {
         "excluded_location": 1146,
         "excluded_turkey": 822,
-        "not_notable": 418,
+        "not_notable": 413,
         "no_name": 5332,
-        "no_resolved_name": 744,
+        "no_resolved_name": 750,
         "duplicate": 0,
         "low_score": 0,
         "no_city": 0
@@ -7685,9 +7665,9 @@
       "reservoirs": {
         "excluded_location": 1277,
         "excluded_turkey": 840,
-        "not_notable": 567,
+        "not_notable": 565,
         "no_name": 12387,
-        "no_resolved_name": 235,
+        "no_resolved_name": 237,
         "duplicate": 0,
         "low_score": 0,
         "no_city": 0
@@ -7729,7 +7709,7 @@
         "reservoir": 3
       },
       "Iran": {
-        "dam": 33,
+        "dam": 32,
         "reservoir": 5
       },
       "Lebanon": {
@@ -7795,7 +7775,7 @@
         "facilityType": "dams",
         "mirror": "primary",
         "status": 200,
-        "durationMs": 11012,
+        "durationMs": 9686,
         "attempts": 1,
         "ok": true
       },
@@ -7803,7 +7783,7 @@
         "facilityType": "reservoirs",
         "mirror": "primary",
         "status": 200,
-        "durationMs": 27612,
+        "durationMs": 28161,
         "attempts": 1,
         "ok": true
       },
@@ -7811,13 +7791,13 @@
         "facilityType": "desalination",
         "mirror": "primary",
         "status": 200,
-        "durationMs": 14355,
+        "durationMs": 478,
         "attempts": 1,
         "ok": true
       }
     ],
     "source": "snapshot",
-    "generatedAt": "2026-04-20T22:29:12.554Z",
+    "generatedAt": "2026-04-20T22:49:47.899Z",
     "enrichment": {
       "withCapacity": 96,
       "withCity": 219,
@@ -7826,7 +7806,7 @@
     "scoreHistogram": [
       {
         "bucket": "25-39",
-        "count": 28
+        "count": 27
       },
       {
         "bucket": "40-54",
