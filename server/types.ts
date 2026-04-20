@@ -160,6 +160,20 @@ export interface WeatherGridPoint {
 
 export type WaterFacilityType = 'dam' | 'reservoir' | 'desalination';
 
+/**
+ * Human-readable display labels for each WaterFacilityType.
+ *
+ * Lives in server/types.ts (not overpass-water.ts) so the client can import
+ * it without dragging in the adapter's Node-only imports (`fs`, `path`, `url`).
+ * Added during Phase 27.3.2 post-ship to fix a black-screen regression from
+ * Plan 07's client-side waterLabel.ts collapse.
+ */
+export const FACILITY_TYPE_LABELS: Record<WaterFacilityType, string> = {
+  dam: 'Dam',
+  reservoir: 'Reservoir',
+  desalination: 'Desalination Plant',
+};
+
 export interface WaterStressIndicators {
   bws_raw: number; // baseline water stress raw value
   bws_score: number; // 0-5 normalized score

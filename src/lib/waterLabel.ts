@@ -1,5 +1,4 @@
-import type { WaterFacility } from '../../server/types';
-import { FACILITY_TYPE_LABELS } from '../../server/adapters/overpass-water';
+import { FACILITY_TYPE_LABELS, type WaterFacility } from '../../server/types';
 
 /**
  * Single source of truth for a water facility's UI display name.

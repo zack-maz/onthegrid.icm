@@ -1,7 +1,12 @@
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import type { WaterFacility, WaterFacilityType, WaterStressIndicators } from '../types.js';
+import {
+  FACILITY_TYPE_LABELS,
+  type WaterFacility,
+  type WaterFacilityType,
+  type WaterStressIndicators,
+} from '../types.js';
 import { assignBasinStress } from '../lib/basinLookup.js';
 import { logger } from '../lib/logger.js';
 
@@ -436,11 +441,11 @@ export function classifyWaterType(tags: Record<string, string>): WaterFacilityTy
   return result;
 }
 
-export const FACILITY_TYPE_LABELS: Record<WaterFacilityType, string> = {
-  dam: 'Dam',
-  reservoir: 'Reservoir',
-  desalination: 'Desalination Plant',
-};
+// FACILITY_TYPE_LABELS moved to server/types.ts (Phase 27.3.2 post-ship fix) so
+// client code can import it without pulling this module's Node-only fs/path/url
+// top-level imports into the browser bundle. Re-exported below for existing
+// consumers (test fixtures, route helpers) that import from this module.
+export { FACILITY_TYPE_LABELS };
 
 /**
  * Extract an English label from OSM tags.
