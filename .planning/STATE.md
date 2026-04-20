@@ -2,8 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
-status: Phase 27.3.1 complete — all 7 UAT gaps closed; 3 in-browser items in HUMAN-UAT.md pending manual sign-off
-last_updated: '2026-04-19T23:15:00.000Z'
+status: complete
+status_detail: Phase 27.3.1 complete — all 7 UAT gaps closed; shipped via PR #7 squash-merge to main
+last_updated: '2026-04-20T02:15:00.000Z'
 progress:
   total_phases: 7
   completed_phases: 4
