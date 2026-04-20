@@ -975,7 +975,8 @@ function WaterFiltersSection() {
           {Object.entries(filterStats.byTypeRejections).map(([type, buckets]) => (
             <div key={type} className="text-[9px] text-white/60">
               <span className="text-white/40">{type}:</span> excl={buckets.excluded_location}{' '}
-              turkey={buckets.excluded_turkey} nn={buckets.not_notable} nname={buckets.no_name} dup=
+              turkey={buckets.excluded_turkey} nn={buckets.not_notable} nname={buckets.no_name}{' '}
+              nores={buckets.no_resolved_name} dup=
               {buckets.duplicate} low={buckets.low_score} nocity={buckets.no_city}
             </div>
           ))}
@@ -987,7 +988,8 @@ function WaterFiltersSection() {
       <div className="mt-0.5 text-[9px] text-white/60">
         <span className="font-bold text-white/40">Total rejections:</span> excl=
         {filterStats.rejections.excluded_location} turkey={filterStats.rejections.excluded_turkey}{' '}
-        nn={filterStats.rejections.not_notable} nname={filterStats.rejections.no_name} dup=
+        nn={filterStats.rejections.not_notable} nname={filterStats.rejections.no_name}{' '}
+        nores={filterStats.rejections.no_resolved_name} dup=
         {filterStats.rejections.duplicate} low={filterStats.rejections.low_score} nocity=
         {filterStats.rejections.no_city}
       </div>
