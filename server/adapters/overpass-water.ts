@@ -179,6 +179,26 @@ export function hasCapacityData(tags: Record<string, string>): boolean {
   );
 }
 
+/**
+ * Phase 27.3.2 D-01 / D-05: Latin-label admission check. True iff at least
+ * one of `name:en` / `name` / `operator` is a non-empty trimmed string AND
+ * passes the isLatin script guard. Mirrors the script-check branches already
+ * present in extractLabel — consolidated so computeAdmissionDecision can
+ * reject non-Latin-only elements with the `no_resolved_name` bucket.
+ *
+ * Desalination callers bypass this check (see D-03 exemption in
+ * computeAdmissionDecision).
+ */
+export function hasLatinLabel(tags: Record<string, string>): boolean {
+  const en = tags['name:en']?.trim();
+  if (en && isLatin(en)) return true;
+  const name = tags['name']?.trim();
+  if (name && isLatin(name)) return true;
+  const op = tags['operator']?.trim();
+  if (op && isLatin(op)) return true;
+  return false;
+}
+
 /** Countries to fully exclude */
 const EXCLUDED_COUNTRIES = new Set(['Uzbekistan', 'Tajikistan', 'Kyrgyzstan', 'Kazakhstan']);
 
