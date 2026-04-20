@@ -45,6 +45,8 @@ export interface WaterFilterStats {
     excluded_turkey: number;
     not_notable: number;
     no_name: number;
+    /** Phase 27.3.2 D-04 — rejected because the Latin-label admission check failed for a non-desalination facility (desal-exempt per D-03). Mirrors `WaterFilterStats.rejections.no_resolved_name` in server/adapters/overpass-water.ts. */
+    no_resolved_name: number;
     duplicate: number;
     low_score: number;
     /** Rejected because no nearby city (150km) AND no wikidata/wikipedia ref. Phase 27.3 Plan 04. */
@@ -59,6 +61,8 @@ export interface WaterFilterStats {
       excluded_turkey: number;
       not_notable: number;
       no_name: number;
+      /** Phase 27.3.2 D-04 — per-type Latin-label admission rejection (always 0 for desalination per D-03 exemption). */
+      no_resolved_name: number;
       duplicate: number;
       low_score: number;
       no_city: number;
