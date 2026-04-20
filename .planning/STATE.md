@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
 status: unknown
-last_updated: '2026-04-20T22:00:21.239Z'
+last_updated: '2026-04-20T22:06:29.370Z'
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 43
-  completed_plans: 34
-  percent: 79
+  completed_plans: 35
+  percent: 81
 ---
 
 # Project State
@@ -22,8 +22,9 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 27.3.2 (water-facility-admission-tightening-drop-city-coord-fallback) — IN PROGRESS (4/10 plans)
-Plan: 04 of 10 (admission tightening — hasLatinLabel + no_resolved_name branch)
+Phase: 27.3.2 (water-facility-admission-tightening-drop-city-coord-fallback) — IN PROGRESS (5/10 plans)
+Plan: 5 of 10 (extractLabel desal-only synthesis — server-owned label chain)
+Phase 27.3.2: Plan 05 COMPLETE (Wave 2 second plan — extractLabel in server/adapters/overpass-water.ts grows from 2-arg to 5-arg signature (tags, facilityType, lat, lng, nearestCity: ReturnType<typeof findNearestCity>); two new desal-only synthesis branches inserted between the three Latin-check branches and the bare FACILITY_TYPE_LABELS fallback — "Desalination Plant near {city}" when nearestCity within 150km resolves, coord-based "Desalination Plant at {lat}°N/S, {lng}°E/W" byte-identical to src/lib/waterLabel.ts lines 87-89 pre-Plan-07 otherwise; defense-in-depth: non-desal cannot reach the synthesis branches post-Plan-04 (rejected at admission to no_resolved_name), but branch 6 FACILITY_TYPE_LABELS fallback preserved; extractLabel kept module-private per plan directive — Plan 06 can decide export-for-unit-testing separately; normalizeWaterElement call site threads lat/lon/nearestCity through — pure threading change, no statement reorder because locals were already computed above for computeAdmissionDecision; 151/151 adapter tests pass unchanged — existing fixtures all exercise the Latin-check branches, Plan 06 will add Persian/Arabic-name desal fixtures to exercise the new synthesis branches directly; 22 pre-existing TS errors (llmEventExtractor + events routes) unchanged → zero new errors introduced on overpass-water.ts; coord byte-identity preserved so stale cached "Desalination Plant at 24.45°N, 54.57°E" strings rehydrate character-identically after Plan 07 client collapse; 2 atomic commits 284221d + 29116ab)
 Phase 27.3.2: Plan 04 COMPLETE (Wave 2 first plan — exported hasLatinLabel helper inserted after hasCapacityData mirrors hasName/hasCapacityData export style; new step 3b branch inserted into computeAdmissionDecision between step 3 no_name and step 4 not_notable: non-desal facilities failing Latin-script check on name:en/name/operator now reject to no_resolved_name bucket; desalination unconditionally bypasses step 3b per D-03 exemption; linkedRiver is NOT consulted at admission per D-02 river-rescue kill — linkedRiver enrichment survives post-admission in normalizeWaterElement for detail panel only; computeAdmissionDecision signature unchanged (7 args, no new linkedRiver param); 151/151 adapter tests pass unchanged because existing fixtures all use Latin names (Ataturk Dam, Iraqi Reservoir, Jeddah Desal, etc.) — Plan 06 test-extension is therefore pure addition with no remediation needed; 22 pre-existing TS errors (llmEventExtractor + events routes) unchanged → zero new errors introduced; 2 atomic commits 83d5d98 + 2ad76bd)
 Phase 27.3.2: Plan 03 COMPLETE (Wave 1 — water Redis key bump water:facilities:v2 → v3 so post-deploy reads cold-miss and rebuild envelopes with the new no_resolved_name key; sites key untouched)
 Phase 27.3.2: Plan 02 COMPLETE (Wave 1 — rejectionsSchema Zod validator extended with no_resolved_name: z.number().int().nonnegative() between no_name and duplicate; strict-mode preserved so stale cached entries fail parse on first post-deploy read)
@@ -271,6 +272,9 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 27.3.1 Plan 08 chose a dedicated test file `src/__tests__/sitesFiltersSection.test.tsx` rather than extending the pre-existing failing `devApiStatus.test.tsx` — keeps sites section regression surface independent of the stale `parsed.sources.length === 8` assertion (current rows array has 9 entries including Precip; that failure is pre-existing baseline per deferred-items.md and not fixed by Plan 08). (27.3.1-08)
 - Phase 27.3.2 Plan 04 inserted new admission branch "step 3b" in computeAdmissionDecision between step 3 (no_name) and step 4 (not_notable) — non-desal facilities failing hasLatinLabel(tags) now reject to no_resolved_name bucket; desalination unconditionally bypasses step 3b per D-03 exemption (sparse OSM coverage — 5 of 15 desal admits are non-Latin, dropping them would cost strategic infrastructure visibility); linkedRiver is NOT consulted at admission per D-02 river-rescue kill (linkedRiver enrichment survives post-admission in normalizeWaterElement for detail panel only); computeAdmissionDecision signature unchanged (no new linkedRiver param); all 151 existing adapter tests pass because prior fixtures used Latin names so Plan 06 test-extension becomes pure-addition with zero remediation. (27.3.2-04, D-01/D-02/D-03/D-05)
 - hasLatinLabel(tags) exported from overpass-water.ts mirroring hasName/hasCapacityData shape: returns true when name:en/name/operator is non-empty trimmed AND passes the isLatin script guard (hoisted function declaration, reused verbatim from line 357, no new regex). Placed after hasCapacityData (line 192) to keep admission-decision helper exports clustered in first ~200 lines. (27.3.2-04, D-01)
+- Phase 27.3.2 Plan 05 extended extractLabel in overpass-water.ts from 2-arg `(tags, facilityType)` to 5-arg `(tags, facilityType, lat, lng, nearestCity: ReturnType<typeof findNearestCity>)` with two desal-only synthesis branches inserted between the three existing Latin-check branches and the preserved bare FACILITY_TYPE_LABELS fallback: branch 4 returns `"Desalination Plant near ${nearestCity.name}"` when nearestCity resolves, branch 5 returns `"Desalination Plant at ${Math.abs(lat).toFixed(2)}°${N|S}, ${Math.abs(lng).toFixed(2)}°${E|W}"` when it doesn't — byte-identical to src/lib/waterLabel.ts lines 87-89 pre-Plan-07 so stale cached labels rehydrate character-identically. Non-desal facilities can't reach branches 4-5 (rejected at admission by Plan 04's step 3b), but branch 6 retained as defense-in-depth. (27.3.2-05, D-06/D-07)
+- Phase 27.3.2 Plan 05 kept extractLabel module-private per plan directive — Plan 06 will decide export-for-unit-testing separately; current call graph is extractLabel ← normalizeWaterElement only, so private visibility costs nothing and Plan 06 has flexibility to either export for direct unit testing or mock through normalizeWaterElement. (27.3.2-05, D-07)
+- Phase 27.3.2 Plan 05 typed the new nearestCity parameter as `ReturnType<typeof findNearestCity>` (per PATTERNS.md Pattern 3 prescription) rather than duplicating the inline `{ name, distanceKm, population } | null` shape. Keeps the type tethered to findNearestCity so any future field addition to the return shape propagates automatically to extractLabel. (27.3.2-05, D-07)
 
 ## Pending Todos
 
