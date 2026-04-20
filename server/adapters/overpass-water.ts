@@ -428,13 +428,53 @@ export const FACILITY_TYPE_LABELS: Record<WaterFacilityType, string> = {
   desalination: 'Desalination Plant',
 };
 
-/** Extract an English label from OSM tags */
-function extractLabel(tags: Record<string, string>, facilityType: WaterFacilityType): string {
+/**
+ * Extract an English label from OSM tags.
+ *
+ * Phase 27.3.2 D-06: extended with a desalination-only synthesis branch for
+ * the 5 exempt non-Latin desal facilities. Non-desal facilities never hit
+ * the synthesis branches because `computeAdmissionDecision` rejects them
+ * via `no_resolved_name` at admission time (D-05, Plan 04). Label
+ * synthesis lives server-side so the client can be a one-line read (D-08,
+ * Plan 07).
+ *
+ * Resolution order:
+ *   1. name:en Latin → title-cased name:en
+ *   2. name Latin → title-cased name
+ *   3. operator Latin → title-cased operator
+ *   4. [NEW — desal only] "Desalination Plant near {city}" (nearestCity within 150km)
+ *   5. [NEW — desal only] "Desalination Plant at {lat}°, {lng}°" (no city)
+ *   6. Bare FACILITY_TYPE_LABELS[facilityType] — never reached for non-desal
+ *      post-admission (defense-in-depth only).
+ *
+ * The coord synthesis in branch 5 is byte-identical to the old client
+ * fallback in src/lib/waterLabel.ts (pre-Plan-07), so any stale cached
+ * labels remain renderable identically when the client collapses to a
+ * one-liner.
+ */
+function extractLabel(
+  tags: Record<string, string>,
+  facilityType: WaterFacilityType,
+  lat: number,
+  lng: number,
+  nearestCity: ReturnType<typeof findNearestCity>,
+): string {
   const en = tags['name:en'];
   if (en && en.trim() && isLatin(en)) return toTitleCase(en);
   const raw = tags['name'] || '';
   if (raw && isLatin(raw)) return toTitleCase(raw);
   if (tags.operator && isLatin(tags.operator)) return toTitleCase(tags.operator);
+
+  // D-06 desal-only synthesis branches (non-desal rejected at admission).
+  if (facilityType === 'desalination') {
+    if (nearestCity) {
+      return `Desalination Plant near ${nearestCity.name}`;
+    }
+    const latStr = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}`;
+    const lngStr = `${Math.abs(lng).toFixed(2)}°${lng >= 0 ? 'E' : 'W'}`;
+    return `Desalination Plant at ${latStr}, ${lngStr}`;
+  }
+
   return FACILITY_TYPE_LABELS[facilityType];
 }
 
