@@ -766,6 +766,17 @@ export function computeAdmissionDecision(
     return { verdict: 'reject', bucket: 'no_name' };
   }
 
+  // 3b. Phase 27.3.2 D-01 / D-05: Latin-label admission check. Non-desal
+  //     facilities must carry a Latin-script name in `name:en` / `name` /
+  //     `operator`. Desalination exempt per D-03 (sparse OSM coverage —
+  //     server synthesizes "Desalination Plant near {city}" or coord-based
+  //     fallback label in extractLabel D-06, handled in Plan 05).
+  //     D-02: linkedRiver is no longer an admission signal; remains as
+  //     post-admission enrichment for the detail panel only.
+  if (facilityType !== 'desalination' && !hasLatinLabel(tags)) {
+    return { verdict: 'reject', bucket: 'no_resolved_name' };
+  }
+
   // 4. R-02 Plan 04: compound 2-of-3 gate, EXEMPTED for desalination.
   //    (Desal OSM coverage in ME is sparse — name+type carries enough signal.)
   if (facilityType !== 'desalination') {
