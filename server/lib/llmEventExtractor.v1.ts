@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { callLLM } from '../adapters/llm-provider.js';
-import { forwardGeocode } from '../adapters/nominatim.js';
+import { forwardGeocodeConstrained } from '../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
+import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
 import { logger } from './logger.js';
 import type { EventGroup } from './eventGrouping.js';
 
@@ -268,7 +269,15 @@ export async function geocodeEnrichedEvents(
       await new Promise((resolve) => setTimeout(resolve, GEOCODE_DELAY_MS));
     }
 
-    const geocoded = await forwardGeocode(placeName);
+    // Phase 27.4 CR-01: constrain legacy v1 geocoder to ME viewbox + country
+    // codes so the rollback pipeline honors the D-02 security requirement
+    // ("eliminate 'Damascus, Maryland' class misses"). forwardGeocode
+    // (unconstrained) is no longer imported.
+    const [geocoded] = await forwardGeocodeConstrained(placeName, {
+      countrycodes: ME_COUNTRY_CODES,
+      viewbox: ME_VIEWBOX,
+      limit: 1,
+    });
 
     if (geocoded) {
       // Cache the result
