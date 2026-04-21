@@ -12,7 +12,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useLayerStore } from '@/stores/layerStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
-import type { LLMStatus } from '@/hooks/useLLMStatusPolling';
+import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
 
 interface FetchEntry {
@@ -730,6 +730,14 @@ export function DevApiStatus() {
   const showWaterTab = useLayerStore((s) => s.activeLayers.has('water'));
   const showSitesTab = useFilterStore((s) => s.showSites);
 
+  // Phase 27.4 Plan 09 D-15 — Events tab is dual-gated:
+  //   1. schemaVersion === 'v2' (operator flipped LLM_PIPELINE_V2 and at
+  //      least one run has reported back)
+  //   2. import.meta.env.DEV (prod bundles tree-shake this entire block)
+  // In prod builds the tab is tree-shaken out via the DEV gate — zero
+  // bytes added to the production bundle (see threat T-27.4-09-01).
+  const showEventsTab = llmStatus?.schemaVersion === 'v2' && import.meta.env.DEV;
+
   // Escape key — capture-phase so DevApiStatus closes BEFORE nav-stack pop /
   // detail panel close / search modal close (Plan 12 G6 priority contract).
   // Gated on isOpen so the listener is only active while the modal is visible
@@ -751,7 +759,8 @@ export function DevApiStatus() {
   useEffect(() => {
     if (activeTab === 'water' && !showWaterTab) setTab('overview');
     else if (activeTab === 'sites' && !showSitesTab) setTab('overview');
-  }, [activeTab, showWaterTab, showSitesTab, setTab]);
+    else if (activeTab === 'events' && !showEventsTab) setTab('overview');
+  }, [activeTab, showWaterTab, showSitesTab, showEventsTab, setTab]);
 
   if (!isOpen) return null;
 
@@ -811,6 +820,15 @@ export function DevApiStatus() {
                 Sites
               </TabButton>
             )}
+            {showEventsTab && (
+              <TabButton
+                active={activeTab === 'events'}
+                onClick={() => setTab('events')}
+                testid="tab-events"
+              >
+                Events
+              </TabButton>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -851,6 +869,9 @@ export function DevApiStatus() {
           )}
           {activeTab === 'water' && showWaterTab && <WaterFiltersSection />}
           {activeTab === 'sites' && showSitesTab && <SitesFiltersSection />}
+          {activeTab === 'events' && showEventsTab && (
+            <EventsFiltersSection llmStatus={llmStatus} />
+          )}
         </div>
       </div>
     </div>
@@ -1159,6 +1180,521 @@ function SitesFiltersSection() {
           ))}
         </>
       )}
+    </div>
+  );
+}
+
+/* ---------- Events (Phase 27.4 Plan 09) ---------- */
+
+/**
+ * Phase 27.4 Plan 09 — per-provenance color swatch mapping. The six
+ * provenance tags are color-coded so ops can spot which resolver path
+ * served each event at a glance: green = own snapshot, blue = Overpass
+ * POI, cyan = direct Nominatim, purple = verified two-pass, amber =
+ * GDELT ActionGeo fallback, orange = Bellingcat passthrough.
+ */
+const PROVENANCE_COLORS: Record<string, string> = {
+  'own-site-snapshot': 'text-green-400',
+  'poi-amenity-nominatim': 'text-blue-400',
+  'nominatim-direct': 'text-cyan-400',
+  'nominatim-verified-2pass': 'text-purple-400',
+  'gdelt-actiongeo-fallback': 'text-amber-400',
+  'bellingcat-coord-passthrough': 'text-orange-400',
+};
+
+/**
+ * Phase 27.4 Plan 09 D-16 — pipeline waterfall. Four rows (Grouping →
+ * LLM → Geocoding → Done) with completed/total counters and a ProgressBar
+ * per row. Mirrors the StageIndicator but adds completion percentages
+ * so ops can see how far each stage got when the pipeline is mid-flight.
+ */
+function WaterfallBlock({ llmStatus }: { llmStatus: LLMStatus }) {
+  const stages = [
+    {
+      key: 'grouping',
+      label: 'Grouping',
+      completed: llmStatus.totalGroups ?? 0,
+      total: llmStatus.totalGroups ?? 0,
+    },
+    {
+      key: 'llm-processing',
+      label: 'LLM',
+      completed: llmStatus.completedBatches ?? 0,
+      total: llmStatus.totalBatches ?? 0,
+    },
+    {
+      key: 'geocoding',
+      label: 'Geocoding',
+      completed: llmStatus.completedGeocodes ?? 0,
+      total: llmStatus.totalGeocodes ?? 0,
+    },
+    {
+      key: 'done',
+      label: 'Done',
+      completed: llmStatus.enrichedCount ?? 0,
+      total: llmStatus.enrichedCount ?? 0,
+    },
+  ];
+  return (
+    <div className="mt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Pipeline Waterfall
+      </div>
+      {stages.map((s) => (
+        <div key={s.key} className="mt-1">
+          <div className="flex items-center justify-between text-[9px]">
+            <span className="text-white/60">{s.label}</span>
+            <span className="text-white/40 tabular-nums">
+              {s.completed}/{s.total}
+            </span>
+          </div>
+          <ProgressBar completed={s.completed} total={s.total || 1} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 D-17 — provenance distribution + LLM call success
+ * rate. Each provenance tag is rendered as a ProgressBar over the
+ * aggregate total; success rate is the okCount / callHistory length
+ * ratio (non-ok calls counted against the denominator).
+ */
+function HistogramsBlock({
+  provenanceCounts,
+  callHistory,
+}: {
+  provenanceCounts: Record<string, number>;
+  callHistory: NonNullable<LLMStatus['callHistory']>;
+}) {
+  const provEntries = Object.entries(provenanceCounts).sort((a, b) => b[1] - a[1]);
+  const totalProv = provEntries.reduce((s, [, n]) => s + n, 0);
+  const okCount = callHistory.filter((c) => c.ok).length;
+  return (
+    <div className="mt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Provenance Distribution
+      </div>
+      {provEntries.length === 0 ? (
+        <div className="text-[9px] text-white/40">no data</div>
+      ) : (
+        provEntries.map(([key, n]) => (
+          <div key={key} className="mt-0.5">
+            <div className="flex items-center justify-between text-[9px]">
+              <span className={PROVENANCE_COLORS[key] ?? 'text-white/60'}>{key}</span>
+              <span className="text-white/40 tabular-nums">
+                {n} / {totalProv}
+              </span>
+            </div>
+            <ProgressBar completed={n} total={totalProv || 1} />
+          </div>
+        ))
+      )}
+      <div className="mt-2 text-[9px] text-white/60">
+        LLM Call Success:{' '}
+        <span className="text-white/80 tabular-nums">
+          {okCount}/{callHistory.length}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 B4 — per-event drill-down row. Summary line shows
+ * city / admin1 / country, precision, confidence, and weapon/target.
+ * Expanded view reveals full location hierarchy, reasoning, per-event
+ * tokens, provenance (color-coded), and clickable source links.
+ *
+ * The Copy prompt+response JSON button POSTs to /api/events/llm-replay/
+ * :groupKey (dev-only endpoint wired in Plan 08) and writes the returned
+ * {old, new} JSON to the clipboard; success renders "Copied!" for 2s.
+ */
+function DrillDownRow({ ev }: { ev: RecentEnrichedEvent }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  async function copyPromptResponse() {
+    try {
+      const res = await fetch(`/api/events/llm-replay/${encodeURIComponent(ev.groupKey)}`, {
+        method: 'POST',
+      });
+      const text = res.ok ? await res.text() : JSON.stringify({ error: res.statusText });
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback('Copied!');
+    } catch {
+      setCopyFeedback('Unavailable');
+    }
+    setTimeout(() => setCopyFeedback(null), 2000);
+  }
+
+  const summaryLabel =
+    ev.location.city ??
+    ev.location.admin1 ??
+    ev.location.country ??
+    ev.location.landmark ??
+    'unknown';
+  const weaponTarget = `${ev.weaponType ?? '—'}/${ev.targetType ?? '—'}`;
+
+  return (
+    <div className="mt-1 border-t border-white/5 pt-1">
+      <button
+        className="flex w-full items-center gap-1 text-left text-[9px] text-white/60 hover:text-white/80"
+        onClick={() => setExpanded((v) => !v)}
+        data-testid="drill-down-row-toggle"
+      >
+        <span>{expanded ? '▾' : '▸'}</span>
+        <span className="truncate">{summaryLabel}</span>
+        <span className="text-white/40">· precision={ev.precision}</span>
+        <span className="text-white/40">· conf={ev.confidence.toFixed(2)}</span>
+        <span className="text-white/40">· {weaponTarget}</span>
+      </button>
+      {expanded && (
+        <div className="ml-3 mt-0.5 space-y-0.5 text-[9px] text-white/60">
+          <div>
+            country: <span className="text-white/80">{ev.location.country ?? '—'}</span>
+            {' · '}admin1: <span className="text-white/80">{ev.location.admin1 ?? '—'}</span>
+            {' · '}city: <span className="text-white/80">{ev.location.city ?? '—'}</span>
+            {' · '}neighborhood:{' '}
+            <span className="text-white/80">{ev.location.neighborhood ?? '—'}</span>
+            {' · '}landmark: <span className="text-white/80">{ev.location.landmark ?? '—'}</span>
+          </div>
+          {ev.reasoning && <div className="italic text-white/50">reasoning: {ev.reasoning}</div>}
+          <div>
+            tokensIn: <span className="text-white/80">{ev.tokensIn ?? '—'}</span>
+            {' · '}tokensOut: <span className="text-white/80">{ev.tokensOut ?? '—'}</span>
+            {' · '}provenance:{' '}
+            <span className={PROVENANCE_COLORS[ev.provenance] ?? 'text-white/80'}>
+              {ev.provenance}
+            </span>
+          </div>
+          {ev.sources.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <span>sources:</span>
+              {ev.sources.slice(0, 5).map((u, i) => (
+                <a
+                  key={u + i}
+                  href={u}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:underline"
+                >
+                  [{i + 1}]
+                </a>
+              ))}
+            </div>
+          )}
+          <button
+            className="text-white/60 hover:text-white/80"
+            onClick={copyPromptResponse}
+            data-testid="drill-down-copy"
+          >
+            {copyFeedback ?? 'Copy prompt+response JSON'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 D-18 — drill-down wrapper. Collapsed by default to
+ * avoid rendering 50 rows eagerly when ops is only glancing at the
+ * overview blocks above. Click the heading to expand; empty list shows
+ * the zero-state message.
+ */
+function DrillDownBlock({ llmStatus }: { llmStatus: LLMStatus }) {
+  const events = llmStatus.recentEvents ?? [];
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="mt-2">
+      <button
+        className="text-[9px] font-bold uppercase tracking-wider text-white/40 hover:text-white/80"
+        onClick={() => setExpanded((v) => !v)}
+        data-testid="drill-down-expand"
+      >
+        Drill-down ({events.length} events) {expanded ? '▾' : '▸'}
+      </button>
+      {expanded && events.length === 0 && (
+        <div className="mt-1 text-[9px] text-white/40">No recent enriched events.</div>
+      )}
+      {expanded &&
+        events.map((ev) => <DrillDownRow key={`${ev.groupKey}-${ev.fetchedAt}`} ev={ev} />)}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 D-19 — last N LLM calls. Each row shows the
+ * provider, total tokens (in+out), wall duration, batch size, and
+ * relative timestamp. Green dot = ok, red dot = non-ok (retry or dead
+ * letter). Capped via max-h-32 overflow-y-auto.
+ */
+function CallLogBlock({ callHistory }: { callHistory: NonNullable<LLMStatus['callHistory']> }) {
+  if (callHistory.length === 0) {
+    return (
+      <div className="mt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          LLM Call Log (0)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No LLM calls yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        LLM Call Log (last {callHistory.length})
+      </div>
+      <div className="mt-1 max-h-32 overflow-y-auto">
+        {callHistory.map((c, i) => (
+          <div
+            key={`${c.timestamp}-${i}`}
+            className="flex items-center justify-between gap-1 text-[9px]"
+          >
+            <span className={c.ok ? 'text-green-400' : 'text-red-400'}>●</span>
+            <span className="text-white/60">{c.provider}</span>
+            <span className="text-white/40 tabular-nums">{c.tokensIn + c.tokensOut}t</span>
+            <span className="text-white/40 tabular-nums">{c.durationMs}ms</span>
+            <span className="text-white/40">bs{c.batchSize}</span>
+            <span className="ml-auto text-white/30 tabular-nums">
+              {relativeTime(new Date(c.timestamp).toISOString())}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 D-36 — per-provider daily token budget. Bars scale
+ * against DAILY_LIMITS (cerebras 1M, groq 200k) which mirror the
+ * server-side budget enforced in llmTokenBudget.ts. ⏸ glyph appears
+ * next to the provider name when the circuit breaker is paused.
+ */
+function BudgetBarsBlock({
+  tokenCounters,
+  breakerState,
+}: {
+  tokenCounters: { cerebras: number; groq: number };
+  breakerState: { cerebras: 'ok' | 'paused'; groq: 'ok' | 'paused' };
+}) {
+  const CEREBRAS_MAX = 1_000_000;
+  const GROQ_MAX = 200_000;
+  return (
+    <div className="mt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Token Budget (daily)
+      </div>
+      <div className="mt-1 text-[9px]">
+        <div className="flex items-center justify-between">
+          <span className="text-white/60">
+            Cerebras {breakerState.cerebras === 'paused' ? '⏸' : ''}
+          </span>
+          <span className="text-white/40 tabular-nums">
+            {tokenCounters.cerebras.toLocaleString()}/{CEREBRAS_MAX.toLocaleString()} (
+            {Math.round((tokenCounters.cerebras / CEREBRAS_MAX) * 100)}%)
+          </span>
+        </div>
+        <ProgressBar completed={tokenCounters.cerebras} total={CEREBRAS_MAX} />
+      </div>
+      <div className="mt-1 text-[9px]">
+        <div className="flex items-center justify-between">
+          <span className="text-white/60">Groq {breakerState.groq === 'paused' ? '⏸' : ''}</span>
+          <span className="text-white/40 tabular-nums">
+            {tokenCounters.groq.toLocaleString()}/{GROQ_MAX.toLocaleString()} (
+            {Math.round((tokenCounters.groq / GROQ_MAX) * 100)}%)
+          </span>
+        </div>
+        <ProgressBar completed={tokenCounters.groq} total={GROQ_MAX} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 D-20 — accuracy eval summary. Three concentric
+ * accuracy tiers (5km / 20km / 100km) against a ground-truth set. The
+ * D-25 gate (≥80% @ 20km) decides whether pipelineV2 can flip to prod;
+ * PASS/FAIL is visualized next to the 20km counter.
+ */
+function EvalScoreBlock({ evalScore }: { evalScore: LLMStatus['evalScore'] }) {
+  if (!evalScore || evalScore.total === 0) {
+    return <div className="mt-2 text-[9px] text-white/40">Eval: no ground-truth loaded</div>;
+  }
+  const pct20 = Math.round((evalScore.within20km / evalScore.total) * 100);
+  const gatePass = pct20 >= 80;
+  return (
+    <div className="mt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Accuracy Eval (ground-truth {evalScore.total})
+      </div>
+      <div className="mt-0.5 text-[9px] text-white/60">
+        5km:{' '}
+        <span className="text-white/80 tabular-nums">
+          {evalScore.within5km}/{evalScore.total}
+        </span>
+        {' · '}20km:{' '}
+        <span className={gatePass ? 'text-green-400' : 'text-red-400'}>
+          {evalScore.within20km}/{evalScore.total} ({pct20}%)
+        </span>
+        {' · '}100km:{' '}
+        <span className="text-white/80 tabular-nums">
+          {evalScore.within100km}/{evalScore.total}
+        </span>
+      </div>
+      <div className="mt-0.5 text-[9px]">
+        D-25 gate (≥80% @20km):{' '}
+        {gatePass ? (
+          <span className="text-green-400">PASS</span>
+        ) : (
+          <span className="text-red-400">FAIL</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 D-30 — dead-letter queue recent entries. Capped to
+ * the first 10 (from the server-side limit of 50) so the block stays
+ * scannable; `DLQ: 0 entries` when empty. Each row shows reason (ZOD
+ * fail / LLM null / retry exhausted), truncated group id, and relative
+ * timestamp.
+ */
+function DlqBlock({ entries }: { entries: NonNullable<LLMStatus['dlqRecent']> }) {
+  if (entries.length === 0) {
+    return <div className="mt-2 text-[9px] text-white/40">DLQ: 0 entries</div>;
+  }
+  return (
+    <div className="mt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-red-400">
+        DLQ ({entries.length})
+      </div>
+      <div className="mt-1 max-h-20 overflow-y-auto">
+        {entries.slice(0, 10).map((e) => (
+          <div
+            key={e.id + e.timestamp}
+            className="flex items-center gap-1 text-[9px] text-white/60"
+          >
+            <span className="text-red-400">●</span>{' '}
+            <span className="text-white/80">{e.reason}</span>
+            {' · '}
+            <span className="truncate">{e.id.slice(0, 32)}</span>
+            <span className="ml-auto tabular-nums text-white/30">
+              {relativeTime(new Date(e.timestamp).toISOString())}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 D-23 — suspect event count. "Suspect" means the
+ * resolver flagged the event as potentially wrong (e.g., country
+ * mismatch, neighborhood precision without landmark, etc.). Amber when
+ * non-zero so the number pops.
+ */
+function SuspectBlock({ count }: { count: number }) {
+  return (
+    <div className="mt-2 text-[9px]">
+      <span className="font-bold uppercase tracking-wider text-white/40">Suspect events: </span>
+      <span className={count > 0 ? 'tabular-nums text-amber-400' : 'tabular-nums text-white/60'}>
+        {count}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4 Plan 09 — dev-only Events tab. Renders the 8-block v2
+ * observability surface that makes every 27.4 decision visible in a
+ * single pane of glass. CONTEXT.md: "If you can't see it in the panel,
+ * it effectively doesn't exist."
+ *
+ * Block order (per RESEARCH.md lines 1117-1131):
+ *   1. Pipeline Waterfall (D-16)
+ *   2. Provenance Distribution + LLM success histogram (D-17)
+ *   3. Per-event drill-down (D-18 / B4)
+ *   4. LLM Call Log (D-19)
+ *   5. Token Budget bars (D-36)
+ *   6. Accuracy Eval (D-20 / D-25 gate)
+ *   7. Dead-letter queue (D-30)
+ *   8. Suspect count badge (D-23)
+ *
+ * Threat mitigations:
+ *   - T-27.4-09-01: dual dev gate (schemaVersion + import.meta.env.DEV)
+ *   - T-27.4-09-02/03: React escapes all strings — no dangerouslySetInnerHTML
+ *   - T-27.4-09-04: DLQ capped at 10 visible rows + max-h overflow; call
+ *     history capped at 20 on the server side + max-h-32 here.
+ */
+interface EventsFiltersSectionProps {
+  llmStatus: LLMStatus | null;
+}
+
+function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
+  if (!llmStatus) {
+    return (
+      <div className="mt-2 p-2 text-[9px] text-white/40">No LLM status available.</div>
+    );
+  }
+  const ch = llmStatus.callHistory ?? [];
+  const tc = llmStatus.tokenCounters ?? { cerebras: 0, groq: 0 };
+  const bk = llmStatus.breakerState ?? { cerebras: 'ok' as const, groq: 'ok' as const };
+  const es = llmStatus.evalScore;
+  const pc = llmStatus.provenanceCounts ?? {};
+  const sc = llmStatus.suspectCount ?? 0;
+  const dlq = llmStatus.dlqRecent ?? [];
+
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Events Pipeline (v2)
+      </span>
+      <div className="mt-0.5 text-[9px] text-white/60">
+        Schema:{' '}
+        <span className="text-white/80">{llmStatus.schemaVersion ?? 'unknown'}</span>
+        {' · '}Stage: <span className="text-white/80">{llmStatus.stage}</span>
+        {llmStatus.durationMs ? (
+          <>
+            {' · '}Last run:{' '}
+            <span className="text-white/80">{Math.round(llmStatus.durationMs / 1000)}s</span>
+          </>
+        ) : null}
+        {llmStatus.paused === true && (
+          <span className="ml-2 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] text-amber-400">
+            Paused — soft cap
+          </span>
+        )}
+      </div>
+
+      {/* Block 1: Pipeline Waterfall (D-16) */}
+      <WaterfallBlock llmStatus={llmStatus} />
+
+      {/* Block 2: Histograms — provenance + call success (D-17) */}
+      <HistogramsBlock provenanceCounts={pc} callHistory={ch} />
+
+      {/* Block 3: Per-event drill-down (D-18 / B4) */}
+      <DrillDownBlock llmStatus={llmStatus} />
+
+      {/* Block 4: LLM call log (D-19) */}
+      <CallLogBlock callHistory={ch} />
+
+      {/* Block 5: Budget bars (D-36) */}
+      <BudgetBarsBlock tokenCounters={tc} breakerState={bk} />
+
+      {/* Block 6: Eval score + D-25 gate (D-20) */}
+      <EvalScoreBlock evalScore={es} />
+
+      {/* Block 7: DLQ list (D-30) */}
+      <DlqBlock entries={dlq} />
+
+      {/* Block 8: Suspect count badge (D-23) */}
+      <SuspectBlock count={sc} />
     </div>
   );
 }

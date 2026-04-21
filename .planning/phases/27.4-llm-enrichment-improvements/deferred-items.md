@@ -12,3 +12,13 @@ Rationale for deferral: these errors exist on the plan's base commit (c13f868) a
 Verified:
 - `git stash` → `npm run typecheck` → 31 errors
 - `git stash pop` → `npm run typecheck` → 31 errors (identical count)
+
+## From Plan 27.4-09 (agent-a6e1ed19)
+
+Pre-existing test failure in `src/__tests__/filters.test.ts` (32 test cases) that predates this plan's scope:
+
+- `TypeError: Cannot read properties of undefined (reading 'length')` at `src/lib/filters.ts:147` — `filters.enabledPrecisions.length < 4` throws because the filters fixture omits the `enabledPrecisions` field. Introduced when the precision-filter branch was added; the fixture in `filters.test.ts` was not updated.
+- Last modification of `src/lib/filters.ts`: commit `2c7e6ae feat(27.2-quick): add precision and entity ID search/filter support`.
+- Not touched by Plan 09 — our files_modified are strictly `server/routes/events.ts`, `src/hooks/useLLMStatusPolling.ts`, `src/types/ui.ts`, `src/stores/uiStore.ts`, `src/components/ui/DevApiStatus.tsx`, `src/__tests__/devApiStatusEventsSection.test.tsx` (plus `src/types/llm.ts` new type mirror + `src/__tests__/uiStore.test.ts` + `server/__tests__/routes/events.test.ts` extensions + this deferred-items.md).
+
+Fix belongs in a follow-up plan that owns `src/lib/filters.ts` (e.g., a targeted "filter fixture regression" patch). Scope boundary respected per executor rules.
