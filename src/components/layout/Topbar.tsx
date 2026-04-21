@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { StatusDropdown } from '@/components/layout/StatusDropdown';
 import { NotificationBell } from '@/components/layout/NotificationBell';
@@ -173,6 +173,79 @@ function DevApiStatusTrigger() {
   return <DevApiStatusTriggerInner />;
 }
 
+/**
+ * Dev-only pipeline version pill. Shows the currently-effective v1/v2 and
+ * clicks to swap via POST /api/events/llm-pipeline. Positioned next to
+ * DevApiStatusTrigger per user request (post-debug 2026-04-21).
+ *
+ * The endpoint is dual-gated (NODE_ENV + 404 fallback); the UI is
+ * DEV-only via the parent wrapper so production builds tree-shake it.
+ */
+function PipelineVersionPillInner() {
+  const [version, setVersion] = useState<'v1' | 'v2' | 'unknown'>('unknown');
+  const [busy, setBusy] = useState(false);
+
+  const fetchVersion = useCallback(async () => {
+    try {
+      const res = await fetch('/api/events/llm-pipeline');
+      if (!res.ok) return;
+      const json = (await res.json()) as { effective?: 'v1' | 'v2' };
+      if (json.effective === 'v1' || json.effective === 'v2') {
+        setVersion(json.effective);
+      }
+    } catch {
+      // leave as unknown
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchVersion();
+  }, [fetchVersion]);
+
+  const swap = useCallback(async () => {
+    if (busy || version === 'unknown') return;
+    const next = version === 'v2' ? 'v1' : 'v2';
+    setBusy(true);
+    try {
+      const res = await fetch('/api/events/llm-pipeline', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ version: next }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { effective?: 'v1' | 'v2' };
+        if (json.effective) setVersion(json.effective);
+      }
+    } catch {
+      // leave version untouched
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, version]);
+
+  if (version === 'unknown') return null;
+
+  return (
+    <button
+      data-testid="pipeline-version-pill"
+      onClick={swap}
+      disabled={busy}
+      className="rounded-md px-2 py-1 font-mono text-[10px] transition-colors hover:bg-white/5 disabled:opacity-50"
+      style={{
+        color: version === 'v2' ? 'rgb(74,222,128)' : 'rgb(234,179,8)',
+      }}
+      title={`LLM pipeline: ${version}. Click to switch to ${version === 'v2' ? 'v1' : 'v2'}.`}
+    >
+      {version}
+    </button>
+  );
+}
+
+function PipelineVersionPill() {
+  if (!import.meta.env.DEV) return null;
+  return <PipelineVersionPillInner />;
+}
+
 export function Topbar() {
   return (
     <header
@@ -206,10 +279,11 @@ export function Topbar() {
         </kbd>
       </button>
 
-      {/* Right: Reset + DevApiStatus trigger (dev-only) + Notification bell */}
+      {/* Right: Reset + DevApiStatus trigger (dev-only) + pipeline-version pill (dev-only) + Notification bell */}
       <div className="flex items-center gap-1">
         <ResetButton />
         <DevApiStatusTrigger />
+        <PipelineVersionPill />
         <NotificationBell />
       </div>
 

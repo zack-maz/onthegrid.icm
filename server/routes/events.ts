@@ -28,7 +28,13 @@ const BATCH_SIZE_V1 = 8;
 import { runEval } from '../lib/llmEvalHarness.js';
 import { llmProgress, resetProgress, updateProgress, buildSummary } from '../lib/llmProgress.js';
 import type { LLMRunSummary } from '../lib/llmProgress.js';
-import { WAR_START, CACHE_TTL, isPipelineV2 } from '../config.js';
+import {
+  WAR_START,
+  CACHE_TTL,
+  isPipelineV2,
+  setPipelineOverride,
+  getPipelineOverride,
+} from '../config.js';
 import {
   shouldPauseNewEvents,
   prioritizeBySeverity,
@@ -429,6 +435,41 @@ function sendNormalizedEvents(
 
 export const eventsRouter = Router();
 
+// ---------------------------------------------------------------------------
+// Phase 27.4 post-debug 2026-04-21 — runtime v1/v2 override
+//
+// The in-memory override in config.ts takes precedence over the env default.
+// It's hydrated from Redis on each /api/events request so multi-worker
+// deployments share a single source of truth, and updated immediately on
+// POST /llm-pipeline so the caller sees the new version on their next poll.
+//
+// Redis key: events:llm-pipeline-override ∈ {'v1', 'v2'} | absent
+// When absent → env default wins. When set → override wins until cleared
+// (POST body: {version: null}) or Redis TTL expires (7 days).
+// ---------------------------------------------------------------------------
+
+/** Redis key for the in-memory override. 7-day TTL so orphaned flips expire. */
+const PIPELINE_OVERRIDE_KEY = 'events:llm-pipeline-override';
+const PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
+
+/**
+ * Refresh the in-memory pipeline override from Redis. Called at the top of
+ * every /api/events handler so downstream sync `isPipelineV2()` reads see
+ * the latest toggle value. Graceful on Redis failure: keeps current cache.
+ */
+async function refreshPipelineOverride(): Promise<void> {
+  try {
+    const v = await redis.get<string>(PIPELINE_OVERRIDE_KEY);
+    if (v === 'v1' || v === 'v2') {
+      setPipelineOverride(v);
+    } else {
+      setPipelineOverride(null);
+    }
+  } catch {
+    // Keep existing cache on Redis failure — the env fallback is still active.
+  }
+}
+
 /**
  * DEV-ONLY: LLM pipeline status endpoint.
  * Returns live in-memory progress when pipeline is active, or Redis summary
@@ -439,6 +480,10 @@ eventsRouter.get('/llm-status', async (_req, res) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(404).json({ error: 'Not found' });
   }
+
+  // Post-debug 2026-04-21: refresh in-memory override so the status endpoint
+  // reflects the latest Topbar-pill setting across workers.
+  await refreshPipelineOverride();
 
   // Phase 27.4 D-24/D-37: request-time flag read via isPipelineV2 helper (W4
   // fix) so operators can flip LLM_PIPELINE_V2 without a rebuild. Summary key
@@ -559,10 +604,65 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
+/**
+ * DEV-ONLY: runtime v1/v2 pipeline toggle (post-debug 2026-04-21).
+ *
+ * GET returns the currently-effective version + source ('override' or 'env').
+ * POST {version: 'v1' | 'v2' | null} sets the in-memory override AND writes
+ * it through to Redis so multi-worker deployments stay coherent; `null`
+ * clears the override and reverts to the env default.
+ *
+ * Dual-gate per Pitfall 6: route registered only in non-prod, AND each
+ * handler re-checks NODE_ENV before acting in case env flips after boot.
+ */
+if (process.env.NODE_ENV !== 'production') {
+  eventsRouter.get('/llm-pipeline', async (_req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    await refreshPipelineOverride();
+    const override = getPipelineOverride();
+    const effective = isPipelineV2() ? 'v2' : 'v1';
+    return res.json({ effective, override, source: override ? 'override' : 'env' });
+  });
+
+  eventsRouter.post('/llm-pipeline', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    const body = (req.body ?? {}) as { version?: unknown };
+    const version = body.version;
+    if (version !== 'v1' && version !== 'v2' && version !== null) {
+      return res.status(400).json({ error: 'version must be "v1", "v2", or null' });
+    }
+    try {
+      if (version === null) {
+        await redis.del(PIPELINE_OVERRIDE_KEY);
+        setPipelineOverride(null);
+      } else {
+        await redis.set(PIPELINE_OVERRIDE_KEY, version, { ex: PIPELINE_OVERRIDE_TTL_SEC });
+        setPipelineOverride(version);
+      }
+    } catch (err) {
+      return res.status(500).json({
+        error: 'override_write_failed',
+        detail: String(err).slice(0, 200),
+      });
+    }
+    const effective = isPipelineV2() ? 'v2' : 'v1';
+    return res.json({ effective, override: getPipelineOverride(), source: version ? 'override' : 'env' });
+  });
+}
+
 eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   const { backfill: forceBackfill } = res.locals.validatedQuery as z.infer<
     typeof eventsQuerySchema
   >;
+
+  // Post-debug 2026-04-21 — hydrate the in-memory pipeline override from
+  // Redis at the request boundary so downstream sync `isPipelineV2()` reads
+  // see the latest toggle value across workers.
+  await refreshPipelineOverride();
 
   // Phase 27.4 D-24/D-37: request-time flag read via isPipelineV2 helper (W4
   // fix) so operators can flip LLM_PIPELINE_V2 without a rebuild. Cache keys
