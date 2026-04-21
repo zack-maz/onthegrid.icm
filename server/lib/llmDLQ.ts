@@ -48,13 +48,20 @@ export async function enqueueDLQ(entry: DLQEntry): Promise<void> {
     const size = await redis.scard(DLQ_KEY);
     if (size > DLQ_MAX) {
       const all = await redis.smembers(DLQ_KEY);
-      const parsed: DLQEntry[] = [];
-      for (const s of all) {
-        const p = parseEntry(s);
-        if (p) parsed.push(p);
-      }
-      parsed.sort((a, b) => a.timestamp - b.timestamp);
-      const toRemove = parsed.slice(0, size - DLQ_MAX).map((e) => JSON.stringify(e));
+      // WR-02: pair each raw member string with its parsed form, sort by
+      // timestamp, and pass the ORIGINAL raw strings to srem. Re-serialising
+      // via JSON.stringify(parsed) is unsafe because Upstash REST may not
+      // round-trip byte-for-byte (key ordering, whitespace, number
+      // precision), which would cause srem to silently no-op and the DLQ
+      // would never shrink below DLQ_MAX.
+      const withParsed = all
+        .map((raw) => {
+          const rawStr = typeof raw === 'string' ? raw : JSON.stringify(raw);
+          return { raw: rawStr, parsed: parseEntry(raw) };
+        })
+        .filter((x): x is { raw: string; parsed: DLQEntry } => x.parsed !== null);
+      withParsed.sort((a, b) => a.parsed.timestamp - b.parsed.timestamp);
+      const toRemove = withParsed.slice(0, size - DLQ_MAX).map((x) => x.raw);
       if (toRemove.length > 0) await redis.srem(DLQ_KEY, ...toRemove);
     }
   } catch (err) {
