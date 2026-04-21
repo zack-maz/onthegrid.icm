@@ -944,4 +944,94 @@ describe('Events Route (Redis accumulator)', () => {
       }
     });
   });
+
+  describe('Phase 27.4 LLM_PIPELINE_V2 flag (D-24/D-37/D-40)', () => {
+    const llmEventV1 = makeEvent({
+      id: 'llm-v1-1',
+      label: 'Baghdad V1 cached',
+      data: {
+        eventType: 'Aerial weapons',
+        subEventType: 'CAMEO 195',
+        fatalities: 0,
+        actor1: 'USA',
+        actor2: 'IRN',
+        notes: '',
+        source: 'https://example.com/v1',
+        goldsteinScale: -10,
+        locationName: 'Baghdad, Iraq',
+        cameoCode: '195',
+        llmProcessed: true,
+      },
+    });
+    const llmEventV2 = makeEvent({
+      id: 'llm-v2-1',
+      label: 'Baghdad V2 cached',
+      data: {
+        eventType: 'Aerial weapons',
+        subEventType: 'CAMEO 195',
+        fatalities: 0,
+        actor1: 'USA',
+        actor2: 'IRN',
+        notes: '',
+        source: 'https://example.com/v2',
+        goldsteinScale: -10,
+        locationName: 'Baghdad, Iraq',
+        cameoCode: '195',
+        llmProcessed: true,
+      },
+    });
+
+    beforeEach(() => {
+      delete process.env.LLM_PIPELINE_V2;
+    });
+
+    it('reads events:llm (v1) when LLM_PIPELINE_V2 unset', async () => {
+      // Pre-populate v1 LLM cache with fresh data; v2 key left untouched
+      redisStore.set('events:llm', {
+        data: [llmEventV1],
+        fetchedAt: Date.now(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].id).toBe('llm-v1-1');
+      // Did not read or write to v2 keys
+      expect(redisStore.has('events:llm:v2')).toBe(false);
+    });
+
+    it('reads events:llm:v2 when LLM_PIPELINE_V2=true', async () => {
+      process.env.LLM_PIPELINE_V2 = 'true';
+      // Pre-populate v2 cache with fresh data
+      redisStore.set('events:llm:v2', {
+        data: [llmEventV2],
+        fetchedAt: Date.now(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].id).toBe('llm-v2-1');
+    });
+
+    it('falls through to events:llm (v1) when v2 is empty during rollout', async () => {
+      process.env.LLM_PIPELINE_V2 = 'true';
+      // v2 key has no entry; v1 has fresh data
+      redisStore.set('events:llm', {
+        data: [llmEventV1],
+        fetchedAt: Date.now(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].id).toBe('llm-v1-1');
+    });
+  });
 });

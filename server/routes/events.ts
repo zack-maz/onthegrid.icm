@@ -12,14 +12,19 @@ import { groupGdeltRows } from '../lib/eventGrouping.js';
 import { processEventGroups, geocodeEnrichedEvents } from '../lib/llmEventExtractor.js';
 import { llmProgress, resetProgress, updateProgress, buildSummary } from '../lib/llmProgress.js';
 import type { LLMRunSummary } from '../lib/llmProgress.js';
-import { WAR_START, CACHE_TTL } from '../config.js';
+import { WAR_START, CACHE_TTL, isPipelineV2 } from '../config.js';
 import { validateQuery } from '../middleware/validate.js';
 import { sendValidated } from '../middleware/validateResponse.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { eventsResponseSchema } from '../schemas/cacheResponse.js';
 import type { ConflictEventEntity, NewsCluster } from '../types.js';
 import { getHighestTier, extractDomain, getSourceTier } from '../lib/sourceTiers.js';
-import { saveDevLLMCache, loadDevLLMCache } from '../cache/devFileCache.js';
+import {
+  saveDevLLMCache,
+  loadDevLLMCache,
+  saveDevLLMCacheV2,
+  loadDevLLMCacheV2,
+} from '../cache/devFileCache.js';
 
 /** Zod schema for /api/events query params */
 const eventsQuerySchema = z.object({
@@ -230,9 +235,15 @@ eventsRouter.get('/llm-status', async (_req, res) => {
     return res.json(llmProgress);
   }
 
+  // Phase 27.4 D-24/D-37: request-time flag read via isPipelineV2 helper (W4
+  // fix) so operators can flip LLM_PIPELINE_V2 without a rebuild. Summary key
+  // branches accordingly; v1 key left alone for rollback (D-40).
+  const pipelineV2 = isPipelineV2();
+  const LLM_SUMMARY_KEY_ACTIVE = pipelineV2 ? 'events:llm-summary:v2' : LLM_SUMMARY_KEY;
+
   // Otherwise, fall back to Redis summary from last completed run
   try {
-    const summary = await cacheGetSafe<LLMRunSummary>(LLM_SUMMARY_KEY, 0);
+    const summary = await cacheGetSafe<LLMRunSummary>(LLM_SUMMARY_KEY_ACTIVE, 0);
     if (summary?.data) {
       return res.json({ stage: 'idle' as const, lastRun: summary.data });
     }
@@ -248,18 +259,47 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     typeof eventsQuerySchema
   >;
 
+  // Phase 27.4 D-24/D-37: request-time flag read via isPipelineV2 helper (W4
+  // fix) so operators can flip LLM_PIPELINE_V2 without a rebuild. Cache keys
+  // branch accordingly; v1 keys are left alone for rollback (D-40).
+  const pipelineV2 = isPipelineV2();
+  const LLM_EVENTS_KEY_ACTIVE = pipelineV2 ? 'events:llm:v2' : LLM_EVENTS_KEY;
+  const LLM_SUMMARY_KEY_ACTIVE = pipelineV2 ? 'events:llm-summary:v2' : LLM_SUMMARY_KEY;
+
   // --- LLM cache check (highest priority: serve enriched events if fresh) ---
-  const llmCached = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY, LLM_LOGICAL_TTL_MS);
+  let llmCached = await cacheGetSafe<ConflictEventEntity[]>(
+    LLM_EVENTS_KEY_ACTIVE,
+    LLM_LOGICAL_TTL_MS,
+  );
   if (llmCached && !llmCached.stale) {
     return sendNormalizedEvents(res, llmCached);
   }
 
+  // Phase 27.4 Pitfall 1: during rollout, v2 cache may be empty while v1 is
+  // populated. Serve v1 as a bridge — Plan 02 wires v2 writes so v2 fills in.
+  if (pipelineV2 && !llmCached?.data) {
+    const llmCachedV1 = await cacheGetSafe<ConflictEventEntity[]>(
+      LLM_EVENTS_KEY,
+      LLM_LOGICAL_TTL_MS,
+    );
+    if (llmCachedV1 && !llmCachedV1.stale) {
+      return sendNormalizedEvents(res, llmCachedV1);
+    }
+    // If v1 has stale data but v2 has none, promote v1 to the local `llmCached`
+    // var so the stale-serve path at the bottom of the handler still works.
+    if (llmCachedV1?.data && !llmCached?.data) {
+      llmCached = llmCachedV1;
+    }
+  }
+
   // Dev fallback: if Redis LLM cache is empty, try local file cache to avoid re-processing
   if (!llmCached?.data) {
-    const devData = loadDevLLMCache<ConflictEventEntity[]>();
+    const devData = pipelineV2
+      ? loadDevLLMCacheV2<ConflictEventEntity[]>()
+      : loadDevLLMCache<ConflictEventEntity[]>();
     if (devData) {
       // Seed Redis from file so subsequent requests are fast
-      await cacheSetSafe(LLM_EVENTS_KEY, devData, LLM_REDIS_TTL_SEC);
+      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, devData, LLM_REDIS_TTL_SEC);
       // Write synthetic summary so LLM Pipeline section shows "loaded from file cache"
       const geocoded = devData.filter(
         (e) => e.data.precision && e.data.precision !== 'region',
@@ -273,8 +313,9 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
         durationMs: 0,
         error: null,
         source: 'dev-file-cache',
+        schemaVersion: pipelineV2 ? 'v2' : 'v1',
       };
-      await cacheSetSafe(LLM_SUMMARY_KEY, summary, LLM_SUMMARY_TTL_SEC);
+      await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, summary, LLM_SUMMARY_TTL_SEC);
       // Set cooldown so the pipeline doesn't re-trigger on the next request
       await recordLLMTimestamp();
       log.info({ count: devData.length }, 'served LLM events from dev file cache');
@@ -394,6 +435,9 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
         }
 
         resetProgress(); // sets stage='grouping', startedAt=now
+        // Phase 27.4 D-39: stamp schemaVersion on the run summary so
+        // /api/events/llm-status surfaces which extractor wrote the payload.
+        updateProgress({ schemaVersion: pipelineV2 ? 'v2' : 'v1' });
 
         try {
           const groups = groupGdeltRows(merged);
@@ -419,7 +463,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
               durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
             });
             try {
-              await cacheSetSafe(LLM_SUMMARY_KEY, buildSummary(), LLM_SUMMARY_TTL_SEC);
+              await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
             } catch {
               /* best-effort */
             }
@@ -444,7 +488,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
               durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
             });
             try {
-              await cacheSetSafe(LLM_SUMMARY_KEY, buildSummary(), LLM_SUMMARY_TTL_SEC);
+              await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
             } catch {
               /* best-effort */
             }
@@ -474,8 +518,9 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
           }
           const llmMerged = Array.from(llmMergeMap.values());
 
-          await cacheSetSafe(LLM_EVENTS_KEY, llmMerged, LLM_REDIS_TTL_SEC);
-          saveDevLLMCache(llmMerged);
+          await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, llmMerged, LLM_REDIS_TTL_SEC);
+          if (pipelineV2) saveDevLLMCacheV2(llmMerged);
+          else saveDevLLMCache(llmMerged);
           log.info(
             { count: llmEntities.length, total: llmMerged.length },
             'LLM: processed and cached enriched events (background)',
@@ -487,7 +532,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
             durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
           });
           try {
-            await cacheSetSafe(LLM_SUMMARY_KEY, buildSummary(), LLM_SUMMARY_TTL_SEC);
+            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
           } catch {
             /* best-effort */
           }
@@ -499,7 +544,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
             durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
           });
           try {
-            await cacheSetSafe(LLM_SUMMARY_KEY, buildSummary(), LLM_SUMMARY_TTL_SEC);
+            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
           } catch {
             /* best-effort */
           }
