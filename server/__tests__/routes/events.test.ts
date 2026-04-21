@@ -57,6 +57,19 @@ const mockGroupGdeltRows = vi.fn(() => []);
 const mockProcessEventGroups = vi.fn(async () => null);
 const mockGeocodeEnrichedEvents = vi.fn(async () => []);
 
+// Phase 27.4 Plan 08 — runEval (eval harness) + processEventGroupsV2 (replay).
+const mockRunEval = vi.fn(async () => ({
+  within5km: 0,
+  within20km: 0,
+  within100km: 0,
+  total: 0,
+}));
+const mockProcessEventGroupsV2 = vi.fn(async () => ({
+  events: [],
+  matchedNewsByGroup: new Map(),
+  bellingcatByGroup: new Map(),
+}));
+
 // LLM progress mock — mutable singleton object for test manipulation
 const mockLlmProgress = {
   stage: 'idle' as string,
@@ -186,6 +199,18 @@ vi.mock('../../lib/llmEventExtractor.js', () => ({
   processEventGroups: (...args: unknown[]) => mockProcessEventGroups(...(args as [])),
   geocodeEnrichedEvents: (...args: unknown[]) => mockGeocodeEnrichedEvents(...(args as [])),
 }));
+// Phase 27.4 Plan 08 — the v2 extractor is called directly by the /llm-replay
+// endpoint; mock it so the replay tests assert routing + response shape
+// without dragging in the real LLM path.
+vi.mock('../../lib/llmEventExtractor.v2.js', () => ({
+  processEventGroupsV2: (...args: unknown[]) => mockProcessEventGroupsV2(...(args as [])),
+}));
+// Phase 27.4 Plan 08 — runEval is called inside the v2 fire-and-forget
+// block. Mock it so tests can assert invocation without needing a real
+// ground-truth file on disk.
+vi.mock('../../lib/llmEvalHarness.js', () => ({
+  runEval: (...args: unknown[]) => mockRunEval(...(args as [])),
+}));
 vi.mock('../../adapters/overpass-water.js', () => ({
   fetchWaterFacilities: vi.fn(async () => []),
   FACILITY_TYPE_LABELS: {
@@ -290,6 +315,21 @@ describe('Events Route (Redis accumulator)', () => {
     mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v1', events: null });
     mockGeocodeEnrichedEvents.mockClear();
     mockGeocodeEnrichedEvents.mockResolvedValue({ schemaVersion: 'v1', events: [] });
+
+    // Phase 27.4 Plan 08 — reset eval harness + v2 extractor mocks.
+    mockRunEval.mockClear();
+    mockRunEval.mockResolvedValue({
+      within5km: 0,
+      within20km: 0,
+      within100km: 0,
+      total: 0,
+    });
+    mockProcessEventGroupsV2.mockClear();
+    mockProcessEventGroupsV2.mockResolvedValue({
+      events: [],
+      matchedNewsByGroup: new Map(),
+      bellingcatByGroup: new Map(),
+    });
 
     const { createApp } = await import('../../index.js');
     const app = createApp();
@@ -1244,6 +1284,291 @@ describe('Events Route (Redis accumulator)', () => {
       const geoCalls = mockGeocodeEnrichedEvents.mock.calls;
       const geoInput = geoCalls[0]?.[0] as { schemaVersion?: string };
       expect(geoInput?.schemaVersion).toBe('v2');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Phase 27.4 Plan 08 — eval harness + /llm-replay dev endpoint.
+  // -------------------------------------------------------------------------
+
+  describe('Phase 27.4 Plan 08 — eval harness + /llm-replay', () => {
+    beforeEach(() => {
+      // All replay tests execute the v2 path.
+      delete process.env.LLM_PIPELINE_V2;
+    });
+
+    it('runEval is called after geocodeEnrichedEvents in v2 path', async () => {
+      process.env.LLM_PIPELINE_V2 = 'true';
+      mockIsLLMConfigured.mockReturnValue(true);
+      mockFetchEvents.mockResolvedValue([eventA]);
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-eval',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+      mockProcessEventGroups.mockResolvedValue({
+        schemaVersion: 'v2',
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-eval',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.85,
+            },
+            type: 'airstrike',
+            confidence: 0.82,
+            reasoning: 'Test',
+            weaponType: null,
+            targetType: null,
+            timeOfDay: null,
+            durationMinutes: null,
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'Baghdad strike',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 2,
+          },
+        ],
+        matchedNewsByGroup: new Map(),
+        bellingcatByGroup: new Map(),
+      });
+      mockGeocodeEnrichedEvents.mockResolvedValue({
+        schemaVersion: 'v2',
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-eval',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.85,
+            },
+            type: 'airstrike',
+            confidence: 0.82,
+            reasoning: 'Test',
+            weaponType: null,
+            targetType: null,
+            timeOfDay: null,
+            durationMinutes: null,
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'Baghdad strike',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 2,
+            resolvedLat: 33.3,
+            resolvedLng: 44.4,
+            geocodeProvenance: 'nominatim-direct',
+            precision: 'city',
+            suspect: false,
+            actionGeoDistanceKm: 3,
+            displayName: 'Baghdad, Iraq',
+          },
+        ],
+      });
+      mockRunEval.mockResolvedValue({
+        within5km: 12,
+        within20km: 18,
+        within100km: 22,
+        total: 25,
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      expect(res.ok).toBe(true);
+
+      // Background fire-and-forget means we need to let the microtask queue
+      // drain; all our mocks are synchronous-resolving promises so one macro
+      // task tick is enough.
+      await new Promise((r) => setTimeout(r, 50));
+
+      // runEval should have fired exactly once in the v2 branch.
+      expect(mockRunEval).toHaveBeenCalledTimes(1);
+      // It must run AFTER geocodeEnrichedEvents — assert both were called.
+      expect(mockGeocodeEnrichedEvents).toHaveBeenCalled();
+    });
+
+    it('POST /llm-replay/:groupKey returns 404 in production', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        const res = await fetch(`${baseUrl}/api/events/llm-replay/grp-anything`, {
+          method: 'POST',
+        });
+        // The route was registered when NODE_ENV was 'test' (the default
+        // for the outer describe), so the in-handler gate must catch this
+        // at request-time and return 404. If the in-handler gate is ever
+        // removed, this test fails.
+        expect(res.status).toBe(404);
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
+    });
+
+    it('POST /llm-replay/:groupKey returns {old, new} in dev when group exists', async () => {
+      // The route is registered when NODE_ENV !== 'production'; default test
+      // env satisfies that. Seed both v2 + GDELT caches.
+      const cachedV2Event = makeEvent({
+        id: 'llm-v2-grp-replay',
+        label: 'Baghdad old',
+      });
+      redisStore.set('events:llm:v2', {
+        data: [cachedV2Event],
+        fetchedAt: Date.now(),
+      });
+      redisStore.set('events:gdelt', {
+        data: [eventA],
+        fetchedAt: Date.now(),
+      });
+
+      // groupGdeltRows must return a group with key === 'grp-replay'.
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-replay',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+
+      // processEventGroupsV2 returns a fresh extraction for the replay.
+      mockProcessEventGroupsV2.mockResolvedValue({
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-replay',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.9,
+            },
+            type: 'airstrike',
+            confidence: 0.88,
+            reasoning: 'Fresh extraction',
+            weaponType: null,
+            targetType: null,
+            timeOfDay: null,
+            durationMinutes: null,
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'Baghdad new',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+        matchedNewsByGroup: new Map(),
+        bellingcatByGroup: new Map(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events/llm-replay/grp-replay`, {
+        method: 'POST',
+      });
+      expect(res.ok).toBe(true);
+      const body = (await res.json()) as {
+        old: { id: string; label: string };
+        new: { summary: string } | null;
+      };
+      expect(body.old).toBeTruthy();
+      expect(body.old.id).toBe('llm-v2-grp-replay');
+      expect(body.new).toBeTruthy();
+      expect(body.new!.summary).toBe('Baghdad new');
+      // Replay must have invoked the v2 extractor.
+      expect(mockProcessEventGroupsV2).toHaveBeenCalledTimes(1);
+    });
+
+    it('POST /llm-replay does NOT write to events:llm:v2 cache (T-27.4-08-05)', async () => {
+      // Seed caches so the replay succeeds.
+      const cachedV2Event = makeEvent({ id: 'llm-v2-grp-readonly', label: 'old' });
+      redisStore.set('events:llm:v2', {
+        data: [cachedV2Event],
+        fetchedAt: Date.now(),
+      });
+      redisStore.set('events:gdelt', {
+        data: [eventA],
+        fetchedAt: Date.now(),
+      });
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-readonly',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+      mockProcessEventGroupsV2.mockResolvedValue({
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-readonly',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.9,
+            },
+            type: 'airstrike',
+            confidence: 0.88,
+            reasoning: 'r',
+            weaponType: null,
+            targetType: null,
+            timeOfDay: null,
+            durationMinutes: null,
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'new',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+        matchedNewsByGroup: new Map(),
+        bellingcatByGroup: new Map(),
+      });
+
+      // Clear the cacheSet mock so only replay-induced writes are counted.
+      _mockCacheSet.mockClear();
+
+      const res = await fetch(`${baseUrl}/api/events/llm-replay/grp-readonly`, {
+        method: 'POST',
+      });
+      expect(res.ok).toBe(true);
+
+      // Pitfall 6 invariant — replay handler must NOT write to events:llm:v2.
+      // Inspect every cacheSet call made during the replay and assert none
+      // targeted the v2 LLM cache key.
+      const cacheWriteKeys = _mockCacheSet.mock.calls.map((c) => c[0] as string);
+      expect(cacheWriteKeys).not.toContain('events:llm:v2');
+      // Also — the v1 LLM cache key must not be written to by the replay
+      // handler (replay is v2-only, but defense-in-depth).
+      expect(cacheWriteKeys).not.toContain('events:llm');
     });
   });
 });

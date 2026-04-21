@@ -14,6 +14,13 @@ import {
   geocodeEnrichedEvents,
   type GeocodedEnrichedEventV2,
 } from '../lib/llmEventExtractor.js';
+// Phase 27.4 Plan 08 D-21 — v2-only replay path re-extracts a single group
+// without writing to cache (Pitfall 6 defense-in-depth).
+import { processEventGroupsV2 } from '../lib/llmEventExtractor.v2.js';
+// Phase 27.4 Plan 08 D-20 — resolver-only eval harness. Called inside the v2
+// fire-and-forget block AFTER geocodeEnrichedEvents returns and BEFORE
+// cache-set so the evalScore flows to buildSummary() on the same run.
+import { runEval } from '../lib/llmEvalHarness.js';
 import { llmProgress, resetProgress, updateProgress, buildSummary } from '../lib/llmProgress.js';
 import type { LLMRunSummary } from '../lib/llmProgress.js';
 import { WAR_START, CACHE_TTL, isPipelineV2 } from '../config.js';
@@ -348,6 +355,69 @@ eventsRouter.get('/llm-status', async (_req, res) => {
   res.json({ stage: 'idle' as const, lastRun: null });
 });
 
+/**
+ * Phase 27.4 Plan 08 D-21 — dev-only prompt replay endpoint.
+ *
+ * Re-extracts a single cached v2 event group with the CURRENT prompt and
+ * returns `{ old, new }` so the operator can iterate on prompt wording
+ * side-by-side without waiting for the full pipeline cycle.
+ *
+ * CRITICAL (threat T-27.4-08-05 / Pitfall 6): the handler MUST NOT write
+ * back to `events:llm:v2`. It is strictly read-only vs. the cache. Any
+ * `cacheSetSafe('events:llm:v2', ...)` call here is a bug.
+ *
+ * CRITICAL (threat T-27.4-08-01 / Pitfall 6): dual-layer dev gate —
+ *   1. Route registered ONLY when NODE_ENV !== 'production' so the endpoint
+ *      is not even mounted in prod (defense-in-depth).
+ *   2. In-handler 404 check in case NODE_ENV changes post-registration.
+ *
+ * groupKey is sanitized (length cap + typeof string) per T-27.4-08-02.
+ */
+if (process.env.NODE_ENV !== 'production') {
+  eventsRouter.post('/llm-replay/:groupKey', async (req, res) => {
+    // Defense-in-depth gate — matches /llm-status above.
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { groupKey } = req.params;
+    // T-27.4-08-02 — length cap + type guard. Express populates req.params
+    // as string but an attacker could force unexpected shapes via malformed
+    // URLs; the typeof check is belt-and-braces.
+    if (!groupKey || typeof groupKey !== 'string' || groupKey.length > 200) {
+      return res.status(400).json({ error: 'invalid_group_key' });
+    }
+
+    // Find the existing cached v2 entity by id containing the groupKey.
+    // (v2 ids are formed as `llm-v2-${groupKey}` in enrichedV2ToEntities.)
+    const cached = await cacheGetSafe<ConflictEventEntity[]>('events:llm:v2', 0);
+    const existing = cached?.data?.find((e) => e.id.includes(groupKey));
+    if (!existing) return res.status(404).json({ error: 'not_found' });
+
+    // Reconstruct the target group from the raw GDELT cache — the extractor
+    // needs an EventGroup, not a ConflictEventEntity.
+    const rawCache = await cacheGetSafe<ConflictEventEntity[]>(EVENTS_KEY, 0);
+    if (!rawCache?.data) return res.status(404).json({ error: 'gdelt_cache_empty' });
+    const groups = groupGdeltRows(rawCache.data);
+    const group = groups.find((g) => g.key === groupKey);
+    if (!group) return res.status(404).json({ error: 'group_gone' });
+
+    // Re-extract a SINGLE group — processEventGroupsV2 itself does not write
+    // to cache; the only caller that does is the fire-and-forget block above.
+    // This is the Pitfall 6 "cache-read-only" invariant.
+    try {
+      const extraction = await processEventGroupsV2([group]);
+      const first = extraction?.events?.[0] ?? null;
+      return res.json({ old: existing, new: first });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'extract_failed',
+        detail: String(err).slice(0, 200),
+      });
+    }
+  });
+}
+
 eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   const { backfill: forceBackfill } = res.locals.validatedQuery as z.infer<
     typeof eventsQuerySchema
@@ -656,6 +726,20 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
               if (e.suspect) suspectCount++;
             }
             updateProgress({ provenanceCounts, suspectCount });
+
+            // Phase 27.4 Plan 08 D-20/D-25: run the resolver-only accuracy
+            // eval AFTER geocodeEnrichedEvents returns and BEFORE we build
+            // the run summary / cache-set. runEval writes evalScore via
+            // updateProgress so buildSummary() picks it up on the same run.
+            // Failure is non-fatal — the real pipeline continues either way
+            // (A6 / Pitfall 8: resolver-only so no token budget impact).
+            try {
+              const evalScore = await runEval();
+              log.info({ evalScore }, 'eval harness completed');
+            } catch (evalErr) {
+              log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
+            }
+
             llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
           } else {
             const geoResult = await geocodeEnrichedEvents(
