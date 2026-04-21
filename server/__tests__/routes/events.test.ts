@@ -204,6 +204,10 @@ vi.mock('../../lib/llmEventExtractor.js', () => ({
 // without dragging in the real LLM path.
 vi.mock('../../lib/llmEventExtractor.v2.js', () => ({
   processEventGroupsV2: (...args: unknown[]) => mockProcessEventGroupsV2(...(args as [])),
+  // Phase 27.4 WR-03 — events.ts imports BATCH_SIZE for totalBatches math.
+  // Mirror the real value (2) so the progress-math branch behaves the same
+  // under the mock.
+  BATCH_SIZE: 2,
 }));
 // Phase 27.4 Plan 08 — runEval is called inside the v2 fire-and-forget
 // block. Mock it so tests can assert invocation without needing a real

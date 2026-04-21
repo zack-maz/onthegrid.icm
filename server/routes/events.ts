@@ -16,7 +16,12 @@ import {
 } from '../lib/llmEventExtractor.js';
 // Phase 27.4 Plan 08 D-21 — v2-only replay path re-extracts a single group
 // without writing to cache (Pitfall 6 defense-in-depth).
-import { processEventGroupsV2 } from '../lib/llmEventExtractor.v2.js';
+import {
+  processEventGroupsV2,
+  BATCH_SIZE as BATCH_SIZE_V2,
+} from '../lib/llmEventExtractor.v2.js';
+// Phase 27.4 WR-03 — use v1 BATCH_SIZE (8) for progress math when v2 is off.
+const BATCH_SIZE_V1 = 8;
 // Phase 27.4 Plan 08 D-20 — resolver-only eval harness. Called inside the v2
 // fire-and-forget block AFTER geocodeEnrichedEvents returns and BEFORE
 // cache-set so the evalScore flows to buildSummary() on the same run.
@@ -795,9 +800,14 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
           // events. No-op when not soft-capped (helper returns input ref).
           const prioritizedGroups = await prioritizeBySeverity(newGroups);
 
+          // WR-03: v2 uses BATCH_SIZE=2; v1 uses BATCH_SIZE=8. Using a
+          // hard-coded 8 when v2 is active produced totalBatches 4x too
+          // high, making the /api/events/llm-status progress ratio
+          // appear to stall.
+          const effectiveBatchSize = pipelineV2 ? BATCH_SIZE_V2 : BATCH_SIZE_V1;
           updateProgress({
             stage: 'llm-processing',
-            totalBatches: Math.ceil(prioritizedGroups.length / 8),
+            totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
           });
 
           const extractResult = await processEventGroups(
