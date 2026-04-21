@@ -211,6 +211,29 @@ vi.mock('../../lib/llmEventExtractor.v2.js', () => ({
 vi.mock('../../lib/llmEvalHarness.js', () => ({
   runEval: (...args: unknown[]) => mockRunEval(...(args as [])),
 }));
+// Phase 27.4 Plan 09 — /llm-status endpoint composes the v2 observability
+// payload from listDLQ + shouldPauseNewEvents. Mock both so tests can
+// control the response shape without reaching Redis.
+const mockListDLQ = vi.fn(async () => []);
+vi.mock('../../lib/llmDLQ.js', () => ({
+  listDLQ: (...args: unknown[]) => mockListDLQ(...(args as [number])),
+  enqueueDLQ: vi.fn(async () => {}),
+  countDLQ: vi.fn(async () => 0),
+  DLQ_KEY: 'events:llm-dlq',
+}));
+const mockShouldPauseNewEvents = vi.fn(async () => false);
+const mockPrioritizeBySeverity = vi.fn(async (groups: unknown[]) => groups);
+vi.mock('../../lib/llmTokenBudget.js', () => ({
+  shouldPauseNewEvents: (...args: unknown[]) => mockShouldPauseNewEvents(...(args as [])),
+  prioritizeBySeverity: (...args: unknown[]) =>
+    mockPrioritizeBySeverity(...(args as [unknown[]])),
+  getDailyTokens: vi.fn(async () => 0),
+  incrDailyTokens: vi.fn(async () => 0),
+  budgetState: vi.fn(() => 'ok' as const),
+  computeSeverityScore: vi.fn(() => 0),
+  DAILY_LIMITS: { cerebras: 1_000_000, groq: 200_000 } as const,
+  todayKey: vi.fn((p: string) => `llm:tokens:${p}:d`),
+}));
 vi.mock('../../adapters/overpass-water.js', () => ({
   fetchWaterFacilities: vi.fn(async () => []),
   FACILITY_TYPE_LABELS: {
@@ -330,6 +353,14 @@ describe('Events Route (Redis accumulator)', () => {
       matchedNewsByGroup: new Map(),
       bellingcatByGroup: new Map(),
     });
+
+    // Phase 27.4 Plan 09 — reset DLQ + token-budget mocks.
+    mockListDLQ.mockClear();
+    mockListDLQ.mockResolvedValue([]);
+    mockShouldPauseNewEvents.mockClear();
+    mockShouldPauseNewEvents.mockResolvedValue(false);
+    mockPrioritizeBySeverity.mockClear();
+    mockPrioritizeBySeverity.mockImplementation(async (groups: unknown[]) => groups);
 
     const { createApp } = await import('../../index.js');
     const app = createApp();
@@ -1012,6 +1043,96 @@ describe('Events Route (Redis accumulator)', () => {
       } finally {
         process.env.NODE_ENV = originalEnv;
       }
+    });
+  });
+
+  describe('Phase 27.4 Plan 09 — /llm-status v2 observability extension', () => {
+    it('returns dlqRecent + evalScore + tokenCounters + recentEvents + paused in dev', async () => {
+      Object.assign(mockLlmProgress, {
+        stage: 'idle',
+        schemaVersion: 'v2',
+        callHistory: [
+          {
+            provider: 'cerebras',
+            model: 'gpt-oss-120b',
+            tokensIn: 1000,
+            tokensOut: 300,
+            durationMs: 450,
+            ok: true,
+            batchSize: 8,
+            timestamp: Date.now() - 10_000,
+          },
+        ],
+        tokenCounters: { cerebras: 12345, groq: 6789 },
+        dlqCount: 2,
+        breakerState: { cerebras: 'ok', groq: 'ok' },
+        evalScore: { within5km: 3, within20km: 8, within100km: 9, total: 10 },
+        provenanceCounts: { 'nominatim-direct': 5, 'own-site-snapshot': 3 },
+        suspectCount: 1,
+      });
+      mockListDLQ.mockResolvedValue([
+        {
+          id: 'group-xyz',
+          reason: 'zod_fail',
+          lastError: 'missing summary',
+          timestamp: Date.now(),
+        },
+      ]);
+      mockShouldPauseNewEvents.mockResolvedValue(true);
+
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.stage).toBe('idle');
+      expect(body.schemaVersion).toBe('v2');
+      expect(Array.isArray(body.callHistory)).toBe(true);
+      expect(body.callHistory[0].provider).toBe('cerebras');
+      expect(body.tokenCounters).toEqual({ cerebras: 12345, groq: 6789 });
+      expect(body.dlqCount).toBe(2);
+      expect(Array.isArray(body.dlqRecent)).toBe(true);
+      expect(body.dlqRecent[0].reason).toBe('zod_fail');
+      expect(body.breakerState).toEqual({ cerebras: 'ok', groq: 'ok' });
+      expect(body.evalScore).toEqual({
+        within5km: 3,
+        within20km: 8,
+        within100km: 9,
+        total: 10,
+      });
+      expect(body.provenanceCounts).toEqual({
+        'nominatim-direct': 5,
+        'own-site-snapshot': 3,
+      });
+      expect(body.suspectCount).toBe(1);
+      expect(Array.isArray(body.recentEvents)).toBe(true);
+      expect(body.paused).toBe(true);
+    });
+
+    it('still 404s in production (observability block not leaked)', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        const res = await fetch(`${baseUrl}/api/events/llm-status`);
+        expect(res.status).toBe(404);
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
+    });
+
+    it('dlqRecent falls back to [] when listDLQ throws', async () => {
+      mockListDLQ.mockRejectedValueOnce(new Error('redis unreachable'));
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+      expect(res.ok).toBe(true);
+      expect(body.dlqRecent).toEqual([]);
+    });
+
+    it('paused falls back to false when shouldPauseNewEvents throws', async () => {
+      mockShouldPauseNewEvents.mockRejectedValueOnce(new Error('boom'));
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+      expect(res.ok).toBe(true);
+      expect(body.paused).toBe(false);
     });
   });
 

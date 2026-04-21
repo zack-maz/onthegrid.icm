@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type { GeocodeProvenance } from '@/types/llm';
 
 const ACTIVE_INTERVAL = 5_000;
 const IDLE_INTERVAL = 30_000;
@@ -12,6 +13,41 @@ export interface LLMRunSummary {
   durationMs: number;
   error: string | null;
   source?: 'pipeline' | 'dev-file-cache';
+  // Phase 27.4 Plan 09 — summary fields surviving cold-start read via Redis
+  schemaVersion?: 'v1' | 'v2';
+  tokenCounters?: { cerebras: number; groq: number };
+  dlqCount?: number;
+  evalScore?: { within5km: number; within20km: number; within100km: number; total: number };
+  provenanceCounts?: Record<string, number>;
+  suspectCount?: number;
+}
+
+/**
+ * Phase 27.4 Plan 09 B4 — projected shape for the DevApiStatus per-event
+ * drill-down. Sourced from /api/events/llm-status (dev-only). Location
+ * hierarchy reflects v2 extraction; fields that are not produced by the v2
+ * extractor today (tokensIn/tokensOut) are populated as null and the
+ * drill-down falls back to the batch-level call-history tokens.
+ */
+export interface RecentEnrichedEvent {
+  groupKey: string;
+  location: {
+    country: string | null;
+    admin1: string | null;
+    city: string | null;
+    neighborhood: string | null;
+    landmark: string | null;
+  };
+  precision: 'exact' | 'neighborhood' | 'city' | 'region';
+  confidence: number;
+  reasoning: string;
+  weaponType: string | null;
+  targetType: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  provenance: GeocodeProvenance;
+  sources: string[];
+  fetchedAt: number;
 }
 
 export interface LLMStatus {
@@ -28,6 +64,32 @@ export interface LLMStatus {
   errorMessage?: string | null;
   durationMs?: number | null;
   lastRun?: LLMRunSummary | null;
+
+  // Phase 27.4 Plan 09 v2 observability additions (D-15..D-23, D-30..D-36):
+  schemaVersion?: 'v1' | 'v2';
+  callHistory?: Array<{
+    provider: 'cerebras' | 'groq';
+    model: string;
+    tokensIn: number;
+    tokensOut: number;
+    durationMs: number;
+    ok: boolean;
+    batchSize: number;
+    timestamp: number;
+  }>;
+  tokenCounters?: { cerebras: number; groq: number };
+  dlqCount?: number;
+  dlqRecent?: Array<{ id: string; reason: string; lastError: string; timestamp: number }>;
+  breakerState?: { cerebras: 'ok' | 'paused'; groq: 'ok' | 'paused' };
+  evalScore?: { within5km: number; within20km: number; within100km: number; total: number };
+  provenanceCounts?: Record<string, number>;
+  suspectCount?: number;
+
+  // B4 fix — last 50 enriched events for DrillDownBlock (D-18)
+  recentEvents?: RecentEnrichedEvent[];
+
+  // B5 surface — soft-cap pause flag for "Paused — soft cap" badge
+  paused?: boolean;
 }
 
 export function useLLMStatusPolling(): LLMStatus {

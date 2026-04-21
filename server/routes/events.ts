@@ -28,6 +28,7 @@ import {
   shouldPauseNewEvents,
   prioritizeBySeverity,
 } from '../lib/llmTokenBudget.js';
+import { listDLQ } from '../lib/llmDLQ.js';
 import type { GeocodeProvenance } from '../lib/llmSchema.js';
 import { validateQuery } from '../middleware/validate.js';
 import { sendValidated } from '../middleware/validateResponse.js';
@@ -85,6 +86,109 @@ const LLM_SUMMARY_KEY = 'events:llm-summary';
 
 /** 24-hour TTL for LLM summary — retained across multiple pipeline runs */
 const LLM_SUMMARY_TTL_SEC = 86_400;
+
+/**
+ * Phase 27.4 Plan 09 B4 — dev-only projected shape consumed by
+ * DevApiStatus DrillDownBlock. Matches RecentEnrichedEvent on the client
+ * side (src/hooks/useLLMStatusPolling.ts).
+ *
+ * The v2 extractor's richer fields (full location hierarchy, weapon/target,
+ * confidence, reasoning, per-event token counts, geocode provenance) are
+ * not yet persisted onto the cached ConflictEventEntity.data envelope —
+ * only locationName/summary/precision/sourceCount survive the
+ * enrichedV2ToEntities projection. We therefore populate what we can and
+ * null out the rest so the client renderer degrades gracefully; richer
+ * per-event persistence is a follow-up (noted in the plan's pattern map).
+ */
+export interface RecentEnrichedEvent {
+  groupKey: string;
+  location: {
+    country: string | null;
+    admin1: string | null;
+    city: string | null;
+    neighborhood: string | null;
+    landmark: string | null;
+  };
+  precision: 'exact' | 'neighborhood' | 'city' | 'region';
+  confidence: number;
+  reasoning: string;
+  weaponType: string | null;
+  targetType: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  provenance: GeocodeProvenance;
+  sources: string[];
+  fetchedAt: number;
+}
+
+/**
+ * Read the active v2 LLM cache and project the last N entries into
+ * RecentEnrichedEvent shape for DevApiStatus DrillDownBlock.
+ *
+ * Graceful degradation (D-29 / CLAUDE.md): any error returns [] so the
+ * /llm-status endpoint never crashes because the cache is unreachable.
+ */
+async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEvent[]> {
+  const pipelineV2 = isPipelineV2();
+  const key = pipelineV2 ? 'events:llm:v2' : LLM_EVENTS_KEY;
+  try {
+    const cached = await cacheGetSafe<ConflictEventEntity[]>(key, 0);
+    if (!cached?.data) return [];
+    // Most recent first — entity.timestamp is the event timestamp.
+    return cached.data
+      .slice()
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, limit)
+      .map((e): RecentEnrichedEvent => {
+        const d = (e.data ?? {}) as {
+          locationName?: string;
+          summary?: string;
+          precision?: 'exact' | 'neighborhood' | 'city' | 'region';
+          sourceCount?: number;
+          source?: string;
+        } & Partial<{
+          location: RecentEnrichedEvent['location'];
+          confidence: number;
+          reasoning: string;
+          weaponType: string | null;
+          targetType: string | null;
+          tokensIn: number | null;
+          tokensOut: number | null;
+          geocodeProvenance: GeocodeProvenance;
+          sourceUrls: string[];
+        }>;
+        // The stable groupKey is embedded in the v2 id as `llm-v2-${key}`;
+        // strip the prefix and any trailing index suffix we may add later.
+        const groupKey = e.id.replace(/^llm-v2-/, '').replace(/-\d+$/, '');
+        return {
+          groupKey,
+          location:
+            d.location ??
+            {
+              // Best-effort: if the entity only carries locationName we
+              // surface it in the city slot so the summary row is useful.
+              country: null,
+              admin1: null,
+              city: d.locationName ?? null,
+              neighborhood: null,
+              landmark: null,
+            },
+          precision: d.precision ?? 'region',
+          confidence: d.confidence ?? 0,
+          reasoning: d.reasoning ?? '',
+          weaponType: d.weaponType ?? null,
+          targetType: d.targetType ?? null,
+          tokensIn: d.tokensIn ?? null,
+          tokensOut: d.tokensOut ?? null,
+          provenance: d.geocodeProvenance ?? 'gdelt-actiongeo-fallback',
+          sources: d.sourceUrls ?? (d.source ? [d.source] : []),
+          fetchedAt: e.timestamp,
+        };
+      });
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Check whether a backfill should run.
@@ -331,28 +435,60 @@ eventsRouter.get('/llm-status', async (_req, res) => {
     return res.status(404).json({ error: 'Not found' });
   }
 
-  // If in-memory progress is active (not idle), return it directly
-  if (llmProgress.stage !== 'idle') {
-    return res.json(llmProgress);
-  }
-
   // Phase 27.4 D-24/D-37: request-time flag read via isPipelineV2 helper (W4
   // fix) so operators can flip LLM_PIPELINE_V2 without a rebuild. Summary key
   // branches accordingly; v1 key left alone for rollback (D-40).
   const pipelineV2 = isPipelineV2();
   const LLM_SUMMARY_KEY_ACTIVE = pipelineV2 ? 'events:llm-summary:v2' : LLM_SUMMARY_KEY;
 
+  // Phase 27.4 Plan 09 — assemble the full v2 observability payload:
+  //   * DLQ recent entries (D-30) — bounded at 50
+  //   * Projected recent enriched events (B4 / D-18)
+  //   * Soft-cap pause flag (B5 surface / D-33)
+  //
+  // Each is try/caught internally; a degraded signal returns [] or false
+  // rather than throwing. The /llm-status endpoint is the single pane of
+  // glass ops relies on before the D-25 prod flip, so availability matters
+  // more than any single block being populated.
+  const [dlqRecent, recentEvents, paused] = await Promise.all([
+    listDLQ(50).catch(() => []),
+    loadRecentEnrichedEvents(50).catch(() => []),
+    shouldPauseNewEvents().catch(() => false),
+  ]);
+
+  const common = {
+    schemaVersion: llmProgress.schemaVersion,
+    callHistory: llmProgress.callHistory,
+    tokenCounters: llmProgress.tokenCounters,
+    dlqCount: llmProgress.dlqCount ?? dlqRecent.length,
+    dlqRecent,
+    recentEvents,
+    paused,
+    breakerState: llmProgress.breakerState,
+    evalScore: llmProgress.evalScore,
+    provenanceCounts: llmProgress.provenanceCounts,
+    suspectCount: llmProgress.suspectCount,
+  };
+
+  // If in-memory progress is active (not idle), return it merged with the
+  // v2 observability common block so DevApiStatus sees DLQ / drill-down
+  // even mid-run.
+  if (llmProgress.stage !== 'idle') {
+    return res.json({ ...llmProgress, ...common });
+  }
+
   // Otherwise, fall back to Redis summary from last completed run
   try {
     const summary = await cacheGetSafe<LLMRunSummary>(LLM_SUMMARY_KEY_ACTIVE, 0);
     if (summary?.data) {
-      return res.json({ stage: 'idle' as const, lastRun: summary.data });
+      return res.json({ stage: 'idle' as const, lastRun: summary.data, ...common });
     }
   } catch {
-    // Redis failure — return idle with no history
+    // Redis failure — return idle with no history but still surface the
+    // v2 observability common block.
   }
 
-  res.json({ stage: 'idle' as const, lastRun: null });
+  res.json({ stage: 'idle' as const, lastRun: null, ...common });
 });
 
 /**

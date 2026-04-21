@@ -161,6 +161,11 @@ describe('uiStore', () => {
       expect(useUIStore.getState().activeDevApiStatusTab).toBe('sites');
     });
 
+    it('setDevApiStatusTab("events") sets active tab to events (Phase 27.4 Plan 09)', () => {
+      useUIStore.getState().setDevApiStatusTab('events');
+      expect(useUIStore.getState().activeDevApiStatusTab).toBe('events');
+    });
+
     it('tab choice persists across open/close cycle (session persistence)', () => {
       useUIStore.getState().openDevApiStatus();
       useUIStore.getState().setDevApiStatusTab('water');
