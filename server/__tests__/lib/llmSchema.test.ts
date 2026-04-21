@@ -80,11 +80,28 @@ describe('enrichedEventV2 parse rejection (D-05 + constraint enforcement)', () =
     expect(result.success).toBe(false);
   });
 
-  it('Test 4: REJECTS a payload where reasoning is 201 chars long (max 200)', () => {
+  it('Test 4: TRUNCATES reasoning over 200 chars to 197 chars + ellipsis (post-debug 2026-04-21)', () => {
+    // Post-debug: changed from reject-on-over-200 to transform+truncate
+    // because Cerebras qwen strips `maxLength` from the LLM wire schema,
+    // and chatty models routinely emit 200-400 char reasoning. Rejecting
+    // the whole batch for one over-long reasoning loses ALL events; silent
+    // truncation keeps the extraction-yield high while still bounding cache size.
     const payload = validV2Payload();
-    payload.reasoning = 'x'.repeat(201);
+    payload.reasoning = 'x'.repeat(400);
     const result = enrichedEventV2.safeParse(payload);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.reasoning.length).toBe(198); // 197 chars + ellipsis (1 code point)
+    expect(result.data.reasoning.endsWith('…')).toBe(true);
+  });
+
+  it('Test 4b: reasoning ≤200 chars passes through unchanged', () => {
+    const payload = validV2Payload();
+    payload.reasoning = 'Event matched by date + actors + distance <50km from GDELT centroid.';
+    const result = enrichedEventV2.safeParse(payload);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.reasoning).toBe(payload.reasoning);
   });
 
   it('Test 5: REJECTS a payload where weaponType="nuke" (not in enum)', () => {

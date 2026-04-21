@@ -113,9 +113,20 @@ export const enrichedEventV2 = z
     // confidence reflects "where"; event confidence reflects overall LLM
     // certainty about the whole extraction (type/actors/casualties/etc).
     confidence: z.number().min(0).max(1),
-    // D-12: <=200 char rationale citing which signals led to the pick.
+    // D-12: ≤200 char rationale citing which signals led to the pick.
     // Auditable in DevApiStatus drill-down (D-18).
-    reasoning: z.string().max(200),
+    //
+    // Post-debug 2026-04-21: changed from `.max(200)` (reject) to transform+
+    // truncate. The LLM wire JSON schema no longer carries `maxLength: 200`
+    // (Cerebras qwen rejects that keyword), so the model isn't structurally
+    // constrained — and verbose models routinely emit 200-400 char reasoning.
+    // Rejecting the whole batch for one over-long reasoning field loses ALL
+    // events in the batch, which is worse than silently truncating one field.
+    // The system prompt still says "≤200 chars"; Zod is the enforcement-of-
+    // last-resort that keeps the v2 cache compact.
+    reasoning: z
+      .string()
+      .transform((s) => (s.length > 200 ? `${s.slice(0, 197)}…` : s)),
     // D-13: weapon classification (nullable — not all events specify).
     weaponType: z
       .enum(['airstrike', 'drone', 'missile', 'artillery', 'small_arms', 'IED'])
