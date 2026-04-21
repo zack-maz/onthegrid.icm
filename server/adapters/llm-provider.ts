@@ -11,7 +11,10 @@ import { incrDailyTokens, getDailyTokens, budgetState } from '../lib/llmTokenBud
 import { updateProgress, llmProgress } from '../lib/llmProgress.js';
 
 const log = logger.child({ module: 'llm' });
-export const CEREBRAS_MODEL = 'gpt-oss-120b';
+// Cerebras: gpt-oss-120b is gated to higher tiers; qwen-3-235b-a22b is open on
+// the default tier and gives comparable reasoning quality for structured output.
+// If access to gpt-oss-120b is later granted, swap this constant back.
+export const CEREBRAS_MODEL = 'qwen-3-235b-a22b-instruct-2507';
 export const GROQ_MODEL = 'openai/gpt-oss-120b';
 const LLM_TIMEOUT_MS = 30_000;
 
@@ -55,10 +58,37 @@ function appendCallHistory(entry: {
   ok: boolean;
   batchSize: number;
   timestamp: number;
+  skipReason?: 'breaker' | 'hard_cap' | 'no_client';
 }): void {
   const history = llmProgress.callHistory ?? [];
   const next = [entry, ...history].slice(0, CALL_HISTORY_MAX);
   updateProgress({ callHistory: next });
+}
+
+/**
+ * Record a synthetic call history entry for a skipped provider attempt.
+ * Used when a provider is bypassed without any network activity: circuit
+ * breaker paused, daily token hard cap reached, or no API key configured.
+ * Without this, `completedBatches=N, enrichedCount=0` runs leave an empty
+ * call history with no actionable diagnosis on DevApiStatus.
+ */
+function recordSkippedAttempt(
+  provider: Provider,
+  batchSize: number,
+  skipReason: 'breaker' | 'hard_cap' | 'no_client',
+): void {
+  const model = provider === 'cerebras' ? CEREBRAS_MODEL : GROQ_MODEL;
+  appendCallHistory({
+    provider,
+    model,
+    tokensIn: 0,
+    tokensOut: 0,
+    durationMs: 0,
+    ok: false,
+    batchSize,
+    timestamp: Date.now(),
+    skipReason,
+  });
 }
 
 interface ProviderAttemptResult {
@@ -73,7 +103,10 @@ async function tryProviderOnce(
   batchSize: number,
 ): Promise<ProviderAttemptResult> {
   const client = provider === 'cerebras' ? getCerebrasClient() : getGroqClient();
-  if (!client) return { content: null, tokens: 0 };
+  if (!client) {
+    recordSkippedAttempt(provider, batchSize, 'no_client');
+    return { content: null, tokens: 0 };
+  }
   const model = provider === 'cerebras' ? CEREBRAS_MODEL : GROQ_MODEL;
   const t0 = Date.now();
   try {
@@ -172,11 +205,13 @@ export async function callLLM(
   for (const provider of providers) {
     if (!isAvailable(provider)) {
       log.info({ provider }, 'circuit breaker paused, skipping provider');
+      recordSkippedAttempt(provider, batchSize, 'breaker');
       continue;
     }
     const used = await getDailyTokens(provider);
     if (budgetState(provider, used) === 'hard') {
       log.warn({ provider, used }, 'hard cap reached, skipping provider');
+      recordSkippedAttempt(provider, batchSize, 'hard_cap');
       continue;
     }
 

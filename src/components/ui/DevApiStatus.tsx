@@ -1453,10 +1453,24 @@ function CallLogBlock({ callHistory }: { callHistory: NonNullable<LLMStatus['cal
             key={`${c.timestamp}-${i}`}
             className="flex items-center justify-between gap-1 text-[9px]"
           >
-            <span className={c.ok ? 'text-green-400' : 'text-red-400'}>●</span>
+            <span
+              className={
+                c.skipReason ? 'text-amber-400' : c.ok ? 'text-green-400' : 'text-red-400'
+              }
+            >
+              {c.skipReason ? '⊘' : '●'}
+            </span>
             <span className="text-white/60">{c.provider}</span>
-            <span className="text-white/40 tabular-nums">{c.tokensIn + c.tokensOut}t</span>
-            <span className="text-white/40 tabular-nums">{c.durationMs}ms</span>
+            {c.skipReason ? (
+              <span className="rounded bg-amber-500/20 px-1 text-amber-300">
+                skip:{c.skipReason}
+              </span>
+            ) : (
+              <>
+                <span className="text-white/40 tabular-nums">{c.tokensIn + c.tokensOut}t</span>
+                <span className="text-white/40 tabular-nums">{c.durationMs}ms</span>
+              </>
+            )}
             <span className="text-white/40">bs{c.batchSize}</span>
             <span className="ml-auto text-white/30 tabular-nums">
               {relativeTime(new Date(c.timestamp).toISOString())}

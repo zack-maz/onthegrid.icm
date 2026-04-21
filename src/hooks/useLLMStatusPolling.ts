@@ -76,6 +76,11 @@ export interface LLMStatus {
     ok: boolean;
     batchSize: number;
     timestamp: number;
+    // Synthetic skip entry marker — set when the attempt bypassed the network
+    // (breaker paused, daily hard cap reached, or no API key configured). The
+    // Events tab shows these with a distinct badge so "0 enriched" runs are
+    // diagnosable instead of silent.
+    skipReason?: 'breaker' | 'hard_cap' | 'no_client';
   }>;
   tokenCounters?: { cerebras: number; groq: number };
   dlqCount?: number;

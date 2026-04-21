@@ -102,7 +102,9 @@ describe('llm-provider', () => {
 
     expect(result).toBe('{"events":[]}');
     expect(createMock).toHaveBeenCalledTimes(1);
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-oss-120b' }));
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'qwen-3-235b-a22b-instruct-2507' }),
+    );
   });
 
   it('falls back to Groq when Cerebras retries are exhausted', async () => {
@@ -137,7 +139,7 @@ describe('llm-provider', () => {
     expect(result).toBeNull();
   });
 
-  it('uses gpt-oss-120b for Cerebras and openai/gpt-oss-120b for Groq', async () => {
+  it('uses qwen-3-235b for Cerebras and openai/gpt-oss-120b for Groq', async () => {
     const { callLLM } = await import('../../adapters/llm-provider.js');
     createMock.mockResolvedValueOnce({
       choices: [{ message: { content: '{"ok":true}' } }],
@@ -145,7 +147,9 @@ describe('llm-provider', () => {
     });
 
     await callLLM([{ role: 'user', content: 'test' }], { type: 'object', properties: {} });
-    expect(createMock.mock.calls[0][0].model).toBe('gpt-oss-120b');
+    // Post-debug: Cerebras model swapped from gpt-oss-120b (gated to higher
+    // tiers) to qwen-3-235b-a22b-instruct-2507 (open on the default tier).
+    expect(createMock.mock.calls[0][0].model).toBe('qwen-3-235b-a22b-instruct-2507');
   });
 
   // ------------------------------------------------------------------------
@@ -289,6 +293,98 @@ describe('llm-provider', () => {
         (c) => c[0] && typeof c[0] === 'object' && 'breakerState' in (c[0] as object),
       );
       expect(breakerCalls.length).toBeGreaterThanOrEqual(2); // one per provider exhaustion
+    });
+
+    // ------------------------------------------------------------------------
+    // Phase 27.4 post-review follow-up — synthetic skip-entry telemetry.
+    //
+    // When a provider attempt is bypassed without touching the network
+    // (breaker paused, hard cap reached, or no API key configured), we
+    // append a synthetic callHistory entry with `skipReason` set so
+    // DevApiStatus Events tab can explain "0 enriched" runs instead of
+    // presenting an empty history with no actionable diagnosis.
+    // ------------------------------------------------------------------------
+
+    type CallHistoryEntry = {
+      provider: string;
+      ok: boolean;
+      tokensIn: number;
+      tokensOut: number;
+      durationMs: number;
+      skipReason?: 'breaker' | 'hard_cap' | 'no_client';
+    };
+    /**
+     * Aggregate the newest entry from every updateProgress({callHistory})
+     * call. The mocked `llmProgress` singleton is frozen with
+     * `callHistory: undefined`, so `appendCallHistory` always prepends onto
+     * an empty list and emits a 1-entry update per append. Collecting the
+     * first entry of each gives the full append sequence in order.
+     */
+    function collectCallHistory(): CallHistoryEntry[] {
+      const historyCalls = updateProgressFn.mock.calls.filter(
+        (c) => c[0] && typeof c[0] === 'object' && 'callHistory' in (c[0] as object),
+      );
+      return historyCalls
+        .map((c) => (c[0] as { callHistory: CallHistoryEntry[] }).callHistory[0])
+        .filter((e): e is CallHistoryEntry => e !== undefined);
+    }
+
+    it('H: breaker-paused provider produces synthetic skipReason="breaker" entry', async () => {
+      const { callLLM } = await import('../../adapters/llm-provider.js');
+      // Cerebras breaker paused, groq ok — cerebras should produce skip entry.
+      isAvailableFn.mockImplementation((p) => p !== 'cerebras');
+      createMock.mockResolvedValueOnce({
+        choices: [{ message: { content: '{"ok":true}' } }],
+        usage: { total_tokens: 50, prompt_tokens: 40, completion_tokens: 10 },
+      });
+
+      await callLLM([{ role: 'user', content: 'test' }], { type: 'object', properties: {} });
+
+      const history = collectCallHistory();
+      const skipEntries = history.filter((h) => h.skipReason === 'breaker');
+      expect(skipEntries.length).toBe(1);
+      expect(skipEntries[0].provider).toBe('cerebras');
+      expect(skipEntries[0].ok).toBe(false);
+      expect(skipEntries[0].tokensIn).toBe(0);
+      expect(skipEntries[0].tokensOut).toBe(0);
+      expect(skipEntries[0].durationMs).toBe(0);
+    });
+
+    it('I: hard-cap budget produces synthetic skipReason="hard_cap" entry', async () => {
+      const { callLLM } = await import('../../adapters/llm-provider.js');
+      // Cerebras hard-capped, groq ok — cerebras should produce skip entry.
+      budgetStateFn.mockImplementation((p) => (p === 'cerebras' ? 'hard' : 'ok'));
+      createMock.mockResolvedValueOnce({
+        choices: [{ message: { content: '{"ok":true}' } }],
+        usage: { total_tokens: 50, prompt_tokens: 40, completion_tokens: 10 },
+      });
+
+      await callLLM([{ role: 'user', content: 'test' }], { type: 'object', properties: {} });
+
+      const history = collectCallHistory();
+      const skipEntries = history.filter((h) => h.skipReason === 'hard_cap');
+      expect(skipEntries.length).toBe(1);
+      expect(skipEntries[0].provider).toBe('cerebras');
+      expect(skipEntries[0].ok).toBe(false);
+    });
+
+    it('J: when BOTH providers skip, callHistory has 2 skip entries and result is null', async () => {
+      const { callLLM } = await import('../../adapters/llm-provider.js');
+      // Both providers hard-capped — 0 network calls, 2 skip entries, null result.
+      budgetStateFn.mockReturnValue('hard');
+
+      const result = await callLLM(
+        [{ role: 'user', content: 'test' }],
+        { type: 'object', properties: {} },
+      );
+
+      expect(result).toBeNull();
+      // createMock never invoked — no network activity.
+      expect(createMock).not.toHaveBeenCalled();
+      const history = collectCallHistory();
+      const skipEntries = history.filter((h) => h.skipReason === 'hard_cap');
+      expect(skipEntries.length).toBe(2);
+      expect(skipEntries.map((e) => e.provider).sort()).toEqual(['cerebras', 'groq']);
     });
   });
 });

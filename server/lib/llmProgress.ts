@@ -47,7 +47,14 @@ export interface LLMPipelineProgress {
   /** D-39: which extractor schema produced this run. (Added in Plan 01.) */
   schemaVersion?: 'v1' | 'v2';
 
-  /** D-19: last N=20 LLM calls (shift-append). Populated via updateProgress. */
+  /**
+   * D-19: last N=20 LLM calls (shift-append). Populated via updateProgress.
+   *
+   * `skipReason` marks synthetic entries for skipped attempts that never touched
+   * the network (breaker paused, hard-cap budget, no client configured). These
+   * are logged so DevApiStatus can explain `completedBatches=N, enrichedCount=0`
+   * outcomes instead of presenting an empty call history with no diagnosis.
+   */
   callHistory?: Array<{
     provider: 'cerebras' | 'groq';
     model: string;
@@ -57,6 +64,7 @@ export interface LLMPipelineProgress {
     ok: boolean;
     batchSize: number;
     timestamp: number;
+    skipReason?: 'breaker' | 'hard_cap' | 'no_client';
   }>;
 
   /** D-32: per-provider daily token counters mirrored from Redis for fast read. */
