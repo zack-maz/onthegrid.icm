@@ -20,6 +20,9 @@ const log = logger.child({ module: 'dev-file-cache' });
 const DEV_CACHE_DIR = join(process.cwd(), '.dev-cache');
 const LLM_EVENTS_FILE = join(DEV_CACHE_DIR, 'llm-events.json');
 
+/** Phase 27.4 D-38: v2 dev file cache for LLM_PIPELINE_V2=true path. */
+const LLM_EVENTS_FILE_V2 = join(DEV_CACHE_DIR, 'llm-events-v2.json');
+
 /** Max age for dev cache file (48 hours) — generous for dev convenience across overnight restarts */
 const MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
@@ -72,6 +75,59 @@ export function loadDevLLMCache<T>(): T | null {
     return entry.data;
   } catch (err) {
     log.warn({ err }, 'failed to read dev file cache');
+    return null;
+  }
+}
+
+/**
+ * Phase 27.4 D-38: v2 dev file cache writer.
+ *
+ * Mirrors saveDevLLMCache but writes to `.dev-cache/llm-events-v2.json`. Used
+ * by the fire-and-forget LLM block in events.ts when LLM_PIPELINE_V2=true.
+ * The v1 file is NOT deleted — it ages out via MAX_AGE_MS so rollback to
+ * LLM_PIPELINE_V2=false still has a dev-side warm-start path.
+ *
+ * isDev = process.env.NODE_ENV === 'development' is an EXACT-MATCH allowlist,
+ * not a `!= production` predicate (CLAUDE.md convention).
+ */
+export function saveDevLLMCacheV2<T>(data: T): void {
+  if (!isDev) return;
+  try {
+    if (!existsSync(DEV_CACHE_DIR)) {
+      mkdirSync(DEV_CACHE_DIR, { recursive: true });
+    }
+    const entry: DevCacheEntry<T> = { data, savedAt: Date.now() };
+    writeFileSync(LLM_EVENTS_FILE_V2, JSON.stringify(entry));
+    log.info('saved LLM events to dev file cache (v2)');
+  } catch (err) {
+    log.warn({ err }, 'failed to write dev file cache (v2)');
+  }
+}
+
+/**
+ * Phase 27.4 D-38: v2 dev file cache reader.
+ *
+ * Returns parsed `T` when file exists and was written < MAX_AGE_MS ago.
+ * Returns null otherwise — same contract as loadDevLLMCache for v1.
+ */
+export function loadDevLLMCacheV2<T>(): T | null {
+  if (!isDev) return null;
+  try {
+    if (!existsSync(LLM_EVENTS_FILE_V2)) return null;
+    const raw = readFileSync(LLM_EVENTS_FILE_V2, 'utf-8');
+    const entry = JSON.parse(raw) as DevCacheEntry<T>;
+    const age = Date.now() - entry.savedAt;
+    if (age > MAX_AGE_MS) {
+      log.info({ ageMs: age }, 'dev file cache (v2) too old, ignoring');
+      return null;
+    }
+    log.info(
+      { ageMs: age, ageMin: Math.round(age / 60_000) },
+      'loaded LLM events from dev file cache (v2)',
+    );
+    return entry.data;
+  } catch (err) {
+    log.warn({ err }, 'failed to read dev file cache (v2)');
     return null;
   }
 }

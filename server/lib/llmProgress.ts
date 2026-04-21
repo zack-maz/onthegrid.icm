@@ -31,6 +31,9 @@ export interface LLMPipelineProgress {
   enrichedCount: number;
   errorMessage: string | null;
   durationMs: number | null;
+
+  // Phase 27.4 D-39 (minimal extension needed here; Plan 02 adds the rest).
+  schemaVersion?: 'v1' | 'v2';
 }
 
 /**
@@ -46,6 +49,9 @@ export interface LLMRunSummary {
   durationMs: number;
   error: string | null;
   source?: 'pipeline' | 'dev-file-cache';
+  // Phase 27.4 D-39: which extractor schema produced this run.
+  // Optional for read-compat with v1 summaries written before the flag landed.
+  schemaVersion?: 'v1' | 'v2';
 }
 
 /** Initial state for the progress singleton. */
@@ -62,6 +68,7 @@ export const INITIAL_PROGRESS: Readonly<LLMPipelineProgress> = {
   enrichedCount: 0,
   errorMessage: null,
   durationMs: null,
+  schemaVersion: undefined,
 };
 
 /**
@@ -103,5 +110,6 @@ export function buildSummary(): LLMRunSummary {
     durationMs: llmProgress.durationMs ?? 0,
     error: llmProgress.errorMessage,
     source: 'pipeline',
+    schemaVersion: llmProgress.schemaVersion,
   };
 }
