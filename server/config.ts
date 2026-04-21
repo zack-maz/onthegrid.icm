@@ -30,6 +30,15 @@ export const envSchema = z.object({
   CEREBRAS_API_KEY: z.string().default(''),
   GROQ_API_KEY: z.string().default(''),
 
+  // Phase 27.4 (D-24): toggles between v1 extractor (default, safe rollback)
+  // and v2 extractor (flag-gated; structured hierarchy + richer prompts).
+  // Read at request-time (not module-init) so flag flips take effect without
+  // a rebuild. Default 'false' in prod, 'true' in dev via .env.example.
+  LLM_PIPELINE_V2: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
   // Tuning parameters
   EVENT_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
   EVENT_MIN_SOURCES: z.coerce.number().int().min(1).default(2),
@@ -184,3 +193,19 @@ export const NEWS_SLIDING_WINDOW_MS = 7 * 86_400_000; // 7 days
 export const NEWS_CLUSTER_WINDOW_MS = 86_400_000; // 24h fuzzy match window
 export const NEWS_JACCARD_THRESHOLD = 0.8;
 export const NEWS_MIN_TOKENS_FOR_FUZZY = 5;
+
+// ---------------------------------------------------------------------------
+// Phase 27.4 flag readers
+// ---------------------------------------------------------------------------
+
+/**
+ * Phase 27.4 (D-24) W4 fix: single-source-of-truth reader for the
+ * LLM_PIPELINE_V2 flag. Read at request-time (not module-init) so a Vercel
+ * dashboard flip takes effect without a rebuild. Every consumer MUST use
+ * this helper rather than `process.env.LLM_PIPELINE_V2 === 'true'` —
+ * centralization prevents string-literal drift and eases the 27.5 flag
+ * deletion.
+ */
+export function isPipelineV2(): boolean {
+  return process.env.LLM_PIPELINE_V2 === 'true';
+}
