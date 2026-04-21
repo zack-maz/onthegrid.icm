@@ -43,7 +43,11 @@ vi.mock('../../lib/eventScoring.js', () => ({
 }));
 
 vi.mock('../../lib/sourceTiers.js', () => ({
-  classifySourceTier: vi.fn().mockReturnValue(2),
+  // The extractor uses getSourceTier('', hostname) — matches the existing
+  // server/lib/sourceTiers.ts export. Default to tier 2 (silver) so the
+  // NEWS BLOCK formatter emits [T2] tags on articles without an explicit
+  // mock override; individual tests override for tier-specific assertions.
+  getSourceTier: vi.fn().mockReturnValue(2),
 }));
 
 vi.mock('../../lib/llmDLQ.js', () => ({
@@ -55,7 +59,7 @@ import { callLLM } from '../../adapters/llm-provider.js';
 import { cacheGetSafe } from '../../cache/redis.js';
 import { resolveLocation } from '../../lib/llmResolver.js';
 import { extractBellingcatGeo } from '../../lib/eventScoring.js';
-import { classifySourceTier } from '../../lib/sourceTiers.js';
+import { getSourceTier } from '../../lib/sourceTiers.js';
 import { enqueueDLQ } from '../../lib/llmDLQ.js';
 import {
   processEventGroupsV2,
@@ -155,8 +159,8 @@ beforeEach(() => {
   vi.mocked(resolveLocation).mockReset();
   vi.mocked(extractBellingcatGeo).mockReset();
   vi.mocked(extractBellingcatGeo).mockReturnValue(undefined);
-  vi.mocked(classifySourceTier).mockReset();
-  vi.mocked(classifySourceTier).mockReturnValue(2);
+  vi.mocked(getSourceTier).mockReset();
+  vi.mocked(getSourceTier).mockReturnValue(2);
   vi.mocked(enqueueDLQ).mockReset();
   vi.mocked(enqueueDLQ).mockResolvedValue(undefined);
 });
@@ -203,11 +207,16 @@ describe('llmEventExtractor.v2', () => {
   // Test 3: NEWS BLOCK appears when news cache has matching articles
   // -----------------------------------------------------------------------
   it('NEWS BLOCK emitted with tier tags when news cache matches', () => {
-    vi.mocked(classifySourceTier).mockImplementation((host: string) => {
-      if (host.includes('reuters')) return 1;
-      if (host.includes('aljazeera')) return 2;
-      return 3;
-    });
+    // getSourceTier(source, domain) — the extractor passes '' for source so
+    // only the hostname (second arg) is used for classification here.
+    vi.mocked(getSourceTier).mockImplementation(
+      (_source: string, host: string | undefined) => {
+        const h = host ?? '';
+        if (h.includes('reuters')) return 1;
+        if (h.includes('aljazeera')) return 2;
+        return 3;
+      },
+    );
 
     const prompt = buildBatchUserPromptV2([
       {
