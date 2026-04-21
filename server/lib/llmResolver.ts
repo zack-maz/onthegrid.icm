@@ -216,6 +216,9 @@ async function resolveViaPoiAmenity(hierarchy: LocationHierarchyV2): Promise<Sna
     return cached.data as SnapshotHit;
   }
   try {
+    // WR-01: throttle only after cache-miss is confirmed so that a
+    // cache-hit path does not update lastNominatimCallMs and let a
+    // subsequent uncached call bypass the 1 req/s Nominatim policy.
     await throttleNominatim();
     const candidates = await forwardGeocodeConstrained(hierarchy.landmark, {
       amenity,
@@ -269,6 +272,9 @@ async function resolveViaNominatimDirect(
     return cached.data as SnapshotHit;
   }
   try {
+    // WR-01: throttle only after cache-miss is confirmed so that a
+    // cache-hit path does not update lastNominatimCallMs and let a
+    // subsequent uncached call bypass the 1 req/s Nominatim policy.
     await throttleNominatim();
     const candidates = await forwardGeocodeConstrained(query, {
       countrycodes: cc ?? ME_COUNTRY_CODES,
@@ -369,6 +375,9 @@ async function resolveViaVerifiedTwoPass(
     return cached.data as SnapshotHit;
   }
   try {
+    // WR-01: throttle only after cache-miss is confirmed so that a
+    // cache-hit path does not update lastNominatimCallMs and let a
+    // subsequent uncached call bypass the 1 req/s Nominatim policy.
     await throttleNominatim();
     const candidates = await forwardGeocodeConstrained(query, {
       countrycodes: cc ?? ME_COUNTRY_CODES,
