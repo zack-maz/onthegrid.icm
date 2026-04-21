@@ -385,9 +385,24 @@ async function resolveViaVerifiedTwoPass(
       limit: 5,
       addressdetails: true,
     });
-    if (candidates.length < 2) {
+    if (candidates.length === 0) {
       await cacheSetSafe(key, { miss: true }, GEOCODE_CACHE_REDIS_TTL_SEC);
       return null;
+    }
+    if (candidates.length === 1) {
+      // WR-04: single unambiguous Nominatim result — accept without LLM
+      // reranking. The 2-pass reranker exists to disambiguate; one
+      // candidate needs no disambiguation. Caching a miss here would
+      // wrongly route this query to the lower-quality GDELT fallback for
+      // the next 30d.
+      const only = candidates[0]!;
+      const hit: SnapshotHit = {
+        lat: only.lat,
+        lng: only.lng,
+        displayName: only.displayName,
+      };
+      await cacheSetSafe(key, hit, GEOCODE_CACHE_REDIS_TTL_SEC);
+      return hit;
     }
     const userPrompt = buildRerankerUserPrompt(hierarchy, candidates, ctx);
     const raw = await callLLM(

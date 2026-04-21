@@ -103,6 +103,10 @@ describe('llmResolver', () => {
   });
 
   it('falls through to nominatim-direct when snapshot loaders return null and landmark is not POI', async () => {
+    // With WR-04: precision=city triggers the 2-pass sanity gate; the
+    // verify branch also returns a single candidate which is now accepted
+    // directly (provenance `nominatim-verified-2pass`) instead of being
+    // negative-cached as a miss.
     vi.mocked(forwardGeocodeConstrained).mockResolvedValue([
       {
         lat: 33.3,
@@ -118,7 +122,7 @@ describe('llmResolver', () => {
       ctx({ centroidLat: 33.3, centroidLng: 44.4 }),
     );
 
-    expect(out.provenance).toBe('nominatim-direct');
+    expect(out.provenance).toBe('nominatim-verified-2pass');
     expect(out.lat).toBeCloseTo(33.3);
     expect(out.lng).toBeCloseTo(44.4);
   });
@@ -652,6 +656,10 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
   });
 
   it('does not call LLM reranker when fewer than 2 candidates returned', async () => {
+    // WR-04: single-candidate verify result is now accepted as a
+    // nominatim-verified-2pass hit (no LLM call). Prior behavior cached
+    // a miss and fell through to GDELT fallback for 30d — that path no
+    // longer exists for length===1.
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([
         { lat: 33.5, lng: 36.3, displayName: 'Damascus', type: 'city', address: { country_code: 'sy' } },
@@ -665,7 +673,9 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
       ctx({ centroidLat: 33.5, centroidLng: 36.3 }),
     );
 
-    expect(out.provenance).toBe('nominatim-direct');
+    expect(out.provenance).toBe('nominatim-verified-2pass');
+    expect(out.lat).toBeCloseTo(33.5);
+    expect(out.lng).toBeCloseTo(36.3);
     expect(vi.mocked(callLLM)).not.toHaveBeenCalled();
   });
 });
