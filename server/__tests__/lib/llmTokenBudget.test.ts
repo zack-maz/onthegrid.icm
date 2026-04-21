@@ -49,7 +49,11 @@ import {
   budgetState,
   todayKey,
   DAILY_LIMITS,
+  shouldPauseNewEvents,
+  prioritizeBySeverity,
 } from '../../lib/llmTokenBudget.js';
+import type { EventGroup } from '../../lib/eventGrouping.js';
+import type { ConflictEventEntity } from '../../types.js';
 
 // Access the mock handles attached by the factory.
 const mocks = (redisMod as unknown as { __mocks: Record<string, ReturnType<typeof vi.fn>> })
@@ -120,5 +124,136 @@ describe('llmTokenBudget (D-32..D-36)', () => {
   it('DAILY_LIMITS record exposes Cerebras 1M and Groq 200K', () => {
     expect(DAILY_LIMITS.cerebras).toBe(1_000_000);
     expect(DAILY_LIMITS.groq).toBe(200_000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 3 (Phase 27.4 D-33 / D-35 / B5 fix) — soft-cap helpers.
+// ---------------------------------------------------------------------------
+
+/** Minimal ConflictEventEntity factory for fixtures. */
+function mkEntity(
+  type: 'airstrike' | 'on_ground' | 'explosion' | 'targeted' | 'other',
+  opts: { mentions?: number; sources?: number; tier?: number; timestamp?: number } = {},
+): ConflictEventEntity {
+  const now = Date.now();
+  return {
+    id: `e-${Math.random().toString(36).slice(2)}`,
+    type,
+    lat: 33,
+    lng: 44,
+    timestamp: opts.timestamp ?? now,
+    label: 'test',
+    data: {
+      cameoCode: '190',
+      numMentions: opts.mentions ?? 1,
+      numSources: opts.sources ?? 1,
+      sourceTier: opts.tier ?? 2,
+      actor1: 'A',
+      actor2: 'B',
+      goldsteinScale: -5,
+      source: 'http://example.com',
+    } as ConflictEventEntity['data'],
+  } as ConflictEventEntity;
+}
+
+function mkGroup(
+  type: 'airstrike' | 'on_ground' | 'explosion' | 'targeted' | 'other',
+  opts: { mentions?: number; sources?: number; timestamp?: number } = {},
+): EventGroup {
+  const entity = mkEntity(type, opts);
+  return {
+    key: `grp-${entity.id}`,
+    entities: [entity],
+    centroidLat: 33,
+    centroidLng: 44,
+    primaryCameo: '190',
+    timestamp: opts.timestamp ?? Date.now(),
+    totalMentions: opts.mentions ?? 1,
+    totalSources: opts.sources ?? 1,
+    sourceUrls: ['http://example.com'],
+  };
+}
+
+describe('shouldPauseNewEvents (D-33)', () => {
+  beforeEach(() => {
+    getMock.mockReset().mockResolvedValue(null);
+  });
+
+  it('TB10: returns false when both cerebras and groq are in ok state', async () => {
+    // 0 tokens used for each → ok/ok
+    getMock.mockResolvedValue(0);
+    expect(await shouldPauseNewEvents()).toBe(false);
+  });
+
+  it('TB11: returns true when cerebras is soft-capped (>= 80% of 1M)', async () => {
+    getMock.mockImplementation((key: string) => {
+      if (typeof key === 'string' && key.includes('cerebras')) return Promise.resolve(800_000);
+      return Promise.resolve(0);
+    });
+    expect(await shouldPauseNewEvents()).toBe(true);
+  });
+
+  it('TB12: returns true when groq is soft-capped even if cerebras is ok', async () => {
+    getMock.mockImplementation((key: string) => {
+      if (typeof key === 'string' && key.includes('groq')) return Promise.resolve(160_000);
+      return Promise.resolve(0);
+    });
+    expect(await shouldPauseNewEvents()).toBe(true);
+  });
+
+  it('TB13: returns false when BOTH providers are hard-capped (soft gate only fires on soft state)', async () => {
+    // Hard cap for both — soft-cap gate is specifically for the 'soft' band.
+    getMock.mockImplementation((key: string) => {
+      if (typeof key === 'string' && key.includes('cerebras'))
+        return Promise.resolve(960_000);
+      if (typeof key === 'string' && key.includes('groq')) return Promise.resolve(195_000);
+      return Promise.resolve(0);
+    });
+    expect(await shouldPauseNewEvents()).toBe(false);
+  });
+});
+
+describe('prioritizeBySeverity (D-35)', () => {
+  beforeEach(() => {
+    getMock.mockReset().mockResolvedValue(null);
+  });
+
+  it('TB14: returns groups unchanged (reference equality) when neither provider is soft-capped', async () => {
+    getMock.mockResolvedValue(0);
+    const groups = [mkGroup('airstrike'), mkGroup('on_ground'), mkGroup('other')];
+    const result = await prioritizeBySeverity(groups);
+    expect(result).toBe(groups); // reference equality — no sort overhead
+  });
+
+  it('TB15: returns a NEW array sorted by severity desc when soft-capped', async () => {
+    getMock.mockImplementation((key: string) => {
+      if (typeof key === 'string' && key.includes('cerebras')) return Promise.resolve(800_000);
+      return Promise.resolve(0);
+    });
+    const low = mkGroup('other', { mentions: 1, sources: 1 });
+    const mid = mkGroup('on_ground', { mentions: 5, sources: 3 });
+    const high = mkGroup('airstrike', { mentions: 20, sources: 10 });
+    const groups = [low, mid, high];
+    const result = await prioritizeBySeverity(groups);
+
+    // NEW array (not the same reference)
+    expect(result).not.toBe(groups);
+    // Highest-severity group at index 0
+    expect(result[0]).toBe(high);
+    expect(result[result.length - 1]).toBe(low);
+  });
+
+  it('TB16: ties broken deterministically by timestamp desc', async () => {
+    getMock.mockImplementation((key: string) => {
+      if (typeof key === 'string' && key.includes('cerebras')) return Promise.resolve(800_000);
+      return Promise.resolve(0);
+    });
+    // Two groups with identical severity inputs but different timestamps.
+    const older = mkGroup('airstrike', { mentions: 5, sources: 3, timestamp: 1000 });
+    const newer = mkGroup('airstrike', { mentions: 5, sources: 3, timestamp: 2000 });
+    const result = await prioritizeBySeverity([older, newer]);
+    expect(result[0]).toBe(newer);
+    expect(result[1]).toBe(older);
   });
 });
