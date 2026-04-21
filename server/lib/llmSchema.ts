@@ -248,7 +248,16 @@ export const EVENT_EXTRACTION_SCHEMA_V2: Record<string, unknown> = {
             enum: ['airstrike', 'on_ground', 'explosion', 'targeted', 'other'],
           },
           confidence: { type: 'number', minimum: 0, maximum: 1 },
-          reasoning: { type: 'string', maxLength: 200 },
+          // Post-debug 2026-04-21: removed `maxLength: 200` from the LLM wire
+          // schema — Cerebras qwen-3-235b rejects `maxLength` in strict
+          // response_format with `wrong_api_format: Invalid fields for schema
+          // with types ['string']: {'maxLength'}`. Cerebras Cloud's structured
+          // output engine doesn't implement the full JSON Schema validation
+          // keyword set that OpenAI/Groq do. Zod still enforces `.max(200)` on
+          // the parsed result below, so over-long reasoning trips `zod_fail`
+          // in the DLQ instead of silently corrupting the v2 cache. The system
+          // prompt instructs the LLM to keep reasoning brief (≤200 chars).
+          reasoning: { type: 'string' },
           weaponType: {
             type: ['string', 'null'],
             enum: ['airstrike', 'drone', 'missile', 'artillery', 'small_arms', 'IED', null],
