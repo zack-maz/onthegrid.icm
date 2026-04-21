@@ -120,3 +120,151 @@ describe('nominatim forwardGeocode', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('Phase 27.4 forwardGeocodeConstrained (D-02/D-03/D-04)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('builds URL with ME defaults when no opts given (D-02)', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ lat: '35', lon: '40', display_name: 'Deir ez-Zor', type: 'city' }],
+    });
+    globalThis.fetch = mock as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    await forwardGeocodeConstrained('Deir ez-Zor');
+    const called = mock.mock.calls[0][0] as string;
+    expect(called).toContain('q=Deir+ez-Zor');
+    expect(called).toContain('format=jsonv2');
+    expect(called).toContain('limit=1');
+    expect(called).toContain(
+      'countrycodes=ir%2Ciq%2Csy%2Clb%2Cil%2Cps%2Cjo%2Ceg%2Csa%2Cae%2Cbh%2Ckw%2Com%2Cqa%2Cye%2Ctr%2Caf%2Cpk%2Ctm%2Caz%2Cam%2Cge',
+    );
+    expect(called).toContain('viewbox=30%2C15%2C70%2C42');
+    expect(called).toContain('bounded=1');
+    expect(called).toContain('accept-language=en');
+  });
+
+  it('supports limit=5 + addressdetails=1 for 2-pass verify (D-04)', async () => {
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    globalThis.fetch = mock as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    await forwardGeocodeConstrained('Deir ez-Zor', { limit: 5, addressdetails: true });
+    const called = mock.mock.calls[0][0] as string;
+    expect(called).toContain('limit=5');
+    expect(called).toContain('addressdetails=1');
+  });
+
+  it('uses amenity=... and omits q= when opts.amenity given (D-03)', async () => {
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    globalThis.fetch = mock as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    await forwardGeocodeConstrained('ignored', {
+      amenity: 'nuclear power plant',
+      countrycodes: 'ir',
+    });
+    const called = mock.mock.calls[0][0] as string;
+    expect(called).toContain('amenity=nuclear+power+plant');
+    expect(called).not.toContain('q=ignored');
+    expect(called).toContain('countrycodes=ir');
+  });
+
+  it('respects bounded=false', async () => {
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    globalThis.fetch = mock as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    await forwardGeocodeConstrained('x', { bounded: false });
+    const called = mock.mock.calls[0][0] as string;
+    expect(called).toContain('viewbox=30%2C15%2C70%2C42');
+    expect(called).not.toContain('bounded=1');
+  });
+
+  it('countrycodes override replaces the default', async () => {
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    globalThis.fetch = mock as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    await forwardGeocodeConstrained('x', { countrycodes: 'ir' });
+    const called = mock.mock.calls[0][0] as string;
+    // url contains countrycodes=ir only, not the comma-separated list
+    expect(called).toMatch(/countrycodes=ir(&|$)/);
+  });
+
+  it('returns [] on non-200 response', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({}),
+    }) as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    const out = await forwardGeocodeConstrained('x');
+    expect(out).toEqual([]);
+  });
+
+  it('returns [] when JSON response is not an array', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ error: 'bad query' }),
+    }) as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    const out = await forwardGeocodeConstrained('x');
+    expect(out).toEqual([]);
+  });
+
+  it('parses a 3-result response into 3 ForwardGeocodedLocation entries', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { lat: '35.33', lon: '40.15', display_name: 'Deir ez-Zor, Syria', type: 'city' },
+        { lat: '35.40', lon: '40.10', display_name: 'Deir ez-Zor Governorate', type: 'region' },
+        { lat: '35.29', lon: '40.18', display_name: 'Deir ez-Zor Airport', type: 'aerodrome' },
+      ],
+    }) as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    const out = await forwardGeocodeConstrained('Deir ez-Zor', { limit: 5 });
+    expect(out).toHaveLength(3);
+    expect(out[0].lat).toBeCloseTo(35.33);
+    expect(out[2].type).toBe('aerodrome');
+  });
+
+  it('populates address field when addressdetails=true', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          lat: '33',
+          lon: '44',
+          display_name: 'Baghdad',
+          type: 'city',
+          address: { country_code: 'iq', country: 'Iraq', city: 'Baghdad' },
+        },
+      ],
+    }) as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    const out = await forwardGeocodeConstrained('Baghdad', { addressdetails: true });
+    expect(out[0].address?.country_code).toBe('iq');
+    expect(out[0].address?.city).toBe('Baghdad');
+  });
+
+  it('sends User-Agent header', async () => {
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    globalThis.fetch = mock as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    await forwardGeocodeConstrained('x');
+    const opts = mock.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(opts.headers['User-Agent']).toBe('IranConflictMonitor/1.0 (personal project)');
+  });
+
+  it('returns [] on fetch exception', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockRejectedValue(new Error('Network error')) as unknown as typeof fetch;
+    const { forwardGeocodeConstrained } = await import('../../adapters/nominatim.js');
+    const out = await forwardGeocodeConstrained('x');
+    expect(out).toEqual([]);
+  });
+});
