@@ -80,7 +80,11 @@ describe('llmEventExtractor', () => {
 
   it('returns EnrichedEvent[] with location, type, summary, casualties fields', async () => {
     const { callLLM } = await import('../../adapters/llm-provider.js');
-    const { processEventGroups } = await import('../../lib/llmEventExtractor.js');
+    // Phase 27.4 Plan 06 — barrel now returns a tagged union; these v1
+    // behavior tests import from the v1 implementation directly so the
+    // contract under test is the pure v1 function (not the flag-gated
+    // barrel).
+    const { processEventGroups } = await import('../../lib/llmEventExtractor.v1.js');
 
     const validResponse = JSON.stringify({
       events: [
@@ -111,7 +115,11 @@ describe('llmEventExtractor', () => {
 
   it('returns null when callLLM returns null (graceful degradation)', async () => {
     const { callLLM } = await import('../../adapters/llm-provider.js');
-    const { processEventGroups } = await import('../../lib/llmEventExtractor.js');
+    // Phase 27.4 Plan 06 — barrel now returns a tagged union; these v1
+    // behavior tests import from the v1 implementation directly so the
+    // contract under test is the pure v1 function (not the flag-gated
+    // barrel).
+    const { processEventGroups } = await import('../../lib/llmEventExtractor.v1.js');
 
     vi.mocked(callLLM).mockResolvedValueOnce(null);
 
@@ -123,7 +131,11 @@ describe('llmEventExtractor', () => {
 
   it('validates LLM output with Zod and rejects malformed responses', async () => {
     const { callLLM } = await import('../../adapters/llm-provider.js');
-    const { processEventGroups } = await import('../../lib/llmEventExtractor.js');
+    // Phase 27.4 Plan 06 — barrel now returns a tagged union; these v1
+    // behavior tests import from the v1 implementation directly so the
+    // contract under test is the pure v1 function (not the flag-gated
+    // barrel).
+    const { processEventGroups } = await import('../../lib/llmEventExtractor.v1.js');
 
     // Missing required fields
     const malformedResponse = JSON.stringify({
@@ -146,7 +158,11 @@ describe('llmEventExtractor', () => {
 
   it('batch-processes groups (BATCH_SIZE = 8)', async () => {
     const { callLLM } = await import('../../adapters/llm-provider.js');
-    const { processEventGroups } = await import('../../lib/llmEventExtractor.js');
+    // Phase 27.4 Plan 06 — barrel now returns a tagged union; these v1
+    // behavior tests import from the v1 implementation directly so the
+    // contract under test is the pure v1 function (not the flag-gated
+    // barrel).
+    const { processEventGroups } = await import('../../lib/llmEventExtractor.v1.js');
 
     // Create 10 groups — should result in 2 batches (8 + 2)
     const groups = Array.from({ length: 10 }, (_, i) => makeGroup({ key: `grp-${i}` }));
@@ -183,7 +199,11 @@ describe('llmEventExtractor', () => {
 
   it('EnrichedEvent has precision field with enum value', async () => {
     const { callLLM } = await import('../../adapters/llm-provider.js');
-    const { processEventGroups } = await import('../../lib/llmEventExtractor.js');
+    // Phase 27.4 Plan 06 — barrel now returns a tagged union; these v1
+    // behavior tests import from the v1 implementation directly so the
+    // contract under test is the pure v1 function (not the flag-gated
+    // barrel).
+    const { processEventGroups } = await import('../../lib/llmEventExtractor.v1.js');
 
     const response = JSON.stringify({
       events: [
