@@ -28,7 +28,11 @@ import { z } from 'zod';
 import { callLLM } from '../adapters/llm-provider.js';
 import { forwardGeocodeConstrained } from '../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
+import { env } from '../config.js';
 import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
+import { withBatchWatchdog } from './llmExtractorWatchdog.js';
+import { enqueueDLQ } from './llmDLQ.js';
+import { updateProgress, llmProgress } from './llmProgress.js';
 import { logger } from './logger.js';
 import type { EventGroup } from './eventGrouping.js';
 
@@ -211,16 +215,65 @@ export async function processEventGroups(
     const batchIndex = Math.floor(i / BATCH_SIZE);
     const userPrompt = buildBatchUserPrompt(batch);
 
-    const content = await callLLM(
-      [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      EVENT_EXTRACTION_SCHEMA,
+    // Phase 27.4.1 D-11/D-12/D-13: SYMMETRY with v2. The rollback path
+    // must not exhibit the same P0 hang-stall defect — wrap callLLM in
+    // withBatchWatchdog so a 90s+ Cerebras hang routes the batch's groups
+    // to the DLQ with reason='timeout_watchdog' and the loop continues.
+    // Identical hook shape to v2 (Plan 03).
+    const content = await withBatchWatchdog(
+      () =>
+        callLLM(
+          [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          EVENT_EXTRACTION_SCHEMA,
+          { batchSize: batch.length },
+        ),
+      {
+        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+        softWarnMs: 60_000, // D-02 — hard-coded soft-warn threshold
+        batchIndex,
+        label: 'v1',
+        onTimeout: async () => {
+          // D-04: DLQ-route every group in the timed-out batch.
+          for (const g of batch) {
+            await enqueueDLQ({
+              id: g.key,
+              reason: 'timeout_watchdog',
+              lastError: `v1 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+              timestamp: Date.now(),
+            });
+          }
+          updateProgress({
+            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1,
+          });
+        },
+        onSoftWarn: (elapsedMs) => {
+          // D-02 — append soft-warn entry to callHistory so DevApiStatus can
+          // render an amber marker without a separate UI change.
+          const history = llmProgress.callHistory ?? [];
+          const softWarnEntry: NonNullable<typeof llmProgress.callHistory>[number] = {
+            provider: 'cerebras',
+            model: 'watchdog-soft-warn',
+            tokensIn: 0,
+            tokensOut: 0,
+            durationMs: elapsedMs,
+            ok: true,
+            batchSize: batch.length,
+            timestamp: Date.now(),
+          };
+          updateProgress({
+            callHistory: [softWarnEntry, ...history].slice(0, 20),
+          });
+        },
+      },
     );
 
     if (content === null) {
-      log.warn({ batchIndex }, 'LLM returned null for batch');
+      // Either callLLM returned null OR watchdog fired — both already
+      // logged / DLQ'd / incremented telemetry above. Continue to next batch.
+      log.warn({ batchIndex }, 'LLM returned null for batch (null or watchdog timeout)');
       onBatchComplete?.(batchIndex + 1, totalBatches);
       continue;
     }
