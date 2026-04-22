@@ -174,16 +174,19 @@ function DevApiStatusTrigger() {
 }
 
 /**
- * Dev-only pipeline version pill. Shows the currently-effective v1/v2 and
- * clicks to swap via POST /api/events/llm-pipeline. Positioned next to
- * DevApiStatusTrigger per user request (post-debug 2026-04-21).
+ * Dev-only pipeline version pill. Shows the currently-effective v1/v2 LLM
+ * pipeline version as a READ-ONLY indicator. Phase 27.4.1 D-20: the
+ * click-to-swap behavior has been stripped; operators who need to flip
+ * versions should POST /api/events/llm-pipeline directly (the endpoint
+ * remains available for scripted use). This passive pill answers
+ * "which version's data am I seeing right now?" without the footgun
+ * of accidentally swapping from dev clicks.
  *
  * The endpoint is dual-gated (NODE_ENV + 404 fallback); the UI is
  * DEV-only via the parent wrapper so production builds tree-shake it.
  */
 function PipelineVersionPillInner() {
   const [version, setVersion] = useState<'v1' | 'v2' | 'unknown'>('unknown');
-  const [busy, setBusy] = useState(false);
 
   const fetchVersion = useCallback(async () => {
     try {
@@ -202,42 +205,19 @@ function PipelineVersionPillInner() {
     void fetchVersion();
   }, [fetchVersion]);
 
-  const swap = useCallback(async () => {
-    if (busy || version === 'unknown') return;
-    const next = version === 'v2' ? 'v1' : 'v2';
-    setBusy(true);
-    try {
-      const res = await fetch('/api/events/llm-pipeline', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version: next }),
-      });
-      if (res.ok) {
-        const json = (await res.json()) as { effective?: 'v1' | 'v2' };
-        if (json.effective) setVersion(json.effective);
-      }
-    } catch {
-      // leave version untouched
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, version]);
-
   if (version === 'unknown') return null;
 
   return (
-    <button
+    <span
       data-testid="pipeline-version-pill"
-      onClick={swap}
-      disabled={busy}
-      className="rounded-md px-2 py-1 font-mono text-[10px] transition-colors hover:bg-white/5 disabled:opacity-50"
+      className="rounded-md px-2 py-1 font-mono text-[10px]"
       style={{
         color: version === 'v2' ? 'rgb(74,222,128)' : 'rgb(234,179,8)',
       }}
-      title={`LLM pipeline: ${version}. Click to switch to ${version === 'v2' ? 'v1' : 'v2'}.`}
+      title={`LLM pipeline: ${version} (read-only — use POST /api/events/llm-pipeline to swap)`}
     >
       {version}
-    </button>
+    </span>
   );
 }
 
