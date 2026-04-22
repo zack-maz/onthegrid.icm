@@ -30,10 +30,13 @@ import {
 } from './llmSchema.js';
 import { callLLM } from '../adapters/llm-provider.js';
 import { resolveLocation, type ResolveContext, type ResolvedLocation } from './llmResolver.js';
-import { cacheGetSafe } from '../cache/redis.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { getSourceTier } from './sourceTiers.js';
 import { extractBellingcatGeo } from './eventScoring.js';
 import { enqueueDLQ } from './llmDLQ.js';
+import { withBatchWatchdog } from './llmExtractorWatchdog.js';
+import { updateProgress, llmProgress } from './llmProgress.js';
+import { env } from '../config.js';
 import { logger } from './logger.js';
 
 const log = logger.child({ module: 'llm-extractor-v2' });
@@ -139,6 +142,31 @@ export interface GeocodedEnrichedEventV2 extends EnrichedEventV2 {
   actionGeoDistanceKm: number;
   displayName: string;
 }
+
+/**
+ * Phase 27.4.1 D-08 — cache envelope for events:llm:v2.
+ *
+ * Wraps the events array with progress metadata so readers can distinguish
+ * a partial snapshot (mid-run) from a final snapshot (complete=true). The
+ * outer CacheEntry<T> wrapper from cacheSetSafe preserves the existing
+ * fetchedAt semantics; this envelope adds the run-level completion state.
+ *
+ * D-09: the reader (/api/events) continues to treat this as a v2-shape
+ * cache regardless of `complete` — the Pitfall 1 bridge still chooses v1
+ * when v2 is empty OR incomplete-and-no-v1-bridge-was-found. Partial-v2
+ * serving is explicitly deferred.
+ */
+export interface LLMCachePayload {
+  events: EnrichedEventV2[];
+  progress: `${number}/${number}`;
+  complete: boolean;
+  generatedAt: string;
+}
+
+/** Phase 27.4.1 D-07 — Redis hard TTL for the partial/final cache snapshot.
+ *  Must match the LLM_REDIS_TTL_SEC used in server/routes/events.ts so the
+ *  partial writes don't expire out of band with the caller's expectations. */
+const LLM_REDIS_TTL_SEC = 9000;
 
 // ---------------------------------------------------------------------------
 // Prompt builder — GDELT headers + 3 conditional enrichment blocks.
@@ -313,6 +341,42 @@ async function loadTemporalContext(group: EventGroup): Promise<PriorEnrichedEven
 // second round of Redis reads.
 // ---------------------------------------------------------------------------
 
+/**
+ * Phase 27.4.1 D-07/D-08/D-10 — write a partial/final snapshot of the
+ * in-progress events array to events:llm:v2. Wrapped in cacheSetSafe so
+ * Redis failures don't propagate (D-29). `complete: true` is written
+ * exactly once, after the last batch of the run.
+ *
+ * NOTE on shape: this writes an LLMCachePayload envelope. The reader
+ * (server/routes/events.ts) currently reads v2 as ConflictEventEntity[]
+ * — during the rollout window, the envelope's `events` field carries
+ * EnrichedEventV2[] (pre-geocoding shape), which the route layer
+ * transforms via enrichedV2ToEntities AFTER the full run completes.
+ * The Pitfall 1 bridge (D-09) continues to serve v1 when the v2 cache
+ * is empty OR shaped like an envelope (reader reads ConflictEventEntity[]
+ * and finds a non-array), so partial-to-user is naturally suppressed.
+ * Partial-v2 reader semantics are explicitly deferred per CONTEXT.
+ */
+async function writePartialCache(
+  events: EnrichedEventV2[],
+  completed: number,
+  total: number,
+  complete: boolean,
+): Promise<void> {
+  const payload: LLMCachePayload = {
+    events,
+    progress: `${completed}/${total}`,
+    complete,
+    generatedAt: new Date().toISOString(),
+  };
+  try {
+    await cacheSetSafe(EVENTS_LLM_V2_KEY, payload, LLM_REDIS_TTL_SEC);
+  } catch (err) {
+    // cacheSetSafe already swallows internally, but belt+suspenders.
+    log.warn({ err, completed, total, complete }, 'partial cache write failed');
+  }
+}
+
 export async function processEventGroupsV2(
   groups: EventGroup[],
   onBatchComplete?: (completed: number, total: number) => void,
@@ -350,17 +414,78 @@ export async function processEventGroupsV2(
 
     const userPrompt = buildBatchUserPromptV2(contexts);
 
-    const content = await callLLM(
-      [
-        { role: 'system', content: SYSTEM_PROMPT_V2 },
-        { role: 'user', content: userPrompt },
-      ],
-      EVENT_EXTRACTION_SCHEMA_V2,
-      { batchSize: batch.length },
+    // Phase 27.4.1 D-01/D-04/D-05/D-06/D-11 — wrap the callLLM invocation
+    // with the shared watchdog so a hung Cerebras call can no longer stall
+    // the entire run. On timeout: each group in the batch is DLQ-routed
+    // with reason='timeout_watchdog', llmProgress.watchdogTimeoutCount is
+    // bumped, and withBatchWatchdog returns null so we `continue` to the
+    // next batch instead of blocking. The late-resolving promise is
+    // discarded inside the watchdog (D-05 clobber prevention).
+    const content = await withBatchWatchdog(
+      () =>
+        callLLM(
+          [
+            { role: 'system', content: SYSTEM_PROMPT_V2 },
+            { role: 'user', content: userPrompt },
+          ],
+          EVENT_EXTRACTION_SCHEMA_V2,
+          { batchSize: batch.length },
+        ),
+      {
+        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+        softWarnMs: 60_000, // D-02 hard-coded — only hard cap is env-tunable
+        batchIndex,
+        label: 'v2',
+        onTimeout: async () => {
+          // D-04: DLQ-route every group in the batch; enqueueDLQ is
+          // try/catch internally (D-29 graceful degradation) so these
+          // awaits never throw out of the fire-and-forget block.
+          for (const g of batch) {
+            await enqueueDLQ({
+              id: g.key,
+              reason: 'timeout_watchdog',
+              lastError: `v2 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+              timestamp: Date.now(),
+            });
+          }
+          // D-06: bump progress field — DevApiStatus reads from the
+          // singleton via /llm-status so this surfaces without UI changes.
+          updateProgress({
+            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1,
+          });
+        },
+        onSoftWarn: (elapsedMs) => {
+          // D-02: append a synthetic soft-warn entry to callHistory so
+          // p95 can be tuned without redeploys. Keep it tiny — the
+          // DevApiStatus call log just shows an amber marker.
+          const history = llmProgress.callHistory ?? [];
+          updateProgress({
+            callHistory: [
+              {
+                provider: 'cerebras' as const,
+                model: 'watchdog-soft-warn',
+                tokensIn: 0,
+                tokensOut: 0,
+                durationMs: elapsedMs,
+                ok: true,
+                batchSize: batch.length,
+                timestamp: Date.now(),
+              },
+              ...history,
+            ].slice(0, 20),
+          });
+        },
+      },
     );
+
     if (content === null) {
-      log.warn({ batchIndex }, 'callLLM returned null for batch');
+      // Either callLLM returned null OR the watchdog fired. Both paths
+      // already logged / DLQ'd / updated telemetry; just continue.
+      log.warn({ batchIndex }, 'batch yielded no content (null or watchdog timeout)');
       onBatchComplete?.(batchIndex + 1, totalBatches);
+      // Phase 27.4.1 D-07 — write partial cache even on failed batches so a
+      // subsequent restart resumes from the last successful batch, not zero.
+      await writePartialCache(results, batchIndex + 1, totalBatches, false);
       continue;
     }
     try {
@@ -384,6 +509,7 @@ export async function processEventGroupsV2(
           });
         }
         onBatchComplete?.(batchIndex + 1, totalBatches);
+        await writePartialCache(results, batchIndex + 1, totalBatches, false);
         continue;
       }
       results.push(...validated.data.events);
@@ -392,7 +518,17 @@ export async function processEventGroupsV2(
       log.warn({ err, batchIndex }, 'JSON.parse failed');
     }
     onBatchComplete?.(batchIndex + 1, totalBatches);
+
+    // Phase 27.4.1 D-07 — write partial snapshot after each successful
+    // batch. cacheSetSafe is try/caught internally so Redis errors here
+    // don't propagate (D-29 graceful degradation).
+    await writePartialCache(results, batchIndex + 1, totalBatches, false);
   }
+
+  // Phase 27.4.1 D-10 — final write with complete=true. A reader can now
+  // distinguish mid-run partial (complete: false) from a terminated-run
+  // final (complete: true) without inspecting progress math.
+  await writePartialCache(results, totalBatches, totalBatches, true);
 
   return {
     events: allFailed ? null : results,
