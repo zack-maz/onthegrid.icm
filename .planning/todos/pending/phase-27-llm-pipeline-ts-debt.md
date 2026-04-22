@@ -61,3 +61,26 @@ Option 1 is preferred — it makes the invariant live at the type layer.
 If Phase 27.4 does not absorb this within the milestone, file it as an explicit
 phase-pre-req so `tsc -b --noEmit` can be made a blocking CI gate (currently
 advisory because of these known holdouts).
+
+## Status update — 2026-04-22
+
+Current error count re-verified on branch `feature/27.4-llm-enrichment-improvements`
+(HEAD `712a2be`):
+
+- `server/lib/llmEventExtractor.v1.ts` — 20 errors (same shapes as original todo;
+  file renamed during Phase 27.4 v1/v2 split, errors migrated verbatim)
+- `server/routes/events.ts` — 0 errors ✅ (cleaned up during 27.4)
+- `src/hooks/useEntityLayers.ts` — 8 errors (`depthTest` unknown, deck.gl v9
+  drift; out-of-scope for this todo)
+- `server/adapters/llm-provider.ts` — 1 error (out-of-scope for this todo)
+
+### Scope decision
+
+Bundled into **Phase 27.4.1** (P0 v2 extractor watchdog + this cleanup) per
+2026-04-22 session decision. When that phase opens, the in-scope work here is
+the 20 errors in `llmEventExtractor.v1.ts` — apply Option 1 (narrow types at
+the Zod parse boundary). Close this todo when that phase lands.
+
+Note: `llmEventExtractor.v1.ts` is preserved as rollback code only; v2 is the
+runtime default as of commit `712a2be`. Urgency is accordingly low, but the
+cleanup still unblocks making `tsc -b --noEmit` a blocking CI gate.

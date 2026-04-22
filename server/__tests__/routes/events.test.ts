@@ -57,6 +57,19 @@ const mockGroupGdeltRows = vi.fn(() => []);
 const mockProcessEventGroups = vi.fn(async () => null);
 const mockGeocodeEnrichedEvents = vi.fn(async () => []);
 
+// Phase 27.4 Plan 08 — runEval (eval harness) + processEventGroupsV2 (replay).
+const mockRunEval = vi.fn(async () => ({
+  within5km: 0,
+  within20km: 0,
+  within100km: 0,
+  total: 0,
+}));
+const mockProcessEventGroupsV2 = vi.fn(async () => ({
+  events: [],
+  matchedNewsByGroup: new Map(),
+  bellingcatByGroup: new Map(),
+}));
+
 // LLM progress mock — mutable singleton object for test manipulation
 const mockLlmProgress = {
   stage: 'idle' as string,
@@ -186,6 +199,45 @@ vi.mock('../../lib/llmEventExtractor.js', () => ({
   processEventGroups: (...args: unknown[]) => mockProcessEventGroups(...(args as [])),
   geocodeEnrichedEvents: (...args: unknown[]) => mockGeocodeEnrichedEvents(...(args as [])),
 }));
+// Phase 27.4 Plan 08 — the v2 extractor is called directly by the /llm-replay
+// endpoint; mock it so the replay tests assert routing + response shape
+// without dragging in the real LLM path.
+vi.mock('../../lib/llmEventExtractor.v2.js', () => ({
+  processEventGroupsV2: (...args: unknown[]) => mockProcessEventGroupsV2(...(args as [])),
+  // Phase 27.4 WR-03 — events.ts imports BATCH_SIZE for totalBatches math.
+  // Mirror the real value (2) so the progress-math branch behaves the same
+  // under the mock.
+  BATCH_SIZE: 2,
+}));
+// Phase 27.4 Plan 08 — runEval is called inside the v2 fire-and-forget
+// block. Mock it so tests can assert invocation without needing a real
+// ground-truth file on disk.
+vi.mock('../../lib/llmEvalHarness.js', () => ({
+  runEval: (...args: unknown[]) => mockRunEval(...(args as [])),
+}));
+// Phase 27.4 Plan 09 — /llm-status endpoint composes the v2 observability
+// payload from listDLQ + shouldPauseNewEvents. Mock both so tests can
+// control the response shape without reaching Redis.
+const mockListDLQ = vi.fn(async () => []);
+vi.mock('../../lib/llmDLQ.js', () => ({
+  listDLQ: (...args: unknown[]) => mockListDLQ(...(args as [number])),
+  enqueueDLQ: vi.fn(async () => {}),
+  countDLQ: vi.fn(async () => 0),
+  DLQ_KEY: 'events:llm-dlq',
+}));
+const mockShouldPauseNewEvents = vi.fn(async () => false);
+const mockPrioritizeBySeverity = vi.fn(async (groups: unknown[]) => groups);
+vi.mock('../../lib/llmTokenBudget.js', () => ({
+  shouldPauseNewEvents: (...args: unknown[]) => mockShouldPauseNewEvents(...(args as [])),
+  prioritizeBySeverity: (...args: unknown[]) =>
+    mockPrioritizeBySeverity(...(args as [unknown[]])),
+  getDailyTokens: vi.fn(async () => 0),
+  incrDailyTokens: vi.fn(async () => 0),
+  budgetState: vi.fn(() => 'ok' as const),
+  computeSeverityScore: vi.fn(() => 0),
+  DAILY_LIMITS: { cerebras: 1_000_000, groq: 200_000 } as const,
+  todayKey: vi.fn((p: string) => `llm:tokens:${p}:d`),
+}));
 vi.mock('../../adapters/overpass-water.js', () => ({
   fetchWaterFacilities: vi.fn(async () => []),
   FACILITY_TYPE_LABELS: {
@@ -206,6 +258,11 @@ vi.mock('../../adapters/open-meteo-precip.js', () => ({
 vi.mock('../../cache/devFileCache.js', () => ({
   saveDevLLMCache: vi.fn(),
   loadDevLLMCache: vi.fn(() => null),
+  // Phase 27.4 Plan 01 added v2 pair — must be included or events.ts (which
+  // imports both the v1 and v2 pairs) fails module resolution with vitest's
+  // strict mock check.
+  saveDevLLMCacheV2: vi.fn(),
+  loadDevLLMCacheV2: vi.fn(() => null),
   saveDevWaterCache: vi.fn(),
   loadDevWaterCache: vi.fn(() => null),
 }));
@@ -279,9 +336,35 @@ describe('Events Route (Redis accumulator)', () => {
     mockGroupGdeltRows.mockClear();
     mockGroupGdeltRows.mockReturnValue([]);
     mockProcessEventGroups.mockClear();
-    mockProcessEventGroups.mockResolvedValue(null);
+    // Phase 27.4 Plan 06 — barrel returns tagged union; default is v1 null
+    // (no events) which the handler treats as "LLM returned null for all
+    // batches" and falls back to raw GDELT.
+    mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v1', events: null });
     mockGeocodeEnrichedEvents.mockClear();
-    mockGeocodeEnrichedEvents.mockResolvedValue([]);
+    mockGeocodeEnrichedEvents.mockResolvedValue({ schemaVersion: 'v1', events: [] });
+
+    // Phase 27.4 Plan 08 — reset eval harness + v2 extractor mocks.
+    mockRunEval.mockClear();
+    mockRunEval.mockResolvedValue({
+      within5km: 0,
+      within20km: 0,
+      within100km: 0,
+      total: 0,
+    });
+    mockProcessEventGroupsV2.mockClear();
+    mockProcessEventGroupsV2.mockResolvedValue({
+      events: [],
+      matchedNewsByGroup: new Map(),
+      bellingcatByGroup: new Map(),
+    });
+
+    // Phase 27.4 Plan 09 — reset DLQ + token-budget mocks.
+    mockListDLQ.mockClear();
+    mockListDLQ.mockResolvedValue([]);
+    mockShouldPauseNewEvents.mockClear();
+    mockShouldPauseNewEvents.mockResolvedValue(false);
+    mockPrioritizeBySeverity.mockClear();
+    mockPrioritizeBySeverity.mockImplementation(async (groups: unknown[]) => groups);
 
     const { createApp } = await import('../../index.js');
     const app = createApp();
@@ -659,32 +742,40 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      mockProcessEventGroups.mockResolvedValue([
-        {
-          groupKey: 'grp-1',
-          location: { name: 'Baghdad', precision: 'city' },
-          type: 'airstrike',
-          actors: ['US Air Force'],
-          severity: 'high',
-          summary: 'Airstrike on Baghdad',
-          casualties: { killed: 2, injured: 5, unknown: false },
-          sourceCount: 3,
-        },
-      ]);
-      mockGeocodeEnrichedEvents.mockResolvedValue([
-        {
-          groupKey: 'grp-1',
-          resolvedLat: 33.3,
-          resolvedLng: 44.4,
-          location: { name: 'Baghdad', precision: 'city' },
-          type: 'airstrike',
-          actors: ['US Air Force'],
-          severity: 'high',
-          summary: 'Airstrike on Baghdad',
-          casualties: { killed: 2, injured: 5, unknown: false },
-          sourceCount: 3,
-        },
-      ]);
+      // Phase 27.4 Plan 06: barrel returns tagged union; v1 branch carries
+      // `events` plus a 'v1' discriminator. geocodeEnrichedEvents mirrors.
+      mockProcessEventGroups.mockResolvedValue({
+        schemaVersion: 'v1',
+        events: [
+          {
+            groupKey: 'grp-1',
+            location: { name: 'Baghdad', precision: 'city' },
+            type: 'airstrike',
+            actors: ['US Air Force'],
+            severity: 'high',
+            summary: 'Airstrike on Baghdad',
+            casualties: { killed: 2, injured: 5, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+      });
+      mockGeocodeEnrichedEvents.mockResolvedValue({
+        schemaVersion: 'v1',
+        events: [
+          {
+            groupKey: 'grp-1',
+            resolvedLat: 33.3,
+            resolvedLng: 44.4,
+            location: { name: 'Baghdad', precision: 'city' },
+            type: 'airstrike',
+            actors: ['US Air Force'],
+            severity: 'high',
+            summary: 'Airstrike on Baghdad',
+            casualties: { killed: 2, injured: 5, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+      });
 
       const res = await fetch(`${baseUrl}/api/events`);
       const body = await res.json();
@@ -733,7 +824,9 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      mockProcessEventGroups.mockResolvedValue(null); // LLM failed
+      // LLM failed — barrel returns { schemaVersion, events: null } so the
+      // handler takes the "LLM returned null for all batches" branch.
+      mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v1', events: null });
 
       const res = await fetch(`${baseUrl}/api/events`);
       const body = await res.json();
@@ -775,32 +868,39 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      mockProcessEventGroups.mockResolvedValue([
-        {
-          groupKey: 'grp-1',
-          location: { name: 'Baghdad', precision: 'city' },
-          type: 'airstrike',
-          actors: ['US Air Force'],
-          severity: 'high',
-          summary: 'Airstrike on Baghdad',
-          casualties: { killed: 2, injured: 5, unknown: false },
-          sourceCount: 3,
-        },
-      ]);
-      mockGeocodeEnrichedEvents.mockResolvedValue([
-        {
-          groupKey: 'grp-1',
-          resolvedLat: 33.3,
-          resolvedLng: 44.4,
-          location: { name: 'Baghdad', precision: 'city' },
-          type: 'airstrike',
-          actors: ['US Air Force'],
-          severity: 'high',
-          summary: 'Airstrike on Baghdad',
-          casualties: { killed: 2, injured: 5, unknown: false },
-          sourceCount: 3,
-        },
-      ]);
+      // Phase 27.4 Plan 06 — tagged union result.
+      mockProcessEventGroups.mockResolvedValue({
+        schemaVersion: 'v1',
+        events: [
+          {
+            groupKey: 'grp-1',
+            location: { name: 'Baghdad', precision: 'city' },
+            type: 'airstrike',
+            actors: ['US Air Force'],
+            severity: 'high',
+            summary: 'Airstrike on Baghdad',
+            casualties: { killed: 2, injured: 5, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+      });
+      mockGeocodeEnrichedEvents.mockResolvedValue({
+        schemaVersion: 'v1',
+        events: [
+          {
+            groupKey: 'grp-1',
+            resolvedLat: 33.3,
+            resolvedLng: 44.4,
+            location: { name: 'Baghdad', precision: 'city' },
+            type: 'airstrike',
+            actors: ['US Air Force'],
+            severity: 'high',
+            summary: 'Airstrike on Baghdad',
+            casualties: { killed: 2, injured: 5, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+      });
 
       const res = await fetch(`${baseUrl}/api/events`);
       expect(res.ok).toBe(true);
@@ -860,11 +960,16 @@ describe('Events Route (Redis accumulator)', () => {
         casualties: { killed: 0, injured: 0, unknown: true },
         sourceCount: 2,
       };
-      mockProcessEventGroups.mockResolvedValue([newEnriched]);
+      // Phase 27.4 Plan 06 — tagged union result.
+      mockProcessEventGroups.mockResolvedValue({
+        schemaVersion: 'v1',
+        events: [newEnriched],
+      });
 
-      mockGeocodeEnrichedEvents.mockResolvedValue([
-        { ...newEnriched, resolvedLat: 34.0, resolvedLng: 45.0 },
-      ]);
+      mockGeocodeEnrichedEvents.mockResolvedValue({
+        schemaVersion: 'v1',
+        events: [{ ...newEnriched, resolvedLat: 34.0, resolvedLng: 45.0 }],
+      });
 
       const res = await fetch(`${baseUrl}/api/events`);
       await res.json();
@@ -942,6 +1047,653 @@ describe('Events Route (Redis accumulator)', () => {
       } finally {
         process.env.NODE_ENV = originalEnv;
       }
+    });
+  });
+
+  describe('Phase 27.4 Plan 09 — /llm-status v2 observability extension', () => {
+    it('returns dlqRecent + evalScore + tokenCounters + recentEvents + paused in dev', async () => {
+      Object.assign(mockLlmProgress, {
+        stage: 'idle',
+        schemaVersion: 'v2',
+        callHistory: [
+          {
+            provider: 'cerebras',
+            model: 'gpt-oss-120b',
+            tokensIn: 1000,
+            tokensOut: 300,
+            durationMs: 450,
+            ok: true,
+            batchSize: 8,
+            timestamp: Date.now() - 10_000,
+          },
+        ],
+        tokenCounters: { cerebras: 12345, groq: 6789 },
+        dlqCount: 2,
+        breakerState: { cerebras: 'ok', groq: 'ok' },
+        evalScore: { within5km: 3, within20km: 8, within100km: 9, total: 10 },
+        provenanceCounts: { 'nominatim-direct': 5, 'own-site-snapshot': 3 },
+        suspectCount: 1,
+      });
+      mockListDLQ.mockResolvedValue([
+        {
+          id: 'group-xyz',
+          reason: 'zod_fail',
+          lastError: 'missing summary',
+          timestamp: Date.now(),
+        },
+      ]);
+      mockShouldPauseNewEvents.mockResolvedValue(true);
+
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.stage).toBe('idle');
+      expect(body.schemaVersion).toBe('v2');
+      expect(Array.isArray(body.callHistory)).toBe(true);
+      expect(body.callHistory[0].provider).toBe('cerebras');
+      expect(body.tokenCounters).toEqual({ cerebras: 12345, groq: 6789 });
+      expect(body.dlqCount).toBe(2);
+      expect(Array.isArray(body.dlqRecent)).toBe(true);
+      expect(body.dlqRecent[0].reason).toBe('zod_fail');
+      expect(body.breakerState).toEqual({ cerebras: 'ok', groq: 'ok' });
+      expect(body.evalScore).toEqual({
+        within5km: 3,
+        within20km: 8,
+        within100km: 9,
+        total: 10,
+      });
+      expect(body.provenanceCounts).toEqual({
+        'nominatim-direct': 5,
+        'own-site-snapshot': 3,
+      });
+      expect(body.suspectCount).toBe(1);
+      expect(Array.isArray(body.recentEvents)).toBe(true);
+      expect(body.paused).toBe(true);
+    });
+
+    it('still 404s in production (observability block not leaked)', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        const res = await fetch(`${baseUrl}/api/events/llm-status`);
+        expect(res.status).toBe(404);
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
+    });
+
+    it('dlqRecent falls back to [] when listDLQ throws', async () => {
+      mockListDLQ.mockRejectedValueOnce(new Error('redis unreachable'));
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+      expect(res.ok).toBe(true);
+      expect(body.dlqRecent).toEqual([]);
+    });
+
+    it('paused falls back to false when shouldPauseNewEvents throws', async () => {
+      mockShouldPauseNewEvents.mockRejectedValueOnce(new Error('boom'));
+      const res = await fetch(`${baseUrl}/api/events/llm-status`);
+      const body = await res.json();
+      expect(res.ok).toBe(true);
+      expect(body.paused).toBe(false);
+    });
+  });
+
+  describe('Phase 27.4 LLM_PIPELINE_V2 flag (D-24/D-37/D-40)', () => {
+    const llmEventV1 = makeEvent({
+      id: 'llm-v1-1',
+      label: 'Baghdad V1 cached',
+      data: {
+        eventType: 'Aerial weapons',
+        subEventType: 'CAMEO 195',
+        fatalities: 0,
+        actor1: 'USA',
+        actor2: 'IRN',
+        notes: '',
+        source: 'https://example.com/v1',
+        goldsteinScale: -10,
+        locationName: 'Baghdad, Iraq',
+        cameoCode: '195',
+        llmProcessed: true,
+      },
+    });
+    const llmEventV2 = makeEvent({
+      id: 'llm-v2-1',
+      label: 'Baghdad V2 cached',
+      data: {
+        eventType: 'Aerial weapons',
+        subEventType: 'CAMEO 195',
+        fatalities: 0,
+        actor1: 'USA',
+        actor2: 'IRN',
+        notes: '',
+        source: 'https://example.com/v2',
+        goldsteinScale: -10,
+        locationName: 'Baghdad, Iraq',
+        cameoCode: '195',
+        llmProcessed: true,
+      },
+    });
+
+    beforeEach(() => {
+      delete process.env.LLM_PIPELINE_V2;
+    });
+
+    it('reads events:llm (v1) when LLM_PIPELINE_V2 unset', async () => {
+      // Pre-populate v1 LLM cache with fresh data; v2 key left untouched
+      redisStore.set('events:llm', {
+        data: [llmEventV1],
+        fetchedAt: Date.now(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].id).toBe('llm-v1-1');
+      // Did not read or write to v2 keys
+      expect(redisStore.has('events:llm:v2')).toBe(false);
+    });
+
+    it('reads events:llm:v2 when LLM_PIPELINE_V2=true', async () => {
+      process.env.LLM_PIPELINE_V2 = 'true';
+      // Pre-populate v2 cache with fresh data
+      redisStore.set('events:llm:v2', {
+        data: [llmEventV2],
+        fetchedAt: Date.now(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].id).toBe('llm-v2-1');
+    });
+
+    it('falls through to events:llm (v1) when v2 is empty during rollout', async () => {
+      process.env.LLM_PIPELINE_V2 = 'true';
+      // v2 key has no entry; v1 has fresh data
+      redisStore.set('events:llm', {
+        data: [llmEventV1],
+        fetchedAt: Date.now(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].id).toBe('llm-v1-1');
+    });
+  });
+
+  describe('Phase 27.4 Plan 06 v2 extractor integration', () => {
+    beforeEach(() => {
+      delete process.env.LLM_PIPELINE_V2;
+    });
+
+    /**
+     * v1-path test: with the flag unset, the handler routes through v1 and
+     * ConflictEventEntity.data.schemaVersion is NOT set to 'v2' (v1 entities
+     * don't carry that discriminator).
+     */
+    it('v1 path runs when LLM_PIPELINE_V2 unset and stores v1-shaped entities', async () => {
+      mockIsLLMConfigured.mockReturnValue(true);
+      mockFetchEvents.mockResolvedValue([eventA]);
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-v1',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+      mockProcessEventGroups.mockResolvedValue({
+        schemaVersion: 'v1',
+        events: [
+          {
+            groupKey: 'grp-v1',
+            location: { name: 'Baghdad', precision: 'city' },
+            type: 'airstrike',
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'Strike',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 2,
+          },
+        ],
+      });
+      mockGeocodeEnrichedEvents.mockResolvedValue({
+        schemaVersion: 'v1',
+        events: [
+          {
+            groupKey: 'grp-v1',
+            resolvedLat: 33.3,
+            resolvedLng: 44.4,
+            location: { name: 'Baghdad', precision: 'city' },
+            type: 'airstrike',
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'Strike',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 2,
+          },
+        ],
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      expect(res.ok).toBe(true);
+      // First call triggered background LLM; second call should pick up the
+      // cached v1 entity. We can't await the background promise directly, but
+      // the Redis mock is synchronous so the cache is populated by the time
+      // we re-fetch.
+      expect(mockProcessEventGroups).toHaveBeenCalled();
+    });
+
+    /**
+     * v2-path test: with the flag on, the handler routes through v2, passes
+     * the bellingcat/news maps to the geocoder, and the resulting entities
+     * carry the resolver's provenance + suspect flag on data.*.
+     */
+    it('v2 path runs when LLM_PIPELINE_V2=true and stores v2-shaped entities', async () => {
+      process.env.LLM_PIPELINE_V2 = 'true';
+      mockIsLLMConfigured.mockReturnValue(true);
+      mockFetchEvents.mockResolvedValue([eventA]);
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-v2',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+      mockProcessEventGroups.mockResolvedValue({
+        schemaVersion: 'v2',
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-v2',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.85,
+            },
+            type: 'airstrike',
+            confidence: 0.82,
+            reasoning: 'Cross-matched with Reuters article',
+            weaponType: 'missile',
+            targetType: 'military',
+            timeOfDay: '03:15',
+            durationMinutes: null,
+            actors: ['USA', 'IRN'],
+            severity: 'high',
+            summary: 'Strike on Baghdad military installation',
+            casualties: { killed: 2, injured: 5, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+        matchedNewsByGroup: new Map([
+          [
+            'grp-v2',
+            [
+              {
+                title: 'Strike on Baghdad confirmed',
+                url: 'https://reuters.com/x',
+                publishedAt: Date.now(),
+                sourceCountry: 'UK',
+              },
+            ],
+          ],
+        ]),
+        bellingcatByGroup: new Map(),
+      });
+      mockGeocodeEnrichedEvents.mockResolvedValue({
+        schemaVersion: 'v2',
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-v2',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.85,
+            },
+            type: 'airstrike',
+            confidence: 0.82,
+            reasoning: 'Cross-matched with Reuters article',
+            weaponType: 'missile',
+            targetType: 'military',
+            timeOfDay: '03:15',
+            durationMinutes: null,
+            actors: ['USA', 'IRN'],
+            severity: 'high',
+            summary: 'Strike on Baghdad military installation',
+            casualties: { killed: 2, injured: 5, unknown: false },
+            sourceCount: 3,
+            resolvedLat: 33.3,
+            resolvedLng: 44.4,
+            geocodeProvenance: 'nominatim-direct',
+            precision: 'city',
+            suspect: false,
+            actionGeoDistanceKm: 5.2,
+            displayName: 'Baghdad, Iraq',
+          },
+        ],
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      expect(res.ok).toBe(true);
+      expect(mockProcessEventGroups).toHaveBeenCalled();
+      expect(mockGeocodeEnrichedEvents).toHaveBeenCalled();
+      // The handler must pass the tagged v2 input to geocodeEnrichedEvents —
+      // confirm the mock saw the v2 schemaVersion.
+      const geoCalls = mockGeocodeEnrichedEvents.mock.calls;
+      const geoInput = geoCalls[0]?.[0] as { schemaVersion?: string };
+      expect(geoInput?.schemaVersion).toBe('v2');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Phase 27.4 Plan 08 — eval harness + /llm-replay dev endpoint.
+  // -------------------------------------------------------------------------
+
+  describe('Phase 27.4 Plan 08 — eval harness + /llm-replay', () => {
+    beforeEach(() => {
+      // All replay tests execute the v2 path.
+      delete process.env.LLM_PIPELINE_V2;
+    });
+
+    it('runEval is called after geocodeEnrichedEvents in v2 path', async () => {
+      process.env.LLM_PIPELINE_V2 = 'true';
+      mockIsLLMConfigured.mockReturnValue(true);
+      mockFetchEvents.mockResolvedValue([eventA]);
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-eval',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+      mockProcessEventGroups.mockResolvedValue({
+        schemaVersion: 'v2',
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-eval',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.85,
+            },
+            type: 'airstrike',
+            confidence: 0.82,
+            reasoning: 'Test',
+            weaponType: null,
+            targetType: null,
+            timeOfDay: null,
+            durationMinutes: null,
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'Baghdad strike',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 2,
+          },
+        ],
+        matchedNewsByGroup: new Map(),
+        bellingcatByGroup: new Map(),
+      });
+      mockGeocodeEnrichedEvents.mockResolvedValue({
+        schemaVersion: 'v2',
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-eval',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.85,
+            },
+            type: 'airstrike',
+            confidence: 0.82,
+            reasoning: 'Test',
+            weaponType: null,
+            targetType: null,
+            timeOfDay: null,
+            durationMinutes: null,
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'Baghdad strike',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 2,
+            resolvedLat: 33.3,
+            resolvedLng: 44.4,
+            geocodeProvenance: 'nominatim-direct',
+            precision: 'city',
+            suspect: false,
+            actionGeoDistanceKm: 3,
+            displayName: 'Baghdad, Iraq',
+          },
+        ],
+      });
+      mockRunEval.mockResolvedValue({
+        within5km: 12,
+        within20km: 18,
+        within100km: 22,
+        total: 25,
+      });
+
+      const res = await fetch(`${baseUrl}/api/events`);
+      expect(res.ok).toBe(true);
+
+      // Background fire-and-forget means we need to let the microtask queue
+      // drain; all our mocks are synchronous-resolving promises so one macro
+      // task tick is enough.
+      await new Promise((r) => setTimeout(r, 50));
+
+      // runEval should have fired exactly once in the v2 branch.
+      expect(mockRunEval).toHaveBeenCalledTimes(1);
+      // It must run AFTER geocodeEnrichedEvents — assert both were called.
+      expect(mockGeocodeEnrichedEvents).toHaveBeenCalled();
+    });
+
+    it('POST /llm-replay/:groupKey returns 404 in production', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        const res = await fetch(`${baseUrl}/api/events/llm-replay/grp-anything`, {
+          method: 'POST',
+        });
+        // The route was registered when NODE_ENV was 'test' (the default
+        // for the outer describe), so the in-handler gate must catch this
+        // at request-time and return 404. If the in-handler gate is ever
+        // removed, this test fails.
+        expect(res.status).toBe(404);
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
+    });
+
+    it('POST /llm-replay/:groupKey returns {old, new} in dev when group exists', async () => {
+      // The route is registered when NODE_ENV !== 'production'; default test
+      // env satisfies that. Seed both v2 + GDELT caches.
+      const cachedV2Event = makeEvent({
+        id: 'llm-v2-grp-replay',
+        label: 'Baghdad old',
+      });
+      redisStore.set('events:llm:v2', {
+        data: [cachedV2Event],
+        fetchedAt: Date.now(),
+      });
+      redisStore.set('events:gdelt', {
+        data: [eventA],
+        fetchedAt: Date.now(),
+      });
+
+      // groupGdeltRows must return a group with key === 'grp-replay'.
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-replay',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+
+      // processEventGroupsV2 returns a fresh extraction for the replay.
+      mockProcessEventGroupsV2.mockResolvedValue({
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-replay',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.9,
+            },
+            type: 'airstrike',
+            confidence: 0.88,
+            reasoning: 'Fresh extraction',
+            weaponType: null,
+            targetType: null,
+            timeOfDay: null,
+            durationMinutes: null,
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'Baghdad new',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+        matchedNewsByGroup: new Map(),
+        bellingcatByGroup: new Map(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/events/llm-replay/grp-replay`, {
+        method: 'POST',
+      });
+      expect(res.ok).toBe(true);
+      const body = (await res.json()) as {
+        old: { id: string; label: string };
+        new: { summary: string } | null;
+      };
+      expect(body.old).toBeTruthy();
+      expect(body.old.id).toBe('llm-v2-grp-replay');
+      expect(body.new).toBeTruthy();
+      expect(body.new!.summary).toBe('Baghdad new');
+      // Replay must have invoked the v2 extractor.
+      expect(mockProcessEventGroupsV2).toHaveBeenCalledTimes(1);
+    });
+
+    it('POST /llm-replay does NOT write to events:llm:v2 cache (T-27.4-08-05)', async () => {
+      // Seed caches so the replay succeeds.
+      const cachedV2Event = makeEvent({ id: 'llm-v2-grp-readonly', label: 'old' });
+      redisStore.set('events:llm:v2', {
+        data: [cachedV2Event],
+        fetchedAt: Date.now(),
+      });
+      redisStore.set('events:gdelt', {
+        data: [eventA],
+        fetchedAt: Date.now(),
+      });
+      mockGroupGdeltRows.mockReturnValue([
+        {
+          key: 'grp-readonly',
+          entities: [eventA],
+          centroidLat: 33.3,
+          centroidLng: 44.4,
+          primaryCameo: '195',
+          timestamp: Date.now(),
+          totalMentions: 10,
+          totalSources: 3,
+          sourceUrls: [],
+        },
+      ]);
+      mockProcessEventGroupsV2.mockResolvedValue({
+        events: [
+          {
+            schemaVersion: 'v2',
+            groupKey: 'grp-readonly',
+            location: {
+              country: 'Iraq',
+              admin1: null,
+              city: 'Baghdad',
+              neighborhood: null,
+              landmark: null,
+              confidence: 0.9,
+            },
+            type: 'airstrike',
+            confidence: 0.88,
+            reasoning: 'r',
+            weaponType: null,
+            targetType: null,
+            timeOfDay: null,
+            durationMinutes: null,
+            actors: ['USA'],
+            severity: 'high',
+            summary: 'new',
+            casualties: { killed: 1, injured: 0, unknown: false },
+            sourceCount: 3,
+          },
+        ],
+        matchedNewsByGroup: new Map(),
+        bellingcatByGroup: new Map(),
+      });
+
+      // Clear the cacheSet mock so only replay-induced writes are counted.
+      _mockCacheSet.mockClear();
+
+      const res = await fetch(`${baseUrl}/api/events/llm-replay/grp-readonly`, {
+        method: 'POST',
+      });
+      expect(res.ok).toBe(true);
+
+      // Pitfall 6 invariant — replay handler must NOT write to events:llm:v2.
+      // Inspect every cacheSet call made during the replay and assert none
+      // targeted the v2 LLM cache key.
+      const cacheWriteKeys = _mockCacheSet.mock.calls.map((c) => c[0] as string);
+      expect(cacheWriteKeys).not.toContain('events:llm:v2');
+      // Also — the v1 LLM cache key must not be written to by the replay
+      // handler (replay is v2-only, but defense-in-depth).
+      expect(cacheWriteKeys).not.toContain('events:llm');
     });
   });
 });

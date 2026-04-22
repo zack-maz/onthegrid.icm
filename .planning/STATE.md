@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
 status: ready_to_plan
-last_updated: '2026-04-20T22:13:43.501Z'
+last_updated: '2026-04-22T02:10:00Z'
 progress:
-  total_phases: 9
-  completed_phases: 4
-  total_plans: 43
-  completed_plans: 36
-  percent: 44
+  total_phases: 10
+  completed_phases: 5
+  total_plans: 52
+  completed_plans: 49
+  percent: 50
 ---
 
 # Project State
@@ -22,7 +22,29 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 27.3.3
+Phase: 28
+Plan: Not started
+
+Phase 27.4 FINAL COMMITS (branch `feature/27.4-llm-enrichment-improvements`, HEAD `712a2be`, 43 commits ahead of main):
+
+- `712a2be` feat(27.4): v2 default + runtime v1/v2 toggle pill in Topbar
+- `a2ad342` fix(27.4): truncate over-long reasoning instead of rejecting batch
+- `8d325ee` fix(27.4): drop maxLength from v2 JSON schema (Cerebras qwen rejects it)
+- `191708f` feat(27.4): add synthetic callHistory skip entries for silent provider bypasses (also swaps CEREBRAS_MODEL → qwen-3-235b-a22b-instruct-2507)
+- `47ff0a0` docs(27.4): add code review fix report (5/5 findings fixed)
+- All 9 wave plans merged (c13f868, 805b21b, 6c9e1a4, db629af, b7e03de as wave-merge points)
+
+Phase 27.4 KNOWN FOLLOW-UPS (ranked in HANDOFF.md):
+
+- P0: v2 extractor needs per-batch cache flush + watchdog (one hung Cerebras call = 45min lost work; stall reproduced at batch 133/184)
+- P1: pre-existing client test failures (32 filters + 1 entityLayers) documented in deferred-items.md
+- P2: pre-existing TS drift (31 errors baseline unchanged)
+- P3: Token budget predictive surfacing
+- P4: Cerebras model revert if user upgrades tier
+
+Phase 27.3.3 (romanization of non-Latin water names) was DEFERRED and remains planned work in ROADMAP.
+
+Phase: 27.3.3 (deferred; ready when romanization phase is spec'd)
 Plan: Not started
 Phase 27.3.2: Plan 06 COMPLETE (Wave 2 third plan — 7 new unit tests appended to server/**tests**/adapters/overpass-water.test.ts under new describe block "Phase 27.3.2 admission tightening — no_resolved_name + desal synthesis" after the existing 27.3.1 R-06 block; covers D-16: (1) non-desal dam with Latin name:en admits; (2) non-desal dam with Persian-only name "سد کرخه" rejects to no_resolved_name; (3) non-Latin reservoir "خزان دجلة" near Tigris still rejects to no_resolved_name — D-02 river-rescue kill verification; (4) desal with non-Latin name at offshore Red Sea coords admits, normalizeWaterElement route-through asserts label === 'Desalination Plant at 22.50°N, 37.50°E' (extractLabel branch 5 coord synthesis byte-identical to src/lib/waterLabel.ts lines 87-89 pre-Plan-07); (5) desal with non-Latin name at Jeddah coords admits, normalizeWaterElement route-through asserts label === 'Desalination Plant near Jeddah' (extractLabel branch 4 city synthesis); (6) ordering lock: no_name fires before no_resolved_name when tags empty; (7) ordering lock: no_resolved_name fires before not_notable when non-Latin name in non-priority country would also fail compound gate; chose full-label-string assertion over verdict-only for cases 4-5 because normalizeWaterElement invocation cost was +~15 lines with zero new mocks and closes synthesis-branch coverage server-side at the earliest possible plan (cheaper than waiting for Plan 08 client tests or Plan 10 snapshot grep); extractLabel kept module-private — route-through-normalizeWaterElement pattern achieves coverage without changing adapter export surface; zero pre-existing fixture remediation needed — both Plan 04 and Plan 05 forecasts held true: all 151 pre-plan tests green on baseline, 158 green after appending +7; full server suite 818/818 across 60 test files; single atomic commit 6aec39d)
 Phase 27.3.2: Plan 05 COMPLETE (Wave 2 second plan — extractLabel in server/adapters/overpass-water.ts grows from 2-arg to 5-arg signature (tags, facilityType, lat, lng, nearestCity: ReturnType<typeof findNearestCity>); two new desal-only synthesis branches inserted between the three Latin-check branches and the bare FACILITY_TYPE_LABELS fallback — "Desalination Plant near {city}" when nearestCity within 150km resolves, coord-based "Desalination Plant at {lat}°N/S, {lng}°E/W" byte-identical to src/lib/waterLabel.ts lines 87-89 pre-Plan-07 otherwise; defense-in-depth: non-desal cannot reach the synthesis branches post-Plan-04 (rejected at admission to no_resolved_name), but branch 6 FACILITY_TYPE_LABELS fallback preserved; extractLabel kept module-private per plan directive — Plan 06 can decide export-for-unit-testing separately; normalizeWaterElement call site threads lat/lon/nearestCity through — pure threading change, no statement reorder because locals were already computed above for computeAdmissionDecision; 151/151 adapter tests pass unchanged — existing fixtures all exercise the Latin-check branches, Plan 06 will add Persian/Arabic-name desal fixtures to exercise the new synthesis branches directly; 22 pre-existing TS errors (llmEventExtractor + events routes) unchanged → zero new errors introduced on overpass-water.ts; coord byte-identity preserved so stale cached "Desalination Plant at 24.45°N, 54.57°E" strings rehydrate character-identically after Plan 07 client collapse; 2 atomic commits 284221d + 29116ab)

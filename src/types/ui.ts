@@ -68,12 +68,14 @@ export type SidebarSection = 'counters' | 'layers' | 'filters';
 /**
  * Phase 27.3.1 Plan 12 G6 — DevApiStatus modal tab identity.
  *
- * Three mutually-exclusive tabs in the centered DevApiStatus modal:
+ * Four mutually-exclusive tabs in the centered DevApiStatus modal:
  *   - overview: API source table + LLM Pipeline section
  *   - water:    WaterFiltersSection (byCountry, byType, Overpass health, etc)
  *   - sites:    SitesFiltersSection (byType, byCountry, rejections, health)
+ *   - events:   EventsFiltersSection — Phase 27.4 Plan 09 (dev-only, gated on
+ *               llmStatus.schemaVersion === 'v2' AND import.meta.env.DEV)
  */
-export type DevApiStatusTab = 'overview' | 'water' | 'sites';
+export type DevApiStatusTab = 'overview' | 'water' | 'sites' | 'events';
 
 export interface UIState {
   isDetailPanelOpen: boolean;

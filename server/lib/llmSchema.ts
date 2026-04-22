@@ -1,0 +1,342 @@
+/**
+ * Phase 27.4 LLM extraction schemas (D-01, D-11..D-14, D-22, D-23).
+ *
+ * This module is the SINGLE source of truth for v2 contract evolution. Two
+ * Zod schemas (v1 + v2) live behind a discriminated union so the cache read
+ * path tolerates mixed payloads during rollout (RESEARCH.md Pitfall 1).
+ *
+ * Invariants (load-bearing):
+ *   - D-05: LLM NEVER emits lat/lng. The v2 location object is `.strict()`
+ *           so any surplus key including lat/lng/coordinates fails safeParse.
+ *   - Pitfall 4: schemaVersion is attached server-side on cache write, never
+ *           by the LLM. The `batchResponseV2` preprocess wrapper seeds it on
+ *           read for safety.
+ *   - Pitfall 5: precision is derived from the deepest non-null hierarchy
+ *           field; it is NOT present on the LLM output surface (removed from
+ *           v2 schema to resolve dual-source-of-truth).
+ */
+
+import { z } from 'zod';
+
+// ---------------------------------------------------------------------------
+// D-22: geocoding resolver provenance (six paths).
+//
+// Downstream (Plans 03/05/06/07) tag each resolved event with one of these
+// six strings so DevApiStatus can render a provenance pie-chart aggregate.
+// The exhaustive switch trick in the companion test prevents silent drift
+// when a seventh member is added without widening the switch.
+// ---------------------------------------------------------------------------
+
+export const GEOCODE_PROVENANCE_VALUES = [
+  'own-site-snapshot',
+  'poi-amenity-nominatim',
+  'nominatim-direct',
+  'nominatim-verified-2pass',
+  'gdelt-actiongeo-fallback',
+  'bellingcat-coord-passthrough',
+] as const;
+
+export type GeocodeProvenance = (typeof GEOCODE_PROVENANCE_VALUES)[number];
+
+export const geocodeProvenanceSchema = z.enum(GEOCODE_PROVENANCE_VALUES);
+
+// ---------------------------------------------------------------------------
+// Shared sub-schemas.
+// ---------------------------------------------------------------------------
+
+const casualtiesSchema = z.object({
+  killed: z.number().int().nullable(),
+  injured: z.number().int().nullable(),
+  unknown: z.boolean(),
+});
+
+// ---------------------------------------------------------------------------
+// v1 schema (FROZEN — mirrors server/lib/llmEventExtractor.ts enrichedEventSchema).
+//
+// Preserved so events:llm (v1 key) cached payloads still parse during the
+// D-40 rollback window. Plan 01 renames the extractor file to `.v1.ts`;
+// this schema is structurally identical plus a `schemaVersion: 'v1'`
+// discriminator literal used by `enrichedEventAny`.
+// ---------------------------------------------------------------------------
+
+export const enrichedEventV1 = z.object({
+  schemaVersion: z.literal('v1'),
+  groupKey: z.string(),
+  location: z.object({
+    name: z.string(),
+    precision: z.enum(['exact', 'neighborhood', 'city', 'region']),
+  }),
+  type: z.enum(['airstrike', 'on_ground', 'explosion', 'targeted', 'other']),
+  actors: z.array(z.string()),
+  severity: z.enum(['critical', 'high', 'medium', 'low']),
+  summary: z.string(),
+  casualties: casualtiesSchema,
+  sourceCount: z.number().int(),
+});
+
+export type EnrichedEventV1 = z.infer<typeof enrichedEventV1>;
+
+// ---------------------------------------------------------------------------
+// v2 schema (D-01, D-05, D-11..D-14).
+//
+// The location hierarchy uses `.strict()` so ANY extra key (including
+// lat/lng/coordinates the LLM might hallucinate despite the system prompt)
+// fails safeParse and the event gets routed to the DLQ. This single line is
+// the D-05 enforcement: "LLM NEVER emits coordinates."
+//
+// Note: precision is NOT on this schema — server derives via derivePrecision
+// below (RESEARCH.md Pitfall 5 / A7). Keeping precision off the LLM surface
+// kills the dual-source-of-truth conflict where the LLM could claim
+// "precision: exact" while populating only `country`.
+// ---------------------------------------------------------------------------
+
+export const locationHierarchyV2 = z
+  .object({
+    country: z.string().min(1).nullable(),
+    admin1: z.string().min(1).nullable(),
+    city: z.string().min(1).nullable(),
+    neighborhood: z.string().min(1).nullable(),
+    landmark: z.string().min(1).nullable(),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
+
+export type LocationHierarchyV2 = z.infer<typeof locationHierarchyV2>;
+
+export const enrichedEventV2 = z
+  .object({
+    schemaVersion: z.literal('v2'),
+    groupKey: z.string(),
+    location: locationHierarchyV2,
+    type: z.enum(['airstrike', 'on_ground', 'explosion', 'targeted', 'other']),
+    // D-12: per-event confidence alongside location-level confidence. Location
+    // confidence reflects "where"; event confidence reflects overall LLM
+    // certainty about the whole extraction (type/actors/casualties/etc).
+    confidence: z.number().min(0).max(1),
+    // D-12: ≤200 char rationale citing which signals led to the pick.
+    // Auditable in DevApiStatus drill-down (D-18).
+    //
+    // Post-debug 2026-04-21: changed from `.max(200)` (reject) to transform+
+    // truncate. The LLM wire JSON schema no longer carries `maxLength: 200`
+    // (Cerebras qwen rejects that keyword), so the model isn't structurally
+    // constrained — and verbose models routinely emit 200-400 char reasoning.
+    // Rejecting the whole batch for one over-long reasoning field loses ALL
+    // events in the batch, which is worse than silently truncating one field.
+    // The system prompt still says "≤200 chars"; Zod is the enforcement-of-
+    // last-resort that keeps the v2 cache compact.
+    reasoning: z
+      .string()
+      .transform((s) => (s.length > 200 ? `${s.slice(0, 197)}…` : s)),
+    // D-13: weapon classification (nullable — not all events specify).
+    weaponType: z
+      .enum(['airstrike', 'drone', 'missile', 'artillery', 'small_arms', 'IED'])
+      .nullable(),
+    // D-13: target classification (nullable — not all events specify).
+    targetType: z.enum(['military', 'infrastructure', 'civilian', 'leadership']).nullable(),
+    // D-14: UTC time-of-day in HH:MM. Strict regex rejects 24:00+ and bad
+    // minute ranges (60+). Format-only validation — calendar math lives
+    // outside this schema.
+    timeOfDay: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .nullable(),
+    // D-14: duration in minutes. Nullable for instantaneous events.
+    durationMinutes: z.number().int().nonnegative().nullable(),
+    actors: z.array(z.string()),
+    severity: z.enum(['critical', 'high', 'medium', 'low']),
+    summary: z.string(),
+    casualties: casualtiesSchema,
+    sourceCount: z.number().int(),
+  })
+  .strict();
+
+export type EnrichedEventV2 = z.infer<typeof enrichedEventV2>;
+
+// ---------------------------------------------------------------------------
+// Discriminated union for cache-read safety during rollout.
+//
+// Used on every `events:llm*` cache read so v1 + v2 payloads can coexist
+// during the D-24 flag-gated rollout. The discriminator field is
+// `schemaVersion` — typo-safe via Zod's `discriminatedUnion` (RESEARCH.md
+// Pitfall 4: centralize the literal in one place).
+// ---------------------------------------------------------------------------
+
+export const enrichedEventAny = z.discriminatedUnion('schemaVersion', [
+  enrichedEventV1,
+  enrichedEventV2,
+]);
+
+export type EnrichedEventAny = z.infer<typeof enrichedEventAny>;
+
+// ---------------------------------------------------------------------------
+// Server-owned precision derivation (RESEARCH.md Pitfall 5 / A7).
+//
+// Tie-break rule from D-01: precision is the deepest non-null field in the
+// hierarchy. `exact` > `neighborhood` > `city` > `region`. Country-only and
+// admin1-only both collapse to `region` — there is no "admin1" precision
+// bucket in the five-type ontology.
+// ---------------------------------------------------------------------------
+
+export type Precision = 'exact' | 'neighborhood' | 'city' | 'region';
+
+export function derivePrecision(hierarchy: LocationHierarchyV2): Precision {
+  if (hierarchy.landmark !== null) return 'exact';
+  if (hierarchy.neighborhood !== null) return 'neighborhood';
+  if (hierarchy.city !== null) return 'city';
+  // Both admin1-only and country-only map to 'region' per D-01.
+  return 'region';
+}
+
+// ---------------------------------------------------------------------------
+// D-23: outlier / suspect flag.
+//
+// An event is "suspect" (and surfaced as such in DevApiStatus + the
+// drill-down deviation list) when ANY of:
+//   - confidence < 0.5                                 (low LLM certainty)
+//   - precision === 'region'                           (coarse geography)
+//   - resolved coord > 100km from GDELT ActionGeo      (spatial outlier)
+//   - all source tiers are tier-3 / bronze             (weak sourcing)
+//
+// The function is pure — no Redis, no I/O — so tests cover all four branches
+// and Plans 03 + 06 + 09 consume it at different stages (resolver exit,
+// cache-write, UI aggregate).
+// ---------------------------------------------------------------------------
+
+export interface SuspectInput {
+  confidence: number;
+  precision: Precision;
+  /** Haversine km between resolved coord and group.centroidLat/Lng. */
+  actionGeoDistanceKm: number;
+  /** Per-source tier classification from sourceTiers.ts. */
+  tiers: Array<'gold' | 'silver' | 'bronze'>;
+}
+
+export function deriveSuspect(input: SuspectInput): boolean {
+  if (input.confidence < 0.5) return true;
+  if (input.precision === 'region') return true;
+  if (input.actionGeoDistanceKm > 100) return true;
+  if (input.tiers.length > 0 && input.tiers.every((t) => t === 'bronze')) return true;
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// JSON Schema for Cerebras/Groq `response_format: json_schema` strict mode.
+//
+// This shape mirrors enrichedEventV2 BUT omits `schemaVersion` — the LLM
+// does NOT emit that field; the extractor attaches it server-side on cache
+// write (Pitfall 4: "write schemaVersion server-side, never LLM-emitted").
+//
+// Critical: `additionalProperties: false` on every object level. Dropping
+// it on any sub-object means the LLM can leak extra keys through the strict
+// gate, which would defeat D-05 enforcement at the wire protocol layer
+// (RESEARCH.md Pattern 1 lines 346-378).
+// ---------------------------------------------------------------------------
+
+export const EVENT_EXTRACTION_SCHEMA_V2: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          groupKey: { type: 'string' },
+          location: {
+            type: 'object',
+            properties: {
+              country: { type: ['string', 'null'] },
+              admin1: { type: ['string', 'null'] },
+              city: { type: ['string', 'null'] },
+              neighborhood: { type: ['string', 'null'] },
+              landmark: { type: ['string', 'null'] },
+              confidence: { type: 'number', minimum: 0, maximum: 1 },
+            },
+            required: ['country', 'admin1', 'city', 'neighborhood', 'landmark', 'confidence'],
+            additionalProperties: false,
+          },
+          type: {
+            type: 'string',
+            enum: ['airstrike', 'on_ground', 'explosion', 'targeted', 'other'],
+          },
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+          // Post-debug 2026-04-21: removed `maxLength: 200` from the LLM wire
+          // schema — Cerebras qwen-3-235b rejects `maxLength` in strict
+          // response_format with `wrong_api_format: Invalid fields for schema
+          // with types ['string']: {'maxLength'}`. Cerebras Cloud's structured
+          // output engine doesn't implement the full JSON Schema validation
+          // keyword set that OpenAI/Groq do. Zod still enforces `.max(200)` on
+          // the parsed result below, so over-long reasoning trips `zod_fail`
+          // in the DLQ instead of silently corrupting the v2 cache. The system
+          // prompt instructs the LLM to keep reasoning brief (≤200 chars).
+          reasoning: { type: 'string' },
+          weaponType: {
+            type: ['string', 'null'],
+            enum: ['airstrike', 'drone', 'missile', 'artillery', 'small_arms', 'IED', null],
+          },
+          targetType: {
+            type: ['string', 'null'],
+            enum: ['military', 'infrastructure', 'civilian', 'leadership', null],
+          },
+          timeOfDay: { type: ['string', 'null'] },
+          durationMinutes: { type: ['integer', 'null'], minimum: 0 },
+          actors: { type: 'array', items: { type: 'string' } },
+          severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
+          summary: { type: 'string' },
+          casualties: {
+            type: 'object',
+            properties: {
+              killed: { type: ['integer', 'null'] },
+              injured: { type: ['integer', 'null'] },
+              unknown: { type: 'boolean' },
+            },
+            required: ['killed', 'injured', 'unknown'],
+            additionalProperties: false,
+          },
+          sourceCount: { type: 'integer' },
+        },
+        required: [
+          'groupKey',
+          'location',
+          'type',
+          'confidence',
+          'reasoning',
+          'weaponType',
+          'targetType',
+          'timeOfDay',
+          'durationMinutes',
+          'actors',
+          'severity',
+          'summary',
+          'casualties',
+          'sourceCount',
+        ],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['events'],
+  additionalProperties: false,
+};
+
+// ---------------------------------------------------------------------------
+// Batch envelope — array of events. Schema-level (Zod) and JSON-Schema-level
+// (for the LLM wire format). Plan 06's v2 extractor uses `batchResponseV2`
+// for the full batch response parse.
+//
+// The `z.preprocess` wrapper seeds `schemaVersion: 'v2'` on each incoming
+// item so the LLM can omit the field (Pitfall 4) while the discriminated
+// union read path still sees a well-formed payload.
+// ---------------------------------------------------------------------------
+
+export const batchResponseV2 = z.object({
+  events: z.array(
+    z.preprocess((v: unknown) => {
+      if (v && typeof v === 'object' && !('schemaVersion' in v)) {
+        return { ...(v as object), schemaVersion: 'v2' as const };
+      }
+      return v;
+    }, enrichedEventV2),
+  ),
+});
+
+export type BatchResponseV2 = z.infer<typeof batchResponseV2>;
