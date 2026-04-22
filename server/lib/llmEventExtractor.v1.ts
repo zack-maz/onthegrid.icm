@@ -163,8 +163,11 @@ function buildBatchUserPrompt(groups: EventGroup[]): string {
   const lines: string[] = ['Analyze these GDELT event groups and extract structured data:\n'];
 
   for (let i = 0; i < groups.length; i++) {
+    // Phase 27.4.1 D-15: noUncheckedIndexedAccess guard — local-bind + continue.
     const g = groups[i];
+    if (!g) continue;
     const entity = g.entities[0]; // Representative entity for context
+    if (!entity) continue;
     lines.push(`--- Event Group ${i + 1} (key: ${g.key}) ---`);
     lines.push(`Date: ${new Date(g.timestamp).toISOString().slice(0, 10)}`);
     lines.push(`CAMEO Code: ${g.primaryCameo}`);
@@ -270,7 +273,13 @@ export async function geocodeEnrichedEvents(
   const results: Array<EnrichedEvent & { resolvedLat: number; resolvedLng: number }> = [];
 
   for (let i = 0; i < events.length; i++) {
+    // Phase 27.4.1 D-15: noUncheckedIndexedAccess guard — local-bind + continue.
+    // Narrows `event` from `EnrichedEvent | undefined` to `EnrichedEvent`, which
+    // also resolves the downstream TS2345 spread errors at L258/289/302 without
+    // needing to tighten the Zod schema (Category C → secondary symptom of
+    // Category B per the audit at the top of this file).
     const event = events[i];
+    if (!event) continue;
     const placeName = event.location.name;
     const cacheKey = `${GEOCODE_CACHE_PREFIX}${placeName.toLowerCase().trim()}`;
 
