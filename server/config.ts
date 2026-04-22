@@ -42,6 +42,13 @@ export const envSchema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
 
+  // Phase 27.4.1 (D-01/D-02/D-03): per-batch timeout for the LLM extractor
+  // watchdog. Default 90_000 ms hard-kills a batch that Cerebras never
+  // returns from; the DLQ absorbs the group and the loop continues.
+  // Soft-warn at 60_000 ms is hard-coded in the watchdog helper; only the
+  // hard cap is env-tunable for in-incident rescue without a redeploy.
+  LLM_BATCH_TIMEOUT_MS: z.coerce.number().int().positive().default(90000),
+
   // Tuning parameters
   EVENT_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
   EVENT_MIN_SOURCES: z.coerce.number().int().min(1).default(2),

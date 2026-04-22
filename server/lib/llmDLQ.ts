@@ -20,7 +20,7 @@ const LAST_ERROR_MAX_CHARS = 500; // Pitfall 7
 
 export interface DLQEntry {
   id: string;
-  reason: 'zod_fail' | 'llm_null' | 'retry_exhausted';
+  reason: 'zod_fail' | 'llm_null' | 'retry_exhausted' | 'timeout_watchdog';
   lastError: string;
   timestamp: number;
 }
