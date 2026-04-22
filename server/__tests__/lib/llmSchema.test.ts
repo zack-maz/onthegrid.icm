@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import {
-  enrichedEventV1,
   enrichedEventV2,
   enrichedEventAny,
   derivePrecision,
@@ -66,9 +65,7 @@ describe('enrichedEventV2 parse rejection (D-05 + constraint enforcement)', () =
     expect(result.success).toBe(false);
     if (!result.success) {
       // At least one Zod issue must involve the `location` path (surplus key rejection).
-      const touchesLocation = result.error.issues.some((issue) =>
-        issue.path.includes('location'),
-      );
+      const touchesLocation = result.error.issues.some((issue) => issue.path.includes('location'));
       expect(touchesLocation).toBe(true);
     }
   });
