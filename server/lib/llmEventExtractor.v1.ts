@@ -1,3 +1,29 @@
+/**
+ * Phase 27.4.1 TS audit (D-14, 3-error sample classified 2026-04-22):
+ *
+ *   L141 ('g' is possibly undefined):    Category A — noUncheckedIndexedAccess,
+ *                                        fix = local-bind + early-continue (D-15).
+ *   L248 ('event' possibly undefined):   Category B — noUncheckedIndexedAccess,
+ *                                        fix = local-bind + early-continue (D-15).
+ *   L258 (TS2345 spread mismatch):       Category C — secondary symptom of B;
+ *                                        vanishes when `event` is narrowed by
+ *                                        the local-bind guard. No D-16 schema
+ *                                        tightening needed — Zod schema is
+ *                                        already non-optional on all fields.
+ *
+ * Conclusion: all 20 errors fall into Categories A + B; Category C is a
+ * downstream effect. Fix applied uniformly via D-15 (local-bind + early-
+ * continue). No D-17 non-null assertions introduced.
+ *
+ * Full error map (verified via `npx tsc --noEmit -p tsconfig.server.json`):
+ *   - Category A (13 errors, buildBatchUserPrompt L141-151): `g` / `entity`
+ *     possibly undefined — resolved by Task 2 Fix 1.
+ *   - Category B (4 errors, geocodeEnrichedEvents L248/296/299/310): `event`
+ *     possibly undefined — resolved by Task 2 Fix 2.
+ *   - Category C (3 errors, spread at L258/289/302): TS2345 — resolves as a
+ *     side-effect of Fix 2 (narrowed `event` eliminates the undefined widening
+ *     on the `...event` spread).
+ */
 import { z } from 'zod';
 import { callLLM } from '../adapters/llm-provider.js';
 import { forwardGeocodeConstrained } from '../adapters/nominatim.js';
