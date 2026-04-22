@@ -55,8 +55,8 @@ describe('Entity Layer Constants', () => {
     it('targeted is dark crimson', () => {
       expect(ENTITY_COLORS.targeted).toEqual([139, 30, 30]);
     });
-    it('other is gray with red tint', () => {
-      expect(ENTITY_COLORS.other).toEqual([190, 170, 168]);
+    it('other is light red', () => {
+      expect(ENTITY_COLORS.other).toEqual([220, 100, 90]);
     });
   });
   describe('ICON_SIZE', () => {
