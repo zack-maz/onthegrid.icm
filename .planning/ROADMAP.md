@@ -176,19 +176,19 @@ Plans:
 **Goal:** Raise the LLM-enriched event pipeline to Palantir-grade accuracy and observability. Layered geolocation resolver (own-snapshot → POI-amenity Nominatim → direct Nominatim → 2-pass LLM verify → Bellingcat coord passthrough → GDELT ActionGeo fallback); richer prompts (news + Bellingcat + temporal context blocks); extended output schema (structured place hierarchy, confidence, reasoning, weapon/target, time/duration); dedicated Events section in DevApiStatus (waterfall, histograms, drill-down, call log, budget bars, eval harness, DLQ); flag-gated rollout (LLM_PIPELINE_V2); bounded retry + DLQ + circuit breaker; tracked token budget; cache-version bump (events:llm → events:llm:v2).
 **Depends on:** Phase 27.3
 **Requirements:** D-01 through D-40 (from 27.4-CONTEXT.md)
-**Plans:** 9 plans
+**Plans:** 9/9 plans complete
 
 Plans:
 
-- [ ] 27.4-01-PLAN.md — Flag + cache versioning + v1 preservation (LLM_PIPELINE_V2, llmEventExtractor.v1.ts rename, meBounds constants, dev-cache v2 filename, events.ts flag-gated cache keys + schemaVersion on summary)
-- [ ] 27.4-02-PLAN.md — Zod v2 schema + discriminated union + llmProgress extension (llmSchema.ts with enrichedEventV2, GeocodeProvenance enum, derivePrecision, deriveSuspect; llmProgress.ts gains callHistory/tokenCounters/dlqCount/breakerState/evalScore/provenanceCounts/suspectCount)
-- [ ] 27.4-03-PLAN.md — Resolver skeleton + provenance tagging (llmResolver.ts with 6-path dispatch; own-snapshot + direct + bellingcat + gdelt-fallback functional; POI + 2-pass verify stubs for Plan 05)
-- [ ] 27.4-04-PLAN.md — Nominatim extensions (forwardGeocodeConstrained with viewbox + 22 countrycodes + amenity mode + top-5; ME defaults hard-coded server-side)
-- [ ] 27.4-05-PLAN.md — POI specialist + 2-pass verify wiring (replaces Plan 03 stubs; sanity gate for city-precision or >250km distance; reranker LLM call with strict pick schema; 1-req/s throttle + Redis cache)
-- [ ] 27.4-06-PLAN.md — v2 extractor + enriched prompts (llmEventExtractor.v2.ts BATCH_SIZE=2; NEWS + BELLINGCAT + TEMPORAL context blocks; resolveLocation integration; barrel routes by LLM_PIPELINE_V2)
-- [ ] 27.4-07-PLAN.md — Reliability + budget + call-log (llmCircuitBreaker, llmDLQ, llmTokenBudget modules; llm-provider.ts retry + jitter + token incr + call history)
-- [ ] 27.4-08-PLAN.md — Eval harness + prompt replay (ground-truth-events.json curated with user sign-off; resolver-only eval per A6; /llm-replay dev-only endpoint with dual-gate; D-25 prod-flip gate visible in /llm-status)
-- [ ] 27.4-09-PLAN.md — DevApiStatus Events section (extends /llm-status with full v2 payload; Events tab + EventsFiltersSection 8 blocks: waterfall, provenance histogram, drill-down, call log, budget bars, eval score, DLQ, suspect count)
+- [x] 27.4-01-PLAN.md — Flag + cache versioning + v1 preservation (LLM_PIPELINE_V2, llmEventExtractor.v1.ts rename, meBounds constants, dev-cache v2 filename, events.ts flag-gated cache keys + schemaVersion on summary)
+- [x] 27.4-02-PLAN.md — Zod v2 schema + discriminated union + llmProgress extension (llmSchema.ts with enrichedEventV2, GeocodeProvenance enum, derivePrecision, deriveSuspect; llmProgress.ts gains callHistory/tokenCounters/dlqCount/breakerState/evalScore/provenanceCounts/suspectCount)
+- [x] 27.4-03-PLAN.md — Resolver skeleton + provenance tagging (llmResolver.ts with 6-path dispatch; own-snapshot + direct + bellingcat + gdelt-fallback functional; POI + 2-pass verify stubs for Plan 05)
+- [x] 27.4-04-PLAN.md — Nominatim extensions (forwardGeocodeConstrained with viewbox + 22 countrycodes + amenity mode + top-5; ME defaults hard-coded server-side)
+- [x] 27.4-05-PLAN.md — POI specialist + 2-pass verify wiring (replaces Plan 03 stubs; sanity gate for city-precision or >250km distance; reranker LLM call with strict pick schema; 1-req/s throttle + Redis cache)
+- [x] 27.4-06-PLAN.md — v2 extractor + enriched prompts (llmEventExtractor.v2.ts BATCH_SIZE=2; NEWS + BELLINGCAT + TEMPORAL context blocks; resolveLocation integration; barrel routes by LLM_PIPELINE_V2)
+- [x] 27.4-07-PLAN.md — Reliability + budget + call-log (llmCircuitBreaker, llmDLQ, llmTokenBudget modules; llm-provider.ts retry + jitter + token incr + call history)
+- [x] 27.4-08-PLAN.md — Eval harness + prompt replay (ground-truth-events.json curated with user sign-off; resolver-only eval per A6; /llm-replay dev-only endpoint with dual-gate; D-25 prod-flip gate visible in /llm-status)
+- [x] 27.4-09-PLAN.md — DevApiStatus Events section (extends /llm-status with full v2 payload; Events tab + EventsFiltersSection 8 blocks: waterfall, provenance histogram, drill-down, call log, budget bars, eval score, DLQ, suspect count)
 
 ### Phase 28: Performance & Load Testing — was Phase 27
 

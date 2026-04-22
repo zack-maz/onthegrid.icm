@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
-status: awaiting_close
+status: ready_to_plan
 last_updated: '2026-04-22T02:10:00Z'
 progress:
   total_phases: 10
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 52
   completed_plans: 49
-  percent: 94
+  percent: 50
 ---
 
 # Project State
@@ -22,10 +22,11 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 27.4 — llm-enrichment-improvements (AWAITING CLOSE per 27.4-HANDOFF.md)
-Plan: 9 of 9 — all merged. 5 post-review runtime improvements also landed. V1 pipeline verified live (296 enriched events). V2 pipeline stalled at 133/184 — architectural follow-up (P0) required. See `.planning/phases/27.4-llm-enrichment-improvements/27.4-HANDOFF.md` for full context + resume options.
+Phase: 28
+Plan: Not started
 
 Phase 27.4 FINAL COMMITS (branch `feature/27.4-llm-enrichment-improvements`, HEAD `712a2be`, 43 commits ahead of main):
+
 - `712a2be` feat(27.4): v2 default + runtime v1/v2 toggle pill in Topbar
 - `a2ad342` fix(27.4): truncate over-long reasoning instead of rejecting batch
 - `8d325ee` fix(27.4): drop maxLength from v2 JSON schema (Cerebras qwen rejects it)
@@ -34,6 +35,7 @@ Phase 27.4 FINAL COMMITS (branch `feature/27.4-llm-enrichment-improvements`, HEA
 - All 9 wave plans merged (c13f868, 805b21b, 6c9e1a4, db629af, b7e03de as wave-merge points)
 
 Phase 27.4 KNOWN FOLLOW-UPS (ranked in HANDOFF.md):
+
 - P0: v2 extractor needs per-batch cache flush + watchdog (one hung Cerebras call = 45min lost work; stall reproduced at batch 133/184)
 - P1: pre-existing client test failures (32 filters + 1 entityLayers) documented in deferred-items.md
 - P2: pre-existing TS drift (31 errors baseline unchanged)
