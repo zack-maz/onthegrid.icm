@@ -1,8 +1,38 @@
+/**
+ * Phase 27.4.1 TS audit (D-14, 3-error sample classified 2026-04-22):
+ *
+ *   L141 ('g' is possibly undefined):    Category A — noUncheckedIndexedAccess,
+ *                                        fix = local-bind + early-continue (D-15).
+ *   L248 ('event' possibly undefined):   Category B — noUncheckedIndexedAccess,
+ *                                        fix = local-bind + early-continue (D-15).
+ *   L258 (TS2345 spread mismatch):       Category C — secondary symptom of B;
+ *                                        vanishes when `event` is narrowed by
+ *                                        the local-bind guard. No D-16 schema
+ *                                        tightening needed — Zod schema is
+ *                                        already non-optional on all fields.
+ *
+ * Conclusion: all 20 errors fall into Categories A + B; Category C is a
+ * downstream effect. Fix applied uniformly via D-15 (local-bind + early-
+ * continue). No D-17 non-null assertions introduced.
+ *
+ * Full error map (verified via `npx tsc --noEmit -p tsconfig.server.json`):
+ *   - Category A (13 errors, buildBatchUserPrompt L141-151): `g` / `entity`
+ *     possibly undefined — resolved by Task 2 Fix 1.
+ *   - Category B (4 errors, geocodeEnrichedEvents L248/296/299/310): `event`
+ *     possibly undefined — resolved by Task 2 Fix 2.
+ *   - Category C (3 errors, spread at L258/289/302): TS2345 — resolves as a
+ *     side-effect of Fix 2 (narrowed `event` eliminates the undefined widening
+ *     on the `...event` spread).
+ */
 import { z } from 'zod';
 import { callLLM } from '../adapters/llm-provider.js';
 import { forwardGeocodeConstrained } from '../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
+import { env } from '../config.js';
 import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
+import { withBatchWatchdog } from './llmExtractorWatchdog.js';
+import { enqueueDLQ } from './llmDLQ.js';
+import { updateProgress, llmProgress } from './llmProgress.js';
 import { logger } from './logger.js';
 import type { EventGroup } from './eventGrouping.js';
 
@@ -137,8 +167,11 @@ function buildBatchUserPrompt(groups: EventGroup[]): string {
   const lines: string[] = ['Analyze these GDELT event groups and extract structured data:\n'];
 
   for (let i = 0; i < groups.length; i++) {
+    // Phase 27.4.1 D-15: noUncheckedIndexedAccess guard — local-bind + continue.
     const g = groups[i];
+    if (!g) continue;
     const entity = g.entities[0]; // Representative entity for context
+    if (!entity) continue;
     lines.push(`--- Event Group ${i + 1} (key: ${g.key}) ---`);
     lines.push(`Date: ${new Date(g.timestamp).toISOString().slice(0, 10)}`);
     lines.push(`CAMEO Code: ${g.primaryCameo}`);
@@ -182,16 +215,65 @@ export async function processEventGroups(
     const batchIndex = Math.floor(i / BATCH_SIZE);
     const userPrompt = buildBatchUserPrompt(batch);
 
-    const content = await callLLM(
-      [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      EVENT_EXTRACTION_SCHEMA,
+    // Phase 27.4.1 D-11/D-12/D-13: SYMMETRY with v2. The rollback path
+    // must not exhibit the same P0 hang-stall defect — wrap callLLM in
+    // withBatchWatchdog so a 90s+ Cerebras hang routes the batch's groups
+    // to the DLQ with reason='timeout_watchdog' and the loop continues.
+    // Identical hook shape to v2 (Plan 03).
+    const content = await withBatchWatchdog(
+      () =>
+        callLLM(
+          [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          EVENT_EXTRACTION_SCHEMA,
+          { batchSize: batch.length },
+        ),
+      {
+        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+        softWarnMs: 60_000, // D-02 — hard-coded soft-warn threshold
+        batchIndex,
+        label: 'v1',
+        onTimeout: async () => {
+          // D-04: DLQ-route every group in the timed-out batch.
+          for (const g of batch) {
+            await enqueueDLQ({
+              id: g.key,
+              reason: 'timeout_watchdog',
+              lastError: `v1 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+              timestamp: Date.now(),
+            });
+          }
+          updateProgress({
+            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1,
+          });
+        },
+        onSoftWarn: (elapsedMs) => {
+          // D-02 — append soft-warn entry to callHistory so DevApiStatus can
+          // render an amber marker without a separate UI change.
+          const history = llmProgress.callHistory ?? [];
+          const softWarnEntry: NonNullable<typeof llmProgress.callHistory>[number] = {
+            provider: 'cerebras',
+            model: 'watchdog-soft-warn',
+            tokensIn: 0,
+            tokensOut: 0,
+            durationMs: elapsedMs,
+            ok: true,
+            batchSize: batch.length,
+            timestamp: Date.now(),
+          };
+          updateProgress({
+            callHistory: [softWarnEntry, ...history].slice(0, 20),
+          });
+        },
+      },
     );
 
     if (content === null) {
-      log.warn({ batchIndex }, 'LLM returned null for batch');
+      // Either callLLM returned null OR watchdog fired — both already
+      // logged / DLQ'd / incremented telemetry above. Continue to next batch.
+      log.warn({ batchIndex }, 'LLM returned null for batch (null or watchdog timeout)');
       onBatchComplete?.(batchIndex + 1, totalBatches);
       continue;
     }
@@ -244,7 +326,13 @@ export async function geocodeEnrichedEvents(
   const results: Array<EnrichedEvent & { resolvedLat: number; resolvedLng: number }> = [];
 
   for (let i = 0; i < events.length; i++) {
+    // Phase 27.4.1 D-15: noUncheckedIndexedAccess guard — local-bind + continue.
+    // Narrows `event` from `EnrichedEvent | undefined` to `EnrichedEvent`, which
+    // also resolves the downstream TS2345 spread errors at L258/289/302 without
+    // needing to tighten the Zod schema (Category C → secondary symptom of
+    // Category B per the audit at the top of this file).
     const event = events[i];
+    if (!event) continue;
     const placeName = event.location.name;
     const cacheKey = `${GEOCODE_CACHE_PREFIX}${placeName.toLowerCase().trim()}`;
 
