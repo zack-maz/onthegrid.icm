@@ -84,6 +84,9 @@ export interface LLMPipelineProgress {
 
   /** D-23: derived "suspect" event count for last run. */
   suspectCount?: number;
+
+  /** Phase 27.4.1 D-06: count of batches killed by the timeout watchdog in current run. */
+  watchdogTimeoutCount?: number;
 }
 
 /**
@@ -143,6 +146,7 @@ export const INITIAL_PROGRESS: Readonly<LLMPipelineProgress> = {
   evalScore: undefined,
   provenanceCounts: undefined,
   suspectCount: undefined,
+  watchdogTimeoutCount: undefined,
 };
 
 /**
