@@ -228,7 +228,14 @@ export async function callLLM(
         // Transient error — backoff and retry same provider on the next
         // iteration (if there is one).
         if (attempt < RETRY_ATTEMPTS - 1) {
-          const base = BACKOFF_MS[attempt] ?? BACKOFF_MS[BACKOFF_MS.length - 1];
+          // Phase 27.4.1: BACKOFF_MS is `readonly [1000, 4000]`; under
+          // noUncheckedIndexedAccess both index reads narrow to `number | undefined`,
+          // so the nullish-chain would produce `number | undefined`. `attempt` is
+          // bounded by the loop guard (`attempt < RETRY_ATTEMPTS - 1`, RETRY_ATTEMPTS=2)
+          // which means only attempt=0 ever reaches this code path. Use a literal
+          // fallback of BACKOFF_MS[0] so the compiler sees `number` and not an
+          // undefined-union.
+          const base: number = BACKOFF_MS[attempt] ?? BACKOFF_MS[0] ?? 1000;
           await sleepWithJitter(base);
         }
       }
