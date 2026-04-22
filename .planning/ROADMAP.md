@@ -195,14 +195,14 @@ Plans:
 **Goal:** Close Phase 27.4's known P0 architectural defect — v2 extractor writes `events:llm:v2` Redis cache only after all batches complete, so one hung Cerebras call loses 45+ min of LLM work (stall reproduced at batch 133/184). Introduce a per-batch `cacheSetSafe` with accumulating writes, a per-batch timeout watchdog (default 90s, 60s soft-warn in callHistory, env-var override via `LLM_BATCH_TIMEOUT_MS`) that DLQ-routes timed-out groups with `reason='timeout_watchdog'`, and a shared `server/lib/llmExtractorWatchdog.ts` helper applied symmetrically to both v1 and v2 extractors so the rollback path stays reliable. Bundle cleanup of the 20 pre-existing TS errors in `server/lib/llmEventExtractor.v1.ts` (narrow at the Zod parse boundary where Zod guarantees non-optionality; local-bind + early-continue where `noUncheckedIndexedAccess` is the culprit — audit 3 errors first before choosing). Also bundle three quick wins: 1 TS error in `server/adapters/llm-provider.ts:232`, 1 color test fix in `src/__tests__/entityLayers.test.ts` (expects `[190,170,168]`, code returns `[220,100,90]` post-27 commit `709fa15`), and strip click-to-swap from `PipelineVersionPill` in Topbar (pill stays as read-only served-version indicator; env var + POST /api/events/llm-pipeline endpoint remain the authoritative swap surface for operator/scripted use).
 **Depends on:** Phase 27.4
 **Requirements:** Derived from 27.4.1-SCOPE.md (P0 + v1.ts TS cleanup + quick wins 3a/3b/3c)
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 
-- [ ] 27.4.1-01-PLAN.md — Shared watchdog helper + DLQ reason extension + LLM_BATCH_TIMEOUT_MS env var + watchdogTimeoutCount progress field
-- [ ] 27.4.1-02-PLAN.md — Quick wins bundle: llm-provider.ts:232 TS fix, entityLayers.test.ts color update, PipelineVersionPill click-to-swap strip
-- [ ] 27.4.1-03-PLAN.md — V2 extractor P0 fix: LLMCachePayload envelope + per-batch cacheSetSafe + watchdog wrap
-- [ ] 27.4.1-04-PLAN.md — V1 extractor watchdog symmetry + 20 TS error cleanup (audit-first per D-14)
+- [x] 27.4.1-01-PLAN.md — Shared watchdog helper + DLQ reason extension + LLM_BATCH_TIMEOUT_MS env var + watchdogTimeoutCount progress field
+- [x] 27.4.1-02-PLAN.md — Quick wins bundle: llm-provider.ts:232 TS fix, entityLayers.test.ts color update, PipelineVersionPill click-to-swap strip
+- [x] 27.4.1-03-PLAN.md — V2 extractor P0 fix: LLMCachePayload envelope + per-batch cacheSetSafe + watchdog wrap
+- [x] 27.4.1-04-PLAN.md — V1 extractor watchdog symmetry + 20 TS error cleanup (audit-first per D-14)
 
 ### Phase 28: Performance & Load Testing — was Phase 27
 
