@@ -55,12 +55,36 @@ vi.mock('../../lib/llmDLQ.js', () => ({
   DLQ_KEY: 'events:llm-dlq',
 }));
 
+// Phase 27.4.1 Plan 03 — mock the watchdog helper so tests control timeout
+// behavior. Default: transparent pass-through that just invokes batchFn.
+// Individual tests override mockImplementationOnce to simulate timeout.
+vi.mock('../../lib/llmExtractorWatchdog.js', () => ({
+  withBatchWatchdog: vi.fn(
+    async (batchFn: () => Promise<unknown>, _opts: unknown) => batchFn(),
+  ),
+}));
+
+// Phase 27.4.1 Plan 03 — mock llmProgress so watchdog-timeout assertions can
+// verify updateProgress({watchdogTimeoutCount: ...}) was called.
+vi.mock('../../lib/llmProgress.js', () => ({
+  updateProgress: vi.fn(),
+  llmProgress: { watchdogTimeoutCount: undefined, callHistory: undefined },
+}));
+
+// Phase 27.4.1 Plan 03 — mock config env so LLM_BATCH_TIMEOUT_MS is
+// available without hitting the Zod env parser.
+vi.mock('../../config.js', () => ({
+  env: { LLM_BATCH_TIMEOUT_MS: 90000 },
+}));
+
 import { callLLM } from '../../adapters/llm-provider.js';
-import { cacheGetSafe } from '../../cache/redis.js';
+import { cacheGetSafe, cacheSetSafe } from '../../cache/redis.js';
 import { resolveLocation } from '../../lib/llmResolver.js';
 import { extractBellingcatGeo } from '../../lib/eventScoring.js';
 import { getSourceTier } from '../../lib/sourceTiers.js';
 import { enqueueDLQ } from '../../lib/llmDLQ.js';
+import { withBatchWatchdog } from '../../lib/llmExtractorWatchdog.js';
+import { updateProgress } from '../../lib/llmProgress.js';
 import {
   processEventGroupsV2,
   geocodeEnrichedEventsV2,
@@ -523,5 +547,174 @@ describe('llmEventExtractor.v2', () => {
     for (const call of calls) {
       expect((call[0] as { reason: string }).reason).toBe('zod_fail');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 27.4.1 — watchdog + per-batch cache integration tests
+//
+// Covers the 3 new critical behaviors from Plan 03:
+//   14. Partial LLMCachePayload write to events:llm:v2 after each batch +
+//       final write carries complete: true (D-07 / D-08 / D-10)
+//   15. Watchdog timeout routes every group in the batch to DLQ with
+//       reason='timeout_watchdog' and bumps watchdogTimeoutCount (D-04 / D-06)
+//   16. Watchdog timeout on batch N does not abort the loop — batch N+1
+//       still runs, final write still happens (D-11 / D-13)
+// ---------------------------------------------------------------------------
+
+describe('Phase 27.4.1 — watchdog + per-batch cache', () => {
+  beforeEach(() => {
+    vi.mocked(callLLM).mockReset();
+    vi.mocked(cacheGetSafe).mockReset();
+    vi.mocked(cacheGetSafe).mockResolvedValue(null);
+    vi.mocked(cacheSetSafe).mockReset();
+    vi.mocked(cacheSetSafe).mockResolvedValue(undefined);
+    vi.mocked(enqueueDLQ).mockReset();
+    vi.mocked(enqueueDLQ).mockResolvedValue(undefined);
+    vi.mocked(resolveLocation).mockReset();
+    vi.mocked(extractBellingcatGeo).mockReset();
+    vi.mocked(extractBellingcatGeo).mockReturnValue(undefined);
+    vi.mocked(getSourceTier).mockReset();
+    vi.mocked(getSourceTier).mockReturnValue(2);
+    vi.mocked(updateProgress).mockReset();
+    vi.mocked(withBatchWatchdog).mockReset();
+    // Default watchdog mock: transparent pass-through. Individual tests
+    // override with mockImplementationOnce to simulate timeout.
+    vi.mocked(withBatchWatchdog).mockImplementation(
+      async (batchFn) => batchFn(),
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 14: per-batch partial cache write + final complete: true write
+  // -----------------------------------------------------------------------
+  it('writes a partial LLMCachePayload to events:llm:v2 after each successful batch', async () => {
+    // 4 groups → 2 batches (BATCH_SIZE = 2)
+    const groups = [
+      makeGroup({ key: 'grp-b1-1', entities: [makeEntity({ id: 'e1' })] }),
+      makeGroup({ key: 'grp-b1-2', entities: [makeEntity({ id: 'e2' })] }),
+      makeGroup({ key: 'grp-b2-1', entities: [makeEntity({ id: 'e3' })] }),
+      makeGroup({ key: 'grp-b2-2', entities: [makeEntity({ id: 'e4' })] }),
+    ];
+    vi.mocked(callLLM).mockResolvedValue(
+      JSON.stringify({ events: [makeEnrichedEvent()] }),
+    );
+
+    await processEventGroupsV2(groups);
+
+    const writes = vi
+      .mocked(cacheSetSafe)
+      .mock.calls.filter(([key]) => key === 'events:llm:v2');
+
+    // 2 partial (one per successful batch) + 1 final complete:true = 3 writes
+    expect(writes.length).toBeGreaterThanOrEqual(3);
+
+    // Final write has complete: true (D-10) with progress 2/2
+    const last = writes[writes.length - 1][1] as {
+      events: unknown[];
+      progress: string;
+      complete: boolean;
+      generatedAt: string;
+    };
+    expect(last.complete).toBe(true);
+    expect(last.progress).toBe('2/2');
+    expect(typeof last.generatedAt).toBe('string');
+    expect(Array.isArray(last.events)).toBe(true);
+
+    // First partial write has complete: false
+    const first = writes[0][1] as { complete: boolean };
+    expect(first.complete).toBe(false);
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 15: watchdog timeout routes every group to DLQ + bumps counter
+  // -----------------------------------------------------------------------
+  it('watchdog timeout: DLQ-routes all groups in the batch with reason=timeout_watchdog and bumps watchdogTimeoutCount', async () => {
+    const groups = [
+      makeGroup({ key: 'grp-timeout-1', entities: [makeEntity({ id: 'e1' })] }),
+      makeGroup({ key: 'grp-timeout-2', entities: [makeEntity({ id: 'e2' })] }),
+    ];
+
+    // Simulate watchdog firing on the single batch
+    vi.mocked(withBatchWatchdog).mockImplementationOnce(async (_batchFn, opts) => {
+      const typedOpts = opts as { onTimeout: () => Promise<void> };
+      await typedOpts.onTimeout();
+      return null;
+    });
+
+    await processEventGroupsV2(groups);
+
+    // enqueueDLQ called once per group with reason='timeout_watchdog'
+    const dlqCalls = vi.mocked(enqueueDLQ).mock.calls;
+    const timeoutCalls = dlqCalls.filter(
+      ([e]) => (e as { reason: string }).reason === 'timeout_watchdog',
+    );
+    expect(timeoutCalls.length).toBe(2);
+    const timeoutIds = timeoutCalls.map(
+      ([e]) => (e as { id: string }).id,
+    );
+    expect(timeoutIds).toContain('grp-timeout-1');
+    expect(timeoutIds).toContain('grp-timeout-2');
+
+    // updateProgress called with watchdogTimeoutCount increment (undefined + 1 → 1)
+    const progressCalls = vi.mocked(updateProgress).mock.calls;
+    const timeoutCountCall = progressCalls.find(
+      ([p]) => 'watchdogTimeoutCount' in (p as object),
+    );
+    expect(timeoutCountCall).toBeDefined();
+    expect(
+      (timeoutCountCall![0] as { watchdogTimeoutCount: number })
+        .watchdogTimeoutCount,
+    ).toBe(1);
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 16: timeout on one batch does not abort the loop — subsequent
+  //          batches still run and final complete:true write still happens
+  // -----------------------------------------------------------------------
+  it('watchdog timeout on batch N does not abort the loop — batch N+1 still runs', async () => {
+    // 4 groups → 2 batches
+    const groups = [
+      makeGroup({ key: 'grp-loop-1', entities: [makeEntity({ id: 'e1' })] }),
+      makeGroup({ key: 'grp-loop-2', entities: [makeEntity({ id: 'e2' })] }),
+      makeGroup({ key: 'grp-loop-3', entities: [makeEntity({ id: 'e3' })] }),
+      makeGroup({ key: 'grp-loop-4', entities: [makeEntity({ id: 'e4' })] }),
+    ];
+
+    // First batch times out, second batch passes through
+    vi.mocked(withBatchWatchdog)
+      .mockImplementationOnce(async (_batchFn, opts) => {
+        const typedOpts = opts as { onTimeout: () => Promise<void> };
+        await typedOpts.onTimeout();
+        return null;
+      })
+      .mockImplementationOnce(async (batchFn) => batchFn());
+
+    vi.mocked(callLLM).mockResolvedValue(
+      JSON.stringify({
+        events: [
+          makeEnrichedEvent({ groupKey: 'grp-loop-3' }),
+          makeEnrichedEvent({ groupKey: 'grp-loop-4' }),
+        ],
+      }),
+    );
+
+    const result = await processEventGroupsV2(groups);
+
+    // Second batch's events landed in results (proves loop continued past
+    // the timeout on batch 0).
+    expect(result.events).not.toBeNull();
+    expect(result.events!.length).toBe(2);
+
+    // Final cache write still fires with complete: true and progress 2/2
+    const writes = vi
+      .mocked(cacheSetSafe)
+      .mock.calls.filter(([key]) => key === 'events:llm:v2');
+    const last = writes[writes.length - 1][1] as {
+      complete: boolean;
+      progress: string;
+    };
+    expect(last.complete).toBe(true);
+    expect(last.progress).toBe('2/2');
   });
 });
