@@ -204,6 +204,19 @@ Plans:
 - [x] 27.4.1-03-PLAN.md — V2 extractor P0 fix: LLMCachePayload envelope + per-batch cacheSetSafe + watchdog wrap
 - [x] 27.4.1-04-PLAN.md — V1 extractor watchdog symmetry + 20 TS error cleanup (audit-first per D-14)
 
+### Phase 27.4.2: CI Health + LLM v2 Quality Tuning (INSERTED)
+
+**Goal:** Bundle two concerns — green `main` CI (32 filter-test fixture failures, 4 npm-audit vulns, ~25 prettier format-drift files, ~20 lint warnings) and raise v2 LLM enrichment to a measurable quality bar (one full 184-batch run completes under the new watchdog, captures eval baseline against the 50-event ground truth harness, then tuning iteration beats v1 eval score by ≥5pp AND drops `gdelt-actiongeo-fallback` provenance below 25%). Greening CI is the prerequisite so regression-watch during LLM tuning is trustworthy.
+**Depends on:** Phase 27.4.1
+**Requirements:** TBD (to be derived in /gsd-discuss-phase; scope levers + hang-recurrence policy still open)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-discuss-phase 27.4.2 then /gsd-plan-phase 27.4.2 to break down)
+
+**Explicitly out-of-scope:** Phase 27.4.3 (deck.gl v9 `depthTest` TS drift), Phase 27.4.5 (LLM flight-recorder Redis history), Phase 27.3.3 (romanization of non-Latin water names), Vercel preview deploy failure.
+
 ### Phase 28: Performance & Load Testing — was Phase 27
 
 **Goal:** Optimize initial load time and validate production handles 250 concurrent users.
