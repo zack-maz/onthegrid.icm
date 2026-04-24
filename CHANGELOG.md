@@ -4,6 +4,61 @@ All notable changes to the Iran Conflict Monitor project.
 
 ## [Unreleased]
 
+### Phase 27.4.1: V2 Extractor Watchdog + LLM Pipeline TS Cleanup (2026-04-22 → 2026-04-24)
+
+#### Added
+
+- Shared `server/lib/llmExtractorWatchdog.ts` helper with `withBatchWatchdog(batchFn, opts)` — per-batch `Promise.race` with AbortController late-resolve guard, soft-warn + hard-timeout thresholds, DLQ routing via `onTimeout` hook. Applied symmetrically to both v1 and v2 extractors.
+- `LLM_BATCH_TIMEOUT_MS` env var (default 90000) — in-incident timeout tuning without code change; soft-warn hardcoded at 60000ms per D-02.
+- `llmProgress.watchdogTimeoutCount` field — surfaces watchdog activations for DevApiStatus pipeline waterfall.
+- DLQ `reason: 'timeout_watchdog'` — timed-out groups enter normal retry/exclusion pipeline.
+- `LLMCachePayload` envelope type `{events, progress: 'N/M', complete: boolean, generatedAt}` written per-batch to `events:llm:v2:partial` (observability-only key).
+- Reader defense-in-depth helpers `toEntityArray(data)` + `coerceCachedEvents(cached)` in `server/routes/events.ts` — coerce any unexpected envelope shape to `[]` so downstream consumers (sync HTTP, Pitfall 1 bridge, fire-and-forget background `llmCachedRef` iterations, `loadRecentEnrichedEvents` sort) degrade gracefully instead of throwing.
+
+#### Fixed
+
+- P0 from Phase 27.4 — v2 extractor now per-batch flushes state to Redis. One hung Cerebras call no longer loses 45+ min of LLM work (stall reproduced at batch 133/184 on 2026-04-21).
+- 20 TypeScript errors in `server/lib/llmEventExtractor.v1.ts` cleaned via local-bind + early-continue pattern (all Category A `noUncheckedIndexedAccess` drift — Zod schemas untouched per D-16 audit).
+- 1 TypeScript error in `server/adapters/llm-provider.ts:232` (BACKOFF_MS literal fallback narrowing).
+- 1 failing test in `src/__tests__/entityLayers.test.ts` — `other is gray with red tint` expectation updated to shipped `[220,100,90]` (value diverged in Phase 27 commit `709fa15`).
+- Post-ship: Plan 03 was writing `LLMCachePayload` envelopes to `events:llm:v2` (the terminal reader's key, expects `ConflictEventEntity[]`) which crashed `/api/events` with `TypeError: events.map is not a function`. Partial writes moved to dedicated observability key `events:llm:v2:partial` in commit `a5c8846`.
+- Post-ship: `/gsd-debug` caught `llmCachedRef.data is not iterable` at the fire-and-forget background task's iteration sites. Commit `e26ceca` added defense-in-depth guards at all 3 `events:llm:v2` read sites.
+
+#### Changed
+
+- `PipelineVersionPill` in Topbar is now a **read-only indicator** — `onClick` handler stripped. Version still settable via `LLM_PIPELINE_V2` env var and `GET/POST /api/events/llm-pipeline` endpoints for scripted operator use.
+- Total server TypeScript error count: **29 → 8** (−21). Remaining 8 are `useEntityLayers.ts` `depthTest` deck.gl v9 type drift, deferred to Phase 27.4.3.
+
+#### Verification
+
+- 971/971 server test suite pass (+3 new watchdog integration tests, zero regressions)
+- All 23 locked CONTEXT decisions (D-01..D-23) covered, all 10 must-haves (MH-1..MH-10) met
+- `/api/events` returns HTTP 200 post-fix (was HTTP 500 pre-fix)
+- Old tech-debt todo `phase-27-llm-pipeline-ts-debt.md` closed + deleted
+
+### Phase 27.4: LLM Enrichment Improvements (2026-04-13 → 2026-04-22)
+
+#### Added
+
+- Palantir-grade LLM geolocation pipeline with 6-path resolver (own-snapshot → POI-amenity Nominatim → direct Nominatim → 2-pass LLM verify → Bellingcat coord passthrough → GDELT ActionGeo fallback).
+- Richer prompts — NEWS block (tier-tagged from `news:gdelt`, ±24h), BELLINGCAT block, TEMPORAL block (prior events ±72h + ±1deg bbox).
+- Extended v2 Zod schema — structured place hierarchy `{country, admin1, city, neighborhood, landmark, confidence}`, `derivePrecision` + `deriveSuspect` pure functions, 6-value `GeocodeProvenance` enum, reasoning truncation-not-rejection.
+- Reliability primitives — `llmCircuitBreaker.ts` (sliding 10-call window, 30% error pause), `llmDLQ.ts` (Redis SADD bounded set, 200 entry cap, 7d TTL), `llmTokenBudget.ts` (Cerebras 1M/day, Groq 200K/day, soft 0.8 / hard 0.95 caps).
+- Eval harness — 50 curated ground-truth events across 11 countries, resolver-only accuracy scoring at 5/20/100km thresholds.
+- DevApiStatus Events tab — 8 observability blocks (pipeline waterfall, precision/confidence/source-tier/casualty histograms, per-event drill-down, LLM call log with skip telemetry, per-provider budget bars, eval score gate, DLQ, suspect count).
+- Dev-only `POST /api/events/llm-replay/:groupKey` endpoint — re-extract single group without writing to cache.
+- Runtime pipeline override — `GET/POST /api/events/llm-pipeline` with Redis-backed override (7d TTL) for v1/v2 swap without redeploy.
+
+#### Changed
+
+- Flag-gated v2 pipeline — `LLM_PIPELINE_V2` env (default `true` post-debug 2026-04-21); v1 preserved as rollback at `llmEventExtractor.v1.ts`.
+- Cache version bump — v2 Redis keys `events:llm:v2` + `events:llm-summary:v2` coexist with v1. Pitfall 1 bridge serves v1 when v2 is empty (map never goes blank during rollout).
+- Cerebras model swapped — `gpt-oss-120b` → `qwen-3-235b-a22b-instruct-2507` (free-tier compatible; paid tier required for original).
+
+#### Known at ship
+
+- V2 extractor wrote cache only AFTER all batches complete — one hung call lost 45+ min of work. Addressed by Phase 27.4.1 watchdog + per-batch cache flush.
+
 ## [v1.2.3] - 2026-03-29
 
 ### Changed

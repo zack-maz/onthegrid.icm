@@ -27,7 +27,8 @@ not aspirational operations advice.
 7. [Upstash command budget exhausted](#7-upstash-command-budget-exhausted)
 8. [CORS misconfiguration after deploy](#8-cors-misconfiguration-after-deploy)
 9. [Vercel cron job failure](#9-vercel-cron-job-failure)
-10. [Common log query patterns](#common-log-query-patterns)
+10. [LLM pipeline hung / /api/events returning 500](#10-llm-pipeline-hung--apievents-returning-500)
+11. [Common log query patterns](#common-log-query-patterns)
 
 ---
 
@@ -582,6 +583,89 @@ multiple layers even during low-traffic periods.
   a single missed warm doesn't cause an outage, only a bump in
   cold requests.
 - Vercel cron billing is monitored via the dashboard.
+
+---
+
+## 10. LLM pipeline hung / `/api/events` returning 500
+
+**Symptom:** `/api/events` returns HTTP 500 with `TypeError: events.map is not a function` or `llmCachedRef.data is not iterable`. Map either shows stale v1 data or goes blank depending on which cache path failed.
+
+**Root cause (Phase 27.4.1 era, fixed in `a5c8846` + `e26ceca`):** shape drift between the v2 extractor's partial writes and the terminal reader's expected `ConflictEventEntity[]`. The fix splits the two concerns across two Redis keys:
+
+- `events:llm:v2` — terminal, `ConflictEventEntity[]`, written only by `server/routes/events.ts:~1016` after geocoding completes. Served to users.
+- `events:llm:v2:partial` — observability-only, `LLMCachePayload` envelope `{events, progress: 'N/M', complete, generatedAt}`, written per-batch by `writePartialCache` in `server/lib/llmEventExtractor.v2.ts`. NEVER served to users.
+
+### Diagnosis
+
+```bash
+REDIS_URL=$(grep UPSTASH_REDIS_REST_URL .env | cut -d= -f2 | tr -d '"')
+REDIS_TOKEN=$(grep UPSTASH_REDIS_REST_TOKEN .env | cut -d= -f2 | tr -d '"')
+
+# Check terminal key shape — should be a JSON array starting with [
+curl -s -H "Authorization: Bearer $REDIS_TOKEN" "$REDIS_URL/get/events:llm:v2" | head -c 100
+
+# Check partial key — should be an envelope starting with {"events":[
+curl -s -H "Authorization: Bearer $REDIS_TOKEN" "$REDIS_URL/get/events:llm:v2:partial" | head -c 100
+
+# Check LLM pipeline progress
+curl -s http://localhost:3001/api/events/llm-status | jq '{stage, completedBatches, totalBatches, watchdogTimeoutCount}'
+```
+
+### Recovery
+
+**If `events:llm:v2` contains envelope data (regression):**
+
+```bash
+# Clear it — Pitfall 1 bridge will serve v1 cache automatically
+curl -s -X POST -H "Authorization: Bearer $REDIS_TOKEN" "$REDIS_URL/del/events:llm:v2"
+```
+
+The reader at `server/routes/events.ts:675` now calls `coerceCachedEvents` which degrades an unexpected envelope to `[]` instead of throwing, so this case should no longer produce HTTP 500 as of `e26ceca`.
+
+**If v2 extractor is stuck (batch N/M not advancing):**
+
+```bash
+# Clear the pipeline cooldown so a retrigger can fire
+curl -s -X POST -H "Authorization: Bearer $REDIS_TOKEN" "$REDIS_URL/del/events:llm-process-ts"
+
+# Check the watchdog-timeout counter — if it's incrementing, the extractor
+# is recovering on its own; if 0 and no progress, the loop is truly hung
+# and the server needs a restart
+curl -s http://localhost:3001/api/events/llm-status | jq '.watchdogTimeoutCount'
+```
+
+### Tuning `LLM_BATCH_TIMEOUT_MS`
+
+Default 90000ms (90s) hard-kill with 60s soft-warn. Raise if Cerebras is
+consistently exceeding 90s under high-traffic conditions (check amber
+`⊘` soft-warn entries in DevApiStatus call log):
+
+```bash
+# .env — takes effect on next server restart (node --watch does not reload env)
+LLM_BATCH_TIMEOUT_MS=120000
+```
+
+The watchdog is a safety net, not a performance optimizer. Too-aggressive
+timeouts false-positive DLQ legitimate slow batches.
+
+### Prevention
+
+- `events:llm:v2:partial` writes are type-enforced by `LLMCachePayload` —
+  any future regression writing to the terminal key would trip the
+  reader's `toEntityArray` guard, degrading to empty-array-served rather
+  than 500.
+- Server test suite (`npx vitest run server/`) includes integration tests
+  for the watchdog + cache accumulation paths in
+  `server/__tests__/lib/llmEventExtractor.v2.test.ts`.
+
+### Why this matters
+
+- **Severity:** the map goes blank if no v1 bridge cache is available;
+  with v1 available, the bridge keeps the map rendering enriched events
+  while the v2 path recovers. Graceful degradation contract holds.
+- **Related commits:** `a5c8846` (partial key split), `e26ceca` (reader
+  defense-in-depth). See CHANGELOG.md Phase 27.4.1 entry for the full
+  incident narrative.
 
 ---
 

@@ -1,6 +1,6 @@
 # Iran Conflict Monitor — Project Status
 
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-24
 
 ## Progress
 
@@ -9,8 +9,8 @@ v0.9 MVP:                [██████████████████
 v1.0 Deployment:         [████████████████████]  2/2  phases (shipped 2026-03-20)
 v1.1 Intelligence Layer: [████████████████████]  8/8  phases (shipped 2026-03-22)
 v1.2 Visualization:      [████████████████████]  7/7  phases (shipped 2026-03-29)
-v1.3 Data Quality:       [████████████████████] 11/11 phases (closing — all primary phases shipped)
-v1.4 GDELT & Perf:       [░░░░░░░░░░░░░░░░░░░░]  0/2  phases (planned)
+v1.3 Data Quality:       [████████████████████] 11/11 phases (shipped 2026-04-09)
+v1.4 GDELT & Perf:       [████████████████░░░░]  6/10 phases (Phase 27.4.1 shipping)
 ```
 
 ## Phase Status
@@ -57,14 +57,25 @@ v1.4 GDELT & Perf:       [░░░░░░░░░░░░░░░░░░
 | 26.1  | Water Layer Refinements                    | v1.3      | Done    | 2026-04-04 |
 | 26.3  | Production Code Cleanup                    | v1.3      | Done    | 2026-04-07 |
 | 26.4  | Documentation & External Presentation      | v1.3      | Done    | 2026-04-08 |
-| 27    | Conflict Geolocation Improvement (GDELT)   | v1.4      | Planned | —          |
+| 27    | Conflict Geolocation Improvement (GDELT)   | v1.4      | Done    | 2026-04-12 |
+| 27.1  | Dev Observability & LLM Pipeline Status    | v1.4      | Done    | 2026-04-15 |
+| 27.2  | Event Quality & Water Data Improvements    | v1.4      | Done    | 2026-04-17 |
+| 27.3  | Water Facility Filtering Improvements      | v1.4      | Done    | 2026-04-18 |
+| 27.3.1| Water Facility Retry and Cleanup           | v1.4      | Done    | 2026-04-19 |
+| 27.3.2| Water Facility Admission Tightening        | v1.4      | Done    | 2026-04-20 |
+| 27.3.3| Romanize Non-Latin Water Names             | v1.4      | Deferred| —          |
+| 27.4  | LLM Enrichment Improvements                | v1.4      | Done    | 2026-04-22 |
+| 27.4.1| V2 Extractor Watchdog + TS Cleanup         | v1.4      | Done    | 2026-04-24 |
+| 27.4.2| CI Health (flip main CI green)             | v1.4      | Planned | —          |
+| 27.4.3| deck.gl v9 Type Drift                      | v1.4      | Planned | —          |
+| 27.4.5| LLM Pipeline Full History Observability    | v1.4      | Planned | —          |
 | 28    | Performance & Load Testing                 | v1.4      | Planned | —          |
 
 _Phase 26.2 (Conflict Geolocation Improvement, NLP attempt) was scrapped in Phase 26.3 and renumbered to Phase 27 under v1.4 on 2026-04-08. Original Phase 27 (Performance & Load Testing) was renumbered to Phase 28 under v1.4 on the same date. Historical artifacts from the scrapped 26.2 attempt are preserved at `.planning/phases/archive-26.2-nlp-scrapped/`._
 
 ## Current Focus
 
-v1.3 closing — all 11 primary phases shipped (22, 22.1, 23, 23.1, 23.2, 24, 25, 26, 26.1, 26.3, 26.4). 1277 tests passing, type-coverage 97.05%. Next milestone is v1.4, starting with Phase 27 (GDELT Redo — fresh approach after the scrapped NLP attempt).
+v1.4 in flight — 6 phases shipped (27, 27.1, 27.2, 27.3, 27.3.1, 27.3.2, 27.4, 27.4.1). Phase 27.4.1 (V2 Extractor Watchdog) currently in PR #9 with 25 commits ahead of main, 971/971 server tests passing, TS error count driven 29 → 8. Next queued work is CI Health (27.4.2), deck.gl v9 drift cleanup (27.4.3), and LLM Pipeline full-history observability (27.4.5) before Phase 28 performance/load testing closes the milestone.
 
 ## What's Been Built
 
@@ -153,6 +164,26 @@ v1.3 closing — all 11 primary phases shipped (22, 22.1, 23, 23.1, 23.2, 24, 25
 **Phase 26.3: Production Code Cleanup** — Portfolio-grade internal quality: pino structured logging with X-Request-ID tracing, Zod config consolidation + query validation, AppError envelope with graceful SIGTERM shutdown, `noUncheckedIndexedAccess` strict TypeScript across server, 1164-line hand-written OpenAPI 3.0 spec, vitest coverage gates. Phase 26.2 NLP dead code fully removed.
 
 **Phase 26.4: Documentation & External Presentation** — Portfolio hero README (564 lines) with agentic Playwright-captured Hormuz GIF and 6 layer screenshots, 10 Mermaid architecture docs with 21 diagrams (+ exhaustive ontology deep dive), 8 ADRs including a 300-line retrospective on the scrapped Phase 26.2 NLP approach, 9-failure-mode runbook, graceful degradation contract. Palantir-grade gap closure: pino log redaction, type-coverage CI gate at 97% floor, chaos test proving graceful Redis-death degradation (exposed + fixed a real `Promise.race` gap in `cacheGetSafe`), Zod response schema validation. CI/CD pipeline (GitHub Actions + CodeQL + husky + gitleaks). 1277 tests passing.
+
+### v1.4 GDELT Redo & Performance (Phases 27-28, in flight)
+
+**Phase 27: Conflict Geolocation Improvement (GDELT Redo)** — LLM-based extraction via Cerebras (primary) and Groq (fallback), gpt-oss-120b / qwen-3-235b ontology. Simplified 5-type conflict taxonomy (airstrike, on_ground, explosion, targeted, other) replacing the 11-type CAMEO mapping. Forward geocoding via Nominatim with 30-day Redis cache, 1-req/s throttle, ME viewbox + 22 country codes server-locked. Precision tiers (exact / neighborhood / city / region) rendered as radius rings via `PrecisionRingLayer`. Lazy-on-cache-miss trigger with 15-min cooldown, dual v1+v2 cache keys, graceful degradation to raw GDELT when LLM unavailable.
+
+**Phase 27.1: Dev Observability & LLM Pipeline Status** — Server-side LLM progress module with callback injection pattern, `/api/events/llm-status` endpoint (NODE_ENV-gated), DevApiStatus multi-tab modal with 8 observability blocks (pipeline waterfall, source health, precision histograms, call log).
+
+**Phase 27.2: Event Quality & Water Data Improvements** — Source tier registry (`sourceTiers.ts`), tier-gated news filtering (1.5x/1.0x/0.7x severity multipliers), LLM prompt enrichment with news article context, precision ring UX polish, water facility coverage expansion (Overpass name filter removal + reverse geocode fallback for unnamed facilities).
+
+**Phase 27.3: Water Facility Filtering Improvements** — Holistic filter pipeline with per-stage rejection tracking, enrichment pipeline, river bbox optimization, WATER_ATTACK_EVENT_TYPES extracted to shared constant across layer/detail/counter consumers.
+
+**Phase 27.3.1: Water Facility Retry and Cleanup** — Committed JSON snapshot (`src/data/water-facilities.json`, 602→436→305 facilities through successive admission tightening) to decouple cold-starts from Overpass, multi-user resilience tier Redis→devFileCache→snapshot→Overpass, `computeAdmissionDecision` pure-function helper extracted from scattered rejection branches, WaterFilterStats observability with byCountry + byTypeRejections + Overpass health + source provenance surfaced in DevApiStatus.
+
+**Phase 27.3.2: Water Facility Admission Tightening** — Latin-label admission gate (non-desalination facilities require Latin-script `name:en`/`name`/`operator`), server-owned label synthesis for desalination exemption ("Desalination Plant near {city}" or coord-based fallback), Redis key v3 bump to force cold-fill of new `no_resolved_name` rejection bucket.
+
+**Phase 27.3.3: Romanize Non-Latin Water Names** — Deferred. Dedicated phase will add transliteration to re-admit non-Latin names under the Latin gate (`سد سعد` → `Saad Dam`).
+
+**Phase 27.4: LLM Enrichment Improvements** — Palantir-grade geolocation resolver (6-path dispatch: own-snapshot → POI-amenity Nominatim → direct Nominatim → 2-pass LLM verify → Bellingcat coord passthrough → GDELT ActionGeo fallback). Richer prompts with NEWS + BELLINGCAT + TEMPORAL context blocks. Extended v2 Zod schema with structured place hierarchy + confidence + reasoning. Reliability primitives: circuit breaker (sliding 10-call window), DLQ (bounded 200-entry Redis set), token budget tracker (Cerebras 1M/day, Groq 200K/day, soft 0.8 / hard 0.95). Eval harness with 50 curated ground-truth events at 5/20/100km thresholds. DevApiStatus Events tab with 8 blocks including eval gate + suspect count. Dev-only prompt replay endpoint + runtime v1/v2 toggle.
+
+**Phase 27.4.1: V2 Extractor Watchdog + LLM Pipeline TS Cleanup** — P0 fix for Phase 27.4's architectural defect (one hung Cerebras call could lose 45+ min of LLM work). Shared `withBatchWatchdog` helper with Promise.race + AbortController late-resolve guard, default 90s hard-kill + 60s soft-warn, env-var override `LLM_BATCH_TIMEOUT_MS`, timed-out groups DLQ-routed with `reason='timeout_watchdog'`. Applied symmetrically to both v1 and v2 extractors. Per-batch cache flush to dedicated observability key `events:llm:v2:partial` (terminal key `events:llm:v2` retains its `ConflictEventEntity[]` contract). 20 TS errors in `llmEventExtractor.v1.ts` cleaned via local-bind + early-continue pattern (D-15). Two post-ship bug fixes landed via systematic debugging: `a5c8846` moved partial writes away from the terminal key after `events.map is not a function` crashed `/api/events`, and `e26ceca` added `toEntityArray` + `coerceCachedEvents` defense-in-depth guards at all 3 v2 read sites. Server TS error count 29 → 8. 971/971 server tests pass (+3 new watchdog integration tests).
 
 ## Blockers
 
