@@ -144,9 +144,10 @@ async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEv
   const key = pipelineV2 ? 'events:llm:v2' : LLM_EVENTS_KEY;
   try {
     const cached = await cacheGetSafe<ConflictEventEntity[]>(key, 0);
-    if (!cached?.data) return [];
+    const events = toEntityArray(cached?.data);
+    if (events.length === 0) return [];
     // Most recent first — entity.timestamp is the event timestamp.
-    return cached.data
+    return events
       .slice()
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, limit)
@@ -433,6 +434,34 @@ function sendNormalizedEvents(
   });
 }
 
+/**
+ * Phase 27.4.1 post-ship defense-in-depth (2026-04-24).
+ *
+ * `events:llm:v2` is owned by the terminal route write below (~line 1016)
+ * which stores a ConflictEventEntity[] array. Plan 03 briefly wrote an
+ * LLMCachePayload envelope to the same key which crashed every consumer
+ * (events.map is not a function; llmCachedRef.data is not iterable); the
+ * writer is fixed in a5c8846 to target events:llm:v2:partial instead.
+ *
+ * This guard is belt-and-suspenders — if any future regression reintroduces
+ * an envelope write to the terminal key, the synchronous HTTP path and
+ * the fire-and-forget background task both degrade to "serve empty /
+ * recompute from scratch" instead of throwing 500. The Pitfall 1 bridge
+ * then kicks in and maps users to v1 cache where possible.
+ *
+ * Callers should apply at the read site so downstream consumers (iteration
+ * loops, .find, .map, sendNormalizedEvents payload) can trust the shape.
+ */
+function toEntityArray(data: unknown): ConflictEventEntity[] {
+  return Array.isArray(data) ? (data as ConflictEventEntity[]) : [];
+}
+
+function coerceCachedEvents<C extends { data: unknown }>(
+  cached: C,
+): Omit<C, 'data'> & { data: ConflictEventEntity[] } {
+  return { ...cached, data: toEntityArray(cached.data) };
+}
+
 export const eventsRouter = Router();
 
 // ---------------------------------------------------------------------------
@@ -577,7 +606,7 @@ if (process.env.NODE_ENV !== 'production') {
     // Find the existing cached v2 entity by id containing the groupKey.
     // (v2 ids are formed as `llm-v2-${groupKey}` in enrichedV2ToEntities.)
     const cached = await cacheGetSafe<ConflictEventEntity[]>('events:llm:v2', 0);
-    const existing = cached?.data?.find((e) => e.id.includes(groupKey));
+    const existing = toEntityArray(cached?.data).find((e) => e.id.includes(groupKey));
     if (!existing) return res.status(404).json({ error: 'not_found' });
 
     // Reconstruct the target group from the raw GDELT cache — the extractor
@@ -672,10 +701,16 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   const LLM_SUMMARY_KEY_ACTIVE = pipelineV2 ? 'events:llm-summary:v2' : LLM_SUMMARY_KEY;
 
   // --- LLM cache check (highest priority: serve enriched events if fresh) ---
+  // Post-ship defense-in-depth 2026-04-24: coerce to array-shape immediately
+  // so the sync HTTP path (sendNormalizedEvents → normalizeEventTypes.map),
+  // the Pitfall 1 bridge assignment below, and the fire-and-forget background
+  // task's llmCachedRef iterations (lines ~854, ~1007) all see a guaranteed
+  // ConflictEventEntity[] regardless of what shape the cache holds.
   let llmCached = await cacheGetSafe<ConflictEventEntity[]>(
     LLM_EVENTS_KEY_ACTIVE,
     LLM_LOGICAL_TTL_MS,
   );
+  if (llmCached) llmCached = coerceCachedEvents(llmCached);
   if (llmCached && !llmCached.stale) {
     return sendNormalizedEvents(res, llmCached);
   }
