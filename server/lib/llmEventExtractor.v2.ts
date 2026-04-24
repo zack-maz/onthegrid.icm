@@ -60,7 +60,22 @@ const TEMPORAL_CONTEXT_WINDOW_MS = 72 * 3_600_000;
 const NEWS_MATCH_WINDOW_MS = 24 * 3_600_000;
 /** Redis keys read by the context builder. */
 const NEWS_KEY = 'news:gdelt';
+/**
+ * Terminal cache of ConflictEventEntity[] — written by server/routes/events.ts
+ * after geocoding completes. Read here only for the TEMPORAL CONTEXT BLOCK
+ * (±72h + ±1deg bbox of prior enriched events).
+ */
 const EVENTS_LLM_V2_KEY = 'events:llm:v2';
+/**
+ * Partial-progress cache for the v2 extractor — written per-batch from
+ * writePartialCache. Holds LLMCachePayload<EnrichedEventV2> envelopes so
+ * DevApiStatus / /llm-status can show in-flight progress without colliding
+ * with the terminal ConflictEventEntity[] key above. Readers of the main
+ * /api/events endpoint NEVER touch this key (Plan 27.4.1 post-ship fix —
+ * original Plan 03 wrote envelopes to the terminal key which broke the
+ * route's normalizeEventTypes.map call).
+ */
+const EVENTS_LLM_V2_PARTIAL_KEY = 'events:llm:v2:partial';
 
 // ---------------------------------------------------------------------------
 // System prompt (D-05 verbatim, expanded for D-11..D-14).
@@ -144,17 +159,19 @@ export interface GeocodedEnrichedEventV2 extends EnrichedEventV2 {
 }
 
 /**
- * Phase 27.4.1 D-08 — cache envelope for events:llm:v2.
+ * Phase 27.4.1 D-08 — cache envelope for `events:llm:v2:partial`.
  *
- * Wraps the events array with progress metadata so readers can distinguish
- * a partial snapshot (mid-run) from a final snapshot (complete=true). The
- * outer CacheEntry<T> wrapper from cacheSetSafe preserves the existing
- * fetchedAt semantics; this envelope adds the run-level completion state.
+ * Wraps the events array with progress metadata so readers (DevApiStatus /
+ * /llm-status) can distinguish a partial snapshot (mid-run) from a final
+ * snapshot (complete=true). The outer CacheEntry<T> wrapper from cacheSetSafe
+ * preserves the existing fetchedAt semantics; this envelope adds the
+ * run-level completion state.
  *
- * D-09: the reader (/api/events) continues to treat this as a v2-shape
- * cache regardless of `complete` — the Pitfall 1 bridge still chooses v1
- * when v2 is empty OR incomplete-and-no-v1-bridge-was-found. Partial-v2
- * serving is explicitly deferred.
+ * D-09 (post-ship revision): the user-facing reader (/api/events) NEVER
+ * touches this envelope — it reads `events:llm:v2` (the terminal key, a
+ * plain ConflictEventEntity[]) only. Partial-v2 serving to users is
+ * explicitly deferred to a future phase. The Pitfall 1 bridge continues
+ * to serve v1 when the terminal key is empty.
  */
 export interface LLMCachePayload {
   events: EnrichedEventV2[];
@@ -342,20 +359,21 @@ async function loadTemporalContext(group: EventGroup): Promise<PriorEnrichedEven
 // ---------------------------------------------------------------------------
 
 /**
- * Phase 27.4.1 D-07/D-08/D-10 — write a partial/final snapshot of the
- * in-progress events array to events:llm:v2. Wrapped in cacheSetSafe so
- * Redis failures don't propagate (D-29). `complete: true` is written
- * exactly once, after the last batch of the run.
+ * Phase 27.4.1 D-07/D-08/D-10 (post-ship revision) — write a partial/final
+ * snapshot of the in-progress events array to `events:llm:v2:partial`, a
+ * key RESERVED FOR OBSERVABILITY. The terminal /api/events reader never
+ * touches this key — it reads `events:llm:v2` which is only ever written
+ * by the route-level geocode-then-write step (server/routes/events.ts:1016)
+ * with the correct ConflictEventEntity[] shape.
  *
- * NOTE on shape: this writes an LLMCachePayload envelope. The reader
- * (server/routes/events.ts) currently reads v2 as ConflictEventEntity[]
- * — during the rollout window, the envelope's `events` field carries
- * EnrichedEventV2[] (pre-geocoding shape), which the route layer
- * transforms via enrichedV2ToEntities AFTER the full run completes.
- * The Pitfall 1 bridge (D-09) continues to serve v1 when the v2 cache
- * is empty OR shaped like an envelope (reader reads ConflictEventEntity[]
- * and finds a non-array), so partial-to-user is naturally suppressed.
- * Partial-v2 reader semantics are explicitly deferred per CONTEXT.
+ * Why two keys: LLMCachePayload carries EnrichedEventV2[] (pre-geocode
+ * shape). Writing that to the terminal key broke normalizeEventTypes.map
+ * in production (observed 2026-04-24). Splitting the keys makes the
+ * progress/observability vs user-facing-cache boundary explicit.
+ *
+ * Wrapped in cacheSetSafe so Redis failures don't propagate (D-29).
+ * `complete: true` is written exactly once, after the last batch of
+ * the run.
  */
 async function writePartialCache(
   events: EnrichedEventV2[],
@@ -370,7 +388,7 @@ async function writePartialCache(
     generatedAt: new Date().toISOString(),
   };
   try {
-    await cacheSetSafe(EVENTS_LLM_V2_KEY, payload, LLM_REDIS_TTL_SEC);
+    await cacheSetSafe(EVENTS_LLM_V2_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC);
   } catch (err) {
     // cacheSetSafe already swallows internally, but belt+suspenders.
     log.warn({ err, completed, total, complete }, 'partial cache write failed');

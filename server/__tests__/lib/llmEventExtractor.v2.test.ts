@@ -554,8 +554,10 @@ describe('llmEventExtractor.v2', () => {
 // Phase 27.4.1 — watchdog + per-batch cache integration tests
 //
 // Covers the 3 new critical behaviors from Plan 03:
-//   14. Partial LLMCachePayload write to events:llm:v2 after each batch +
-//       final write carries complete: true (D-07 / D-08 / D-10)
+//   14. Partial LLMCachePayload write to events:llm:v2:partial after each
+//       batch + final write carries complete: true (D-07 / D-08 / D-10;
+//       post-ship 2026-04-24: key was events:llm:v2 — collided with
+//       terminal ConflictEventEntity[] key and broke /api/events reader)
 //   15. Watchdog timeout routes every group in the batch to DLQ with
 //       reason='timeout_watchdog' and bumps watchdogTimeoutCount (D-04 / D-06)
 //   16. Watchdog timeout on batch N does not abort the loop — batch N+1
@@ -588,7 +590,7 @@ describe('Phase 27.4.1 — watchdog + per-batch cache', () => {
   // -----------------------------------------------------------------------
   // Test 14: per-batch partial cache write + final complete: true write
   // -----------------------------------------------------------------------
-  it('writes a partial LLMCachePayload to events:llm:v2 after each successful batch', async () => {
+  it('writes a partial LLMCachePayload to events:llm:v2:partial after each successful batch', async () => {
     // 4 groups → 2 batches (BATCH_SIZE = 2)
     const groups = [
       makeGroup({ key: 'grp-b1-1', entities: [makeEntity({ id: 'e1' })] }),
@@ -604,7 +606,7 @@ describe('Phase 27.4.1 — watchdog + per-batch cache', () => {
 
     const writes = vi
       .mocked(cacheSetSafe)
-      .mock.calls.filter(([key]) => key === 'events:llm:v2');
+      .mock.calls.filter(([key]) => key === 'events:llm:v2:partial');
 
     // 2 partial (one per successful batch) + 1 final complete:true = 3 writes
     expect(writes.length).toBeGreaterThanOrEqual(3);
@@ -709,7 +711,7 @@ describe('Phase 27.4.1 — watchdog + per-batch cache', () => {
     // Final cache write still fires with complete: true and progress 2/2
     const writes = vi
       .mocked(cacheSetSafe)
-      .mock.calls.filter(([key]) => key === 'events:llm:v2');
+      .mock.calls.filter(([key]) => key === 'events:llm:v2:partial');
     const last = writes[writes.length - 1][1] as {
       complete: boolean;
       progress: string;
