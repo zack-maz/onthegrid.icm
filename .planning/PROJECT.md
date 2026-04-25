@@ -90,4 +90,4 @@ Portfolio: 564-line README with hero GIF, 10-file Mermaid architecture deep dive
 
 ---
 
-_Last updated: 2026-04-19 after Phase 27.3.1 gap closure (12/12 plans; all 7 UAT gaps resolved; 3 in-browser sign-off items in HUMAN-UAT.md)_
+_Last updated: 2026-04-25 after Phase 27.4.2 close (CI health + LLM v2 tuning — 7/10 plans landed; D-13 stop met early; all four CI gates GREEN + .husky/pre-push added; resolver eval-at-20km lifted 0.760 → 0.940 via Plan 07 Branch 2 fix; Plans 08/09/10 deferred to Phase 27.5 backlog; HUMAN-UAT 27.4.2 has 2 follow-up items deferred to post-Phase-27.4.3 production run)_
