@@ -115,6 +115,8 @@ export interface LLMRunSummary {
   evalScore?: { within5km: number; within20km: number; within100km: number; total: number };
   provenanceCounts?: Partial<Record<GeocodeProvenance, number>>;
   suspectCount?: number;
+  /** Phase 27.4.1 D-06 / 27.4.2 P6: count of batches killed by the timeout watchdog in last run. */
+  watchdogTimeoutCount?: number;
 }
 
 /**
@@ -200,5 +202,6 @@ export function buildSummary(): LLMRunSummary {
     evalScore: llmProgress.evalScore,
     provenanceCounts: llmProgress.provenanceCounts,
     suspectCount: llmProgress.suspectCount,
+    watchdogTimeoutCount: llmProgress.watchdogTimeoutCount,
   };
 }

@@ -20,6 +20,8 @@ export interface LLMRunSummary {
   evalScore?: { within5km: number; within20km: number; within100km: number; total: number };
   provenanceCounts?: Record<string, number>;
   suspectCount?: number;
+  // Phase 27.4.2 P6 — surface watchdog kill count on cold-start dashboard reads
+  watchdogTimeoutCount?: number;
 }
 
 /**
