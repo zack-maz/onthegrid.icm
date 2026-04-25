@@ -209,7 +209,7 @@ Plans:
 **Goal:** Bundle two concerns — green `main` CI (32 filter-test fixture failures, 4 npm-audit vulns, ~25 prettier format-drift files, ~20 lint warnings) and raise v2 LLM enrichment to a measurable quality bar (one full 184-batch run completes under the new watchdog, captures eval baseline against the 50-event ground truth harness, then tuning iteration beats v1 eval score by ≥5pp AND drops `gdelt-actiongeo-fallback` provenance below 25%). Greening CI is the prerequisite so regression-watch during LLM tuning is trustworthy.
 **Depends on:** Phase 27.4.1
 **Requirements:** D-01 through D-17 (from 27.4.2-CONTEXT.md; phase has no formal REQ-IDs)
-**Plans:** 10 plans (5 Wave-1 CI + 5 Wave-2 tuning, last 3 conditional per D-13 stop)
+**Plans:** 7/10 plans complete
 
 Plans:
 
