@@ -62,8 +62,23 @@ function makeDefaults(): FilterState {
     setShowHighSeverity: () => {},
     setShowMediumSeverity: () => {},
     setShowLowSeverity: () => {},
+    // Phase 27.4.2 D-03 — backfill of Phase 27 precision filter shipped with
+    // src/lib/filters.ts:147 reading filters.enabledPrecisions.length < 4.
+    // Default value matches src/stores/filterStore.ts DEFAULTS.
+    enabledPrecisions: [
+      'exact',
+      'neighborhood',
+      'city',
+      'region',
+    ] as import('@/stores/filterStore').PrecisionTier[],
     // Site type toggles
-    enabledSiteTypes: ['nuclear', 'naval', 'oil', 'airbase', 'port'] as import('@/types/entities').SiteType[],
+    enabledSiteTypes: [
+      'nuclear',
+      'naval',
+      'oil',
+      'airbase',
+      'port',
+    ] as import('@/types/entities').SiteType[],
     setEnabledSiteTypes: () => {},
     toggleSiteType: () => {},
     // Visibility toggles

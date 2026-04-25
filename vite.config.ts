@@ -48,7 +48,17 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**', 'scripts/load-test.spec.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'scripts/load-test.spec.ts',
+      // Phase 27.4.2 Rule-3 fix: legacy parallel-executor worktrees under
+      // .claude/worktrees/agent-*/ contain stale snapshots of test files that
+      // pre-date current fixture factories (e.g. filters.test.ts without
+      // enabledPrecisions). They are dev tooling, not project source — vitest
+      // glob-matching them inflates the failure count and blocks CI gates.
+      '**/.claude/worktrees/**',
+    ],
     globals: true,
     testTimeout: 10000,
     pool: 'forks',
