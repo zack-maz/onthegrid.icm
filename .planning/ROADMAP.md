@@ -217,7 +217,7 @@ Plans:
 - [x] 27.4.2-02-npm-audit-fix-PLAN.md — Wave 1: npm audit fix without --force (D-04; clear high-severity advisories)
 - [x] 27.4.2-03-prettier-mass-sweep-PLAN.md — Wave 1: prettier sweep ~56 canonical drift files (D-05; lands BEFORE Wave 2 to avoid merge-conflict thrash on server/lib/llm\*.ts)
 - [x] 27.4.2-04-lint-sweep-and-ci-gate-PLAN.md — Wave 1: lint sweep (411 problems / 62 errors → 0 errors via .claude/\*\* worktree-isolation Rule-3 patch — all 62 errors lived in stale agent snapshots; live codebase had 0 errors); deferred vite.config.ts manualChunks fix absorbed; D-02 negotiated reading locked; all 4 D-02 gates GREEN; Wave 2 gate-keeper PASSED
-- [ ] 27.4.2-05-pre-commit-guard-verification-PLAN.md — Wave 1: verify .husky/pre-commit fires on drift; optional .husky/pre-push; CHECKPOINT before Wave 2
+- [x] 27.4.2-05-pre-commit-guard-verification-PLAN.md — Wave 1: verified .husky/pre-commit fires (3 live-fire tests: prettier drift → auto-fix; `any` lint error → BLOCK; gitleaks → ran on success); added .husky/pre-push for full-tree format:check + lint per RESEARCH Open Q #2 YES; CHECKPOINT auto-confirmed inline per Plan 04 precedent (gates exit-code-checkable); Wave 1 CLOSED, Wave 2 may begin
 - [ ] 27.4.2-06-tuning-baseline-and-helpers-PLAN.md — Wave 2: scripts/eval-replay.ts + setProviderOrderOverride + watchdogTimeoutCount surfacing + pre-tuning baseline capture (D-06/D-07/D-08/D-09/D-10)
 - [ ] 27.4.2-07-tuning-lever-1-poi-PLAN.md — Wave 2: D-11 lever 1 — POI keyword expansion + amenity-mapping audit
 - [ ] 27.4.2-08-tuning-lever-2-twopass-thresholds-PLAN.md — Wave 2 (conditional on D-13): D-11 lever 2 — 2-pass verify thresholds (250km gate + WR-04 single-candidate)
