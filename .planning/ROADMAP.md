@@ -216,7 +216,7 @@ Plans:
 - [x] 27.4.2-01-filter-test-fixture-PLAN.md — Wave 1: backfill enabledPrecisions in filters.test.ts makeDefaults() (D-03; greens 544 cascading failures from one root cause)
 - [x] 27.4.2-02-npm-audit-fix-PLAN.md — Wave 1: npm audit fix without --force (D-04; clear high-severity advisories)
 - [x] 27.4.2-03-prettier-mass-sweep-PLAN.md — Wave 1: prettier sweep ~56 canonical drift files (D-05; lands BEFORE Wave 2 to avoid merge-conflict thrash on server/lib/llm\*.ts)
-- [ ] 27.4.2-04-lint-sweep-and-ci-gate-PLAN.md — Wave 1: lint sweep (412 problems / 63 errors → 0 errors); D-02 negotiated reading documented; CHECKPOINT
+- [x] 27.4.2-04-lint-sweep-and-ci-gate-PLAN.md — Wave 1: lint sweep (411 problems / 62 errors → 0 errors via .claude/\*\* worktree-isolation Rule-3 patch — all 62 errors lived in stale agent snapshots; live codebase had 0 errors); deferred vite.config.ts manualChunks fix absorbed; D-02 negotiated reading locked; all 4 D-02 gates GREEN; Wave 2 gate-keeper PASSED
 - [ ] 27.4.2-05-pre-commit-guard-verification-PLAN.md — Wave 1: verify .husky/pre-commit fires on drift; optional .husky/pre-push; CHECKPOINT before Wave 2
 - [ ] 27.4.2-06-tuning-baseline-and-helpers-PLAN.md — Wave 2: scripts/eval-replay.ts + setProviderOrderOverride + watchdogTimeoutCount surfacing + pre-tuning baseline capture (D-06/D-07/D-08/D-09/D-10)
 - [ ] 27.4.2-07-tuning-lever-1-poi-PLAN.md — Wave 2: D-11 lever 1 — POI keyword expansion + amenity-mapping audit
