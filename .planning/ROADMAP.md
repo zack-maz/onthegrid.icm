@@ -215,7 +215,7 @@ Plans:
 
 - [x] 27.4.2-01-filter-test-fixture-PLAN.md — Wave 1: backfill enabledPrecisions in filters.test.ts makeDefaults() (D-03; greens 544 cascading failures from one root cause)
 - [x] 27.4.2-02-npm-audit-fix-PLAN.md — Wave 1: npm audit fix without --force (D-04; clear high-severity advisories)
-- [ ] 27.4.2-03-prettier-mass-sweep-PLAN.md — Wave 1: prettier sweep ~56 canonical drift files (D-05; lands BEFORE Wave 2 to avoid merge-conflict thrash on server/lib/llm\*.ts)
+- [x] 27.4.2-03-prettier-mass-sweep-PLAN.md — Wave 1: prettier sweep ~56 canonical drift files (D-05; lands BEFORE Wave 2 to avoid merge-conflict thrash on server/lib/llm\*.ts)
 - [ ] 27.4.2-04-lint-sweep-and-ci-gate-PLAN.md — Wave 1: lint sweep (412 problems / 63 errors → 0 errors); D-02 negotiated reading documented; CHECKPOINT
 - [ ] 27.4.2-05-pre-commit-guard-verification-PLAN.md — Wave 1: verify .husky/pre-commit fires on drift; optional .husky/pre-push; CHECKPOINT before Wave 2
 - [ ] 27.4.2-06-tuning-baseline-and-helpers-PLAN.md — Wave 2: scripts/eval-replay.ts + setProviderOrderOverride + watchdogTimeoutCount surfacing + pre-tuning baseline capture (D-06/D-07/D-08/D-09/D-10)
