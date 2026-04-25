@@ -21,6 +21,7 @@
     "capture:hero": "tsx scripts/capture-hero.ts",
     "refresh:water": "node --env-file-if-exists=.env --import tsx/esm scripts/refresh-water-facilities.ts",
     "refresh:sites": "node --env-file-if-exists=.env --import tsx/esm scripts/refresh-sites.ts",
+    "eval:replay": "node --env-file-if-exists=.env --import tsx/esm scripts/eval-replay.ts",
     "type-coverage": "type-coverage",
     "preview": "vite preview",
     "prepare": "husky"
