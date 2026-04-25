@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Phase 27.4.2 P5 — pre-push guard for whole-tree drift.
+# lint-staged in pre-commit only sees staged files; this runs the full
+# tree on push so accumulated drift is caught BEFORE CI burns minutes
+# rejecting the same diff.
+#
+# Cost: ~10s for npm run format:check + npm run lint on a clean tree.
+# Skip with --no-verify ONLY in emergency; D-02 gate enforcement and
+# project security protocol both forbid routine bypass.
+set -e
+
+echo "→ Running pre-push guards (npm run format:check && npm run lint)..."
+
+npm run format:check
+npm run lint
+
+echo "→ Pre-push guards passed."
