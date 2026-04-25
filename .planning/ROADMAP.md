@@ -208,12 +208,23 @@ Plans:
 
 **Goal:** Bundle two concerns — green `main` CI (32 filter-test fixture failures, 4 npm-audit vulns, ~25 prettier format-drift files, ~20 lint warnings) and raise v2 LLM enrichment to a measurable quality bar (one full 184-batch run completes under the new watchdog, captures eval baseline against the 50-event ground truth harness, then tuning iteration beats v1 eval score by ≥5pp AND drops `gdelt-actiongeo-fallback` provenance below 25%). Greening CI is the prerequisite so regression-watch during LLM tuning is trustworthy.
 **Depends on:** Phase 27.4.1
-**Requirements:** TBD (to be derived in /gsd-discuss-phase; scope levers + hang-recurrence policy still open)
-**Plans:** 0 plans
+**Requirements:** D-01 through D-17 (from 27.4.2-CONTEXT.md; phase has no formal REQ-IDs)
+**Plans:** 10 plans (5 Wave-1 CI + 5 Wave-2 tuning, last 3 conditional per D-13 stop)
 
 Plans:
 
-- [ ] TBD (run /gsd-discuss-phase 27.4.2 then /gsd-plan-phase 27.4.2 to break down)
+- [ ] 27.4.2-01-filter-test-fixture-PLAN.md — Wave 1: backfill enabledPrecisions in filters.test.ts makeDefaults() (D-03; greens 544 cascading failures from one root cause)
+- [ ] 27.4.2-02-npm-audit-fix-PLAN.md — Wave 1: npm audit fix without --force (D-04; clear high-severity advisories)
+- [ ] 27.4.2-03-prettier-mass-sweep-PLAN.md — Wave 1: prettier sweep ~56 canonical drift files (D-05; lands BEFORE Wave 2 to avoid merge-conflict thrash on server/lib/llm\*.ts)
+- [ ] 27.4.2-04-lint-sweep-and-ci-gate-PLAN.md — Wave 1: lint sweep (412 problems / 63 errors → 0 errors); D-02 negotiated reading documented; CHECKPOINT
+- [ ] 27.4.2-05-pre-commit-guard-verification-PLAN.md — Wave 1: verify .husky/pre-commit fires on drift; optional .husky/pre-push; CHECKPOINT before Wave 2
+- [ ] 27.4.2-06-tuning-baseline-and-helpers-PLAN.md — Wave 2: scripts/eval-replay.ts + setProviderOrderOverride + watchdogTimeoutCount surfacing + pre-tuning baseline capture (D-06/D-07/D-08/D-09/D-10)
+- [ ] 27.4.2-07-tuning-lever-1-poi-PLAN.md — Wave 2: D-11 lever 1 — POI keyword expansion + amenity-mapping audit
+- [ ] 27.4.2-08-tuning-lever-2-twopass-thresholds-PLAN.md — Wave 2 (conditional on D-13): D-11 lever 2 — 2-pass verify thresholds (250km gate + WR-04 single-candidate)
+- [ ] 27.4.2-09-tuning-lever-3-system-prompt-PLAN.md — Wave 2 (conditional on D-13): D-11 lever 3 — SYSTEM_PROMPT_V2 anti-fabrication tightening
+- [ ] 27.4.2-10-tuning-lever-4-news-temporal-bellingcat-PLAN.md — Wave 2 (conditional on D-13): D-11 lever 4 — NEWS/TEMPORAL/BELLINGCAT block tuning + phase close
+
+**Wave structure:** Wave 1 (P1-P5) sequential; Wave 2 (P6-P10) sequential, P8/P9/P10 conditional on D-13 stop. P6 depends on P5 (D-02 strict CI gate before tuning).
 
 **Explicitly out-of-scope:** Phase 27.4.3 (deck.gl v9 `depthTest` TS drift), Phase 27.4.5 (LLM flight-recorder Redis history), Phase 27.3.3 (romanization of non-Latin water names), Vercel preview deploy failure.
 
