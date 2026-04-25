@@ -177,6 +177,25 @@ async function tryProviderOnce(
   }
 }
 
+// Phase 27.4.2 P6 — D-07 hang-recurrence response. Wave-scoped in-memory
+// override mirrors the setPipelineOverride pattern in server/config.ts:230-242.
+// No Redis persistence per D-07 (ops-managed, not user-toggled).
+//
+// Usage from operator scripts or wave runbook:
+//   import { setProviderOrderOverride } from './server/adapters/llm-provider.js'
+//   setProviderOrderOverride(['groq', 'cerebras'])  // D-07 flip
+//   setProviderOrderOverride(null)                   // restore default
+let _providerOrderOverride: readonly Provider[] | null = null;
+
+export function setProviderOrderOverride(order: readonly Provider[] | null): void {
+  _providerOrderOverride = order;
+}
+
+export function getProviderOrder(): readonly Provider[] {
+  if (_providerOrderOverride) return _providerOrderOverride;
+  return ['cerebras', 'groq'] as const;
+}
+
 /**
  * Call an LLM with structured JSON Schema output.
  *
@@ -195,7 +214,7 @@ export async function callLLM(
   opts: { batchSize?: number } = {},
 ): Promise<string | null> {
   const batchSize = opts.batchSize ?? 1;
-  const providers: Provider[] = ['cerebras', 'groq'];
+  const providers: readonly Provider[] = getProviderOrder();
 
   for (const provider of providers) {
     if (!isAvailable(provider)) {
