@@ -51,3 +51,6 @@ tmp/
 
 # MCP config
 .mcp.json
+
+# Claude Code per-session state (agent worktrees, local settings, scheduled-task locks)
+.claude/
