@@ -6,7 +6,24 @@ import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier/flat';
 
 export default tseslint.config(
-  { ignores: ['dist', 'api', 'coverage', 'node_modules', 'load-test-results'] },
+  {
+    ignores: [
+      'dist',
+      'api',
+      'coverage',
+      'node_modules',
+      'load-test-results',
+      // Phase 27.4.2 Rule-3 fix: legacy parallel-executor worktrees under
+      // .claude/worktrees/agent-*/ contain stale snapshots of source files
+      // (e.g. older `any` casts, pre-Plan-03 prefer-const violations) that
+      // pre-date current cleanup. They are dev tooling — eslint glob-matching
+      // them inflates the error count (62 of 62 errors lived here pre-fix)
+      // and would corrupt locked git worktrees if --fix touched them.
+      // Mirrors Plan 01's vite.config.ts test.exclude and Plan 03's
+      // .prettierignore precedents for the same locked-worktree pollution.
+      '.claude/**',
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

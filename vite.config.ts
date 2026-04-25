@@ -25,12 +25,18 @@ export default defineConfig({
         manualChunks: {
           'vendor-react': ['react', 'react-dom'],
           'vendor-maplibre': ['maplibre-gl'],
+          // Phase 27.4.2 Plan 04 absorbed deferred fix (per
+          // .planning/phases/27.4.2-ci-health-and-llm-v2-tuning/deferred-items.md):
+          // dropped '@deck.gl/react' and '@deck.gl/aggregation-layers' — neither is
+          // installed in package.json (only core, layers, mapbox, extensions are).
+          // Rollup errors at build time when manualChunks names cannot be resolved
+          // as entry modules. The two test-only mocks for aggregation-layers under
+          // src/test/__mocks__/ are aliased via vite.config test.alias and never
+          // need to be present in the production bundle graph.
           'vendor-deckgl': [
             '@deck.gl/core',
             '@deck.gl/layers',
             '@deck.gl/mapbox',
-            '@deck.gl/react',
-            '@deck.gl/aggregation-layers',
             '@deck.gl/extensions',
           ],
         },
