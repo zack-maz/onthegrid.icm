@@ -226,7 +226,18 @@ Plans:
 
 **Wave structure:** Wave 1 (P1-P5) sequential; Wave 2 (P6-P10) sequential, P8/P9/P10 conditional on D-13 stop. P6 depends on P5 (D-02 strict CI gate before tuning).
 
-**Explicitly out-of-scope:** Phase 27.4.3 (deck.gl v9 `depthTest` TS drift), Phase 27.4.5 (LLM flight-recorder Redis history), Phase 27.3.3 (romanization of non-Latin water names), Vercel preview deploy failure.
+**Explicitly out-of-scope:** Phase 27.4.4 (deck.gl v9 `depthTest` TS drift — was 27.4.3 before 27.4.3 was reassigned to free-claude-code routing), Phase 27.4.5 (LLM flight-recorder Redis history), Phase 27.3.3 (romanization of non-Latin water names), Vercel preview deploy failure.
+
+### Phase 27.4.3: free-claude-code Routing Evaluation (INSERTED)
+
+**Goal:** Evaluate [free-claude-code](https://github.com/Alishahryar1/free-claude-code) as a replacement for the manual Cerebras/Groq routing in `server/adapters/llm-provider.ts`. Determine whether free-claude-code can serve as the primary LLM provider for the v2 enrichment pipeline (replacing the Cerebras-primary + Groq-fallback cascade) or fits as a third tier. Evaluation criteria: (1) **feasibility** — license/auth model fit; (2) **reliability** — avoids the Cerebras-style hangs that abandoned Plan 07's wave-boundary production run; (3) **cost/quota** — daily/per-call limits vs current Cerebras 1M TPD + Groq 200K TPD free tiers; (4) **integration shape** — drop-in OpenAI-compatible SDK or custom client; (5) **eval quality parity** — runs the 50-event ground-truth harness and scores within ±5pp of Plan 07 baseline (eval-at-20km 0.940). Phase 27.4.2 `HUMAN-UAT.md` tests 1+2 (full 184-batch production run + post-fix fallback% measurement) are blocked on this phase landing.
+**Depends on:** Phase 27.4.2
+**Requirements:** TBD (define via `/gsd-discuss-phase 27.4.3`)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run `/gsd-discuss-phase 27.4.3` to scope, then `/gsd-plan-phase 27.4.3` to break down)
 
 ### Phase 28: Performance & Load Testing — was Phase 27
 
