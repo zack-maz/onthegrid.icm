@@ -19,7 +19,7 @@ affects: [layer-controls, filter-panel, ui-consistency]
 tech-stack:
   added: []
   patterns:
-    - "Visualization layers and entity filters are separate UI concerns in separate panels"
+    - 'Visualization layers and entity filters are separate UI concerns in separate panels'
 
 key-files:
   created: []
@@ -28,12 +28,12 @@ key-files:
     - src/__tests__/LayerToggles.test.tsx
 
 key-decisions:
-  - "Event toggles are entity filters, not visualization layers -- removed from Layers panel, kept solely in Filter panel"
-  - "Test suite updated to assert absence of event toggles (negative assertions) and correct 6-toggle count"
+  - 'Event toggles are entity filters, not visualization layers -- removed from Layers panel, kept solely in Filter panel'
+  - 'Test suite updated to assert absence of event toggles (negative assertions) and correct 6-toggle count'
 
 patterns-established:
-  - "LayerTogglesSlot only renders VisualizationLayerId toggles (geographic, weather, water, threat, political, ethnic)"
-  - "Event type filtering lives exclusively in FilterPanelSlot via filterStore"
+  - 'LayerTogglesSlot only renders VisualizationLayerId toggles (geographic, weather, water, threat, political, ethnic)'
+  - 'Event type filtering lives exclusively in FilterPanelSlot via filterStore'
 
 requirements-completed: [D-12]
 
@@ -55,6 +55,7 @@ completed: 2026-04-09
 - **Files modified:** 2
 
 ## Accomplishments
+
 - Removed EventMasterToggle, EventSubToggle, and EVENT_SUB_TOGGLES config array from LayerTogglesSlot.tsx
 - Removed unused imports (useFilterStore, EVENT_TYPE_COLORS) and separator div
 - Updated test suite: replaced 12-toggle assertions with 6-toggle assertions plus negative event toggle checks
@@ -67,10 +68,12 @@ Each task was committed atomically:
 1. **Task 1: Remove duplicate event toggles from LayerTogglesSlot** - `578f432` (fix)
 
 ## Files Created/Modified
+
 - `src/components/layout/LayerTogglesSlot.tsx` - Removed all event toggle code (EventMasterToggle, EventSubToggle, EVENT_SUB_TOGGLES, filterStore/eventColors imports, separator)
 - `src/__tests__/LayerToggles.test.tsx` - Updated to assert 6 viz-only toggles, added negative assertions for absent event toggles, removed filterStore setup
 
 ## Decisions Made
+
 - Test file rewritten rather than patched -- cleaner to remove all event-toggle test cases and add explicit "does not render event toggles" negative assertions
 - eventColors.ts module left in place (not deleted) since the plan scope is LayerTogglesSlot cleanup only; it is now an orphan import-wise but may be used by future code
 
@@ -79,10 +82,11 @@ Each task was committed atomically:
 ### Auto-fixed Issues
 
 **1. [Rule 1 - Bug] Updated test file to match component changes**
+
 - **Found during:** Task 1 (Remove duplicate event toggles)
 - **Issue:** Test file asserted 12 switch roles and presence of event toggles that no longer exist
 - **Fix:** Rewrote test to assert 6 switches, added negative assertions for event toggle absence, removed filterStore beforeEach setup
-- **Files modified:** src/__tests__/LayerToggles.test.tsx
+- **Files modified:** src/**tests**/LayerToggles.test.tsx
 - **Verification:** All 11 tests pass
 - **Committed in:** 578f432 (part of task commit)
 
@@ -92,12 +96,15 @@ Each task was committed atomically:
 **Impact on plan:** Test update was necessary for correctness. No scope creep.
 
 ## Issues Encountered
+
 None
 
 ## User Setup Required
+
 None - no external service configuration required.
 
 ## Next Phase Readiness
+
 - LayerTogglesSlot is clean with only visualization layer toggles
 - Event toggles exist solely in FilterPanelSlot (lines 316-364)
 - Plan 07 (event type normalization / cache migration) addresses the remaining blocker (events not visible)
@@ -111,5 +118,6 @@ None - no external service configuration required.
 - TypeScript typecheck clean (zero errors)
 
 ---
-*Phase: 27-conflict-geolocation-improvement*
-*Completed: 2026-04-09*
+
+_Phase: 27-conflict-geolocation-improvement_
+_Completed: 2026-04-09_

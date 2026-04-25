@@ -34,10 +34,7 @@ const log = logger.child({ module: 'llm-eval-harness' });
 // Module-relative path to the curated ground-truth file committed in Task 1
 // of this plan. Matches the path used at commit time (0c5ec8c).
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const GROUND_TRUTH_PATH = resolve(
-  __dirname,
-  '../../.planning/eval/ground-truth-events.json',
-);
+const GROUND_TRUTH_PATH = resolve(__dirname, '../../.planning/eval/ground-truth-events.json');
 
 /** Redis key for the eval baseline — survives pipeline cold starts so
  *  DevApiStatus + the /llm-status endpoint can render a reference score
@@ -179,9 +176,7 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 

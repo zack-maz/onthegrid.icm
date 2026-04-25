@@ -16,10 +16,7 @@ import {
 } from '../lib/llmEventExtractor.js';
 // Phase 27.4 Plan 08 D-21 — v2-only replay path re-extracts a single group
 // without writing to cache (Pitfall 6 defense-in-depth).
-import {
-  processEventGroupsV2,
-  BATCH_SIZE as BATCH_SIZE_V2,
-} from '../lib/llmEventExtractor.v2.js';
+import { processEventGroupsV2, BATCH_SIZE as BATCH_SIZE_V2 } from '../lib/llmEventExtractor.v2.js';
 // Phase 27.4 WR-03 — use v1 BATCH_SIZE (8) for progress math when v2 is off.
 const BATCH_SIZE_V1 = 8;
 // Phase 27.4 Plan 08 D-20 — resolver-only eval harness. Called inside the v2
@@ -35,10 +32,7 @@ import {
   setPipelineOverride,
   getPipelineOverride,
 } from '../config.js';
-import {
-  shouldPauseNewEvents,
-  prioritizeBySeverity,
-} from '../lib/llmTokenBudget.js';
+import { shouldPauseNewEvents, prioritizeBySeverity } from '../lib/llmTokenBudget.js';
 import { listDLQ } from '../lib/llmDLQ.js';
 import type { GeocodeProvenance } from '../lib/llmSchema.js';
 import { validateQuery } from '../middleware/validate.js';
@@ -174,17 +168,15 @@ async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEv
         const groupKey = e.id.replace(/^llm-v2-/, '').replace(/-\d+$/, '');
         return {
           groupKey,
-          location:
-            d.location ??
-            {
-              // Best-effort: if the entity only carries locationName we
-              // surface it in the city slot so the summary row is useful.
-              country: null,
-              admin1: null,
-              city: d.locationName ?? null,
-              neighborhood: null,
-              landmark: null,
-            },
+          location: d.location ?? {
+            // Best-effort: if the entity only carries locationName we
+            // surface it in the city slot so the summary row is useful.
+            country: null,
+            admin1: null,
+            city: d.locationName ?? null,
+            neighborhood: null,
+            landmark: null,
+          },
           precision: d.precision ?? 'region',
           confidence: d.confidence ?? 0,
           reasoning: d.reasoning ?? '',
@@ -679,7 +671,11 @@ if (process.env.NODE_ENV !== 'production') {
       });
     }
     const effective = isPipelineV2() ? 'v2' : 'v1';
-    return res.json({ effective, override: getPipelineOverride(), source: version ? 'override' : 'env' });
+    return res.json({
+      effective,
+      override: getPipelineOverride(),
+      source: version ? 'override' : 'env',
+    });
   });
 }
 
@@ -945,12 +941,9 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
             totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
           });
 
-          const extractResult = await processEventGroups(
-            prioritizedGroups,
-            (completed, total) => {
-              updateProgress({ completedBatches: completed, totalBatches: total });
-            },
-          );
+          const extractResult = await processEventGroups(prioritizedGroups, (completed, total) => {
+            updateProgress({ completedBatches: completed, totalBatches: total });
+          });
 
           if (!extractResult.events || extractResult.events.length === 0) {
             log.warn('LLM processing returned null — raw GDELT serving continues');

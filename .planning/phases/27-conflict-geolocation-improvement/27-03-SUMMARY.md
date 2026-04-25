@@ -36,10 +36,10 @@ LLM processing pipeline wired into events route with lazy on-request processing,
 
 ## Completed Tasks
 
-| # | Task | Commit | Key Changes |
-|---|------|--------|-------------|
-| 1 | Wire LLM processing into events route with cooldown + dual-cache | `94a0cf6` (RED), `ee4d249` (GREEN) | events.ts: LLM cache layer, shouldRunLLM/recordLLMTimestamp helpers, enrichedToEntities converter, diff-based group processing; 7 TDD tests in events.test.ts |
-| 2 | Graceful degradation integration test | `c71a73b` | events-fallback.test.ts: 5 integration tests covering all degradation paths; fix enriched.length > 0 check |
+| #   | Task                                                             | Commit                             | Key Changes                                                                                                                                                   |
+| --- | ---------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Wire LLM processing into events route with cooldown + dual-cache | `94a0cf6` (RED), `ee4d249` (GREEN) | events.ts: LLM cache layer, shouldRunLLM/recordLLMTimestamp helpers, enrichedToEntities converter, diff-based group processing; 7 TDD tests in events.test.ts |
+| 2   | Graceful degradation integration test                            | `c71a73b`                          | events-fallback.test.ts: 5 integration tests covering all degradation paths; fix enriched.length > 0 check                                                    |
 
 ## Architecture
 
@@ -60,6 +60,7 @@ New imports: `isLLMConfigured`, `groupGdeltRows`, `processEventGroups`, `geocode
 ### Auto-fixed Issues
 
 **1. [Rule 1 - Bug] Fixed duplicate CEREBRAS_API_KEY/GROQ_API_KEY in config.ts**
+
 - **Found during:** Task 1
 - **Issue:** Plan 02 (wave 1) added duplicate Zod schema entries for CEREBRAS_API_KEY and GROQ_API_KEY alongside the existing entries from Plan 01
 - **Fix:** Removed the original duplicate entries, kept the Phase 27-commented ones
@@ -67,6 +68,7 @@ New imports: `isLLMConfigured`, `groupGdeltRows`, `processEventGroups`, `geocode
 - **Commit:** ee4d249
 
 **2. [Rule 3 - Blocking] Installed openai npm package in worktree**
+
 - **Found during:** Task 1 verification
 - **Issue:** Plan 02 added openai to package.json but worktree node_modules didn't have it installed
 - **Fix:** Ran `npm install` -- package.json already had the dependency from wave 1
@@ -74,6 +76,7 @@ New imports: `isLLMConfigured`, `groupGdeltRows`, `processEventGroups`, `geocode
 - **Commit:** N/A (no code change needed)
 
 **3. [Rule 1 - Bug] Fixed empty enriched array treated as success**
+
 - **Found during:** Task 2 (malformed JSON test)
 - **Issue:** `processEventGroups` returns `[]` (not `null`) when LLM returns parseable-but-invalid JSON. Empty array is truthy in JS, so the route served `[]` instead of falling through to raw GDELT.
 - **Fix:** Changed `if (enriched)` to `if (enriched && enriched.length > 0)`

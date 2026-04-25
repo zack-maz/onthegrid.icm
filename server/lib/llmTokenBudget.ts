@@ -140,8 +140,7 @@ export async function shouldPauseNewEvents(): Promise<boolean> {
     getDailyTokens('groq'),
   ]);
   return (
-    budgetState('cerebras', cerebrasUsed) === 'soft' ||
-    budgetState('groq', groqUsed) === 'soft'
+    budgetState('cerebras', cerebrasUsed) === 'soft' || budgetState('groq', groqUsed) === 'soft'
   );
 }
 
@@ -158,7 +157,5 @@ export async function prioritizeBySeverity(groups: EventGroup[]): Promise<EventG
   if (!paused) return groups; // common case — skip sort entirely
   return groups
     .slice()
-    .sort(
-      (a, b) => computeSeverityScore(b) - computeSeverityScore(a) || b.timestamp - a.timestamp,
-    );
+    .sort((a, b) => computeSeverityScore(b) - computeSeverityScore(a) || b.timestamp - a.timestamp);
 }

@@ -238,9 +238,7 @@ export function buildBatchUserPromptV2(contexts: PromptContext[]): string {
     // D-08 TEMPORAL BLOCK — up to 3 prior events in the same region/window.
     if (temporalEvents.length > 0) {
       lines.push('');
-      lines.push(
-        `--- TEMPORAL CONTEXT (${temporalEvents.length} recent events in region) ---`,
-      );
+      lines.push(`--- TEMPORAL CONTEXT (${temporalEvents.length} recent events in region) ---`);
       for (const t of temporalEvents) {
         const locStr =
           [t.location.landmark, t.location.neighborhood, t.location.city]
@@ -510,10 +508,7 @@ export async function processEventGroupsV2(
       const parsed = JSON.parse(content);
       const validated = batchResponseV2.safeParse(parsed);
       if (!validated.success) {
-        log.warn(
-          { issues: validated.error.issues.slice(0, 3), batchIndex },
-          'v2 Zod parse failed',
-        );
+        log.warn({ issues: validated.error.issues.slice(0, 3), batchIndex }, 'v2 Zod parse failed');
         // W1 fix — surface every failed group to the DLQ so DevApiStatus can
         // count and triage them. enqueueDLQ caps lastError at 500 chars
         // internally (Plan 07 Pitfall 7).

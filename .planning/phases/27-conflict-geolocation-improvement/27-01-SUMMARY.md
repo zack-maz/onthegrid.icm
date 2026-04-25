@@ -13,7 +13,17 @@ provides:
   - LLM-enriched ConflictEventData fields (summary, casualties, precision, actors, sourceCount, llmProcessed)
   - CEREBRAS_API_KEY and GROQ_API_KEY env vars in config
   - Updated cacheResponse schema for new types + LLM fields
-affects: [27-02, 27-03, 27-04, 27-05, 27-06, client-toggle-groups, client-severity-scoring, client-event-detail]
+affects:
+  [
+    27-02,
+    27-03,
+    27-04,
+    27-05,
+    27-06,
+    client-toggle-groups,
+    client-severity-scoring,
+    client-event-detail,
+  ]
 
 # Tech tracking
 tech-stack:
@@ -39,14 +49,14 @@ key-files:
     - server/__tests__/adapters/acled.test.ts
 
 key-decisions:
-  - "5-type taxonomy groups by attack vector: airstrike (aerial), on_ground (infantry/assault), explosion (artillery/bombing), targeted (assassination/abduction), other (blockade/ceasefire/mass violence/WMD)"
-  - "ROOT_FALLBACK maps root 18->on_ground, root 19->on_ground, root 20->other; unknown codes default to on_ground"
-  - "GOLDSTEIN_CEILINGS downgrades: airstrike/explosion -> on_ground, on_ground/targeted -> other, other -> null (no downgrade)"
-  - "LLM fields added as all-optional to ConflictEventData for zero-breaking-change backward compatibility"
+  - '5-type taxonomy groups by attack vector: airstrike (aerial), on_ground (infantry/assault), explosion (artillery/bombing), targeted (assassination/abduction), other (blockade/ceasefire/mass violence/WMD)'
+  - 'ROOT_FALLBACK maps root 18->on_ground, root 19->on_ground, root 20->other; unknown codes default to on_ground'
+  - 'GOLDSTEIN_CEILINGS downgrades: airstrike/explosion -> on_ground, on_ground/targeted -> other, other -> null (no downgrade)'
+  - 'LLM fields added as all-optional to ConflictEventData for zero-breaking-change backward compatibility'
 
 patterns-established:
-  - "5-type ConflictEventType union is the canonical event taxonomy going forward"
-  - "classifyByBaseCode is the CAMEO fallback classifier when LLM is unavailable"
+  - '5-type ConflictEventType union is the canonical event taxonomy going forward'
+  - 'classifyByBaseCode is the CAMEO fallback classifier when LLM is unavailable'
 
 requirements-completed: [D-07, D-10, D-16]
 
@@ -68,6 +78,7 @@ completed: 2026-04-09
 - **Files modified:** 12
 
 ## Accomplishments
+
 - Replaced 11 CAMEO-derived ConflictEventType values with 5 attack-vector categories across all server code
 - Updated BASE_CODE_MAP (17 entries), ROOT_FALLBACK (3 entries), and GOLDSTEIN_CEILINGS (5 entries) for new taxonomy
 - Added 6 optional LLM-enriched fields to ConflictEventData (summary, casualties, precision, actors, sourceCount, llmProcessed)
@@ -83,6 +94,7 @@ Each task was committed atomically:
 2. **Task 2: Update existing server tests for 5-type taxonomy** - `0ebb479` (test)
 
 ## Files Created/Modified
+
 - `server/types.ts` - ConflictEventType union rewritten to 5 types; LLM fields added to ConflictEventData
 - `server/adapters/gdelt.ts` - BASE_CODE_MAP, ROOT_FALLBACK, and fallback default updated for new taxonomy
 - `server/adapters/acled.ts` - classifyEventType updated for new taxonomy (preserved adapter)
@@ -97,6 +109,7 @@ Each task was committed atomically:
 - `server/__tests__/adapters/acled.test.ts` - Classification assertions updated for new taxonomy
 
 ## Decisions Made
+
 - Mapped CAMEO 200-204 (mass violence, mass expulsion, mass killings, ethnic cleansing, WMD) all to `other` -- these are rare and don't map cleanly to a single attack vector
 - Mapped CAMEO 181 (abduction) and 185-186 (assassination) to `targeted` -- both involve specific targeting of individuals
 - Mapped CAMEO 183 (bombing) and 194 (shelling/artillery) to `explosion` -- both involve explosive ordnance
@@ -108,6 +121,7 @@ Each task was committed atomically:
 ### Auto-fixed Issues
 
 **1. [Rule 1 - Bug] Fixed ACLED adapter type values**
+
 - **Found during:** Task 1 (TypeScript compilation check)
 - **Issue:** `server/adapters/acled.ts` contained old type literals ('shelling', 'ground_combat', 'assassination', 'abduction', 'assault') that were no longer valid ConflictEventType values
 - **Fix:** Updated classifyEventType function to use new 5-type taxonomy
@@ -116,6 +130,7 @@ Each task was committed atomically:
 - **Committed in:** 932b189 (Task 1 commit)
 
 **2. [Rule 1 - Bug] Fixed GDELT audit record fallback type**
+
 - **Found during:** Task 1 (TypeScript compilation check)
 - **Issue:** `server/adapters/gdelt.ts` lines 574/623 used `'assault' as const` for audit Phase A rejection records, which was no longer a valid ConflictEventType
 - **Fix:** Changed to `'on_ground' as const`
@@ -124,26 +139,29 @@ Each task was committed atomically:
 - **Committed in:** 932b189 (Task 1 commit)
 
 **3. [Rule 1 - Bug] Fixed ACLED adapter test assertions**
+
 - **Found during:** Task 2 (server test suite run)
 - **Issue:** `server/__tests__/adapters/acled.test.ts` expected old type values ('shelling')
 - **Fix:** Updated assertions to expect 'explosion'
-- **Files modified:** server/__tests__/adapters/acled.test.ts
+- **Files modified:** server/**tests**/adapters/acled.test.ts
 - **Verification:** All 517 server tests pass
 - **Committed in:** 0ebb479 (Task 2 commit)
 
 **4. [Rule 1 - Bug] Fixed GDELT fixture test assertions**
+
 - **Found during:** Task 2 (server test suite run)
 - **Issue:** `server/__tests__/gdelt-fixtures.test.ts` expected old type values ('shelling', 'bombing')
 - **Fix:** Updated assertions to expect 'explosion'
-- **Files modified:** server/__tests__/gdelt-fixtures.test.ts
+- **Files modified:** server/**tests**/gdelt-fixtures.test.ts
 - **Verification:** All 517 server tests pass
 - **Committed in:** 0ebb479 (Task 2 commit)
 
 **5. [Rule 1 - Bug] Fixed events route test mock config and fixtures**
+
 - **Found during:** Task 2 (server test suite run)
 - **Issue:** `server/__tests__/routes/events.test.ts` mock config missing `cerebras` and `groq` fields; event fixtures used old type values ('ground_combat', 'shelling', 'bombing')
 - **Fix:** Added cerebras/groq to mock config; updated fixture types to new taxonomy
-- **Files modified:** server/__tests__/routes/events.test.ts
+- **Files modified:** server/**tests**/routes/events.test.ts
 - **Verification:** All 517 server tests pass
 - **Committed in:** 0ebb479 (Task 2 commit)
 
@@ -153,17 +171,20 @@ Each task was committed atomically:
 **Impact on plan:** All auto-fixes were necessary consequences of the type union change. TypeScript's strict type checking surfaced every consumer that needed updating. No scope creep.
 
 ## Issues Encountered
+
 None -- TypeScript strict mode surfaced all consumers of the old type union, making the migration mechanical.
 
 ## User Setup Required
 
 External services require manual configuration for LLM providers (used by later plans in this phase):
+
 - `CEREBRAS_API_KEY` -- obtain from https://cloud.cerebras.ai -> API Keys -> Create new key
 - `GROQ_API_KEY` -- obtain from https://console.groq.com -> API Keys -> Create API Key
 
 Both default to empty string (graceful degradation -- LLM features disabled when unconfigured).
 
 ## Next Phase Readiness
+
 - 5-type taxonomy is now the canonical type system across all server code
 - Client-side code still uses old 11-type taxonomy (CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS, severity.ts TYPE_WEIGHTS) -- this is handled by Plan 05 (client-side migration)
 - LLM data fields are ready for Plan 02 (LLM provider adapter) and Plan 03 (event grouping + extraction)
@@ -178,5 +199,6 @@ Both default to empty string (graceful degradation -- LLM features disabled when
 - 0 TypeScript errors
 
 ---
-*Phase: 27-conflict-geolocation-improvement*
-*Completed: 2026-04-09*
+
+_Phase: 27-conflict-geolocation-improvement_
+_Completed: 2026-04-09_

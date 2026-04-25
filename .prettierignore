@@ -8,3 +8,10 @@ api/*.cjs
 docs/screenshots
 docs/hero.gif
 package-lock.json
+
+# Stale parallel-executor worktree snapshots from a separate workstream.
+# These contain frozen copies of past plans; they must not be reformatted by
+# the canonical sweep (Plan 27.4.2-03 acceptance criterion #6 forbids
+# touching files outside .planning/, server/, src/, docs/, repo root).
+# Mirrors vite.config.ts test.exclude precedent established by Plan 27.4.2-01.
+.claude/

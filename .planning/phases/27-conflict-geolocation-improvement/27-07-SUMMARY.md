@@ -28,11 +28,11 @@ key-files:
     - server/routes/events.ts
 
 key-decisions:
-  - "Normalization layer over cache flush: chose runtime remapping before Zod validation rather than flushing Redis, because it handles both stale cache AND any edge case where old-format data re-enters the pipeline"
-  - "sendNormalizedEvents helper centralizes normalization: single wrapper function used at all 7 response paths, rather than 7 inline normalizeEventTypes calls, for DRY and auditability"
+  - 'Normalization layer over cache flush: chose runtime remapping before Zod validation rather than flushing Redis, because it handles both stale cache AND any edge case where old-format data re-enters the pipeline'
+  - 'sendNormalizedEvents helper centralizes normalization: single wrapper function used at all 7 response paths, rather than 7 inline normalizeEventTypes calls, for DRY and auditability'
 
 patterns-established:
-  - "Cache migration via normalization layer: when schema changes break cached data, add a runtime normalization step before validation rather than requiring cache flush"
+  - 'Cache migration via normalization layer: when schema changes break cached data, add a runtime normalization step before validation rather than requiring cache flush'
 
 requirements-completed: [D-08]
 
@@ -54,6 +54,7 @@ completed: 2026-04-09
 - **Files modified:** 3
 
 ## Accomplishments
+
 - Created normalizeEventTypes() pure function with complete old-to-new type mapping (10 old types to 5 new types)
 - Wired normalization into all 7 sendValidated response paths in events route via sendNormalizedEvents helper
 - Unblocked event visibility: stale Redis cache with old taxonomy no longer causes 500 schema mismatch or silent drops
@@ -67,11 +68,13 @@ Each task was committed atomically:
 2. **Task 2: Wire normalizeEventTypes into all 7 sendValidated paths** - `c4716b2` (fix)
 
 ## Files Created/Modified
+
 - `server/lib/normalizeEventTypes.ts` - Pure function mapping OLD_TO_NEW_TYPE record, normalizes both event.type and data.eventType
 - `server/__tests__/lib/normalizeEventTypes.test.ts` - 23 tests: all 10 old types, 5 new type passthroughs, data.eventType, edge cases, immutability
 - `server/routes/events.ts` - Added import + sendNormalizedEvents helper + replaced all 7 sendValidated call sites
 
 ## Decisions Made
+
 - Normalization layer over cache flush: runtime remapping before Zod validation handles both stale cache AND any edge case where old-format data re-enters the pipeline (e.g., backfill producing old types)
 - sendNormalizedEvents helper centralizes normalization at a single wrapper function, so all 7 response paths are auditable from one location
 - data.eventType also normalized when it matches an old type key, keeping inner data consistent with top-level type field
@@ -90,10 +93,12 @@ None.
 None - no external service configuration required.
 
 ## Next Phase Readiness
+
 - Events with old cached types will now be served correctly with new 5-type taxonomy
 - UAT blocker (Test 4: "Not seeing any events at all") should be resolved
 - Plan 08 (toggle cleanup) can proceed independently as it addresses separate UAT issue (Test 3)
 
 ---
-*Phase: 27-conflict-geolocation-improvement*
-*Completed: 2026-04-09*
+
+_Phase: 27-conflict-geolocation-improvement_
+_Completed: 2026-04-09_

@@ -72,15 +72,18 @@ export function groupGdeltRows(entities: ConflictEventEntity[]): EventGroup[] {
       const groupDay = dayBucket(group.timestamp);
       if (groupDay !== entityDay) continue;
       if (cameoRoot(group.primaryCameo) !== entityRoot) continue;
-      if (haversineKm(group.centroidLat, group.centroidLng, entity.lat, entity.lng) > GROUP_RADIUS_KM) continue;
+      if (
+        haversineKm(group.centroidLat, group.centroidLng, entity.lat, entity.lng) > GROUP_RADIUS_KM
+      )
+        continue;
 
       // Match found — add to group
       group.entities.push(entity);
       const centroid = computeCentroid(group.entities);
       group.centroidLat = centroid.lat;
       group.centroidLng = centroid.lng;
-      group.totalMentions += (entity.data.numMentions ?? 0);
-      group.totalSources += (entity.data.numSources ?? 0);
+      group.totalMentions += entity.data.numMentions ?? 0;
+      group.totalSources += entity.data.numSources ?? 0;
       if (entity.data.source) {
         group.sourceUrls.push(entity.data.source);
       }

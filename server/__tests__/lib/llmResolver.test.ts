@@ -85,9 +85,7 @@ describe('llmResolver', () => {
   it('resolves via sitesSnapshot when landmark substring-matches a site label with matching country', async () => {
     vi.mocked(loadSitesSnapshot).mockReturnValue({
       generatedAt: '2026-04-20T00:00:00Z',
-      sites: [
-        { label: 'Natanz Nuclear Facility', country: 'Iran', lat: 33.72, lng: 51.73 },
-      ],
+      sites: [{ label: 'Natanz Nuclear Facility', country: 'Iran', lat: 33.72, lng: 51.73 }],
       stats: {},
     } as unknown as ReturnType<typeof loadSitesSnapshot>);
 
@@ -207,9 +205,7 @@ describe('llmResolver', () => {
   it('country filter blocks cross-country substring match', async () => {
     vi.mocked(loadSitesSnapshot).mockReturnValue({
       generatedAt: '2026-04-20T00:00:00Z',
-      sites: [
-        { label: 'Dimona Nuclear Power Plant', country: 'Israel', lat: 31.0, lng: 35.14 },
-      ],
+      sites: [{ label: 'Dimona Nuclear Power Plant', country: 'Israel', lat: 31.0, lng: 35.14 }],
       stats: {},
     } as unknown as ReturnType<typeof loadSitesSnapshot>);
 
@@ -494,12 +490,36 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
   it('sanity gate fires on precision=city and runs two-pass verify', async () => {
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([
-        { lat: 33.50, lng: 36.30, displayName: 'Damascus', type: 'city', address: { country_code: 'sy' } },
+        {
+          lat: 33.5,
+          lng: 36.3,
+          displayName: 'Damascus',
+          type: 'city',
+          address: { country_code: 'sy' },
+        },
       ])
       .mockResolvedValueOnce([
-        { lat: 33.50, lng: 36.30, displayName: 'Damascus center', type: 'city', address: { country_code: 'sy' } },
-        { lat: 33.52, lng: 36.29, displayName: 'Jobar neighborhood', type: 'suburb', address: { country_code: 'sy' } },
-        { lat: 33.48, lng: 36.31, displayName: 'Other suburb', type: 'suburb', address: { country_code: 'sy' } },
+        {
+          lat: 33.5,
+          lng: 36.3,
+          displayName: 'Damascus center',
+          type: 'city',
+          address: { country_code: 'sy' },
+        },
+        {
+          lat: 33.52,
+          lng: 36.29,
+          displayName: 'Jobar neighborhood',
+          type: 'suburb',
+          address: { country_code: 'sy' },
+        },
+        {
+          lat: 33.48,
+          lng: 36.31,
+          displayName: 'Other suburb',
+          type: 'suburb',
+          address: { country_code: 'sy' },
+        },
       ]);
 
     vi.mocked(callLLM).mockResolvedValueOnce(
@@ -524,12 +544,36 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
   it('sanity gate fires when direct hit lies >250km from centroid', async () => {
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([
-        { lat: 40.0, lng: 50.0, displayName: 'Far away', type: 'village', address: { country_code: 'iq' } },
+        {
+          lat: 40.0,
+          lng: 50.0,
+          displayName: 'Far away',
+          type: 'village',
+          address: { country_code: 'iq' },
+        },
       ])
       .mockResolvedValueOnce([
-        { lat: 33.0, lng: 44.0, displayName: 'A', type: 'village', address: { country_code: 'iq' } },
-        { lat: 33.1, lng: 44.1, displayName: 'B', type: 'village', address: { country_code: 'iq' } },
-        { lat: 33.2, lng: 44.2, displayName: 'C', type: 'village', address: { country_code: 'iq' } },
+        {
+          lat: 33.0,
+          lng: 44.0,
+          displayName: 'A',
+          type: 'village',
+          address: { country_code: 'iq' },
+        },
+        {
+          lat: 33.1,
+          lng: 44.1,
+          displayName: 'B',
+          type: 'village',
+          address: { country_code: 'iq' },
+        },
+        {
+          lat: 33.2,
+          lng: 44.2,
+          displayName: 'C',
+          type: 'village',
+          address: { country_code: 'iq' },
+        },
       ]);
     vi.mocked(callLLM).mockResolvedValueOnce(JSON.stringify({ pick: 1, reasoning: 'ok' }));
 
@@ -565,11 +609,23 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
   it('sends reranker schema with pick (1-5) + reasoning (<=100) to callLLM', async () => {
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([
-        { lat: 33.5, lng: 36.3, displayName: 'Damascus', type: 'city', address: { country_code: 'sy' } },
+        {
+          lat: 33.5,
+          lng: 36.3,
+          displayName: 'Damascus',
+          type: 'city',
+          address: { country_code: 'sy' },
+        },
       ])
       .mockResolvedValueOnce([
         { lat: 33.5, lng: 36.3, displayName: 'A', type: 'city', address: { country_code: 'sy' } },
-        { lat: 33.52, lng: 36.29, displayName: 'B', type: 'suburb', address: { country_code: 'sy' } },
+        {
+          lat: 33.52,
+          lng: 36.29,
+          displayName: 'B',
+          type: 'suburb',
+          address: { country_code: 'sy' },
+        },
       ]);
     vi.mocked(callLLM).mockResolvedValueOnce(JSON.stringify({ pick: 1, reasoning: 'ok' }));
 
@@ -595,16 +651,26 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
   it('parses reranker response and returns pick-1-based candidate', async () => {
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([
-        { lat: 33.5, lng: 36.3, displayName: 'Damascus', type: 'city', address: { country_code: 'sy' } },
+        {
+          lat: 33.5,
+          lng: 36.3,
+          displayName: 'Damascus',
+          type: 'city',
+          address: { country_code: 'sy' },
+        },
       ])
       .mockResolvedValueOnce([
-        { lat: 33.50, lng: 36.30, displayName: 'A', type: 'city', address: { country_code: 'sy' } },
-        { lat: 33.55, lng: 36.35, displayName: 'B', type: 'suburb', address: { country_code: 'sy' } },
-        { lat: 33.60, lng: 36.40, displayName: 'C', type: 'suburb', address: { country_code: 'sy' } },
+        { lat: 33.5, lng: 36.3, displayName: 'A', type: 'city', address: { country_code: 'sy' } },
+        {
+          lat: 33.55,
+          lng: 36.35,
+          displayName: 'B',
+          type: 'suburb',
+          address: { country_code: 'sy' },
+        },
+        { lat: 33.6, lng: 36.4, displayName: 'C', type: 'suburb', address: { country_code: 'sy' } },
       ]);
-    vi.mocked(callLLM).mockResolvedValueOnce(
-      JSON.stringify({ pick: 3, reasoning: 'best match' }),
-    );
+    vi.mocked(callLLM).mockResolvedValueOnce(JSON.stringify({ pick: 3, reasoning: 'best match' }));
 
     const out = await resolveLocation(
       hierarchy({ country: 'Syria', city: 'Damascus' }),
@@ -612,18 +678,30 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
     );
 
     expect(out.provenance).toBe('nominatim-verified-2pass');
-    expect(out.lat).toBeCloseTo(33.60);
-    expect(out.lng).toBeCloseTo(36.40);
+    expect(out.lat).toBeCloseTo(33.6);
+    expect(out.lng).toBeCloseTo(36.4);
   });
 
   it('falls back to direct hit when callLLM returns null', async () => {
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([
-        { lat: 33.5, lng: 36.3, displayName: 'Damascus', type: 'city', address: { country_code: 'sy' } },
+        {
+          lat: 33.5,
+          lng: 36.3,
+          displayName: 'Damascus',
+          type: 'city',
+          address: { country_code: 'sy' },
+        },
       ])
       .mockResolvedValueOnce([
         { lat: 33.5, lng: 36.3, displayName: 'A', type: 'city', address: { country_code: 'sy' } },
-        { lat: 33.55, lng: 36.35, displayName: 'B', type: 'suburb', address: { country_code: 'sy' } },
+        {
+          lat: 33.55,
+          lng: 36.35,
+          displayName: 'B',
+          type: 'suburb',
+          address: { country_code: 'sy' },
+        },
       ]);
     vi.mocked(callLLM).mockResolvedValueOnce(null);
 
@@ -639,11 +717,23 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
   it('falls back when reranker response fails Zod validation (pick out of range)', async () => {
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([
-        { lat: 33.5, lng: 36.3, displayName: 'Damascus', type: 'city', address: { country_code: 'sy' } },
+        {
+          lat: 33.5,
+          lng: 36.3,
+          displayName: 'Damascus',
+          type: 'city',
+          address: { country_code: 'sy' },
+        },
       ])
       .mockResolvedValueOnce([
         { lat: 33.5, lng: 36.3, displayName: 'A', type: 'city', address: { country_code: 'sy' } },
-        { lat: 33.55, lng: 36.35, displayName: 'B', type: 'suburb', address: { country_code: 'sy' } },
+        {
+          lat: 33.55,
+          lng: 36.35,
+          displayName: 'B',
+          type: 'suburb',
+          address: { country_code: 'sy' },
+        },
       ]);
     vi.mocked(callLLM).mockResolvedValueOnce(JSON.stringify({ pick: 99, reasoning: 'bad' }));
 
@@ -662,10 +752,22 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
     // longer exists for length===1.
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([
-        { lat: 33.5, lng: 36.3, displayName: 'Damascus', type: 'city', address: { country_code: 'sy' } },
+        {
+          lat: 33.5,
+          lng: 36.3,
+          displayName: 'Damascus',
+          type: 'city',
+          address: { country_code: 'sy' },
+        },
       ])
       .mockResolvedValueOnce([
-        { lat: 33.5, lng: 36.3, displayName: 'Only one', type: 'city', address: { country_code: 'sy' } },
+        {
+          lat: 33.5,
+          lng: 36.3,
+          displayName: 'Only one',
+          type: 'city',
+          address: { country_code: 'sy' },
+        },
       ]);
 
     const out = await resolveLocation(

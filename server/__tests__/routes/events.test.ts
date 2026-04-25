@@ -229,8 +229,7 @@ const mockShouldPauseNewEvents = vi.fn(async () => false);
 const mockPrioritizeBySeverity = vi.fn(async (groups: unknown[]) => groups);
 vi.mock('../../lib/llmTokenBudget.js', () => ({
   shouldPauseNewEvents: (...args: unknown[]) => mockShouldPauseNewEvents(...(args as [])),
-  prioritizeBySeverity: (...args: unknown[]) =>
-    mockPrioritizeBySeverity(...(args as [unknown[]])),
+  prioritizeBySeverity: (...args: unknown[]) => mockPrioritizeBySeverity(...(args as [unknown[]])),
   getDailyTokens: vi.fn(async () => 0),
   incrDailyTokens: vi.fn(async () => 0),
   budgetState: vi.fn(() => 'ok' as const),

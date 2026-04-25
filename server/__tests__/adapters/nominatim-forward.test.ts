@@ -110,9 +110,9 @@ describe('nominatim forwardGeocode', () => {
   });
 
   it('returns null on fetch exception', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValueOnce(
-      new Error('Network error'),
-    ) as unknown as typeof fetch;
+    globalThis.fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Network error')) as unknown as typeof fetch;
 
     const { forwardGeocode } = await import('../../adapters/nominatim.js');
     const result = await forwardGeocode('Baghdad');

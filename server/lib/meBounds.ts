@@ -12,5 +12,4 @@
  */
 export const ME_VIEWBOX: readonly [number, number, number, number] = [30, 15, 70, 42] as const;
 
-export const ME_COUNTRY_CODES =
-  'ir,iq,sy,lb,il,ps,jo,eg,sa,ae,bh,kw,om,qa,ye,tr,af,pk,tm,az,am,ge';
+export const ME_COUNTRY_CODES = 'ir,iq,sy,lb,il,ps,jo,eg,sa,ae,bh,kw,om,qa,ye,tr,af,pk,tm,az,am,ge';

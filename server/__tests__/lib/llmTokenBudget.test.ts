@@ -205,8 +205,7 @@ describe('shouldPauseNewEvents (D-33)', () => {
   it('TB13: returns false when BOTH providers are hard-capped (soft gate only fires on soft state)', async () => {
     // Hard cap for both — soft-cap gate is specifically for the 'soft' band.
     getMock.mockImplementation((key: string) => {
-      if (typeof key === 'string' && key.includes('cerebras'))
-        return Promise.resolve(960_000);
+      if (typeof key === 'string' && key.includes('cerebras')) return Promise.resolve(960_000);
       if (typeof key === 'string' && key.includes('groq')) return Promise.resolve(195_000);
       return Promise.resolve(0);
     });

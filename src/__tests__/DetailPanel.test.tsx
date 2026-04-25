@@ -83,7 +83,8 @@ const mockEnrichedAirstrike: ConflictEventEntity = {
     goldsteinScale: -7.0,
     locationName: 'Deir ez-Zor, eastern Syria',
     cameoCode: '195',
-    summary: 'Coalition forces conducted an airstrike near Deir ez-Zor targeting militia positions.',
+    summary:
+      'Coalition forces conducted an airstrike near Deir ez-Zor targeting militia positions.',
     casualties: { killed: 3, injured: 5 },
     precision: 'neighborhood',
     sourceCount: 4,

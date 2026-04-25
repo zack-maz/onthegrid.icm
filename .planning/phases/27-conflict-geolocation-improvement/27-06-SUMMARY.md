@@ -29,12 +29,12 @@ key-files:
     - CLAUDE.md
 
 key-decisions:
-  - "TODO(26.2) markers in non-target files (system-context.md, README.md) also resolved for completeness"
+  - 'TODO(26.2) markers in non-target files (system-context.md, README.md) also resolved for completeness'
   - "Basin lookup limitation retained as 'Known limitation' note rather than TODO — it's a real constraint, not planned work"
-  - "Dispersion algorithm documented as retained for fallback path only, not deprecated"
+  - 'Dispersion algorithm documented as retained for fallback path only, not deprecated'
 
 patterns-established:
-  - "Known limitation notes replace TODO markers for genuine constraints without planned fixes"
+  - 'Known limitation notes replace TODO markers for genuine constraints without planned fixes'
 
 requirements-completed: [D-20]
 
@@ -55,6 +55,7 @@ completed: 2026-04-09
 - **Files modified:** 6
 
 ## Accomplishments
+
 - Replaced 11-type CAMEO union with 5-type attack-vector taxonomy across all architecture docs
 - Added Section 9 (LLM Event Extraction) to algorithms.md documenting the full pipeline
 - Updated events sequence diagram in data-flows.md with dual-cache + LLM enrichment path
@@ -69,6 +70,7 @@ Each task was committed atomically:
 2. **Task 2: Human verification checkpoint** - awaiting user verification
 
 ## Files Created/Modified
+
 - `docs/architecture/ontology/types.md` - 5-type union, LLM fields in class diagram, resolved TODO(26.2)
 - `docs/architecture/ontology/algorithms.md` - Dispersion status note, severity weight update, Section 9 LLM extraction, resolved TODO(26.2)
 - `docs/architecture/data-flows.md` - Events sequence diagram with LLM path, dual-cache notes, resolved TODO(26.2)
@@ -77,6 +79,7 @@ Each task was committed atomically:
 - `CLAUDE.md` - New LLM Event Pipeline section, updated ConflictEventType and toggle references
 
 ## Decisions Made
+
 - Resolved TODO(26.2) in system-context.md and README.md even though the plan only targeted 3 files — these were the remaining markers and leaving them would be inconsistent
 - Basin lookup coarseness kept as "Known limitation" rather than a TODO since there's no concrete plan to add 50MB polygon indexing to serverless
 - Dispersion algorithm explicitly documented as "retained for fallback" rather than removed, since it still runs when LLM is unavailable
@@ -86,6 +89,7 @@ Each task was committed atomically:
 ### Auto-fixed Issues
 
 **1. [Rule 2 - Missing Critical] Resolved TODO(26.2) in system-context.md and README.md**
+
 - **Found during:** Task 1
 - **Issue:** Plan specified 3 architecture doc files but 2 additional files (system-context.md, README.md) also had TODO(26.2) markers
 - **Fix:** Updated both files — system-context.md gets LLM pipeline description, README.md gets past-tense reference to resolved markers
@@ -99,6 +103,7 @@ Each task was committed atomically:
 **Impact on plan:** Expanded scope from 3 to 5 architecture docs to fully resolve all TODO(26.2) markers. No scope creep — these were the same class of change.
 
 ## Issues Encountered
+
 None
 
 ## User Setup Required
@@ -106,6 +111,7 @@ None
 None - documentation changes only, no external service configuration required.
 
 ## Next Phase Readiness
+
 - All architecture documentation reflects the Phase 27 implementation
 - Human verification of the live feature is pending (Task 2 checkpoint)
 - After verification, Phase 27 is complete and ready for merge to main
@@ -115,5 +121,6 @@ None - documentation changes only, no external service configuration required.
 All 6 modified files verified present. Task 1 commit (b3c06f2) verified in git log. Zero TODO(26.2) markers remaining in target files.
 
 ---
-*Phase: 27-conflict-geolocation-improvement*
-*Completed: 2026-04-09*
+
+_Phase: 27-conflict-geolocation-improvement_
+_Completed: 2026-04-09_

@@ -76,7 +76,6 @@ export async function withBatchWatchdog<T>(
   opts: BatchWatchdogOptions,
 ): Promise<T | null> {
   let timedOut = false;
-  let softWarnTimer: ReturnType<typeof setTimeout> | undefined;
   let hardTimer: ReturnType<typeof setTimeout> | undefined;
 
   const workPromise = batchFn();
@@ -90,14 +89,12 @@ export async function withBatchWatchdog<T>(
     hardTimer = setTimeout(() => {
       timedOut = true;
       reject(
-        new Error(
-          `batch ${opts.batchIndex} (${opts.label}) timed out after ${opts.timeoutMs}ms`,
-        ),
+        new Error(`batch ${opts.batchIndex} (${opts.label}) timed out after ${opts.timeoutMs}ms`),
       );
     }, opts.timeoutMs);
   });
 
-  softWarnTimer = setTimeout(() => {
+  const softWarnTimer: ReturnType<typeof setTimeout> = setTimeout(() => {
     if (!timedOut) {
       try {
         opts.onSoftWarn?.(opts.softWarnMs);

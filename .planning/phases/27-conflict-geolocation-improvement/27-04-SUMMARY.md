@@ -20,8 +20,8 @@ affects: [27-05, 27-06, LayerTogglesSlot, useQuerySync, NotificationCard]
 tech-stack:
   added: []
   patterns:
-    - "Master + sub-toggle pattern for event visibility (showEvents gates all, sub-toggles refine)"
-    - "eventToggleMap Record<string, boolean> for per-type toggle lookups replacing CONFLICT_TOGGLE_GROUPS casts"
+    - 'Master + sub-toggle pattern for event visibility (showEvents gates all, sub-toggles refine)'
+    - 'eventToggleMap Record<string, boolean> for per-type toggle lookups replacing CONFLICT_TOGGLE_GROUPS casts'
 
 key-files:
   created: []
@@ -39,14 +39,14 @@ key-files:
     - src/hooks/useWaterLayers.ts
 
 key-decisions:
-  - "GROUND_COMBAT_TYPES counter group combines on_ground + explosion + other (3 of 5 new types) to preserve the existing 3-row counter layout (Airstrikes, Ground Combat, Targeted)"
-  - "DESTRUCTIVE_EVENT_TYPES simplified from [airstrike,bombing,shelling,wmd] to [airstrike,explosion] for water facility attack status"
-  - "Master showEvents toggle gates all event visibility; sub-toggles only refine within that gate"
-  - "eventToggleMap pattern in useEntityLayers/ThreatHeatmapOverlay replaces verbose CONFLICT_TOGGLE_GROUPS.showXxx cast lookups"
+  - 'GROUND_COMBAT_TYPES counter group combines on_ground + explosion + other (3 of 5 new types) to preserve the existing 3-row counter layout (Airstrikes, Ground Combat, Targeted)'
+  - 'DESTRUCTIVE_EVENT_TYPES simplified from [airstrike,bombing,shelling,wmd] to [airstrike,explosion] for water facility attack status'
+  - 'Master showEvents toggle gates all event visibility; sub-toggles only refine within that gate'
+  - 'eventToggleMap pattern in useEntityLayers/ThreatHeatmapOverlay replaces verbose CONFLICT_TOGGLE_GROUPS.showXxx cast lookups'
 
 patterns-established:
-  - "Master + sub-toggle: showEvents boolean gates all events, 5 sub-booleans gate per-type"
-  - "eventToggleMap: Record<string, boolean> built from toggle store for clean per-type visibility checks"
+  - 'Master + sub-toggle: showEvents boolean gates all events, 5 sub-booleans gate per-type'
+  - 'eventToggleMap: Record<string, boolean> built from toggle store for clean per-type visibility checks'
 
 requirements-completed: [D-08, D-09]
 
@@ -68,6 +68,7 @@ completed: 2026-04-09
 - **Files modified:** 21 (3 source + 1 test in Task 1, 11 source + 7 tests in Task 2)
 
 ## Accomplishments
+
 - Replaced 11-type CONFLICT_TOGGLE_GROUPS (3 groups) with 5-type layout (5 groups, 1:1 with types)
 - Added master showEvents toggle to filterStore with 5 sub-toggles, replacing old showGroundCombat
 - Updated TYPE_WEIGHTS from 11 entries to 5 entries with recalibrated weights
@@ -82,6 +83,7 @@ Each task was committed atomically:
 2. **Task 2: Update severity, search, counters, entity layers, threat heatmap, and all client tests** - `d16cf00` (feat)
 
 ## Files Created/Modified
+
 - `src/types/ui.ts` - CONFLICT_TOGGLE_GROUPS (5 entries), EVENT_TYPE_LABELS (5 entries), isConflictEventType (unchanged, auto-derives)
 - `src/stores/filterStore.ts` - showEvents master toggle + showOnGround/showExplosions/showOther sub-toggles + actions
 - `src/lib/severity.ts` - TYPE_WEIGHTS with 5 entries (airstrike:10, explosion:8, targeted:8, on_ground:6, other:3)
@@ -96,6 +98,7 @@ Each task was committed atomically:
 - 10 test files updated with new type values
 
 ## Decisions Made
+
 - GROUND_COMBAT_TYPES combines on_ground + explosion + other into one counter row to preserve existing 3-row layout
 - DESTRUCTIVE_EVENT_TYPES simplified to [airstrike, explosion] since bombing/shelling/wmd no longer exist as separate types
 - Master showEvents toggle added above sub-toggles in FilterPanelSlot for quick all-events on/off
@@ -106,6 +109,7 @@ Each task was committed atomically:
 ### Auto-fixed Issues
 
 **1. [Rule 2 - Missing Critical] Updated FilterPanelSlot, DetailPanelSlot, SearchResultItem, WaterFacilityDetail, useWaterLayers**
+
 - **Found during:** Task 2
 - **Issue:** Plan only listed 10 files but grep found 6 additional source files referencing old types (showGroundCombat, assassination, abduction, bombing, shelling, wmd)
 - **Fix:** Updated all 6 additional files to use new type names
@@ -114,6 +118,7 @@ Each task was committed atomically:
 - **Committed in:** d16cf00
 
 **2. [Rule 2 - Missing Critical] Updated additional test files (StatusPanel, eventStore, ThreatClusterDetail, tagRegistry)**
+
 - **Found during:** Task 2
 - **Issue:** Plan listed 4 test files but grep found 4 additional test files with old type references
 - **Fix:** Updated all additional test files
@@ -127,16 +132,20 @@ Each task was committed atomically:
 **Impact on plan:** Essential for correctness. Without these fixes, tests would fail and runtime would show wrong type colors/icons. No scope creep.
 
 ## Issues Encountered
+
 - Pre-existing server test failure (llm-provider.test.ts) due to missing `openai` npm dependency from Wave 1 server changes -- out of scope for this client-only plan
 
 ## User Setup Required
+
 None - no external service configuration required.
 
 ## Next Phase Readiness
+
 - All client-side code now uses the 5-type taxonomy consistently
 - Ready for Plan 05 (UI component updates for LayerTogglesSlot, CountersSlot, etc.)
 - Ready for Plan 06 (search/filter integration with new types)
 
 ---
-*Phase: 27-conflict-geolocation-improvement*
-*Completed: 2026-04-09*
+
+_Phase: 27-conflict-geolocation-improvement_
+_Completed: 2026-04-09_

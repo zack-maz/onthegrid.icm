@@ -10,6 +10,7 @@ Pre-existing TypeScript errors observed during typecheck that predate this plan'
 Rationale for deferral: these errors exist on the plan's base commit (c13f868) and are not introduced by Plan 27.4-07. The plan modified only 4 files under server/lib and server/adapters; none of those files produce typecheck errors.
 
 Verified:
+
 - `git stash` → `npm run typecheck` → 31 errors
 - `git stash pop` → `npm run typecheck` → 31 errors (identical count)
 

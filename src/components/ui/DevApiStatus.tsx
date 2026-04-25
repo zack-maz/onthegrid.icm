@@ -1009,8 +1009,8 @@ function WaterFiltersSection() {
       <div className="mt-0.5 text-[9px] text-white/60">
         <span className="font-bold text-white/40">Total rejections:</span> excl=
         {filterStats.rejections.excluded_location} turkey={filterStats.rejections.excluded_turkey}{' '}
-        nn={filterStats.rejections.not_notable} nname={filterStats.rejections.no_name}{' '}
-        nores={filterStats.rejections.no_resolved_name} dup=
+        nn={filterStats.rejections.not_notable} nname={filterStats.rejections.no_name} nores=
+        {filterStats.rejections.no_resolved_name} dup=
         {filterStats.rejections.duplicate} low={filterStats.rejections.low_score} nocity=
         {filterStats.rejections.no_city}
       </div>
@@ -1454,9 +1454,7 @@ function CallLogBlock({ callHistory }: { callHistory: NonNullable<LLMStatus['cal
             className="flex items-center justify-between gap-1 text-[9px]"
           >
             <span
-              className={
-                c.skipReason ? 'text-amber-400' : c.ok ? 'text-green-400' : 'text-red-400'
-              }
+              className={c.skipReason ? 'text-amber-400' : c.ok ? 'text-green-400' : 'text-red-400'}
             >
               {c.skipReason ? '⊘' : '●'}
             </span>
@@ -1652,9 +1650,7 @@ interface EventsFiltersSectionProps {
 
 function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
   if (!llmStatus) {
-    return (
-      <div className="mt-2 p-2 text-[9px] text-white/40">No LLM status available.</div>
-    );
+    return <div className="mt-2 p-2 text-[9px] text-white/40">No LLM status available.</div>;
   }
   const ch = llmStatus.callHistory ?? [];
   const tc = llmStatus.tokenCounters ?? { cerebras: 0, groq: 0 };
@@ -1670,8 +1666,7 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
         Events Pipeline (v2)
       </span>
       <div className="mt-0.5 text-[9px] text-white/60">
-        Schema:{' '}
-        <span className="text-white/80">{llmStatus.schemaVersion ?? 'unknown'}</span>
+        Schema: <span className="text-white/80">{llmStatus.schemaVersion ?? 'unknown'}</span>
         {' · '}Stage: <span className="text-white/80">{llmStatus.stage}</span>
         {llmStatus.durationMs ? (
           <>

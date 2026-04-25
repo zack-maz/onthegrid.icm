@@ -59,9 +59,7 @@ vi.mock('../../lib/llmDLQ.js', () => ({
 // behavior. Default: transparent pass-through that just invokes batchFn.
 // Individual tests override mockImplementationOnce to simulate timeout.
 vi.mock('../../lib/llmExtractorWatchdog.js', () => ({
-  withBatchWatchdog: vi.fn(
-    async (batchFn: () => Promise<unknown>, _opts: unknown) => batchFn(),
-  ),
+  withBatchWatchdog: vi.fn(async (batchFn: () => Promise<unknown>, _opts: unknown) => batchFn()),
 }));
 
 // Phase 27.4.1 Plan 03 — mock llmProgress so watchdog-timeout assertions can
@@ -233,14 +231,12 @@ describe('llmEventExtractor.v2', () => {
   it('NEWS BLOCK emitted with tier tags when news cache matches', () => {
     // getSourceTier(source, domain) — the extractor passes '' for source so
     // only the hostname (second arg) is used for classification here.
-    vi.mocked(getSourceTier).mockImplementation(
-      (_source: string, host: string | undefined) => {
-        const h = host ?? '';
-        if (h.includes('reuters')) return 1;
-        if (h.includes('aljazeera')) return 2;
-        return 3;
-      },
-    );
+    vi.mocked(getSourceTier).mockImplementation((_source: string, host: string | undefined) => {
+      const h = host ?? '';
+      if (h.includes('reuters')) return 1;
+      if (h.includes('aljazeera')) return 2;
+      return 3;
+    });
 
     const prompt = buildBatchUserPromptV2([
       {
@@ -277,9 +273,7 @@ describe('llmEventExtractor.v2', () => {
       {
         group: makeGroup(),
         matchedNews: [],
-        bellingcatHits: [
-          { title: 'Bellingcat OSINT: strike at Natanz', lat: 33.72, lng: 51.73 },
-        ],
+        bellingcatHits: [{ title: 'Bellingcat OSINT: strike at Natanz', lat: 33.72, lng: 51.73 }],
         temporalEvents: [],
       },
     ]);
@@ -358,9 +352,7 @@ describe('llmEventExtractor.v2', () => {
   // Test 8: processEventGroupsV2 happy path returns enriched events
   // -----------------------------------------------------------------------
   it('processEventGroupsV2 happy path returns V2ExtractionRun with events', async () => {
-    vi.mocked(callLLM).mockResolvedValue(
-      JSON.stringify({ events: [makeEnrichedEvent()] }),
-    );
+    vi.mocked(callLLM).mockResolvedValue(JSON.stringify({ events: [makeEnrichedEvent()] }));
 
     const run = await processEventGroupsV2([makeGroup()]);
 
@@ -376,9 +368,7 @@ describe('llmEventExtractor.v2', () => {
   // Test 9: Zod parse failure → empty events + no throw
   // -----------------------------------------------------------------------
   it('Zod parse failure returns empty events without throwing', async () => {
-    vi.mocked(callLLM).mockResolvedValue(
-      JSON.stringify({ events: [{ not_a_valid_event: true }] }),
-    );
+    vi.mocked(callLLM).mockResolvedValue(JSON.stringify({ events: [{ not_a_valid_event: true }] }));
 
     const run = await processEventGroupsV2([makeGroup()]);
 
@@ -399,10 +389,7 @@ describe('llmEventExtractor.v2', () => {
     });
 
     const group = makeGroup();
-    const events = [
-      makeEnrichedEvent(),
-      makeEnrichedEvent({ groupKey: 'grp-test-1' }),
-    ];
+    const events = [makeEnrichedEvent(), makeEnrichedEvent({ groupKey: 'grp-test-1' })];
 
     const groupsByKey = new Map([[group.key, group]]);
     const geocoded = await geocodeEnrichedEventsV2(
@@ -449,9 +436,7 @@ describe('llmEventExtractor.v2', () => {
       return null;
     });
     vi.mocked(extractBellingcatGeo).mockReturnValue({ lat: 33.72, lng: 51.73 });
-    vi.mocked(callLLM).mockResolvedValue(
-      JSON.stringify({ events: [makeEnrichedEvent()] }),
-    );
+    vi.mocked(callLLM).mockResolvedValue(JSON.stringify({ events: [makeEnrichedEvent()] }));
     vi.mocked(resolveLocation).mockResolvedValue({
       lat: 33.72,
       lng: 51.73,
@@ -528,14 +513,9 @@ describe('llmEventExtractor.v2', () => {
   // Test 13: W1 fix — Zod fail enqueues one DLQ entry per group with reason=zod_fail
   // -----------------------------------------------------------------------
   it('W1 — Zod fail enqueues one DLQ entry per group in the failed batch', async () => {
-    vi.mocked(callLLM).mockResolvedValue(
-      JSON.stringify({ events: [{ not_valid: true }] }),
-    );
+    vi.mocked(callLLM).mockResolvedValue(JSON.stringify({ events: [{ not_valid: true }] }));
 
-    const groups = [
-      makeGroup({ key: 'grp-fail-1' }),
-      makeGroup({ key: 'grp-fail-2' }),
-    ];
+    const groups = [makeGroup({ key: 'grp-fail-1' }), makeGroup({ key: 'grp-fail-2' })];
 
     await processEventGroupsV2(groups);
 
@@ -582,9 +562,7 @@ describe('Phase 27.4.1 — watchdog + per-batch cache', () => {
     vi.mocked(withBatchWatchdog).mockReset();
     // Default watchdog mock: transparent pass-through. Individual tests
     // override with mockImplementationOnce to simulate timeout.
-    vi.mocked(withBatchWatchdog).mockImplementation(
-      async (batchFn) => batchFn(),
-    );
+    vi.mocked(withBatchWatchdog).mockImplementation(async (batchFn) => batchFn());
   });
 
   // -----------------------------------------------------------------------
@@ -598,9 +576,7 @@ describe('Phase 27.4.1 — watchdog + per-batch cache', () => {
       makeGroup({ key: 'grp-b2-1', entities: [makeEntity({ id: 'e3' })] }),
       makeGroup({ key: 'grp-b2-2', entities: [makeEntity({ id: 'e4' })] }),
     ];
-    vi.mocked(callLLM).mockResolvedValue(
-      JSON.stringify({ events: [makeEnrichedEvent()] }),
-    );
+    vi.mocked(callLLM).mockResolvedValue(JSON.stringify({ events: [makeEnrichedEvent()] }));
 
     await processEventGroupsV2(groups);
 
@@ -652,22 +628,15 @@ describe('Phase 27.4.1 — watchdog + per-batch cache', () => {
       ([e]) => (e as { reason: string }).reason === 'timeout_watchdog',
     );
     expect(timeoutCalls.length).toBe(2);
-    const timeoutIds = timeoutCalls.map(
-      ([e]) => (e as { id: string }).id,
-    );
+    const timeoutIds = timeoutCalls.map(([e]) => (e as { id: string }).id);
     expect(timeoutIds).toContain('grp-timeout-1');
     expect(timeoutIds).toContain('grp-timeout-2');
 
     // updateProgress called with watchdogTimeoutCount increment (undefined + 1 → 1)
     const progressCalls = vi.mocked(updateProgress).mock.calls;
-    const timeoutCountCall = progressCalls.find(
-      ([p]) => 'watchdogTimeoutCount' in (p as object),
-    );
+    const timeoutCountCall = progressCalls.find(([p]) => 'watchdogTimeoutCount' in (p as object));
     expect(timeoutCountCall).toBeDefined();
-    expect(
-      (timeoutCountCall![0] as { watchdogTimeoutCount: number })
-        .watchdogTimeoutCount,
-    ).toBe(1);
+    expect((timeoutCountCall![0] as { watchdogTimeoutCount: number }).watchdogTimeoutCount).toBe(1);
   });
 
   // -----------------------------------------------------------------------

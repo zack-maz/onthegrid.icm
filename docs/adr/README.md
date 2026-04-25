@@ -15,17 +15,17 @@ context, decision, consequences, alternatives, references. See
 
 ## Index
 
-| ADR                                                                    | Title                                                       | Status                              |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------- |
-| [0001](./0001-upstash-redis-over-traditional-redis.md)                 | Upstash Redis over traditional Redis                        | Accepted                            |
-| [0002](./0002-vercel-serverless-over-traditional-hosting.md)           | Vercel serverless over traditional hosting                  | Accepted                            |
-| [0003](./0003-gdelt-v2-as-default-conflict-source.md)                  | GDELT v2 as default conflict source                         | Accepted                            |
-| [0004](./0004-threat-density-via-radial-gradient-shader.md)            | Threat density via RadialGradientExtension shader           | Accepted                            |
-| [0005](./0005-phase-26-2-nlp-approach-scrapped.md)                     | Phase 26.2 NLP approach scrapped — the honest retrospective | Superseded — reverted in Phase 26.3 |
-| [0006](./0006-pino-and-zod-for-production-hardening.md)                | Pino structured logging + Zod config/response validation    | Accepted                            |
-| [0007](./0007-water-stress-as-point-facilities.md)                     | Water stress as point facilities, not polygon fills         | Accepted                            |
-| [0008](./0008-ethnic-distribution-via-geoepr-with-hatched-overlays.md) | Ethnic distribution via GeoEPR 2021 with hatched overlays   | Accepted                            |
-| [0009](./0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md) | Two-key split for LLM partial progress vs terminal reads   | Accepted                            |
+| ADR                                                                        | Title                                                       | Status                              |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------- |
+| [0001](./0001-upstash-redis-over-traditional-redis.md)                     | Upstash Redis over traditional Redis                        | Accepted                            |
+| [0002](./0002-vercel-serverless-over-traditional-hosting.md)               | Vercel serverless over traditional hosting                  | Accepted                            |
+| [0003](./0003-gdelt-v2-as-default-conflict-source.md)                      | GDELT v2 as default conflict source                         | Accepted                            |
+| [0004](./0004-threat-density-via-radial-gradient-shader.md)                | Threat density via RadialGradientExtension shader           | Accepted                            |
+| [0005](./0005-phase-26-2-nlp-approach-scrapped.md)                         | Phase 26.2 NLP approach scrapped — the honest retrospective | Superseded — reverted in Phase 26.3 |
+| [0006](./0006-pino-and-zod-for-production-hardening.md)                    | Pino structured logging + Zod config/response validation    | Accepted                            |
+| [0007](./0007-water-stress-as-point-facilities.md)                         | Water stress as point facilities, not polygon fills         | Accepted                            |
+| [0008](./0008-ethnic-distribution-via-geoepr-with-hatched-overlays.md)     | Ethnic distribution via GeoEPR 2021 with hatched overlays   | Accepted                            |
+| [0009](./0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md) | Two-key split for LLM partial progress vs terminal reads    | Accepted                            |
 
 ## One-line summaries
 
@@ -58,7 +58,7 @@ context, decision, consequences, alternatives, references. See
   post-ship incident: the v2 extractor's per-batch durability flush
   collided with the terminal reader's array-shape contract on a
   shared Redis key, crashing `/api/events` with `events.map is not
-  a function`. Split observability (`events:llm:v2:partial`) from
+a function`. Split observability (`events:llm:v2:partial`) from
   user-facing (`events:llm:v2`) + added `toEntityArray` /
   `coerceCachedEvents` reader guards. The lesson — accepted-rollout-
   window framing is never acceptable when it violates a writer/reader

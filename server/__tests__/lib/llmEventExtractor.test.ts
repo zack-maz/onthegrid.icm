@@ -186,9 +186,7 @@ describe('llmEventExtractor', () => {
       makeBatchResponse(groups.slice(0, 8).map((g) => g.key)),
     );
     // Second batch: 2 groups
-    vi.mocked(callLLM).mockResolvedValueOnce(
-      makeBatchResponse(groups.slice(8).map((g) => g.key)),
-    );
+    vi.mocked(callLLM).mockResolvedValueOnce(makeBatchResponse(groups.slice(8).map((g) => g.key)));
 
     const result = await processEventGroups(groups);
 

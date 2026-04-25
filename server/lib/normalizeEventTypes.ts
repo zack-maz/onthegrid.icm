@@ -29,9 +29,7 @@ const OLD_TO_NEW_TYPE: Record<string, ConflictEventType> = {
  * Also normalizes `data.eventType` if it matches an old type key, keeping
  * the inner data consistent with the top-level type field.
  */
-export function normalizeEventTypes(
-  events: ConflictEventEntity[],
-): ConflictEventEntity[] {
+export function normalizeEventTypes(events: ConflictEventEntity[]): ConflictEventEntity[] {
   return events.map((event) => {
     const mappedType = OLD_TO_NEW_TYPE[event.type];
     const mappedDataType = OLD_TO_NEW_TYPE[event.data.eventType];
@@ -44,9 +42,7 @@ export function normalizeEventTypes(
     return {
       ...event,
       type: mappedType ?? event.type,
-      data: mappedDataType
-        ? { ...event.data, eventType: mappedDataType }
-        : event.data,
+      data: mappedDataType ? { ...event.data, eventType: mappedDataType } : event.data,
     };
   });
 }

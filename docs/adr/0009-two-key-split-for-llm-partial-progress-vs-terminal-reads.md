@@ -62,7 +62,7 @@ previously muxed onto `events:llm:v2`:
   `loadRecentEnrichedEvents`, and the `/llm-replay` dev endpoint.
 - **`events:llm:v2:partial`** — observability-only cache.
   `LLMCachePayload` envelope (`{events: EnrichedEventV2[], progress,
-  complete, generatedAt}`). Written per-batch by
+complete, generatedAt}`). Written per-batch by
   `writePartialCache` in `server/lib/llmEventExtractor.v2.ts`. Read
   only by DevApiStatus / `/llm-status` for progress display. Never
   served to users.

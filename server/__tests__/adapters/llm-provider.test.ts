@@ -95,10 +95,10 @@ describe('llm-provider', () => {
       usage: { total_tokens: 100, prompt_tokens: 80, completion_tokens: 20 },
     });
 
-    const result = await callLLM(
-      [{ role: 'user', content: 'test' }],
-      { type: 'object', properties: {} },
-    );
+    const result = await callLLM([{ role: 'user', content: 'test' }], {
+      type: 'object',
+      properties: {},
+    });
 
     expect(result).toBe('{"events":[]}');
     expect(createMock).toHaveBeenCalledTimes(1);
@@ -118,7 +118,10 @@ describe('llm-provider', () => {
       usage: { total_tokens: 150, prompt_tokens: 100, completion_tokens: 50 },
     });
 
-    const promise = callLLM([{ role: 'user', content: 'test' }], { type: 'object', properties: {} });
+    const promise = callLLM([{ role: 'user', content: 'test' }], {
+      type: 'object',
+      properties: {},
+    });
     // Advance past the 1s retry backoff.
     await vi.advanceTimersByTimeAsync(2000);
     const result = await promise;
@@ -132,7 +135,10 @@ describe('llm-provider', () => {
     // 4 failures: Cerebras 1s retry, Cerebras retry-2, Groq 1s retry, Groq retry-2
     createMock.mockRejectedValue(new Error('down'));
 
-    const promise = callLLM([{ role: 'user', content: 'test' }], { type: 'object', properties: {} });
+    const promise = callLLM([{ role: 'user', content: 'test' }], {
+      type: 'object',
+      properties: {},
+    });
     await vi.advanceTimersByTimeAsync(10000);
     const result = await promise;
 
@@ -166,10 +172,10 @@ describe('llm-provider', () => {
         usage: { total_tokens: 50, prompt_tokens: 40, completion_tokens: 10 },
       });
 
-      const result = await callLLM(
-        [{ role: 'user', content: 'test' }],
-        { type: 'object', properties: {} },
-      );
+      const result = await callLLM([{ role: 'user', content: 'test' }], {
+        type: 'object',
+        properties: {},
+      });
 
       expect(result).toBe('{"ok":true}');
       // Only one call should have occurred — groq only.
@@ -186,10 +192,10 @@ describe('llm-provider', () => {
         usage: { total_tokens: 50, prompt_tokens: 40, completion_tokens: 10 },
       });
 
-      const result = await callLLM(
-        [{ role: 'user', content: 'test' }],
-        { type: 'object', properties: {} },
-      );
+      const result = await callLLM([{ role: 'user', content: 'test' }], {
+        type: 'object',
+        properties: {},
+      });
 
       expect(result).toBe('{"ok":true}');
       expect(createMock).toHaveBeenCalledTimes(1);
@@ -217,10 +223,10 @@ describe('llm-provider', () => {
         usage: { total_tokens: 100, prompt_tokens: 80, completion_tokens: 20 },
       });
 
-      const promise = callLLM(
-        [{ role: 'user', content: 'test' }],
-        { type: 'object', properties: {} },
-      );
+      const promise = callLLM([{ role: 'user', content: 'test' }], {
+        type: 'object',
+        properties: {},
+      });
       await vi.advanceTimersByTimeAsync(2000);
       const result = await promise;
 
@@ -236,10 +242,10 @@ describe('llm-provider', () => {
       const { callLLM } = await import('../../adapters/llm-provider.js');
       createMock.mockRejectedValue(new Error('all down'));
 
-      const promise = callLLM(
-        [{ role: 'user', content: 'test' }],
-        { type: 'object', properties: {} },
-      );
+      const promise = callLLM([{ role: 'user', content: 'test' }], {
+        type: 'object',
+        properties: {},
+      });
       await vi.advanceTimersByTimeAsync(10000);
       const result = await promise;
 
@@ -256,10 +262,10 @@ describe('llm-provider', () => {
         usage: { total_tokens: 77, prompt_tokens: 60, completion_tokens: 17 },
       });
 
-      const promise = callLLM(
-        [{ role: 'user', content: 'test' }],
-        { type: 'object', properties: {} },
-      );
+      const promise = callLLM([{ role: 'user', content: 'test' }], {
+        type: 'object',
+        properties: {},
+      });
       await vi.advanceTimersByTimeAsync(2000);
       await promise;
 
@@ -282,10 +288,10 @@ describe('llm-provider', () => {
       // Both providers fail all retries — should trigger breakerState update.
       createMock.mockRejectedValue(new Error('down'));
 
-      const promise = callLLM(
-        [{ role: 'user', content: 'test' }],
-        { type: 'object', properties: {} },
-      );
+      const promise = callLLM([{ role: 'user', content: 'test' }], {
+        type: 'object',
+        properties: {},
+      });
       await vi.advanceTimersByTimeAsync(10000);
       await promise;
 
@@ -373,10 +379,10 @@ describe('llm-provider', () => {
       // Both providers hard-capped — 0 network calls, 2 skip entries, null result.
       budgetStateFn.mockReturnValue('hard');
 
-      const result = await callLLM(
-        [{ role: 'user', content: 'test' }],
-        { type: 'object', properties: {} },
-      );
+      const result = await callLLM([{ role: 'user', content: 'test' }], {
+        type: 'object',
+        properties: {},
+      });
 
       expect(result).toBeNull();
       // createMock never invoked — no network activity.

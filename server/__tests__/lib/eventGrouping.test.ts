@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest';
 import type { ConflictEventEntity } from '../../types.js';
 
 // Helper to create a test entity
-function makeEntity(overrides: Partial<ConflictEventEntity> & { lat: number; lng: number; data?: Partial<ConflictEventEntity['data']> }): ConflictEventEntity {
+function makeEntity(
+  overrides: Partial<ConflictEventEntity> & {
+    lat: number;
+    lng: number;
+    data?: Partial<ConflictEventEntity['data']>;
+  },
+): ConflictEventEntity {
   return {
     id: overrides.id ?? `evt-${Math.random().toString(36).slice(2)}`,
     type: overrides.type ?? 'airstrike',
@@ -36,8 +42,18 @@ describe('eventGrouping', () => {
     const sameDay = now;
     // Baghdad coordinates ~33.3, 44.4. Two points 10km apart.
     const entities = [
-      makeEntity({ lat: 33.3, lng: 44.4, timestamp: sameDay, data: { cameoCode: '195', numMentions: 10, numSources: 5 } }),
-      makeEntity({ lat: 33.35, lng: 44.45, timestamp: sameDay, data: { cameoCode: '193', numMentions: 8, numSources: 3 } }),
+      makeEntity({
+        lat: 33.3,
+        lng: 44.4,
+        timestamp: sameDay,
+        data: { cameoCode: '195', numMentions: 10, numSources: 5 },
+      }),
+      makeEntity({
+        lat: 33.35,
+        lng: 44.45,
+        timestamp: sameDay,
+        data: { cameoCode: '193', numMentions: 8, numSources: 3 },
+      }),
     ];
 
     const groups = groupGdeltRows(entities);
@@ -95,8 +111,18 @@ describe('eventGrouping', () => {
 
     const now = Date.now();
     const entities = [
-      makeEntity({ lat: 33.0, lng: 44.0, timestamp: now, data: { cameoCode: '195', numMentions: 10, numSources: 5 } }),
-      makeEntity({ lat: 33.1, lng: 44.1, timestamp: now, data: { cameoCode: '193', numMentions: 8, numSources: 3 } }),
+      makeEntity({
+        lat: 33.0,
+        lng: 44.0,
+        timestamp: now,
+        data: { cameoCode: '195', numMentions: 10, numSources: 5 },
+      }),
+      makeEntity({
+        lat: 33.1,
+        lng: 44.1,
+        timestamp: now,
+        data: { cameoCode: '193', numMentions: 8, numSources: 3 },
+      }),
     ];
 
     const groups = groupGdeltRows(entities);

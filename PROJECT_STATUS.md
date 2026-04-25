@@ -15,61 +15,61 @@ v1.4 GDELT & Perf:       [████████████████░░
 
 ## Phase Status
 
-| Phase | Name                                       | Milestone | Status  | Date       |
-| ----- | ------------------------------------------ | --------- | ------- | ---------- |
-| 1     | Project Scaffolding & Theme                | v0.9      | Done    | 2026-03-14 |
-| 2     | Base Map                                   | v0.9      | Done    | 2026-03-14 |
-| 3     | API Proxy                                  | v0.9      | Done    | 2026-03-15 |
-| 4     | Flight Data Feed                           | v0.9      | Done    | 2026-03-15 |
-| 5     | Entity Rendering                           | v0.9      | Done    | 2026-03-15 |
-| 6     | Multi-Source Flight Data                   | v0.9      | Done    | 2026-03-16 |
-| 7     | StatusPanel & Source Config                | v0.9      | Done    | 2026-03-16 |
-| 8     | Ship & Conflict Data                       | v0.9      | Done    | 2026-03-16 |
-| 8.1   | GDELT Conflict Events                      | v0.9      | Done    | 2026-03-17 |
-| 9     | Layer Controls & News Toggle               | v0.9      | Done    | 2026-03-17 |
-| 10    | Detail Panel & Event Reclassification      | v0.9      | Done    | 2026-03-18 |
-| 11    | Smart Filters                              | v0.9      | Done    | 2026-03-18 |
-| 12    | Analytics Dashboard                        | v0.9      | Done    | 2026-03-18 |
-| 13    | Serverless Cache Migration                 | v1.0      | Done    | 2026-03-20 |
-| 14    | Vercel Deployment                          | v1.0      | Done    | 2026-03-20 |
-| 15    | Key Sites Overlay                          | v1.1      | Done    | 2026-03-20 |
-| 16    | News Feed                                  | v1.1      | Done    | 2026-03-20 |
-| 17    | Notification Center                        | v1.1      | Done    | 2026-03-20 |
-| 18    | Oil Markets Tracker                        | v1.1      | Done    | 2026-03-21 |
-| 19    | Search, Filter & UI Cleanup                | v1.1      | Done    | 2026-03-22 |
-| 19.1  | Advanced Search with Tag Filtering         | v1.1      | Done    | 2026-03-22 |
-| 19.2  | Counter Entity Dropdowns                   | v1.1      | Done    | 2026-03-22 |
-| 20    | Visualization Layers & Filter Independence | v1.2      | Done    | 2026-03-24 |
-| 20.1  | Geographical & Weather Layers              | v1.2      | Done    | 2026-03-23 |
-| 20.2  | Threat Heatmap Layer                       | v1.2      | Done    | 2026-03-23 |
-| 21    | Production Review & Deploy Sync            | v1.2      | Done    | 2026-03-27 |
-| 21.1  | GDELT News Relevance Filtering             | v1.2      | Done    | 2026-03-26 |
-| 21.2  | GDELT Event Quality Pipeline               | v1.2      | Done    | 2026-03-28 |
-| 21.3  | Multi-User Load Testing                    | v1.2      | Done    | 2026-03-29 |
-| 22    | GDELT Event Quality & OSINT                | v1.3      | Done    | 2026-03-30 |
-| 22.1  | Fixing Dispersion                          | v1.3      | Done    | 2026-03-31 |
-| 23    | Threat Density Improvements                | v1.3      | Done    | 2026-03-31 |
-| 23.1  | Detail Panel Navigation Stack              | v1.3      | Done    | 2026-04-01 |
-| 23.2  | Threat Density Scatter Plots               | v1.3      | Done    | 2026-04-01 |
-| 24    | Political Boundaries Layer                 | v1.3      | Done    | 2026-04-02 |
-| 25    | Ethnic Distribution Layer                  | v1.3      | Done    | 2026-04-02 |
-| 26    | Water Stress Layer                         | v1.3      | Done    | 2026-04-03 |
-| 26.1  | Water Layer Refinements                    | v1.3      | Done    | 2026-04-04 |
-| 26.3  | Production Code Cleanup                    | v1.3      | Done    | 2026-04-07 |
-| 26.4  | Documentation & External Presentation      | v1.3      | Done    | 2026-04-08 |
-| 27    | Conflict Geolocation Improvement (GDELT)   | v1.4      | Done    | 2026-04-12 |
-| 27.1  | Dev Observability & LLM Pipeline Status    | v1.4      | Done    | 2026-04-15 |
-| 27.2  | Event Quality & Water Data Improvements    | v1.4      | Done    | 2026-04-17 |
-| 27.3  | Water Facility Filtering Improvements      | v1.4      | Done    | 2026-04-18 |
-| 27.3.1| Water Facility Retry and Cleanup           | v1.4      | Done    | 2026-04-19 |
-| 27.3.2| Water Facility Admission Tightening        | v1.4      | Done    | 2026-04-20 |
-| 27.3.3| Romanize Non-Latin Water Names             | v1.4      | Deferred| —          |
-| 27.4  | LLM Enrichment Improvements                | v1.4      | Done    | 2026-04-22 |
-| 27.4.1| V2 Extractor Watchdog + TS Cleanup         | v1.4      | Done    | 2026-04-24 |
-| 27.4.2| CI Health (flip main CI green)             | v1.4      | Planned | —          |
-| 27.4.3| deck.gl v9 Type Drift                      | v1.4      | Planned | —          |
-| 27.4.5| LLM Pipeline Full History Observability    | v1.4      | Planned | —          |
-| 28    | Performance & Load Testing                 | v1.4      | Planned | —          |
+| Phase  | Name                                       | Milestone | Status   | Date       |
+| ------ | ------------------------------------------ | --------- | -------- | ---------- |
+| 1      | Project Scaffolding & Theme                | v0.9      | Done     | 2026-03-14 |
+| 2      | Base Map                                   | v0.9      | Done     | 2026-03-14 |
+| 3      | API Proxy                                  | v0.9      | Done     | 2026-03-15 |
+| 4      | Flight Data Feed                           | v0.9      | Done     | 2026-03-15 |
+| 5      | Entity Rendering                           | v0.9      | Done     | 2026-03-15 |
+| 6      | Multi-Source Flight Data                   | v0.9      | Done     | 2026-03-16 |
+| 7      | StatusPanel & Source Config                | v0.9      | Done     | 2026-03-16 |
+| 8      | Ship & Conflict Data                       | v0.9      | Done     | 2026-03-16 |
+| 8.1    | GDELT Conflict Events                      | v0.9      | Done     | 2026-03-17 |
+| 9      | Layer Controls & News Toggle               | v0.9      | Done     | 2026-03-17 |
+| 10     | Detail Panel & Event Reclassification      | v0.9      | Done     | 2026-03-18 |
+| 11     | Smart Filters                              | v0.9      | Done     | 2026-03-18 |
+| 12     | Analytics Dashboard                        | v0.9      | Done     | 2026-03-18 |
+| 13     | Serverless Cache Migration                 | v1.0      | Done     | 2026-03-20 |
+| 14     | Vercel Deployment                          | v1.0      | Done     | 2026-03-20 |
+| 15     | Key Sites Overlay                          | v1.1      | Done     | 2026-03-20 |
+| 16     | News Feed                                  | v1.1      | Done     | 2026-03-20 |
+| 17     | Notification Center                        | v1.1      | Done     | 2026-03-20 |
+| 18     | Oil Markets Tracker                        | v1.1      | Done     | 2026-03-21 |
+| 19     | Search, Filter & UI Cleanup                | v1.1      | Done     | 2026-03-22 |
+| 19.1   | Advanced Search with Tag Filtering         | v1.1      | Done     | 2026-03-22 |
+| 19.2   | Counter Entity Dropdowns                   | v1.1      | Done     | 2026-03-22 |
+| 20     | Visualization Layers & Filter Independence | v1.2      | Done     | 2026-03-24 |
+| 20.1   | Geographical & Weather Layers              | v1.2      | Done     | 2026-03-23 |
+| 20.2   | Threat Heatmap Layer                       | v1.2      | Done     | 2026-03-23 |
+| 21     | Production Review & Deploy Sync            | v1.2      | Done     | 2026-03-27 |
+| 21.1   | GDELT News Relevance Filtering             | v1.2      | Done     | 2026-03-26 |
+| 21.2   | GDELT Event Quality Pipeline               | v1.2      | Done     | 2026-03-28 |
+| 21.3   | Multi-User Load Testing                    | v1.2      | Done     | 2026-03-29 |
+| 22     | GDELT Event Quality & OSINT                | v1.3      | Done     | 2026-03-30 |
+| 22.1   | Fixing Dispersion                          | v1.3      | Done     | 2026-03-31 |
+| 23     | Threat Density Improvements                | v1.3      | Done     | 2026-03-31 |
+| 23.1   | Detail Panel Navigation Stack              | v1.3      | Done     | 2026-04-01 |
+| 23.2   | Threat Density Scatter Plots               | v1.3      | Done     | 2026-04-01 |
+| 24     | Political Boundaries Layer                 | v1.3      | Done     | 2026-04-02 |
+| 25     | Ethnic Distribution Layer                  | v1.3      | Done     | 2026-04-02 |
+| 26     | Water Stress Layer                         | v1.3      | Done     | 2026-04-03 |
+| 26.1   | Water Layer Refinements                    | v1.3      | Done     | 2026-04-04 |
+| 26.3   | Production Code Cleanup                    | v1.3      | Done     | 2026-04-07 |
+| 26.4   | Documentation & External Presentation      | v1.3      | Done     | 2026-04-08 |
+| 27     | Conflict Geolocation Improvement (GDELT)   | v1.4      | Done     | 2026-04-12 |
+| 27.1   | Dev Observability & LLM Pipeline Status    | v1.4      | Done     | 2026-04-15 |
+| 27.2   | Event Quality & Water Data Improvements    | v1.4      | Done     | 2026-04-17 |
+| 27.3   | Water Facility Filtering Improvements      | v1.4      | Done     | 2026-04-18 |
+| 27.3.1 | Water Facility Retry and Cleanup           | v1.4      | Done     | 2026-04-19 |
+| 27.3.2 | Water Facility Admission Tightening        | v1.4      | Done     | 2026-04-20 |
+| 27.3.3 | Romanize Non-Latin Water Names             | v1.4      | Deferred | —          |
+| 27.4   | LLM Enrichment Improvements                | v1.4      | Done     | 2026-04-22 |
+| 27.4.1 | V2 Extractor Watchdog + TS Cleanup         | v1.4      | Done     | 2026-04-24 |
+| 27.4.2 | CI Health (flip main CI green)             | v1.4      | Planned  | —          |
+| 27.4.3 | deck.gl v9 Type Drift                      | v1.4      | Planned  | —          |
+| 27.4.5 | LLM Pipeline Full History Observability    | v1.4      | Planned  | —          |
+| 28     | Performance & Load Testing                 | v1.4      | Planned  | —          |
 
 _Phase 26.2 (Conflict Geolocation Improvement, NLP attempt) was scrapped in Phase 26.3 and renumbered to Phase 27 under v1.4 on 2026-04-08. Original Phase 27 (Performance & Load Testing) was renumbered to Phase 28 under v1.4 on the same date. Historical artifacts from the scrapped 26.2 attempt are preserved at `.planning/phases/archive-26.2-nlp-scrapped/`._
 

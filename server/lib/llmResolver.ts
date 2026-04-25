@@ -18,11 +18,7 @@ import { loadSitesSnapshot } from './sitesSnapshot.js';
 import { loadWaterSnapshot } from './waterSnapshot.js';
 import { logger } from './logger.js';
 import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
-import {
-  derivePrecision,
-  type GeocodeProvenance,
-  type LocationHierarchyV2,
-} from './llmSchema.js';
+import { derivePrecision, type GeocodeProvenance, type LocationHierarchyV2 } from './llmSchema.js';
 
 const log = logger.child({ module: 'llm-resolver' });
 
@@ -89,10 +85,27 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 }
 
 export const POI_KEYWORDS: readonly string[] = [
-  'nuclear', 'airbase', 'air base', 'naval base', 'naval', 'airport', 'airfield',
-  'port', 'port of', 'military base', 'military complex', 'garrison', 'barracks',
-  'dam', 'reservoir', 'refinery', 'power plant', 'power station', 'pipeline',
-  'oil terminal', 'substation',
+  'nuclear',
+  'airbase',
+  'air base',
+  'naval base',
+  'naval',
+  'airport',
+  'airfield',
+  'port',
+  'port of',
+  'military base',
+  'military complex',
+  'garrison',
+  'barracks',
+  'dam',
+  'reservoir',
+  'refinery',
+  'power plant',
+  'power station',
+  'pipeline',
+  'oil terminal',
+  'substation',
 ] as const;
 
 export function isPoiLandmark(landmark: string | null): boolean {
@@ -158,12 +171,29 @@ function countryMatches(
 function countryCodeFromName(country: string | null): string | undefined {
   if (!country) return undefined;
   const map: Record<string, string> = {
-    iran: 'ir', iraq: 'iq', syria: 'sy', lebanon: 'lb', israel: 'il',
-    palestine: 'ps', jordan: 'jo', egypt: 'eg',
-    'saudi arabia': 'sa', uae: 'ae', 'united arab emirates': 'ae',
-    bahrain: 'bh', kuwait: 'kw', oman: 'om', qatar: 'qa', yemen: 'ye',
-    turkey: 'tr', afghanistan: 'af', pakistan: 'pk', turkmenistan: 'tm',
-    azerbaijan: 'az', armenia: 'am', georgia: 'ge',
+    iran: 'ir',
+    iraq: 'iq',
+    syria: 'sy',
+    lebanon: 'lb',
+    israel: 'il',
+    palestine: 'ps',
+    jordan: 'jo',
+    egypt: 'eg',
+    'saudi arabia': 'sa',
+    uae: 'ae',
+    'united arab emirates': 'ae',
+    bahrain: 'bh',
+    kuwait: 'kw',
+    oman: 'om',
+    qatar: 'qa',
+    yemen: 'ye',
+    turkey: 'tr',
+    afghanistan: 'af',
+    pakistan: 'pk',
+    turkmenistan: 'tm',
+    azerbaijan: 'az',
+    armenia: 'am',
+    georgia: 'ge',
   };
   return map[country.toLowerCase()];
 }
@@ -232,7 +262,7 @@ async function resolveViaPoiAmenity(hierarchy: LocationHierarchyV2): Promise<Sna
       return !c.address?.country_code || c.address.country_code === cc;
     });
     if (filtered.length === 0) {
-        await cacheSetSafe(key, { miss: true }, GEOCODE_CACHE_REDIS_TTL_SEC);
+      await cacheSetSafe(key, { miss: true }, GEOCODE_CACHE_REDIS_TTL_SEC);
       return null;
     }
     const first = filtered[0]!;
@@ -324,8 +354,14 @@ function buildRerankerUserPrompt(
 ): string {
   const lines: string[] = [];
   const hierarchyStr = [
-    hierarchy.landmark, hierarchy.neighborhood, hierarchy.city, hierarchy.admin1, hierarchy.country,
-  ].filter(Boolean).join(', ');
+    hierarchy.landmark,
+    hierarchy.neighborhood,
+    hierarchy.city,
+    hierarchy.admin1,
+    hierarchy.country,
+  ]
+    .filter(Boolean)
+    .join(', ');
   lines.push(
     `You extracted the location "${hierarchyStr}". Nominatim returned ${candidates.length} candidates.`,
   );
@@ -339,7 +375,9 @@ function buildRerankerUserPrompt(
   lines.push('');
   lines.push('Candidates:');
   candidates.forEach((c, i) => {
-    lines.push(`  ${i + 1}. ${c.displayName} [${c.lat.toFixed(3)}, ${c.lng.toFixed(3)}] (${c.type})`);
+    lines.push(
+      `  ${i + 1}. ${c.displayName} [${c.lat.toFixed(3)}, ${c.lng.toFixed(3)}] (${c.type})`,
+    );
   });
   lines.push('');
   lines.push('Respond with JSON: { "pick": <1-N>, "reasoning": "<=100 chars" }');
@@ -507,7 +545,10 @@ export async function resolveLocation(
           ...verified,
           provenance: 'nominatim-verified-2pass',
           actionGeoDistanceKm: haversineKm(
-            verified.lat, verified.lng, ctx.centroidLat, ctx.centroidLng,
+            verified.lat,
+            verified.lng,
+            ctx.centroidLat,
+            ctx.centroidLng,
           ),
         };
       }
@@ -521,7 +562,10 @@ export async function resolveLocation(
       ...directHit,
       provenance: 'nominatim-direct',
       actionGeoDistanceKm: haversineKm(
-        directHit.lat, directHit.lng, ctx.centroidLat, ctx.centroidLng,
+        directHit.lat,
+        directHit.lng,
+        ctx.centroidLat,
+        ctx.centroidLng,
       ),
     };
   }

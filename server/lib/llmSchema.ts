@@ -124,9 +124,7 @@ export const enrichedEventV2 = z
     // events in the batch, which is worse than silently truncating one field.
     // The system prompt still says "≤200 chars"; Zod is the enforcement-of-
     // last-resort that keeps the v2 cache compact.
-    reasoning: z
-      .string()
-      .transform((s) => (s.length > 200 ? `${s.slice(0, 197)}…` : s)),
+    reasoning: z.string().transform((s) => (s.length > 200 ? `${s.slice(0, 197)}…` : s)),
     // D-13: weapon classification (nullable — not all events specify).
     weaponType: z
       .enum(['airstrike', 'drone', 'missile', 'artillery', 'small_arms', 'IED'])
