@@ -126,7 +126,8 @@ describe('llmResolver', () => {
   });
 
   it('POI amenity miss falls through to nominatim-direct', async () => {
-    // Plan 05: POI branch calls forwardGeocodeConstrained with amenity. When
+    // Plan 05 + Plan 07: POI branch calls forwardGeocodeConstrained with
+    // q=<landmark> (Plan 07 swap from amenity= → q= per D-11 lever 1). When
     // no POI result, dispatch continues to nominatim-direct (second call).
     vi.mocked(forwardGeocodeConstrained)
       .mockResolvedValueOnce([])
@@ -315,10 +316,18 @@ describe('Phase 27.4 Plan 05 - POI amenity path (D-03)', () => {
     expect(out.lat).toBeCloseTo(33.72);
     expect(out.lng).toBeCloseTo(51.73);
 
+    // Phase 27.4.2 P7 (D-11 lever 1): Branch 2 now uses q=<landmark> instead
+    // of amenity=<inferred type>. The amenity= mode dropped the place name
+    // (Nominatim spec — amenity is mutually exclusive with q) and returned
+    // the wrong POI for 9/12 within-20km eval failures. Plan 07 swaps it for
+    // a name-based POI search; the POI keyword gate (isPoiLandmark) still
+    // routes only POI-flavored landmarks to this branch.
     const calls = vi.mocked(forwardGeocodeConstrained).mock.calls;
     expect(calls.length).toBeGreaterThanOrEqual(1);
+    const placeName = calls[0]![0];
     const opts = calls[0]![1]!;
-    expect(opts.amenity).toBe('nuclear power plant');
+    expect(placeName).toBe('Natanz nuclear facility');
+    expect(opts.amenity).toBeUndefined();
     expect(opts.countrycodes).toBe('ir');
   });
 

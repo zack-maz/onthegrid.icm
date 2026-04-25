@@ -117,40 +117,11 @@ export function isPoiLandmark(landmark: string | null): boolean {
   });
 }
 
-const POI_AMENITY_MAP: Record<string, string> = {
-  nuclear: 'nuclear power plant',
-  airbase: 'military airbase',
-  'air base': 'military airbase',
-  'naval base': 'naval base',
-  naval: 'naval base',
-  airport: 'airport',
-  airfield: 'airfield',
-  'port of': 'port',
-  port: 'port',
-  'military base': 'military base',
-  'military complex': 'military base',
-  garrison: 'military base',
-  barracks: 'barracks',
-  dam: 'dam',
-  reservoir: 'reservoir',
-  refinery: 'oil refinery',
-  'power plant': 'power plant',
-  'power station': 'power plant',
-  pipeline: 'pipeline',
-  'oil terminal': 'oil terminal',
-  substation: 'substation',
-};
-
-function inferAmenity(landmark: string): string | null {
-  const lower = landmark.toLowerCase();
-  const keywords = Object.keys(POI_AMENITY_MAP).sort((a, b) => b.length - a.length);
-  for (const kw of keywords) {
-    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`, 'i');
-    if (regex.test(lower)) return POI_AMENITY_MAP[kw]!;
-  }
-  return null;
-}
+// Phase 27.4.2 P7 (D-11 lever 1): POI_AMENITY_MAP and inferAmenity removed.
+// The Branch 2 path now uses q=<landmark> instead of amenity=<inferred type>
+// (see resolveViaPoiAmenity below for rationale). The type-inference table
+// became dead code with that change. POI_KEYWORDS above retains its role as
+// the gate for routing landmarks into Branch 2.
 
 export function fuzzyNameMatch(landmark: string, snapshotLabel: string): boolean {
   const a = landmark.trim().toLowerCase();
@@ -233,10 +204,24 @@ function resolveFromSnapshot(hierarchy: LocationHierarchyV2): SnapshotHit | null
 
 async function resolveViaPoiAmenity(hierarchy: LocationHierarchyV2): Promise<SnapshotHit | null> {
   if (!hierarchy.landmark) return null;
-  const amenity = inferAmenity(hierarchy.landmark);
-  if (!amenity) return null;
+  // Phase 27.4.2 P7 (D-11 lever 1): the POI keyword gate (isPoiLandmark)
+  // still routes named-POI landmarks to this branch, but the Nominatim call
+  // now uses q=<full landmark> instead of amenity=<inferred type>. The
+  // amenity= mode is mutually exclusive with q= per the Nominatim API spec
+  // (see https://nominatim.org/release-docs/latest/api/Search/#structured-query
+  // — "Cannot be combined with the q=<query> parameter") which means the
+  // pre-Plan-07 path was sending only the inferred type and dropping the
+  // place name. Result: Nominatim returned the FIRST matching amenity in
+  // the country-code constraint instead of the specific named POI. Spot
+  // checks against the 50-event ground-truth corpus showed this delivered
+  // 100s-of-km-wrong coordinates for 9 of 12 within-20km failures
+  // (gt-007/021/022/028/038/041/043/047/048). Switching to q=<landmark>
+  // either resolves the named POI correctly (proven for Bushehr Nuclear
+  // Power Plant, Ben Gurion Airport, Tiyas Air Base) or returns 0 results
+  // → falls through to nominatim-direct → gdelt-actiongeo-fallback. Either
+  // outcome is strictly better than the prior wrong-amenity match.
   const cc = countryCodeFromName(hierarchy.country);
-  const key = cacheKey('poi', { amenity, country: cc, landmark: hierarchy.landmark });
+  const key = cacheKey('poi', { country: cc, landmark: hierarchy.landmark });
   const cached = await cacheGetSafe<SnapshotHit | { miss: true }>(
     key,
     GEOCODE_CACHE_LOGICAL_TTL_MS,
@@ -251,7 +236,6 @@ async function resolveViaPoiAmenity(hierarchy: LocationHierarchyV2): Promise<Sna
     // subsequent uncached call bypass the 1 req/s Nominatim policy.
     await throttleNominatim();
     const candidates = await forwardGeocodeConstrained(hierarchy.landmark, {
-      amenity,
       countrycodes: cc ?? ME_COUNTRY_CODES,
       viewbox: ME_VIEWBOX,
       addressdetails: true,
