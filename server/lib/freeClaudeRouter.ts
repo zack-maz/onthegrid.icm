@@ -65,8 +65,21 @@ const JITTER_MS = 250;
 // Phase 27.4.3 D-08: V3_PRIMARY_MODEL env override for bake-off iterations.
 // After Plan 03 winner-lock, the default constant is updated to the winner;
 // env override remains for future re-evaluation without code edit.
-// D-08: NVIDIA NIM default model. Plan 03 may swap the winner after eval bake-off.
-const NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? 'moonshotai/kimi-k2.5';
+//
+// Phase 27.4.3 D-08 bake-off winner (locked Plan 03 Task 5, operator-approved
+// 2026-04-25 against the BAKEOFF.md matrix). qwen/qwen3.5-397b-a17b cleared
+// the D-16 Gate A 0.890 within20km floor exactly (9/10 = 0.900) on a 10-event
+// sample with 0 watchdog timeouts and 10/10 LLM call success — the only
+// candidate that simultaneously honored the v3 batch envelope, emitted
+// resolver-friendly hierarchies, and held p95 latency well under the 90s
+// watchdog cap. Runner-up meta/llama-3.3-70b-instruct (0.800) is kept as
+// holdout standby; cycle via V3_PRIMARY_MODEL without code edit.
+//
+// Re-evaluate via: npm run eval:replay -- --model=<candidate>
+// Per-candidate baselines persisted at events:llm-eval-baseline:v3:<sanitized-model-id> (90d TTL).
+// See .planning/phases/27.4.3-free-claude-code-routing/27.4.3-03-BAKEOFF.md
+// for the per-candidate score matrix and selection rationale.
+const NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? 'qwen/qwen3.5-397b-a17b';
 // D-09: OpenRouter free-tier fallback model.
 const OPENROUTER_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 // D-09: free-tier daily request cap for OpenRouter (rough envelope; per-model
