@@ -7,6 +7,7 @@
 // ---------------------------------------------------------------------------
 
 import type { GeocodeProvenance } from './llmSchema.js';
+import type { Provider } from './llmCircuitBreaker.js';
 
 /**
  * Live progress state for the LLM enrichment pipeline.
@@ -56,7 +57,10 @@ export interface LLMPipelineProgress {
    * outcomes instead of presenting an empty call history with no diagnosis.
    */
   callHistory?: Array<{
-    provider: 'cerebras' | 'groq';
+    // Phase 27.4.3 (D-09): widened to the breaker Provider union so the v3
+    // free-claude-code router can append nvidia_nim/openrouter entries
+    // without an extra cast at every callsite.
+    provider: Provider;
     model: string;
     tokensIn: number;
     tokensOut: number;
@@ -73,8 +77,12 @@ export interface LLMPipelineProgress {
   /** D-30: bounded DLQ size for DevApiStatus badge. */
   dlqCount?: number;
 
-  /** D-31: sliding-window circuit-breaker state per provider. */
-  breakerState?: { cerebras: 'ok' | 'paused'; groq: 'ok' | 'paused' };
+  /**
+   * D-31: sliding-window circuit-breaker state per provider.
+   * Phase 27.4.3 (D-09): widened to all four providers; getBreakerState now
+   * returns nvidia_nim + openrouter alongside cerebras + groq.
+   */
+  breakerState?: Record<Provider, 'ok' | 'paused'>;
 
   /** D-20: latest eval harness score (also written to Redis summary on completion). */
   evalScore?: { within5km: number; within20km: number; within100km: number; total: number };

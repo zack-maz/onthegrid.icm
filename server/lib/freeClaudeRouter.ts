@@ -141,7 +141,7 @@ function getOpenRouterClient(): OpenAI | null {
 export function stripReasoningBlocks(
   raw: string | null,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  reasoningContent?: string,
+  _reasoningContent?: string,
 ): string | null {
   if (!raw) return raw;
   let s = raw.replace(/<think>[\s\S]*?<\/think>/g, '');
