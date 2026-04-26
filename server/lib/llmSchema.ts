@@ -151,17 +151,47 @@ export const enrichedEventV2 = z
 export type EnrichedEventV2 = z.infer<typeof enrichedEventV2>;
 
 // ---------------------------------------------------------------------------
+// v3 schema (Phase 27.4.3 D-10).
+//
+// The v3 wire contract relaxes (no strict JSON Schema mode on NVIDIA NIM /
+// OpenRouter free models — they don't reliably enforce strict JSON Schema
+// response_format), but the runtime Zod contract is byte-identical to v2 —
+// only `schemaVersion` literal differs. The 27.4 schema lock (D-23) is
+// preserved at the type/validation level: derivePrecision + deriveSuspect
+// continue to work against the same shape; the discriminated union below
+// admits v3 payloads transparently for cache-read.
+//
+// Note on strict() preservation: `z.object({...}).strict().extend({...})`
+// in Zod v3 re-applies strict on the resulting schema. Tested: a v3 payload
+// with a surplus `lat` key on `location` still fails safeParse via the
+// nested strict() on locationHierarchyV2, AND a surplus top-level key fails
+// via the outer strict() preserved through .extend(). If a future Zod
+// upgrade changes this, replace this declaration with a full enumerated
+// `z.object({...}).strict()` mirroring v2 verbatim.
+// ---------------------------------------------------------------------------
+
+export const enrichedEventV3 = enrichedEventV2.extend({
+  schemaVersion: z.literal('v3'),
+});
+
+export type EnrichedEventV3 = z.infer<typeof enrichedEventV3>;
+
+// ---------------------------------------------------------------------------
 // Discriminated union for cache-read safety during rollout.
 //
-// Used on every `events:llm*` cache read so v1 + v2 payloads can coexist
+// Used on every `events:llm*` cache read so v1 + v2 + v3 payloads can coexist
 // during the D-24 flag-gated rollout. The discriminator field is
 // `schemaVersion` — typo-safe via Zod's `discriminatedUnion` (RESEARCH.md
 // Pitfall 4: centralize the literal in one place).
+//
+// Phase 27.4.3: v3 admitted alongside v1/v2. v1 retained for the D-40
+// rollback window; v2 retained as the current default (LLM_PIPELINE_V2=true).
 // ---------------------------------------------------------------------------
 
 export const enrichedEventAny = z.discriminatedUnion('schemaVersion', [
   enrichedEventV1,
   enrichedEventV2,
+  enrichedEventV3,
 ]);
 
 export type EnrichedEventAny = z.infer<typeof enrichedEventAny>;
@@ -317,6 +347,18 @@ export const EVENT_EXTRACTION_SCHEMA_V2: Record<string, unknown> = {
 };
 
 // ---------------------------------------------------------------------------
+// Phase 27.4.3 D-10: v3 surfaces this constant as PROMPT INSTRUCTION TEXT
+// (not response_format.json_schema), because NVIDIA NIM and OpenRouter free
+// models do not reliably support strict JSON Schema mode. Zod validates
+// post-parse — same defense-in-depth as v2.
+//
+// Schema content is byte-identical to v2 — alias for clarity. Plan 02b's
+// v3 extractor stringifies this and embeds it in the system prompt verbatim.
+// ---------------------------------------------------------------------------
+
+export const EVENT_EXTRACTION_SCHEMA_V3: Record<string, unknown> = EVENT_EXTRACTION_SCHEMA_V2;
+
+// ---------------------------------------------------------------------------
 // Batch envelope — array of events. Schema-level (Zod) and JSON-Schema-level
 // (for the LLM wire format). Plan 06's v2 extractor uses `batchResponseV2`
 // for the full batch response parse.
@@ -338,3 +380,25 @@ export const batchResponseV2 = z.object({
 });
 
 export type BatchResponseV2 = z.infer<typeof batchResponseV2>;
+
+// ---------------------------------------------------------------------------
+// v3 batch envelope — Phase 27.4.3 D-10.
+//
+// Same preprocess pattern as v2 but seeds `schemaVersion: 'v3'`. Plan 02b's
+// v3 extractor uses this to parse the LLM batch response under the relaxed
+// wire contract (no strict json_schema mode); Zod is the enforcement-of-
+// last-resort that keeps malformed v3 payloads out of the v3 cache.
+// ---------------------------------------------------------------------------
+
+export const batchResponseV3 = z.object({
+  events: z.array(
+    z.preprocess((v: unknown) => {
+      if (v && typeof v === 'object' && !('schemaVersion' in v)) {
+        return { ...(v as object), schemaVersion: 'v3' as const };
+      }
+      return v;
+    }, enrichedEventV3),
+  ),
+});
+
+export type BatchResponseV3 = z.infer<typeof batchResponseV3>;
