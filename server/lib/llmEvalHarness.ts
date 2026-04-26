@@ -28,6 +28,13 @@ import { updateProgress } from './llmProgress.js';
 import { cacheSetSafe } from '../cache/redis.js';
 import { logger } from './logger.js';
 import type { LocationHierarchyV2 } from './llmSchema.js';
+// Phase 27.4.3 Plan 05 D-17 — Trigger 2 (eval-drop). Thread the new score
+// into the auto-rollback check after baseline persistence. The check is a
+// no-op unless v3 is the active pipeline AND the drop vs. the unsuffixed
+// baseline (the cutover-gate score, NOT a per-model bake-off baseline) is
+// >= 5pp. Wrapped in catch so a redis hiccup or audit-log failure inside
+// the trigger never poisons the eval-harness happy path.
+import { checkEvalDropTrigger } from './llmEventExtractor.v3.js';
 
 const log = logger.child({ module: 'llm-eval-harness' });
 
@@ -273,6 +280,17 @@ export async function runEval(opts: { model?: string } = {}): Promise<EvalScore>
     await cacheSetSafe(key, score, BASELINE_TTL_SEC);
   } catch (err) {
     log.warn({ err, key }, 'failed to persist eval baseline to Redis');
+  }
+
+  // Phase 27.4.3 Plan 05 D-17 Trigger 2 — eval-drop auto-rollback check.
+  // Only fires when comparing against the LOCKED baseline (no model arg) so
+  // a per-model bake-off score never trips the rollback. The trigger is a
+  // no-op unless v3 is the active pipeline.
+  if (score.total > 0 && !opts.model) {
+    const ratio = score.within20km / score.total;
+    await checkEvalDropTrigger({ newWithin20kmRatio: ratio }).catch((err) => {
+      log.warn({ err }, 'D-17 eval-drop trigger check failed (swallowed)');
+    });
   }
 
   return score;
