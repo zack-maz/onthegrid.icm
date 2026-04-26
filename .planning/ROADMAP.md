@@ -226,7 +226,7 @@ Plans:
 
 **Wave structure:** Wave 1 (P1-P5) sequential; Wave 2 (P6-P10) sequential, P8/P9/P10 conditional on D-13 stop. P6 depends on P5 (D-02 strict CI gate before tuning).
 
-**Explicitly out-of-scope:** Phase 27.4.4 (deck.gl v9 `depthTest` TS drift — was 27.4.3 before 27.4.3 was reassigned to free-claude-code routing), Phase 27.4.5 (LLM flight-recorder Redis history), Phase 27.3.3 (romanization of non-Latin water names), Vercel preview deploy failure.
+**Explicitly out-of-scope:** Phase 27.4.5 (deck.gl v9 `depthTest` TS drift — was 27.4.4; renumbered 2026-04-26 when 27.4.4 was reassigned to v3 latency remediation + cutover), Phase 27.4.6 (LLM flight-recorder Redis history — was 27.4.5; renumbered same date), Phase 27.3.3 (romanization of non-Latin water names), Vercel preview deploy failure.
 
 ### Phase 27.4.3: free-claude-code Routing Evaluation (INSERTED)
 
@@ -243,6 +243,15 @@ Plans:
 - [x] 27.4.3-03-PLAN.md — Wave 4: D-08 multi-model bake-off — exercise >=3 NVIDIA NIM candidates, capture per-distance scores in 27.4.3-03-BAKEOFF.md, lock winner in NVIDIA_NIM_DEFAULT_MODEL (D-16 Gate A floor 0.890)
 - [x] 27.4.3-04-PLAN.md — Wave 5 (re-sequenced from W-5; runs after Plan 03 winner-lock): DevApiStatus 7 v3 blocks (RoutingTrace, Latency, RateLimitHeadroom local-bind W-4, SchemaStrictFailure, ErrorTaxonomy, PipelineFlips, CostShadow) + LineageDrillDown extension (B-2 fields populated) + Topbar pill v3 (read-only blue) + regression tests (Partial<LLMStatus> mocks per W-6)
 - [x] 27.4.3-05-PLAN.md — Wave 6 (re-sequenced from W-5): D-17 auto-rollback wiring (watchdog-recurrence + eval-drop, imports appendPipelineAudit from lib/pipelineAudit per B-3) + D-16 Gate A/B cutover + cutover POST + Topbar pill smoke + 27.4.2-HUMAN-UAT.md tests 1+2 close
+
+### Phase 27.4.4: v3 Latency Remediation and Cutover
+
+**Goal:** Solve the v3 production-latency blocker that caused Phase 27.4.3 Gate B to fail (qwen/qwen3.5-397b-a17b p99 929s, 11 watchdog timeouts, 218-min duration), then execute the deferred cutover (POST `/api/events/llm-pipeline {version: 'v3'}`) and close Phase 27.4.2 HUMAN-UAT tests 1+2. Reuses all infrastructure from 27.4.3 (vendored router, v3 extractor, observability dashboard, auto-rollback, eval harness, bake-off scripts). Approach TBD via discussion (candidate paths: alternative NIM model with lower long-tail latency, adaptive batching, provider racing, looser watchdog with cap). Success: Gate B PASS (watchdog=0, DLQ≤5, duration≤120min) + cutover live + UAT closed.
+**Depends on:** Phase 27.4.3
+**Requirements:** Derived from 27.4.4-CONTEXT.md (TBD)
+**Plans:** 0 plans
+
+- [ ] (plans TBD after CONTEXT.md and research)
 
 ### Phase 28: Performance & Load Testing — was Phase 27
 
