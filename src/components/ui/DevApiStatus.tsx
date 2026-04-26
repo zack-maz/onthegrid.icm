@@ -146,14 +146,22 @@ const STAGE_COLORS: Record<string, string> = {
   error: '#ef4444',
 };
 
-function ProgressBar({ completed, total }: { completed: number; total: number }) {
+function ProgressBar({
+  completed,
+  total,
+  barColor,
+}: {
+  completed: number;
+  total: number;
+  barColor?: string;
+}) {
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   return (
     <div className="flex items-center gap-1.5">
       <div className="h-1 flex-1 rounded-full bg-white/10">
         <div
           className="h-1 rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, backgroundColor: '#a78bfa' }}
+          style={{ width: `${pct}%`, backgroundColor: barColor ?? '#a78bfa' }}
         />
       </div>
       <span className="text-[8px] text-white/40 tabular-nums">{pct}%</span>
@@ -1200,6 +1208,12 @@ const PROVENANCE_COLORS: Record<string, string> = {
   'nominatim-verified-2pass': 'text-purple-400',
   'gdelt-actiongeo-fallback': 'text-amber-400',
   'bellingcat-coord-passthrough': 'text-orange-400',
+};
+
+// Phase 27.4.3 D-12: per-provider semantic colors for v3 routing-trace + latency + headroom blocks.
+const PROVIDER_COLORS: Record<'nvidia_nim' | 'openrouter', string> = {
+  nvidia_nim: 'text-green-400',
+  openrouter: 'text-blue-400',
 };
 
 /**
