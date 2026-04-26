@@ -45,8 +45,13 @@ export interface LLMPipelineProgress {
   // Phase 27.4 extensions — all optional so v1 readers continue to work.
   // ---------------------------------------------------------------------
 
-  /** D-39: which extractor schema produced this run. (Added in Plan 01.) */
-  schemaVersion?: 'v1' | 'v2';
+  /**
+   * D-39: which extractor schema produced this run. (Added in Plan 01.)
+   * Phase 27.4.3 Plan 02a: widened to include 'v3' for the free-claude-code
+   * routing pipeline (NVIDIA NIM / OpenRouter cascade). v3 cache writes set
+   * this field so /llm-status consumers can branch on it.
+   */
+  schemaVersion?: 'v1' | 'v2' | 'v3';
 
   /**
    * D-19: last N=20 LLM calls (shift-append). Populated via updateProgress.
@@ -55,12 +60,25 @@ export interface LLMPipelineProgress {
    * the network (breaker paused, hard-cap budget, no client configured). These
    * are logged so DevApiStatus can explain `completedBatches=N, enrichedCount=0`
    * outcomes instead of presenting an empty call history with no diagnosis.
+   *
+   * Phase 27.4.3 Plan 02a:
+   * - `provider` widened to include 'nvidia_nim' | 'openrouter' (v3 routers).
+   *   Inline literal kept here (not the breaker `Provider` re-export) so
+   *   /llm-status JSON consumers see the same string union as the wire type.
+   * - `routingReason` added to surface the v3 fall-through cascade ('primary'
+   *   for first-try, 'fall_through:<reason>' for subsequent providers).
+   * - `skipReason` widened with two v3-specific values ('rate_limit_window',
+   *   'daily_cap') so synthetic skip entries from the v3 RollingWindow
+   *   limiter and per-provider daily caps render distinctly.
+   * - 'watchdog-soft-warn' added to skipReason — Phase 27.4.1 added a
+   *   synthetic call-history entry under that exact label; including it on
+   *   the type contract here drops the ad-hoc `as const` at the writer site.
    */
   callHistory?: Array<{
-    // Phase 27.4.3 (D-09): widened to the breaker Provider union so the v3
-    // free-claude-code router can append nvidia_nim/openrouter entries
-    // without an extra cast at every callsite.
-    provider: Provider;
+    // Phase 27.4.3 (D-09 + Plan 02a): inline literal union covering all four
+    // providers. Kept inline (not `Provider`) so the JSON serialization of
+    // /llm-status matches the wire type 1:1 — clients import this same union.
+    provider: 'cerebras' | 'groq' | 'nvidia_nim' | 'openrouter';
     model: string;
     tokensIn: number;
     tokensOut: number;
@@ -68,7 +86,15 @@ export interface LLMPipelineProgress {
     ok: boolean;
     batchSize: number;
     timestamp: number;
-    skipReason?: 'breaker' | 'hard_cap' | 'no_client';
+    /** v3 routing trace: 'primary' for first-try, 'fall_through:<reason>' for cascade hops. */
+    routingReason?: 'primary' | string;
+    skipReason?:
+      | 'breaker'
+      | 'hard_cap'
+      | 'no_client'
+      | 'rate_limit_window'
+      | 'daily_cap'
+      | 'watchdog-soft-warn';
   }>;
 
   /** D-32: per-provider daily token counters mirrored from Redis for fast read. */
@@ -95,6 +121,75 @@ export interface LLMPipelineProgress {
 
   /** Phase 27.4.1 D-06: count of batches killed by the timeout watchdog in current run. */
   watchdogTimeoutCount?: number;
+
+  // ---------------------------------------------------------------------
+  // Phase 27.4.3 Plan 02a — v3 observability fields (D-12, D-14, D-19).
+  //
+  // All optional + additive — v2 cache readers ignore unknown fields.
+  // The fields are populated by Plan 02b's instrumentation (this plan is
+  // type-only so the contract is settled before the extractor work begins).
+  // ---------------------------------------------------------------------
+
+  /** D-12 (v3): chronological trace of routing decisions per batch — drives the Routing Trace block. */
+  routingTrace?: Array<{
+    ts: number;
+    batch: number;
+    provider: 'nvidia_nim' | 'openrouter';
+    model: string;
+    reason: string;
+  }>;
+
+  /**
+   * D-14 (v3): per-provider latency histogram for the dashboard sparklines.
+   * `samples` is the underlying ring buffer (capped at 100 by Plan 02b's
+   * instrumentation) used to recompute p50/p95/p99/sparkline on each insert.
+   * The /llm-status route maps this field to the client-facing `latency`
+   * name (UI-SPEC §"Data freshness" line 317) and drops `samples` —
+   * `samples` is server-only.
+   */
+  latencyHistogram?: Record<
+    'nvidia_nim' | 'openrouter',
+    { p50: number; p95: number; p99: number; sparkline: number[]; samples: number[] }
+  >;
+
+  /** D-12 (v3): rate-limit headroom — both per-minute window + per-day cap, with optional per-model breakout. */
+  rateLimit?: Record<
+    'nvidia_nim' | 'openrouter',
+    {
+      used: number;
+      cap: number;
+      window: 'minute' | 'day';
+      perModel?: Record<string, { used: number; cap: number }>;
+    }
+  >;
+
+  /** D-19 (v3): structured failure breakdown — feeds the Schema Failures block. */
+  schemaFailures?: Record<
+    'nvidia_nim' | 'openrouter',
+    { total: number; malformedJson: number; missingField: number; typeMismatch: number }
+  >;
+
+  /** D-19 (v3): per-provider error taxonomy histogram — feeds the Error Taxonomy block. */
+  errorTaxonomy?: Record<
+    'nvidia_nim' | 'openrouter',
+    Record<
+      'rate_limit' | 'timeout' | 'malformed_json' | 'schema_fail' | 'network' | 'upstream_500' | 'other',
+      number
+    >
+  >;
+
+  /** D-12 (v3): shadow cost calculator — what the run WOULD have cost on Anthropic Sonnet. */
+  costShadow?: { tokensIn: number; tokensOut: number; usd: number };
+
+  /**
+   * Phase 27.4.3 Plan 02a (B-2): live ring buffer of recent enriched events
+   * with their lineage fields. Mirrored to LLMRunSummary on completion so
+   * cold-start dashboard reads see the same drill-down list.
+   *
+   * Element type extension (see RecentEnrichedEvent below) carries the new
+   * reasoningTrace + lineageHash optional fields populated by Plan 02b.
+   */
+  recentEvents?: RecentEnrichedEvent[];
 }
 
 /**
@@ -116,7 +211,8 @@ export interface LLMRunSummary {
   durationMs: number;
   error: string | null;
   source?: 'pipeline' | 'dev-file-cache';
-  schemaVersion?: 'v1' | 'v2';
+  /** Phase 27.4.3 Plan 02a: widened to include 'v3' for the free-claude-code routing pipeline. */
+  schemaVersion?: 'v1' | 'v2' | 'v3';
   // Phase 27.4 additional summary fields (optional for read-compat):
   tokenCounters?: { cerebras: number; groq: number };
   dlqCount?: number;
@@ -125,6 +221,136 @@ export interface LLMRunSummary {
   suspectCount?: number;
   /** Phase 27.4.1 D-06 / 27.4.2 P6: count of batches killed by the timeout watchdog in last run. */
   watchdogTimeoutCount?: number;
+
+  // ---------------------------------------------------------------------
+  // Phase 27.4.3 Plan 02a — v3 observability mirror of LLMPipelineProgress.
+  //
+  // Persisted to Redis at end-of-run so cold-start dashboard reads — which
+  // can only load the Redis summary, not the in-memory singleton — still
+  // see the v3 routing trace, latency histogram, rate-limit headroom,
+  // schema failures, error taxonomy, and shadow cost. callHistory mirror
+  // covers the same widened provider + skipReason union as the live
+  // singleton above.
+  //
+  // recentEvents is intentionally NOT mirrored here — element type
+  // extension below (RecentEnrichedEvent gains reasoningTrace + lineageHash
+  // per B-2) covers Plan 04's DrillDownRow surface.
+  // ---------------------------------------------------------------------
+
+  callHistory?: Array<{
+    provider: 'cerebras' | 'groq' | 'nvidia_nim' | 'openrouter';
+    model: string;
+    tokensIn: number;
+    tokensOut: number;
+    durationMs: number;
+    ok: boolean;
+    batchSize: number;
+    timestamp: number;
+    routingReason?: 'primary' | string;
+    skipReason?:
+      | 'breaker'
+      | 'hard_cap'
+      | 'no_client'
+      | 'rate_limit_window'
+      | 'daily_cap'
+      | 'watchdog-soft-warn';
+  }>;
+
+  routingTrace?: Array<{
+    ts: number;
+    batch: number;
+    provider: 'nvidia_nim' | 'openrouter';
+    model: string;
+    reason: string;
+  }>;
+
+  latencyHistogram?: Record<
+    'nvidia_nim' | 'openrouter',
+    { p50: number; p95: number; p99: number; sparkline: number[]; samples: number[] }
+  >;
+
+  rateLimit?: Record<
+    'nvidia_nim' | 'openrouter',
+    {
+      used: number;
+      cap: number;
+      window: 'minute' | 'day';
+      perModel?: Record<string, { used: number; cap: number }>;
+    }
+  >;
+
+  schemaFailures?: Record<
+    'nvidia_nim' | 'openrouter',
+    { total: number; malformedJson: number; missingField: number; typeMismatch: number }
+  >;
+
+  errorTaxonomy?: Record<
+    'nvidia_nim' | 'openrouter',
+    Record<
+      'rate_limit' | 'timeout' | 'malformed_json' | 'schema_fail' | 'network' | 'upstream_500' | 'other',
+      number
+    >
+  >;
+
+  costShadow?: { tokensIn: number; tokensOut: number; usd: number };
+
+  /**
+   * Phase 27.4.3 Plan 02a (B-2): last N enriched events with their lineage
+   * fields populated. Element type extension carries reasoningTrace +
+   * lineageHash so Plan 04 Task 3 DrillDownRow can render them under TS
+   * strict mode without `as any` or TS2339.
+   *
+   * Server-side recentEvents element type is locally declared to avoid a
+   * circular import with /llm-status route and to keep llmProgress.ts
+   * dependency-light. The two new optional fields land here AND on the
+   * client mirror in src/hooks/useLLMStatusPolling.ts in the SAME COMMIT
+   * (A9 atomic invariant per the project canon).
+   */
+  recentEvents?: RecentEnrichedEvent[];
+}
+
+// ---------------------------------------------------------------------------
+// RecentEnrichedEvent (server-side mirror).
+//
+// Phase 27.4.3 Plan 02a / B-2: this element type backs LLMRunSummary.recentEvents
+// and gains two new optional fields:
+//   - reasoningTrace: <think>...</think> text stripped from the raw v3 LLM
+//     response by Plan 02b's lineage helper. NULLable / optional because v1
+//     and v2 LLM responses don't carry think tags.
+//   - lineageHash: sha256(prompt || model || eventId) — used by Plan 04's
+//     DrillDownRow extension to anchor the "copy lineage" button and
+//     identify replayable events. Optional because v1/v2 paths predate the
+//     lineage helper.
+//
+// Plan 04 Task 3 reads these fields directly under TS strict mode — that's
+// the ONLY consumer; the field is otherwise observability-only. Threat
+// surface declared here, populated in Plan 02b. (See plan threat_model
+// T-27.4.3-02a-02 — accept disposition, DEV-only consumer.)
+// ---------------------------------------------------------------------------
+
+export interface RecentEnrichedEvent {
+  groupKey: string;
+  location: {
+    country: string | null;
+    admin1: string | null;
+    city: string | null;
+    neighborhood: string | null;
+    landmark: string | null;
+  };
+  precision: 'exact' | 'neighborhood' | 'city' | 'region';
+  confidence: number;
+  reasoning: string;
+  weaponType: string | null;
+  targetType: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  provenance: GeocodeProvenance;
+  sources: string[];
+  fetchedAt: number;
+  // === Phase 27.4.3 Plan 02a (B-2): populated by Plan 02b lineage helper. ===
+  // Plan 04 Task 3 DrillDownRow renders these directly under TS strict mode.
+  reasoningTrace?: string;
+  lineageHash?: string;
 }
 
 /**
@@ -157,6 +383,17 @@ export const INITIAL_PROGRESS: Readonly<LLMPipelineProgress> = {
   provenanceCounts: undefined,
   suspectCount: undefined,
   watchdogTimeoutCount: undefined,
+  // Phase 27.4.3 Plan 02a — v3 observability fields seeded undefined so
+  // resetProgress() clears stale data between runs (e.g., a lingering
+  // routingTrace from yesterday's v3 run would otherwise confuse today's
+  // dashboard if today only ran v2).
+  routingTrace: undefined,
+  latencyHistogram: undefined,
+  rateLimit: undefined,
+  schemaFailures: undefined,
+  errorTaxonomy: undefined,
+  costShadow: undefined,
+  recentEvents: undefined,
 };
 
 /**
@@ -211,5 +448,19 @@ export function buildSummary(): LLMRunSummary {
     provenanceCounts: llmProgress.provenanceCounts,
     suspectCount: llmProgress.suspectCount,
     watchdogTimeoutCount: llmProgress.watchdogTimeoutCount,
+    // Phase 27.4.3 Plan 02a — thread the new v3 observability fields into
+    // the persisted Redis summary so cold-start dashboard reads see the
+    // routing trace, latency histogram, rate-limit headroom, schema failures,
+    // error taxonomy, shadow cost, callHistory mirror, and recentEvents
+    // drill-down. callHistory is also persisted so the cold-start render
+    // matches the live render exactly.
+    callHistory: llmProgress.callHistory,
+    routingTrace: llmProgress.routingTrace,
+    latencyHistogram: llmProgress.latencyHistogram,
+    rateLimit: llmProgress.rateLimit,
+    schemaFailures: llmProgress.schemaFailures,
+    errorTaxonomy: llmProgress.errorTaxonomy,
+    costShadow: llmProgress.costShadow,
+    recentEvents: llmProgress.recentEvents,
   };
 }

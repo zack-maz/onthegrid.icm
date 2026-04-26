@@ -147,9 +147,22 @@ describe('enrichedEventAny discriminator', () => {
     }
   });
 
-  it('Test 8c: payload with schemaVersion:"v3" rejects (no matching discriminator)', () => {
+  it('Test 8c: v3 payload with schemaVersion:"v3" parses as the v3 branch (Phase 27.4.3 D-10)', () => {
+    // Phase 27.4.3 widened the discriminated union to include the v3 branch
+    // (byte-identical to v2 except for the schemaVersion literal). v3 wire
+    // contract relaxes for NVIDIA NIM / OpenRouter — see llmSchema.ts.
     const payload = validV2Payload();
     payload.schemaVersion = 'v3';
+    const result = enrichedEventAny.safeParse(payload);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schemaVersion).toBe('v3');
+    }
+  });
+
+  it('Test 8d: payload with schemaVersion:"v4" rejects (no matching discriminator)', () => {
+    const payload = validV2Payload();
+    payload.schemaVersion = 'v4';
     const result = enrichedEventAny.safeParse(payload);
     expect(result.success).toBe(false);
   });
