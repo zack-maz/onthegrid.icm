@@ -146,14 +146,22 @@ const STAGE_COLORS: Record<string, string> = {
   error: '#ef4444',
 };
 
-function ProgressBar({ completed, total }: { completed: number; total: number }) {
+function ProgressBar({
+  completed,
+  total,
+  barColor,
+}: {
+  completed: number;
+  total: number;
+  barColor?: string;
+}) {
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   return (
     <div className="flex items-center gap-1.5">
       <div className="h-1 flex-1 rounded-full bg-white/10">
         <div
           className="h-1 rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, backgroundColor: '#a78bfa' }}
+          style={{ width: `${pct}%`, backgroundColor: barColor ?? '#a78bfa' }}
         />
       </div>
       <span className="text-[8px] text-white/40 tabular-nums">{pct}%</span>
@@ -730,13 +738,15 @@ export function DevApiStatus() {
   const showWaterTab = useLayerStore((s) => s.activeLayers.has('water'));
   const showSitesTab = useFilterStore((s) => s.showSites);
 
-  // Phase 27.4 Plan 09 D-15 — Events tab is dual-gated:
-  //   1. schemaVersion === 'v2' (operator flipped LLM_PIPELINE_V2 and at
-  //      least one run has reported back)
+  // Phase 27.4 Plan 09 D-15 / Phase 27.4.3 Plan 04 — Events tab is dual-gated:
+  //   1. schemaVersion === 'v2' OR 'v3' (operator flipped LLM_PIPELINE_V2 / V3
+  //      and at least one run has reported back)
   //   2. import.meta.env.DEV (prod bundles tree-shake this entire block)
   // In prod builds the tab is tree-shaken out via the DEV gate — zero
-  // bytes added to the production bundle (see threat T-27.4-09-01).
-  const showEventsTab = llmStatus?.schemaVersion === 'v2' && import.meta.env.DEV;
+  // bytes added to the production bundle (see threat T-27.4-09-01 + T-27.4.3-04-01).
+  const showEventsTab =
+    (llmStatus?.schemaVersion === 'v2' || llmStatus?.schemaVersion === 'v3') &&
+    import.meta.env.DEV;
 
   // Escape key — capture-phase so DevApiStatus closes BEFORE nav-stack pop /
   // detail panel close / search modal close (Plan 12 G6 priority contract).
@@ -870,7 +880,15 @@ export function DevApiStatus() {
           {activeTab === 'water' && showWaterTab && <WaterFiltersSection />}
           {activeTab === 'sites' && showSitesTab && <SitesFiltersSection />}
           {activeTab === 'events' && showEventsTab && (
-            <EventsFiltersSection llmStatus={llmStatus} />
+            // Phase 27.4.3 Plan 04 — version-routed render switch.
+            // v3 mounts EventsFiltersSectionV3 (8-block surface); v2 keeps the
+            // existing EventsFiltersSection (8-block v2 surface). v1 stays gated
+            // out (no Events tab on v1) per UI-SPEC §"Render switch".
+            llmStatus?.schemaVersion === 'v3' && import.meta.env.DEV ? (
+              <EventsFiltersSectionV3 llmStatus={llmStatus} />
+            ) : llmStatus?.schemaVersion === 'v2' && import.meta.env.DEV ? (
+              <EventsFiltersSection llmStatus={llmStatus} />
+            ) : null
           )}
         </div>
       </div>
@@ -1202,6 +1220,12 @@ const PROVENANCE_COLORS: Record<string, string> = {
   'bellingcat-coord-passthrough': 'text-orange-400',
 };
 
+// Phase 27.4.3 D-12: per-provider semantic colors for v3 routing-trace + latency + headroom blocks.
+const PROVIDER_COLORS: Record<'nvidia_nim' | 'openrouter', string> = {
+  nvidia_nim: 'text-green-400',
+  openrouter: 'text-blue-400',
+};
+
 /**
  * Phase 27.4 Plan 09 D-16 — pipeline waterfall. Four rows (Grouping →
  * LLM → Geocoding → Done) with completed/total counters and a ProgressBar
@@ -1385,6 +1409,30 @@ function DrillDownRow({ ev }: { ev: RecentEnrichedEvent }) {
               ))}
             </div>
           )}
+          {/* Phase 27.4.3 D-13 Lineage extension — reasoning trace + lineage hash chip.
+              Optional fields; v1/v2 cached events lack them so chips simply don't render
+              (intended graceful degradation across pipeline versions, not a hand-wave). */}
+          {ev.reasoningTrace ? (
+            <div className="mt-1">
+              <div className="text-[9px] uppercase tracking-wider text-white/40">
+                Reasoning trace
+              </div>
+              <pre className="mt-0.5 max-h-24 overflow-y-auto whitespace-pre-wrap text-[9px] italic text-white/40">
+                {ev.reasoningTrace}
+              </pre>
+            </div>
+          ) : null}
+          {ev.lineageHash ? (
+            <div className="mt-1 flex items-center gap-1">
+              <span className="text-[9px] uppercase tracking-wider text-white/40">Lineage</span>
+              <span
+                className="font-mono text-[9px] text-cyan-400"
+                title={ev.lineageHash}
+              >
+                hash: {ev.lineageHash.slice(0, 8)}…
+              </span>
+            </div>
+          ) : null}
           <button
             className="text-white/60 hover:text-white/80"
             onClick={copyPromptResponse}
@@ -1622,6 +1670,389 @@ function SuspectBlock({ count }: { count: number }) {
   );
 }
 
+/* ========================================================================
+ * Phase 27.4.3 Plan 04 — v3 observability blocks (D-12 / D-13 / D-14 / D-15
+ * / D-19). All blocks below are gated upstream by `EventsFiltersSectionV3`
+ * which renders only when llmStatus.schemaVersion === 'v3' && import.meta.env.DEV.
+ * Each block defends against missing data with verbatim UI-SPEC empty-state
+ * copy so the v3 surface is render-safe even on first poll / cold cache.
+ * ======================================================================== */
+
+/**
+ * Phase 27.4.3 D-12 §1 — Routing Trace block. Analog: CallLogBlock.
+ * One row per routing decision (last 50 from server-side ring buffer).
+ * Each row shows time, batch index, provider/model, and routing reason
+ * with green chip on `primary`, amber chip on cascade fall-through.
+ */
+function RoutingTraceBlock({ trace }: { trace?: LLMStatus['routingTrace'] }) {
+  const rows = trace ?? [];
+  if (rows.length === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Routing Trace (last 50)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No routing decisions yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Routing Trace (last 50)
+      </div>
+      <div className="mt-1 max-h-32 overflow-y-auto">
+        {rows.slice(0, 50).map((r) => {
+          const ts = new Date(r.ts);
+          const time = `${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}:${String(ts.getSeconds()).padStart(2, '0')}`;
+          const isPrimary = r.reason === 'primary';
+          const reasonClass = isPrimary
+            ? 'bg-green-500/20 text-green-300 px-1 rounded'
+            : 'bg-amber-500/20 text-amber-300 px-1 rounded';
+          return (
+            <div
+              key={`${r.ts}-${r.batch}`}
+              className="flex items-center gap-1 text-[9px] text-white/60 tabular-nums"
+            >
+              <span className="text-white/40">[{time}]</span>
+              <span>batch={r.batch}</span>
+              <span>→</span>
+              <span className={PROVIDER_COLORS[r.provider]}>
+                {r.provider}/{r.model}
+              </span>
+              <span className={reasonClass}>{r.reason}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-12 §2 — Latency histogram block. Analog: BudgetBarsBlock.
+ * Per-provider P50/P95/P99 line + sparkline of recent latency samples.
+ * Amber warning chip when P99 exceeds the 60s soft watchdog warn threshold.
+ */
+function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) {
+  const providers = latency
+    ? (Object.keys(latency) as Array<'nvidia_nim' | 'openrouter'>)
+    : [];
+  const empty =
+    providers.length === 0 ||
+    providers.every((p) => {
+      const s = latency?.[p];
+      return !s || s.sparkline.length === 0;
+    });
+  if (empty) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Latency (P50/P95/P99)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No LLM calls yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Latency (P50/P95/P99)
+      </div>
+      {providers.map((p) => {
+        const stats = latency?.[p];
+        if (!stats) return null;
+        const overWatchdog = stats.p99 > 60_000;
+        return (
+          <div key={p} className="mt-1">
+            <div
+              className={`flex items-center justify-between gap-1 text-[9px] tabular-nums ${PROVIDER_COLORS[p]}`}
+            >
+              <span>
+                {p}: P50 {stats.p50}ms · P95 {stats.p95}ms · P99 {stats.p99}ms
+              </span>
+              {overWatchdog ? (
+                <span className="text-amber-400">⚠ over watchdog warn (60s)</span>
+              ) : null}
+            </div>
+            <Sparkline points={stats.sparkline} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-12 §2 — sparkline helper. Inline SVG polyline; min 2 points.
+ * Caller decides container height; this scales 0..max → full height.
+ */
+function Sparkline({ points }: { points: number[] }) {
+  if (points.length < 2) return null;
+  const max = Math.max(...points, 1);
+  const xStep = 100 / (points.length - 1);
+  const path = points.map((y, i) => `${i * xStep},${100 - (y / max) * 100}`).join(' ');
+  return (
+    <svg className="h-4 w-full text-blue-400" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <polyline points={path} fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-12 §3 — Rate-limit headroom block. Analog: BudgetBarsBlock.
+ * Per-provider used/cap progress bar with green/amber/red color rules:
+ *   ratio ≥ 0.95 → red bar + "Capped — falling through" badge
+ *   ratio ≥ 0.80 → amber bar + "≥80% — fall-through likely" badge
+ *   else         → green bar (no badge)
+ */
+function RateLimitHeadroomBlock({ rateLimit }: { rateLimit?: LLMStatus['rateLimit'] }) {
+  const providers = rateLimit
+    ? (Object.keys(rateLimit) as Array<'nvidia_nim' | 'openrouter'>)
+    : [];
+  if (providers.length === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Rate-Limit Headroom
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No requests this window.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Rate-Limit Headroom
+      </div>
+      {providers.map((p) => {
+        const r = rateLimit?.[p];
+        if (!r) return null;
+        const ratio = r.cap > 0 ? r.used / r.cap : 0;
+        const barColor = ratio >= 0.95 ? '#f87171' : ratio >= 0.8 ? '#fbbf24' : '#34d399';
+        // W-4 fix: 27.4.1 D-15 local-bind pattern (avoid Object.values()[0] under noUncheckedIndexedAccess)
+        const firstModel = r.perModel ? Object.entries(r.perModel)[0] : undefined;
+        const firstModelName = firstModel?.[0] ?? 'kimi-k2.5';
+        const firstModelUsed = firstModel?.[1]?.used ?? 0;
+        const labelText =
+          p === 'nvidia_nim'
+            ? `NVIDIA NIM: ${r.used}/${r.cap} req/min · ${firstModelUsed} req today`
+            : `OpenRouter: ${r.used}/${r.cap} req on ${firstModelName}`;
+        const badge =
+          ratio >= 0.95 ? (
+            <span className="text-red-400">Capped — falling through</span>
+          ) : ratio >= 0.8 ? (
+            <span className="text-amber-400">≥80% — fall-through likely</span>
+          ) : null;
+        return (
+          <div key={p} className="mt-1">
+            <div className="flex items-center justify-between gap-1 text-[9px] tabular-nums text-white/80">
+              <span>{labelText}</span>
+              {badge}
+            </div>
+            <ProgressBar completed={r.used} total={r.cap} barColor={barColor} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-12 §4 — Schema-strict failure block. Analog: HistogramsBlock.
+ * Per-provider {total, malformedJson, missingField, typeMismatch} counters.
+ * Renders only providers with non-zero failure counts; zero-state empty
+ * line otherwise (no per-provider noise when v3 is healthy).
+ */
+function SchemaStrictFailureBlock({
+  schemaFailures,
+  callHistory,
+}: {
+  schemaFailures?: LLMStatus['schemaFailures'];
+  callHistory?: LLMStatus['callHistory'];
+}) {
+  const sf = schemaFailures;
+  const providers = sf ? (Object.keys(sf) as Array<'nvidia_nim' | 'openrouter'>) : [];
+  const totalAcrossAll = providers.reduce((acc, p) => acc + (sf?.[p]?.total ?? 0), 0);
+  if (totalAcrossAll === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Schema-Strict Failure Rate
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No schema rejections.</div>
+      </div>
+    );
+  }
+  const totalCalls = (callHistory ?? []).length;
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Schema-Strict Failure Rate
+      </div>
+      {providers.map((p) => {
+        const f = sf?.[p];
+        if (!f || f.total === 0) return null;
+        const pct = totalCalls > 0 ? ((f.total / totalCalls) * 100).toFixed(1) : '—';
+        return (
+          <div key={p} className={`mt-1 text-[9px] tabular-nums ${PROVIDER_COLORS[p]}`}>
+            {p}: {f.total} of {totalCalls} ({pct}%) — malformed_json={f.malformedJson} ·
+            missing_field={f.missingField} · type_mismatch={f.typeMismatch}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-14 — Error Taxonomy block. Analog: HistogramsBlock.
+ * Per-provider 7-bucket counters (rate_limit / timeout / malformed_json /
+ * schema_fail / network / upstream_500 / other) flowed from
+ * freeClaudeRouter B-1 instrumentation. Empty-state when zero across all
+ * providers + all buckets.
+ */
+function ErrorTaxonomyBlock({ taxonomy }: { taxonomy?: LLMStatus['errorTaxonomy'] }) {
+  const t = taxonomy;
+  const providers = t ? (Object.keys(t) as Array<'nvidia_nim' | 'openrouter'>) : [];
+  const totalAcrossAll = providers.reduce(
+    (acc, p) => acc + Object.values(t?.[p] ?? {}).reduce((a, b) => a + b, 0),
+    0,
+  );
+  if (totalAcrossAll === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Error Taxonomy (today UTC)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No errors today.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Error Taxonomy (today UTC)
+      </div>
+      {providers.map((p) => {
+        const buckets = t?.[p];
+        if (!buckets) return null;
+        const cells = Object.entries(buckets).map(([k, n]) => {
+          const cls = n > 0 ? 'text-white/80' : 'text-white/30';
+          return (
+            <span key={k} className={`${cls} tabular-nums`}>
+              {k}={n}
+            </span>
+          );
+        });
+        return (
+          <div
+            key={p}
+            className={`mt-1 flex flex-wrap items-center gap-1 text-[9px] ${PROVIDER_COLORS[p]}`}
+          >
+            <span>{p}:</span>
+            {cells.flatMap((c, i) =>
+              i > 0
+                ? [
+                    <span key={`s${i}`} className="text-white/30">
+                      ·
+                    </span>,
+                    c,
+                  ]
+                : [c],
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-15 — Pipeline Flips block. Analog: CallLogBlock + DlqBlock.
+ * Each entry shows ISO timestamp, from→to version, trigger, operator,
+ * optional reason. Auto-flip triggers (auto:eval_drop, auto:watchdog_recurrence)
+ * are color-coded amber/red so on-call eyes are drawn to them.
+ */
+function PipelineFlipsBlock({ flips }: { flips?: LLMStatus['pipelineFlips'] }) {
+  const rows = flips ?? [];
+  if (rows.length === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Pipeline Flips (last 200)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No flips recorded.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Pipeline Flips (last 200)
+      </div>
+      <div className="mt-1 max-h-32 overflow-y-auto">
+        {rows.slice(0, 50).map((f) => {
+          const iso = new Date(f.ts).toISOString();
+          const triggerClass =
+            f.trigger === 'auto:eval_drop'
+              ? 'text-amber-400'
+              : f.trigger === 'auto:watchdog_recurrence'
+                ? 'text-red-400'
+                : 'text-white/60';
+          return (
+            <div key={`${f.ts}-${f.from}-${f.to}`} className="text-[9px]">
+              <div className={`flex items-center gap-1 tabular-nums ${triggerClass}`}>
+                <span>[{iso}]</span>
+                <span>
+                  {f.from} → {f.to}
+                </span>
+                <span>·</span>
+                <span>{f.trigger}</span>
+                <span>·</span>
+                <span>{f.operator}</span>
+              </div>
+              {f.reason ? <div className="text-[9px] italic text-white/50">{f.reason}</div> : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-19 — Cost Shadow block. Analog: EvalScoreBlock.
+ * Shows what the v3 run would cost at Anthropic Sonnet rates if the
+ * pipeline were on the paid path; tagline reaffirms that free-claude-code
+ * routing avoided that spend. Three counters on one line.
+ */
+function CostShadowBlock({ cost }: { cost?: LLMStatus['costShadow'] }) {
+  const c = cost;
+  if (!c || (c.tokensIn === 0 && c.tokensOut === 0)) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          v3 Cost Shadow (last 24h)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No tokens billed this window.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        v3 Cost Shadow (last 24h)
+      </div>
+      <div className="mt-1 text-[9px] tabular-nums text-white/80">
+        Tokens in: ~{c.tokensIn.toLocaleString()} · Tokens out: ~{c.tokensOut.toLocaleString()} ·
+        Shadow cost: ${c.usd.toFixed(3)}
+      </div>
+      <div className="text-[9px] italic text-green-400">↳ saved by free-claude-code routing</div>
+    </div>
+  );
+}
+
 /**
  * Phase 27.4 Plan 09 — dev-only Events tab. Renders the 8-block v2
  * observability surface that makes every 27.4 decision visible in a
@@ -1705,5 +2136,58 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
       {/* Block 8: Suspect count badge (D-23) */}
       <SuspectBlock count={sc} />
     </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 Plan 04 — sibling of EventsFiltersSection, gated on
+ * schemaVersion === 'v3' && import.meta.env.DEV by the parent render switch.
+ * Renders the 8-block v3 observability stack per UI-SPEC §"Component
+ * Inventory" + §"Render switch".
+ *
+ * Block order (per UI-SPEC §"Section headers" lines 169-180):
+ *   1. Routing Trace (D-12 §1)
+ *   2. Latency P50/P95/P99 (D-12 §2)
+ *   3. Rate-Limit Headroom (D-12 §3)
+ *   4. Schema-Strict Failure Rate (D-12 §4)
+ *   5. Error Taxonomy (D-14)
+ *   6. Pipeline Flips (D-15)
+ *   7. v3 Cost Shadow (D-19)
+ *   + Lineage drill-down (D-13) — rendered IN-PLACE inside DrillDownRow under
+ *     the existing event-list block (DrillDownRow auto-detects v3 fields).
+ *     No separate block here; that's the entire v3 lineage UX surface.
+ *
+ * Threat mitigations:
+ *   - T-27.4.3-04-01: production tree-shake gate via parent showEventsTab
+ *   - T-27.4.3-04-02: pill stays read-only (Topbar.tsx, separate file)
+ *   - T-27.4.3-04-03: lineage prompt/response only inside DEV gate
+ *   - T-27.4.3-04-04: regression tests assert empty-state copy verbatim
+ */
+function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
+  return (
+    <section className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] text-white/60">
+        Schema: v3 · Stage: {llmStatus.stage ?? 'idle'}
+      </div>
+      <RoutingTraceBlock trace={llmStatus.routingTrace} />
+      <LatencyHistogramBlock latency={llmStatus.latency} />
+      <RateLimitHeadroomBlock rateLimit={llmStatus.rateLimit} />
+      <SchemaStrictFailureBlock
+        schemaFailures={llmStatus.schemaFailures}
+        callHistory={llmStatus.callHistory}
+      />
+      <ErrorTaxonomyBlock taxonomy={llmStatus.errorTaxonomy} />
+      <PipelineFlipsBlock flips={llmStatus.pipelineFlips} />
+      <CostShadowBlock cost={llmStatus.costShadow} />
+      {/* D-13 Lineage drill-down: per-event drill-down rows include the v3
+          lineage extension (reasoning trace + lineage hash chip). DrillDownRow
+          auto-detects v3 fields on RecentEnrichedEvent — they're optional, so
+          v2-cached events under the same surface degrade gracefully (no chips).
+          Rule 2 deviation from Plan 04 Task 4: the v3 composer needs to mount
+          DrillDownBlock so the lineage UX surface is actually reachable when
+          v3 is active (the v2 composer is replaced, not stacked, by the
+          version-routed render switch). */}
+      <DrillDownBlock llmStatus={llmStatus} />
+    </section>
   );
 }

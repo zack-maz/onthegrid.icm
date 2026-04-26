@@ -174,7 +174,7 @@ function DevApiStatusTrigger() {
 }
 
 /**
- * Dev-only pipeline version pill. Shows the currently-effective v1/v2 LLM
+ * Dev-only pipeline version pill. Shows the currently-effective v1/v2/v3 LLM
  * pipeline version as a READ-ONLY indicator. Phase 27.4.1 D-20: the
  * click-to-swap behavior has been stripped; operators who need to flip
  * versions should POST /api/events/llm-pipeline directly (the endpoint
@@ -184,16 +184,27 @@ function DevApiStatusTrigger() {
  *
  * The endpoint is dual-gated (NODE_ENV + 404 fallback); the UI is
  * DEV-only via the parent wrapper so production builds tree-shake it.
+ *
+ * Phase 27.4.3 Plan 04 — version union widened to admit 'v3', rendered
+ * in blue rgb(96,165,250) per UI-SPEC §"Pipeline-version pill". PILL_COLORS
+ * lookup record replaces the inline ternary so adding future versions is
+ * a one-line change.
  */
+const PILL_COLORS: Record<'v1' | 'v2' | 'v3', string> = {
+  v1: 'rgb(234,179,8)', // yellow (existing)
+  v2: 'rgb(74,222,128)', // green (existing)
+  v3: 'rgb(96,165,250)', // blue accent-blue family (UI-SPEC new)
+};
+
 function PipelineVersionPillInner() {
-  const [version, setVersion] = useState<'v1' | 'v2' | 'unknown'>('unknown');
+  const [version, setVersion] = useState<'v1' | 'v2' | 'v3' | 'unknown'>('unknown');
 
   const fetchVersion = useCallback(async () => {
     try {
       const res = await fetch('/api/events/llm-pipeline');
       if (!res.ok) return;
-      const json = (await res.json()) as { effective?: 'v1' | 'v2' };
-      if (json.effective === 'v1' || json.effective === 'v2') {
+      const json = (await res.json()) as { effective?: 'v1' | 'v2' | 'v3' };
+      if (json.effective === 'v1' || json.effective === 'v2' || json.effective === 'v3') {
         setVersion(json.effective);
       }
     } catch {
@@ -211,9 +222,7 @@ function PipelineVersionPillInner() {
     <span
       data-testid="pipeline-version-pill"
       className="rounded-md px-2 py-1 font-mono text-[10px]"
-      style={{
-        color: version === 'v2' ? 'rgb(74,222,128)' : 'rgb(234,179,8)',
-      }}
+      style={{ color: PILL_COLORS[version] }}
       title={`LLM pipeline: ${version} (read-only — use POST /api/events/llm-pipeline to swap)`}
     >
       {version}
