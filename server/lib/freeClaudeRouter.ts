@@ -62,8 +62,11 @@ const LLM_TIMEOUT_MS = 120_000;
 const RETRY_ATTEMPTS = 2;
 const BACKOFF_MS = [1000, 4000] as const;
 const JITTER_MS = 250;
+// Phase 27.4.3 D-08: V3_PRIMARY_MODEL env override for bake-off iterations.
+// After Plan 03 winner-lock, the default constant is updated to the winner;
+// env override remains for future re-evaluation without code edit.
 // D-08: NVIDIA NIM default model. Plan 03 may swap the winner after eval bake-off.
-const NVIDIA_NIM_DEFAULT_MODEL = 'moonshotai/kimi-k2.5';
+const NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? 'moonshotai/kimi-k2.5';
 // D-09: OpenRouter free-tier fallback model.
 const OPENROUTER_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 // D-09: free-tier daily request cap for OpenRouter (rough envelope; per-model

@@ -14,6 +14,10 @@
  *   events:llm:v2:partial → events:llm:v3:partial
  *
  * v1/v2 extractors remain shipped untouched (rollback safety per D-21).
+ *
+ * Phase 27.4.3 D-08 bake-off: set V3_BAKEOFF_MODEL=<id> to override the
+ * freeClaudeRouter primary model for a single extractor run. Used during
+ * multi-model evaluation; not load-bearing in production.
  */
 
 import type { EventGroup } from './eventGrouping.js';
@@ -55,6 +59,11 @@ const log = logger.child({ module: 'llm-extractor-v3' });
  *  far more context (news + Bellingcat + temporal) and fits more comfortably
  *  into the provider's attention budget when batched narrowly. */
 export const BATCH_SIZE = 2;
+
+/** Phase 27.4.3 D-08 bake-off — empty/undefined uses freeClaudeRouter's
+ *  NVIDIA_NIM_DEFAULT_MODEL. Set V3_BAKEOFF_MODEL=<id> in env to swap the
+ *  primary model for a single extractor run during multi-model evaluation. */
+const V3_BAKEOFF_MODEL = process.env.V3_BAKEOFF_MODEL;
 
 /** RESEARCH.md A5 — cap temporal block at 3 prior events to avoid prompt bloat. */
 const TEMPORAL_CONTEXT_COUNT = 3;
@@ -454,7 +463,7 @@ export async function processEventGroupsV3(
             { role: 'user', content: userPrompt },
           ],
           JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
-          { batchSize: batch.length },
+          { batchSize: batch.length, modelOverride: V3_BAKEOFF_MODEL },
         );
         routing = result.routing;
         // freeClaudeRouter's stripReasoningBlocks already removed <think>
