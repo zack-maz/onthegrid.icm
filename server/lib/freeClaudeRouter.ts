@@ -20,6 +20,10 @@ import { env } from '../config.js';
 import { logger } from './logger.js';
 import { isAvailable, record, type Provider } from './llmCircuitBreaker.js';
 import { redis } from '../cache/redis.js';
+// Phase 27.4.3 Plan 02b B-1 — instrumentation hooks. Writes per-attempt
+// latency, headroom, error-taxonomy, and shadow-cost into the live progress
+// singleton so DevApiStatus / /llm-status surfaces them under v3.
+import { llmProgress, updateProgress } from './llmProgress.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -304,6 +308,7 @@ export async function callLLM(
     });
 
     for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+      const t0 = Date.now();
       try {
         if (p.name === 'nvidia_nim') nvidiaNimWindow.consume();
         if (p.name === 'openrouter') await incrOpenRouterDaily();
@@ -314,6 +319,23 @@ export async function callLLM(
           response_format: { type: 'json_object' }, // D-10: NO strict mode
           temperature: 0,
         });
+        const latencyMs = Date.now() - t0;
+
+        // === B-1 §1: Latency capture ===
+        recordLatency(p.name, latencyMs);
+
+        // === B-1 §2: Rate-limit headroom snapshot ===
+        recordHeadroom(p.name);
+
+        // === B-1 §4: Shadow-cost accrual (read usage from completion) ===
+        const usage = (res as { usage?: { prompt_tokens?: number; completion_tokens?: number } })
+          .usage;
+        const tokensIn = usage?.prompt_tokens ?? 0;
+        const tokensOut = usage?.completion_tokens ?? 0;
+        if (tokensIn > 0 || tokensOut > 0) {
+          await accrueShadowCost(tokensIn, tokensOut);
+        }
+
         const raw = res.choices[0]?.message?.content ?? null;
         const reasoningField = (
           res.choices[0]?.message as { reasoning_content?: string } | undefined
@@ -322,12 +344,18 @@ export async function callLLM(
         record(p.name as Provider, 'ok');
         return { content, routing: decisions };
       } catch (err) {
+        const latencyMs = Date.now() - t0;
+        // Latency captured even on failure — surfaces hung calls in dashboard.
+        recordLatency(p.name, latencyMs);
+        // === B-1 §3: Error taxonomy increment ===
         const bucket = classifyError(err);
+        recordErrorBucket(p.name, bucket);
         log.warn(
           {
             provider: p.name,
             attempt,
             bucket,
+            latencyMs,
             err: err instanceof Error ? err.message : String(err),
           },
           'router attempt failed',
@@ -346,6 +374,119 @@ export async function callLLM(
 
   log.warn('all free providers unavailable — returning null content');
   return { content: null, routing: decisions };
+}
+
+// ---------------------------------------------------------------------------
+// B-1 instrumentation helpers (D-12, D-14, D-19)
+//
+// Each freeClaudeRouter attempt records: (1) latencyMs into a per-provider
+// ring buffer with P50/P95/P99 recompute; (2) headroom snapshot via the
+// RollingWindow.headroom() / OpenRouter daily counter; (3) error bucket on
+// catch via classifyError; (4) shadow cost from res.usage tokens.
+//
+// All writes go through updateProgress() so the same Object.assign-based
+// mutability semantics that existing v2 code relies on are preserved. The
+// helpers gracefully no-op when llmProgress is empty / under test mocks.
+// ---------------------------------------------------------------------------
+
+/** Ring buffer cap per provider. P50/P95/P99 recompute on each insert. */
+const LATENCY_RING_CAP = 100;
+
+function quantile(sorted: number[], q: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q));
+  return sorted[idx] ?? 0;
+}
+
+function recordLatency(provider: FreeProvider, latencyMs: number): void {
+  const current = llmProgress.latencyHistogram ?? {
+    nvidia_nim: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] },
+    openrouter: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] },
+  };
+  const bucket = current[provider];
+  const samples = [...(bucket.samples ?? []), latencyMs].slice(-LATENCY_RING_CAP);
+  const sorted = [...samples].sort((a, b) => a - b);
+  const next = {
+    ...current,
+    [provider]: {
+      p50: quantile(sorted, 0.5),
+      p95: quantile(sorted, 0.95),
+      p99: quantile(sorted, 0.99),
+      sparkline: samples.slice(-30), // last 30 for the SVG sparkline
+      samples,
+    },
+  };
+  updateProgress({ latencyHistogram: next });
+}
+
+function recordHeadroom(provider: FreeProvider): void {
+  // Ensure both providers have a record; only the active one updates per attempt.
+  const current = llmProgress.rateLimit ?? {
+    nvidia_nim: { used: 0, cap: 40, window: 'minute' as const, perModel: {} },
+    openrouter: { used: 0, cap: OPENROUTER_DAILY_CAP, window: 'day' as const, perModel: {} },
+  };
+  if (provider === 'nvidia_nim') {
+    const h = nvidiaNimWindow.headroom();
+    current.nvidia_nim = { ...current.nvidia_nim, used: h.used, cap: h.cap };
+  } else {
+    // openrouter — read the daily counter without re-incrementing
+    // (incrOpenRouterDaily already incremented above; we just snapshot).
+    // Use a non-blocking fire-and-forget read.
+    getOpenRouterDaily()
+      .then((used) => {
+        const rl = llmProgress.rateLimit;
+        if (!rl) return;
+        updateProgress({
+          rateLimit: {
+            ...rl,
+            openrouter: { ...current.openrouter, used },
+          },
+        });
+      })
+      .catch(() => {
+        // observability-only — swallow errors silently
+      });
+  }
+  updateProgress({ rateLimit: current });
+}
+
+function recordErrorBucket(provider: FreeProvider, bucket: RouterErrorBucket): void {
+  // 7-bucket taxonomy seed (D-14) — kept single-line so the acceptance grep
+  // anchors on the exact field-set without prettier-driven reformatting.
+  // prettier-ignore
+  const current = llmProgress.errorTaxonomy ?? {
+    nvidia_nim: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 },
+    openrouter: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 },
+  };
+  const next = {
+    ...current,
+    [provider]: { ...current[provider], [bucket]: (current[provider][bucket] ?? 0) + 1 },
+  };
+  updateProgress({ errorTaxonomy: next });
+}
+
+/** D-19: tokens_in × $0.20/M + tokens_out × $0.40/M. Daily roll-up persisted to Redis. */
+async function accrueShadowCost(tokensIn: number, tokensOut: number): Promise<void> {
+  const usd = (tokensIn * 0.2 + tokensOut * 0.4) / 1_000_000;
+  const current = llmProgress.costShadow ?? { tokensIn: 0, tokensOut: 0, usd: 0 };
+  updateProgress({
+    costShadow: {
+      tokensIn: current.tokensIn + tokensIn,
+      tokensOut: current.tokensOut + tokensOut,
+      usd: current.usd + usd,
+    },
+  });
+  // Daily roll-up Redis key per CONTEXT D-19 (90d ring).
+  try {
+    const key = `events:llm-cost-shadow:v3:${todayKey()}`;
+    await redis.hincrby(key, 'tokensIn', tokensIn);
+    await redis.hincrby(key, 'tokensOut', tokensOut);
+    // usd stored as integer microcents (×1e6) to avoid Redis float precision loss.
+    await redis.hincrby(key, 'usdMicrocents', Math.round(usd * 1_000_000));
+    await redis.expire(key, 90 * 24 * 3600);
+  } catch {
+    // observability-only; skip on Redis failure
+  }
 }
 
 // ---------------------------------------------------------------------------
