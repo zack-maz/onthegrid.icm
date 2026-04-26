@@ -738,13 +738,15 @@ export function DevApiStatus() {
   const showWaterTab = useLayerStore((s) => s.activeLayers.has('water'));
   const showSitesTab = useFilterStore((s) => s.showSites);
 
-  // Phase 27.4 Plan 09 D-15 — Events tab is dual-gated:
-  //   1. schemaVersion === 'v2' (operator flipped LLM_PIPELINE_V2 and at
-  //      least one run has reported back)
+  // Phase 27.4 Plan 09 D-15 / Phase 27.4.3 Plan 04 — Events tab is dual-gated:
+  //   1. schemaVersion === 'v2' OR 'v3' (operator flipped LLM_PIPELINE_V2 / V3
+  //      and at least one run has reported back)
   //   2. import.meta.env.DEV (prod bundles tree-shake this entire block)
   // In prod builds the tab is tree-shaken out via the DEV gate — zero
-  // bytes added to the production bundle (see threat T-27.4-09-01).
-  const showEventsTab = llmStatus?.schemaVersion === 'v2' && import.meta.env.DEV;
+  // bytes added to the production bundle (see threat T-27.4-09-01 + T-27.4.3-04-01).
+  const showEventsTab =
+    (llmStatus?.schemaVersion === 'v2' || llmStatus?.schemaVersion === 'v3') &&
+    import.meta.env.DEV;
 
   // Escape key — capture-phase so DevApiStatus closes BEFORE nav-stack pop /
   // detail panel close / search modal close (Plan 12 G6 priority contract).
@@ -878,7 +880,15 @@ export function DevApiStatus() {
           {activeTab === 'water' && showWaterTab && <WaterFiltersSection />}
           {activeTab === 'sites' && showSitesTab && <SitesFiltersSection />}
           {activeTab === 'events' && showEventsTab && (
-            <EventsFiltersSection llmStatus={llmStatus} />
+            // Phase 27.4.3 Plan 04 — version-routed render switch.
+            // v3 mounts EventsFiltersSectionV3 (8-block surface); v2 keeps the
+            // existing EventsFiltersSection (8-block v2 surface). v1 stays gated
+            // out (no Events tab on v1) per UI-SPEC §"Render switch".
+            llmStatus?.schemaVersion === 'v3' && import.meta.env.DEV ? (
+              <EventsFiltersSectionV3 llmStatus={llmStatus} />
+            ) : llmStatus?.schemaVersion === 'v2' && import.meta.env.DEV ? (
+              <EventsFiltersSection llmStatus={llmStatus} />
+            ) : null
           )}
         </div>
       </div>
@@ -2126,5 +2136,52 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
       {/* Block 8: Suspect count badge (D-23) */}
       <SuspectBlock count={sc} />
     </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 Plan 04 — sibling of EventsFiltersSection, gated on
+ * schemaVersion === 'v3' && import.meta.env.DEV by the parent render switch.
+ * Renders the 8-block v3 observability stack per UI-SPEC §"Component
+ * Inventory" + §"Render switch".
+ *
+ * Block order (per UI-SPEC §"Section headers" lines 169-180):
+ *   1. Routing Trace (D-12 §1)
+ *   2. Latency P50/P95/P99 (D-12 §2)
+ *   3. Rate-Limit Headroom (D-12 §3)
+ *   4. Schema-Strict Failure Rate (D-12 §4)
+ *   5. Error Taxonomy (D-14)
+ *   6. Pipeline Flips (D-15)
+ *   7. v3 Cost Shadow (D-19)
+ *   + Lineage drill-down (D-13) — rendered IN-PLACE inside DrillDownRow under
+ *     the existing event-list block (DrillDownRow auto-detects v3 fields).
+ *     No separate block here; that's the entire v3 lineage UX surface.
+ *
+ * Threat mitigations:
+ *   - T-27.4.3-04-01: production tree-shake gate via parent showEventsTab
+ *   - T-27.4.3-04-02: pill stays read-only (Topbar.tsx, separate file)
+ *   - T-27.4.3-04-03: lineage prompt/response only inside DEV gate
+ *   - T-27.4.3-04-04: regression tests assert empty-state copy verbatim
+ */
+function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
+  return (
+    <section className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] text-white/60">
+        Schema: v3 · Stage: {llmStatus.stage ?? 'idle'}
+      </div>
+      <RoutingTraceBlock trace={llmStatus.routingTrace} />
+      <LatencyHistogramBlock latency={llmStatus.latency} />
+      <RateLimitHeadroomBlock rateLimit={llmStatus.rateLimit} />
+      <SchemaStrictFailureBlock
+        schemaFailures={llmStatus.schemaFailures}
+        callHistory={llmStatus.callHistory}
+      />
+      <ErrorTaxonomyBlock taxonomy={llmStatus.errorTaxonomy} />
+      <PipelineFlipsBlock flips={llmStatus.pipelineFlips} />
+      <CostShadowBlock cost={llmStatus.costShadow} />
+      {/* Note: LineageDrillDown extension is rendered inside DrillDownRow under
+          the existing event-list block (DrillDownRow auto-detects v3 fields).
+          No separate block here. */}
+    </section>
   );
 }
