@@ -1636,6 +1636,241 @@ function SuspectBlock({ count }: { count: number }) {
   );
 }
 
+/* ========================================================================
+ * Phase 27.4.3 Plan 04 — v3 observability blocks (D-12 / D-13 / D-14 / D-15
+ * / D-19). All blocks below are gated upstream by `EventsFiltersSectionV3`
+ * which renders only when llmStatus.schemaVersion === 'v3' && import.meta.env.DEV.
+ * Each block defends against missing data with verbatim UI-SPEC empty-state
+ * copy so the v3 surface is render-safe even on first poll / cold cache.
+ * ======================================================================== */
+
+/**
+ * Phase 27.4.3 D-12 §1 — Routing Trace block. Analog: CallLogBlock.
+ * One row per routing decision (last 50 from server-side ring buffer).
+ * Each row shows time, batch index, provider/model, and routing reason
+ * with green chip on `primary`, amber chip on cascade fall-through.
+ */
+function RoutingTraceBlock({ trace }: { trace?: LLMStatus['routingTrace'] }) {
+  const rows = trace ?? [];
+  if (rows.length === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Routing Trace (last 50)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No routing decisions yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Routing Trace (last 50)
+      </div>
+      <div className="mt-1 max-h-32 overflow-y-auto">
+        {rows.slice(0, 50).map((r) => {
+          const ts = new Date(r.ts);
+          const time = `${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}:${String(ts.getSeconds()).padStart(2, '0')}`;
+          const isPrimary = r.reason === 'primary';
+          const reasonClass = isPrimary
+            ? 'bg-green-500/20 text-green-300 px-1 rounded'
+            : 'bg-amber-500/20 text-amber-300 px-1 rounded';
+          return (
+            <div
+              key={`${r.ts}-${r.batch}`}
+              className="flex items-center gap-1 text-[9px] text-white/60 tabular-nums"
+            >
+              <span className="text-white/40">[{time}]</span>
+              <span>batch={r.batch}</span>
+              <span>→</span>
+              <span className={PROVIDER_COLORS[r.provider]}>
+                {r.provider}/{r.model}
+              </span>
+              <span className={reasonClass}>{r.reason}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-12 §2 — Latency histogram block. Analog: BudgetBarsBlock.
+ * Per-provider P50/P95/P99 line + sparkline of recent latency samples.
+ * Amber warning chip when P99 exceeds the 60s soft watchdog warn threshold.
+ */
+function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) {
+  const providers = latency
+    ? (Object.keys(latency) as Array<'nvidia_nim' | 'openrouter'>)
+    : [];
+  const empty =
+    providers.length === 0 ||
+    providers.every((p) => {
+      const s = latency?.[p];
+      return !s || s.sparkline.length === 0;
+    });
+  if (empty) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Latency (P50/P95/P99)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No LLM calls yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Latency (P50/P95/P99)
+      </div>
+      {providers.map((p) => {
+        const stats = latency?.[p];
+        if (!stats) return null;
+        const overWatchdog = stats.p99 > 60_000;
+        return (
+          <div key={p} className="mt-1">
+            <div
+              className={`flex items-center justify-between gap-1 text-[9px] tabular-nums ${PROVIDER_COLORS[p]}`}
+            >
+              <span>
+                {p}: P50 {stats.p50}ms · P95 {stats.p95}ms · P99 {stats.p99}ms
+              </span>
+              {overWatchdog ? (
+                <span className="text-amber-400">⚠ over watchdog warn (60s)</span>
+              ) : null}
+            </div>
+            <Sparkline points={stats.sparkline} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-12 §2 — sparkline helper. Inline SVG polyline; min 2 points.
+ * Caller decides container height; this scales 0..max → full height.
+ */
+function Sparkline({ points }: { points: number[] }) {
+  if (points.length < 2) return null;
+  const max = Math.max(...points, 1);
+  const xStep = 100 / (points.length - 1);
+  const path = points.map((y, i) => `${i * xStep},${100 - (y / max) * 100}`).join(' ');
+  return (
+    <svg className="h-4 w-full text-blue-400" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <polyline points={path} fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-12 §3 — Rate-limit headroom block. Analog: BudgetBarsBlock.
+ * Per-provider used/cap progress bar with green/amber/red color rules:
+ *   ratio ≥ 0.95 → red bar + "Capped — falling through" badge
+ *   ratio ≥ 0.80 → amber bar + "≥80% — fall-through likely" badge
+ *   else         → green bar (no badge)
+ */
+function RateLimitHeadroomBlock({ rateLimit }: { rateLimit?: LLMStatus['rateLimit'] }) {
+  const providers = rateLimit
+    ? (Object.keys(rateLimit) as Array<'nvidia_nim' | 'openrouter'>)
+    : [];
+  if (providers.length === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Rate-Limit Headroom
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No requests this window.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Rate-Limit Headroom
+      </div>
+      {providers.map((p) => {
+        const r = rateLimit?.[p];
+        if (!r) return null;
+        const ratio = r.cap > 0 ? r.used / r.cap : 0;
+        const barColor = ratio >= 0.95 ? '#f87171' : ratio >= 0.8 ? '#fbbf24' : '#34d399';
+        // W-4 fix: 27.4.1 D-15 local-bind pattern (avoid Object.values()[0] under noUncheckedIndexedAccess)
+        const firstModel = r.perModel ? Object.entries(r.perModel)[0] : undefined;
+        const firstModelName = firstModel?.[0] ?? 'kimi-k2.5';
+        const firstModelUsed = firstModel?.[1]?.used ?? 0;
+        const labelText =
+          p === 'nvidia_nim'
+            ? `NVIDIA NIM: ${r.used}/${r.cap} req/min · ${firstModelUsed} req today`
+            : `OpenRouter: ${r.used}/${r.cap} req on ${firstModelName}`;
+        const badge =
+          ratio >= 0.95 ? (
+            <span className="text-red-400">Capped — falling through</span>
+          ) : ratio >= 0.8 ? (
+            <span className="text-amber-400">≥80% — fall-through likely</span>
+          ) : null;
+        return (
+          <div key={p} className="mt-1">
+            <div className="flex items-center justify-between gap-1 text-[9px] tabular-nums text-white/80">
+              <span>{labelText}</span>
+              {badge}
+            </div>
+            <ProgressBar completed={r.used} total={r.cap} barColor={barColor} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-12 §4 — Schema-strict failure block. Analog: HistogramsBlock.
+ * Per-provider {total, malformedJson, missingField, typeMismatch} counters.
+ * Renders only providers with non-zero failure counts; zero-state empty
+ * line otherwise (no per-provider noise when v3 is healthy).
+ */
+function SchemaStrictFailureBlock({
+  schemaFailures,
+  callHistory,
+}: {
+  schemaFailures?: LLMStatus['schemaFailures'];
+  callHistory?: LLMStatus['callHistory'];
+}) {
+  const sf = schemaFailures;
+  const providers = sf ? (Object.keys(sf) as Array<'nvidia_nim' | 'openrouter'>) : [];
+  const totalAcrossAll = providers.reduce((acc, p) => acc + (sf?.[p]?.total ?? 0), 0);
+  if (totalAcrossAll === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Schema-Strict Failure Rate
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No schema rejections.</div>
+      </div>
+    );
+  }
+  const totalCalls = (callHistory ?? []).length;
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Schema-Strict Failure Rate
+      </div>
+      {providers.map((p) => {
+        const f = sf?.[p];
+        if (!f || f.total === 0) return null;
+        const pct = totalCalls > 0 ? ((f.total / totalCalls) * 100).toFixed(1) : '—';
+        return (
+          <div key={p} className={`mt-1 text-[9px] tabular-nums ${PROVIDER_COLORS[p]}`}>
+            {p}: {f.total} of {totalCalls} ({pct}%) — malformed_json={f.malformedJson} ·
+            missing_field={f.missingField} · type_mismatch={f.typeMismatch}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * Phase 27.4 Plan 09 — dev-only Events tab. Renders the 8-block v2
  * observability surface that makes every 27.4 decision visible in a
