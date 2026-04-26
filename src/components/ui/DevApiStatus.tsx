@@ -1399,6 +1399,30 @@ function DrillDownRow({ ev }: { ev: RecentEnrichedEvent }) {
               ))}
             </div>
           )}
+          {/* Phase 27.4.3 D-13 Lineage extension — reasoning trace + lineage hash chip.
+              Optional fields; v1/v2 cached events lack them so chips simply don't render
+              (intended graceful degradation across pipeline versions, not a hand-wave). */}
+          {ev.reasoningTrace ? (
+            <div className="mt-1">
+              <div className="text-[9px] uppercase tracking-wider text-white/40">
+                Reasoning trace
+              </div>
+              <pre className="mt-0.5 max-h-24 overflow-y-auto whitespace-pre-wrap text-[9px] italic text-white/40">
+                {ev.reasoningTrace}
+              </pre>
+            </div>
+          ) : null}
+          {ev.lineageHash ? (
+            <div className="mt-1 flex items-center gap-1">
+              <span className="text-[9px] uppercase tracking-wider text-white/40">Lineage</span>
+              <span
+                className="font-mono text-[9px] text-cyan-400"
+                title={ev.lineageHash}
+              >
+                hash: {ev.lineageHash.slice(0, 8)}…
+              </span>
+            </div>
+          ) : null}
           <button
             className="text-white/60 hover:text-white/80"
             onClick={copyPromptResponse}
@@ -1867,6 +1891,154 @@ function SchemaStrictFailureBlock({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-14 — Error Taxonomy block. Analog: HistogramsBlock.
+ * Per-provider 7-bucket counters (rate_limit / timeout / malformed_json /
+ * schema_fail / network / upstream_500 / other) flowed from
+ * freeClaudeRouter B-1 instrumentation. Empty-state when zero across all
+ * providers + all buckets.
+ */
+function ErrorTaxonomyBlock({ taxonomy }: { taxonomy?: LLMStatus['errorTaxonomy'] }) {
+  const t = taxonomy;
+  const providers = t ? (Object.keys(t) as Array<'nvidia_nim' | 'openrouter'>) : [];
+  const totalAcrossAll = providers.reduce(
+    (acc, p) => acc + Object.values(t?.[p] ?? {}).reduce((a, b) => a + b, 0),
+    0,
+  );
+  if (totalAcrossAll === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Error Taxonomy (today UTC)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No errors today.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Error Taxonomy (today UTC)
+      </div>
+      {providers.map((p) => {
+        const buckets = t?.[p];
+        if (!buckets) return null;
+        const cells = Object.entries(buckets).map(([k, n]) => {
+          const cls = n > 0 ? 'text-white/80' : 'text-white/30';
+          return (
+            <span key={k} className={`${cls} tabular-nums`}>
+              {k}={n}
+            </span>
+          );
+        });
+        return (
+          <div
+            key={p}
+            className={`mt-1 flex flex-wrap items-center gap-1 text-[9px] ${PROVIDER_COLORS[p]}`}
+          >
+            <span>{p}:</span>
+            {cells.flatMap((c, i) =>
+              i > 0
+                ? [
+                    <span key={`s${i}`} className="text-white/30">
+                      ·
+                    </span>,
+                    c,
+                  ]
+                : [c],
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-15 — Pipeline Flips block. Analog: CallLogBlock + DlqBlock.
+ * Each entry shows ISO timestamp, from→to version, trigger, operator,
+ * optional reason. Auto-flip triggers (auto:eval_drop, auto:watchdog_recurrence)
+ * are color-coded amber/red so on-call eyes are drawn to them.
+ */
+function PipelineFlipsBlock({ flips }: { flips?: LLMStatus['pipelineFlips'] }) {
+  const rows = flips ?? [];
+  if (rows.length === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Pipeline Flips (last 200)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No flips recorded.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        Pipeline Flips (last 200)
+      </div>
+      <div className="mt-1 max-h-32 overflow-y-auto">
+        {rows.slice(0, 50).map((f) => {
+          const iso = new Date(f.ts).toISOString();
+          const triggerClass =
+            f.trigger === 'auto:eval_drop'
+              ? 'text-amber-400'
+              : f.trigger === 'auto:watchdog_recurrence'
+                ? 'text-red-400'
+                : 'text-white/60';
+          return (
+            <div key={`${f.ts}-${f.from}-${f.to}`} className="text-[9px]">
+              <div className={`flex items-center gap-1 tabular-nums ${triggerClass}`}>
+                <span>[{iso}]</span>
+                <span>
+                  {f.from} → {f.to}
+                </span>
+                <span>·</span>
+                <span>{f.trigger}</span>
+                <span>·</span>
+                <span>{f.operator}</span>
+              </div>
+              {f.reason ? <div className="text-[9px] italic text-white/50">{f.reason}</div> : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.4.3 D-19 — Cost Shadow block. Analog: EvalScoreBlock.
+ * Shows what the v3 run would cost at Anthropic Sonnet rates if the
+ * pipeline were on the paid path; tagline reaffirms that free-claude-code
+ * routing avoided that spend. Three counters on one line.
+ */
+function CostShadowBlock({ cost }: { cost?: LLMStatus['costShadow'] }) {
+  const c = cost;
+  if (!c || (c.tokensIn === 0 && c.tokensOut === 0)) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          v3 Cost Shadow (last 24h)
+        </div>
+        <div className="mt-1 text-[9px] text-white/40">No tokens billed this window.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        v3 Cost Shadow (last 24h)
+      </div>
+      <div className="mt-1 text-[9px] tabular-nums text-white/80">
+        Tokens in: ~{c.tokensIn.toLocaleString()} · Tokens out: ~{c.tokensOut.toLocaleString()} ·
+        Shadow cost: ${c.usd.toFixed(3)}
+      </div>
+      <div className="text-[9px] italic text-green-400">↳ saved by free-claude-code routing</div>
     </div>
   );
 }
