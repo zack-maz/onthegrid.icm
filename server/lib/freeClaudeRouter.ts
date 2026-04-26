@@ -247,8 +247,17 @@ export async function callLLM(
     if (!p) continue;
     const isPrimary = idx === 0;
     const prevName = idx > 0 ? providers[idx - 1]?.name : null;
+    /**
+     * Build the routing reason for the *current* provider when it is BYPASSED
+     * by a gate (no_client / breaker / rate_limit_window / daily_cap).
+     *   - For the primary, encode the bypass cause as `skipped:<suffix>` so
+     *     observability sees why we never even attempted it (otherwise primary
+     *     bypass would be indistinguishable from a normal primary attempt).
+     *   - For downstream providers, use the existing `fall_through:<prev>_<suffix>`
+     *     shape so the trace shows which prior provider triggered the cascade.
+     */
     const buildReason = (suffix: string): string =>
-      isPrimary ? 'primary' : `fall_through:${prevName}_${suffix}`;
+      isPrimary ? `skipped:${suffix}` : `fall_through:${prevName}_${suffix}`;
 
     if (!p.client) {
       decisions.push({
