@@ -301,13 +301,16 @@ describe('runEval', () => {
     );
   });
 
-  it('Test 11: persists baseline to Redis key events:llm-eval-baseline:v2 on completion', async () => {
+  it('Test 11: persists baseline to Redis key events:llm-eval-baseline:v3 on completion (no model arg)', async () => {
+    // Phase 27.4.3 Plan 02b D-04 — baseline key bumped from v2 → v3 in
+    // lockstep with the cache-version policy. Default no-arg invocation
+    // continues to persist to the unsuffixed BASELINE_KEY.
     vi.mocked(resolveLocation).mockResolvedValue(resolvedLoc(33.72, 51.73));
 
     await runEval();
 
     expect(vi.mocked(cacheSetSafe)).toHaveBeenCalledWith(
-      'events:llm-eval-baseline:v2',
+      'events:llm-eval-baseline:v3',
       expect.objectContaining({
         within5km: expect.any(Number),
         within20km: expect.any(Number),
@@ -315,6 +318,45 @@ describe('runEval', () => {
         total: expect.any(Number),
       }),
       // TTL: 90 days in seconds = 90 * 86400 = 7_776_000. Accept any positive integer.
+      expect.any(Number),
+    );
+  });
+
+  it('Test 11b: persists per-model baseline when runEval invoked with {model: "kimi-k2.5"} (Phase 27.4.3 D-08)', async () => {
+    // Multi-model bake-off support — the model arg keys the baseline so
+    // side-by-side comparisons can persist independently.
+    vi.mocked(resolveLocation).mockResolvedValue(resolvedLoc(33.72, 51.73));
+
+    await runEval({ model: 'kimi-k2.5' });
+
+    expect(vi.mocked(cacheSetSafe)).toHaveBeenCalledWith(
+      'events:llm-eval-baseline:v3:kimi-k2.5',
+      expect.objectContaining({
+        within5km: expect.any(Number),
+        within20km: expect.any(Number),
+        within100km: expect.any(Number),
+        total: expect.any(Number),
+      }),
+      expect.any(Number),
+    );
+  });
+
+  it('Test 11c: sanitizes slashes in OpenRouter-style model ids (e.g. moonshotai/kimi-k2.5 → moonshotai_kimi-k2.5)', async () => {
+    // OpenRouter / NVIDIA NIM ids carry vendor prefixes separated by `/`
+    // which would create unexpected key hierarchies in Redis. The harness
+    // replaces `/` with `_` so the key stays single-segment by convention.
+    vi.mocked(resolveLocation).mockResolvedValue(resolvedLoc(33.72, 51.73));
+
+    await runEval({ model: 'moonshotai/kimi-k2.5' });
+
+    expect(vi.mocked(cacheSetSafe)).toHaveBeenCalledWith(
+      'events:llm-eval-baseline:v3:moonshotai_kimi-k2.5',
+      expect.objectContaining({
+        within5km: expect.any(Number),
+        within20km: expect.any(Number),
+        within100km: expect.any(Number),
+        total: expect.any(Number),
+      }),
       expect.any(Number),
     );
   });

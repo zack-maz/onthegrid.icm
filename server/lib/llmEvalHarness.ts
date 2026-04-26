@@ -38,8 +38,14 @@ const GROUND_TRUTH_PATH = resolve(__dirname, '../../.planning/eval/ground-truth-
 
 /** Redis key for the eval baseline — survives pipeline cold starts so
  *  DevApiStatus + the /llm-status endpoint can render a reference score
- *  even before the first post-deploy pipeline run completes. */
-const BASELINE_KEY = 'events:llm-eval-baseline:v2';
+ *  even before the first post-deploy pipeline run completes.
+ *
+ *  Phase 27.4.3 Plan 02b D-04: bumped from `:v2` to `:v3` per the cache-
+ *  version bump policy. Multi-model bake-off (D-08) keys per-model
+ *  baselines as `${BASELINE_KEY}:${sanitized-model-id}` when runEval is
+ *  invoked with an explicit `model` argument; the unsuffixed BASELINE_KEY
+ *  is the default-no-model baseline. */
+const BASELINE_KEY = 'events:llm-eval-baseline:v3';
 
 /** 90-day TTL — baseline is effectively permanent; the TTL prevents stale
  *  entries from lingering forever if the ground-truth set goes stale and
@@ -203,7 +209,16 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
  * /api/events/llm-status response carries it) and persists to Redis under
  * BASELINE_KEY (so cold-start dashboard reads have a reference point).
  */
-export async function runEval(): Promise<EvalScore> {
+/**
+ * Phase 27.4.3 Plan 02b D-08 — `model` arg threads through for multi-model
+ * bake-off support. Eval is RESOLVER-ONLY (per A6 / Pitfall 8 — zero LLM
+ * token spend), so `model` is metadata for keying the baseline output, NOT
+ * a runtime call parameter. The default no-arg invocation persists to the
+ * unsuffixed `BASELINE_KEY`; with `{model: 'kimi-k2.5'}` it persists to
+ * `${BASELINE_KEY}:kimi-k2.5` (slashes in model IDs sanitized to underscore
+ * so the Redis key remains conventional).
+ */
+export async function runEval(opts: { model?: string } = {}): Promise<EvalScore> {
   const gt = loadGroundTruth();
   if (!gt) {
     const zero: EvalScore = { within5km: 0, within20km: 0, within100km: 0, total: 0 };
@@ -248,10 +263,16 @@ export async function runEval(): Promise<EvalScore> {
   updateProgress({ evalScore: score });
 
   // Baseline persistence — best-effort. Redis failure does not fail the eval.
+  // Phase 27.4.3 Plan 02b D-08: when a model arg is provided, key the
+  // baseline by sanitized model id so a multi-model bake-off can compare
+  // per-model scores side-by-side. Slashes in OpenRouter-style ids
+  // (e.g. 'moonshotai/kimi-k2.5') are replaced with underscore so the key
+  // shape stays conventional.
+  const key = opts.model ? `${BASELINE_KEY}:${opts.model.replace(/\//g, '_')}` : BASELINE_KEY;
   try {
-    await cacheSetSafe(BASELINE_KEY, score, BASELINE_TTL_SEC);
+    await cacheSetSafe(key, score, BASELINE_TTL_SEC);
   } catch (err) {
-    log.warn({ err }, 'failed to persist eval baseline to Redis');
+    log.warn({ err, key }, 'failed to persist eval baseline to Redis');
   }
 
   return score;
