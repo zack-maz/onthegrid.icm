@@ -9,15 +9,28 @@
 
 import { redis } from '../cache/redis.js';
 import { logger } from './logger.js';
+import type { Provider as BreakerProvider } from './llmCircuitBreaker.js';
 
 const log = logger.child({ module: 'llm-token-budget' });
 
-export type Provider = 'cerebras' | 'groq';
+// Phase 27.4.3 (D-04): re-export the widened breaker Provider so callers that
+// hold a `Provider` from llmCircuitBreaker can pass it to budget functions
+// without an extra cast. The v3 cascade (server/lib/freeClaudeRouter.ts) does
+// NOT use llmTokenBudget — D-04 retired this module from the v3 path. The
+// nvidia_nim/openrouter limits below are zero-cost type-compat defaults that
+// resolve to budgetState='hard' if ever invoked, which would safely skip the
+// provider rather than corrupt counters.
+export type Provider = BreakerProvider;
 
 /** Daily token ceilings per provider (free tier). */
 export const DAILY_LIMITS: Record<Provider, number> = {
   cerebras: 1_000_000,
   groq: 200_000,
+  // Phase 27.4.3: v3 path uses freeClaudeRouter, not this module. These zero
+  // limits are present purely for Record<Provider, number> exhaustiveness
+  // and would force a 'hard' budgetState if ever invoked — safe fail-closed.
+  nvidia_nim: 0,
+  openrouter: 0,
 };
 
 const TTL_48H_SEC = 172_800;

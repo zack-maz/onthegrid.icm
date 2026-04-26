@@ -10,7 +10,12 @@
  * guarantees fall-through to next provider or raw GDELT.
  */
 
-export type Provider = 'cerebras' | 'groq';
+// Phase 27.4.3 (D-09): widen Provider union to include the two free-claude-code
+// routing providers introduced in this phase. v1/v2 cascade in
+// server/adapters/llm-provider.ts continues to use only 'cerebras' | 'groq';
+// v3 cascade in server/lib/freeClaudeRouter.ts uses 'nvidia_nim' | 'openrouter'.
+// All four share the same circuit-breaker primitive.
+export type Provider = 'cerebras' | 'groq' | 'nvidia_nim' | 'openrouter';
 type Outcome = 'ok' | 'err';
 
 interface BreakerState {
@@ -25,6 +30,8 @@ const PAUSE_DURATION_MS = 5 * 60_000;
 const state: Record<Provider, BreakerState> = {
   cerebras: { outcomes: [], pausedUntil: null },
   groq: { outcomes: [], pausedUntil: null },
+  nvidia_nim: { outcomes: [], pausedUntil: null },
+  openrouter: { outcomes: [], pausedUntil: null },
 };
 
 export function record(provider: Provider, outcome: Outcome): void {
@@ -52,6 +59,8 @@ export function getBreakerState(): Record<Provider, 'ok' | 'paused'> {
   return {
     cerebras: isAvailable('cerebras') ? 'ok' : 'paused',
     groq: isAvailable('groq') ? 'ok' : 'paused',
+    nvidia_nim: isAvailable('nvidia_nim') ? 'ok' : 'paused',
+    openrouter: isAvailable('openrouter') ? 'ok' : 'paused',
   };
 }
 
@@ -59,4 +68,6 @@ export function getBreakerState(): Record<Provider, 'ok' | 'paused'> {
 export function __resetBreakerForTests(): void {
   state.cerebras = { outcomes: [], pausedUntil: null };
   state.groq = { outcomes: [], pausedUntil: null };
+  state.nvidia_nim = { outcomes: [], pausedUntil: null };
+  state.openrouter = { outcomes: [], pausedUntil: null };
 }

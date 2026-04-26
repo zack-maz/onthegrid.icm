@@ -20,7 +20,18 @@ const LAST_ERROR_MAX_CHARS = 500; // Pitfall 7
 
 export interface DLQEntry {
   id: string;
-  reason: 'zod_fail' | 'llm_null' | 'retry_exhausted' | 'timeout_watchdog';
+  // Phase 27.4.3 (D-09 + integration_points DLQ taxonomy): widened with four
+  // v3:* failure modes for the free-claude-code routing cascade. Existing
+  // 27.4 reasons preserved for v1/v2 paths and DLQ replay safety.
+  reason:
+    | 'zod_fail'
+    | 'llm_null'
+    | 'retry_exhausted'
+    | 'timeout_watchdog'
+    | 'v3:timeout_watchdog'
+    | 'v3:malformed'
+    | 'v3:schema_fail'
+    | 'v3:rate_limit_exhaust';
   lastError: string;
   timestamp: number;
 }

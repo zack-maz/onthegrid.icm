@@ -74,14 +74,32 @@ describe('llmCircuitBreaker (D-31)', () => {
   });
 
   it('CB8: getBreakerState returns per-provider ok/paused for llmProgress mirror', () => {
-    expect(getBreakerState()).toEqual({ cerebras: 'ok', groq: 'ok' });
+    // Phase 27.4.3 (D-09): Provider union widened to include nvidia_nim +
+    // openrouter for the v3 free-claude-code routing cascade. CB8 expectations
+    // updated to assert all four providers.
+    expect(getBreakerState()).toEqual({
+      cerebras: 'ok',
+      groq: 'ok',
+      nvidia_nim: 'ok',
+      openrouter: 'ok',
+    });
 
     // Trip cerebras
     for (let i = 0; i < 10; i++) record('cerebras', 'err');
-    expect(getBreakerState()).toEqual({ cerebras: 'paused', groq: 'ok' });
+    expect(getBreakerState()).toEqual({
+      cerebras: 'paused',
+      groq: 'ok',
+      nvidia_nim: 'ok',
+      openrouter: 'ok',
+    });
 
     // Trip groq too
     for (let i = 0; i < 10; i++) record('groq', 'err');
-    expect(getBreakerState()).toEqual({ cerebras: 'paused', groq: 'paused' });
+    expect(getBreakerState()).toEqual({
+      cerebras: 'paused',
+      groq: 'paused',
+      nvidia_nim: 'ok',
+      openrouter: 'ok',
+    });
   });
 });
