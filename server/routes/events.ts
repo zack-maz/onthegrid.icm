@@ -481,7 +481,9 @@ const PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
 async function refreshPipelineOverride(): Promise<void> {
   try {
     const v = await redis.get<string>(PIPELINE_OVERRIDE_KEY);
-    if (v === 'v1' || v === 'v2') {
+    // Phase 27.4.3 (D-07): widened to accept 'v3' alongside the existing
+    // 'v1' / 'v2' override values from setPipelineOverride.
+    if (v === 'v1' || v === 'v2' || v === 'v3') {
       setPipelineOverride(v);
     } else {
       setPipelineOverride(null);

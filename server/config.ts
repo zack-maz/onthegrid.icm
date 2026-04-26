@@ -30,6 +30,25 @@ export const envSchema = z.object({
   CEREBRAS_API_KEY: z.string().default(''),
   GROQ_API_KEY: z.string().default(''),
 
+  // Phase 27.4.3 (D-04, D-22): free-claude-code routing providers.
+  // NVIDIA NIM is the v3 primary (40 req/min free tier, no documented
+  // daily token cap). OpenRouter is the v3 fallback (~100-200 req/day per
+  // free model). Both are graceful — empty string means unconfigured and
+  // the v3 cascade falls through to the next provider (or returns null,
+  // letting the extractor degrade to raw GDELT per D-29).
+  NVIDIA_NIM_API_KEY: z.string().default(''),
+  OPENROUTER_API_KEY: z.string().default(''),
+
+  // Phase 27.4.3 (D-07): toggles between v2 extractor (current default)
+  // and v3 extractor (free-claude-code routing). Default 'false' until
+  // the D-16 cutover gate is met. Read at request-time (not module-init)
+  // so flag flips take effect without a rebuild. Runtime override via
+  // POST /api/events/llm-pipeline {version: 'v3'} takes precedence.
+  LLM_PIPELINE_V3: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
   // Phase 27.4 (D-24): toggles between v1 extractor (legacy rollback path)
   // and v2 extractor (structured hierarchy + richer prompts, current default).
   // Read at request-time (not module-init) so flag flips take effect without
@@ -227,18 +246,40 @@ export const NEWS_MIN_TOKENS_FOR_FUZZY = 5;
  *
  * Precedence:  override > env var  (env default flipped to 'true' 2026-04-21)
  */
-let pipelineOverride: 'v1' | 'v2' | null = null;
+let pipelineOverride: 'v1' | 'v2' | 'v3' | null = null;
 
-export function setPipelineOverride(v: 'v1' | 'v2' | null): void {
+export function setPipelineOverride(v: 'v1' | 'v2' | 'v3' | null): void {
   pipelineOverride = v;
 }
 
-export function getPipelineOverride(): 'v1' | 'v2' | null {
+export function getPipelineOverride(): 'v1' | 'v2' | 'v3' | null {
   return pipelineOverride;
 }
 
 export function isPipelineV2(): boolean {
   if (pipelineOverride === 'v2') return true;
-  if (pipelineOverride === 'v1') return false;
+  if (pipelineOverride === 'v1' || pipelineOverride === 'v3') return false;
+  // Phase 27.4.3 (D-07): when LLM_PIPELINE_V3 is true, v3 wins; v2 is off.
+  if (process.env.LLM_PIPELINE_V3 === 'true') return false;
   return process.env.LLM_PIPELINE_V2 === 'true';
+}
+
+/**
+ * Phase 27.4.3 (D-07) v3 pipeline activation. Same precedence ladder as
+ * isPipelineV2 — runtime override beats env. Returns true ONLY when the
+ * v3 path is the active extractor; consumers must use this helper rather
+ * than reading the env directly so the override stays consistent across
+ * all 3-4 call sites.
+ */
+export function isPipelineV3(): boolean {
+  if (pipelineOverride === 'v3') return true;
+  if (pipelineOverride === 'v1' || pipelineOverride === 'v2') return false;
+  return process.env.LLM_PIPELINE_V3 === 'true';
+}
+
+/** Convenience helper for barrels and route handlers. */
+export function getPipelineVersion(): 'v1' | 'v2' | 'v3' {
+  if (isPipelineV3()) return 'v3';
+  if (isPipelineV2()) return 'v2';
+  return 'v1';
 }
