@@ -75,7 +75,12 @@ interface BakeoffResult {
   durationMs: number;
   latencies: { p50: number; p95: number; p99: number; mean: number };
   errorPreviews: string[];
-  resolverOnlyEvalScore: { within5km: number; within20km: number; within100km: number; total: number } | null;
+  resolverOnlyEvalScore: {
+    within5km: number;
+    within20km: number;
+    within100km: number;
+    total: number;
+  } | null;
   watchdogTimeouts: number;
   notes: string;
 }
@@ -186,7 +191,10 @@ async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResu
           { batchSize: 1, modelOverride: model },
         ),
         new Promise<never>((_, rej) =>
-          setTimeout(() => rej(new Error(`bakeoff per-event timeout ${PER_EVENT_TIMEOUT_MS}ms`)), PER_EVENT_TIMEOUT_MS),
+          setTimeout(
+            () => rej(new Error(`bakeoff per-event timeout ${PER_EVENT_TIMEOUT_MS}ms`)),
+            PER_EVENT_TIMEOUT_MS,
+          ),
         ),
       ]);
     } catch (err) {
@@ -218,7 +226,9 @@ async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResu
       parsed = JSON.parse(llmResult.content);
     } catch (jsonErr) {
       jsonParseFail++;
-      errorPreviews.push(`${ev.id}: JSON.parse failed — ${(jsonErr as Error).message.slice(0, 120)}`);
+      errorPreviews.push(
+        `${ev.id}: JSON.parse failed — ${(jsonErr as Error).message.slice(0, 120)}`,
+      );
       console.error(`  [${i + 1}/${events.length}] ${ev.id} — JSON parse fail`);
       continue;
     }
@@ -227,7 +237,10 @@ async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResu
     const validated = batchResponseV3.safeParse(parsed);
     if (!validated.success) {
       schemaFail++;
-      const issues = validated.error.issues.slice(0, 2).map((iss) => `${iss.path.join('.')}: ${iss.message}`).join('; ');
+      const issues = validated.error.issues
+        .slice(0, 2)
+        .map((iss) => `${iss.path.join('.')}: ${iss.message}`)
+        .join('; ');
       errorPreviews.push(`${ev.id}: Zod fail — ${issues.slice(0, 200)}`);
       console.error(`  [${i + 1}/${events.length}] ${ev.id} — Zod fail`);
       continue;
@@ -317,7 +330,11 @@ async function main(): Promise<void> {
     console.error('Usage: tsx scripts/bakeoff-v3.ts --models=<m1>,<m2>,... [--limit=N]');
     process.exit(1);
   }
-  const models = modelsArg.split('=')[1]!.split(',').map((s) => s.trim()).filter(Boolean);
+  const models = modelsArg
+    .split('=')[1]!
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const limit = limitArg ? parseInt(limitArg.split('=')[1]!, 10) : Infinity;
 
   const gtRaw = readFileSync(GT_PATH, 'utf-8');

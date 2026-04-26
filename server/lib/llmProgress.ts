@@ -173,7 +173,13 @@ export interface LLMPipelineProgress {
   errorTaxonomy?: Record<
     'nvidia_nim' | 'openrouter',
     Record<
-      'rate_limit' | 'timeout' | 'malformed_json' | 'schema_fail' | 'network' | 'upstream_500' | 'other',
+      | 'rate_limit'
+      | 'timeout'
+      | 'malformed_json'
+      | 'schema_fail'
+      | 'network'
+      | 'upstream_500'
+      | 'other',
       number
     >
   >;
@@ -287,7 +293,13 @@ export interface LLMRunSummary {
   errorTaxonomy?: Record<
     'nvidia_nim' | 'openrouter',
     Record<
-      'rate_limit' | 'timeout' | 'malformed_json' | 'schema_fail' | 'network' | 'upstream_500' | 'other',
+      | 'rate_limit'
+      | 'timeout'
+      | 'malformed_json'
+      | 'schema_fail'
+      | 'network'
+      | 'upstream_500'
+      | 'other',
       number
     >
   >;

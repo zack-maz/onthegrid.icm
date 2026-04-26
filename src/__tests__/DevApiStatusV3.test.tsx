@@ -277,7 +277,9 @@ describe('DevApiStatus v3 surface — Phase 27.4.3 Plan 04', () => {
 
     // Lineage extension chips
     expect(screen.getByText('Reasoning trace')).toBeInTheDocument();
-    expect(screen.getByText(/Reasoning: based on the source mentions of Tehran/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Reasoning: based on the source mentions of Tehran/),
+    ).toBeInTheDocument();
     expect(screen.getByText('Lineage')).toBeInTheDocument();
     // Hash chip shows first 8 chars + ellipsis
     expect(screen.getByText(/hash: a1b2c3d4…/)).toBeInTheDocument();

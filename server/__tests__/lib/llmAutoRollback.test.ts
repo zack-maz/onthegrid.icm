@@ -127,11 +127,9 @@ describe('D-17 Trigger 1 — checkWatchdogRecurrenceTrigger', () => {
 
     expect(result.rolledBack).toBe(true);
     expect(setPipelineOverrideMock).toHaveBeenCalledWith('v2');
-    expect(redisSetMock).toHaveBeenCalledWith(
-      'events:llm-pipeline-override',
-      'v2',
-      { ex: 7 * 24 * 3600 },
-    );
+    expect(redisSetMock).toHaveBeenCalledWith('events:llm-pipeline-override', 'v2', {
+      ex: 7 * 24 * 3600,
+    });
     expect(appendPipelineAuditMock).toHaveBeenCalledTimes(1);
     const entry = appendPipelineAuditMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(entry.trigger).toBe('auto:watchdog_recurrence');
@@ -197,11 +195,9 @@ describe('D-17 Trigger 2 — checkEvalDropTrigger', () => {
 
     expect(result.rolledBack).toBe(true);
     expect(setPipelineOverrideMock).toHaveBeenCalledWith('v2');
-    expect(redisSetMock).toHaveBeenCalledWith(
-      'events:llm-pipeline-override',
-      'v2',
-      { ex: 7 * 24 * 3600 },
-    );
+    expect(redisSetMock).toHaveBeenCalledWith('events:llm-pipeline-override', 'v2', {
+      ex: 7 * 24 * 3600,
+    });
     expect(appendPipelineAuditMock).toHaveBeenCalledTimes(1);
     const entry = appendPipelineAuditMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(entry.trigger).toBe('auto:eval_drop');

@@ -745,8 +745,7 @@ export function DevApiStatus() {
   // In prod builds the tab is tree-shaken out via the DEV gate — zero
   // bytes added to the production bundle (see threat T-27.4-09-01 + T-27.4.3-04-01).
   const showEventsTab =
-    (llmStatus?.schemaVersion === 'v2' || llmStatus?.schemaVersion === 'v3') &&
-    import.meta.env.DEV;
+    (llmStatus?.schemaVersion === 'v2' || llmStatus?.schemaVersion === 'v3') && import.meta.env.DEV;
 
   // Escape key — capture-phase so DevApiStatus closes BEFORE nav-stack pop /
   // detail panel close / search modal close (Plan 12 G6 priority contract).
@@ -879,17 +878,17 @@ export function DevApiStatus() {
           )}
           {activeTab === 'water' && showWaterTab && <WaterFiltersSection />}
           {activeTab === 'sites' && showSitesTab && <SitesFiltersSection />}
-          {activeTab === 'events' && showEventsTab && (
+          {activeTab === 'events' &&
+            showEventsTab &&
             // Phase 27.4.3 Plan 04 — version-routed render switch.
             // v3 mounts EventsFiltersSectionV3 (8-block surface); v2 keeps the
             // existing EventsFiltersSection (8-block v2 surface). v1 stays gated
             // out (no Events tab on v1) per UI-SPEC §"Render switch".
-            llmStatus?.schemaVersion === 'v3' && import.meta.env.DEV ? (
+            (llmStatus?.schemaVersion === 'v3' && import.meta.env.DEV ? (
               <EventsFiltersSectionV3 llmStatus={llmStatus} />
             ) : llmStatus?.schemaVersion === 'v2' && import.meta.env.DEV ? (
               <EventsFiltersSection llmStatus={llmStatus} />
-            ) : null
-          )}
+            ) : null)}
         </div>
       </div>
     </div>
@@ -1425,10 +1424,7 @@ function DrillDownRow({ ev }: { ev: RecentEnrichedEvent }) {
           {ev.lineageHash ? (
             <div className="mt-1 flex items-center gap-1">
               <span className="text-[9px] uppercase tracking-wider text-white/40">Lineage</span>
-              <span
-                className="font-mono text-[9px] text-cyan-400"
-                title={ev.lineageHash}
-              >
+              <span className="font-mono text-[9px] text-cyan-400" title={ev.lineageHash}>
                 hash: {ev.lineageHash.slice(0, 8)}…
               </span>
             </div>
@@ -1735,9 +1731,7 @@ function RoutingTraceBlock({ trace }: { trace?: LLMStatus['routingTrace'] }) {
  * Amber warning chip when P99 exceeds the 60s soft watchdog warn threshold.
  */
 function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) {
-  const providers = latency
-    ? (Object.keys(latency) as Array<'nvidia_nim' | 'openrouter'>)
-    : [];
+  const providers = latency ? (Object.keys(latency) as Array<'nvidia_nim' | 'openrouter'>) : [];
   const empty =
     providers.length === 0 ||
     providers.every((p) => {
@@ -1807,9 +1801,7 @@ function Sparkline({ points }: { points: number[] }) {
  *   else         → green bar (no badge)
  */
 function RateLimitHeadroomBlock({ rateLimit }: { rateLimit?: LLMStatus['rateLimit'] }) {
-  const providers = rateLimit
-    ? (Object.keys(rateLimit) as Array<'nvidia_nim' | 'openrouter'>)
-    : [];
+  const providers = rateLimit ? (Object.keys(rateLimit) as Array<'nvidia_nim' | 'openrouter'>) : [];
   if (providers.length === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">

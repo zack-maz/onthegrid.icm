@@ -21,11 +21,7 @@
  */
 
 import type { EventGroup } from './eventGrouping.js';
-import type {
-  LocationHierarchyV2,
-  EnrichedEventV3,
-  GeocodeProvenance,
-} from './llmSchema.js';
+import type { LocationHierarchyV2, EnrichedEventV3, GeocodeProvenance } from './llmSchema.js';
 import {
   batchResponseV3,
   EVENT_EXTRACTION_SCHEMA_V3,
@@ -595,10 +591,7 @@ export async function processEventGroupsV3(
 
     const validated = batchResponseV3.safeParse(parsed);
     if (!validated.success) {
-      log.warn(
-        { issues: validated.error.issues.slice(0, 3), batchIndex },
-        'v3 Zod parse failed',
-      );
+      log.warn({ issues: validated.error.issues.slice(0, 3), batchIndex }, 'v3 Zod parse failed');
       const errPayload = JSON.stringify(validated.error.issues.slice(0, 3));
       for (const g of batch) {
         await enqueueDLQ({
@@ -734,7 +727,7 @@ async function performAutoRollbackToV2(opts: {
   trigger: 'auto:watchdog_recurrence' | 'auto:eval_drop';
   reason: string;
 }): Promise<void> {
-  const fromVersion: 'v3' = 'v3';
+  const fromVersion = 'v3' as const;
   setPipelineOverride('v2');
   try {
     await redis.set(PIPELINE_OVERRIDE_KEY, 'v2', { ex: PIPELINE_OVERRIDE_TTL_SEC });

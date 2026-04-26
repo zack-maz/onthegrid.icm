@@ -62,7 +62,12 @@ interface BakeoffResult {
   durationMs: number;
   latencies: { p50: number; p95: number; p99: number; mean: number };
   errorPreviews: string[];
-  resolverOnlyEvalScore: { within5km: number; within20km: number; within100km: number; total: number } | null;
+  resolverOnlyEvalScore: {
+    within5km: number;
+    within20km: number;
+    within100km: number;
+    total: number;
+  } | null;
   notes: string;
 }
 
@@ -170,7 +175,9 @@ async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResu
 
     if (consecHardFail >= HARD_FAIL_LIMIT) {
       // Skip remaining events for unfit model — record skip reason once.
-      console.error(`  [${i + 1}/${events.length}] ${ev.id} — SKIPPED (early-abort: ${consecHardFail} consec hard-fails)`);
+      console.error(
+        `  [${i + 1}/${events.length}] ${ev.id} — SKIPPED (early-abort: ${consecHardFail} consec hard-fails)`,
+      );
       llmCallError++;
       continue;
     }
@@ -249,7 +256,9 @@ async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResu
         .map((iss) => `${iss.path.join('.')}: ${iss.message}`)
         .join('; ');
       errorPreviews.push(`${ev.id}: Zod fail — ${issues.slice(0, 200)}`);
-      console.error(`  [${i + 1}/${events.length}] ${ev.id} — Zod fail (${evLatency}ms): ${issues.slice(0, 80)}`);
+      console.error(
+        `  [${i + 1}/${events.length}] ${ev.id} — Zod fail (${evLatency}ms): ${issues.slice(0, 80)}`,
+      );
       continue;
     }
 
@@ -335,14 +344,20 @@ async function main(): Promise<void> {
     console.error('Usage: tsx scripts/bakeoff-v3-direct.ts --models=<m1>,<m2>,... [--limit=N]');
     process.exit(1);
   }
-  const models = modelsArg.split('=')[1]!.split(',').map((s) => s.trim()).filter(Boolean);
+  const models = modelsArg
+    .split('=')[1]!
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const limit = limitArg ? parseInt(limitArg.split('=')[1]!, 10) : 10;
 
   const gtRaw = readFileSync(GT_PATH, 'utf-8');
   const gtFile = JSON.parse(gtRaw) as { events: GTEvent[] };
   const allEvents = gtFile.events.slice(0, limit);
 
-  console.error(`Bake-off (direct OpenAI SDK): ${models.length} models × ${allEvents.length} GT events`);
+  console.error(
+    `Bake-off (direct OpenAI SDK): ${models.length} models × ${allEvents.length} GT events`,
+  );
   console.error(`Models: ${models.join(', ')}`);
   console.error(`Per-call timeout: ${PER_CALL_TIMEOUT_MS}ms\n`);
 
@@ -359,7 +374,9 @@ async function main(): Promise<void> {
     console.error(
       `    llm_ok=${r.llmCallSuccess}, timeout=${r.llmCallTimeout}, err=${r.llmCallError}, empty=${r.emptyContent}, json_fail=${r.jsonParseFail}, schema_fail=${r.schemaFail}`,
     );
-    console.error(`    p50=${r.latencies.p50}ms p95=${r.latencies.p95}ms mean=${r.latencies.mean}ms duration=${r.durationMs}ms`);
+    console.error(
+      `    p50=${r.latencies.p50}ms p95=${r.latencies.p95}ms mean=${r.latencies.mean}ms duration=${r.durationMs}ms`,
+    );
   }
 
   console.error('\n=== SCOREBOARD ===');

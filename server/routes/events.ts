@@ -859,18 +859,12 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   // may be empty while v2 / v1 are populated; we bridge to whichever earlier
   // version has fresh data so the map never goes blank during cutover.
   if (pipelineV3 && !llmCached?.data) {
-    let bridgeV2 = await cacheGetSafe<ConflictEventEntity[]>(
-      'events:llm:v2',
-      LLM_LOGICAL_TTL_MS,
-    );
+    let bridgeV2 = await cacheGetSafe<ConflictEventEntity[]>('events:llm:v2', LLM_LOGICAL_TTL_MS);
     if (bridgeV2) bridgeV2 = coerceCachedEvents(bridgeV2);
     if (bridgeV2 && !bridgeV2.stale) {
       return sendNormalizedEvents(res, bridgeV2);
     }
-    let bridgeV1 = await cacheGetSafe<ConflictEventEntity[]>(
-      LLM_EVENTS_KEY,
-      LLM_LOGICAL_TTL_MS,
-    );
+    let bridgeV1 = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY, LLM_LOGICAL_TTL_MS);
     if (bridgeV1) bridgeV1 = coerceCachedEvents(bridgeV1);
     if (bridgeV1 && !bridgeV1.stale) {
       return sendNormalizedEvents(res, bridgeV1);
@@ -886,10 +880,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
 
   // Phase 27.4 Pitfall 1 (preserved): v2 → v1 bridge when v2 cache is empty.
   if (pipelineV2 && !llmCached?.data) {
-    let llmCachedV1 = await cacheGetSafe<ConflictEventEntity[]>(
-      LLM_EVENTS_KEY,
-      LLM_LOGICAL_TTL_MS,
-    );
+    let llmCachedV1 = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY, LLM_LOGICAL_TTL_MS);
     if (llmCachedV1) llmCachedV1 = coerceCachedEvents(llmCachedV1);
     if (llmCachedV1 && !llmCachedV1.stale) {
       return sendNormalizedEvents(res, llmCachedV1);

@@ -45,9 +45,8 @@ vi.mock('../../lib/llmCircuitBreaker.js', () => ({
 }));
 
 // Dynamic import after mocks are registered.
-const { callLLM, stripReasoningBlocks, classifyError, __internal } = await import(
-  '../../lib/freeClaudeRouter.js'
-);
+const { callLLM, stripReasoningBlocks, classifyError, __internal } =
+  await import('../../lib/freeClaudeRouter.js');
 
 beforeEach(() => {
   vi.clearAllMocks();
