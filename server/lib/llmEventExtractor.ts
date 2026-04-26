@@ -5,12 +5,16 @@
  * isPipelineV2() (D-24, W4 single-source-of-truth helper) read at call
  * time so operators can flip LLM_PIPELINE_V2 without a rebuild.
  *
- * Re-exports v1 types for backward compatibility with pre-27.4 consumers.
- * v2 consumers should import from llmEventExtractor.v2.ts directly when
- * they need access to v2-only shapes (GeocodedEnrichedEventV2, etc.).
+ * Phase 27.4.3 Plan 02b: extended to v3 via getPipelineVersion(). Three-way
+ * dispatch returns a discriminated union — the compiler enforces correct
+ * downstream branching.
  *
- * v1 is preserved under .v1.ts per D-26 as the rollback path; will be
- * removed in phase 27.5 cleanup.
+ * Re-exports v1 types for backward compatibility with pre-27.4 consumers.
+ * v2/v3 consumers should import from the version-specific module directly
+ * when they need access to version-only shapes (GeocodedEnrichedEventV2/3, etc.).
+ *
+ * v1 is preserved under .v1.ts per D-26 as the rollback path; v2 is
+ * preserved per D-21 (Phase 27.4.3) for the same purpose.
  */
 
 import type { EventGroup } from './eventGrouping.js';
@@ -21,8 +25,13 @@ import {
   type NewsArticleForPrompt,
   type GeocodedEnrichedEventV2,
 } from './llmEventExtractor.v2.js';
-import type { EnrichedEventV2 } from './llmSchema.js';
-import { isPipelineV2 } from '../config.js';
+import {
+  processEventGroupsV3,
+  geocodeEnrichedEventsV3,
+  type GeocodedEnrichedEventV3,
+} from './llmEventExtractor.v3.js';
+import type { EnrichedEventV2, EnrichedEventV3 } from './llmSchema.js';
+import { getPipelineVersion } from '../config.js';
 
 // Re-export v1 types for pre-27.4 consumers that import types directly.
 export type { EnrichedEvent } from './llmEventExtractor.v1.js';
@@ -32,12 +41,14 @@ export type {
   GeocodedEnrichedEventV2,
   V2ExtractionRun,
 } from './llmEventExtractor.v2.js';
+// Re-export v3 types so events.ts and Plan 04 dashboards can branch.
+export type { GeocodedEnrichedEventV3, V3ExtractionRun } from './llmEventExtractor.v3.js';
 
 /**
  * Tagged extractor result — `schemaVersion` discriminates the branch so
  * downstream code knows which shape to consume.
  *
- * v2 additionally carries `matchedNewsByGroup` + `bellingcatByGroup` which
+ * v2/v3 additionally carry `matchedNewsByGroup` + `bellingcatByGroup` which
  * the geocoder needs to populate ResolveContext.articleTitles (W3) and
  * ResolveContext.bellingcatCoord (W2).
  */
@@ -48,20 +59,36 @@ export type ExtractorRun =
       events: EnrichedEventV2[] | null;
       matchedNewsByGroup: Map<string, NewsArticleForPrompt[]>;
       bellingcatByGroup: Map<string, { lat: number; lng: number }>;
+    }
+  | {
+      schemaVersion: 'v3';
+      events: EnrichedEventV3[] | null;
+      matchedNewsByGroup: Map<string, NewsArticleForPrompt[]>;
+      bellingcatByGroup: Map<string, { lat: number; lng: number }>;
     };
 
 /**
  * Flag-routed extractor entry point.
  *
- * Reads isPipelineV2() (W4 — no raw process.env access here) so callers
- * don't need to know which pipeline is active. Returns a tagged union so
- * downstream code must branch — the compiler keeps the two shapes honest.
+ * Reads getPipelineVersion() so callers don't need to know which pipeline
+ * is active. Returns a tagged union so downstream code must branch — the
+ * compiler keeps the three shapes honest.
  */
 export async function processEventGroups(
   groups: EventGroup[],
   onBatchComplete?: (completed: number, total: number) => void,
 ): Promise<ExtractorRun> {
-  if (isPipelineV2()) {
+  const version = getPipelineVersion();
+  if (version === 'v3') {
+    const run = await processEventGroupsV3(groups, onBatchComplete);
+    return {
+      schemaVersion: 'v3',
+      events: run.events,
+      matchedNewsByGroup: run.matchedNewsByGroup,
+      bellingcatByGroup: run.bellingcatByGroup,
+    };
+  }
+  if (version === 'v2') {
     const run = await processEventGroupsV2(groups, onBatchComplete);
     return {
       schemaVersion: 'v2',
@@ -85,6 +112,12 @@ export type GeocoderInput =
       events: EnrichedEventV2[];
       matchedNewsByGroup: Map<string, NewsArticleForPrompt[]>;
       bellingcatByGroup: Map<string, { lat: number; lng: number }>;
+    }
+  | {
+      schemaVersion: 'v3';
+      events: EnrichedEventV3[];
+      matchedNewsByGroup: Map<string, NewsArticleForPrompt[]>;
+      bellingcatByGroup: Map<string, { lat: number; lng: number }>;
     };
 
 export type GeocoderResult =
@@ -92,11 +125,12 @@ export type GeocoderResult =
       schemaVersion: 'v1';
       events: Array<v1.EnrichedEvent & { resolvedLat: number; resolvedLng: number }>;
     }
-  | { schemaVersion: 'v2'; events: GeocodedEnrichedEventV2[] };
+  | { schemaVersion: 'v2'; events: GeocodedEnrichedEventV2[] }
+  | { schemaVersion: 'v3'; events: GeocodedEnrichedEventV3[] };
 
 /**
- * Flag-routed geocoder. W2/W3 fixes: v2 branch threads matched news +
- * bellingcat maps into geocodeEnrichedEventsV2 so ctx.articleTitles = real
+ * Flag-routed geocoder. W2/W3 fixes: v2/v3 branches thread matched news +
+ * bellingcat maps into geocodeEnrichedEventsV2/3 so ctx.articleTitles = real
  * headlines and ctx.bellingcatCoord is populated when a Bellingcat-tier
  * article's title carried parseable coordinates.
  */
@@ -105,6 +139,17 @@ export async function geocodeEnrichedEvents(
   groups: EventGroup[],
   onComplete?: (completed: number, total: number) => void,
 ): Promise<GeocoderResult> {
+  if (input.schemaVersion === 'v3') {
+    const groupsByKey = new Map(groups.map((g) => [g.key, g] as const));
+    const events = await geocodeEnrichedEventsV3(
+      input.events,
+      groupsByKey,
+      input.matchedNewsByGroup,
+      input.bellingcatByGroup,
+      onComplete,
+    );
+    return { schemaVersion: 'v3', events };
+  }
   if (input.schemaVersion === 'v2') {
     const groupsByKey = new Map(groups.map((g) => [g.key, g] as const));
     const events = await geocodeEnrichedEventsV2(
