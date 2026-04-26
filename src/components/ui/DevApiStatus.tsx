@@ -2179,9 +2179,15 @@ function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
       <ErrorTaxonomyBlock taxonomy={llmStatus.errorTaxonomy} />
       <PipelineFlipsBlock flips={llmStatus.pipelineFlips} />
       <CostShadowBlock cost={llmStatus.costShadow} />
-      {/* Note: LineageDrillDown extension is rendered inside DrillDownRow under
-          the existing event-list block (DrillDownRow auto-detects v3 fields).
-          No separate block here. */}
+      {/* D-13 Lineage drill-down: per-event drill-down rows include the v3
+          lineage extension (reasoning trace + lineage hash chip). DrillDownRow
+          auto-detects v3 fields on RecentEnrichedEvent — they're optional, so
+          v2-cached events under the same surface degrade gracefully (no chips).
+          Rule 2 deviation from Plan 04 Task 4: the v3 composer needs to mount
+          DrillDownBlock so the lineage UX surface is actually reachable when
+          v3 is active (the v2 composer is replaced, not stacked, by the
+          version-routed render switch). */}
+      <DrillDownBlock llmStatus={llmStatus} />
     </section>
   );
 }
