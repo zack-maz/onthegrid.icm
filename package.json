@@ -22,6 +22,7 @@
     "refresh:water": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/refresh-water-facilities.ts",
     "refresh:sites": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/refresh-sites.ts",
     "eval:replay": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/eval-replay.ts",
+    "bakeoff": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/bakeoff-v3-direct.ts",
     "type-coverage": "type-coverage",
     "preview": "vite preview",
     "prepare": "husky"
