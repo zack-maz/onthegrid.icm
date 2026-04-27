@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -n client,server -c blue,green \"npm:dev:client\" \"npm:dev:server\"",
     "dev:client": "vite",
-    "dev:server": "node --env-file-if-exists=.env --import tsx/esm --watch server/index.ts",
+    "dev:server": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm --watch server/index.ts",
     "build": "vite build && tsup server/vercel-entry.ts --format esm --out-dir api --no-splitting --tsconfig tsconfig.server.json",
     "typecheck": "tsc -b && type-coverage",
     "lint": "eslint .",
@@ -19,9 +19,9 @@
     "knip": "knip",
     "check:env": "tsx scripts/check-env-example.ts",
     "capture:hero": "tsx scripts/capture-hero.ts",
-    "refresh:water": "node --env-file-if-exists=.env --import tsx/esm scripts/refresh-water-facilities.ts",
-    "refresh:sites": "node --env-file-if-exists=.env --import tsx/esm scripts/refresh-sites.ts",
-    "eval:replay": "node --env-file-if-exists=.env --import tsx/esm scripts/eval-replay.ts",
+    "refresh:water": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/refresh-water-facilities.ts",
+    "refresh:sites": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/refresh-sites.ts",
+    "eval:replay": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/eval-replay.ts",
     "type-coverage": "type-coverage",
     "preview": "vite preview",
     "prepare": "husky"
