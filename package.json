@@ -23,6 +23,8 @@
     "refresh:sites": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/refresh-sites.ts",
     "eval:replay": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/eval-replay.ts",
     "bakeoff": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/bakeoff-v3-direct.ts",
+    "bakeoff:preflight": "npm run bakeoff -- --models=qwen/qwen3.5-397b-a17b,meta/llama-3.3-70b-instruct,nvidia/nemotron-3-super-120b-a12b,z-ai/glm4.7 --limit=20 --mode=characterize",
+    "bakeoff:full": "npm run bakeoff -- --models=qwen/qwen3.5-397b-a17b,meta/llama-3.3-70b-instruct,nvidia/nemotron-3-super-120b-a12b,z-ai/glm4.7 --limit=50",
     "type-coverage": "type-coverage",
     "preview": "vite preview",
     "prepare": "husky"
