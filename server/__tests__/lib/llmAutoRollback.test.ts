@@ -51,7 +51,12 @@ vi.mock('../../config.js', () => ({
   setPipelineOverride: (...args: unknown[]) => setPipelineOverrideMock(...args),
   // env is read at module-init by freeClaudeRouter (transitively imported);
   // provide an empty object so the env access doesn't throw.
-  env: { NVIDIA_NIM_API_KEY: '', OPENROUTER_API_KEY: '', LLM_BATCH_TIMEOUT_MS: 90000 },
+  env: {
+    NVIDIA_NIM_API_KEY: '',
+    OPENROUTER_API_KEY: '',
+    LLM_BATCH_TIMEOUT_MS: 90000,
+    V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
+  },
   // Used by the v3 extractor (not exercised by these tests but imported).
   isPipelineV2: vi.fn().mockReturnValue(false),
   getPipelineVersion: vi.fn().mockReturnValue('v3'),

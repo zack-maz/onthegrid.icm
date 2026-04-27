@@ -68,6 +68,25 @@ export const envSchema = z.object({
   // hard cap is env-tunable for in-incident rescue without a redeploy.
   LLM_BATCH_TIMEOUT_MS: z.coerce.number().int().positive().default(90000),
 
+  // Phase 27.4.4 D-04 / D-13 / D-18: opt-in feature flags for v3 latency remediation.
+  // Default OFF for D-04 + D-18 keeps Gate B telemetry pure; activated post-cutover when
+  // ops cost > telemetry purity (D-04, D-18).
+  V3_ADAPTIVE_BATCH: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  V3_LINEAGE_PREFILTER: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  // Phase 27.4.4 D-13: env-tunable Trigger 1 (auto-rollback) threshold. Default 2
+  // (lowered from hardcoded 3 to keep consistent with strict Gate B watchdog=0
+  // while letting single timeouts recover without spurious flip).
+  V3_WATCHDOG_ROLLBACK_THRESHOLD: z.coerce.number().int().positive().default(2),
+  // Phase 27.4.4 D-14: Vercel cron secret. Empty default preserves existing
+  // un-authed cron-warm/cron-health behavior; eval-cron route 401s when set.
+  CRON_SECRET: z.string().default(''),
+
   // Phase 27.4.4 D-20 Option B (RESEARCH §6) — dev/prod Redis key isolation
   // when a separate Upstash database is unavailable. When set (e.g. `dev:`),
   // every key passing through the wrapped `redis` instance + cacheGet/Set
