@@ -74,6 +74,40 @@ interface BakeoffResult {
 const NVIDIA_NIM_BASE = 'https://integrate.api.nvidia.com/v1';
 const PER_CALL_TIMEOUT_MS = 60_000;
 
+// Phase 27.4.4 D-05 — instrumented preflight trace sink. Each --mode=characterize
+// call appends one JSONL record per event with TTFB / gen duration / token rate /
+// max_tokens hits / reasoning bytes. Operator derives the per-candidate matrix in
+// 27.4.4-PREFLIGHT-CHARACTERIZATION.md from this file.
+const TRACE_PATH = '/tmp/27.4.4-preflight-trace.jsonl';
+
+// Phase 27.4.4 D-07 — per-model prompt-tuning best-bets (RESEARCH §2.3 + §2.4).
+// nemotron Tier-1 baseline emits a flat object instead of the `events` array
+// envelope; explicit envelope-shape demand should pull it back into compliance.
+// glm4.7 Tier-1 baseline burns output budget on `<think>` blocks; disabling
+// reasoning frees those tokens for the JSON envelope.
+//
+// Apply uniformly via the resolved {messages, extraBody} bundle below — never
+// route through freeClaudeRouter (Anti-Pattern A6 — direct-SDK precision is
+// load-bearing for D-02 latency measurements).
+const PROMPT_OVERRIDES: Record<
+  string,
+  {
+    systemPromptSuffix?: string;
+    extraBody?: Record<string, unknown>;
+    responseFormatMode?: 'json_object' | 'text';
+  }
+> = {
+  'nvidia/nemotron-3-super-120b-a12b': {
+    systemPromptSuffix:
+      '\n\nIMPORTANT: Your output MUST be a single JSON object with a top-level "events" array. Example: {"events": [{"groupKey": "...", "location": {...}, ...}]}. Do NOT emit a flat object with groupKey at the top level. The "events" array wrapper is REQUIRED.',
+  },
+  'z-ai/glm4.7': {
+    extraBody: { chat_template_kwargs: { enable_thinking: false } },
+  },
+};
+
+type Mode = 'evaluate' | 'characterize';
+
 const SYSTEM_PROMPT_BAKEOFF = [
   'You are a conflict event analyst extracting structured data from GDELT event records.',
   '',
@@ -138,8 +172,12 @@ function quantile(sorted: number[], q: number): number {
   return sorted[idx] ?? 0;
 }
 
-async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResult> {
-  console.error(`\n=== bake-off (direct): ${model} (${events.length} events) ===`);
+async function bakeoffOne(
+  model: string,
+  events: GTEvent[],
+  mode: Mode = 'evaluate',
+): Promise<BakeoffResult> {
+  console.error(`\n=== bake-off (direct, mode=${mode}): ${model} (${events.length} events) ===`);
   const apiKey = process.env.NVIDIA_NIM_API_KEY;
   if (!apiKey) throw new Error('NVIDIA_NIM_API_KEY not set');
   const client = new OpenAI({
@@ -148,6 +186,16 @@ async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResu
     timeout: PER_CALL_TIMEOUT_MS,
     maxRetries: 0, // Bake-off needs precise per-call latency; disable SDK retries (default is 2).
   });
+
+  // Phase 27.4.4 D-07 — resolve per-model prompt overrides once per bake-off run.
+  // PROMPT_OVERRIDES contains nemotron envelope-shape demand + glm4.7 thinking-disable.
+  const override = PROMPT_OVERRIDES[model] ?? {};
+  const systemPrompt = override.systemPromptSuffix
+    ? SYSTEM_PROMPT_BAKEOFF + override.systemPromptSuffix
+    : SYSTEM_PROMPT_BAKEOFF;
+  const responseFormat: { type: 'json_object' | 'text' } = {
+    type: override.responseFormatMode ?? 'json_object',
+  };
 
   // EARLY-ABORT: if first 3 calls all hard-fail (timeout / 5xx / null content),
   // skip the remaining 7 events and mark the model unfit. Saves ~10 min per
@@ -187,19 +235,98 @@ async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResu
     const ac = new AbortController();
     const abortTimer = setTimeout(() => ac.abort(), PER_CALL_TIMEOUT_MS);
     try {
-      const completion = await client.chat.completions.create(
-        {
+      if (mode === 'characterize') {
+        // Phase 27.4.4 D-05 — instrumented streaming path.
+        // stream_options.include_usage attaches a final chunk with usage stats.
+        // We capture firstByteTs on first chunk, accumulate raw delta, capture
+        // finish_reason + usage from final chunk, then append a per-call telemetry
+        // record to TRACE_PATH for operator-side derivation of the per-candidate
+        // matrix in 27.4.4-PREFLIGHT-CHARACTERIZATION.md.
+        const streamArgs: Record<string, unknown> = {
           model,
           messages: [
-            { role: 'system', content: SYSTEM_PROMPT_BAKEOFF },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content: buildUserPromptForGT(ev) },
           ],
-          response_format: { type: 'json_object' },
+          response_format: responseFormat,
           temperature: 0,
-        },
-        { signal: ac.signal },
-      );
-      raw = completion.choices[0]?.message?.content ?? null;
+          stream: true,
+          stream_options: { include_usage: true },
+        };
+        if (override.extraBody) {
+          streamArgs.extra_body = override.extraBody;
+        }
+        const stream = await client.chat.completions.create(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          streamArgs as any,
+          { signal: ac.signal },
+        );
+        let firstByteTs: number | null = null;
+        let acc = '';
+        let usage: { completion_tokens?: number; prompt_tokens?: number } | null = null;
+        let finishReason: string | null = null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for await (const chunk of stream as any) {
+          if (firstByteTs === null) firstByteTs = Date.now();
+          const delta = chunk?.choices?.[0]?.delta?.content ?? '';
+          if (delta) acc += delta;
+          if (chunk?.choices?.[0]?.finish_reason) {
+            finishReason = chunk.choices[0].finish_reason;
+          }
+          if (chunk?.usage) usage = chunk.usage;
+        }
+        raw = acc || null;
+        const totalLatencyMs = Date.now() - evStart;
+        const ttfbMs = firstByteTs !== null ? firstByteTs - evStart : null;
+        const genDurationMs = firstByteTs !== null ? Date.now() - firstByteTs : null;
+        const tokensOut = usage?.completion_tokens ?? null;
+        const emissionRateTps =
+          genDurationMs && tokensOut
+            ? Number((tokensOut / (genDurationMs / 1000)).toFixed(2))
+            : null;
+        const reasoningMatches = (acc || '').match(/<think>[\s\S]*?<\/think>/g);
+        const reasoningBytes = reasoningMatches
+          ? reasoningMatches.reduce((s, m) => s + m.length, 0)
+          : 0;
+        appendFileSync(
+          TRACE_PATH,
+          JSON.stringify({
+            timestamp: new Date().toISOString(),
+            model,
+            eventId: ev.id,
+            ttfbMs,
+            genDurationMs,
+            totalLatencyMs,
+            tokensOut,
+            emissionRateTps,
+            reasoningBytes,
+            finishReason,
+            promptOverrideApplied: !!(override.systemPromptSuffix || override.extraBody),
+          }) + '\n',
+        );
+      } else {
+        // Default 'evaluate' path — non-streaming, preserves existing 27.4.3 latency
+        // measurement shape verbatim. A6 invariant: direct-SDK call, no router.
+        const completionArgs: Record<string, unknown> = {
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: buildUserPromptForGT(ev) },
+          ],
+          response_format: responseFormat,
+          temperature: 0,
+        };
+        if (override.extraBody) {
+          completionArgs.extra_body = override.extraBody;
+        }
+        const completion = await client.chat.completions.create(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          completionArgs as any,
+          { signal: ac.signal },
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        raw = (completion as any).choices?.[0]?.message?.content ?? null;
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const evLatency = Date.now() - evStart;
@@ -340,8 +467,11 @@ async function bakeoffOne(model: string, events: GTEvent[]): Promise<BakeoffResu
 async function main(): Promise<void> {
   const modelsArg = process.argv.find((a) => a.startsWith('--models='));
   const limitArg = process.argv.find((a) => a.startsWith('--limit='));
+  const modeArg = process.argv.find((a) => a.startsWith('--mode='));
   if (!modelsArg) {
-    console.error('Usage: tsx scripts/bakeoff-v3-direct.ts --models=<m1>,<m2>,... [--limit=N]');
+    console.error(
+      'Usage: tsx scripts/bakeoff-v3-direct.ts --models=<m1>,<m2>,... [--limit=N] [--mode=evaluate|characterize]',
+    );
     process.exit(1);
   }
   const models = modelsArg
@@ -350,22 +480,34 @@ async function main(): Promise<void> {
     .map((s) => s.trim())
     .filter(Boolean);
   const limit = limitArg ? parseInt(limitArg.split('=')[1]!, 10) : 10;
+  const modeRaw = modeArg ? modeArg.split('=')[1] : 'evaluate';
+  if (modeRaw !== 'evaluate' && modeRaw !== 'characterize') {
+    console.error('--mode must be "evaluate" or "characterize"');
+    process.exit(1);
+  }
+  const mode: Mode = modeRaw;
 
   const gtRaw = readFileSync(GT_PATH, 'utf-8');
   const gtFile = JSON.parse(gtRaw) as { events: GTEvent[] };
   const allEvents = gtFile.events.slice(0, limit);
 
   console.error(
-    `Bake-off (direct OpenAI SDK): ${models.length} models × ${allEvents.length} GT events`,
+    `Bake-off (direct OpenAI SDK, mode=${mode}): ${models.length} models × ${allEvents.length} GT events`,
   );
   console.error(`Models: ${models.join(', ')}`);
-  console.error(`Per-call timeout: ${PER_CALL_TIMEOUT_MS}ms\n`);
+  console.error(`Per-call timeout: ${PER_CALL_TIMEOUT_MS}ms`);
+  if (mode === 'characterize') {
+    // Phase 27.4.4 D-05 — fresh trace file per characterize run.
+    writeFileSync(TRACE_PATH, '');
+    console.error(`Preflight trace sink: ${TRACE_PATH}`);
+  }
+  console.error('');
 
   writeFileSync(RESULTS_PATH, '');
 
   const results: BakeoffResult[] = [];
   for (const model of models) {
-    const r = await bakeoffOne(model, allEvents);
+    const r = await bakeoffOne(model, allEvents, mode);
     results.push(r);
     appendFileSync(RESULTS_PATH, JSON.stringify(r) + '\n');
     console.error(
