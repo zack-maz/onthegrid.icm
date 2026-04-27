@@ -68,6 +68,16 @@ export const envSchema = z.object({
   // hard cap is env-tunable for in-incident rescue without a redeploy.
   LLM_BATCH_TIMEOUT_MS: z.coerce.number().int().positive().default(90000),
 
+  // Phase 27.4.4 D-20 Option B (RESEARCH §6) — dev/prod Redis key isolation
+  // when a separate Upstash database is unavailable. When set (e.g. `dev:`),
+  // every key passing through the wrapped `redis` instance + cacheGet/Set
+  // helpers gets the prefix applied. Production never sets this so prod keys
+  // remain unsuffixed (`events:llm:v3`); dev sets `CACHE_KEY_PREFIX=dev:` in
+  // .env.local so dev runs land at `dev:events:llm:v3` and never collide with
+  // the live prod cache. Defense-in-depth — survives operator forgetting to
+  // swap Upstash databases.
+  CACHE_KEY_PREFIX: z.string().default(''),
+
   // Tuning parameters
   EVENT_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
   EVENT_MIN_SOURCES: z.coerce.number().int().min(1).default(2),

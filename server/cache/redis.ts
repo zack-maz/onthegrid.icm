@@ -1,11 +1,73 @@
 import { Redis } from '@upstash/redis';
 import type { CacheResponse } from '../types.js';
 
+/**
+ * Phase 27.4.4 D-20 Option B (RESEARCH §6) — dev/prod key isolation.
+ *
+ * When `CACHE_KEY_PREFIX` is set in env (e.g. `dev:`), every key passing
+ * through this exported `redis` instance gets the prefix applied
+ * automatically. Production never sets the var; dev sets it in `.env.local`
+ * so a dry-run against the same Upstash database doesn't pollute the live
+ * `events:llm:v3` / `events:llm-eval-baseline:v3` / `events:llm-pipeline-audit`
+ * keys.
+ *
+ * Implemented as a Proxy on the Redis client so all 30+ existing call sites
+ * (redis.get, redis.set, redis.sadd, redis.expire, redis.hincrby, redis.zadd,
+ *  redis.lpush, redis.lrange, redis.scard, redis.smembers, redis.srem, ...)
+ * get prefixed without per-call-site changes. Methods that don't take a key
+ * (`ping`, `dbsize`, `info`, `time`, `echo`, `flushall`, `flushdb`) pass
+ * through unchanged. `del`/`unlink` may take multiple keys variadic; all
+ * trailing string args are prefixed too. Other methods only ever take the
+ * key as the first arg (members/values/fields are never keys).
+ *
+ * The four cacheGet/cacheSet/cacheGetSafe/cacheSetSafe helpers below all
+ * funnel through this same `redis` instance, so they inherit the prefix
+ * for free.
+ */
+const NON_KEY_METHODS = new Set<string>([
+  'ping',
+  'dbsize',
+  'info',
+  'time',
+  'echo',
+  'flushall',
+  'flushdb',
+]);
+const VARIADIC_KEY_METHODS = new Set<string>(['del', 'unlink']);
+
+function wrapWithPrefix(client: Redis): Redis {
+  const prefix = process.env.CACHE_KEY_PREFIX ?? '';
+  if (!prefix) return client;
+
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== 'function') return value;
+      if (typeof prop !== 'string' || NON_KEY_METHODS.has(prop)) {
+        return value.bind(target);
+      }
+      return function (...args: unknown[]) {
+        if (args.length > 0 && typeof args[0] === 'string') {
+          args[0] = prefix + args[0];
+        }
+        if (VARIADIC_KEY_METHODS.has(prop)) {
+          for (let i = 1; i < args.length; i++) {
+            if (typeof args[i] === 'string') args[i] = prefix + args[i];
+          }
+        }
+        return (value as (...a: unknown[]) => unknown).apply(target, args);
+      };
+    },
+  }) as Redis;
+}
+
 /** Shared Upstash Redis client (REST-based, safe for serverless) */
-export const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+export const redis = wrapWithPrefix(
+  new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  }),
+);
 
 /** Internal storage shape persisted in Redis */
 interface CacheEntry<T> {
