@@ -108,6 +108,7 @@ vi.mock('../../lib/logger.js', () => ({
 
 vi.mock('../../lib/freeClaudeRouter.js', () => ({
   callLLM: vi.fn(),
+  prewarmIfCold: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../adapters/llm-provider.js', () => ({

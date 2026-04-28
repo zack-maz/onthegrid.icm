@@ -44,19 +44,22 @@ vi.mock('../../lib/pipelineAudit.js', () => ({
 }));
 
 // config — control isPipelineV3() return value per-test, capture setPipelineOverride() calls.
+// Phase 27.4.4 D-13 — env is hoisted as a mutable mockEnv so per-test
+// V3_WATCHDOG_ROLLBACK_THRESHOLD overrides drive the env-tunable threshold path.
 const isPipelineV3Mock = vi.fn();
 const setPipelineOverrideMock = vi.fn();
-vi.mock('../../config.js', () => ({
-  isPipelineV3: (...args: unknown[]) => isPipelineV3Mock(...args),
-  setPipelineOverride: (...args: unknown[]) => setPipelineOverrideMock(...args),
-  // env is read at module-init by freeClaudeRouter (transitively imported);
-  // provide an empty object so the env access doesn't throw.
-  env: {
+const { mockEnv } = vi.hoisted(() => ({
+  mockEnv: {
     NVIDIA_NIM_API_KEY: '',
     OPENROUTER_API_KEY: '',
     LLM_BATCH_TIMEOUT_MS: 90000,
     V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
   },
+}));
+vi.mock('../../config.js', () => ({
+  isPipelineV3: (...args: unknown[]) => isPipelineV3Mock(...args),
+  setPipelineOverride: (...args: unknown[]) => setPipelineOverrideMock(...args),
+  env: mockEnv,
   // Used by the v3 extractor (not exercised by these tests but imported).
   isPipelineV2: vi.fn().mockReturnValue(false),
   getPipelineVersion: vi.fn().mockReturnValue('v3'),
@@ -117,6 +120,9 @@ beforeEach(() => {
   isPipelineV3Mock.mockReset();
   setPipelineOverrideMock.mockReset();
   llmProgress.watchdogTimeoutCount = 0;
+  // Phase 27.4.4 D-13 — restore default threshold between tests so a custom
+  // override in one test cannot bleed into the next.
+  mockEnv.V3_WATCHDOG_ROLLBACK_THRESHOLD = 2;
 });
 
 // ===========================================================================
@@ -145,9 +151,10 @@ describe('D-17 Trigger 1 — checkWatchdogRecurrenceTrigger', () => {
     expect(['dev', 'cron', 'production']).toContain(entry.operator);
   });
 
-  it('is a no-op when watchdogTimeoutCount < 3 (transient, not recurrence)', async () => {
+  it('is a no-op when watchdogTimeoutCount < threshold (transient, not recurrence)', async () => {
+    // D-13: default threshold is 2, so count=1 is below the bar.
     isPipelineV3Mock.mockReturnValue(true);
-    llmProgress.watchdogTimeoutCount = 2;
+    llmProgress.watchdogTimeoutCount = 1;
 
     const result = await checkWatchdogRecurrenceTrigger();
 
@@ -178,6 +185,40 @@ describe('D-17 Trigger 1 — checkWatchdogRecurrenceTrigger', () => {
     expect(result.rolledBack).toBe(true);
     expect(setPipelineOverrideMock).toHaveBeenCalledWith('v2');
     expect(appendPipelineAuditMock).toHaveBeenCalledTimes(1);
+  });
+
+  // ---------------------------------------------------------------------
+  // Phase 27.4.4 D-13 — env-tunable threshold (default 2 + custom value).
+  // ---------------------------------------------------------------------
+
+  it('D-13 default threshold is 2 — count=2 triggers rollback (recurrence boundary at the new default)', async () => {
+    isPipelineV3Mock.mockReturnValue(true);
+    mockEnv.V3_WATCHDOG_ROLLBACK_THRESHOLD = 2; // explicit, not relying on beforeEach
+    llmProgress.watchdogTimeoutCount = 2;
+
+    const result = await checkWatchdogRecurrenceTrigger();
+
+    expect(result.rolledBack).toBe(true);
+    expect(setPipelineOverrideMock).toHaveBeenCalledWith('v2');
+    const entry = appendPipelineAuditMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(entry.reason).toMatch(/watchdogTimeoutCount=2 \(>= 2\)/);
+  });
+
+  it('D-13 custom threshold honored — V3_WATCHDOG_ROLLBACK_THRESHOLD=5 keeps count=4 a no-op, count=5 triggers', async () => {
+    isPipelineV3Mock.mockReturnValue(true);
+    mockEnv.V3_WATCHDOG_ROLLBACK_THRESHOLD = 5;
+
+    llmProgress.watchdogTimeoutCount = 4;
+    const below = await checkWatchdogRecurrenceTrigger();
+    expect(below.rolledBack).toBe(false);
+    expect(setPipelineOverrideMock).not.toHaveBeenCalled();
+
+    llmProgress.watchdogTimeoutCount = 5;
+    const at = await checkWatchdogRecurrenceTrigger();
+    expect(at.rolledBack).toBe(true);
+    expect(setPipelineOverrideMock).toHaveBeenCalledWith('v2');
+    const entry = appendPipelineAuditMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(entry.reason).toMatch(/watchdogTimeoutCount=5 \(>= 5\)/);
   });
 });
 

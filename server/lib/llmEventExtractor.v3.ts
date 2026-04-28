@@ -31,7 +31,11 @@ import {
 // Phase 27.4.3 D-03 — LLM call source swapped from llm-provider to
 // freeClaudeRouter (NVIDIA NIM → OpenRouter cascade). Routing decisions feed
 // llmProgress.routingTrace below.
-import { callLLM as freeClaudeCallLLM, type RoutingDecision } from './freeClaudeRouter.js';
+import {
+  callLLM as freeClaudeCallLLM,
+  prewarmIfCold,
+  type RoutingDecision,
+} from './freeClaudeRouter.js';
 // Phase 27.4.3 B-2 — lineage persistence after each per-event extract.
 // Phase 27.4.4 D-18 — group-level lineage pre-filter helpers (read-side).
 import {
@@ -453,6 +457,11 @@ export async function processEventGroupsV3(
   // before the pre-filter loop so DevApiStatus's lineage-prefilter cell can
   // render even when no groups passed through (default-OFF state).
   updateProgress({ lineagePrefilterEnabled: env.V3_LINEAGE_PREFILTER });
+
+  // Phase 27.4.4 D-21 — fire a 1-token synthetic NIM warmup if the in-memory
+  // lastNimCallTs indicates the client has gone cold (>60s idle). Best-effort;
+  // the helper swallows errors so a cold-NIM run never aborts here.
+  await prewarmIfCold();
 
   const results: EnrichedEventV3[] = [];
   let allFailed = true;
@@ -1005,12 +1014,17 @@ export async function checkWatchdogRecurrenceTrigger(): Promise<{
 }> {
   if (!isPipelineV3()) return { rolledBack: false };
   const wdCount = llmProgress.watchdogTimeoutCount ?? 0;
-  if (wdCount < 3) return { rolledBack: false };
+  // Phase 27.4.4 D-13 — threshold is env-tunable. Default 2 (Zod schema in
+  // server/config.ts) keeps Gate B's strict watchdog=0 baseline while letting
+  // single timeouts recover without spurious flip; ops can raise it without
+  // a redeploy via V3_WATCHDOG_ROLLBACK_THRESHOLD=N.
+  const threshold = env.V3_WATCHDOG_ROLLBACK_THRESHOLD;
+  if (wdCount < threshold) return { rolledBack: false };
   log.warn(
-    { watchdogTimeoutCount: wdCount },
+    { watchdogTimeoutCount: wdCount, threshold },
     'D-17 Trigger 1: watchdog recurrence — auto-rollback v3 -> v2',
   );
-  const reason = `watchdogTimeoutCount=${wdCount} (>= 3)`;
+  const reason = `watchdogTimeoutCount=${wdCount} (>= ${threshold})`;
   await performAutoRollbackToV2({ trigger: 'auto:watchdog_recurrence', reason });
   return { rolledBack: true, reason };
 }

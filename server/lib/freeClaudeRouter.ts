@@ -149,6 +149,18 @@ class RollingWindow {
 const nvidiaNimWindow = new RollingWindow(40, 60_000);
 
 // ---------------------------------------------------------------------------
+// Phase 27.4.4 D-21 — NIM cold-start pre-warm.
+//
+// In-memory timestamp of the most recent NIM call (any call, not just
+// pre-warm). Persisted ONLY in module memory — RESEARCH §8 explicitly forbids
+// Redis backing because (a) cross-instance staleness would defeat the
+// 60s window and (b) Vercel Fluid Compute warm starts share module state
+// already, so the in-memory value is the cheapest correct signal.
+// ---------------------------------------------------------------------------
+let lastNimCallTs = 0;
+const PREWARM_COLD_THRESHOLD_MS = 60_000;
+
+// ---------------------------------------------------------------------------
 // Lazy client init (mirror server/adapters/llm-provider.ts:23-40)
 // ---------------------------------------------------------------------------
 
@@ -385,6 +397,9 @@ export async function callLLM(
         )?.reasoning_content;
         const content = stripReasoningBlocks(raw, reasoningField);
         record(p.name as Provider, 'ok');
+        // Phase 27.4.4 D-21 — stamp lastNimCallTs on every successful NIM
+        // call so prewarmIfCold() correctly detects > 60s of NIM idleness.
+        if (p.name === 'nvidia_nim') lastNimCallTs = Date.now();
         return { content, routing: decisions };
       } catch (err) {
         const latencyMs = Date.now() - t0;
@@ -529,6 +544,64 @@ async function accrueShadowCost(tokensIn: number, tokensOut: number): Promise<vo
     await redis.expire(key, 90 * 24 * 3600);
   } catch {
     // observability-only; skip on Redis failure
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 27.4.4 D-21 — prewarmIfCold.
+//
+// Fires a 1-token synthetic NIM call when the in-memory `lastNimCallTs`
+// indicates the NIM client has gone cold (>60s idle). The synthetic call
+// is intentionally small (max_tokens=1, 1-message prompt) so the cost is
+// negligible vs. the latency cliff that follows a cold start. Failures are
+// swallowed — pre-warm is best-effort observability, never a hard gate.
+//
+// Side-effects on llmProgress (mirrored to DevApiStatus's pre-warm cell):
+//   - prewarmCount: total prewarmIfCold() calls that fired a request this run.
+//   - lastPrewarmTs: timestamp of most recent fired prewarm.
+//   - prewarmState: 'warm' (recent NIM activity) | 'cold-fired' (this call
+//     fired a warmup) | 'unknown' (no NIM client configured).
+//
+// Caller is `processEventGroupsV3` before the main batch loop; the helper
+// is also re-exported here so unit tests can drive its branches directly.
+// ---------------------------------------------------------------------------
+export async function prewarmIfCold(): Promise<void> {
+  const log = logger.child({ component: 'freeClaudeRouter.prewarmIfCold' });
+  const client = getNvidiaNimClient();
+  if (!client) {
+    updateProgress({ prewarmState: 'unknown' });
+    return;
+  }
+  const now = Date.now();
+  const elapsed = lastNimCallTs > 0 ? now - lastNimCallTs : Number.POSITIVE_INFINITY;
+  if (elapsed <= PREWARM_COLD_THRESHOLD_MS) {
+    updateProgress({ prewarmState: 'warm' });
+    return;
+  }
+  // Cold — fire a 1-token synthetic warmup. Best-effort, never throws out.
+  try {
+    await client.chat.completions.create({
+      model: NVIDIA_NIM_DEFAULT_MODEL,
+      messages: [{ role: 'user', content: 'ok' }],
+      max_tokens: 1,
+      temperature: 0,
+    });
+    lastNimCallTs = Date.now();
+    updateProgress({
+      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
+      lastPrewarmTs: lastNimCallTs,
+      prewarmState: 'cold-fired',
+    });
+  } catch (err) {
+    log.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      'prewarmIfCold synthetic call failed (non-fatal)',
+    );
+    updateProgress({
+      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
+      lastPrewarmTs: Date.now(),
+      prewarmState: 'cold-fired',
+    });
   }
 }
 
