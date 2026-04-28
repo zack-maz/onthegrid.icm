@@ -88,3 +88,64 @@ export const __testing = {
   LINEAGE_TTL_SEC,
   LINEAGE_MAX_ENTRIES,
 };
+
+// ---------------------------------------------------------------------------
+// Phase 27.4.4 Plan 01 Task 7 (D-18) — group-level lineage pre-filter.
+//
+// Hash a GDELT EventGroup's stable identity (key + sorted(sourceUrls) +
+// totalMentions) so the v3 extractor can short-circuit groups whose enriched
+// output is already cached. Read-side only in 27.4.4 — the WRITE-side
+// `redis.setex(GROUP_LINEAGE_KEY_PREFIX + hash, GROUP_LINEAGE_TTL_SEC, value)`
+// lands in a future phase. For 27.4.4 the pre-filter only consumes pre-existing
+// cache entries (e.g. seeded by external warm tooling or the snapshot script);
+// a true write-through of every successful batch is held back so Plan 02
+// Gate B telemetry stays comparable to pre-pre-filter runs.
+//
+// Default OFF via env.V3_LINEAGE_PREFILTER. Operator flips after Plan 02.
+// ---------------------------------------------------------------------------
+
+/** Read-side cache key for the group-lineage pre-filter. */
+export const GROUP_LINEAGE_KEY_PREFIX = 'events:llm:v3:group-lineage:';
+
+/** TTL for cached group lineage. 7 days mirrors per-event lineage TTL. */
+export const GROUP_LINEAGE_TTL_SEC = 7 * 24 * 3600;
+
+/**
+ * Future write-side payload shape for the pre-filter cache. Defined here so
+ * the (read-only) v3 extractor and any future writer agree on the on-disk
+ * envelope. `event` is intentionally `unknown` — the v3 extractor parses it
+ * through batchResponseV3.safeParse on read, which is cheaper than importing
+ * EnrichedEventV3 here and creating a circular module dependency.
+ */
+export interface GroupLineageCachePayload {
+  /** EnrichedEventV3 from a prior successful extract (writer's responsibility). */
+  event: unknown;
+  /** Unix-ms timestamp the writer captured when persisting. Used for in-app
+   *  TTL gating before the Redis hard TTL fires (defense-in-depth). */
+  ts: number;
+}
+
+/**
+ * sha256(key || sorted(sourceUrls).join('|') || totalMentions) — group-stable
+ * identity hash. Mentions count is included so the same upstream key with a
+ * higher source count (i.e. more corroboration) recomputes a fresh hash and
+ * triggers a re-extract rather than serving the lower-corroboration result.
+ *
+ * sourceUrls are sorted to defend against upstream ordering noise; the GDELT
+ * pipeline does not guarantee deterministic URL ordering across days.
+ */
+export function computeGroupLineageHash(input: {
+  key: string;
+  sourceUrls: readonly string[];
+  totalMentions: number;
+}): string {
+  const sortedUrls = [...input.sourceUrls].sort().join('|');
+  return crypto
+    .createHash('sha256')
+    .update(input.key)
+    .update('|')
+    .update(sortedUrls)
+    .update('|')
+    .update(String(input.totalMentions))
+    .digest('hex');
+}

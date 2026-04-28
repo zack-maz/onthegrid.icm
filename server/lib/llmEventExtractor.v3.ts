@@ -33,7 +33,14 @@ import {
 // llmProgress.routingTrace below.
 import { callLLM as freeClaudeCallLLM, type RoutingDecision } from './freeClaudeRouter.js';
 // Phase 27.4.3 B-2 — lineage persistence after each per-event extract.
-import { appendLineage } from './llmLineage.js';
+// Phase 27.4.4 D-18 — group-level lineage pre-filter helpers (read-side).
+import {
+  appendLineage,
+  computeGroupLineageHash,
+  GROUP_LINEAGE_KEY_PREFIX,
+  GROUP_LINEAGE_TTL_SEC,
+  type GroupLineageCachePayload,
+} from './llmLineage.js';
 import { resolveLocation, type ResolveContext, type ResolvedLocation } from './llmResolver.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { getSourceTier } from './sourceTiers.js';
@@ -442,12 +449,92 @@ export async function processEventGroupsV3(
   // even when splitCount is 0 (i.e. no batches have timed out yet this run).
   updateProgress({ adaptiveBatchEnabled: env.V3_ADAPTIVE_BATCH });
 
+  // Phase 27.4.4 D-18 — mirror env.V3_LINEAGE_PREFILTER + seed the counters
+  // before the pre-filter loop so DevApiStatus's lineage-prefilter cell can
+  // render even when no groups passed through (default-OFF state).
+  updateProgress({ lineagePrefilterEnabled: env.V3_LINEAGE_PREFILTER });
+
   const results: EnrichedEventV3[] = [];
   let allFailed = true;
-  const totalBatches = Math.ceil(groups.length / BATCH_SIZE);
 
-  for (let i = 0; i < groups.length; i += BATCH_SIZE) {
-    const batch = groups.slice(i, i + BATCH_SIZE);
+  // Phase 27.4.4 D-18 — group-level lineage pre-filter. When enabled, every
+  // group gets a stable hash (key + sorted(sourceUrls) + totalMentions) and
+  // the read-side cache at GROUP_LINEAGE_KEY_PREFIX + hash is consulted. On
+  // hit AND age < GROUP_LINEAGE_TTL_SEC, the cached EnrichedEventV3 is pushed
+  // straight to results and the group is dropped from the LLM-call queue.
+  // On miss, age expiry, malformed payload, or Redis read failure, the group
+  // falls through unchanged. The WRITE-side is OUT OF SCOPE for 27.4.4 (a
+  // future phase wires `redis.setex(GROUP_LINEAGE_KEY_PREFIX + hash, ...)`
+  // after each successful batch — see Plan 02 Gate B follow-ups).
+  let groupsToProcess: EventGroup[] = groups;
+  if (env.V3_LINEAGE_PREFILTER) {
+    const stats = llmProgress.lineagePrefilterStats ?? { hitCount: 0, missCount: 0 };
+    const queue: EventGroup[] = [];
+    const nowMs = Date.now();
+    const ttlMs = GROUP_LINEAGE_TTL_SEC * 1000;
+
+    for (const group of groups) {
+      const hash = computeGroupLineageHash({
+        key: group.key,
+        sourceUrls: group.sourceUrls,
+        totalMentions: group.totalMentions,
+      });
+      const cacheKey = `${GROUP_LINEAGE_KEY_PREFIX}${hash}`;
+      let cached: GroupLineageCachePayload | null = null;
+      try {
+        const raw = await redis.get(cacheKey);
+        if (raw != null) {
+          // Upstash REST sometimes parses JSON-shaped values; normalise to an object.
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            'event' in (parsed as Record<string, unknown>) &&
+            'ts' in (parsed as Record<string, unknown>)
+          ) {
+            cached = parsed as GroupLineageCachePayload;
+          }
+        }
+      } catch (readErr) {
+        log.warn(
+          {
+            cacheKey,
+            err: readErr instanceof Error ? readErr.message : String(readErr),
+          },
+          'lineage pre-filter read failed; falling through',
+        );
+      }
+
+      const fresh = cached && typeof cached.ts === 'number' && nowMs - cached.ts < ttlMs;
+      if (fresh && cached) {
+        // Hit AND fresh — re-validate through the v3 batch schema before
+        // trusting an opaque cache payload. A future writer that drifts the
+        // schema must not crash the live extractor; the safeParse failure
+        // path treats it as a miss.
+        const reparse = batchResponseV3.safeParse({ events: [cached.event] });
+        if (reparse.success && reparse.data.events[0]) {
+          results.push(reparse.data.events[0]);
+          allFailed = false;
+          stats.hitCount += 1;
+          continue;
+        }
+        log.warn(
+          { cacheKey },
+          'lineage pre-filter cache payload failed v3 reparse; treating as miss',
+        );
+      }
+      stats.missCount += 1;
+      queue.push(group);
+    }
+
+    updateProgress({ lineagePrefilterStats: stats });
+    groupsToProcess = queue;
+  }
+
+  const totalBatches = Math.ceil(groupsToProcess.length / BATCH_SIZE);
+
+  for (let i = 0; i < groupsToProcess.length; i += BATCH_SIZE) {
+    const batch = groupsToProcess.slice(i, i + BATCH_SIZE);
     const batchIndex = Math.floor(i / BATCH_SIZE);
 
     // Parallel Redis reads per group in the batch (BATCH_SIZE * 2 keys each).
