@@ -21,6 +21,7 @@ import { waterRouter } from './routes/water.js';
 import { healthRouter } from './routes/health.js';
 import { cronHealthRouter } from './routes/cron-health.js';
 import { cronWarmRouter } from './routes/cron-warm.js';
+import { evalCronRouter } from './routes/eval-cron.js';
 export function createApp() {
   const app = express();
 
@@ -83,6 +84,7 @@ export function createApp() {
   // Cron endpoints (no cache, no rate limit — triggered by Vercel cron)
   app.use('/api/cron/health', cronHealthRouter);
   app.use('/api/cron/warm', cronWarmRouter);
+  app.use('/api/cron/eval', evalCronRouter);
 
   // Portfolio demo baseline rate limit — runs on every /api/* request
   // BEFORE the per-endpoint limiters below. 6 req/min per IP. Prevents
