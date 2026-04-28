@@ -31,7 +31,8 @@ export interface DLQEntry {
     | 'v3:timeout_watchdog'
     | 'v3:malformed'
     | 'v3:schema_fail'
-    | 'v3:rate_limit_exhaust';
+    | 'v3:rate_limit_exhaust'
+    | 'v3:adaptive-retry-fail'; // Phase 27.4.4 D-04 — split-on-timeout retry budget exhaustion
   lastError: string;
   timestamp: number;
 }

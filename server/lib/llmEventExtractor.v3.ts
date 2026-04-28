@@ -437,6 +437,11 @@ export async function processEventGroupsV3(
     return { events: [], matchedNewsByGroup, bellingcatByGroup };
   }
 
+  // Phase 27.4.4 D-04 — mirror env.V3_ADAPTIVE_BATCH onto the live progress
+  // singleton so DevApiStatus's adaptive-batch cell renders the active state
+  // even when splitCount is 0 (i.e. no batches have timed out yet this run).
+  updateProgress({ adaptiveBatchEnabled: env.V3_ADAPTIVE_BATCH });
+
   const results: EnrichedEventV3[] = [];
   let allFailed = true;
   const totalBatches = Math.ceil(groups.length / BATCH_SIZE);
@@ -470,6 +475,7 @@ export async function processEventGroupsV3(
     // decisions are captured into `routing` (closure) and threaded into
     // llmProgress.routingTrace below.
     let routing: RoutingDecision[] = [];
+    let didTimeout = false; // Phase 27.4.4 D-04 — flag for adaptive split-retry handoff.
     const t0 = Date.now();
     const content = await withBatchWatchdog(
       async () => {
@@ -494,6 +500,15 @@ export async function processEventGroupsV3(
         batchIndex,
         label: 'v3',
         onTimeout: async () => {
+          didTimeout = true;
+          // Phase 27.4.4 D-04 — when adaptive batching is enabled AND the
+          // batch has > 1 group, defer DLQ enqueue + watchdogTimeoutCount
+          // increment to the splitBatchOnTimeout helper called below. The
+          // helper enqueues v3:adaptive-retry-fail per failed half-group
+          // and never increments watchdogTimeoutCount (Test 6 invariant —
+          // a successful split-retry must NOT trigger D-13 auto-rollback).
+          if (env.V3_ADAPTIVE_BATCH && batch.length > 1) return;
+
           // Phase 27.4.3 — DLQ-route each group; enqueueDLQ is try/catch
           // internally (D-29) so these awaits never throw out of the fire-
           // and-forget block.
@@ -549,6 +564,30 @@ export async function processEventGroupsV3(
     }
 
     if (content === null) {
+      // Phase 27.4.4 D-04 — adaptive split-and-retry handoff. When the
+      // watchdog fired AND env.V3_ADAPTIVE_BATCH is on AND the batch had
+      // more than one group, splitBatchOnTimeout retries each half once
+      // at smaller size. Successful halves contribute their events back
+      // into `results`; failed halves DLQ-route as v3:adaptive-retry-fail.
+      // splitCount + retrySuccess + retryFail + dlqEnqueueCount counters
+      // tick inside the helper.
+      if (didTimeout && env.V3_ADAPTIVE_BATCH && batch.length > 1) {
+        const stats = llmProgress.adaptiveBatchStats ?? {
+          splitCount: 0,
+          retrySuccess: 0,
+          retryFail: 0,
+          dlqEnqueueCount: 0,
+        };
+        stats.splitCount += 1;
+        updateProgress({ adaptiveBatchStats: stats });
+
+        const splitEvents = await splitBatchOnTimeout(contexts, batchIndex);
+        results.push(...splitEvents);
+        if (splitEvents.length > 0) allFailed = false;
+        onBatchComplete?.(batchIndex + 1, totalBatches);
+        await writePartialCache(results, batchIndex + 1, totalBatches, false);
+        continue;
+      }
       // Either freeClaudeCallLLM returned null OR the watchdog fired. Both
       // paths already logged / DLQ'd / updated telemetry; just continue.
       log.warn({ batchIndex }, 'v3 batch yielded no content (null or watchdog timeout)');
@@ -702,6 +741,128 @@ export async function processEventGroupsV3(
     matchedNewsByGroup,
     bellingcatByGroup,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 27.4.4 D-04 — splitBatchOnTimeout helper.
+//
+// When the watchdog fires on a batch with > 1 group AND env.V3_ADAPTIVE_BATCH
+// is true, the main loop hands off to this helper instead of DLQ-routing the
+// whole batch. The helper splits the contexts into two halves and retries
+// each half once at the smaller size. Per-half outcomes:
+//   - Success → events parsed and returned (contribute to retrySuccess counter).
+//   - Watchdog timeout / null content / JSON.parse fail / Zod fail →
+//     DLQ-enqueue each group in the half with reason 'v3:adaptive-retry-fail'
+//     (retryFail + dlqEnqueueCount counters tick).
+//
+// The helper never recurses — a half that times out is final. This bounds the
+// adaptive-retry budget to one extra LLM call per timed-out batch (still well
+// inside the per-call timeout envelope).
+//
+// Why a separate helper rather than inline retry: callable in isolation from
+// unit tests, keeps the main batch loop's control flow readable, and isolates
+// the watchdog-wrapping pattern from the parsing pipeline.
+// ---------------------------------------------------------------------------
+
+async function splitBatchOnTimeout(
+  contexts: PromptContext[],
+  batchIndex: number,
+): Promise<EnrichedEventV3[]> {
+  const mid = Math.ceil(contexts.length / 2);
+  const halves: PromptContext[][] = [contexts.slice(0, mid), contexts.slice(mid)];
+  const successes: EnrichedEventV3[] = [];
+
+  const enqueueAdaptiveFails = async (half: PromptContext[], lastError: string): Promise<void> => {
+    for (const ctx of half) {
+      await enqueueDLQ({
+        id: ctx.group.key,
+        reason: 'v3:adaptive-retry-fail',
+        lastError,
+        timestamp: Date.now(),
+      });
+    }
+    const stats = llmProgress.adaptiveBatchStats ?? {
+      splitCount: 0,
+      retrySuccess: 0,
+      retryFail: 0,
+      dlqEnqueueCount: 0,
+    };
+    stats.retryFail += half.length;
+    stats.dlqEnqueueCount += half.length;
+    updateProgress({ adaptiveBatchStats: stats });
+  };
+
+  for (const half of halves) {
+    if (half.length === 0) continue;
+
+    const halfPrompt = buildBatchUserPromptV3(half);
+    let halfTimedOut = false;
+
+    const halfContent = await withBatchWatchdog(
+      async () => {
+        const r = await freeClaudeCallLLM(
+          [
+            { role: 'system', content: SYSTEM_PROMPT_V3 },
+            { role: 'user', content: halfPrompt },
+          ],
+          JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
+          { batchSize: half.length, modelOverride: V3_BAKEOFF_MODEL },
+        );
+        return r.content;
+      },
+      {
+        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+        softWarnMs: 60_000,
+        batchIndex,
+        label: 'v3-split',
+        onTimeout: async () => {
+          halfTimedOut = true;
+        },
+      },
+    );
+
+    if (halfContent === null) {
+      await enqueueAdaptiveFails(
+        half,
+        halfTimedOut
+          ? `v3 split-retry timed out (batch ${batchIndex})`
+          : 'v3 split-retry returned null content',
+      );
+      continue;
+    }
+
+    let halfParsed: unknown;
+    try {
+      halfParsed = JSON.parse(halfContent);
+    } catch (parseErr) {
+      await enqueueAdaptiveFails(
+        half,
+        `v3 split-retry JSON.parse: ${parseErr instanceof Error ? parseErr.message.slice(0, 200) : 'unknown'}`,
+      );
+      continue;
+    }
+
+    const halfValidated = batchResponseV3.safeParse(halfParsed);
+    if (!halfValidated.success) {
+      await enqueueAdaptiveFails(
+        half,
+        `v3 split-retry Zod fail: ${JSON.stringify(halfValidated.error.issues.slice(0, 2))}`,
+      );
+      continue;
+    }
+
+    successes.push(...halfValidated.data.events);
+    const stats = llmProgress.adaptiveBatchStats ?? {
+      splitCount: 0,
+      retrySuccess: 0,
+      retryFail: 0,
+      dlqEnqueueCount: 0,
+    };
+    stats.retrySuccess += half.length;
+    updateProgress({ adaptiveBatchStats: stats });
+  }
+
+  return successes;
 }
 
 // ---------------------------------------------------------------------------

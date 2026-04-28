@@ -123,6 +123,43 @@ export interface LLMPipelineProgress {
   watchdogTimeoutCount?: number;
 
   // ---------------------------------------------------------------------
+  // Phase 27.4.4 — v3 latency-remediation observability fields. All optional
+  // + additive; v2 readers ignore unknown fields. Populated by the v3
+  // extractor when adaptive batching / lineage pre-filter / cold-start
+  // pre-warm fire (Tasks 6 / 7 / 8 of Plan 01). The 3 DevApiStatus cells
+  // (Task 10) consume these field clusters in a single atomic commit.
+  // ---------------------------------------------------------------------
+
+  /** D-04 — adaptive split-on-timeout counters. splitCount = batches the helper
+   *  was called for; retrySuccess/retryFail = groups whose split half passed/failed;
+   *  dlqEnqueueCount = entries the helper enqueued with v3:adaptive-retry-fail. */
+  adaptiveBatchStats?: {
+    splitCount: number;
+    retrySuccess: number;
+    retryFail: number;
+    dlqEnqueueCount: number;
+  };
+  /** D-04 — mirrors env.V3_ADAPTIVE_BATCH at run start so the dashboard cell
+   *  shows active state even before any batch times out. */
+  adaptiveBatchEnabled?: boolean;
+
+  /** D-18 — lineage pre-filter counters. hitCount = groups served from
+   *  cached enriched event < 7d old; missCount = groups falling through to LLM. */
+  lineagePrefilterStats?: {
+    hitCount: number;
+    missCount: number;
+  };
+  /** D-18 — mirrors env.V3_LINEAGE_PREFILTER at run start. */
+  lineagePrefilterEnabled?: boolean;
+
+  /** D-21 — NIM cold-start pre-warm telemetry. prewarmCount = number of
+   *  prewarmIfCold() calls that fired a synthetic warmup request this run.
+   *  prewarmState = current warm/cold-fired/unknown state of the NIM client. */
+  prewarmCount?: number;
+  lastPrewarmTs?: number | null;
+  prewarmState?: 'warm' | 'cold-fired' | 'unknown';
+
+  // ---------------------------------------------------------------------
   // Phase 27.4.3 Plan 02a — v3 observability fields (D-12, D-14, D-19).
   //
   // All optional + additive — v2 cache readers ignore unknown fields.
@@ -227,6 +264,24 @@ export interface LLMRunSummary {
   suspectCount?: number;
   /** Phase 27.4.1 D-06 / 27.4.2 P6: count of batches killed by the timeout watchdog in last run. */
   watchdogTimeoutCount?: number;
+
+  // Phase 27.4.4 — v3 latency-remediation summary mirror of the live fields
+  // added to LLMPipelineProgress above. Optional + additive; v2 readers ignore.
+  adaptiveBatchStats?: {
+    splitCount: number;
+    retrySuccess: number;
+    retryFail: number;
+    dlqEnqueueCount: number;
+  };
+  adaptiveBatchEnabled?: boolean;
+  lineagePrefilterStats?: {
+    hitCount: number;
+    missCount: number;
+  };
+  lineagePrefilterEnabled?: boolean;
+  prewarmCount?: number;
+  lastPrewarmTs?: number | null;
+  prewarmState?: 'warm' | 'cold-fired' | 'unknown';
 
   // ---------------------------------------------------------------------
   // Phase 27.4.3 Plan 02a — v3 observability mirror of LLMPipelineProgress.
