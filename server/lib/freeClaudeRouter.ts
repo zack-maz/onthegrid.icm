@@ -62,29 +62,55 @@ const LLM_TIMEOUT_MS = 120_000;
 const RETRY_ATTEMPTS = 2;
 const BACKOFF_MS = [1000, 4000] as const;
 const JITTER_MS = 250;
-// Phase 27.4.3 D-08: V3_PRIMARY_MODEL env override for bake-off iterations.
-// After Plan 03 winner-lock, the default constant is updated to the winner;
-// env override remains for future re-evaluation without code edit.
+// Phase 27.4.4 D-01 — bake-off winner re-confirmed via combo path
+// (operator-approved 2026-04-28 against 27.4.4-01-BAKEOFF.md). qwen/qwen3.5-397b-a17b
+// remains the v3 primary after the 4-candidate 20-event preflight at
+// 27.4.4-PREFLIGHT-CHARACTERIZATION.md showed:
+//   - qwen: 16/20 within20km (0.80) — best of the 4 LIVE candidates.
+//   - llama: 15/20 (0.75), gen-duration p95=564.4s (2.1× worse than qwen's 264.9s).
+//   - nemotron: 0/20 — schema-fails despite envelope-shape PROMPT_OVERRIDES.
+//   - glm: 0/20 — 400 status on every call (NIM catalog drift or extra_body rejection).
+// 0/4 cleared the D-03 dual hard floor (within20km ≥ 0.890 AND p95 ≤ 30s).
+// Combo path means qwen + V3_ADAPTIVE_BATCH=true at Gate B (Plan 02).
 //
-// Phase 27.4.3 D-08 bake-off winner (locked Plan 03 Task 5, operator-approved
-// 2026-04-25 against the BAKEOFF.md matrix). qwen/qwen3.5-397b-a17b cleared
-// the D-16 Gate A 0.890 within20km floor exactly (9/10 = 0.900) on a 10-event
-// sample with 0 watchdog timeouts and 10/10 LLM call success — the only
-// candidate that simultaneously honored the v3 batch envelope, emitted
-// resolver-friendly hierarchies, and held p95 latency well under the 90s
-// watchdog cap. Runner-up meta/llama-3.3-70b-instruct (0.800) is kept as
-// holdout standby; cycle via V3_PRIMARY_MODEL without code edit.
+// In-incident reversion: temporarily set V3_PRIMARY_MODEL=<NVIDIA_NIM_FALLBACK_MODEL>.
+// In 27.4.4 the fallback is itself qwen (no other viable NIM candidate); fall-back
+// becomes meaningful again when a future phase re-baselines and a different model
+// passes.
 //
-// Re-evaluate via: npm run eval:replay -- --model=<candidate>
 // Per-candidate baselines persisted at events:llm-eval-baseline:v3:<sanitized-model-id> (90d TTL).
-// See .planning/phases/27.4.3-free-claude-code-routing/27.4.3-03-BAKEOFF.md
-// for the per-candidate score matrix and selection rationale.
+// See .planning/phases/27.4.4-v3-latency-remediation-and-cutover/27.4.4-01-BAKEOFF.md.
 const NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? 'qwen/qwen3.5-397b-a17b';
+
+// Phase 27.4.4 D-01 in-incident reversion handle. 27.4.3's qwen incumbent is the
+// only viable NIM candidate after 27.4.4's bake-off — fallback is itself qwen
+// for now. A future phase that re-baselines should update this to the next-best
+// LIVE candidate. Set V3_PRIMARY_MODEL=<this value> to revert without code edit.
+export const NVIDIA_NIM_FALLBACK_MODEL = 'qwen/qwen3.5-397b-a17b';
+
 // D-09: OpenRouter free-tier fallback model.
 const OPENROUTER_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 // D-09: free-tier daily request cap for OpenRouter (rough envelope; per-model
 // caps vary 100-200/day on the free pool).
 const OPENROUTER_DAILY_CAP = 200;
+
+// Phase 27.4.4 D-06: data-driven per-model max_tokens cap (MAX_TOKENS_PER_MODEL).
+// Values seeded from 27.4.4-PREFLIGHT-CHARACTERIZATION.md per-model p99(tokens-out)
+// + 20% buffer. Hard ceiling 4096. Falls back to MAX_TOKENS_DEFAULT for
+// un-cataloged models.
+//
+// Cheapest defense against runaway reasoning. For 27.4.4's candidates the
+// observed p99 tokens-out is well under any cap — the long-tail is generation-
+// rate collapse, NOT truncation (zero finish_reason: "length" across 39
+// successful preflight calls). These caps are defensive ceilings, not load-
+// bearing for p95 latency.
+const MAX_TOKENS_PER_MODEL: Record<string, number> = {
+  'qwen/qwen3.5-397b-a17b': 425, // p99 354 + 20% buffer (winner — 27.4.4)
+  'meta/llama-3.3-70b-instruct': 380, // p99 315 + 20% buffer
+  'nvidia/nemotron-3-super-120b-a12b': 1240, // p99 1031 + 20% buffer (verbose, schema-fails)
+  'z-ai/glm4.7': 1024, // conservative — no traceable records (NIM 400s)
+};
+const MAX_TOKENS_DEFAULT = 4096;
 
 // ---------------------------------------------------------------------------
 // Rolling-window rate limiter (D-01 vendored primitive)
@@ -160,7 +186,7 @@ function getOpenRouterClient(): OpenAI | null {
  */
 export function stripReasoningBlocks(
   raw: string | null,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   _reasoningContent?: string,
 ): string | null {
   if (!raw) return raw;
@@ -242,7 +268,7 @@ async function getOpenRouterDaily(): Promise<number> {
  */
 export async function callLLM(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   _schemaText: string,
   opts: { batchSize?: number; modelOverride?: string } = {},
 ): Promise<{ content: string | null; routing: RoutingDecision[] }> {
@@ -334,6 +360,7 @@ export async function callLLM(
           messages,
           response_format: { type: 'json_object' }, // D-10: NO strict mode
           temperature: 0,
+          max_tokens: MAX_TOKENS_PER_MODEL[p.model] ?? MAX_TOKENS_DEFAULT, // D-06
         });
         const latencyMs = Date.now() - t0;
 
