@@ -107,6 +107,31 @@ export interface LLMRunSummary {
 
   costShadow?: { tokensIn: number; tokensOut: number; usd: number };
 
+  // ---------------------------------------------------------------------
+  // Phase 27.4.4 — A9 mirror of LLMRunSummary's v3 latency-remediation
+  // observability fields (server/lib/llmProgress.ts lines 268-285).
+  // Optional + additive — pre-27.4.4 readers ignore unknown fields. Lands
+  // in the SAME COMMIT as the 3 dev-only DevApiStatus cells (Task 10).
+  // ---------------------------------------------------------------------
+
+  /** D-04 — adaptive split-on-timeout counters. */
+  adaptiveBatchStats?: {
+    splitCount: number;
+    retrySuccess: number;
+    retryFail: number;
+    dlqEnqueueCount: number;
+  };
+  /** D-04 — env.V3_ADAPTIVE_BATCH mirror at run start. */
+  adaptiveBatchEnabled?: boolean;
+  /** D-18 — lineage pre-filter counters. */
+  lineagePrefilterStats?: { hitCount: number; missCount: number };
+  /** D-18 — env.V3_LINEAGE_PREFILTER mirror at run start. */
+  lineagePrefilterEnabled?: boolean;
+  /** D-21 — NIM cold-start pre-warm telemetry. */
+  prewarmCount?: number;
+  lastPrewarmTs?: number | null;
+  prewarmState?: 'warm' | 'cold-fired' | 'unknown';
+
   recentEvents?: RecentEnrichedEvent[];
 }
 
@@ -263,6 +288,27 @@ export interface LLMStatus {
   }>;
 
   costShadow?: { tokensIn: number; tokensOut: number; usd: number };
+
+  // ---------------------------------------------------------------------
+  // Phase 27.4.4 — A9 mirror of live LLMPipelineProgress's v3 latency-
+  // remediation fields. Mid-run reads see them at the top level; idle
+  // reads pull them from .lastRun via LLMRunSummary above. The 3 new
+  // DevApiStatus cells (Pre-warm / Adaptive batch / Lineage prefilter)
+  // fall back across both surfaces.
+  // ---------------------------------------------------------------------
+
+  adaptiveBatchStats?: {
+    splitCount: number;
+    retrySuccess: number;
+    retryFail: number;
+    dlqEnqueueCount: number;
+  };
+  adaptiveBatchEnabled?: boolean;
+  lineagePrefilterStats?: { hitCount: number; missCount: number };
+  lineagePrefilterEnabled?: boolean;
+  prewarmCount?: number;
+  lastPrewarmTs?: number | null;
+  prewarmState?: 'warm' | 'cold-fired' | 'unknown';
 }
 
 export function useLLMStatusPolling(): LLMStatus {

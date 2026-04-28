@@ -2171,6 +2171,12 @@ function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
       <ErrorTaxonomyBlock taxonomy={llmStatus.errorTaxonomy} />
       <PipelineFlipsBlock flips={llmStatus.pipelineFlips} />
       <CostShadowBlock cost={llmStatus.costShadow} />
+      {/* Phase 27.4.4 — A9 atomic dev cells. Each renders an "—" placeholder
+          for any field that is undefined / null so a v2 fallback or a fresh
+          run that hasn't populated stats yet doesn't crash. */}
+      <PrewarmCell llmStatus={llmStatus} />
+      <AdaptiveBatchCell llmStatus={llmStatus} />
+      <LineagePrefilterCell llmStatus={llmStatus} />
       {/* D-13 Lineage drill-down: per-event drill-down rows include the v3
           lineage extension (reasoning trace + lineage hash chip). DrillDownRow
           auto-detects v3 fields on RecentEnrichedEvent — they're optional, so
@@ -2181,5 +2187,101 @@ function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
           version-routed render switch). */}
       <DrillDownBlock llmStatus={llmStatus} />
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 27.4.4 Plan 01 Task 10 (A9 atomic) — 3 dev-only v3 cells.
+//
+// Each cell mirrors a Phase 27.4.4 telemetry cluster:
+//   - PrewarmCell: D-21 NIM cold-start pre-warm — prewarmCount + lastPrewarmTs
+//     + prewarmState (warm | cold-fired | unknown).
+//   - AdaptiveBatchCell: D-04 split-on-timeout — adaptiveBatchEnabled flag plus
+//     splitCount / retrySuccess / retryFail / dlqEnqueueCount strip.
+//   - LineagePrefilterCell: D-18 group-level pre-filter — lineagePrefilterEnabled
+//     flag plus hitCount / missCount.
+//
+// Field reads fall back across:
+//   1. mid-run top-level (server spreads llmProgress when stage !== 'idle')
+//   2. cold-start lastRun (server places summary fields under .lastRun when idle)
+// so cold-start dashboard reads remain populated.
+// ---------------------------------------------------------------------------
+
+function PrewarmCell({ llmStatus }: { llmStatus: LLMStatus }) {
+  const last = llmStatus.lastRun;
+  const count = llmStatus.prewarmCount ?? last?.prewarmCount ?? 0;
+  const tsRaw = llmStatus.lastPrewarmTs ?? last?.lastPrewarmTs ?? null;
+  const state = llmStatus.prewarmState ?? last?.prewarmState ?? 'unknown';
+  const stateColor =
+    state === 'warm'
+      ? 'text-green-300'
+      : state === 'cold-fired'
+        ? 'text-amber-300'
+        : 'text-white/40';
+  const rel = tsRaw ? relativeTime(new Date(tsRaw).toISOString()) : '—';
+  return (
+    <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
+      <span className="font-bold uppercase tracking-wider text-white/40">Prewarm (D-21)</span>
+      <span className="text-white/80">{count} fired</span>
+      <span className={stateColor}>({state})</span>
+      <span className="text-white/40">last: {rel}</span>
+    </div>
+  );
+}
+
+function AdaptiveBatchCell({ llmStatus }: { llmStatus: LLMStatus }) {
+  const last = llmStatus.lastRun;
+  const enabled = llmStatus.adaptiveBatchEnabled ?? last?.adaptiveBatchEnabled ?? false;
+  const stats = llmStatus.adaptiveBatchStats ?? last?.adaptiveBatchStats;
+  const enabledBadge = enabled ? (
+    <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] text-emerald-300">
+      ON
+    </span>
+  ) : (
+    <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/40">OFF</span>
+  );
+  return (
+    <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
+      <span className="font-bold uppercase tracking-wider text-white/40">
+        Adaptive batch (D-04)
+      </span>
+      {enabledBadge}
+      {stats ? (
+        <span className="text-white/80">
+          split {stats.splitCount} · ✓ {stats.retrySuccess} · ✗ {stats.retryFail} · DLQ{' '}
+          {stats.dlqEnqueueCount}
+        </span>
+      ) : (
+        <span className="text-white/40">—</span>
+      )}
+    </div>
+  );
+}
+
+function LineagePrefilterCell({ llmStatus }: { llmStatus: LLMStatus }) {
+  const last = llmStatus.lastRun;
+  const enabled = llmStatus.lineagePrefilterEnabled ?? last?.lineagePrefilterEnabled ?? false;
+  const stats = llmStatus.lineagePrefilterStats ?? last?.lineagePrefilterStats;
+  const enabledBadge = enabled ? (
+    <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] text-emerald-300">
+      ON
+    </span>
+  ) : (
+    <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/40">OFF</span>
+  );
+  return (
+    <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
+      <span className="font-bold uppercase tracking-wider text-white/40">
+        Lineage prefilter (D-18)
+      </span>
+      {enabledBadge}
+      {stats ? (
+        <span className="text-white/80">
+          hit {stats.hitCount} · miss {stats.missCount}
+        </span>
+      ) : (
+        <span className="text-white/40">—</span>
+      )}
+    </div>
   );
 }
