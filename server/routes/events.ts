@@ -470,6 +470,20 @@ function enrichedV3ToEntities(
           injured: enriched.casualties.injured ?? undefined,
           unknown: enriched.casualties.unknown,
         },
+        // Phase 27.4.4 Plan 02 dev-pass — thread the v3 fields the previous
+        // adapter dropped. Live dev surfaced 392/392 entities with
+        // severity=missing, suspect=false, geocodeProvenance=null even though
+        // the pipeline computed all of them. The map needs these for severity
+        // styling, suspect filtering, and provenance-aware tooltips.
+        severity: enriched.severity,
+        suspect: enriched.suspect,
+        geocodeProvenance: enriched.geocodeProvenance,
+        weaponType: enriched.weaponType,
+        targetType: enriched.targetType,
+        timeOfDay: enriched.timeOfDay,
+        durationMinutes: enriched.durationMinutes,
+        reasoning: enriched.reasoning,
+        geocodeDisplayName: enriched.displayName,
       },
     });
   }

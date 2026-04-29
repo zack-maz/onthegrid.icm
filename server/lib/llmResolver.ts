@@ -396,17 +396,10 @@ function buildRerankerUserPrompt(
   return lines.join('\n');
 }
 
-function shouldTriggerTwoPassVerify(
-  hierarchy: LocationHierarchyV2,
-  hit: SnapshotHit,
-  ctx: ResolveContext,
-): boolean {
-  const precision = derivePrecision(hierarchy);
-  if (precision === 'region' || precision === 'city') return true;
-  const dKm = haversineKm(hit.lat, hit.lng, ctx.centroidLat, ctx.centroidLng);
-  if (dKm > 250) return true;
-  return false;
-}
+// shouldTriggerTwoPassVerify removed in Phase 27.4.4 Plan 02 dev-pass — its
+// logic is inlined in resolveLocation's Branch 4 gate so we can let Branch 4
+// run independently of whether Branch 3 returned a hit. See the long comment
+// above the inlined gate for the rationale.
 
 async function resolveViaVerifiedTwoPass(
   hierarchy: LocationHierarchyV2,
@@ -553,8 +546,26 @@ export async function resolveLocation(
     log.warn({ err }, 'nominatim-direct path threw');
   }
 
-  // Branch 4
-  if (directHit && shouldTriggerTwoPassVerify(hierarchy, directHit, ctx)) {
+  // Branch 4 — Phase 27.4.4 Plan 02 dev-pass.
+  //
+  // Pre-fix gate: `directHit && shouldTriggerTwoPassVerify(...)`. When Branch 3
+  // returned null (legitimate empty result OR a 30-day cached miss from a
+  // previously-broken run), Branch 4 was skipped entirely. Live dev surfaced
+  // an Islamabad event resolved 1028km off truth via the GDELT-centroid
+  // fallback for exactly this reason.
+  //
+  // Post-fix: Branch 4 runs whenever city / region precision warrants it,
+  // independent of whether Branch 3 found anything. For exact precision the
+  // existing distance check still applies and requires a directHit.
+  const precision = derivePrecision(hierarchy);
+  const shouldVerify =
+    precision === 'city' ||
+    precision === 'region' ||
+    precision === 'neighborhood' ||
+    (directHit !== null &&
+      haversineKm(directHit.lat, directHit.lng, ctx.centroidLat, ctx.centroidLng) > 250);
+
+  if (shouldVerify) {
     try {
       const verified = await resolveViaVerifiedTwoPass(hierarchy, ctx);
       if (verified) {

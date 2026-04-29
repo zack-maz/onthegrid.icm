@@ -67,6 +67,23 @@ export interface ConflictEventEntity extends MapEntityBase {
     sourceCount?: number; // Number of independent sources
     sourceTier?: 1 | 2 | 3; // Best source tier (1=gold, 2=silver, 3=bronze) — set server-side
     llmProcessed?: boolean; // true when LLM enriched this event
+    // Phase 27.4.4 Plan 02 dev-pass — v3-extracted fields previously dropped
+    // by enrichedV3ToEntities. Optional so v1/v2 entities don't have to set them.
+    severity?: 'critical' | 'high' | 'medium' | 'low';
+    suspect?: boolean; // D-23 outlier flag — set when confidence/precision/distance/source-tier all wrong
+    geocodeProvenance?:
+      | 'own-site-snapshot'
+      | 'poi-amenity-nominatim'
+      | 'nominatim-direct'
+      | 'nominatim-verified-2pass'
+      | 'gdelt-actiongeo-fallback'
+      | 'bellingcat-coord-passthrough';
+    weaponType?: 'airstrike' | 'drone' | 'missile' | 'artillery' | 'small_arms' | 'IED' | null;
+    targetType?: 'military' | 'infrastructure' | 'civilian' | 'leadership' | null;
+    timeOfDay?: string | null; // UTC HH:MM
+    durationMinutes?: number | null;
+    reasoning?: string; // ≤200 char LLM rationale citing signals used
+    geocodeDisplayName?: string; // Resolver's displayName (e.g. Nominatim full address)
   };
 }
 

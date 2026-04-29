@@ -914,3 +914,116 @@ describe('Phase 27.4.4 — admin-polygon filter (eval misses)', () => {
     expect(out.lng).toBeCloseTo(44.0);
   });
 });
+
+// -----------------------------------------------------------------------------
+// Phase 27.4.4 Plan 02 dev-pass — Branch 4 gate fix
+//
+// Live dev surfaced an Islamabad event resolved 1028km off truth via the
+// gdelt-actiongeo-fallback path. Root cause: a previous (hung) dev run
+// cached {miss: true} for Branch 3's direct query. On replay, Branch 3
+// returned null, and Branch 4's gate `(directHit && shouldTrigger…)` skipped
+// it entirely — Branch 4 never got a chance to find the city.
+//
+// Fix: for city or region precision, Branch 4 should run regardless of
+// whether Branch 3 returned a hit. The dispatcher gate becomes a precision-
+// based check, not a directHit-existence check.
+// -----------------------------------------------------------------------------
+
+describe('Phase 27.4.4 — Branch 4 runs even when Branch 3 returns null (city/region)', () => {
+  beforeEach(() => {
+    __resetThrottleForTests();
+    vi.mocked(loadSitesSnapshot).mockReturnValue(null);
+    vi.mocked(loadWaterSnapshot).mockReturnValue(null);
+    vi.mocked(forwardGeocodeConstrained).mockReset().mockResolvedValue([]);
+    vi.mocked(cacheGetSafe).mockReset().mockResolvedValue(null);
+    vi.mocked(cacheSetSafe).mockReset().mockResolvedValue(undefined);
+    vi.mocked(callLLM).mockReset().mockResolvedValue(null);
+  });
+
+  it('city precision: Branch 3 miss-cached → Branch 4 runs and finds the city', async () => {
+    // Reproduces the Islamabad regression: Branch 3 sees a cached miss,
+    // returns null. Branch 4 (verify-2pass) should still fire because the
+    // hierarchy is city-precision and the resolver's job is to find this
+    // place even if Branch 3 has stale cache.
+    vi.mocked(cacheGetSafe).mockImplementation(async (key) => {
+      // Simulate Branch 3's miss-cache for this exact hierarchy.
+      if (typeof key === 'string' && key.includes(':direct:')) {
+        return { data: { miss: true } as unknown as never, fetchedAt: Date.now() };
+      }
+      return null;
+    });
+    // Branch 4's own search returns Islamabad correctly.
+    vi.mocked(forwardGeocodeConstrained).mockResolvedValue([
+      {
+        lat: 33.6938,
+        lng: 73.0651,
+        displayName: 'Islamabad, Zone 1, Islamabad Capital Territory, 44000, Pakistan',
+        type: 'city',
+        address: { country_code: 'pk' },
+      },
+    ]);
+
+    const out = await resolveLocation(
+      hierarchy({
+        country: 'Pakistan',
+        admin1: 'Islamabad Capital Territory',
+        city: 'Islamabad',
+      }),
+      ctx({ centroidLat: 25.38, centroidLng: 68.38 }),
+    );
+
+    // Pre-fix: this returned 'gdelt-actiongeo-fallback' at (25.38, 68.38).
+    // Post-fix: Branch 4 runs and returns the verify-2pass hit.
+    expect(out.provenance).toBe('nominatim-verified-2pass');
+    expect(out.lat).toBeCloseTo(33.6938, 3);
+    expect(out.lng).toBeCloseTo(73.0651, 3);
+  });
+
+  it('region precision: Branch 3 returns null → Branch 4 runs', async () => {
+    // For region-only hierarchies (country/admin1 set, no city), Branch 4
+    // is also the right escalation when Branch 3 finds nothing.
+    let callCount = 0;
+    vi.mocked(forwardGeocodeConstrained).mockImplementation(async () => {
+      callCount++;
+      // First call (Branch 3): empty.
+      // Second call (Branch 4): returns the governorate centroid.
+      if (callCount === 1) return [];
+      return [
+        {
+          lat: 33.0,
+          lng: 44.0,
+          displayName: 'Babil Governorate, Iraq',
+          type: 'administrative',
+          address: { country_code: 'iq' },
+        },
+      ];
+    });
+
+    const out = await resolveLocation(
+      hierarchy({ country: 'Iraq', admin1: 'Babil Governorate' }),
+      ctx({ centroidLat: 33.5, centroidLng: 44.5 }),
+    );
+
+    expect(out.provenance).toBe('nominatim-verified-2pass');
+    expect(out.lat).toBeCloseTo(33.0);
+    expect(out.lng).toBeCloseTo(44.0);
+  });
+
+  it('exact precision: Branch 3 null → Branch 4 does NOT run unless directHit was far', async () => {
+    // Regression guard: for exact-precision events the existing gate logic
+    // (Branch 4 only triggers if directHit > 250km from centroid) should
+    // still apply. With no directHit at all, no Branch 4.
+    vi.mocked(forwardGeocodeConstrained).mockResolvedValue([]);
+
+    const out = await resolveLocation(
+      hierarchy({
+        country: 'Iran',
+        landmark: 'Some specific facility',
+      }),
+      ctx({ centroidLat: 32.0, centroidLng: 53.0 }),
+    );
+
+    // Falls through to GDELT centroid because Branch 4 didn't fire.
+    expect(out.provenance).toBe('gdelt-actiongeo-fallback');
+  });
+});
