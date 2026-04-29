@@ -1,178 +1,211 @@
 ---
 phase: 27.4.4
-plan: 01
+plan: 02
 artifact: HANDOFF
-created: 2026-04-28T15:50Z
+created: 2026-04-28T17:15Z
 operator: zackmaz
-session_commits: 11
-session_tasks_complete: 9
-session_tasks_remaining: 7
+supersedes: HANDOFF.md (2026-04-28T15:50Z) — Plan 01 mid-execution pause
 ---
 
-# 27.4.4 Plan 01 — HANDOFF
+# 27.4.4 — HANDOFF (Plan 01 CLOSED, Plan 02 PENDING)
 
-Plan 01 was paused mid-execution due to context budget. This handoff captures
-state-of-the-world so a fresh `/gsd-execute-phase 27.4.4` session can pick
-up cleanly at Task 7.
+Plan 01 is fully shipped. Plan 02 is operator-gated cutover work (live LLM
+Gate B passes, Vercel prod env flips, two D-16 human approvals) that
+cannot run autonomously. This handoff captures the state-of-the-world a
+fresh session needs to resume.
 
-## Where we are
+## Current branch state
 
-| Task                                   | Status                                                       | Commit                          |
-| -------------------------------------- | ------------------------------------------------------------ | ------------------------------- |
-| 0a — Wave 0 test stubs                 | ✓ done                                                       | `a258da0`                       |
-| 0b — CHECKPOINT dev Redis isolation    | ✓ done (Option B / CACHE_KEY_PREFIX in `.env.local`)         | `2c13a5e`, `9df86c4`            |
-| 0c — CHECKPOINT dev dry-run            | partial — **prelude steps 1-4 done**, postlude 5-6 deferred  | (operator-driven)               |
-| 1 — Zod env vars + .env.example        | ✓ done                                                       | `3e9e809`                       |
-| 2 — Bakeoff harness extensions         | ✓ done                                                       | `5789f9a`, `f239cca`, `d5f5d52` |
-| 3 — CHECKPOINT D-05 preflight          | ✓ done (D-16 approval #1)                                    | `749ca57`                       |
-| 4 — CHECKPOINT D-02 bake-off           | ✓ done **as combo-path** (D-16 approval #2; deviation noted) | `5706232`                       |
-| 5 — Lock winner + MAX_TOKENS_PER_MODEL | ✓ done                                                       | `b44c4c7`                       |
-| 6 — D-04 adaptive batching             | ✓ done (3-file atomic + 6 tests green)                       | `863eef3`                       |
-| **7 — D-18 lineage pre-filter**        | **NOT STARTED**                                              | —                               |
-| **8 — D-21 prewarm + D-13 threshold**  | **NOT STARTED**                                              | —                               |
-| **9 — D-14 cron eval route**           | **NOT STARTED**                                              | —                               |
-| **10 — A9 atomic UI commit**           | **NOT STARTED**                                              | —                               |
-| **11 — Snapshot script**               | **NOT STARTED**                                              | —                               |
-| **12 — CHECKPOINT OpenRouter cascade** | **NOT STARTED** (operator-driven)                            | —                               |
-| **13 — Plan 01 SUMMARY.md**            | **NOT STARTED** (closeout)                                   | —                               |
+- Branch: `feature/27.4.4-v3-latency-remediation-and-cutover`
+- HEAD: `0d248d7` (Plan 01 SUMMARY commit)
+- Ahead of `main`: 11 commits this session + the pre-pause history (full
+  list in `27.4.4-01-SUMMARY.md` § Helper landings).
+- Working tree: clean.
+- Test suite: 1026 / 0 todo / 0 regressions (was 1013 / 11 todo at the
+  pause). Tasks 7+8+9 flipped 7+4+2 = 13 new real tests.
 
-## Combo-path framing — load-bearing for Plan 02
+## Plan 01 — COMPLETE ✓
 
-The 20-event preflight at `27.4.4-PREFLIGHT-CHARACTERIZATION.md` showed
-**0/4 candidates clear D-03 dual hard floor**. Operator approved **combo
-path** at 2026-04-28T15:30Z (`27.4.4-01-BAKEOFF.md`):
+All 13 tasks closed. Closeout artifacts:
 
-- **Winner:** `qwen/qwen3.5-397b-a17b` (locked in `NVIDIA_NIM_DEFAULT_MODEL`).
-  - within20km 16/20 (0.80) — best of the 4 LIVE candidates.
-  - gen-duration p95 = 264.9s (FAILS the ≤30s p95 floor).
-- **Fallback:** itself qwen (no other LIVE candidate in 27.4.4's bake-off).
-- **Plan 02 Gate B will:** ship `V3_ADAPTIVE_BATCH=true` in Vercel prod env
-  BEFORE Pass 1; explicitly carry "expected p95 > 30s" — cutover ships v3
-  for location-accuracy parity, not latency parity.
-- **D-13 V3_WATCHDOG_ROLLBACK_THRESHOLD=2** (default; no override needed).
-- **D-17 STOP-and-defer NOT triggered** — failure is model-related and
-  within scope of D-04 adaptive batching.
+- `27.4.4-01-SUMMARY.md` — bake-off winner + max_tokens caps + 9-task
+  helper landing list with commit SHAs + 2 D-16 approval timestamps +
+  D-20 dry-run pass log + 2 honest deviations + Gate readiness checklist.
+- `dry-run-test.json` — D-19 reference snapshot from Task 0c-postlude
+  step 6 (cacheKeyPrefix:dev:, terminal=null, partial=present, audit=0,
+  dlq=24, lineage=102, baselines=5).
+- 5 new feat commits this session (`9f3acb4` D-18 → `5dc65ea` D-19) plus
+  `0d248d7` Plan 01 closeout doc.
 
-## Operator state
+## Bake-off + combo path — load-bearing for Plan 02
 
-- ✅ `NVIDIA_NIM_API_KEY=nvapi-...` present in `.env.local`.
-- ✅ `LLM_PIPELINE_V3=true` in `.env.local`.
-- ✅ `CACHE_KEY_PREFIX=dev:` in `.env.local` (D-20 Option B isolation).
-- ✅ `OPENROUTER_API_KEY` — operator confirmed earlier; required for Task 12 cascade smoke.
-- ✅ Prod Vercel env STILL points at canonical Upstash DB; production is unaffected.
-- ⚠ `dev:`-prefixed keys exist in the shared Upstash DB. Cleanup recipe at end of phase: `redis.keys('dev:*')` + bulk delete.
+| Field              | Value                                                      |
+| ------------------ | ---------------------------------------------------------- |
+| Winner model       | `qwen/qwen3.5-397b-a17b`                                   |
+| Locked at          | `freeClaudeRouter.ts NVIDIA_NIM_DEFAULT_MODEL` (`b44c4c7`) |
+| Within20km         | 0.80 (16/20)                                               |
+| Gen-duration p95   | 264.9s — FAILS ≤30s p95 floor                              |
+| D-03 dual-floor    | 0/4 candidates cleared → combo path approved               |
+| Required at Gate B | `V3_ADAPTIVE_BATCH=true` in Vercel prod env BEFORE Pass 1  |
 
-## What's left — 7 tasks
+**Plan 02 ships v3 for location-accuracy parity, not latency parity.**
+This is intentional per D-16 #2 approval; the p95 cliff is treated as
+ops cost, not a STOP-and-defer trigger.
 
-The next session must execute these in order. Each task's full spec lives
-in `27.4.4-01-PLAN.md` (the source of truth; this handoff summarizes only).
+## Vercel prod env state
 
-### Task 7 — D-18 lineage pre-filter (atomic 3-file commit)
+| Var                  | Status                  | Notes                                                                                       |
+| -------------------- | ----------------------- | ------------------------------------------------------------------------------------------- |
+| NVIDIA_NIM_API_KEY   | ✓ already set           | Inherited from 27.4.3.                                                                      |
+| CRON_SECRET          | ✓ set 2026-04-28T17:13Z | Encrypted, Production scope. Verified via `vercel env ls production`.                       |
+| LLM_PIPELINE_V3      | ✗ NOT set               | Operator chose to hold — flip BEFORE Gate B Pass 1.                                         |
+| V3_ADAPTIVE_BATCH    | ✗ NOT set               | Combo-path requirement — flip to `true` BEFORE Pass 1.                                      |
+| V3_LINEAGE_PREFILTER | ✗ NOT set               | Stays default OFF through Plan 02 (write-side cache out of scope per Plan 01 deviation #3). |
 
-- Files: `server/lib/llmLineage.ts`, `server/lib/llmEventExtractor.v3.ts`, `server/__tests__/lib/llmLineage-prefilter.test.ts`
-- Add `computeGroupLineageHash` + `GROUP_LINEAGE_KEY_PREFIX` + `GROUP_LINEAGE_TTL_SEC` exports to llmLineage.ts. Sha256 hash inputs: `key + sorted(sourceUrls).join('|') + totalMentions`.
-- Wire pre-filter loop at top of `processEventGroupsV3` BEFORE main batch loop, gated on `env.V3_LINEAGE_PREFILTER`. On hit, skip group + push cached event. On miss, fall through.
-- Mirror `lineagePrefilterStats {hitCount, missCount}` + `lineagePrefilterEnabled` onto llmProgress (FIELDS ALREADY ADDED to llmProgress.ts in commit `863eef3` — just need to populate them).
-- Flip 7 `it.todo` → real tests in `llmLineage-prefilter.test.ts`. Pattern same as v3-adaptive.test.ts (mutating updateProgress mock, hoisted env mock).
-- WRITE-side cache population is OUT OF SCOPE — document in JSDoc that `redis.setex(cacheKey, ...)` lands in a future phase; for 27.4.4 the pre-filter only READS.
-- Default OFF — V3_LINEAGE_PREFILTER stays false through Plan 02 Gate B.
-- Acceptance: `grep "computeGroupLineageHash" server/lib/llmLineage.ts` returns ≥ 1; `grep "env.V3_LINEAGE_PREFILTER" server/lib/llmEventExtractor.v3.ts` returns ≥ 1; `npx vitest run server/__tests__/lib/llmLineage-prefilter.test.ts` reports `Tests 7 passed (7)`.
+## Plan 02 — task-by-task action map
 
-### Task 8 — D-21 NIM cold-start prewarm + D-13 retuned threshold (atomic 4-file commit)
+Plan 02 has 7 tasks across 3 waves. Operator-gated except Task 1.
 
-- Files: `server/lib/freeClaudeRouter.ts`, `server/lib/llmEventExtractor.v3.ts`, `server/__tests__/lib/llmAutoRollback.test.ts`, `server/lib/llmProgress.ts` (already has the prewarm fields from commit `863eef3`).
-- Add `prewarmIfCold()` function to freeClaudeRouter.ts. Module-level `lastNimCallTs` (in-memory only — NO Redis backing per RESEARCH §8). If `Date.now() - lastNimCallTs > 60_000`, fire a synthetic warmup request to NIM (`/v1/chat/completions` with 1-token prompt). Update llmProgress.prewarmCount / lastPrewarmTs / prewarmState.
-- Call `prewarmIfCold()` from `processEventGroupsV3` before the main batch loop.
-- Replace literal `3` in `checkWatchdogRecurrenceTrigger` (line ~759) with `env.V3_WATCHDOG_ROLLBACK_THRESHOLD`. Default already = 2 from Task 1's Zod schema.
-- Add 2 new tests to `llmAutoRollback.test.ts` covering env-tunable threshold (default 2 + custom value).
-- Acceptance: `grep "prewarmIfCold" server/lib/freeClaudeRouter.ts` returns ≥ 2; `grep "env.V3_WATCHDOG_ROLLBACK_THRESHOLD" server/lib/llmEventExtractor.v3.ts` returns 1; `npx vitest run server/__tests__/lib/llmAutoRollback.test.ts` reports the new tests passing.
+### Wave 1
 
-### Task 9 — D-14 /api/cron/eval route + vercel.json crons[] entry (atomic 4-file commit)
+**Task 1 (auto, executor-runnable)** — `scripts/extract-gate-b-snapshot.sh`
 
-- Files: `server/routes/eval-cron.ts` (NEW), `server/index.ts`, `vercel.json`, `server/__tests__/routes/eval-cron.test.ts`.
-- Create `server/routes/eval-cron.ts` exporting `evalCronRouter`. POST handler reads `Authorization: Bearer <CRON_SECRET>` header. If `env.CRON_SECRET` is non-empty: 401 on missing/wrong header; 200 on valid. If `env.CRON_SECRET` is empty: pass through (preserves existing un-authed cron-warm/cron-health behavior). Calls `runEval()` from llmEvalHarness on the happy path.
-- Mount in `server/index.ts`: `app.use('/api/cron/eval', evalCronRouter)`.
-- Add `vercel.json crons[]` entry: `{path: "/api/cron/eval", schedule: "0 4 * * *"}`.
-- Flip 4 `it.todo` → real tests in `eval-cron.test.ts`. Pattern same as routes/health.test.ts.
-- Acceptance: 4 tests pass; `vercel.json` has crons entry.
+- Small bash + jq helper. Pipes `/api/events/llm-status` through jq to
+  emit 8 markdown table rows (7 D-08/D-09 gates + 1 D-15 fallbackRatio).
+- Full script body inline in `27.4.4-02-PLAN.md` lines 167-205.
+- Acceptance: `test -x`, `head -1` is `#!/bin/bash`, jq compile clean.
+- Commit msg: `feat(27.4.4): extract-gate-b-snapshot.sh — operator helper for threshold table generation`.
 
-### Task 10 — A9 atomic UI commit (4 files in SAME commit, verifiable by single `git show <sha> --stat`)
+**Task 2 (checkpoint:human-verify)** — Gate A re-baseline (resolver-only, prod) + D-16 #3
 
-- Files: `src/hooks/useLLMStatusPolling.ts`, `src/components/ui/DevApiStatus.tsx`, plus llmProgress.ts (already done) + the 3 new dev-only cells.
-- Add 3 dev-only cells to DevApiStatus.tsx Events tab gated on `import.meta.env.DEV && schemaVersion === 'v3'`:
-  1. **Pre-warm cell** — reads `prewarmCount`, `lastPrewarmTs`, `prewarmState`. Renders e.g. "Prewarm: 12 fired (warm)" with a relative timestamp.
-  2. **Adaptive batch cell** — reads `adaptiveBatchEnabled`, `adaptiveBatchStats`. Shows splitCount / retrySuccess / retryFail / dlqEnqueueCount as a compact strip.
-  3. **Lineage prefilter cell** — reads `lineagePrefilterEnabled`, `lineagePrefilterStats`. Shows hitCount / missCount.
-- Mirror the new fields in `useLLMStatusPolling.ts`'s LLMRunSummary type so client sees them under v3 polling.
-- Single atomic commit — verified by `git show <sha> --stat | wc -l` showing all 3 source files (DevApiStatus + useLLMStatusPolling + maybe one type file).
-- Default state when fields are undefined: render "—" placeholder, don't crash.
+- Operator runs `npm run eval:replay` against PROD Redis from laptop.
+- Persists baseline to `events:llm-eval-baseline:v3` (90d TTL).
+- Verdicts:
+  - PASS: ratio ≥ 0.890 AND drift < 5pp from 0.940 → proceed.
+  - DRIFT: drift ≥ 5pp from 0.940 → STOP, escalate, defer per D-17.
+  - FLOOR FAIL: ratio < 0.890 → STOP, defer per D-17.
+- Operator writes Gate A section into `27.4.4-02-CUTOVER.md` (NEW file).
+- D-16 STOP marker — resume on `gate-a: pass` or `gate-a: defer (<verdict>)`.
+- Commit msg: `docs(27.4.4): Gate A re-baseline {ratio} (PASS) — checkpoint 3`.
 
-### Task 11 — D-19 forensic snapshot script (1-file commit)
+### Wave 2
 
-- File: `scripts/snapshot-v3-redis.ts`.
-- 6-key dispatch: reads `events:llm:v3` (get), `events:llm:v3:partial` (get), `events:llm:v3:lineage:*` (smembers? — no, this is hash keyspace; use `keys` + dispatch), `events:llm-pipeline-audit` (lrange), `events:llm-dlq` (smembers), `events:llm-eval-baseline:v3:*` (keys + get).
-- CLI args: `--label=<name>` writes JSON to `.planning/phases/27.4.4-v3-latency-remediation-and-cutover/<name>.json`.
-- Add npm script: `"snapshot:v3": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/snapshot-v3-redis.ts"`.
-- RECOMMENDED per RESEARCH §6 Option C: add `--prod-confirm` flag requirement so accidental dev runs of the snapshot can't commit prod data (refuse to run unless flag is set OR `CACHE_KEY_PREFIX` is set).
-- Acceptance: smoke run with `--label=test-1 --prod-confirm` writes a JSON file under the phase dir.
+**Task 3 (checkpoint:human-verify, blocking)** — Gate B Pass 1
 
-### Task 0c-postlude (operator-driven) — D-20 dry-run steps 5+6
+- Wall-clock ~30-45min sequential.
+- Operator must FIRST flip Vercel prod env: `LLM_PIPELINE_V3=true`,
+  `V3_ADAPTIVE_BATCH=true`, then redeploy (`vercel --prod` or push) to
+  pick up the new env.
+- 4-step sequence:
+  1. `tsx scripts/snapshot-v3-redis.ts --label=gate-b-pass-1-start`
+     (note: in prod this needs `.env.local` swapped to PROD Upstash;
+     read-only so safe per A6/Pitfall 8).
+  2. `curl -fsS "https://<vercel-prod-host>/api/events?force=true"` to
+     kick off v3 extraction. Background fire-and-forget.
+  3. Poll `/api/events/llm-status` every ~30s until `stage=idle` AND
+     `completedBatches===totalBatches`.
+  4. `bash scripts/extract-gate-b-snapshot.sh "https://<vercel-prod-host>"`
+     to derive threshold table.
+- Capture `tsx scripts/snapshot-v3-redis.ts --label=gate-b-pass-1-end`.
+- Append Pass 1 section to `27.4.4-02-CUTOVER.md` (verbatim
+  llm-status JSON + threshold table).
+- D-08/D-09/D-15 gates (all 8 must PASS):
+  - watchdogTimeoutCount === 0
+  - DLQ count ≤ 5
+  - duration_min ≤ 120
+  - provenanceCounts populated
+  - schema_fail rate ≤ 2%
+  - latency.nvidia_nim.p95 ≤ 30000ms (relaxed by combo path framing
+    but still tracked — failure here is acknowledged ops cost, not
+    automatic abort. Operator decides whether to proceed.)
+  - routingTrace primary share ≥ 90%
+  - fallbackRatio ≤ 15%
 
-- Step 5 (cron route): `curl -i http://localhost:3001/api/cron/eval` (no auth header). If `CRON_SECRET` unset locally → 200 + JSON body. If `CRON_SECRET` set → 401. Both shapes pass.
-- Step 6 (snapshot): `npm run snapshot:v3 -- --label=dry-run-test --prod-confirm`. Writes JSON file under phase dir.
-- Operator confirms: `dev-dry-run: pass` or `dev-dry-run: fail (<reason>)`.
+**Task 4 (checkpoint:human-verify)** — Pass 1 verdict
 
-### Task 12 (operator-driven) — D-12 OpenRouter cascade dev smoke
+- D-11: any gate FAIL on Pass 1 = overall fail + defer phase.
+- Resume signal: `pass-1: pass` (proceed to Pass 2) OR
+  `pass-1: defer (<which gate>)`.
 
-- Operator runs synthetic NIM-disable test (e.g. `NVIDIA_NIM_API_KEY=invalid npm run dev:server` then trigger /api/events).
-- Expect audit log entry with `fall_through:nvidia_nim_no_client`.
-- Operator confirms: `cascade-smoke: pass` or `cascade-smoke: fail (<reason>)`.
+### Wave 3
 
-### Task 13 — Plan 01 SUMMARY.md
+**Task 5 (checkpoint:human-verify, blocking)** — Gate B Pass 2
 
-- Path: `.planning/phases/27.4.4-v3-latency-remediation-and-cutover/27.4.4-01-SUMMARY.md`.
-- Sections required by must_haves:
-  - Bake-off winner (qwen with combo-path framing).
-  - max_tokens caps table (per Task 5's MAX_TOKENS_PER_MODEL).
-  - 8 helper landings list (Tasks 1, 2, 5, 6, 7, 8, 9, 10, 11 + 0c prelude/postlude split note).
-  - Dev dry-run pass log (operator confirmations from 0b, 0c-prelude, 0c-postlude).
-  - 2 D-16 operator approval checkpoint pass timestamps:
-    - #1 (preflight): `preflight: complete (combo-path)` at 2026-04-28T15:30Z.
-    - #2 (bake-off): `bakeoff: winner=qwen/qwen3.5-397b-a17b (combo-path)` at 2026-04-28T15:30Z.
-  - **Plan deviation log**: 50-event Task 4 bake-off skipped per combo-path D-16 approval; 20-event preflight data used as bake-off matrix instead.
+- Identical mechanics to Task 3, second consecutive run.
+- D-10: 2 consecutive passes required to defeat false-positive risk
+  (Plan 05 of 27.4.3 burned a single pass and let a model-specific
+  long-tail surprise leak through).
+- Snapshots: `--label=gate-b-pass-2-start` + `--label=gate-b-pass-2-end`.
+
+**Task 6 (checkpoint:human-verify)** — Pass 2 verdict + D-16 #4
+
+- Both passes must PASS all 8 gates AND have fallbackRatio ≤ 15%.
+- D-16 STOP marker for cutover authorization.
+- Resume signal: `pass-2: pass` (proceed to cutover POST) OR
+  `pass-2: defer (<which gate>)`.
+
+**Task 7 (auto + manual cleanup)** — Cutover POST + UAT close
+
+- `curl -X POST https://<vercel-prod-host>/api/events/llm-pipeline -d '{"version":"v3"}'`
+  — flips runtime override to v3 prod-wide. Returns 200 + appends entry
+  to `events:llm-pipeline-audit`.
+- Operator visually confirms Topbar PipelineVersionPill renders `v3` in
+  prod browser.
+- Edit `.planning/phases/27.4.2-ci-health-and-llm-v2-tuning/27.4.2-HUMAN-UAT.md`:
+  close tests 1+2 with link to `27.4.4-02-CUTOVER.md` as evidence.
+- Write `27.4.4-02-SUMMARY.md` closeout.
+- Update `STATE.md` + ROADMAP.md to mark Phase 27.4.4 COMPLETE.
+
+## Anti-patterns to preserve (carried from Plan 01 + new from this session)
+
+1. **Don't run Task 4's 50-event LLM-in-loop bake-off** — locked decision per combo-path D-16 #2.
+2. **Don't change `NVIDIA_NIM_DEFAULT_MODEL` from qwen** — winner is locked in `b44c4c7`.
+3. **Don't enable `V3_LINEAGE_PREFILTER` in Vercel prod for Plan 02** — write-side cache is OUT OF SCOPE per Plan 01 deviation #3, so the read-side gate has nothing to read; Gate B telemetry comparability requires it OFF.
+4. **DO enable `V3_ADAPTIVE_BATCH=true` in Vercel prod BEFORE Pass 1** — combo-path requirement per Plan 01 SUMMARY.
+5. **Don't commit terminal-cache writes through `events:llm:v3`** — two-key discipline (terminal vs `:partial`) is load-bearing per Pitfall 3.
+6. **Don't propagate `OPENROUTER_API_KEY` to Vercel prod env** — dev-only cascade fixture per CONTEXT D-12. Plan 02 Gate B does NOT need it.
+7. **Re-test cascade smoke with EMPTY `NVIDIA_NIM_API_KEY` (not "invalid")** before Gate B Pass 1 — Plan 01 Task 12 was PARTIAL CONFIRM only because operator used `invalid` (yields 401 → `fall_through:nvidia_nim_429`) instead of empty (would yield `fall_through:nvidia_nim_no_client`). 5-minute smoke; re-runs against dev.
+8. **Operator must swap `.env.local` Upstash URL/token from dev (Plan 01) BACK to prod for Tasks 2/3/5 snapshot calls.** Snapshot script is read-only (Pitfall 6) so this is safe; revert to dev after Plan 02 close.
 
 ## Resume command
 
 ```bash
-/gsd-execute-phase 27.4.4
+/gsd-execute-phase 27.4.4 --interactive
 ```
 
-The next agent should:
+The `--interactive` flag is the right shape because Plan 02 has 4 D-16
+human-verify checkpoints; subagent-spawned executors can't pause for
+operator decisions.
+
+The next session should:
 
 1. Read this HANDOFF.md first.
-2. Read `27.4.4-01-PLAN.md` for full task specs.
-3. Read `27.4.4-PREFLIGHT-CHARACTERIZATION.md` and `27.4.4-01-BAKEOFF.md` for context on the combo-path verdict.
-4. Verify the operator's `.env.local` still contains the required keys before resuming code-landing tasks.
-5. Resume at Task 7 (D-18 lineage pre-filter).
-
-## Critical anti-patterns to avoid
-
-1. **Don't run Task 4's full 50-event bake-off** — it was explicitly skipped per combo-path. Re-running would waste ~30-50min wall clock + ~200 LLM calls for no decision signal.
-2. **Don't change `NVIDIA_NIM_DEFAULT_MODEL` from qwen** — winner is locked. Future re-baseline is a different phase.
-3. **Don't enable V3_ADAPTIVE_BATCH or V3_LINEAGE_PREFILTER by default** — both stay OFF through Plan 02 Gate B. Operator flips V3_ADAPTIVE_BATCH in Vercel prod env BEFORE Pass 1.
-4. **Don't commit terminal-cache writes through `events:llm:v3`** — the two-key discipline (`events:llm:v3` terminal vs `events:llm:v3:partial` observability) is load-bearing per Pitfall 3.
-5. **Don't propagate `OPENROUTER_API_KEY` to Vercel prod env** — it's a dev-only cascade smoke fixture per CONTEXT D-12. Plan 02 Gate B does not need it.
+2. Read `27.4.4-02-PLAN.md` for full task specs (the 7 tasks above).
+3. Read `27.4.4-01-SUMMARY.md` for the bake-off winner + combo-path framing.
+4. Verify the operator's Vercel prod env state matches the table above.
+5. Start with Task 1 (executor-runnable) → then walk through Tasks 2-7
+   with operator approval at each D-16 checkpoint.
 
 ## Test suite baseline at handoff
 
 ```
-Test Files  72 passed | 2 skipped (74)
-     Tests  1013 passed | 11 todo (1024)
+Test Files  74 passed (74)
+     Tests  1026 passed (1026)
 ```
 
-11 todo cases left to flip green:
+Zero todos. All 11 baseline `it.todo` cases (7 lineage-prefilter +
+4 eval-cron) flipped to real assertions across Plan 01 commits
+`9f3acb4` + `0834c34`. Plus 2 new D-13 threshold tests in
+`64307f4`.
 
-- 7 in `server/__tests__/lib/llmLineage-prefilter.test.ts` (Task 7)
-- 4 in `server/__tests__/routes/eval-cron.test.ts` (Task 9)
+## Where to find things
 
-Plus 2 new tests for D-13 env-tunable threshold to add in Task 8.
+- **PLAN.md** for the cutover: `27.4.4-02-PLAN.md` (in this same dir).
+- **Bake-off receipts**: `27.4.4-01-BAKEOFF.md`, `27.4.4-PREFLIGHT-CHARACTERIZATION.md`.
+- **Plan 01 closeout**: `27.4.4-01-SUMMARY.md` + `dry-run-test.json`.
+- **Per-task scripts**:
+  - `scripts/snapshot-v3-redis.ts` (Plan 01 Task 11) — 6-key forensic capture.
+  - `scripts/eval-replay.ts` (existing) — resolver-only eval against ground truth.
+  - `scripts/extract-gate-b-snapshot.sh` (Plan 02 Task 1) — NOT YET CREATED.
+- **Cutover doc to be created**: `27.4.4-02-CUTOVER.md` (operator-driven, populated incrementally Tasks 2 → 7).
+- **27.4.2 UAT manifest** (Plan 02 Task 7 closes tests 1+2): `.planning/phases/27.4.2-ci-health-and-llm-v2-tuning/27.4.2-HUMAN-UAT.md`.
