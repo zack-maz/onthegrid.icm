@@ -10,10 +10,15 @@
  * Falls back to "No Data" if no country is within 200km.
  */
 
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import type { WaterStressIndicators } from '../types.js';
+// Phase 27.4.4 Plan 02 deploy fix — switch from runtime readFileSync to
+// build-time import. The previous `readFileSync(resolve(__dirname,
+// '../../src/data/aqueduct-basins.json'))` crashed in the Vercel function
+// runtime with ENOENT because tsup doesn't ship src/data/ alongside the
+// bundle. Importing the JSON inlines it into the api/vercel-entry.js
+// bundle directly (tsup + esbuild handle JSON modules natively under
+// `with { type: 'json' }`). +1.5 MB to the bundle but no runtime fs reads.
+import basinsData from '../../src/data/aqueduct-basins.json' with { type: 'json' };
 
 // Compute compositeHealth and bwsScoreToLabel inline to avoid cross-module
 // import from src/ (server should not depend on frontend lib)
@@ -47,10 +52,9 @@ interface BasinEntry {
   iav_score: number;
 }
 
-// Load aqueduct basins data at module init
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const basinsPath = resolve(__dirname, '../../src/data/aqueduct-basins.json');
-const allBasins: BasinEntry[] = JSON.parse(readFileSync(basinsPath, 'utf-8'));
+// Phase 27.4.4 Plan 02 deploy fix — bundle-time inline. See top-of-file
+// comment for the runtime ENOENT incident this replaces.
+const allBasins: BasinEntry[] = basinsData as BasinEntry[];
 
 // Deduplicate by pfaf_id (keep first occurrence)
 const uniqueBasins = new Map<number, BasinEntry>();
