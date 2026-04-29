@@ -609,7 +609,16 @@ export async function processEventGroupsV3(
                 { role: 'user', content: userPrompt },
               ],
               JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
-              { batchSize: batch.length, modelOverride: V3_BAKEOFF_MODEL },
+              {
+                batchSize: batch.length,
+                modelOverride: V3_BAKEOFF_MODEL,
+                // Phase 27.4.4 Plan 02 — drop OpenRouter from the v3 cascade.
+                // Free-tier OR rate-limits ~every call (16 attempts × 16
+                // rate_limit observed in dev); a 100%-failing fallback
+                // amplifies breaker errors and burns the retry budget. v2
+                // keeps OR for legacy rollback parity.
+                skipOpenRouter: true,
+              },
             );
             routing = result.routing;
             // Phase 27.4.4 Plan 02 dev-pass: thread finish_reason so the JSON.parse
@@ -946,7 +955,11 @@ async function splitBatchOnTimeout(
             { role: 'user', content: halfPrompt },
           ],
           JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
-          { batchSize: half.length, modelOverride: V3_BAKEOFF_MODEL },
+          {
+            batchSize: half.length,
+            modelOverride: V3_BAKEOFF_MODEL,
+            skipOpenRouter: true,
+          },
         );
         return r.content;
       },

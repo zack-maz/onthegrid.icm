@@ -292,7 +292,7 @@ export async function callLLM(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
 
   _schemaText: string,
-  opts: { batchSize?: number; modelOverride?: string } = {},
+  opts: { batchSize?: number; modelOverride?: string; skipOpenRouter?: boolean } = {},
 ): Promise<{
   content: string | null;
   routing: RoutingDecision[];
@@ -301,7 +301,15 @@ export async function callLLM(
   const log = logger.child({ component: 'freeClaudeRouter' });
   const decisions: RoutingDecision[] = [];
 
-  const providers: Array<{ name: FreeProvider; model: string; client: OpenAI | null }> = [
+  // Phase 27.4.4 Plan 02 — `skipOpenRouter` lets the v3 extractor opt out of
+  // the OpenRouter fallback. Free-tier OR rate-limits ~every call (~16
+  // attempts × 16 rate_limit errors observed in dev), and a 100%-failing
+  // fallback is worse than no fallback: it amplifies the breaker error
+  // rate and burns the per-call retry budget on a guaranteed loser. v2
+  // keeps OR enabled so the legacy rollback path is unchanged.
+  const includeOpenRouter = !opts.skipOpenRouter;
+
+  const allProviders: Array<{ name: FreeProvider; model: string; client: OpenAI | null }> = [
     {
       name: 'nvidia_nim',
       model: opts.modelOverride ?? NVIDIA_NIM_DEFAULT_MODEL,
@@ -313,6 +321,9 @@ export async function callLLM(
       client: getOpenRouterClient(),
     },
   ];
+  const providers = includeOpenRouter
+    ? allProviders
+    : allProviders.filter((p) => p.name !== 'openrouter');
 
   for (let idx = 0; idx < providers.length; idx++) {
     const p = providers[idx];
@@ -375,6 +386,17 @@ export async function callLLM(
       timestamp: Date.now(),
     });
 
+    // Phase 27.4.4 Plan 02 — `record(p.name, 'err')` is moved out of the per-
+    // attempt catch block (was at the old line 441). Counting every retry
+    // attempt as a breaker-window failure was tripping the breaker on
+    // rate-limit storms even when the SAME call eventually succeeded on
+    // retry — the breaker's 30%-error-rate threshold treats a 429-then-
+    // success as a failure, which is wrong. The fix records `'ok'` on the
+    // success path (existing behavior) and records `'err'` exactly once if
+    // ALL retries are exhausted (non-retriable error or retry budget
+    // burned). recordErrorBucket still increments per-attempt because that
+    // is a raw failure counter, not a breaker signal.
+    let callFailed = false;
     for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
       const t0 = Date.now();
       try {
@@ -438,15 +460,21 @@ export async function callLLM(
           },
           'router attempt failed',
         );
-        record(p.name as Provider, 'err');
         if (bucket === 'rate_limit' && attempt < RETRY_ATTEMPTS - 1) {
           const base: number = BACKOFF_MS[attempt] ?? BACKOFF_MS[0] ?? 1000;
           await sleepWithJitter(base);
           continue;
         }
-        // non-retriable or retry-exhausted -> fall through to next provider
+        // non-retriable or retry-exhausted -> mark call as failed, fall
+        // through to next provider. Single 'err' record per call (not per
+        // attempt) so a single rate-limit-then-retry-succeeds doesn't pollute
+        // the breaker window.
+        callFailed = true;
         break;
       }
+    }
+    if (callFailed) {
+      record(p.name as Provider, 'err');
     }
   }
 

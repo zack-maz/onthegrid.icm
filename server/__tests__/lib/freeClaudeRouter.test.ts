@@ -185,3 +185,59 @@ describe('freeClaudeRouter — error taxonomy', () => {
     expect(classifyError(new Error('HTTP 502 bad gateway'))).toBe('upstream_500');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Group 6 — Phase 27.4.4 Plan 02: breaker accuracy + skipOpenRouter (P1-P3)
+// ---------------------------------------------------------------------------
+
+describe('freeClaudeRouter — breaker semantics (per-call, not per-attempt)', () => {
+  it('P1: 429-then-success-on-retry records only ok to the breaker (not err+ok)', async () => {
+    // The pre-Plan-02 implementation called record(name, "err") inside the
+    // catch block on EVERY failed attempt. A single retried-and-succeeded
+    // call would push (err, ok) into the breaker window, polluting the
+    // 30%-error-rate threshold. Plan 02 moves the err record outside the
+    // retry loop so it fires once-per-call only when retries are exhausted.
+    createMock
+      .mockRejectedValueOnce(new Error('429 rate limit'))
+      .mockResolvedValueOnce({ choices: [{ message: { content: '{"ok":true}' } }] });
+    const { content } = await callLLM([{ role: 'user', content: 'hi' }], '{}');
+    expect(content).toBe('{"ok":true}');
+    // record should be called exactly once (with 'ok'), NOT (err, ok).
+    const calls = recordMock.mock.calls;
+    const errCalls = calls.filter(([, outcome]) => outcome === 'err');
+    const okCalls = calls.filter(([, outcome]) => outcome === 'ok');
+    expect(errCalls.length).toBe(0);
+    expect(okCalls.length).toBe(1);
+  });
+
+  it('P2: retries-exhausted records err exactly once (not per-attempt)', async () => {
+    // When NIM 429s on every retry attempt, only ONE 'err' should land in
+    // the breaker window for that call (not RETRY_ATTEMPTS errs).
+    createMock.mockRejectedValue(new Error('429 rate limit'));
+    await callLLM([{ role: 'user', content: 'hi' }], '{}');
+    // First provider attempted then exhausted -> one 'err' for nvidia_nim.
+    // Second provider also exhausted -> one more 'err' for openrouter.
+    const errCalls = recordMock.mock.calls.filter(([, outcome]) => outcome === 'err');
+    // Exactly 2 'err' records total — one per provider, NOT one per attempt.
+    expect(errCalls.length).toBe(2);
+    expect(errCalls[0]?.[0]).toBe('nvidia_nim');
+    expect(errCalls[1]?.[0]).toBe('openrouter');
+  });
+});
+
+describe('freeClaudeRouter — skipOpenRouter option', () => {
+  it('P3: skipOpenRouter=true excludes OR from cascade even on full NIM failure', async () => {
+    // With skipOpenRouter set, the v3 extractor opts out of the OR fallback.
+    // OR is unusable on free tier (~16/16 rate_limit observed in dev runs).
+    // When NIM fails, the call returns null content — no OR attempt fires.
+    createMock.mockRejectedValue(new Error('429 rate limit'));
+    const { content, routing } = await callLLM([{ role: 'user', content: 'hi' }], '{}', {
+      skipOpenRouter: true,
+    });
+    expect(content).toBeNull();
+    // Routing trace contains only NIM entries (no openrouter).
+    const orEntries = routing.filter((r) => r.provider === 'openrouter');
+    expect(orEntries.length).toBe(0);
+    expect(routing.some((r) => r.provider === 'nvidia_nim')).toBe(true);
+  });
+});
