@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
-status: ready_to_plan
-last_updated: '2026-04-26T00:41:54.881Z'
+status: unknown
+last_updated: '2026-04-27T05:05:20.808Z'
 progress:
-  total_phases: 12
+  total_phases: 13
   completed_phases: 7
-  total_plans: 72
-  completed_plans: 60
-  percent: 58
+  total_plans: 74
+  completed_plans: 66
+  percent: 89
 ---
 
 # Project State
@@ -22,8 +22,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
+Phase: 27.4.4 (v3-latency-remediation-and-cutover) — Plan 01 COMPLETE; Plan 02 (Gate A + Gate B cutover) PENDING
+Plan: 2 of 2
+
+Phase 27.4.4: Plan 01 COMPLETE (Wave 1 — preflight + bake-off + 8 helper landings + A9 atomic UI cells + forensic snapshot script + Plan 01 SUMMARY; bake-off winner qwen/qwen3.5-397b-a17b locked in NVIDIA_NIM_DEFAULT_MODEL via combo-path D-16 approval (2026-04-28T15:30Z) — 0/4 candidates cleared D-03 dual hard floor in 20-event preflight, qwen's 16/20 within20km = 0.80 was best of 4 LIVE candidates, gen-duration p95 264.9s explicitly documented as ops cost not STOP-and-defer trigger; MAX_TOKENS_PER_MODEL caps seeded from preflight p99 + 20% buffer (qwen=425, llama=380, nemotron=1240, glm=1024, default 4096); 9 atomic commits 749ca57→5dc65ea covering: PREFLIGHT-CHARACTERIZATION.md root-cause + verdict skeleton (749ca57), D-16 #1+#2 approval doc (5706232), winner-lock + max_tokens (b44c4c7), D-04 splitBatchOnTimeout + v3:adaptive-retry-fail DLQ reason (863eef3), HANDOFF.md mid-execution pause + resume contract (3f5aa8e), D-18 computeGroupLineageHash + read-side cache pre-filter (9f3acb4), D-21 prewarmIfCold + D-13 env-tunable V3_WATCHDOG_ROLLBACK_THRESHOLD (64307f4), D-14 /api/cron/eval route + vercel.json crons[] entry "0 4 \* \* \*" (0834c34), A9 atomic 3 dev cells + LLMRunSummary mirror (030e9ca), D-19 snapshot-v3-redis 6-key forensic capture (5dc65ea); test suite 1013/11 todo → 1026/0 todo (+13 new tests, 0 regressions: 7 lineage-prefilter + 4 eval-cron + 2 D-13 threshold); D-20 dev dry-run all 6 steps PASS (cron auth 200 + canonical 0.94 ratio, snapshot dev:-prefixed with terminal=null/partial=present/dlq=24/lineage=102/baselines=5); 2 documented deviations: (1) Task 4's 50-event LLM-in-loop bake-off SKIPPED per combo-path D-16 #2 to save ~30-50min wall + ~200 LLM calls for no decision signal — explicitly proscribed by HANDOFF anti-pattern #1, (2) Task 12 OpenRouter cascade smoke PARTIAL CONFIRM only — cascade reached but `fall_through:nvidia_nim_no_client` audit suffix did not surface because operator used NVIDIA_NIM_API_KEY=invalid (yields 401 → fall_through:nvidia_nim_429) instead of empty key (would yield no_client); Plan 02 Gate B preflight will re-test with empty key; D-18 write-side cache population OUT OF SCOPE for 27.4.4 — only read-side ships, write-side `redis.setex(GROUP_LINEAGE_KEY_PREFIX+hash, ...)` lands in a future phase so Gate B telemetry stays comparable to pre-pre-filter runs; SUMMARY.md committed at .planning/phases/27.4.4-v3-latency-remediation-and-cutover/27.4.4-01-SUMMARY.md alongside dry-run-test.json snapshot artifact for Plan 02 reference)
 
 Phase 27.4 FINAL COMMITS (branch `feature/27.4-llm-enrichment-improvements`, HEAD `712a2be`, 43 commits ahead of main):
 
@@ -354,4 +356,4 @@ None.
 - Phase 27.4.2 inserted after Phase 27.4.1 (2026-04-24): CI Health + LLM v2 Quality Tuning — bundled phase greens main CI (32 filter-test failures, 4 npm-audit vulns, prettier format drift, lint warnings) so regression-watch is trustworthy during Track B — then runs one clean 184-batch v2 extraction to capture eval baseline and iterates prompts/resolver until eval ≥v1+5pp AND gdelt-actiongeo-fallback provenance <25%. Scope levers + hang-recurrence policy open for /gsd-discuss-phase. Out-of-scope: 27.4.3 (deck.gl v9 TS drift), 27.4.5 (LLM flight-recorder), 27.3.3 (romanization).
 - Phase 27.4.3 inserted after Phase 27.4.2 (2026-04-25): free-claude-code Routing Evaluation (URGENT) — pivoted from the originally-deferred "Cerebras hang root-cause investigation" to evaluate https://github.com/Alishahryar1/free-claude-code as a replacement for the manual Cerebras/Groq routing in `server/adapters/llm-provider.ts`. Five evaluation criteria (feasibility, reliability, cost/quota, integration shape, eval quality parity ±5pp of Plan 07's 0.940 baseline). Phase 27.4.2 HUMAN-UAT.md tests 1+2 are blocked on this phase landing. Reassigned 27.4.3 number from the prior deck.gl v9 depthTest TS-drift placeholder to this evaluation; deck.gl v9 work renumbers to 27.4.4.
 
-**Planned Phase:** 27.4.3 (free-claude-code-routing) — 6 plans — 2026-04-26T00:29:24.914Z
+**Planned Phase:** 27.4.4 (v3-latency-remediation-and-cutover) — 2 plans — 2026-04-27T03:51:05.323Z
