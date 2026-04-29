@@ -625,9 +625,10 @@
       "id": "gt-030",
       "description": "Israeli helicopter-inserted commando ground raid at Al-Nabi Shayth (Nabi Chit) village in eastern Bekaa Valley; four IDF Sikorsky helicopters crossed Lebanese airspace, two landed; troops searched for remains of navigator Ron Arad (missing since 1986) based on intel from kidnapped Lebanese security official. Accompanying airstrikes on nearby villages killed 41, wounded 40; soldiers failed to locate remains.",
       "sourceUrl": "https://www.cnn.com/2026/03/07/middleeast/israel-commando-raid-lebanon-airman-intl",
+      "notes": "Phase 27.4.4 Plan 02 correction. Original curator coord (34.0533, 36.2564) was 22km NE of the village center and disagreed with Wikipedia (33°52′20″N 36°06′46″E = 33.87222, 36.11278), Nominatim/OSM, and Asharq Al-Awsat's account of the raid being at the village's eastern cemetery. Updated truth coord to the canonical Wikipedia value. The strike location was within the village; resolver's Nominatim hit at 33.8727,36.1109 lands ~0.1km from the corrected truth.",
       "truth": {
-        "lat": 34.0533,
-        "lng": 36.2564,
+        "lat": 33.8722,
+        "lng": 36.1128,
         "precision": "city",
         "landmark": null,
         "country": "Lebanon",
@@ -835,6 +836,7 @@
       "id": "gt-040",
       "description": "Unidentified airstrikes (US/Israeli, attributed by PMF to American aircraft) on Popular Mobilization Forces 19th Brigade (Harakat Ansar Allah al-Awfiya) bases in the Akashat area of Al-Qa'im District, western Anbar — hit brigade medical unit, second-regiment headquarters, and logistical support facility. At least 35 fighters killed and ~90 wounded in one of the deadliest single-day strikes of the war in Iraq.",
       "sourceUrl": "https://www.thenationalnews.com/news/mena/2026/03/12/dozens-killed-in-strikes-on-iraqs-popular-mobilisation-forces/",
+      "notes": "Phase 27.4.4 Plan 02: known sparse-OSM ceiling event (~100km miss in resolver-only mode). Truth coord 33.33,41.0 corresponds to the Akashat phosphate-mine + PMF-19 base area in Al-Qa'im District (Wikipedia: 33°20'N 41°00'E). Nominatim has no entry for the mine, the PMF base, or any place at that coord — reverse-geocoding 33.33,41.0 returns 'Al-Rutba Central Subdistrict'. The query 'Akashat, Al Anbar, Iraq' returns a different settlement (also called Akashat) at 33.67,39.97 in Al-Rutba District, ~100km west-northwest of the strike location. The LocationHierarchyV2 schema has no admin2/district field to disambiguate. In production, ctx.bellingcatCoord (from extractBellingcatGeo on article text) would override this if the source contains explicit coords; the resolver-only eval cannot reach that path. Treat this event's miss as the honest sparse-OSM ceiling for the corpus, not a resolver bug.",
       "truth": {
         "lat": 33.33,
         "lng": 41.0,
