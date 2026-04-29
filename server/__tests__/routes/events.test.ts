@@ -1034,17 +1034,25 @@ describe('Events Route (Redis accumulator)', () => {
       expect(body.lastRun.durationMs).toBe(8000);
     });
 
-    it('returns 404 when NODE_ENV is production', async () => {
+    it('is gated by dashboardAuth in production (was 404, now 503/401)', async () => {
+      // Phase 27.4.4 Plan 02 — /llm-status moved from a NODE_ENV 404 gate to
+      // the dashboardAuth Bearer-token middleware. In prod with no
+      // DASHBOARD_PASSWORD set, the middleware returns 503 (auth_not_configured).
+      // Production telemetry is now reachable for an authed operator.
       const originalEnv = process.env.NODE_ENV;
+      const originalPwd = process.env.DASHBOARD_PASSWORD;
       process.env.NODE_ENV = 'production';
+      delete process.env.DASHBOARD_PASSWORD;
 
       try {
         const res = await fetch(`${baseUrl}/api/events/llm-status`);
-        expect(res.status).toBe(404);
-        const body = await res.json();
-        expect(body.error).toBe('Not found');
+        expect(res.status).toBe(503);
+        const body = (await res.json()) as { error?: string };
+        expect(body.error).toBe('auth_not_configured');
       } finally {
         process.env.NODE_ENV = originalEnv;
+        if (originalPwd === undefined) delete process.env.DASHBOARD_PASSWORD;
+        else process.env.DASHBOARD_PASSWORD = originalPwd;
       }
     });
   });
@@ -1111,14 +1119,23 @@ describe('Events Route (Redis accumulator)', () => {
       expect(body.paused).toBe(true);
     });
 
-    it('still 404s in production (observability block not leaked)', async () => {
+    it('observability block stays gated in production (now 503/401, was 404)', async () => {
+      // Phase 27.4.4 Plan 02 — /llm-status now uses dashboardAuth instead of
+      // a flat NODE_ENV 404. The observability block (dlqRecent, evalScore,
+      // recentEvents, etc.) is still inaccessible to unauthenticated callers
+      // — just gated at 503/401 instead of 404. This test guards against an
+      // accidental ungating.
       const originalEnv = process.env.NODE_ENV;
+      const originalPwd = process.env.DASHBOARD_PASSWORD;
       process.env.NODE_ENV = 'production';
+      delete process.env.DASHBOARD_PASSWORD;
       try {
         const res = await fetch(`${baseUrl}/api/events/llm-status`);
-        expect(res.status).toBe(404);
+        expect(res.status).toBe(503);
       } finally {
         process.env.NODE_ENV = originalEnv;
+        if (originalPwd === undefined) delete process.env.DASHBOARD_PASSWORD;
+        else process.env.DASHBOARD_PASSWORD = originalPwd;
       }
     });
 

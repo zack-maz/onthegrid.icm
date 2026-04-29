@@ -588,11 +588,11 @@ async function refreshPipelineOverride(): Promise<void> {
  * Returns live in-memory progress when pipeline is active, or Redis summary
  * from the last completed run when idle. Gated by NODE_ENV in production.
  */
-eventsRouter.get('/llm-status', async (_req, res) => {
-  // DEV-ONLY: return 404 in production
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(404).json({ error: 'Not found' });
-  }
+eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
+  // Phase 27.4.4 Plan 02 — dashboardAuth middleware replaces the prior
+  // `NODE_ENV === 'production'` 404 gate. /llm-status surfaces operator-grade
+  // telemetry (DLQ, watchdog timeouts, eval scores, routing trace) — same
+  // sensitivity as /llm-pipeline, so same Bearer gate.
 
   // Post-debug 2026-04-21: refresh in-memory override so the status endpoint
   // reflects the latest Topbar-pill setting across workers.
@@ -692,7 +692,13 @@ eventsRouter.get('/llm-status', async (_req, res) => {
  *
  * groupKey is sanitized (length cap + typeof string) per T-27.4-08-02.
  */
-if (process.env.NODE_ENV !== 'production') {
+// Phase 27.4.4 Plan 02 — register unconditionally. The previous
+// `if (process.env.NODE_ENV !== 'production')` wrapper made the route
+// physically absent from the prod app object, which 404'd before the
+// dashboardAuth middleware could ever evaluate the Bearer header. The
+// middleware itself now enforces the prod gate (NODE_ENV !== 'production'
+// → bypass; prod + matching Bearer → next; prod + bad → 401).
+{
   eventsRouter.post('/llm-replay/:groupKey', dashboardAuth, async (req, res) => {
     // Phase 27.4.4 Plan 02 — dashboardAuth middleware replaces the prior
     // `NODE_ENV === 'production'` 404 gate. In dev the middleware bypasses;
@@ -757,7 +763,9 @@ if (process.env.NODE_ENV !== 'production') {
  * Dual-gate per Pitfall 6: route registered only in non-prod, AND each
  * handler re-checks NODE_ENV before acting in case env flips after boot.
  */
-if (process.env.NODE_ENV !== 'production') {
+// Phase 27.4.4 Plan 02 — register unconditionally. See comment above the
+// /llm-replay block for the same NODE_ENV-wrap removal rationale.
+{
   eventsRouter.get('/llm-pipeline', dashboardAuth, async (_req, res) => {
     // Phase 27.4.4 Plan 02 — dashboardAuth middleware replaces the prior
     // `NODE_ENV === 'production'` 404 gate. The endpoint leaks the active
