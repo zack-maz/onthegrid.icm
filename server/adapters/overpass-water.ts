@@ -1,6 +1,3 @@
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import {
   FACILITY_TYPE_LABELS,
   type WaterFacility,
@@ -9,10 +6,12 @@ import {
 } from '../types.js';
 import { assignBasinStress } from '../lib/basinLookup.js';
 import { logger } from '../lib/logger.js';
+// Phase 27.4.4 Plan 02 deploy fix — match basinLookup.ts: switch from
+// runtime readFileSync to build-time JSON import. The bundle includes the
+// rivers polygons inline; no fs reads at function cold-start.
+import riversData from '../../src/data/rivers.json' with { type: 'json' };
 
 const log = logger.child({ module: 'overpass-water' });
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const OVERPASS_FALLBACK = 'https://overpass.private.coffee/api/interpreter';
@@ -334,10 +333,12 @@ interface RiverBbox {
   vertices: [number, number][];
 }
 
-const riversPath = resolve(__dirname, '../../src/data/rivers.json');
-const riversData: { features: RiverFeature[] } = JSON.parse(readFileSync(riversPath, 'utf-8'));
+// Phase 27.4.4 Plan 02 deploy fix — riversData imported at build time
+// (see import statement at top of file). Cast to expected shape since the
+// JSON module assertion gives us a generic object.
+const riversTyped: { features: RiverFeature[] } = riversData as { features: RiverFeature[] };
 
-export const RIVER_BBOXES: RiverBbox[] = riversData.features.map((f) => {
+export const RIVER_BBOXES: RiverBbox[] = riversTyped.features.map((f) => {
   const coords: number[][] =
     f.geometry.type === 'LineString'
       ? (f.geometry.coordinates as number[][])
