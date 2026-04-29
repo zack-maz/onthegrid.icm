@@ -51,6 +51,7 @@ import { getSourceTier } from './sourceTiers.js';
 import { extractBellingcatGeo } from './eventScoring.js';
 import { enqueueDLQ } from './llmDLQ.js';
 import { withBatchWatchdog } from './llmExtractorWatchdog.js';
+import { createLimit } from './concurrencyLimit.js';
 import { updateProgress, llmProgress } from './llmProgress.js';
 import type { RecentEnrichedEvent } from './llmProgress.js';
 import { env, isPipelineV3, setPipelineOverride } from '../config.js';
@@ -542,293 +543,321 @@ export async function processEventGroupsV3(
 
   const totalBatches = Math.ceil(groupsToProcess.length / BATCH_SIZE);
 
+  // Phase 27.4.4 Plan 02 — parallel batch processing. Sequential `await`
+  // per batch was leaving ~95% of NIM's 40-req/min ceiling unused. The
+  // limiter caps in-flight LLM calls at LLM_V3_CONCURRENCY (default 12);
+  // with ~27s/batch latency that's ~26 req/min steady-state, well under
+  // the cap. Drives 197-batch runs from ~95 min → ~10 min.
+  //
+  // Race-safety: JS is single-threaded so updateProgress R-M-W expressions
+  // (e.g. `(llmProgress.x ?? 0) + 1`) evaluate synchronously between awaits
+  // and serialize correctly. The shared `results` array, allFailed flag,
+  // matchedNewsByGroup/bellingcatByGroup maps, and llmProgress mutations
+  // all rely on this. completedBatchesCounter goes through finishBatch so
+  // onBatchComplete + writePartialCache see monotonically-increasing counts
+  // instead of per-batch indices (which jump out of order under concurrency).
+  // writePartialCache uses last-writer-wins on the observability-only
+  // events:llm:v3:partial key.
+  const limit = createLimit(env.LLM_V3_CONCURRENCY);
+  let completedBatchesCounter = 0;
+  const finishBatch = async (): Promise<void> => {
+    const c = ++completedBatchesCounter;
+    onBatchComplete?.(c, totalBatches);
+    await writePartialCache(results, c, totalBatches, false);
+  };
+
+  const tasks: Promise<void>[] = [];
   for (let i = 0; i < groupsToProcess.length; i += BATCH_SIZE) {
     const batch = groupsToProcess.slice(i, i + BATCH_SIZE);
     const batchIndex = Math.floor(i / BATCH_SIZE);
 
-    // Parallel Redis reads per group in the batch (BATCH_SIZE * 2 keys each).
-    const contexts = await Promise.all(batch.map(buildPromptContext));
+    tasks.push(
+      limit(async () => {
+        // Parallel Redis reads per group in the batch (BATCH_SIZE * 2 keys each).
+        const contexts = await Promise.all(batch.map(buildPromptContext));
 
-    // Hoist per-group news + bellingcat hits so the downstream resolver sees
-    // real headlines + coord hints via the V3ExtractionRun return value.
-    for (const ctx of contexts) {
-      matchedNewsByGroup.set(ctx.group.key, ctx.matchedNews);
-      const firstBellingcat = ctx.bellingcatHits[0];
-      if (firstBellingcat) {
-        bellingcatByGroup.set(ctx.group.key, {
-          lat: firstBellingcat.lat,
-          lng: firstBellingcat.lng,
-        });
-      }
-    }
+        // Hoist per-group news + bellingcat hits so the downstream resolver sees
+        // real headlines + coord hints via the V3ExtractionRun return value.
+        for (const ctx of contexts) {
+          matchedNewsByGroup.set(ctx.group.key, ctx.matchedNews);
+          const firstBellingcat = ctx.bellingcatHits[0];
+          if (firstBellingcat) {
+            bellingcatByGroup.set(ctx.group.key, {
+              lat: firstBellingcat.lat,
+              lng: firstBellingcat.lng,
+            });
+          }
+        }
 
-    const userPrompt = buildBatchUserPromptV3(contexts);
+        const userPrompt = buildBatchUserPromptV3(contexts);
 
-    // Phase 27.4.3 D-03 — wrap the freeClaudeRouter.callLLM invocation with
-    // the shared watchdog (D-11/D-12 27.4.1 — symmetric reuse non-negotiable
-    // so the rollback path stays reliable). On timeout each group in the
-    // batch is DLQ-routed with reason='v3:timeout_watchdog'. Routing
-    // decisions are captured into `routing` (closure) and threaded into
-    // llmProgress.routingTrace below.
-    let routing: RoutingDecision[] = [];
-    let didTimeout = false; // Phase 27.4.4 D-04 — flag for adaptive split-retry handoff.
-    let finishReason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | null = null;
-    const t0 = Date.now();
-    const content = await withBatchWatchdog(
-      async () => {
-        const result = await freeClaudeCallLLM(
-          [
-            { role: 'system', content: SYSTEM_PROMPT_V3 },
-            { role: 'user', content: userPrompt },
-          ],
-          JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
-          { batchSize: batch.length, modelOverride: V3_BAKEOFF_MODEL },
+        // Phase 27.4.3 D-03 — wrap the freeClaudeRouter.callLLM invocation with
+        // the shared watchdog (D-11/D-12 27.4.1 — symmetric reuse non-negotiable
+        // so the rollback path stays reliable). On timeout each group in the
+        // batch is DLQ-routed with reason='v3:timeout_watchdog'. Routing
+        // decisions are captured into `routing` (closure) and threaded into
+        // llmProgress.routingTrace below.
+        let routing: RoutingDecision[] = [];
+        let didTimeout = false; // Phase 27.4.4 D-04 — flag for adaptive split-retry handoff.
+        let finishReason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | null = null;
+        const t0 = Date.now();
+        const content = await withBatchWatchdog(
+          async () => {
+            const result = await freeClaudeCallLLM(
+              [
+                { role: 'system', content: SYSTEM_PROMPT_V3 },
+                { role: 'user', content: userPrompt },
+              ],
+              JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
+              { batchSize: batch.length, modelOverride: V3_BAKEOFF_MODEL },
+            );
+            routing = result.routing;
+            // Phase 27.4.4 Plan 02 dev-pass: thread finish_reason so the JSON.parse
+            // catch block can tag truncations distinctly from generic malformed JSON.
+            finishReason = result.finishReason ?? null;
+            // freeClaudeRouter's stripReasoningBlocks already removed <think>
+            // blocks; we don't see the raw text from here. Lineage records
+            // reasoningTrace as empty for v3 unless a future router enhancement
+            // surfaces the raw response (acceptable per D-13 "if present").
+            return result.content;
+          },
+          {
+            timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+            softWarnMs: 60_000, // D-02 hard-coded — only hard cap is env-tunable
+            batchIndex,
+            label: 'v3',
+            onTimeout: async () => {
+              didTimeout = true;
+              // Phase 27.4.4 D-04 — when adaptive batching is enabled AND the
+              // batch has > 1 group, defer DLQ enqueue + watchdogTimeoutCount
+              // increment to the splitBatchOnTimeout helper called below. The
+              // helper enqueues v3:adaptive-retry-fail per failed half-group
+              // and never increments watchdogTimeoutCount (Test 6 invariant —
+              // a successful split-retry must NOT trigger D-13 auto-rollback).
+              if (env.V3_ADAPTIVE_BATCH && batch.length > 1) return;
+
+              // Phase 27.4.3 — DLQ-route each group; enqueueDLQ is try/catch
+              // internally (D-29) so these awaits never throw out of the fire-
+              // and-forget block.
+              for (const g of batch) {
+                await enqueueDLQ({
+                  id: g.key,
+                  reason: 'v3:timeout_watchdog',
+                  lastError: `v3 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+                  timestamp: Date.now(),
+                });
+              }
+              updateProgress({
+                watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1,
+              });
+            },
+            onSoftWarn: (elapsedMs) => {
+              // Append a synthetic soft-warn entry to callHistory so DevApiStatus
+              // shows an amber marker. Field-set must match the LLMPipelineProgress
+              // callHistory element type exactly (durationMs, ok, batchSize,
+              // timestamp). Provider 'nvidia_nim' = the v3 primary.
+              const history = llmProgress.callHistory ?? [];
+              updateProgress({
+                callHistory: [
+                  {
+                    provider: 'nvidia_nim' as const,
+                    model: 'watchdog-soft-warn',
+                    tokensIn: 0,
+                    tokensOut: 0,
+                    durationMs: elapsedMs,
+                    ok: true,
+                    batchSize: batch.length,
+                    timestamp: Date.now(),
+                    skipReason: 'watchdog-soft-warn' as const,
+                  },
+                  ...history,
+                ].slice(0, 20),
+              });
+            },
+          },
         );
-        routing = result.routing;
-        // Phase 27.4.4 Plan 02 dev-pass: thread finish_reason so the JSON.parse
-        // catch block can tag truncations distinctly from generic malformed JSON.
-        finishReason = result.finishReason ?? null;
-        // freeClaudeRouter's stripReasoningBlocks already removed <think>
-        // blocks; we don't see the raw text from here. Lineage records
-        // reasoningTrace as empty for v3 unless a future router enhancement
-        // surfaces the raw response (acceptable per D-13 "if present").
-        return result.content;
-      },
-      {
-        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 60_000, // D-02 hard-coded — only hard cap is env-tunable
-        batchIndex,
-        label: 'v3',
-        onTimeout: async () => {
-          didTimeout = true;
-          // Phase 27.4.4 D-04 — when adaptive batching is enabled AND the
-          // batch has > 1 group, defer DLQ enqueue + watchdogTimeoutCount
-          // increment to the splitBatchOnTimeout helper called below. The
-          // helper enqueues v3:adaptive-retry-fail per failed half-group
-          // and never increments watchdogTimeoutCount (Test 6 invariant —
-          // a successful split-retry must NOT trigger D-13 auto-rollback).
-          if (env.V3_ADAPTIVE_BATCH && batch.length > 1) return;
 
-          // Phase 27.4.3 — DLQ-route each group; enqueueDLQ is try/catch
-          // internally (D-29) so these awaits never throw out of the fire-
-          // and-forget block.
+        // Persist this batch's routing decisions into the per-pipeline trace.
+        if (routing.length) {
+          const prevTrace = llmProgress.routingTrace ?? [];
+          const newEntries = routing.map((r) => ({
+            ts: r.timestamp,
+            batch: batchIndex,
+            provider: r.provider,
+            model: r.model,
+            reason: r.reason,
+          }));
+          updateProgress({ routingTrace: [...newEntries, ...prevTrace].slice(0, 50) });
+        }
+
+        if (content === null) {
+          // Phase 27.4.4 D-04 — adaptive split-and-retry handoff. When the
+          // watchdog fired AND env.V3_ADAPTIVE_BATCH is on AND the batch had
+          // more than one group, splitBatchOnTimeout retries each half once
+          // at smaller size. Successful halves contribute their events back
+          // into `results`; failed halves DLQ-route as v3:adaptive-retry-fail.
+          // splitCount + retrySuccess + retryFail + dlqEnqueueCount counters
+          // tick inside the helper.
+          if (didTimeout && env.V3_ADAPTIVE_BATCH && batch.length > 1) {
+            const stats = llmProgress.adaptiveBatchStats ?? {
+              splitCount: 0,
+              retrySuccess: 0,
+              retryFail: 0,
+              dlqEnqueueCount: 0,
+            };
+            stats.splitCount += 1;
+            updateProgress({ adaptiveBatchStats: stats });
+
+            const splitEvents = await splitBatchOnTimeout(contexts, batchIndex);
+            results.push(...splitEvents);
+            if (splitEvents.length > 0) allFailed = false;
+            await finishBatch();
+            return;
+          }
+          // Either freeClaudeCallLLM returned null OR the watchdog fired. Both
+          // paths already logged / DLQ'd / updated telemetry; just return.
+          log.warn({ batchIndex }, 'v3 batch yielded no content (null or watchdog timeout)');
+          await finishBatch();
+          return;
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(content);
+        } catch (jsonErr) {
+          // Phase 27.4.4 Plan 02 dev-pass: distinguish max_tokens truncation from
+          // generic malformed JSON. finishReason='length' is the authoritative
+          // signal; 'Unterminated string' substring is a heuristic fallback for
+          // providers that don't surface finish_reason. When either matches,
+          // tag the DLQ entries as v3:max_tokens_truncation so the dashboard
+          // can surface "bump the cap" vs. "model is hallucinating" distinctly.
+          const errMsg = jsonErr instanceof Error ? jsonErr.message : String(jsonErr);
+          const isTruncation = finishReason === 'length' || /unterminated string/i.test(errMsg);
+          const dlqReason = isTruncation ? 'v3:max_tokens_truncation' : 'v3:malformed';
+          log.warn(
+            {
+              batchIndex,
+              jsonErr: errMsg,
+              finishReason,
+              dlqReason,
+            },
+            'v3 JSON.parse failed',
+          );
           for (const g of batch) {
             await enqueueDLQ({
               id: g.key,
-              reason: 'v3:timeout_watchdog',
-              lastError: `v3 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+              reason: dlqReason,
+              lastError: `JSON.parse failed (finishReason=${finishReason ?? 'unknown'}): ${errMsg.slice(0, 200)}`,
               timestamp: Date.now(),
             });
           }
-          updateProgress({
-            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1,
+          const sf = llmProgress.schemaFailures ?? {
+            nvidia_nim: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
+            openrouter: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
+          };
+          const primary = routing[0]?.provider ?? 'nvidia_nim';
+          sf[primary].total += 1;
+          sf[primary].malformedJson += 1;
+          updateProgress({ schemaFailures: sf });
+          await finishBatch();
+          return;
+        }
+
+        const validated = batchResponseV3.safeParse(parsed);
+        if (!validated.success) {
+          log.warn(
+            { issues: validated.error.issues.slice(0, 3), batchIndex },
+            'v3 Zod parse failed',
+          );
+          const errPayload = JSON.stringify(validated.error.issues.slice(0, 3));
+          for (const g of batch) {
+            await enqueueDLQ({
+              id: g.key,
+              reason: 'v3:schema_fail',
+              lastError: errPayload,
+              timestamp: Date.now(),
+            });
+          }
+          const sf = llmProgress.schemaFailures ?? {
+            nvidia_nim: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
+            openrouter: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
+          };
+          const primary = routing[0]?.provider ?? 'nvidia_nim';
+          sf[primary].total += 1;
+          sf[primary].missingField += 1;
+          updateProgress({ schemaFailures: sf });
+          await finishBatch();
+          return;
+        }
+
+        results.push(...validated.data.events);
+        allFailed = false;
+
+        // === B-2 D-13 lineage capture per event in the validated batch ===
+        // Stamp lineage hash + reasoningTrace onto recentEvents so Plan 04
+        // DrillDownRow can render them under TS strict mode. Per-event resolve
+        // happens later in geocodeEnrichedEventsV3 — at that point the coord and
+        // resolver path are unknown. We capture lineage at extract-time with
+        // placeholder coord (0,0) + 'gdelt-actiongeo-fallback' provenance; the
+        // geocoder updates the full resolved coord on the cache entry, but
+        // lineage records the LLM's structured-extraction lineage which is
+        // complete here.
+        const promptText = `${SYSTEM_PROMPT_V3}\n\n${userPrompt}`;
+        const reasoningTrace = '';
+        const model = routing[0]?.model ?? 'unknown';
+        const batchDurationMs = Date.now() - t0;
+        for (const enrichedEvt of validated.data.events) {
+          const eventId = `llm-v3-${enrichedEvt.groupKey}`;
+          const { lineageHash } = await appendLineage(eventId, {
+            prompt: promptText,
+            response: content,
+            parsed: enrichedEvt,
+            coord: { lat: 0, lng: 0 }, // resolver fills in coord on the entity; lineage records pre-resolve LLM output
+            provenance: 'gdelt-actiongeo-fallback',
+            resolverPath: 'pre-resolve',
+            reasoningTrace,
+            model,
           });
-        },
-        onSoftWarn: (elapsedMs) => {
-          // Append a synthetic soft-warn entry to callHistory so DevApiStatus
-          // shows an amber marker. Field-set must match the LLMPipelineProgress
-          // callHistory element type exactly (durationMs, ok, batchSize,
-          // timestamp). Provider 'nvidia_nim' = the v3 primary.
-          const history = llmProgress.callHistory ?? [];
-          updateProgress({
-            callHistory: [
-              {
-                provider: 'nvidia_nim' as const,
-                model: 'watchdog-soft-warn',
-                tokensIn: 0,
-                tokensOut: 0,
-                durationMs: elapsedMs,
-                ok: true,
-                batchSize: batch.length,
-                timestamp: Date.now(),
-                skipReason: 'watchdog-soft-warn' as const,
-              },
-              ...history,
-            ].slice(0, 20),
-          });
-        },
-      },
+
+          const recentEvent: RecentEnrichedEvent = {
+            groupKey: enrichedEvt.groupKey,
+            location: {
+              country: enrichedEvt.location.country,
+              admin1: enrichedEvt.location.admin1,
+              city: enrichedEvt.location.city,
+              neighborhood: enrichedEvt.location.neighborhood,
+              landmark: enrichedEvt.location.landmark,
+            },
+            precision: derivePrecision(enrichedEvt.location),
+            confidence: enrichedEvt.confidence,
+            reasoning: enrichedEvt.reasoning,
+            weaponType: enrichedEvt.weaponType,
+            targetType: enrichedEvt.targetType,
+            tokensIn: null,
+            tokensOut: null,
+            provenance: 'gdelt-actiongeo-fallback',
+            sources: [],
+            fetchedAt: Date.now(),
+            reasoningTrace,
+            lineageHash,
+          };
+          const recents = (llmProgress.recentEvents ?? []).slice(0, 49);
+          updateProgress({ recentEvents: [recentEvent, ...recents] });
+        }
+
+        // Soft observability — wall-time per batch surfaces in the log even when
+        // freeClaudeRouter's per-attempt latency capture is the canonical signal.
+        log.debug(
+          { batchIndex, durationMs: batchDurationMs, events: validated.data.events.length },
+          'v3 batch processed',
+        );
+
+        await finishBatch();
+      }),
     );
-
-    // Persist this batch's routing decisions into the per-pipeline trace.
-    if (routing.length) {
-      const prevTrace = llmProgress.routingTrace ?? [];
-      const newEntries = routing.map((r) => ({
-        ts: r.timestamp,
-        batch: batchIndex,
-        provider: r.provider,
-        model: r.model,
-        reason: r.reason,
-      }));
-      updateProgress({ routingTrace: [...newEntries, ...prevTrace].slice(0, 50) });
-    }
-
-    if (content === null) {
-      // Phase 27.4.4 D-04 — adaptive split-and-retry handoff. When the
-      // watchdog fired AND env.V3_ADAPTIVE_BATCH is on AND the batch had
-      // more than one group, splitBatchOnTimeout retries each half once
-      // at smaller size. Successful halves contribute their events back
-      // into `results`; failed halves DLQ-route as v3:adaptive-retry-fail.
-      // splitCount + retrySuccess + retryFail + dlqEnqueueCount counters
-      // tick inside the helper.
-      if (didTimeout && env.V3_ADAPTIVE_BATCH && batch.length > 1) {
-        const stats = llmProgress.adaptiveBatchStats ?? {
-          splitCount: 0,
-          retrySuccess: 0,
-          retryFail: 0,
-          dlqEnqueueCount: 0,
-        };
-        stats.splitCount += 1;
-        updateProgress({ adaptiveBatchStats: stats });
-
-        const splitEvents = await splitBatchOnTimeout(contexts, batchIndex);
-        results.push(...splitEvents);
-        if (splitEvents.length > 0) allFailed = false;
-        onBatchComplete?.(batchIndex + 1, totalBatches);
-        await writePartialCache(results, batchIndex + 1, totalBatches, false);
-        continue;
-      }
-      // Either freeClaudeCallLLM returned null OR the watchdog fired. Both
-      // paths already logged / DLQ'd / updated telemetry; just continue.
-      log.warn({ batchIndex }, 'v3 batch yielded no content (null or watchdog timeout)');
-      onBatchComplete?.(batchIndex + 1, totalBatches);
-      await writePartialCache(results, batchIndex + 1, totalBatches, false);
-      continue;
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch (jsonErr) {
-      // Phase 27.4.4 Plan 02 dev-pass: distinguish max_tokens truncation from
-      // generic malformed JSON. finishReason='length' is the authoritative
-      // signal; 'Unterminated string' substring is a heuristic fallback for
-      // providers that don't surface finish_reason. When either matches,
-      // tag the DLQ entries as v3:max_tokens_truncation so the dashboard
-      // can surface "bump the cap" vs. "model is hallucinating" distinctly.
-      const errMsg = jsonErr instanceof Error ? jsonErr.message : String(jsonErr);
-      const isTruncation = finishReason === 'length' || /unterminated string/i.test(errMsg);
-      const dlqReason = isTruncation ? 'v3:max_tokens_truncation' : 'v3:malformed';
-      log.warn(
-        {
-          batchIndex,
-          jsonErr: errMsg,
-          finishReason,
-          dlqReason,
-        },
-        'v3 JSON.parse failed',
-      );
-      for (const g of batch) {
-        await enqueueDLQ({
-          id: g.key,
-          reason: dlqReason,
-          lastError: `JSON.parse failed (finishReason=${finishReason ?? 'unknown'}): ${errMsg.slice(0, 200)}`,
-          timestamp: Date.now(),
-        });
-      }
-      const sf = llmProgress.schemaFailures ?? {
-        nvidia_nim: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
-        openrouter: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
-      };
-      const primary = routing[0]?.provider ?? 'nvidia_nim';
-      sf[primary].total += 1;
-      sf[primary].malformedJson += 1;
-      updateProgress({ schemaFailures: sf });
-      onBatchComplete?.(batchIndex + 1, totalBatches);
-      await writePartialCache(results, batchIndex + 1, totalBatches, false);
-      continue;
-    }
-
-    const validated = batchResponseV3.safeParse(parsed);
-    if (!validated.success) {
-      log.warn({ issues: validated.error.issues.slice(0, 3), batchIndex }, 'v3 Zod parse failed');
-      const errPayload = JSON.stringify(validated.error.issues.slice(0, 3));
-      for (const g of batch) {
-        await enqueueDLQ({
-          id: g.key,
-          reason: 'v3:schema_fail',
-          lastError: errPayload,
-          timestamp: Date.now(),
-        });
-      }
-      const sf = llmProgress.schemaFailures ?? {
-        nvidia_nim: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
-        openrouter: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
-      };
-      const primary = routing[0]?.provider ?? 'nvidia_nim';
-      sf[primary].total += 1;
-      sf[primary].missingField += 1;
-      updateProgress({ schemaFailures: sf });
-      onBatchComplete?.(batchIndex + 1, totalBatches);
-      await writePartialCache(results, batchIndex + 1, totalBatches, false);
-      continue;
-    }
-
-    results.push(...validated.data.events);
-    allFailed = false;
-
-    // === B-2 D-13 lineage capture per event in the validated batch ===
-    // Stamp lineage hash + reasoningTrace onto recentEvents so Plan 04
-    // DrillDownRow can render them under TS strict mode. Per-event resolve
-    // happens later in geocodeEnrichedEventsV3 — at that point the coord and
-    // resolver path are unknown. We capture lineage at extract-time with
-    // placeholder coord (0,0) + 'gdelt-actiongeo-fallback' provenance; the
-    // geocoder updates the full resolved coord on the cache entry, but
-    // lineage records the LLM's structured-extraction lineage which is
-    // complete here.
-    const promptText = `${SYSTEM_PROMPT_V3}\n\n${userPrompt}`;
-    const reasoningTrace = '';
-    const model = routing[0]?.model ?? 'unknown';
-    const batchDurationMs = Date.now() - t0;
-    for (const enrichedEvt of validated.data.events) {
-      const eventId = `llm-v3-${enrichedEvt.groupKey}`;
-      const { lineageHash } = await appendLineage(eventId, {
-        prompt: promptText,
-        response: content,
-        parsed: enrichedEvt,
-        coord: { lat: 0, lng: 0 }, // resolver fills in coord on the entity; lineage records pre-resolve LLM output
-        provenance: 'gdelt-actiongeo-fallback',
-        resolverPath: 'pre-resolve',
-        reasoningTrace,
-        model,
-      });
-
-      const recentEvent: RecentEnrichedEvent = {
-        groupKey: enrichedEvt.groupKey,
-        location: {
-          country: enrichedEvt.location.country,
-          admin1: enrichedEvt.location.admin1,
-          city: enrichedEvt.location.city,
-          neighborhood: enrichedEvt.location.neighborhood,
-          landmark: enrichedEvt.location.landmark,
-        },
-        precision: derivePrecision(enrichedEvt.location),
-        confidence: enrichedEvt.confidence,
-        reasoning: enrichedEvt.reasoning,
-        weaponType: enrichedEvt.weaponType,
-        targetType: enrichedEvt.targetType,
-        tokensIn: null,
-        tokensOut: null,
-        provenance: 'gdelt-actiongeo-fallback',
-        sources: [],
-        fetchedAt: Date.now(),
-        reasoningTrace,
-        lineageHash,
-      };
-      const recents = (llmProgress.recentEvents ?? []).slice(0, 49);
-      updateProgress({ recentEvents: [recentEvent, ...recents] });
-    }
-
-    // Soft observability — wall-time per batch surfaces in the log even when
-    // freeClaudeRouter's per-attempt latency capture is the canonical signal.
-    log.debug(
-      { batchIndex, durationMs: batchDurationMs, events: validated.data.events.length },
-      'v3 batch processed',
-    );
-
-    onBatchComplete?.(batchIndex + 1, totalBatches);
-    await writePartialCache(results, batchIndex + 1, totalBatches, false);
   }
+
+  await Promise.all(tasks);
 
   // Final write with complete=true so readers can distinguish mid-run partial
   // from a terminated-run final.

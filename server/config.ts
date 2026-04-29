@@ -68,6 +68,22 @@ export const envSchema = z.object({
   // hard cap is env-tunable for in-incident rescue without a redeploy.
   LLM_BATCH_TIMEOUT_MS: z.coerce.number().int().positive().default(90000),
 
+  // Phase 27.4.4 Plan 02 — v3 batch concurrency. Sequential processing was
+  // ~2 batches/min against a NIM ceiling of 40 req/min, leaving ~95% of the
+  // rate budget unused. With ~27s/batch latency, default concurrency = 12
+  // lands roughly 26 req/min steady-state — well under the 40 cap, with
+  // enough headroom to absorb cold-start spikes and per-batch latency
+  // variance. Drives 197-batch dev runs from ~95 min → ~10 min.
+  //
+  // Tuning knob:
+  //   - LLM_V3_CONCURRENCY=1 reverts to fully sequential (rollback path)
+  //   - LLM_V3_CONCURRENCY=20 saturates NIM but risks 429s mid-run
+  //   - default=12 balances throughput against rate-limit safety
+  //
+  // The setting only affects the per-batch fan-out; resolver geocoding is
+  // still serialized at 1 req/s for Nominatim regardless of this value.
+  LLM_V3_CONCURRENCY: z.coerce.number().int().positive().default(12),
+
   // Phase 27.4.4 D-04 / D-13 / D-18: opt-in feature flags for v3 latency remediation.
   // Default OFF for D-04 + D-18 keeps Gate B telemetry pure; activated post-cutover when
   // ops cost > telemetry purity (D-04, D-18).

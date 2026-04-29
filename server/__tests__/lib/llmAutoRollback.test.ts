@@ -54,6 +54,9 @@ const { mockEnv } = vi.hoisted(() => ({
     OPENROUTER_API_KEY: '',
     LLM_BATCH_TIMEOUT_MS: 90000,
     V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
+    // Phase 27.4.4 Plan 02 — parallel batch concurrency. Tests run a small
+    // number of batches; the limit value just needs to be a positive int.
+    LLM_V3_CONCURRENCY: 12,
   },
 }));
 vi.mock('../../config.js', () => ({
