@@ -2,6 +2,33 @@
 
 import { ME_VIEWBOX, ME_COUNTRY_CODES } from '../lib/meBounds.js';
 
+// Phase 27.4.4 Plan 02 dev-pass: hard timeout on Nominatim fetches.
+//
+// Without this, a TCP connection that's accepted but never returns hangs the
+// fetch indefinitely — and since geocodeEnrichedEventsV3 awaits resolveLocation
+// per-event without a per-event try/catch, one bad request blocks the entire
+// 392-event loop. Observed live in dev: 5 of 392 geocoded in 17 minutes, then
+// fully frozen. 10s is generous (Nominatim direct curl returns in <1s) but
+// covers the worst case where the public Nominatim instance is throttling.
+//
+// Env override: NOMINATIM_FETCH_TIMEOUT_MS (defaults to 10000).
+const NOMINATIM_FETCH_TIMEOUT_MS = (() => {
+  const raw = Number(process.env.NOMINATIM_FETCH_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 10_000;
+})();
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NOMINATIM_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface ForwardGeocodedLocation {
   lat: number;
   lng: number;
@@ -43,10 +70,10 @@ export async function forwardGeocode(
 
   const url = `https://nominatim.openstreetmap.org/search?${params}`;
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: { 'User-Agent': 'IranConflictMonitor/1.0 (personal project)' },
     });
-    if (!res.ok) return null;
+    if (!res || !res.ok) return null;
     const data = await res.json();
     if (!Array.isArray(data) || !data[0]) return null;
     return {
@@ -109,10 +136,10 @@ export async function forwardGeocodeConstrained(
 
   const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: { 'User-Agent': 'IranConflictMonitor/1.0 (personal project)' },
     });
-    if (!res.ok) return [];
+    if (!res || !res.ok) return [];
     const data = (await res.json()) as unknown;
     if (!Array.isArray(data)) return [];
     return data.map((d) => {

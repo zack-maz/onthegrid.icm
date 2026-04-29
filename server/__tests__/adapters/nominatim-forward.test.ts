@@ -119,6 +119,57 @@ describe('nominatim forwardGeocode', () => {
 
     expect(result).toBeNull();
   });
+
+  // Phase 27.4.4 Plan 02 dev-pass — fetchWithTimeout AbortController.
+  // Live dev surfaced a 5/392 hang when Nominatim accepted but never responded;
+  // these tests verify the timeout layer drops the call cleanly.
+  it('returns null on AbortError when the underlying fetch is aborted (timeout)', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((_url, init) => {
+      return new Promise((_, reject) => {
+        const signal = (init as RequestInit).signal as AbortSignal | undefined;
+        if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        }
+        // Otherwise the promise hangs forever — this branch only fires if
+        // the fetchWithTimeout helper isn't passing the signal through.
+      });
+    }) as unknown as typeof fetch;
+
+    // Speed the timeout for the test itself (the helper reads env at module
+    // load; we work around that by mocking abort directly above).
+    const { forwardGeocode } = await import('../../adapters/nominatim.js');
+
+    // Trigger the abort via the helper's internal timer by waiting it out.
+    // The default timeout is 10s; we don't want the test to wait that long,
+    // so we manually trigger abort by clobbering the AbortController to fire
+    // on next tick. Simplest path: rely on the implementation calling abort()
+    // itself within NOMINATIM_FETCH_TIMEOUT_MS.
+    //
+    // Belt-and-suspenders: the fetch mock above rejects on abort, so even if
+    // the helper takes the full 10s, the test passes — just slowly. Skip if
+    // your CI is flaky on long runs.
+    const result = await forwardGeocode('Hung Test Place');
+    expect(result).toBeNull();
+  }, 15_000);
+
+  it('passes an AbortSignal through to the underlying fetch (timeout plumbing)', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    globalThis.fetch = vi.fn().mockImplementation((_url, init) => {
+      receivedSignal = (init as RequestInit).signal as AbortSignal | undefined;
+      return Promise.resolve({
+        ok: true,
+        json: async () => [{ lat: '0', lon: '0', display_name: 'X', type: 'city' }],
+      });
+    }) as unknown as typeof fetch;
+
+    const { forwardGeocode } = await import('../../adapters/nominatim.js');
+    await forwardGeocode('Baghdad');
+
+    expect(receivedSignal).toBeDefined();
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+  });
 });
 
 describe('Phase 27.4 forwardGeocodeConstrained (D-02/D-03/D-04)', () => {

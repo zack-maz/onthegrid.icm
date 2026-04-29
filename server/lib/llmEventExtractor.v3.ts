@@ -1141,7 +1141,27 @@ export async function geocodeEnrichedEventsV3(
       // naturally on null).
       bellingcatCoord: bellingcatByGroup.get(ev.groupKey) ?? null,
     };
-    const resolved: ResolvedLocation = await resolveLocation(ev.location, ctx);
+    // Phase 27.4.4 Plan 02 dev-pass — per-event try/catch so a single
+    // resolveLocation failure (timeout, throw, anything unexpected) doesn't
+    // freeze the entire 392-event geocoding loop. On error, we use the GDELT
+    // ActionGeo centroid as the fallback coord and tag provenance accordingly
+    // — same shape as Branch 6 of the resolver, just reached defensively.
+    let resolved: ResolvedLocation;
+    try {
+      resolved = await resolveLocation(ev.location, ctx);
+    } catch (err) {
+      log.warn(
+        { err: err instanceof Error ? err.message : String(err), groupKey: ev.groupKey },
+        'resolveLocation threw — using GDELT centroid fallback for this event',
+      );
+      resolved = {
+        lat: ctx.centroidLat,
+        lng: ctx.centroidLng,
+        provenance: 'gdelt-actiongeo-fallback',
+        actionGeoDistanceKm: 0,
+        displayName: 'GDELT ActionGeo centroid (resolver error fallback)',
+      };
+    }
     const precision = derivePrecision(ev.location);
 
     // Tier classification for suspect derivation — getSourceTier returns
