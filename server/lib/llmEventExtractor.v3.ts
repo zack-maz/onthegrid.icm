@@ -572,6 +572,7 @@ export async function processEventGroupsV3(
     // llmProgress.routingTrace below.
     let routing: RoutingDecision[] = [];
     let didTimeout = false; // Phase 27.4.4 D-04 — flag for adaptive split-retry handoff.
+    let finishReason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | null = null;
     const t0 = Date.now();
     const content = await withBatchWatchdog(
       async () => {
@@ -584,6 +585,9 @@ export async function processEventGroupsV3(
           { batchSize: batch.length, modelOverride: V3_BAKEOFF_MODEL },
         );
         routing = result.routing;
+        // Phase 27.4.4 Plan 02 dev-pass: thread finish_reason so the JSON.parse
+        // catch block can tag truncations distinctly from generic malformed JSON.
+        finishReason = result.finishReason ?? null;
         // freeClaudeRouter's stripReasoningBlocks already removed <think>
         // blocks; we don't see the raw text from here. Lineage records
         // reasoningTrace as empty for v3 unless a future router enhancement
@@ -696,18 +700,29 @@ export async function processEventGroupsV3(
     try {
       parsed = JSON.parse(content);
     } catch (jsonErr) {
+      // Phase 27.4.4 Plan 02 dev-pass: distinguish max_tokens truncation from
+      // generic malformed JSON. finishReason='length' is the authoritative
+      // signal; 'Unterminated string' substring is a heuristic fallback for
+      // providers that don't surface finish_reason. When either matches,
+      // tag the DLQ entries as v3:max_tokens_truncation so the dashboard
+      // can surface "bump the cap" vs. "model is hallucinating" distinctly.
+      const errMsg = jsonErr instanceof Error ? jsonErr.message : String(jsonErr);
+      const isTruncation = finishReason === 'length' || /unterminated string/i.test(errMsg);
+      const dlqReason = isTruncation ? 'v3:max_tokens_truncation' : 'v3:malformed';
       log.warn(
         {
           batchIndex,
-          jsonErr: jsonErr instanceof Error ? jsonErr.message : String(jsonErr),
+          jsonErr: errMsg,
+          finishReason,
+          dlqReason,
         },
         'v3 JSON.parse failed',
       );
       for (const g of batch) {
         await enqueueDLQ({
           id: g.key,
-          reason: 'v3:malformed',
-          lastError: `JSON.parse failed: ${jsonErr instanceof Error ? jsonErr.message.slice(0, 200) : 'unknown'}`,
+          reason: dlqReason,
+          lastError: `JSON.parse failed (finishReason=${finishReason ?? 'unknown'}): ${errMsg.slice(0, 200)}`,
           timestamp: Date.now(),
         });
       }

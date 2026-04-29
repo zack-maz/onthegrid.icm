@@ -471,7 +471,11 @@ describe('Phase 27.4 Plan 05 - POI amenity path (D-03)', () => {
     const hasMissCache = setCalls.some(([key, data]) => {
       return (
         typeof key === 'string' &&
-        key.includes('geocode:fwd:constrained:poi') &&
+        // Cache prefix bumped to v2 in commit c0791e6 (Phase 27.4.4 Plan 02
+        // admin-polygon filter); accept either the legacy or v2 prefix to
+        // keep this assertion focused on the miss-cache behavior, not the
+        // exact prefix string.
+        /geocode:fwd:constrained:(v2:)?poi/.test(key) &&
         data !== null &&
         typeof data === 'object' &&
         (data as { miss?: boolean }).miss === true

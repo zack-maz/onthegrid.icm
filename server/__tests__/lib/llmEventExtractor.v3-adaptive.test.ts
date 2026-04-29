@@ -382,3 +382,95 @@ describe('v3 adaptive batching (D-04)', () => {
     expect(wdcCalls.length).toBe(0);
   });
 });
+
+// -----------------------------------------------------------------------------
+// Phase 27.4.4 Plan 02 dev-pass — DLQ truncation classification
+//
+// Live dev /api/events?force=true revealed the qwen winner truncating at the
+// 425-token cap, surfacing as JSON.parse "Unterminated string" failures. The
+// pre-fix code dumped these into the generic v3:malformed bucket so they
+// were indistinguishable from real LLM hallucinations.
+//
+// This suite locks in the new classification: when finish_reason='length'
+// OR the parser error message matches /unterminated string/i, DLQ entries
+// are tagged as v3:max_tokens_truncation.
+// -----------------------------------------------------------------------------
+
+describe('v3 DLQ truncation classification (Plan 02 dev-pass)', () => {
+  it('truncated response with finishReason=length → DLQ entries tagged v3:max_tokens_truncation', async () => {
+    const groups = [makeGroup('g1', 'e1'), makeGroup('g2', 'e2')];
+    vi.mocked(withBatchWatchdog).mockImplementation(watchdogPassThrough);
+    // Simulate qwen hitting the cap mid-string. Content is unterminated.
+    vi.mocked(freeClaudeCallLLM).mockResolvedValueOnce({
+      content:
+        '{"events":[{"schemaVersion":"v3","groupKey":"g1","reasoning":"strike on a building in the western district that was previously identified as a',
+      routing: [
+        { provider: 'nvidia_nim', model: 'qwen', reason: 'primary', timestamp: Date.now() },
+      ],
+      finishReason: 'length',
+    });
+
+    await processEventGroupsV3(groups);
+
+    const dlqCalls = vi.mocked(enqueueDLQ).mock.calls;
+    const truncationEntries = dlqCalls.filter(
+      ([e]) => (e as { reason: string }).reason === 'v3:max_tokens_truncation',
+    );
+    const malformedEntries = dlqCalls.filter(
+      ([e]) => (e as { reason: string }).reason === 'v3:malformed',
+    );
+    // Both groups in the batch tagged truncation, NOT generic malformed.
+    expect(truncationEntries.length).toBe(2);
+    expect(malformedEntries.length).toBe(0);
+    // Error message preserves the finish_reason for diagnosis.
+    const sample = truncationEntries[0]?.[0] as { lastError: string };
+    expect(sample.lastError).toMatch(/finishReason=length/);
+  });
+
+  it('truncated response WITHOUT finishReason → heuristic on "Unterminated string" still tags v3:max_tokens_truncation', async () => {
+    // Some providers don't surface finish_reason. The error-message heuristic
+    // is the fallback path so older / non-OpenAI-compliant providers still
+    // get correctly classified.
+    const groups = [makeGroup('g1', 'e1')];
+    vi.mocked(withBatchWatchdog).mockImplementation(watchdogPassThrough);
+    vi.mocked(freeClaudeCallLLM).mockResolvedValueOnce({
+      content: '{"events":[{"reasoning":"truncated mid-sentence with no closing quote',
+      routing: [
+        { provider: 'nvidia_nim', model: 'qwen', reason: 'primary', timestamp: Date.now() },
+      ],
+      // finishReason intentionally omitted to exercise the heuristic path.
+    });
+
+    await processEventGroupsV3(groups);
+
+    const truncationEntries = vi
+      .mocked(enqueueDLQ)
+      .mock.calls.filter(([e]) => (e as { reason: string }).reason === 'v3:max_tokens_truncation');
+    expect(truncationEntries.length).toBe(1);
+  });
+
+  it('genuinely malformed JSON (not a truncation) still tags v3:malformed', async () => {
+    // Regression guard. Garbage that ISN'T a truncation should keep its
+    // existing classification so we can tell hallucination apart from cap-hit.
+    const groups = [makeGroup('g1', 'e1')];
+    vi.mocked(withBatchWatchdog).mockImplementation(watchdogPassThrough);
+    vi.mocked(freeClaudeCallLLM).mockResolvedValueOnce({
+      content: '{events: [unquoted, {invalid: tokens}]}', // structurally broken, no unterminated string
+      routing: [
+        { provider: 'nvidia_nim', model: 'qwen', reason: 'primary', timestamp: Date.now() },
+      ],
+      finishReason: 'stop',
+    });
+
+    await processEventGroupsV3(groups);
+
+    const malformedEntries = vi
+      .mocked(enqueueDLQ)
+      .mock.calls.filter(([e]) => (e as { reason: string }).reason === 'v3:malformed');
+    const truncationEntries = vi
+      .mocked(enqueueDLQ)
+      .mock.calls.filter(([e]) => (e as { reason: string }).reason === 'v3:max_tokens_truncation');
+    expect(malformedEntries.length).toBe(1);
+    expect(truncationEntries.length).toBe(0);
+  });
+});

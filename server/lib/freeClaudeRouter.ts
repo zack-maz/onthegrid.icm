@@ -105,7 +105,11 @@ const OPENROUTER_DAILY_CAP = 200;
 // successful preflight calls). These caps are defensive ceilings, not load-
 // bearing for p95 latency.
 const MAX_TOKENS_PER_MODEL: Record<string, number> = {
-  'qwen/qwen3.5-397b-a17b': 425, // p99 354 + 20% buffer (winner — 27.4.4)
+  // Phase 27.4.4 Plan 02 dev-pass bump: 425 → 2048 after live dev /api/events?force=true
+  // showed ~89% truncation rate (50 v3:malformed DLQ in 7 batches) — the
+  // 20-event preflight characterization underestimated production hierarchy
+  // verbosity. 2048 keeps a 5× safety margin against the 4096 default.
+  'qwen/qwen3.5-397b-a17b': 2048,
   'meta/llama-3.3-70b-instruct': 380, // p99 315 + 20% buffer
   'nvidia/nemotron-3-super-120b-a12b': 1240, // p99 1031 + 20% buffer (verbose, schema-fails)
   'z-ai/glm4.7': 1024, // conservative — no traceable records (NIM 400s)
@@ -278,12 +282,22 @@ async function getOpenRouterDaily(): Promise<number> {
  * JSON Schema is delivered to the model as instruction text by the caller.
  * Zod enforces shape post-parse.
  */
+// Phase 27.4.4 Plan 02 dev-pass: surface OpenAI-style finish_reason so the
+// v3 extractor can classify max_tokens truncations distinctly from other
+// JSON parse failures. 'length' = response cut at max_tokens cap; 'stop' =
+// natural completion; null/undefined = provider didn't supply the field.
+export type RouterFinishReason = 'stop' | 'length' | 'tool_calls' | 'content_filter' | null;
+
 export async function callLLM(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
 
   _schemaText: string,
   opts: { batchSize?: number; modelOverride?: string } = {},
-): Promise<{ content: string | null; routing: RoutingDecision[] }> {
+): Promise<{
+  content: string | null;
+  routing: RoutingDecision[];
+  finishReason?: RouterFinishReason;
+}> {
   const log = logger.child({ component: 'freeClaudeRouter' });
   const decisions: RoutingDecision[] = [];
 
@@ -396,11 +410,17 @@ export async function callLLM(
           res.choices[0]?.message as { reasoning_content?: string } | undefined
         )?.reasoning_content;
         const content = stripReasoningBlocks(raw, reasoningField);
+        // Phase 27.4.4 Plan 02 dev-pass: capture OpenAI-style finish_reason.
+        // 'length' indicates max_tokens cap was hit; downstream JSON.parse
+        // catch uses this to tag DLQ entries as v3:max_tokens_truncation
+        // (vs. the generic v3:malformed bucket).
+        const finishReason: RouterFinishReason =
+          (res.choices[0]?.finish_reason as RouterFinishReason | undefined) ?? null;
         record(p.name as Provider, 'ok');
         // Phase 27.4.4 D-21 — stamp lastNimCallTs on every successful NIM
         // call so prewarmIfCold() correctly detects > 60s of NIM idleness.
         if (p.name === 'nvidia_nim') lastNimCallTs = Date.now();
-        return { content, routing: decisions };
+        return { content, routing: decisions, finishReason };
       } catch (err) {
         const latencyMs = Date.now() - t0;
         // Latency captured even on failure — surfaces hung calls in dashboard.

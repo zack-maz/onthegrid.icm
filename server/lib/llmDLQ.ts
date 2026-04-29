@@ -30,6 +30,7 @@ export interface DLQEntry {
     | 'timeout_watchdog'
     | 'v3:timeout_watchdog'
     | 'v3:malformed'
+    | 'v3:max_tokens_truncation' // Phase 27.4.4 Plan 02 dev-pass — finish_reason=length OR JSON 'Unterminated string'
     | 'v3:schema_fail'
     | 'v3:rate_limit_exhaust'
     | 'v3:adaptive-retry-fail'; // Phase 27.4.4 D-04 — split-on-timeout retry budget exhaustion
