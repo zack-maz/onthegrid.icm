@@ -34,6 +34,13 @@ const NON_KEY_METHODS = new Set<string>([
   'flushdb',
 ]);
 const VARIADIC_KEY_METHODS = new Set<string>(['del', 'unlink']);
+// Phase 27.4.4 Plan 02 — SCAN's first arg is the cursor (an opaque string the
+// server returns for pagination), not a key. The default key-prefix behavior
+// would corrupt the cursor on iteration 2+ of a SCAN loop ("ERR invalid
+// cursor"). The `match` option, however, IS a key-pattern and must receive
+// the prefix so callers can write portable patterns like `geocode:*` and have
+// them match the prefixed keys actually stored in dev.
+const SCAN_METHODS = new Set<string>(['scan']);
 
 function wrapWithPrefix(client: Redis): Redis {
   const prefix = process.env.CACHE_KEY_PREFIX ?? '';
@@ -45,6 +52,18 @@ function wrapWithPrefix(client: Redis): Redis {
       if (typeof value !== 'function') return value;
       if (typeof prop !== 'string' || NON_KEY_METHODS.has(prop)) {
         return value.bind(target);
+      }
+      if (SCAN_METHODS.has(prop)) {
+        return function (...args: unknown[]) {
+          // Pass cursor (args[0]) through unchanged. Prefix the `match` option
+          // when present so callers write unprefixed patterns and get correct
+          // matches against prefixed keys.
+          const opts = args[1] as { match?: string; count?: number } | undefined;
+          if (opts && typeof opts.match === 'string') {
+            args[1] = { ...opts, match: prefix + opts.match };
+          }
+          return (value as (...a: unknown[]) => unknown).apply(target, args);
+        };
       }
       return function (...args: unknown[]) {
         if (args.length > 0 && typeof args[0] === 'string') {
