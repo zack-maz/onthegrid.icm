@@ -18,12 +18,22 @@ import { loadSitesSnapshot } from './sitesSnapshot.js';
 import { loadWaterSnapshot } from './waterSnapshot.js';
 import { logger } from './logger.js';
 import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
-import { derivePrecision, type GeocodeProvenance, type LocationHierarchyV2 } from './llmSchema.js';
+import {
+  derivePrecision,
+  type GeocodeProvenance,
+  type LocationHierarchyV2,
+  type Precision,
+} from './llmSchema.js';
 
 const log = logger.child({ module: 'llm-resolver' });
 
 // Cache + throttle
-const GEOCODE_CACHE_PREFIX = 'geocode:fwd:constrained:';
+//
+// 27.4.4 Plan 02 (eval quality): bumped to v2 because filterAdminPolygons
+// changes Branch 3 + Branch 4 outputs for city-precision queries. Without
+// the version bump, prior 30-day cache entries shadow the fix and the
+// admin-polygon hits keep coming back from Redis.
+const GEOCODE_CACHE_PREFIX = 'geocode:fwd:constrained:v2:';
 const GEOCODE_CACHE_LOGICAL_TTL_MS = 30 * 24 * 3600 * 1000;
 const GEOCODE_CACHE_REDIS_TTL_SEC = 30 * 24 * 3600;
 const GEOCODE_DELAY_MS = 1000;
@@ -270,6 +280,20 @@ function buildDisplayNameForQuery(hierarchy: LocationHierarchyV2): string | null
   return parts.join(', ');
 }
 
+// Phase 27.4.4 Plan 02 (eval quality fix). Nominatim's `type: 'administrative'`
+// covers admin polygons (subdistrict / district / governorate / municipality
+// boundary objects). When the hierarchy resolves a city or finer, the polygon
+// centroid is the wrong answer — gt-009 picked up a Subdistrict at 32.87,44.22
+// that sits 20km from the actual town. For region-precision queries we keep
+// admin polygons; that IS the right answer at state level.
+export function filterAdminPolygons<T extends { type: string }>(
+  candidates: readonly T[],
+  precision: Precision,
+): T[] {
+  if (precision === 'region') return [...candidates];
+  return candidates.filter((c) => c.type !== 'administrative');
+}
+
 async function resolveViaNominatimDirect(
   hierarchy: LocationHierarchyV2,
 ): Promise<SnapshotHit | null> {
@@ -290,16 +314,20 @@ async function resolveViaNominatimDirect(
     // cache-hit path does not update lastNominatimCallMs and let a
     // subsequent uncached call bypass the 1 req/s Nominatim policy.
     await throttleNominatim();
+    // 27.4.4: bumped limit 1 → 5 so the admin-polygon filter can fall through
+    // to the next-best candidate (e.g. gt-030 has [admin/municipality, village]
+    // and we want the village).
     const candidates = await forwardGeocodeConstrained(query, {
       countrycodes: cc ?? ME_COUNTRY_CODES,
       viewbox: ME_VIEWBOX,
-      limit: 1,
+      limit: 5,
     });
-    if (candidates.length === 0) {
+    const filtered = filterAdminPolygons(candidates, derivePrecision(hierarchy));
+    if (filtered.length === 0) {
       await cacheSetSafe(key, { miss: true }, GEOCODE_CACHE_REDIS_TTL_SEC);
       return null;
     }
-    const first = candidates[0]!;
+    const first = filtered[0]!;
     const hit: SnapshotHit = { lat: first.lat, lng: first.lng, displayName: first.displayName };
     await cacheSetSafe(key, hit, GEOCODE_CACHE_REDIS_TTL_SEC);
     return hit;
@@ -401,12 +429,17 @@ async function resolveViaVerifiedTwoPass(
     // cache-hit path does not update lastNominatimCallMs and let a
     // subsequent uncached call bypass the 1 req/s Nominatim policy.
     await throttleNominatim();
-    const candidates = await forwardGeocodeConstrained(query, {
+    const rawCandidates = await forwardGeocodeConstrained(query, {
       countrycodes: cc ?? ME_COUNTRY_CODES,
       viewbox: ME_VIEWBOX,
       limit: 5,
       addressdetails: true,
     });
+    // 27.4.4 Plan 02 (eval quality fix): drop admin-polygon hits when
+    // hierarchy implies city precision or finer. Filter happens before
+    // WR-04 single-hit acceptance AND before the LLM reranker, so the
+    // model never sees a polygon-centroid candidate that would mislead it.
+    const candidates = filterAdminPolygons(rawCandidates, derivePrecision(hierarchy));
     if (candidates.length === 0) {
       await cacheSetSafe(key, { miss: true }, GEOCODE_CACHE_REDIS_TTL_SEC);
       return null;

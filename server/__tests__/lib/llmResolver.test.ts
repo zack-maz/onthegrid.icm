@@ -790,3 +790,123 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
     expect(vi.mocked(callLLM)).not.toHaveBeenCalled();
   });
 });
+
+// -----------------------------------------------------------------------------
+// Phase 27.4.4 Plan 02 (eval quality) — admin-polygon filter
+//
+// gt-009 (Jurf al-Sakhar) and gt-030 (Al-Nabi Shayth) revealed the resolver
+// was accepting Nominatim hits with `type: 'administrative'` (subdistrict /
+// municipality polygon centroids) when the hierarchy implied city precision.
+// The polygon centroid sits 20+km from the actual settlement.
+//
+// Fix: when derivePrecision(hierarchy) is city / neighborhood / exact, drop
+// `type === 'administrative'` from candidate lists in BOTH the direct path
+// (Branch 3) and the verify-2pass path (Branch 4). Region-precision events
+// keep them — admin polygons ARE the right answer at state level.
+// -----------------------------------------------------------------------------
+
+describe('Phase 27.4.4 — admin-polygon filter (eval misses)', () => {
+  beforeEach(() => {
+    __resetThrottleForTests();
+    vi.mocked(loadSitesSnapshot).mockReturnValue(null);
+    vi.mocked(loadWaterSnapshot).mockReturnValue(null);
+    vi.mocked(forwardGeocodeConstrained).mockReset().mockResolvedValue([]);
+    vi.mocked(cacheGetSafe).mockReset().mockResolvedValue(null);
+    vi.mocked(cacheSetSafe).mockReset().mockResolvedValue(undefined);
+    vi.mocked(callLLM).mockReset().mockResolvedValue(null);
+  });
+
+  it('city precision: rejects single "administrative" hit and falls through to GDELT centroid', async () => {
+    // gt-009 reproduction: Jurf al-Sakhar query returns one Nominatim hit,
+    // a Subdistrict polygon at 32.87, 44.22. Truth is the town center at
+    // 32.71, 44.12 (~20km away).
+    vi.mocked(forwardGeocodeConstrained).mockResolvedValue([
+      {
+        lat: 32.8682,
+        lng: 44.2159,
+        displayName:
+          'Jurf Al Sakhar Subdistrict, Al-Musayyib District, Babil Governorate, 51006, Iraq',
+        type: 'administrative',
+        address: { country_code: 'iq' },
+      },
+    ]);
+
+    const out = await resolveLocation(
+      hierarchy({ country: 'Iraq', admin1: 'Babil Governorate', city: 'Jurf al-Sakhar' }),
+      ctx({ centroidLat: 32.7083, centroidLng: 44.1167 }),
+    );
+
+    // With the admin-polygon filter, Branch 3 returns null, Branch 4 sees
+    // an empty post-filter candidate list and also returns null. Dispatcher
+    // falls through to bellingcat (no coord set) → GDELT centroid (= ctx).
+    expect(out.provenance).toBe('gdelt-actiongeo-fallback');
+    expect(out.lat).toBeCloseTo(32.7083);
+    expect(out.lng).toBeCloseTo(44.1167);
+  });
+
+  it('city precision: multi-candidate path strips admin polygon before LLM reranker', async () => {
+    // gt-030 reproduction: Al-Nabi Shayth returns [admin/municipality, village].
+    // Branch 3 fetches its own list (limit 5) and should pick the village.
+    // Branch 4 then sees only the village post-filter and accepts via WR-04
+    // single-hit (no LLM call needed).
+    vi.mocked(forwardGeocodeConstrained).mockResolvedValue([
+      {
+        lat: 33.8887,
+        lng: 36.1181,
+        displayName: 'Nabi Shit, Baalbek District, Baalbek-Hermel Governorate, Lebanon',
+        type: 'administrative',
+        address: { country_code: 'lb' },
+      },
+      {
+        lat: 33.8727,
+        lng: 36.1109,
+        displayName:
+          'Al Nabi Shayth, Nabi Shit, Baalbek District, Baalbek-Hermel Governorate, Lebanon',
+        type: 'village',
+        address: { country_code: 'lb' },
+      },
+    ]);
+
+    const out = await resolveLocation(
+      hierarchy({
+        country: 'Lebanon',
+        admin1: 'Baalbek-Hermel Governorate',
+        city: 'Al-Nabi Shayth',
+      }),
+      ctx({ centroidLat: 33.87, centroidLng: 36.11 }),
+    );
+
+    // After admin filter, only the village remains. WR-04 accepts it.
+    // No LLM reranker call.
+    expect(out.provenance).toBe('nominatim-verified-2pass');
+    expect(out.lat).toBeCloseTo(33.8727);
+    expect(out.lng).toBeCloseTo(36.1109);
+    expect(vi.mocked(callLLM)).not.toHaveBeenCalled();
+  });
+
+  it('region precision: keeps "administrative" hits (state-level events still resolve)', async () => {
+    // Regression guard. A country-only or admin1-only hierarchy implies
+    // region precision; the right answer IS the admin polygon centroid.
+    // Make sure we don't filter it away.
+    vi.mocked(forwardGeocodeConstrained).mockResolvedValue([
+      {
+        lat: 33.0,
+        lng: 44.0,
+        displayName: 'Babil Governorate, Iraq',
+        type: 'administrative',
+        address: { country_code: 'iq' },
+      },
+    ]);
+
+    const out = await resolveLocation(
+      hierarchy({ country: 'Iraq', admin1: 'Babil Governorate' }),
+      ctx({ centroidLat: 33.0, centroidLng: 44.0 }),
+    );
+
+    // Region precision → admin polygon kept → returned via direct path
+    // (sanity gate fires for region too, but verify path also accepts).
+    expect(['nominatim-direct', 'nominatim-verified-2pass']).toContain(out.provenance);
+    expect(out.lat).toBeCloseTo(33.0);
+    expect(out.lng).toBeCloseTo(44.0);
+  });
+});
