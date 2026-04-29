@@ -2,210 +2,329 @@
 phase: 27.4.4
 plan: 02
 artifact: HANDOFF
-created: 2026-04-28T17:15Z
+created: 2026-04-29T15:20Z
 operator: zackmaz
-supersedes: HANDOFF.md (2026-04-28T15:50Z) — Plan 01 mid-execution pause
+supersedes: HANDOFF.md (2026-04-28T17:15Z) — Plan 02 task list pre-dev-pass
+session_focus: Dev-pass v3 pipeline debugging + 3 high-impact fixes (5 commits)
 ---
 
-# 27.4.4 — HANDOFF (Plan 01 CLOSED, Plan 02 PENDING)
+# 27.4.4 — HANDOFF (post-dev-pass, pre-cutover)
 
-Plan 01 is fully shipped. Plan 02 is operator-gated cutover work (live LLM
-Gate B passes, Vercel prod env flips, two D-16 human approvals) that
-cannot run autonomously. This handoff captures the state-of-the-world a
-fresh session needs to resume.
+The 2026-04-29 session pivoted from the original Plan 02 cutover script
+into a deep dev-pass on the v3 pipeline. Five commits landed that fix
+real production-side data integrity issues, plus a forensic recording
+artifact captured a full v3 run end-to-end. **Plan 02 Tasks 1+2 are
+shipped**; Tasks 3–7 (Gate B 2-pass, cutover POST, UAT close, SUMMARY)
+are still operator-gated and pending.
+
+The user's stated end-state goal:
+
+> "I want both [dev and prod] working in sync for now, then I'll abandon
+> dev and move all keys to prod for live launch."
 
 ## Current branch state
 
 - Branch: `feature/27.4.4-v3-latency-remediation-and-cutover`
-- HEAD: `0d248d7` (Plan 01 SUMMARY commit)
-- Ahead of `main`: 11 commits this session + the pre-pause history (full
-  list in `27.4.4-01-SUMMARY.md` § Helper landings).
-- Working tree: clean.
-- Test suite: 1026 / 0 todo / 0 regressions (was 1013 / 11 todo at the
-  pause). Tasks 7+8+9 flipped 7+4+2 = 13 new real tests.
+- HEAD: `43edfe8` (resolver Branch 4 gate + v3 adapter + geocode cache
+  hygiene — three bug fixes in one commit)
+- Ahead of `main`: 22 commits — the original Plan 01 work plus 8 new
+  commits this session.
+- Working tree: 3 untracked dev-pass scratch scripts (see "Dev-pass
+  scratch files" section below). Decide whether to commit, ignore, or
+  delete before final push.
+- Test suite: **1037 / 0 todo / 0 regressions** (was 1026 at session
+  start). Typecheck clean.
 
-## Plan 01 — COMPLETE ✓
+## Plan 02 task status
 
-All 13 tasks closed. Closeout artifacts:
+| Task | Description                      | Status                   | Evidence                                                                  |
+| ---- | -------------------------------- | ------------------------ | ------------------------------------------------------------------------- |
+| 1    | extract-gate-b-snapshot.sh       | ✓ shipped                | commit `1325fd1`                                                          |
+| 2    | Gate A re-baseline (D-16 #3)     | ✓ shipped + re-baselined | commits `36cde0e` + `f347244`; PROD `events:llm-eval-baseline:v3` = 0.980 |
+| 3    | Gate B Pass 1                    | ⏸ pending                | operator-gated; needs Vercel prod env flips first                         |
+| 4    | Gate B Pass 2                    | ⏸ pending                | reproducibility check                                                     |
+| 5    | Cutover POST {version: v3}       | ⏸ pending                | needs Tasks 3+4 PASS                                                      |
+| 6    | Close 27.4.2 HUMAN-UAT tests 1+2 | ⏸ pending                | links to CUTOVER.md                                                       |
+| 7    | Plan 02 SUMMARY closeout         | ⏸ pending                | final closeout                                                            |
 
-- `27.4.4-01-SUMMARY.md` — bake-off winner + max_tokens caps + 9-task
-  helper landing list with commit SHAs + 2 D-16 approval timestamps +
-  D-20 dry-run pass log + 2 honest deviations + Gate readiness checklist.
-- `dry-run-test.json` — D-19 reference snapshot from Task 0c-postlude
-  step 6 (cacheKeyPrefix:dev:, terminal=null, partial=present, audit=0,
-  dlq=24, lineage=102, baselines=5).
-- 5 new feat commits this session (`9f3acb4` D-18 → `5dc65ea` D-19) plus
-  `0d248d7` Plan 01 closeout doc.
+## Session commits (top → bottom = chronological)
 
-## Bake-off + combo path — load-bearing for Plan 02
+| SHA       | Subject                                                            | Why                                                          |
+| --------- | ------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `1325fd1` | extract-gate-b-snapshot.sh                                         | Plan 02 Task 1: bash + jq helper for Gate B threshold tables |
+| `36cde0e` | Gate A re-baseline 0.940 (PASS) — checkpoint 3                     | Plan 02 Task 2: original baseline                            |
+| `df938d0` | eval-detail diagnostic                                             | Per-event eval review tool (out-of-band)                     |
+| `c0791e6` | filter Nominatim admin polygons in resolver Branch 3 + 4           | gt-009 (Jurf al-Sakhar) admin-polygon fix; resolver bug      |
+| `57d0b7c` | correct gt-030 truth coord + document gt-040 sparse-OSM limit      | Ground-truth quality                                         |
+| `f347244` | re-baseline Gate A 0.980 (corrected corpus)                        | PROD baseline updated after corpus fixes                     |
+| `4c11b8f` | qwen max_tokens 425→2048 + classify v3 truncations                 | Live dev showed 89% truncation rate; cap underestimated      |
+| `91537f4` | Nominatim fetch timeout + per-event try/catch in v3 geocoder       | Live dev 5/392 hang; missing AbortController                 |
+| `43edfe8` | resolver Branch 4 gate + v3 entity adapter + geocode cache hygiene | **Three real bugs in one commit** — see below                |
 
-| Field              | Value                                                      |
-| ------------------ | ---------------------------------------------------------- |
-| Winner model       | `qwen/qwen3.5-397b-a17b`                                   |
-| Locked at          | `freeClaudeRouter.ts NVIDIA_NIM_DEFAULT_MODEL` (`b44c4c7`) |
-| Within20km         | 0.80 (16/20)                                               |
-| Gen-duration p95   | 264.9s — FAILS ≤30s p95 floor                              |
-| D-03 dual-floor    | 0/4 candidates cleared → combo path approved               |
-| Required at Gate B | `V3_ADAPTIVE_BATCH=true` in Vercel prod env BEFORE Pass 1  |
+## Three real bugs fixed at `43edfe8`
 
-**Plan 02 ships v3 for location-accuracy parity, not latency parity.**
-This is intentional per D-16 #2 approval; the p95 cliff is treated as
-ops cost, not a STOP-and-defer trigger.
+The forensic recording at `.dev-cache/run-2026-04-28T20-46-14/RUN_REPORT.md`
+surfaced these by capturing a complete v3 run end-to-end (197/197 batches,
+392 events, 93 minutes, 1.0% DLQ, 0 watchdog timeouts). All three are
+production-side data integrity issues.
 
-## Vercel prod env state
+### Bug 1: Resolver Branch 4 only ran when Branch 3 had a hit
 
-| Var                  | Status                  | Notes                                                                                       |
-| -------------------- | ----------------------- | ------------------------------------------------------------------------------------------- |
-| NVIDIA_NIM_API_KEY   | ✓ already set           | Inherited from 27.4.3.                                                                      |
-| CRON_SECRET          | ✓ set 2026-04-28T17:13Z | Encrypted, Production scope. Verified via `vercel env ls production`.                       |
-| LLM_PIPELINE_V3      | ✗ NOT set               | Operator chose to hold — flip BEFORE Gate B Pass 1.                                         |
-| V3_ADAPTIVE_BATCH    | ✗ NOT set               | Combo-path requirement — flip to `true` BEFORE Pass 1.                                      |
-| V3_LINEAGE_PREFILTER | ✗ NOT set               | Stays default OFF through Plan 02 (write-side cache out of scope per Plan 01 deviation #3). |
+The Islamabad event in the recorded run resolved to `(25.38, 68.38)` —
+**1028km off** the Nominatim direct hit at `(33.69, 73.07)`. Trace:
 
-## Plan 02 — task-by-task action map
+1. Earlier hung dev run cached `{miss: true}` for Branch 3's direct query
+   `'Islamabad, Islamabad Capital Territory, Pakistan'` under
+   `dev:geocode:fwd:constrained:v2:direct:*` (30-day TTL).
+2. The post-fix run (with the new timeout fix in 91537f4) hit the
+   miss-cache; Branch 3 returned null without retrying.
+3. Branch 4's gate `(directHit && shouldTriggerTwoPassVerify(...))`
+   skipped Branch 4 entirely because directHit was null.
+4. Bellingcat (Branch 5) had no coord; fell through to GDELT centroid
+   (Branch 6) → `(25.38, 68.38)` (the GDELT raw coord for that event).
 
-Plan 02 has 7 tasks across 3 waves. Operator-gated except Task 1.
+**Fix:** inline the precision-based gate so Branch 4 runs whenever city
+/ neighborhood / region precision warrants it, regardless of whether
+Branch 3 had a hit. Exact-precision events keep the existing
+`directHit > 250km from centroid` check. `shouldTriggerTwoPassVerify`
+removed (dead code after inlining).
 
-### Wave 1
+### Bug 2: `enrichedV3ToEntities` dropped 9 v3 fields
 
-**Task 1 (auto, executor-runnable)** — `scripts/extract-gate-b-snapshot.sh`
+Pipeline produces `severity, suspect, geocodeProvenance, weaponType,
+targetType, timeOfDay, durationMinutes, reasoning, displayName` — all
+of which the entity adapter silently dropped. Live dev evidence from
+the recorded run:
 
-- Small bash + jq helper. Pipes `/api/events/llm-status` through jq to
-  emit 8 markdown table rows (7 D-08/D-09 gates + 1 D-15 fallbackRatio).
-- Full script body inline in `27.4.4-02-PLAN.md` lines 167-205.
-- Acceptance: `test -x`, `head -1` is `#!/bin/bash`, jq compile clean.
-- Commit msg: `feat(27.4.4): extract-gate-b-snapshot.sh — operator helper for threshold table generation`.
+- All 392 entities had `data.severity = undefined`
+- All 392 had `data.suspect = undefined` (vs 204 computed by pipeline)
+- All 392 had `data.geocodeProvenance = null`
 
-**Task 2 (checkpoint:human-verify)** — Gate A re-baseline (resolver-only, prod) + D-16 #3
+Map can't render severity-based styling, can't filter by provenance,
+can't visually flag suspect events.
 
-- Operator runs `npm run eval:replay` against PROD Redis from laptop.
-- Persists baseline to `events:llm-eval-baseline:v3` (90d TTL).
-- Verdicts:
-  - PASS: ratio ≥ 0.890 AND drift < 5pp from 0.940 → proceed.
-  - DRIFT: drift ≥ 5pp from 0.940 → STOP, escalate, defer per D-17.
-  - FLOOR FAIL: ratio < 0.890 → STOP, defer per D-17.
-- Operator writes Gate A section into `27.4.4-02-CUTOVER.md` (NEW file).
-- D-16 STOP marker — resume on `gate-a: pass` or `gate-a: defer (<verdict>)`.
-- Commit msg: `docs(27.4.4): Gate A re-baseline {ratio} (PASS) — checkpoint 3`.
+**Fix:** thread all 9 fields through `enrichedV3ToEntities` to
+`ConflictEventEntity.data`. Type extended with optional v3 fields.
+`conflictEventEntitySchema.data` is `.passthrough()` so no schema
+change needed.
 
-### Wave 2
+### Bug 3: `clear-llm-cache-dev.ts` didn't flush geocoder cache
 
-**Task 3 (checkpoint:human-verify, blocking)** — Gate B Pass 1
+Bug 1's miss-cache poison persists across runs because the clear script
+only flushed `events:llm:*` keys. SCAN-based flush of
+`geocode:fwd:constrained:*` (both v2 prefix and legacy unprefixed) added
+so "restart dev → re-run" always starts from a clean resolver state.
 
-- Wall-clock ~30-45min sequential.
-- Operator must FIRST flip Vercel prod env: `LLM_PIPELINE_V3=true`,
-  `V3_ADAPTIVE_BATCH=true`, then redeploy (`vercel --prod` or push) to
-  pick up the new env.
-- 4-step sequence:
-  1. `tsx scripts/snapshot-v3-redis.ts --label=gate-b-pass-1-start`
-     (note: in prod this needs `.env.local` swapped to PROD Upstash;
-     read-only so safe per A6/Pitfall 8).
-  2. `curl -fsS "https://<vercel-prod-host>/api/events?force=true"` to
-     kick off v3 extraction. Background fire-and-forget.
-  3. Poll `/api/events/llm-status` every ~30s until `stage=idle` AND
-     `completedBatches===totalBatches`.
-  4. `bash scripts/extract-gate-b-snapshot.sh "https://<vercel-prod-host>"`
-     to derive threshold table.
-- Capture `tsx scripts/snapshot-v3-redis.ts --label=gate-b-pass-1-end`.
-- Append Pass 1 section to `27.4.4-02-CUTOVER.md` (verbatim
-  llm-status JSON + threshold table).
-- D-08/D-09/D-15 gates (all 8 must PASS):
-  - watchdogTimeoutCount === 0
-  - DLQ count ≤ 5
-  - duration_min ≤ 120
-  - provenanceCounts populated
-  - schema_fail rate ≤ 2%
-  - latency.nvidia_nim.p95 ≤ 30000ms (relaxed by combo path framing
-    but still tracked — failure here is acknowledged ops cost, not
-    automatic abort. Operator decides whether to proceed.)
-  - routingTrace primary share ≥ 90%
-  - fallbackRatio ≤ 15%
+## Eval state
 
-**Task 4 (checkpoint:human-verify)** — Pass 1 verdict
+- **PROD `events:llm-eval-baseline:v3` = 0.980** (49/50 within 20km)
+- Drift from canonical 0.940: +4pp — within D-17 5pp tolerance
+- Original 0.940 measurement preserved in CUTOVER.md `## Gate A` for
+  historical record
+- Re-baseline section appended at `## Gate A — Re-baseline against
+corrected corpus` documenting corpus fixes (gt-009 / gt-030 / gt-040)
 
-- D-11: any gate FAIL on Pass 1 = overall fail + defer phase.
-- Resume signal: `pass-1: pass` (proceed to Pass 2) OR
-  `pass-1: defer (<which gate>)`.
+## Forensic recording artifact
 
-### Wave 3
+`.dev-cache/run-2026-04-28T20-46-14/` contains a complete forensic
+capture of the v3 run that surfaced bugs 1+2:
 
-**Task 5 (checkpoint:human-verify, blocking)** — Gate B Pass 2
+- `RECORDING.log` — tick-by-tick run log (186 ticks)
+- `run-meta.txt` — git SHA, branch, env (secrets redacted)
+- `status-tick-NNN.json` × 186 — verbatim `/api/events/llm-status` every 30s
+- `stage-transition-{stage}.json` — snapshots at each transition
+- `peek-progressive.txt` — partial-cache peeks at batch milestones
+- `status-final.json` — final llm-status verbatim
+- `terminal-cache.json` — full `/api/events` response (392 events)
+- `dlq-final.json` — DLQ entries (2 × `v3:malformed` from
+  `finishReason=abort`)
+- `RUN_REPORT.md` — synthesized summary
 
-- Identical mechanics to Task 3, second consecutive run.
-- D-10: 2 consecutive passes required to defeat false-positive risk
-  (Plan 05 of 27.4.3 burned a single pass and let a model-specific
-  long-tail surprise leak through).
-- Snapshots: `--label=gate-b-pass-2-start` + `--label=gate-b-pass-2-end`.
+The recorder was extended with `set -e` resilience and per-batch
+milestone peeks; reusable for any future run.
 
-**Task 6 (checkpoint:human-verify)** — Pass 2 verdict + D-16 #4
+## Dev-pass scratch files (uncommitted)
 
-- Both passes must PASS all 8 gates AND have fallbackRatio ≤ 15%.
-- D-16 STOP marker for cutover authorization.
-- Resume signal: `pass-2: pass` (proceed to cutover POST) OR
-  `pass-2: defer (<which gate>)`.
+These four scripts are in `scripts/` but not yet committed:
 
-**Task 7 (auto + manual cleanup)** — Cutover POST + UAT close
+| File                                  | Purpose                                                  | Decision needed       |
+| ------------------------------------- | -------------------------------------------------------- | --------------------- |
+| `scripts/eval-detail.ts`              | Per-event eval review (committed at `df938d0`)           | already committed     |
+| `scripts/clear-llm-cache-dev.ts`      | Flush dev LLM + geocoder caches (committed at `43edfe8`) | already committed     |
+| `scripts/peek-v3-partial.ts`          | Inspect `events:llm:v3:partial` mid-run                  | uncommitted — keep?   |
+| `scripts/probe-resolver-islamabad.ts` | One-shot Islamabad regression probe                      | uncommitted — delete? |
+| `scripts/record-v3-run.sh`            | Forensic recording harness for full runs                 | uncommitted — keep?   |
 
-- `curl -X POST https://<vercel-prod-host>/api/events/llm-pipeline -d '{"version":"v3"}'`
-  — flips runtime override to v3 prod-wide. Returns 200 + appends entry
-  to `events:llm-pipeline-audit`.
-- Operator visually confirms Topbar PipelineVersionPill renders `v3` in
-  prod browser.
-- Edit `.planning/phases/27.4.2-ci-health-and-llm-v2-tuning/27.4.2-HUMAN-UAT.md`:
-  close tests 1+2 with link to `27.4.4-02-CUTOVER.md` as evidence.
-- Write `27.4.4-02-SUMMARY.md` closeout.
-- Update `STATE.md` + ROADMAP.md to mark Phase 27.4.4 COMPLETE.
+Recommendation: commit `peek-v3-partial.ts` and `record-v3-run.sh` (both
+useful ops tools); delete `probe-resolver-islamabad.ts` (one-shot).
 
-## Anti-patterns to preserve (carried from Plan 01 + new from this session)
+## Anti-patterns surfaced this session
 
-1. **Don't run Task 4's 50-event LLM-in-loop bake-off** — locked decision per combo-path D-16 #2.
-2. **Don't change `NVIDIA_NIM_DEFAULT_MODEL` from qwen** — winner is locked in `b44c4c7`.
-3. **Don't enable `V3_LINEAGE_PREFILTER` in Vercel prod for Plan 02** — write-side cache is OUT OF SCOPE per Plan 01 deviation #3, so the read-side gate has nothing to read; Gate B telemetry comparability requires it OFF.
-4. **DO enable `V3_ADAPTIVE_BATCH=true` in Vercel prod BEFORE Pass 1** — combo-path requirement per Plan 01 SUMMARY.
-5. **Don't commit terminal-cache writes through `events:llm:v3`** — two-key discipline (terminal vs `:partial`) is load-bearing per Pitfall 3.
-6. **Don't propagate `OPENROUTER_API_KEY` to Vercel prod env** — dev-only cascade fixture per CONTEXT D-12. Plan 02 Gate B does NOT need it.
-7. **Re-test cascade smoke with EMPTY `NVIDIA_NIM_API_KEY` (not "invalid")** before Gate B Pass 1 — Plan 01 Task 12 was PARTIAL CONFIRM only because operator used `invalid` (yields 401 → `fall_through:nvidia_nim_429`) instead of empty (would yield `fall_through:nvidia_nim_no_client`). 5-minute smoke; re-runs against dev.
-8. **Operator must swap `.env.local` Upstash URL/token from dev (Plan 01) BACK to prod for Tasks 2/3/5 snapshot calls.** Snapshot script is read-only (Pitfall 6) so this is safe; revert to dev after Plan 02 close.
+Carrying forward + new from this session.
 
-## Resume command
+1. **Don't run Task 4's 50-event LLM-in-loop bake-off** — locked per
+   combo-path D-16 #2 (carried from prior HANDOFF).
+2. **Don't change `NVIDIA_NIM_DEFAULT_MODEL` from qwen** — winner locked
+   in `b44c4c7` (carried).
+3. **Don't enable `V3_LINEAGE_PREFILTER` in Vercel prod for Plan 02** —
+   write-side cache is OUT OF SCOPE (carried).
+4. **DO enable `V3_ADAPTIVE_BATCH=true` in Vercel prod BEFORE any prod
+   run** — combo-path requirement; live dev showed adaptive saving 1
+   batch from a watchdog timeout (carried + reinforced this session).
+5. **Don't commit terminal-cache writes through `events:llm:v3`** —
+   two-key discipline (terminal vs `:partial`) is load-bearing
+   (carried).
+6. **Don't propagate `OPENROUTER_API_KEY` to Vercel prod env** —
+   dev-only cascade fixture (carried).
+7. **Re-test cascade smoke with EMPTY `NVIDIA_NIM_API_KEY`** before
+   Gate B Pass 1 (carried).
+8. **Operator must swap `.env.local` Upstash URL/token from dev BACK
+   to prod for snapshot calls** — read-only so safe (carried).
+9. **NEW: Don't remove the `geocode:fwd:constrained:` 30-day miss-cache
+   without consideration.** It IS the right behavior in steady-state to
+   avoid hammering Nominatim. The bug was that bad fetches (hung
+   connections without timeout) wrote `{miss: true}` to it. With the
+   timeout fix in `91537f4`, the miss-cache is now safe again. Just
+   flush it once after the timeout fix lands (`clear-llm-cache-dev.ts`
+   now does this).
+10. **NEW: When the partial cache is observability-only, the route
+    layer must NOT read from it as primary.** `loadRecentEnrichedEvents`
+    correctly reads from terminal `events:llm:v3`. Don't change to
+    read from `:partial` — partial is pre-resolver.
+11. **NEW: Bump cache key prefix when behavior changes shift output.**
+    `geocode:fwd:constrained:` → `:v2:` on the admin-polygon filter
+    (commit `c0791e6`). Was correct call. If we ever change resolver
+    output again, bump to `:v3:`.
+
+## Resumption recipe
 
 ```bash
-/gsd-execute-phase 27.4.4 --interactive
+# 1. Switch back to feature branch (if on a different branch)
+cd /Users/zackmaz/Desktop/my_world
+git checkout feature/27.4.4-v3-latency-remediation-and-cutover
+
+# 2. Restart dev to pick up the resolver/adapter/cache fixes
+# (Ctrl-C in npm run dev tab, then re-launch)
+npm run dev
+
+# 3. Clear stale caches (now flushes geocoder too)
+node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/clear-llm-cache-dev.ts
+
+# 4. (Optional) Start the recorder for another forensic capture
+bash scripts/record-v3-run.sh &
+
+# 5. Trigger fresh extraction
+curl -fsS "http://localhost:3001/api/events?backfill=true" | jq '. | length'
+
+# 6. Wait ~90 minutes; watch /api/events/llm-status
+# Expected with all 3 fixes:
+#   - DLQ should stay near 0 (cap=2048 prevents truncation)
+#   - watchdogTimeoutCount should stay 0 (adaptive saves any 1 timeout)
+#   - Geocoding completes in <10 min (timeout fix)
+#   - Far fewer gdelt-actiongeo-fallback events (Branch 4 catches more)
+#   - Islamabad lands at (33.69, 73.07) instead of (25.38, 68.38)
+#   - Entity data has all v3 fields populated (severity, suspect,
+#     geocodeProvenance, weaponType, targetType, etc.)
 ```
 
-The `--interactive` flag is the right shape because Plan 02 has 4 D-16
-human-verify checkpoints; subagent-spawned executors can't pause for
-operator decisions.
+## Path-to-done — three options
 
-The next session should:
+After dev validation completes successfully, the user can choose:
 
-1. Read this HANDOFF.md first.
-2. Read `27.4.4-02-PLAN.md` for full task specs (the 7 tasks above).
-3. Read `27.4.4-01-SUMMARY.md` for the bake-off winner + combo-path framing.
-4. Verify the operator's Vercel prod env state matches the table above.
-5. Start with Task 1 (executor-runnable) → then walk through Tasks 2-7
-   with operator approval at each D-16 checkpoint.
+### Option A: Original Plan 02 cutover (Tasks 3–7)
+
+Run the planned Gate B 2-pass production smoke runs from the operator's
+laptop. Cutover POST. Close 27.4.2 UAT. Write Plan 02 SUMMARY. Mark
+phase complete. ~2-3 hours operator time.
+
+### Option B: Skip Gate B, push directly
+
+The dev signal is strong (full clean run, 0.980 eval, all 3 bugs fixed).
+Push branch, flip Vercel prod env vars (`LLM_PIPELINE_V3=true`,
+`V3_ADAPTIVE_BATCH=true`), let the first prod /api/events trigger
+extraction, monitor `/api/events/llm-status` from prod URL. ~30 min.
+
+### Option C: Cron-architecture redesign first, THEN cutover
+
+User's stated preference earlier in session:
+
+> "Anyway we can locally save our llm-enriched events, so it doesn't
+> need to reload? Instead, pipeline reload should be a daily cron job
+> on the server side in the background"
+
+Implementation:
+
+1. Move pipeline trigger out of `/api/events` (delete the
+   fire-and-forget block at events.ts:1019-1130). Route becomes pure
+   cache reader.
+2. Add `/api/cron/refresh-events` that runs the same pipeline. Schedule
+   in `vercel.json` crons (every 4-6 hours matches GDELT's 15-min
+   updates without thrashing).
+3. Push, flip Vercel env, let first cron tick populate prod cache.
+4. Users always see cached data instantly; pipeline runs are server-side
+   only.
+
+~1-2 hours to implement + push.
+
+## Live-launch cleanup (after cutover, separate work-unit)
+
+When the user is ready to abandon dev and go prod-only:
+
+1. Remove `CACHE_KEY_PREFIX=dev:` from `.env.local`.
+2. Swap `.env.local` Upstash URL+token to PROD permanently.
+3. Delete dev-only Redis keys (`dev:events:*`, `dev:geocode:*`).
+4. Optional: delete or move to `scripts/debug/` the dev-pass scratch
+   scripts (`clear-llm-cache-dev.ts`, `peek-v3-partial.ts`,
+   `record-v3-run.sh`, `eval-detail.ts`).
+5. Set `NODE_ENV=production` enforcement everywhere.
 
 ## Test suite baseline at handoff
 
 ```
 Test Files  74 passed (74)
-     Tests  1026 passed (1026)
+     Tests  1037 passed (1037)
 ```
 
-Zero todos. All 11 baseline `it.todo` cases (7 lineage-prefilter +
-4 eval-cron) flipped to real assertions across Plan 01 commits
-`9f3acb4` + `0834c34`. Plus 2 new D-13 threshold tests in
-`64307f4`.
+Zero todos. +11 new tests this session covering admin-polygon filter
+(3), Branch 4 gate fix (3), DLQ truncation classification (3),
+Nominatim fetch timeout (2). All net-positive — no behavioral
+regressions.
 
 ## Where to find things
 
-- **PLAN.md** for the cutover: `27.4.4-02-PLAN.md` (in this same dir).
-- **Bake-off receipts**: `27.4.4-01-BAKEOFF.md`, `27.4.4-PREFLIGHT-CHARACTERIZATION.md`.
-- **Plan 01 closeout**: `27.4.4-01-SUMMARY.md` + `dry-run-test.json`.
+- **Plan 02 PLAN.md**: `27.4.4-02-PLAN.md` (this dir)
+- **CUTOVER.md** (Gate A captured): `27.4.4-02-CUTOVER.md` (this dir)
+  - Contains both the original 0.940 baseline AND the corpus-corrected
+    0.980 re-baseline section
+- **Plan 01 closeout**: `27.4.4-01-SUMMARY.md` (this dir)
+- **Forensic run report**:
+  `.dev-cache/run-2026-04-28T20-46-14/RUN_REPORT.md`
+- **Eval ground-truth**: `.planning/eval/ground-truth-events.json`
+  (gt-009 corrected, gt-030 truth fixed, gt-040 sparse-OSM noted)
 - **Per-task scripts**:
-  - `scripts/snapshot-v3-redis.ts` (Plan 01 Task 11) — 6-key forensic capture.
-  - `scripts/eval-replay.ts` (existing) — resolver-only eval against ground truth.
-  - `scripts/extract-gate-b-snapshot.sh` (Plan 02 Task 1) — NOT YET CREATED.
-- **Cutover doc to be created**: `27.4.4-02-CUTOVER.md` (operator-driven, populated incrementally Tasks 2 → 7).
-- **27.4.2 UAT manifest** (Plan 02 Task 7 closes tests 1+2): `.planning/phases/27.4.2-ci-health-and-llm-v2-tuning/27.4.2-HUMAN-UAT.md`.
+  - `scripts/extract-gate-b-snapshot.sh` (Plan 02 Task 1) — ready
+  - `scripts/eval-replay.ts` (existing) — resolver-only eval
+  - `scripts/eval-detail.ts` (`df938d0`) — per-event eval review
+  - `scripts/snapshot-v3-redis.ts` (Plan 01 Task 11) — 6-key forensic
+    capture
+  - `scripts/clear-llm-cache-dev.ts` (`43edfe8`) — clear LLM + geocoder
+  - `scripts/peek-v3-partial.ts` (uncommitted) — inspect partial cache
+  - `scripts/record-v3-run.sh` (uncommitted) — forensic recording
+- **27.4.2 UAT manifest** (Plan 02 Task 6 closes tests 1+2):
+  `.planning/phases/27.4.2-ci-health-and-llm-v2-tuning/27.4.2-HUMAN-UAT.md`
+
+## Session next-step decision matrix
+
+If next session starts cold with no preference:
+
+1. **Default**: Restart dev, clear cache, trigger fresh /api/events,
+   wait ~90 min for validation run, then choose Option A / B / C.
+
+2. **If user wants speed-to-done**: Option B (skip Gate B, push, flip
+   Vercel env, watch first prod run).
+
+3. **If user wants production-grade**: Option C (cron architecture
+   first, then push).
+
+4. **If user wants caution**: Option A (full Gate B 2-pass ritual as
+   originally planned).
