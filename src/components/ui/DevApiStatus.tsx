@@ -14,6 +14,7 @@ import { useFilterStore } from '@/stores/filterStore';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
+import { shouldRenderDashboard, dashboardAuthHeaders } from '@/lib/dashboardAuth';
 
 interface FetchEntry {
   ok: boolean;
@@ -738,14 +739,19 @@ export function DevApiStatus() {
   const showWaterTab = useLayerStore((s) => s.activeLayers.has('water'));
   const showSitesTab = useFilterStore((s) => s.showSites);
 
-  // Phase 27.4 Plan 09 D-15 / Phase 27.4.3 Plan 04 — Events tab is dual-gated:
-  //   1. schemaVersion === 'v2' OR 'v3' (operator flipped LLM_PIPELINE_V2 / V3
+  // Phase 27.4 Plan 09 D-15 / Phase 27.4.3 Plan 04 / Phase 27.4.4 Plan 02 —
+  // Events tab is dual-gated:
+  //   1. schemaVersion === 'v2' OR 'v3' (operator flipped LLM_PIPELINE_V2/V3
   //      and at least one run has reported back)
-  //   2. import.meta.env.DEV (prod bundles tree-shake this entire block)
-  // In prod builds the tab is tree-shaken out via the DEV gate — zero
-  // bytes added to the production bundle (see threat T-27.4-09-01 + T-27.4.3-04-01).
+  //   2. shouldRenderDashboard() — dev OR a stored dashboard auth key in prod.
+  //      Replaces the prior `import.meta.env.DEV` tree-shake gate so prod
+  //      operators with a Bearer token see the same observability surface.
+  //      The server-side replay endpoint enforces the gate, so render-side
+  //      visibility without auth would only leak the hint that the tab
+  //      exists, not its functionality.
   const showEventsTab =
-    (llmStatus?.schemaVersion === 'v2' || llmStatus?.schemaVersion === 'v3') && import.meta.env.DEV;
+    (llmStatus?.schemaVersion === 'v2' || llmStatus?.schemaVersion === 'v3') &&
+    shouldRenderDashboard();
 
   // Escape key — capture-phase so DevApiStatus closes BEFORE nav-stack pop /
   // detail panel close / search modal close (Plan 12 G6 priority contract).
@@ -880,13 +886,15 @@ export function DevApiStatus() {
           {activeTab === 'sites' && showSitesTab && <SitesFiltersSection />}
           {activeTab === 'events' &&
             showEventsTab &&
-            // Phase 27.4.3 Plan 04 — version-routed render switch.
-            // v3 mounts EventsFiltersSectionV3 (8-block surface); v2 keeps the
-            // existing EventsFiltersSection (8-block v2 surface). v1 stays gated
-            // out (no Events tab on v1) per UI-SPEC §"Render switch".
-            (llmStatus?.schemaVersion === 'v3' && import.meta.env.DEV ? (
+            // Phase 27.4.3 Plan 04 / Phase 27.4.4 Plan 02 — version-routed
+            // render switch. v3 mounts EventsFiltersSectionV3 (8-block surface);
+            // v2 keeps the existing EventsFiltersSection. v1 stays gated out
+            // per UI-SPEC §"Render switch". The DEV gate is replaced with
+            // shouldRenderDashboard() so prod operators with a Bearer token
+            // see the same surfaces.
+            (llmStatus?.schemaVersion === 'v3' && shouldRenderDashboard() ? (
               <EventsFiltersSectionV3 llmStatus={llmStatus} />
-            ) : llmStatus?.schemaVersion === 'v2' && import.meta.env.DEV ? (
+            ) : llmStatus?.schemaVersion === 'v2' && shouldRenderDashboard() ? (
               <EventsFiltersSection llmStatus={llmStatus} />
             ) : null)}
         </div>
@@ -1340,8 +1348,13 @@ function DrillDownRow({ ev }: { ev: RecentEnrichedEvent }) {
 
   async function copyPromptResponse() {
     try {
+      // Phase 27.4.4 Plan 02 — replay route is Bearer-auth gated in prod.
+      // dashboardAuthHeaders() supplies the Authorization header from
+      // localStorage; in dev the server middleware bypasses and absent
+      // headers are fine.
       const res = await fetch(`/api/events/llm-replay/${encodeURIComponent(ev.groupKey)}`, {
         method: 'POST',
+        headers: dashboardAuthHeaders(),
       });
       const text = res.ok ? await res.text() : JSON.stringify({ error: res.statusText });
       await navigator.clipboard.writeText(text);

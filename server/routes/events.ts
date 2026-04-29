@@ -43,6 +43,7 @@ import { shouldPauseNewEvents, prioritizeBySeverity } from '../lib/llmTokenBudge
 import { listDLQ } from '../lib/llmDLQ.js';
 import type { GeocodeProvenance } from '../lib/llmSchema.js';
 import { validateQuery } from '../middleware/validate.js';
+import { dashboardAuth } from '../middleware/dashboardAuth.js';
 import { sendValidated } from '../middleware/validateResponse.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { eventsResponseSchema } from '../schemas/cacheResponse.js';
@@ -692,12 +693,10 @@ eventsRouter.get('/llm-status', async (_req, res) => {
  * groupKey is sanitized (length cap + typeof string) per T-27.4-08-02.
  */
 if (process.env.NODE_ENV !== 'production') {
-  eventsRouter.post('/llm-replay/:groupKey', async (req, res) => {
-    // Defense-in-depth gate — matches /llm-status above.
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(404).json({ error: 'Not found' });
-    }
-
+  eventsRouter.post('/llm-replay/:groupKey', dashboardAuth, async (req, res) => {
+    // Phase 27.4.4 Plan 02 — dashboardAuth middleware replaces the prior
+    // `NODE_ENV === 'production'` 404 gate. In dev the middleware bypasses;
+    // in prod the operator's Bearer token must match DASHBOARD_PASSWORD.
     const { groupKey } = req.params;
     // T-27.4-08-02 — length cap + type guard. Express populates req.params
     // as string but an attacker could force unexpected shapes via malformed
@@ -759,20 +758,22 @@ if (process.env.NODE_ENV !== 'production') {
  * handler re-checks NODE_ENV before acting in case env flips after boot.
  */
 if (process.env.NODE_ENV !== 'production') {
-  eventsRouter.get('/llm-pipeline', async (_req, res) => {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(404).json({ error: 'Not found' });
-    }
+  eventsRouter.get('/llm-pipeline', dashboardAuth, async (_req, res) => {
+    // Phase 27.4.4 Plan 02 — dashboardAuth middleware replaces the prior
+    // `NODE_ENV === 'production'` 404 gate. The endpoint leaks the active
+    // pipeline override which is a low-sensitivity signal but still
+    // operator-grade telemetry; gating keeps it consistent with the POST.
     await refreshPipelineOverride();
     const override = getPipelineOverride();
     const effective = getPipelineVersion();
     return res.json({ effective, override, source: override ? 'override' : 'env' });
   });
 
-  eventsRouter.post('/llm-pipeline', async (req, res) => {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(404).json({ error: 'Not found' });
-    }
+  eventsRouter.post('/llm-pipeline', dashboardAuth, async (req, res) => {
+    // Phase 27.4.4 Plan 02 — dashboardAuth middleware replaces the prior
+    // `NODE_ENV === 'production'` 404 gate. THIS is the cutover endpoint
+    // (Plan 02 Task 5) — must be reachable from the operator's laptop in
+    // production. Bearer-token gate keeps unauthenticated callers out.
     const body = (req.body ?? {}) as { version?: unknown; reason?: unknown };
     const version = body.version;
     // Phase 27.4.3 Plan 02b — accept 'v3' alongside the existing 'v1' / 'v2'

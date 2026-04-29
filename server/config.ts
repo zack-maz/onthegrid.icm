@@ -87,6 +87,24 @@ export const envSchema = z.object({
   // un-authed cron-warm/cron-health behavior; eval-cron route 401s when set.
   CRON_SECRET: z.string().default(''),
 
+  // Phase 27.4.4 Plan 02 — Bearer-token gate for the dashboard surfaces:
+  //   - GET  /api/events/llm-pipeline    (state read)
+  //   - POST /api/events/llm-pipeline    (cutover flip — the v3 deploy gate)
+  //   - POST /api/events/llm-replay/:id  (single-group replay; fires upstream LLM tokens)
+  //   - GET  /api/dashboard/auth-check   (client-side gate validation)
+  //
+  // Behavior (server/middleware/dashboardAuth.ts):
+  //   - NODE_ENV !== 'production'           → bypass auth (dev convenience)
+  //   - NODE_ENV === 'production' + empty   → 503 auth_not_configured (fail-closed)
+  //   - NODE_ENV === 'production' + matches → next()
+  //
+  // Operator generates the value with `openssl rand -hex 32` and sets it in
+  // both `.env.local` (dev parity) and `vercel env add DASHBOARD_PASSWORD
+  // production` (prod gate). Replaces the previous `NODE_ENV === 'production'`
+  // 404 gates which made the cutover endpoint physically unreachable from the
+  // operator's laptop.
+  DASHBOARD_PASSWORD: z.string().default(''),
+
   // Phase 27.4.4 D-20 Option B (RESEARCH §6) — dev/prod Redis key isolation
   // when a separate Upstash database is unavailable. When set (e.g. `dev:`),
   // every key passing through the wrapped `redis` instance + cacheGet/Set

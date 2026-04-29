@@ -103,6 +103,13 @@ export interface UIState {
   openDevApiStatus: () => void;
   closeDevApiStatus: () => void;
   setDevApiStatusTab: (tab: DevApiStatusTab) => void;
+  // Phase 27.4.4 Plan 02 — Dashboard auth modal. Opens when a not-yet-
+  // authenticated user clicks the DevApiStatusTrigger in production. On
+  // successful probe of /api/dashboard/auth-check the key is persisted to
+  // localStorage and the trigger immediately opens DevApiStatus.
+  isDashboardAuthOpen: boolean;
+  openDashboardAuth: () => void;
+  closeDashboardAuth: () => void;
   openDetailPanel: () => void;
   closeDetailPanel: () => void;
   toggleStatus: () => void;

@@ -18,6 +18,7 @@ import { useWeatherStore } from '@/stores/weatherStore';
 import { useWaterStore } from '@/stores/waterStore';
 import { effectiveStatus } from '@/lib/apiStatus';
 import { INITIAL_VIEW_STATE } from '@/components/map/constants';
+import { hasDashboardKey, shouldRenderDashboard, dashboardAuthHeaders } from '@/lib/dashboardAuth';
 
 function ResetButton() {
   const handleReset = useCallback(() => {
@@ -92,6 +93,19 @@ function ResetButton() {
  */
 function DevApiStatusTriggerInner() {
   const openDevApiStatus = useUIStore((s) => s.openDevApiStatus);
+  const openDashboardAuth = useUIStore((s) => s.openDashboardAuth);
+
+  // Phase 27.4.4 Plan 02 — in dev or when authed, the trigger opens
+  // DevApiStatus directly. In prod with no stored key, the trigger opens
+  // the dashboard auth modal first; on successful auth the modal itself
+  // calls openDevApiStatus, so the next click behaves like dev.
+  const onTriggerClick = useCallback(() => {
+    if (import.meta.env.DEV || hasDashboardKey()) {
+      openDevApiStatus();
+    } else {
+      openDashboardAuth();
+    }
+  }, [openDevApiStatus, openDashboardAuth]);
 
   const flights = useFlightStore(
     useShallow((s) => ({
@@ -158,7 +172,7 @@ function DevApiStatusTriggerInner() {
   return (
     <button
       data-testid="dev-api-status-trigger"
-      onClick={openDevApiStatus}
+      onClick={onTriggerClick}
       className="rounded-md px-2 py-1 font-mono text-[10px] transition-colors hover:bg-white/5"
       style={{ color: hasIssue ? '#ef4444' : 'rgba(255,255,255,0.4)' }}
       title="Dev API Status"
@@ -169,7 +183,9 @@ function DevApiStatusTriggerInner() {
 }
 
 function DevApiStatusTrigger() {
-  if (!import.meta.env.DEV) return null;
+  // Phase 27.4.4 Plan 02 — trigger renders unconditionally so prod operators
+  // can reach the auth modal. The inner button click routes to either
+  // DevApiStatus (dev OR authed) or DashboardAuthModal (prod-not-authed).
   return <DevApiStatusTriggerInner />;
 }
 
@@ -201,7 +217,13 @@ function PipelineVersionPillInner() {
 
   const fetchVersion = useCallback(async () => {
     try {
-      const res = await fetch('/api/events/llm-pipeline');
+      // Phase 27.4.4 Plan 02 — /api/events/llm-pipeline is now Bearer-auth
+      // gated in prod (dev bypasses). dashboardAuthHeaders() returns the
+      // stored key as Authorization; in dev it's an empty object and the
+      // server ignores absence.
+      const res = await fetch('/api/events/llm-pipeline', {
+        headers: dashboardAuthHeaders(),
+      });
       if (!res.ok) return;
       const json = (await res.json()) as { effective?: 'v1' | 'v2' | 'v3' };
       if (json.effective === 'v1' || json.effective === 'v2' || json.effective === 'v3') {
@@ -231,7 +253,11 @@ function PipelineVersionPillInner() {
 }
 
 function PipelineVersionPill() {
-  if (!import.meta.env.DEV) return null;
+  // Phase 27.4.4 Plan 02 — pill renders in dev OR when an operator has
+  // stored a dashboard key. The fetch inside PipelineVersionPillInner
+  // sends the Bearer header; in prod-not-authed it 401s and the pill
+  // stays hidden via its own `version === 'unknown'` short-circuit.
+  if (!shouldRenderDashboard()) return null;
   return <PipelineVersionPillInner />;
 }
 

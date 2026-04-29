@@ -1526,20 +1526,63 @@ describe('Events Route (Redis accumulator)', () => {
       expect(mockGeocodeEnrichedEvents).toHaveBeenCalled();
     });
 
-    it('POST /llm-replay/:groupKey returns 404 in production', async () => {
+    it('POST /llm-replay/:groupKey is gated by dashboardAuth in production', async () => {
+      // Phase 27.4.4 Plan 02 — the prior in-handler `NODE_ENV === 'production'`
+      // 404 gate has been replaced with the dashboardAuth middleware. In prod
+      // an absent Bearer header now returns 503 (auth_not_configured) when
+      // DASHBOARD_PASSWORD is unset, OR 401 (unauthorized) when the password
+      // is set but the header is missing/wrong. The route MUST NOT be
+      // unconditionally reachable in prod — that's the cutover-blocker
+      // regression this test guards against.
       const originalEnv = process.env.NODE_ENV;
+      const originalPwd = process.env.DASHBOARD_PASSWORD;
       process.env.NODE_ENV = 'production';
+      delete process.env.DASHBOARD_PASSWORD;
       try {
         const res = await fetch(`${baseUrl}/api/events/llm-replay/grp-anything`, {
           method: 'POST',
         });
-        // The route was registered when NODE_ENV was 'test' (the default
-        // for the outer describe), so the in-handler gate must catch this
-        // at request-time and return 404. If the in-handler gate is ever
-        // removed, this test fails.
-        expect(res.status).toBe(404);
+        // Empty DASHBOARD_PASSWORD → fail-closed 503.
+        expect(res.status).toBe(503);
+        const body = (await res.json()) as { error?: string };
+        expect(body.error).toBe('auth_not_configured');
       } finally {
         process.env.NODE_ENV = originalEnv;
+        if (originalPwd === undefined) {
+          delete process.env.DASHBOARD_PASSWORD;
+        } else {
+          process.env.DASHBOARD_PASSWORD = originalPwd;
+        }
+      }
+    });
+
+    it('POST /llm-replay/:groupKey returns 401 in prod when Bearer is missing/wrong', async () => {
+      // Phase 27.4.4 Plan 02 — DASHBOARD_PASSWORD set; absent or mismatching
+      // Bearer header returns 401.
+      const originalEnv = process.env.NODE_ENV;
+      const originalPwd = process.env.DASHBOARD_PASSWORD;
+      process.env.NODE_ENV = 'production';
+      process.env.DASHBOARD_PASSWORD = 'test-password-32-chars-long-xx';
+      try {
+        // 1. No header at all
+        const noHeader = await fetch(`${baseUrl}/api/events/llm-replay/grp-anything`, {
+          method: 'POST',
+        });
+        expect(noHeader.status).toBe(401);
+
+        // 2. Wrong Bearer
+        const wrong = await fetch(`${baseUrl}/api/events/llm-replay/grp-anything`, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer wrong-password-32-chars-xxxx' },
+        });
+        expect(wrong.status).toBe(401);
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+        if (originalPwd === undefined) {
+          delete process.env.DASHBOARD_PASSWORD;
+        } else {
+          process.env.DASHBOARD_PASSWORD = originalPwd;
+        }
       }
     });
 

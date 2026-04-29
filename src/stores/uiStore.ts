@@ -38,6 +38,12 @@ export const useUIStore = create<UIState>()((set, get) => ({
   openDevApiStatus: () => set({ isDevApiStatusOpen: true }),
   closeDevApiStatus: () => set({ isDevApiStatusOpen: false }),
   setDevApiStatusTab: (tab) => set({ activeDevApiStatusTab: tab }),
+  // Phase 27.4.4 Plan 02 — dashboard auth modal state (session-scoped;
+  // matches DevApiStatus modal pattern — modal visibility never persists
+  // across reloads, only the auth key itself does).
+  isDashboardAuthOpen: false,
+  openDashboardAuth: () => set({ isDashboardAuthOpen: true }),
+  closeDashboardAuth: () => set({ isDashboardAuthOpen: false }),
   openDetailPanel: () => set({ isDetailPanelOpen: true }),
   closeDetailPanel: () => set({ isDetailPanelOpen: false }),
   toggleStatus: () => set((s) => ({ isStatusCollapsed: !s.isStatusCollapsed })),

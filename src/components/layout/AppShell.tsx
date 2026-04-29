@@ -17,6 +17,8 @@ import { useEscapeKeyHandler } from '@/hooks/useEscapeKeyHandler';
 import { Component, type ReactNode } from 'react';
 import { useQuerySync } from '@/hooks/useQuerySync';
 import { DevApiStatus } from '@/components/ui/DevApiStatus';
+import { DashboardAuthModal } from '@/components/ui/DashboardAuthModal';
+import { shouldRenderDashboard } from '@/lib/dashboardAuth';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -65,12 +67,20 @@ export function AppShell() {
       {/* Floating markets panel */}
       <MarketsSlot />
 
-      {/* Dev-only API status overlay — wrapped in error boundary */}
-      {import.meta.env.DEV && (
+      {/* Phase 27.4.4 Plan 02 — DevApiStatus now renders in dev OR when an
+          operator has stored a dashboard auth key in localStorage (prod). The
+          previous AppShell-level `import.meta.env.DEV` outer gate is now
+          delegated to `shouldRenderDashboard()` so the component ships in
+          prod bundles for authed operators. ErrorBoundary preserved. */}
+      {shouldRenderDashboard() && (
         <ErrorBoundary>
           <DevApiStatus />
         </ErrorBoundary>
       )}
+
+      {/* Dashboard auth gate modal — opens via DevApiStatusTrigger in prod
+          when the user has not yet entered a key. Self-closes when not open. */}
+      <DashboardAuthModal />
     </div>
   );
 }

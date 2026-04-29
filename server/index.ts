@@ -22,6 +22,7 @@ import { healthRouter } from './routes/health.js';
 import { cronHealthRouter } from './routes/cron-health.js';
 import { cronWarmRouter } from './routes/cron-warm.js';
 import { evalCronRouter } from './routes/eval-cron.js';
+import { dashboardAuthRouter } from './routes/dashboardAuth.js';
 export function createApp() {
   const app = express();
 
@@ -104,6 +105,13 @@ export function createApp() {
   app.use('/api/weather', rateLimiters.weather, cacheControl(600, 1200), weatherRouter);
   app.use('/api/geocode', rateLimiters.geocode, cacheControl(86400, 86400), geocodeRouter);
   app.use('/api/water', rateLimiters.water, cacheControl(3600, 82800), waterRouter);
+
+  // Phase 27.4.4 Plan 02 — dashboard auth probe (Bearer-token gated in prod;
+  // bypassed in dev). Client calls GET /api/dashboard/auth-check before
+  // unhiding the DevApiStatus dashboard. Same middleware also gates
+  // /api/events/llm-pipeline + /api/events/llm-replay so the cutover POST
+  // and per-group replay reach the operator's laptop in production.
+  app.use('/api/dashboard', cacheControl(0, 0), dashboardAuthRouter);
 
   // Error handler -- must be after routes
   app.use(errorHandler);
