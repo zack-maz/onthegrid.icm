@@ -410,6 +410,22 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Race-safety contract** — JS event loop is single-threaded so `updateProgress` R-M-W expressions like `(llmProgress.x ?? 0) + 1` evaluate synchronously between awaits and serialize correctly under concurrency. The shared `results` array, `allFailed` flag, `matchedNewsByGroup`/`bellingcatByGroup` maps, and all `llmProgress` mutations rely on this. `completedBatchesCounter` flows through `finishBatch()` so `onBatchComplete` + `writePartialCache` see monotonically-increasing counts instead of per-batch indices (which would jump out of order under concurrency). `events:llm:v3:partial` writes use last-writer-wins (observability-only key).
 - **Rollback path** — `LLM_V3_CONCURRENCY=1` reverts to per-batch await semantics for any incident requiring single-flight diagnosis.
 
+## Cron-Driven Pipeline Trigger (Phase 27.4.6)
+
+- **`/api/events` is cache-only** — the fire-and-forget LLM extraction block (formerly at `events.ts:~1042-1307`) is removed. The route now serves whatever is in `events:llm:v3` (or bridges to `events:llm:v2` / `events:llm` / raw GDELT per Pitfall 1) and never triggers an LLM run.
+- **Daily 4am UTC cron** — `vercel.json` schedules `/api/cron/refresh-events` at `0 4 * * *`. Vercel sends `Authorization: Bearer ${CRON_SECRET}`.
+- **Shared helper** — `server/lib/llmExtractionPipeline.ts` exports `runRefreshExtraction({triggeredBy, forceCooldown})`. The cron route is the only caller; the helper's body is the verbatim port of the prior fire-and-forget code (D-04: zero re-implementation).
+- **Cold-cache self-heal (D-10)** — `runRefreshExtraction` probes `events:llm:v3` BEFORE the cooldown check. Empty cache → bypass cooldown automatically. The first cron invocation after a fresh deploy always populates the cache, regardless of timing relative to the next 4am tick.
+- **Operator force-trigger (D-11)** — `GET /api/cron/refresh-events?force=true` with valid Bearer skips the 15-min cooldown. Use cases: post-bug-fix re-extraction, post-cache-flush warm-up, testing during deploys. Replaces `redis-cli del events:llm-process-ts`.
+- **Eval-drift folds into cron-health (D-09)** — `runEval()` is called inside `server/routes/cron-health.ts` after the Redis ping + source freshness check. Frees a vercel.json cron slot (Hobby cap = 3) without dropping `cron-warm` (which pre-warms `sites:v2` 3-day TTL + `water:facilities`). The `/api/cron/eval` Express route is preserved for manual ops; only its scheduled trigger moved.
+- **NIM-throttle accept-and-fallback (D-08)** — when the 4am tick lands during NIM's documented ~24h throttle window, the watchdog kills batches, DLQ fills, breaker trips. Cron returns 200 with the failure recorded in `llmProgress.dlqCount` + DLQ Redis set. `/api/events` continues serving raw GDELT (Pitfall 1 bridge); map never goes blank. Next tick is 24h later. If that also fails, the operator triggers manually via `?force=true` after NIM recovers. **Pre-flight NIM probes and retry queues are intentionally NOT built** — the surface is small enough that a 30-second manual curl is the right tool.
+- **Final cron schedule (Hobby-compliant, 3 entries)**:
+  - `/api/cron/health` at `0 0 * * *` (Redis ping + source freshness + eval-drift)
+  - `/api/cron/warm` at `0 12 * * *` (Overpass sites + water pre-warm)
+  - `/api/cron/refresh-events` at `0 4 * * *` (LLM v3 extraction)
+- **Anti-pattern #17** — do not re-introduce fire-and-forget extraction back into `/api/events`. The route is cache-only after this phase; cache-write happens only in the cron path.
+- **Anti-pattern #18** — cron must respect `events:llm-process-ts` cooldown unless `forceCooldown === true` OR cache is empty. No parallel runs.
+
 ## V2 Extractor Watchdog (Phase 27.4.1)
 
 - **Shared watchdog helper** — `server/lib/llmExtractorWatchdog.ts` exports `withBatchWatchdog(batchFn, opts)`. Wraps any per-batch Promise with `Promise.race([batchCall, timeoutPromise])` + AbortController/generation-counter late-resolve guard so a timed-out Cerebras call that eventually resolves 10+ min later cannot clobber the cache or propagate stale events (D-05). Applied symmetrically to both `llmEventExtractor.v1.ts` and `llmEventExtractor.v2.ts` so the rollback path stays reliable (D-11/D-12).
