@@ -256,7 +256,7 @@ Plans:
 **Goal:** Move the LLM enrichment pipeline trigger out of `/api/events` and into a daily Vercel cron at 4am UTC. `/api/events` becomes a pure cache reader — first user no longer pays the ~95-min cold-start cost. Pipeline stays warm via server-side cron. Hobby plan compliance: drops dedicated `/api/cron/eval` schedule entry (eval-drift folds into the existing `/api/cron/health` handler per D-09 in CONTEXT.md), keeps `/api/cron/warm` (still needed for Overpass site/water pre-warm). Success: `/api/events` never triggers extraction; cron self-heals on cold cache; `?force=true` query param bypasses cooldown for ops; documented NIM-throttle fallback is "accept failure, raw GDELT bridge holds the line."
 **Depends on:** Phase 27.4.4
 **Requirements:** Derived from 27.4.6-CONTEXT.md (D-01 through D-11)
-**Plans:** Plan 01 scaffolded 2026-04-29, replanned post-/gsd-discuss to incorporate D-08..D-11.
+**Plans:** 1/1 plans complete
 
 ### Phase 28: Performance & Load Testing — was Phase 27
 
