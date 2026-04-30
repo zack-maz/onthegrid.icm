@@ -21,11 +21,7 @@ import { appendPipelineAudit, listPipelineAudit } from '../lib/pipelineAudit.js'
 // Phase 27.4.6 — entity adapters live with the cron-driven extraction
 // helper. The legacy `enrichedToEntities` alias re-exported from this file
 // pulls from there so existing import sites continue to type-check.
-import {
-  enrichedV1ToEntities,
-  enrichedV2ToEntities,
-  enrichedV3ToEntities,
-} from '../lib/llmExtractionPipeline.js';
+import { enrichedV1ToEntities } from '../lib/llmExtractionPipeline.js';
 import { llmProgress } from '../lib/llmProgress.js';
 import type { LLMRunSummary } from '../lib/llmProgress.js';
 import {
@@ -75,9 +71,6 @@ const LLM_EVENTS_KEY = 'events:llm';
 
 /** Redis key storing last LLM processing Unix ms timestamp */
 const LLM_PROCESS_KEY = 'events:llm-process-ts';
-
-/** 15 minute cooldown between LLM processing runs */
-const LLM_COOLDOWN_MS = 900_000;
 
 /** Logical TTL for LLM cache — 15 minutes */
 const LLM_LOGICAL_TTL_MS = 900_000;
