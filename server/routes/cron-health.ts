@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { redis, cacheGetSafe } from '../cache/redis.js';
 import { logger } from '../lib/logger.js';
+import { env } from '../config.js';
+import { runEval } from '../lib/llmEvalHarness.js';
 
 const log = logger.child({ module: 'cron-health' });
 
@@ -21,7 +23,19 @@ const SOURCE_KEYS: Record<string, string> = {
 /** If a source's lastFresh is older than this, log a warning */
 const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
 
-cronHealthRouter.get('/', async (_req, res) => {
+cronHealthRouter.get('/', async (req, res) => {
+  // Phase 27.4.6 D-09 — auth gate added when CRON_SECRET is set. Empty env
+  // preserves the existing un-authed dev behavior (matches cron-warm +
+  // the original cron-health surface). Mirrors eval-cron.ts:33-40.
+  if (env.CRON_SECRET) {
+    const auth = req.header('Authorization') ?? req.header('authorization') ?? '';
+    const expected = `Bearer ${env.CRON_SECRET}`;
+    if (auth !== expected) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+  }
+
   const now = Date.now();
   let redisOk = false;
 
@@ -66,11 +80,33 @@ cronHealthRouter.get('/', async (_req, res) => {
     log.info('all sources healthy');
   }
 
+  // Phase 27.4.6 D-09 — fold eval-drift into cron-health. Replaces the
+  // dropped /api/cron/eval schedule (route file is preserved for manual
+  // ops). Eval runs on cron-health's daily 0 0 * * * tick — decoupled from
+  // refresh-events extraction success (D-08 NIM-throttle resilience). Wrap
+  // in try/catch so an eval failure never degrades the health response.
+  let evalScore: {
+    within5km: number;
+    within20km: number;
+    within100km: number;
+    total: number;
+  } | null = null;
+  let evalError: string | null = null;
+  try {
+    evalScore = await runEval();
+    log.info({ evalScore }, 'eval drift check complete');
+  } catch (err) {
+    evalError = err instanceof Error ? err.message : String(err);
+    log.warn({ err: evalError }, 'eval drift check threw — continuing health response');
+  }
+
   res.json({
     status: redisOk ? 'ok' : 'degraded',
     redis: redisOk,
     timestamp: new Date().toISOString(),
     sources,
     warnings,
+    evalScore,
+    evalError,
   });
 });
