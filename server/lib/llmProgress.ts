@@ -122,6 +122,21 @@ export interface LLMPipelineProgress {
   /** Phase 27.4.1 D-06: count of batches killed by the timeout watchdog in current run. */
   watchdogTimeoutCount?: number;
 
+  /**
+   * Phase 27.4.6 D-06: provenance label for the run trigger.
+   *
+   * - `'cron'` — fired by `/api/cron/refresh-events` on the daily 4am UTC tick
+   *   or via operator `?force=true` curl. This is the canonical post-27.4.6
+   *   trigger source.
+   * - `'manual'` — reserved for ad-hoc operator triggers (e.g., a future
+   *   dashboard "force run" button). The fire-and-forget block at
+   *   `/api/events` is gone, so this label is currently unused but reserved.
+   *
+   * Surfaced by `/api/events/llm-status` so DevApiStatus can display which
+   * trigger fired the most recent run.
+   */
+  lastTriggerSource?: 'cron' | 'manual' | null;
+
   // ---------------------------------------------------------------------
   // Phase 27.4.4 — v3 latency-remediation observability fields. All optional
   // + additive; v2 readers ignore unknown fields. Populated by the v3
@@ -450,6 +465,9 @@ export const INITIAL_PROGRESS: Readonly<LLMPipelineProgress> = {
   provenanceCounts: undefined,
   suspectCount: undefined,
   watchdogTimeoutCount: undefined,
+  // Phase 27.4.6 D-06 — provenance label cleared between runs so a previous
+  // 'cron' label doesn't survive into a manual run (and vice-versa).
+  lastTriggerSource: undefined,
   // Phase 27.4.3 Plan 02a — v3 observability fields seeded undefined so
   // resetProgress() clears stale data between runs (e.g., a lingering
   // routingTrace from yesterday's v3 run would otherwise confuse today's

@@ -9,28 +9,20 @@ import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { extractBellingcatGeo } from '../lib/eventScoring.js';
 import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
 import { groupGdeltRows } from '../lib/eventGrouping.js';
-import {
-  processEventGroups,
-  geocodeEnrichedEvents,
-  type GeocodedEnrichedEventV2,
-  type GeocodedEnrichedEventV3,
-} from '../lib/llmEventExtractor.js';
 // Phase 27.4 Plan 08 D-21 — v2-only replay path re-extracts a single group
 // without writing to cache (Pitfall 6 defense-in-depth).
-import { processEventGroupsV2, BATCH_SIZE as BATCH_SIZE_V2 } from '../lib/llmEventExtractor.v2.js';
+import { processEventGroupsV2 } from '../lib/llmEventExtractor.v2.js';
 // Phase 27.4.3 Plan 02b — v3 replay path mirrors v2: re-extracts a single
 // group without writing to events:llm:v3 (Pitfall 6 defense-in-depth).
 import { processEventGroupsV3 } from '../lib/llmEventExtractor.v3.js';
 // Phase 27.4.3 Plan 02b B-3 — pipeline-flip audit log; canonical home is lib
 // (routes is consumer, not provider). Cyclic-import fix in place.
 import { appendPipelineAudit, listPipelineAudit } from '../lib/pipelineAudit.js';
-// Phase 27.4 WR-03 — use v1 BATCH_SIZE (8) for progress math when v2 is off.
-const BATCH_SIZE_V1 = 8;
-// Phase 27.4 Plan 08 D-20 — resolver-only eval harness. Called inside the v2
-// fire-and-forget block AFTER geocodeEnrichedEvents returns and BEFORE
-// cache-set so the evalScore flows to buildSummary() on the same run.
-import { runEval } from '../lib/llmEvalHarness.js';
-import { llmProgress, resetProgress, updateProgress, buildSummary } from '../lib/llmProgress.js';
+// Phase 27.4.6 — entity adapters live with the cron-driven extraction
+// helper. The legacy `enrichedToEntities` alias re-exported from this file
+// pulls from there so existing import sites continue to type-check.
+import { enrichedV1ToEntities } from '../lib/llmExtractionPipeline.js';
+import { llmProgress } from '../lib/llmProgress.js';
 import type { LLMRunSummary } from '../lib/llmProgress.js';
 import {
   WAR_START,
@@ -39,7 +31,7 @@ import {
   setPipelineOverride,
   getPipelineOverride,
 } from '../config.js';
-import { shouldPauseNewEvents, prioritizeBySeverity } from '../lib/llmTokenBudget.js';
+import { shouldPauseNewEvents } from '../lib/llmTokenBudget.js';
 import { listDLQ } from '../lib/llmDLQ.js';
 import type { GeocodeProvenance } from '../lib/llmSchema.js';
 import { validateQuery } from '../middleware/validate.js';
@@ -48,13 +40,8 @@ import { sendValidated } from '../middleware/validateResponse.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { eventsResponseSchema } from '../schemas/cacheResponse.js';
 import type { ConflictEventEntity, NewsCluster } from '../types.js';
-import { getHighestTier, extractDomain, getSourceTier } from '../lib/sourceTiers.js';
-import {
-  saveDevLLMCache,
-  loadDevLLMCache,
-  saveDevLLMCacheV2,
-  loadDevLLMCacheV2,
-} from '../cache/devFileCache.js';
+import { extractDomain, getSourceTier } from '../lib/sourceTiers.js';
+import { loadDevLLMCache, loadDevLLMCacheV2 } from '../cache/devFileCache.js';
 
 /** Zod schema for /api/events query params */
 const eventsQuerySchema = z.object({
@@ -84,9 +71,6 @@ const LLM_EVENTS_KEY = 'events:llm';
 
 /** Redis key storing last LLM processing Unix ms timestamp */
 const LLM_PROCESS_KEY = 'events:llm-process-ts';
-
-/** 15 minute cooldown between LLM processing runs */
-const LLM_COOLDOWN_MS = 900_000;
 
 /** Logical TTL for LLM cache — 15 minutes */
 const LLM_LOGICAL_TTL_MS = 900_000;
@@ -239,27 +223,20 @@ async function recordBackfillTimestamp(): Promise<void> {
   }
 }
 
-/**
- * Check whether the LLM processing pipeline should run.
- * Returns true if never run or cooldown (15 minutes) has expired.
- *
- * Same resilience pattern as shouldBackfill: Redis failure allows the run
- * (the LLM pipeline has its own error handling).
- */
-async function shouldRunLLM(): Promise<boolean> {
-  try {
-    const lastTs = await redis.get<number>(LLM_PROCESS_KEY);
-    if (lastTs === null || lastTs === undefined) return true;
-    return Date.now() - lastTs > LLM_COOLDOWN_MS;
-  } catch {
-    return true;
-  }
-}
+// Phase 27.4.6 — the prior 15-min cooldown gate (formerly a local
+// `shouldRun…` helper) has been removed: the cache-only /api/events path no
+// longer triggers extractions, and the cron-driven helper inlines its own
+// cooldown check inside `runRefreshExtraction()` over at
+// `server/lib/llmExtractionPipeline.ts`.
+//
+// `recordLLMTimestamp()` is preserved (below) because the dev-file-cache
+// hydration path stamps the cooldown after populating Redis from disk so a
+// cron tick fired moments later doesn't redundantly extract the same data.
 
 /**
  * Persist the LLM processing timestamp without throwing on Redis failure.
- * Best-effort: if Redis is dead, the next request may re-trigger LLM
- * (rate-limited by the LLM providers themselves, not catastrophic).
+ * Best-effort: if Redis is dead, the next dev-file-cache hydration may
+ * re-stamp the cooldown — non-catastrophic.
  */
 async function recordLLMTimestamp(): Promise<void> {
   try {
@@ -269,230 +246,14 @@ async function recordLLMTimestamp(): Promise<void> {
   }
 }
 
-/**
- * Convert v1 LLM-geocoded enriched events back to ConflictEventEntity format.
- * Merges LLM-extracted fields into the existing entity data structure.
- *
- * Renamed from enrichedToEntities → enrichedV1ToEntities in Plan 06 to make
- * the v1/v2 branching explicit; a deprecated alias is exported below for
- * any legacy non-test consumer that hasn't migrated.
- */
-function enrichedV1ToEntities(
-  geocoded: Array<{
-    groupKey: string;
-    resolvedLat: number;
-    resolvedLng: number;
-    location: { name: string; precision: 'exact' | 'neighborhood' | 'city' | 'region' };
-    type: string;
-    actors: string[];
-    severity: string;
-    summary: string;
-    casualties: { killed: number | null; injured: number | null; unknown: boolean };
-    sourceCount: number;
-  }>,
-  groups: Array<{ key: string; entities: ConflictEventEntity[]; sourceUrls: string[] }>,
-): ConflictEventEntity[] {
-  const groupMap = new Map<string, ConflictEventEntity[]>();
-  const groupSourceUrls = new Map<string, string[]>();
-  for (const g of groups) {
-    groupMap.set(g.key, g.entities);
-    groupSourceUrls.set(g.key, g.sourceUrls);
-  }
+// Phase 27.4.6 — entity adapters (enrichedV1ToEntities / enrichedV2ToEntities
+// / enrichedV3ToEntities) live with the cron-driven extraction helper at
+// `server/lib/llmExtractionPipeline.ts`. They were imported above; the
+// deprecated alias is preserved here for any external consumer that still
+// imports `enrichedToEntities` directly.
 
-  const results: ConflictEventEntity[] = [];
-  for (const enriched of geocoded) {
-    const entities = groupMap.get(enriched.groupKey);
-    if (!entities || entities.length === 0) continue;
-
-    // Compute best source tier from the group's source URLs
-    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
-    const sourceTier = getHighestTier(sourceUrls) ?? undefined;
-
-    // Use the first entity as a template, override with LLM data
-    const template = entities[0];
-    if (!template) continue;
-    results.push({
-      ...template,
-      lat: enriched.resolvedLat,
-      lng: enriched.resolvedLng,
-      type: enriched.type as ConflictEventEntity['type'],
-      label: `${enriched.location.name}: ${enriched.summary.slice(0, 60)}`,
-      data: {
-        ...template.data,
-        locationName: enriched.location.name,
-        summary: enriched.summary,
-        precision: enriched.location.precision,
-        llmProcessed: true,
-        actors: enriched.actors,
-        sourceCount: enriched.sourceCount,
-        sourceTier,
-        casualties: {
-          killed: enriched.casualties.killed ?? undefined,
-          injured: enriched.casualties.injured ?? undefined,
-          unknown: enriched.casualties.unknown,
-        },
-      },
-    });
-  }
-  return results;
-}
-
-/**
- * Convert v2 LLM-geocoded enriched events into ConflictEventEntity format.
- *
- * Plan 06: unlike v1, v2 carries a structured location hierarchy, confidence,
- * reasoning, weapon/target, time-of-day, duration, geocode provenance, and a
- * derived suspect flag. All attach to `data.*` so the frontend can render
- * them in the detail panel (Plan 09 onwards) without a schema migration.
- *
- * The entity's label combines the resolver's displayName with the summary
- * so existing client label rendering keeps working. `label` is intentionally
- * a free-form string — the detail panel reads `data.location.*` for
- * structured display.
- */
-function enrichedV2ToEntities(
-  geocoded: GeocodedEnrichedEventV2[],
-  groups: Array<{ key: string; entities: ConflictEventEntity[]; sourceUrls: string[] }>,
-): ConflictEventEntity[] {
-  const groupMap = new Map<string, ConflictEventEntity[]>();
-  const groupSourceUrls = new Map<string, string[]>();
-  for (const g of groups) {
-    groupMap.set(g.key, g.entities);
-    groupSourceUrls.set(g.key, g.sourceUrls);
-  }
-
-  const results: ConflictEventEntity[] = [];
-  for (const enriched of geocoded) {
-    const entities = groupMap.get(enriched.groupKey);
-    if (!entities || entities.length === 0) continue;
-
-    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
-    const sourceTier = getHighestTier(sourceUrls) ?? undefined;
-
-    const template = entities[0];
-    if (!template) continue;
-
-    // Prefer landmark → city → admin1 → country as the human-readable place;
-    // fall back to the resolver's displayName so events that resolved solely
-    // via Nominatim still get a label.
-    const placeLabel =
-      enriched.location.landmark ||
-      enriched.location.city ||
-      enriched.location.admin1 ||
-      enriched.location.country ||
-      enriched.displayName ||
-      'unknown';
-
-    results.push({
-      ...template,
-      // llm-v2 id prefix so merge-by-id can distinguish new v2 entries from
-      // pre-existing v1 cache entries during the rollout window.
-      id: `llm-v2-${enriched.groupKey}`,
-      lat: enriched.resolvedLat,
-      lng: enriched.resolvedLng,
-      type: enriched.type,
-      label: `${placeLabel}: ${enriched.summary.slice(0, 60)}`,
-      data: {
-        ...template.data,
-        locationName: placeLabel,
-        summary: enriched.summary,
-        // server-derived precision (Pitfall 5 — LLM never emits this)
-        precision: enriched.precision,
-        llmProcessed: true,
-        actors: enriched.actors,
-        sourceCount: enriched.sourceCount,
-        sourceTier,
-        casualties: {
-          killed: enriched.casualties.killed ?? undefined,
-          injured: enriched.casualties.injured ?? undefined,
-          unknown: enriched.casualties.unknown,
-        },
-      },
-    });
-  }
-  return results;
-}
-
-/**
- * Phase 27.4.3 Plan 02b — v3 entity adapter. Mirrors enrichedV2ToEntities
- * verbatim (the v3 GeocodedEnrichedEvent shape is structurally identical
- * apart from the schemaVersion discriminator) but stamps the entity id with
- * an `llm-v3-` prefix so merge-by-id during the v3 rollout window can
- * distinguish v3 entries from v1/v2 cache entries living alongside.
- */
-function enrichedV3ToEntities(
-  geocoded: GeocodedEnrichedEventV3[],
-  groups: Array<{ key: string; entities: ConflictEventEntity[]; sourceUrls: string[] }>,
-): ConflictEventEntity[] {
-  const groupMap = new Map<string, ConflictEventEntity[]>();
-  const groupSourceUrls = new Map<string, string[]>();
-  for (const g of groups) {
-    groupMap.set(g.key, g.entities);
-    groupSourceUrls.set(g.key, g.sourceUrls);
-  }
-
-  const results: ConflictEventEntity[] = [];
-  for (const enriched of geocoded) {
-    const entities = groupMap.get(enriched.groupKey);
-    if (!entities || entities.length === 0) continue;
-
-    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
-    const sourceTier = getHighestTier(sourceUrls) ?? undefined;
-
-    const template = entities[0];
-    if (!template) continue;
-
-    const placeLabel =
-      enriched.location.landmark ||
-      enriched.location.city ||
-      enriched.location.admin1 ||
-      enriched.location.country ||
-      enriched.displayName ||
-      'unknown';
-
-    results.push({
-      ...template,
-      id: `llm-v3-${enriched.groupKey}`,
-      lat: enriched.resolvedLat,
-      lng: enriched.resolvedLng,
-      type: enriched.type,
-      label: `${placeLabel}: ${enriched.summary.slice(0, 60)}`,
-      data: {
-        ...template.data,
-        locationName: placeLabel,
-        summary: enriched.summary,
-        precision: enriched.precision,
-        llmProcessed: true,
-        actors: enriched.actors,
-        sourceCount: enriched.sourceCount,
-        sourceTier,
-        casualties: {
-          killed: enriched.casualties.killed ?? undefined,
-          injured: enriched.casualties.injured ?? undefined,
-          unknown: enriched.casualties.unknown,
-        },
-        // Phase 27.4.4 Plan 02 dev-pass — thread the v3 fields the previous
-        // adapter dropped. Live dev surfaced 392/392 entities with
-        // severity=missing, suspect=false, geocodeProvenance=null even though
-        // the pipeline computed all of them. The map needs these for severity
-        // styling, suspect filtering, and provenance-aware tooltips.
-        severity: enriched.severity,
-        suspect: enriched.suspect,
-        geocodeProvenance: enriched.geocodeProvenance,
-        weaponType: enriched.weaponType,
-        targetType: enriched.targetType,
-        timeOfDay: enriched.timeOfDay,
-        durationMinutes: enriched.durationMinutes,
-        reasoning: enriched.reasoning,
-        geocodeDisplayName: enriched.displayName,
-      },
-    });
-  }
-  return results;
-}
-
-/** Deprecated alias — kept so any non-test consumer that imports
- *  enrichedToEntities directly still type-checks. Remove in 27.5 cleanup. */
+/** Deprecated alias — re-exports the v1 adapter from the helper module so
+ *  any legacy importer continues to type-check. Remove in 27.5 cleanup. */
 export const enrichedToEntities = enrichedV1ToEntities;
 
 /**
@@ -1039,272 +800,12 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     // in useFilteredEntities so it dynamically adjusts when filters change.
     await cacheSetSafe(EVENTS_KEY, merged, REDIS_TTL_SEC);
 
-    // --- LLM processing layer (fire-and-forget) ---
-    // Always serve raw GDELT immediately. If LLM is configured and cooldown
-    // expired, kick off enrichment in the background. The NEXT request will
-    // pick up the enriched cache from the top-of-route LLM cache check.
-    if (isLLMConfigured() && (await shouldRunLLM())) {
-      // Record timestamp BEFORE spawning to prevent concurrent triggers
-      await recordLLMTimestamp();
-
-      // Fire-and-forget: don't await — runs after response is sent
-      const llmCachedRef = llmCached;
-      void (async () => {
-        // Prevent concurrent pipeline runs corrupting shared progress state
-        if (
-          llmProgress.stage !== 'idle' &&
-          llmProgress.stage !== 'done' &&
-          llmProgress.stage !== 'error'
-        ) {
-          log.info('LLM pipeline already running, skipping');
-          return;
-        }
-
-        resetProgress(); // sets stage='grouping', startedAt=now
-        // Phase 27.4 D-39 + Phase 27.4.3 Plan 02b: stamp schemaVersion on
-        // the run summary so /api/events/llm-status surfaces which extractor
-        // wrote the payload.
-        updateProgress({ schemaVersion: version });
-
-        try {
-          const groups = groupGdeltRows(merged);
-          updateProgress({ totalGroups: groups.length, stage: 'grouping' });
-
-          // Diff: only process groups whose key doesn't match a cached LLM event
-          const cachedLlmKeys = new Set<string>();
-          if (llmCachedRef?.data) {
-            for (const e of llmCachedRef.data) {
-              if (e.id) cachedLlmKeys.add(e.id);
-            }
-          }
-          const newGroups =
-            cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
-
-          updateProgress({ newGroups: newGroups.length });
-
-          if (newGroups.length === 0) {
-            log.info('LLM: no new groups to process');
-            updateProgress({
-              stage: 'done',
-              completedAt: Date.now(),
-              durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
-            });
-            try {
-              await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-            } catch {
-              /* best-effort */
-            }
-            return;
-          }
-
-          // Phase 27.4 Plan 06 / B5 fix — D-33 soft-cap gate. When either
-          // provider is ≥80% of daily budget, skip new extractions this cycle
-          // and keep serving cached LLM entities. Hard cap (D-34) is already
-          // handled inside callLLM returning null → raw GDELT fallback.
-          const paused = await shouldPauseNewEvents();
-          if (paused) {
-            log.info('LLM_PAUSED_SOFT_CAP');
-            updateProgress({
-              stage: 'done',
-              completedAt: Date.now(),
-              durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
-            });
-            try {
-              await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-            } catch {
-              /* best-effort */
-            }
-            return;
-          }
-
-          // B5 fix — D-35: prioritize highest-severity groups first so the
-          // BATCH_SIZE slice consumed on each cycle contains the highest-impact
-          // events. No-op when not soft-capped (helper returns input ref).
-          const prioritizedGroups = await prioritizeBySeverity(newGroups);
-
-          // WR-03 + Phase 27.4.3 Plan 02b: v2 + v3 use BATCH_SIZE=2; v1 uses
-          // BATCH_SIZE=8. Using a hard-coded 8 when v2/v3 is active would
-          // produce totalBatches 4x too high, making the /api/events/llm-status
-          // progress ratio appear to stall.
-          const effectiveBatchSize = pipelineV3 || pipelineV2 ? BATCH_SIZE_V2 : BATCH_SIZE_V1;
-          updateProgress({
-            stage: 'llm-processing',
-            totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
-          });
-
-          const extractResult = await processEventGroups(prioritizedGroups, (completed, total) => {
-            updateProgress({ completedBatches: completed, totalBatches: total });
-          });
-
-          if (!extractResult.events || extractResult.events.length === 0) {
-            log.warn('LLM processing returned null — raw GDELT serving continues');
-            updateProgress({
-              stage: 'error',
-              errorMessage: 'LLM returned null for all batches',
-              completedAt: Date.now(),
-              durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
-            });
-            try {
-              await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-            } catch {
-              /* best-effort */
-            }
-            return;
-          }
-
-          updateProgress({
-            stage: 'geocoding',
-            enrichedCount: extractResult.events.length,
-            totalGeocodes: extractResult.events.length,
-          });
-
-          // Plan 06 + Phase 27.4.3 Plan 02b: branch on schemaVersion so v1,
-          // v2, and v3 each flow through their respective geocoder + entity-
-          // adapter paths. The extractor barrel produced a 3-way tagged
-          // union; each arm carries the shape the geocoder needs.
-          let llmEntities: ConflictEventEntity[];
-          if (extractResult.schemaVersion === 'v3') {
-            const geoResult = await geocodeEnrichedEvents(
-              {
-                schemaVersion: 'v3',
-                events: extractResult.events,
-                matchedNewsByGroup: extractResult.matchedNewsByGroup,
-                bellingcatByGroup: extractResult.bellingcatByGroup,
-              },
-              prioritizedGroups,
-              (completed, total) => {
-                updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-              },
-            );
-            if (geoResult.schemaVersion !== 'v3') {
-              throw new Error('geocoder schemaVersion mismatch (expected v3)');
-            }
-            // v3-specific observability — same aggregate pattern as v2 (D-22/D-23).
-            const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
-            let suspectCount = 0;
-            for (const e of geoResult.events) {
-              provenanceCounts[e.geocodeProvenance] =
-                (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-              if (e.suspect) suspectCount++;
-            }
-            updateProgress({ provenanceCounts, suspectCount });
-
-            // Resolver-only eval — A6 / Pitfall 8: no LLM token spend.
-            try {
-              const evalScore = await runEval();
-              log.info({ evalScore, schemaVersion: 'v3' }, 'eval harness completed');
-            } catch (evalErr) {
-              log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
-            }
-
-            llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
-          } else if (extractResult.schemaVersion === 'v2') {
-            const geoResult = await geocodeEnrichedEvents(
-              {
-                schemaVersion: 'v2',
-                events: extractResult.events,
-                matchedNewsByGroup: extractResult.matchedNewsByGroup,
-                bellingcatByGroup: extractResult.bellingcatByGroup,
-              },
-              prioritizedGroups,
-              (completed, total) => {
-                updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-              },
-            );
-            if (geoResult.schemaVersion !== 'v2') {
-              // Type-narrowing sanity — the barrel preserves the discriminator.
-              throw new Error('geocoder schemaVersion mismatch (expected v2)');
-            }
-            // Aggregate v2-specific observability metrics: per-provenance
-            // counts feed Plan 09's pie chart, suspectCount feeds the
-            // outlier badge (D-22 / D-23).
-            const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
-            let suspectCount = 0;
-            for (const e of geoResult.events) {
-              provenanceCounts[e.geocodeProvenance] =
-                (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-              if (e.suspect) suspectCount++;
-            }
-            updateProgress({ provenanceCounts, suspectCount });
-
-            // Phase 27.4 Plan 08 D-20/D-25: run the resolver-only accuracy
-            // eval AFTER geocodeEnrichedEvents returns and BEFORE we build
-            // the run summary / cache-set. runEval writes evalScore via
-            // updateProgress so buildSummary() picks it up on the same run.
-            // Failure is non-fatal — the real pipeline continues either way
-            // (A6 / Pitfall 8: resolver-only so no token budget impact).
-            try {
-              const evalScore = await runEval();
-              log.info({ evalScore }, 'eval harness completed');
-            } catch (evalErr) {
-              log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
-            }
-
-            llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
-          } else {
-            const geoResult = await geocodeEnrichedEvents(
-              { schemaVersion: 'v1', events: extractResult.events },
-              prioritizedGroups,
-              (completed, total) => {
-                updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-              },
-            );
-            if (geoResult.schemaVersion !== 'v1') {
-              throw new Error('geocoder schemaVersion mismatch (expected v1)');
-            }
-            llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
-          }
-
-          // Merge newly processed LLM events with existing cached LLM events
-          const llmMergeMap = new Map<string, ConflictEventEntity>();
-          if (llmCachedRef?.data) {
-            for (const e of llmCachedRef.data) {
-              llmMergeMap.set(e.id, e);
-            }
-          }
-          for (const e of llmEntities) {
-            llmMergeMap.set(e.id, e);
-          }
-          const llmMerged = Array.from(llmMergeMap.values());
-
-          await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, llmMerged, LLM_REDIS_TTL_SEC);
-          // Dev file cache: v3 reuses the v2 dev cache slot (shape-compatible
-          // ConflictEventEntity[]) so dev environments without Redis still
-          // hydrate v3 entries from disk. A dedicated v3 dev cache can be
-          // added in a future plan if v2/v3 fixtures need to coexist.
-          if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
-          else saveDevLLMCache(llmMerged);
-          log.info(
-            { count: llmEntities.length, total: llmMerged.length },
-            'LLM: processed and cached enriched events (background)',
-          );
-
-          updateProgress({
-            stage: 'done',
-            completedAt: Date.now(),
-            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
-          });
-          try {
-            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-          } catch {
-            /* best-effort */
-          }
-        } catch (llmErr) {
-          updateProgress({
-            stage: 'error',
-            errorMessage: llmErr instanceof Error ? llmErr.message : 'Unknown LLM error',
-            completedAt: Date.now(),
-            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
-          });
-          try {
-            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-          } catch {
-            /* best-effort */
-          }
-          log.warn({ err: llmErr }, 'LLM background processing failed');
-        }
-      })();
-    }
+    // Phase 27.4.6 — cache-only path. Pipeline triggers are now cron-driven
+    // via /api/cron/refresh-events (server/routes/refresh-events-cron.ts →
+    // server/lib/llmExtractionPipeline.ts:runRefreshExtraction). The prior
+    // fire-and-forget block (~265 lines) has been removed in line with
+    // anti-pattern #17: do NOT re-introduce extraction triggers on the read
+    // path. See CLAUDE.md "Cron-Driven Pipeline Trigger (Phase 27.4.6)".
 
     // Serve immediately: stale LLM cache if available, otherwise raw GDELT
     if (llmCached?.data) {

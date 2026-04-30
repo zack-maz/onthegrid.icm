@@ -9,7 +9,6 @@ import { useMarketStore } from '@/stores/marketStore';
 import { useWeatherStore } from '@/stores/weatherStore';
 import { useWaterStore } from '@/stores/waterStore';
 import { useUIStore } from '@/stores/uiStore';
-import { useLayerStore } from '@/stores/layerStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
@@ -733,25 +732,15 @@ export function DevApiStatus() {
   const setTab = useUIStore((s) => s.setDevApiStatusTab);
   const close = useUIStore((s) => s.closeDevApiStatus);
 
-  // Phase 27.3.1 HUMAN-UAT Gap 1 — tab visibility gated on layer toggles.
-  // Water tab only when the water visualization layer is active; Sites tab
-  // only when the showSites filter toggle is on. Overview stays unconditional.
-  const showWaterTab = useLayerStore((s) => s.activeLayers.has('water'));
+  // Phase 27.4.6 fix — Water + Events tabs are always visible to the operator.
+  // The prior dynamic-state gates hid these tabs at cold start (Water until the
+  // viz layer is toggled on; Events until the LLM pipeline reports a
+  // schemaVersion), which surprised the operator after the Phase 27.4.6 cron
+  // rollout. Sites stays gated on the explicit filter toggle since it is a
+  // filter-driven surface, not an observability surface.
+  const showWaterTab = true;
   const showSitesTab = useFilterStore((s) => s.showSites);
-
-  // Phase 27.4 Plan 09 D-15 / Phase 27.4.3 Plan 04 / Phase 27.4.4 Plan 02 —
-  // Events tab is dual-gated:
-  //   1. schemaVersion === 'v2' OR 'v3' (operator flipped LLM_PIPELINE_V2/V3
-  //      and at least one run has reported back)
-  //   2. shouldRenderDashboard() — dev OR a stored dashboard auth key in prod.
-  //      Replaces the prior `import.meta.env.DEV` tree-shake gate so prod
-  //      operators with a Bearer token see the same observability surface.
-  //      The server-side replay endpoint enforces the gate, so render-side
-  //      visibility without auth would only leak the hint that the tab
-  //      exists, not its functionality.
-  const showEventsTab =
-    (llmStatus?.schemaVersion === 'v2' || llmStatus?.schemaVersion === 'v3') &&
-    shouldRenderDashboard();
+  const showEventsTab = shouldRenderDashboard();
 
   // Escape key — capture-phase so DevApiStatus closes BEFORE nav-stack pop /
   // detail panel close / search modal close (Plan 12 G6 priority contract).
@@ -769,13 +758,12 @@ export function DevApiStatus() {
     return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, [isOpen, close]);
 
-  // If the currently active tab gets hidden because the user toggled off the
-  // corresponding layer, snap back to Overview so the body does not render empty.
+  // Sites tab can still hide under the user when they toggle off `showSites`,
+  // so keep its snap-back. Water + Events are always visible under the
+  // Phase 27.4.6 contract — no snap-back needed.
   useEffect(() => {
-    if (activeTab === 'water' && !showWaterTab) setTab('overview');
-    else if (activeTab === 'sites' && !showSitesTab) setTab('overview');
-    else if (activeTab === 'events' && !showEventsTab) setTab('overview');
-  }, [activeTab, showWaterTab, showSitesTab, showEventsTab, setTab]);
+    if (activeTab === 'sites' && !showSitesTab) setTab('overview');
+  }, [activeTab, showSitesTab, setTab]);
 
   if (!isOpen) return null;
 
@@ -886,17 +874,18 @@ export function DevApiStatus() {
           {activeTab === 'sites' && showSitesTab && <SitesFiltersSection />}
           {activeTab === 'events' &&
             showEventsTab &&
-            // Phase 27.4.3 Plan 04 / Phase 27.4.4 Plan 02 — version-routed
-            // render switch. v3 mounts EventsFiltersSectionV3 (8-block surface);
-            // v2 keeps the existing EventsFiltersSection. v1 stays gated out
-            // per UI-SPEC §"Render switch". The DEV gate is replaced with
-            // shouldRenderDashboard() so prod operators with a Bearer token
-            // see the same surfaces.
-            (llmStatus?.schemaVersion === 'v3' && shouldRenderDashboard() ? (
-              <EventsFiltersSectionV3 llmStatus={llmStatus} />
-            ) : llmStatus?.schemaVersion === 'v2' && shouldRenderDashboard() ? (
+            // Phase 27.4.6 — V3 is the default body when schemaVersion is
+            // unknown (cold start, post-deploy before first cron tick). V2
+            // remains the explicit override; the V1 case drops out via the
+            // shouldRenderDashboard() outer gate since V1 is no longer a
+            // valid runtime pipeline. Prior version-routed switch hid the
+            // body entirely when schemaVersion was undefined, leaving the
+            // tab button visible with an empty body.
+            (llmStatus?.schemaVersion === 'v2' ? (
               <EventsFiltersSection llmStatus={llmStatus} />
-            ) : null)}
+            ) : (
+              <EventsFiltersSectionV3 llmStatus={llmStatus} />
+            ))}
         </div>
       </div>
     </div>

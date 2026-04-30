@@ -191,6 +191,34 @@ describe('DevApiStatus v3 surface — Phase 27.4.3 Plan 04', () => {
     expect(screen.getByText('v3 Cost Shadow (last 24h)')).toBeInTheDocument();
   });
 
+  it('Phase 27.4.6: Events tab + V3 body render when schemaVersion is undefined (cold-start always-visible)', () => {
+    // Cold-start contract: between deploys and the first cron-driven extraction
+    // (or before any v2/v3 run reports back), `schemaVersion` is undefined. The
+    // tab + body must still render — defaulting to V3, which is the active
+    // pipeline post-cutover.
+    mockLLMStatus = { stage: 'idle', lastRun: null };
+    useUIStore.setState({ isDevApiStatusOpen: true });
+    render(<DevApiStatus />);
+    expect(screen.getByTestId('tab-events')).toBeInTheDocument();
+    // Selecting the Events tab mounts EventsFiltersSectionV3 by default.
+    act(() => {
+      fireEvent.click(screen.getByTestId('tab-events'));
+    });
+    // The v2 header should NOT appear — v3 is the default body.
+    expect(screen.queryByText(/Events Pipeline \(v2\)/)).toBeNull();
+  });
+
+  it('Phase 27.4.6: Water tab is always visible regardless of layer state', () => {
+    // Prior contract gated the Water tab on `useLayerStore.activeLayers.has('water')`,
+    // hiding it on cold start until the operator toggled the visualization layer
+    // on. The new contract keeps the Water tab unconditionally available as an
+    // observability surface.
+    useLayerStore.setState({ activeLayers: new Set() });
+    useUIStore.setState({ isDevApiStatusOpen: true });
+    render(<DevApiStatus />);
+    expect(screen.getByTestId('tab-water')).toBeInTheDocument();
+  });
+
   it('does NOT render v3 blocks when schemaVersion=v2 (no version leakage)', () => {
     mockLLMStatus = {
       stage: 'done',

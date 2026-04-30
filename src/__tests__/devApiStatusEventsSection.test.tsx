@@ -212,12 +212,16 @@ describe('EventsFiltersSection (Phase 27.4 Plan 09)', () => {
     vi.useRealTimers();
   });
 
-  // R1 — Events tab NOT rendered when schemaVersion !== 'v2'
-  it('R1: does NOT render the Events tab when schemaVersion is unset (v1 pipeline)', () => {
+  // R1 — Phase 27.4.6: Events tab is always visible (was: hidden when
+  // schemaVersion is unset). The cold-start gate hid the tab between deploys
+  // and the first cron-driven extraction; the new contract renders the tab
+  // whenever the dashboard surface itself is rendered, defaulting the body
+  // to V3 when schemaVersion is unknown.
+  it('R1: renders the Events tab when schemaVersion is unset (Phase 27.4.6 always-visible contract)', () => {
     mockLLMStatus = { stage: 'idle', lastRun: null };
     useUIStore.setState({ isDevApiStatusOpen: true });
     render(<DevApiStatus />);
-    expect(screen.queryByTestId('tab-events')).toBeNull();
+    expect(screen.getByTestId('tab-events')).toBeInTheDocument();
   });
 
   // R2 — Events tab rendered when schemaVersion === 'v2' AND DEV is true

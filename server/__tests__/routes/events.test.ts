@@ -724,8 +724,14 @@ describe('Events Route (Redis accumulator)', () => {
       expect(mockProcessEventGroups).not.toHaveBeenCalled();
     });
 
-    it('triggers LLM processing when LLM cache is stale and cooldown expired', async () => {
-      // Set up: LLM configured, no LLM cooldown set, stale LLM cache
+    it('Phase 27.4.6: /api/events does NOT trigger LLM processing even with stale cache + elapsed cooldown (cache-only path)', async () => {
+      // Pre-Phase-27.4.6 this test asserted that /api/events kicked off the
+      // fire-and-forget LLM pipeline. After Phase 27.4.6 the route is a pure
+      // cache reader — extractions fire only via /api/cron/refresh-events
+      // (server/routes/refresh-events-cron.ts → runRefreshExtraction). Asserting
+      // the inverse here documents the contract change so any future
+      // contributor who re-introduces fire-and-forget here gets caught by
+      // CI before merging (anti-pattern #17).
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
       mockGroupGdeltRows.mockReturnValue([
@@ -741,48 +747,17 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      // Phase 27.4 Plan 06: barrel returns tagged union; v1 branch carries
-      // `events` plus a 'v1' discriminator. geocodeEnrichedEvents mirrors.
-      mockProcessEventGroups.mockResolvedValue({
-        schemaVersion: 'v1',
-        events: [
-          {
-            groupKey: 'grp-1',
-            location: { name: 'Baghdad', precision: 'city' },
-            type: 'airstrike',
-            actors: ['US Air Force'],
-            severity: 'high',
-            summary: 'Airstrike on Baghdad',
-            casualties: { killed: 2, injured: 5, unknown: false },
-            sourceCount: 3,
-          },
-        ],
-      });
-      mockGeocodeEnrichedEvents.mockResolvedValue({
-        schemaVersion: 'v1',
-        events: [
-          {
-            groupKey: 'grp-1',
-            resolvedLat: 33.3,
-            resolvedLng: 44.4,
-            location: { name: 'Baghdad', precision: 'city' },
-            type: 'airstrike',
-            actors: ['US Air Force'],
-            severity: 'high',
-            summary: 'Airstrike on Baghdad',
-            casualties: { killed: 2, injured: 5, unknown: false },
-            sourceCount: 3,
-          },
-        ],
-      });
 
       const res = await fetch(`${baseUrl}/api/events`);
       const body = await res.json();
 
       expect(res.ok).toBe(true);
-      expect(mockProcessEventGroups).toHaveBeenCalled();
-      expect(mockGeocodeEnrichedEvents).toHaveBeenCalled();
+      // The route still serves data (raw GDELT bridge) so the map never
+      // goes blank.
       expect(body.data.length).toBeGreaterThanOrEqual(1);
+      // CRITICAL: extractor + geocoder MUST NOT be invoked from the read path.
+      expect(mockProcessEventGroups).not.toHaveBeenCalled();
+      expect(mockGeocodeEnrichedEvents).not.toHaveBeenCalled();
     });
 
     it('serves stale LLM cache when cooldown has NOT expired', async () => {
@@ -851,7 +826,12 @@ describe('Events Route (Redis accumulator)', () => {
       expect(mockGroupGdeltRows).not.toHaveBeenCalled();
     });
 
-    it('sets cooldown key after successful LLM processing', async () => {
+    it('Phase 27.4.6: /api/events does NOT stamp the cooldown key (cooldown is now owned by runRefreshExtraction in the cron path)', async () => {
+      // Pre-Phase-27.4.6 the route stamped `events:llm-process-ts` BEFORE
+      // spawning the fire-and-forget extraction. After Phase 27.4.6 the route
+      // is cache-only — the cooldown stamp lives inside
+      // server/lib/llmExtractionPipeline.ts:runRefreshExtraction(). Asserting
+      // the inverse here documents the contract change.
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
       mockGroupGdeltRows.mockReturnValue([
@@ -867,55 +847,30 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      // Phase 27.4 Plan 06 — tagged union result.
-      mockProcessEventGroups.mockResolvedValue({
-        schemaVersion: 'v1',
-        events: [
-          {
-            groupKey: 'grp-1',
-            location: { name: 'Baghdad', precision: 'city' },
-            type: 'airstrike',
-            actors: ['US Air Force'],
-            severity: 'high',
-            summary: 'Airstrike on Baghdad',
-            casualties: { killed: 2, injured: 5, unknown: false },
-            sourceCount: 3,
-          },
-        ],
-      });
-      mockGeocodeEnrichedEvents.mockResolvedValue({
-        schemaVersion: 'v1',
-        events: [
-          {
-            groupKey: 'grp-1',
-            resolvedLat: 33.3,
-            resolvedLng: 44.4,
-            location: { name: 'Baghdad', precision: 'city' },
-            type: 'airstrike',
-            actors: ['US Air Force'],
-            severity: 'high',
-            summary: 'Airstrike on Baghdad',
-            casualties: { killed: 2, injured: 5, unknown: false },
-            sourceCount: 3,
-          },
-        ],
-      });
 
       const res = await fetch(`${baseUrl}/api/events`);
       expect(res.ok).toBe(true);
 
-      // Cooldown key should have been set
-      expect(mockRedisSet).toHaveBeenCalledWith(
-        'events:llm-process-ts',
-        expect.any(Number),
-        expect.objectContaining({ ex: expect.any(Number) }),
+      // /api/events MUST NOT touch the cooldown key. (The dev-file-cache
+      // hydration path may stamp it when seeding from disk — that's fine
+      // and also goes through the same key — but no extraction-related
+      // stamping happens on the read path.)
+      const cooldownStamp = mockRedisSet.mock.calls.find(
+        (call) => call[0] === 'events:llm-process-ts',
       );
+      // Either no stamp at all, OR only the dev-file-cache stamp (which fires
+      // when devData is available — this test doesn't seed dev cache so it
+      // should be undefined).
+      expect(cooldownStamp).toBeUndefined();
     });
 
-    it('only processes NEW event groups (diffs against cached LLM events)', async () => {
+    it('Phase 27.4.6: stale LLM cache is served as-is — read path never re-extracts', async () => {
+      // Pre-Phase-27.4.6 the read path diffed cached groups against fresh
+      // GDELT and re-extracted any new groups. After 27.4.6 that lives in the
+      // cron-driven helper. The route still serves whatever is cached so the
+      // map never goes blank — assert that here.
       mockIsLLMConfigured.mockReturnValue(true);
 
-      // Pre-populate LLM cache with stale data containing one already-processed event
       redisStore.set('events:llm', {
         data: [llmEvent],
         fetchedAt: Date.now() - 901_000, // stale
@@ -924,58 +879,13 @@ describe('Events Route (Redis accumulator)', () => {
       const newEvent = makeEvent({ id: 'gdelt-NEW', label: 'New event' });
       mockFetchEvents.mockResolvedValue([eventA, newEvent]);
 
-      // groupGdeltRows returns 2 groups
-      const group1 = {
-        key: 'grp-existing',
-        entities: [eventA],
-        centroidLat: 33.3,
-        centroidLng: 44.4,
-        primaryCameo: '195',
-        timestamp: Date.now(),
-        totalMentions: 10,
-        totalSources: 3,
-        sourceUrls: [],
-      };
-      const group2 = {
-        key: 'grp-new',
-        entities: [newEvent],
-        centroidLat: 34.0,
-        centroidLng: 45.0,
-        primaryCameo: '190',
-        timestamp: Date.now(),
-        totalMentions: 5,
-        totalSources: 2,
-        sourceUrls: [],
-      };
-      mockGroupGdeltRows.mockReturnValue([group1, group2]);
-
-      const newEnriched = {
-        groupKey: 'grp-new',
-        location: { name: 'Mosul', precision: 'city' },
-        type: 'on_ground',
-        actors: ['Iraqi forces'],
-        severity: 'medium',
-        summary: 'Ground operation in Mosul',
-        casualties: { killed: 0, injured: 0, unknown: true },
-        sourceCount: 2,
-      };
-      // Phase 27.4 Plan 06 — tagged union result.
-      mockProcessEventGroups.mockResolvedValue({
-        schemaVersion: 'v1',
-        events: [newEnriched],
-      });
-
-      mockGeocodeEnrichedEvents.mockResolvedValue({
-        schemaVersion: 'v1',
-        events: [{ ...newEnriched, resolvedLat: 34.0, resolvedLng: 45.0 }],
-      });
-
       const res = await fetch(`${baseUrl}/api/events`);
-      await res.json();
+      const body = await res.json();
 
       expect(res.ok).toBe(true);
-      // processEventGroups should receive only the new groups (not already-cached ones)
-      expect(mockProcessEventGroups).toHaveBeenCalled();
+      expect(body.data.length).toBeGreaterThanOrEqual(1);
+      // CRITICAL: the route must NOT trigger extraction.
+      expect(mockProcessEventGroups).not.toHaveBeenCalled();
     });
   });
 
@@ -1246,17 +1156,17 @@ describe('Events Route (Redis accumulator)', () => {
     });
   });
 
-  describe('Phase 27.4 Plan 06 v2 extractor integration', () => {
+  describe('Phase 27.4.6 — /api/events is cache-only regardless of pipeline version', () => {
+    // Pre-Phase-27.4.6 this block asserted that the read path branched into
+    // v1 / v2 / v3 extractors based on env flag. After 27.4.6 the route is a
+    // pure cache reader; the extractor branch lives in the cron-driven
+    // helper. The two cases here lock that contract in for both flag states.
+
     beforeEach(() => {
       delete process.env.LLM_PIPELINE_V2;
     });
 
-    /**
-     * v1-path test: with the flag unset, the handler routes through v1 and
-     * ConflictEventEntity.data.schemaVersion is NOT set to 'v2' (v1 entities
-     * don't carry that discriminator).
-     */
-    it('v1 path runs when LLM_PIPELINE_V2 unset and stores v1-shaped entities', async () => {
+    it('LLM_PIPELINE_V2 unset → /api/events does NOT call processEventGroups', async () => {
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
       mockGroupGdeltRows.mockReturnValue([
@@ -1272,54 +1182,13 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      mockProcessEventGroups.mockResolvedValue({
-        schemaVersion: 'v1',
-        events: [
-          {
-            groupKey: 'grp-v1',
-            location: { name: 'Baghdad', precision: 'city' },
-            type: 'airstrike',
-            actors: ['USA'],
-            severity: 'high',
-            summary: 'Strike',
-            casualties: { killed: 1, injured: 0, unknown: false },
-            sourceCount: 2,
-          },
-        ],
-      });
-      mockGeocodeEnrichedEvents.mockResolvedValue({
-        schemaVersion: 'v1',
-        events: [
-          {
-            groupKey: 'grp-v1',
-            resolvedLat: 33.3,
-            resolvedLng: 44.4,
-            location: { name: 'Baghdad', precision: 'city' },
-            type: 'airstrike',
-            actors: ['USA'],
-            severity: 'high',
-            summary: 'Strike',
-            casualties: { killed: 1, injured: 0, unknown: false },
-            sourceCount: 2,
-          },
-        ],
-      });
 
       const res = await fetch(`${baseUrl}/api/events`);
       expect(res.ok).toBe(true);
-      // First call triggered background LLM; second call should pick up the
-      // cached v1 entity. We can't await the background promise directly, but
-      // the Redis mock is synchronous so the cache is populated by the time
-      // we re-fetch.
-      expect(mockProcessEventGroups).toHaveBeenCalled();
+      expect(mockProcessEventGroups).not.toHaveBeenCalled();
     });
 
-    /**
-     * v2-path test: with the flag on, the handler routes through v2, passes
-     * the bellingcat/news maps to the geocoder, and the resulting entities
-     * carry the resolver's provenance + suspect flag on data.*.
-     */
-    it('v2 path runs when LLM_PIPELINE_V2=true and stores v2-shaped entities', async () => {
+    it('LLM_PIPELINE_V2=true → /api/events does NOT call the v2 extractor either', async () => {
       process.env.LLM_PIPELINE_V2 = 'true';
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
@@ -1336,95 +1205,11 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      mockProcessEventGroups.mockResolvedValue({
-        schemaVersion: 'v2',
-        events: [
-          {
-            schemaVersion: 'v2',
-            groupKey: 'grp-v2',
-            location: {
-              country: 'Iraq',
-              admin1: null,
-              city: 'Baghdad',
-              neighborhood: null,
-              landmark: null,
-              confidence: 0.85,
-            },
-            type: 'airstrike',
-            confidence: 0.82,
-            reasoning: 'Cross-matched with Reuters article',
-            weaponType: 'missile',
-            targetType: 'military',
-            timeOfDay: '03:15',
-            durationMinutes: null,
-            actors: ['USA', 'IRN'],
-            severity: 'high',
-            summary: 'Strike on Baghdad military installation',
-            casualties: { killed: 2, injured: 5, unknown: false },
-            sourceCount: 3,
-          },
-        ],
-        matchedNewsByGroup: new Map([
-          [
-            'grp-v2',
-            [
-              {
-                title: 'Strike on Baghdad confirmed',
-                url: 'https://reuters.com/x',
-                publishedAt: Date.now(),
-                sourceCountry: 'UK',
-              },
-            ],
-          ],
-        ]),
-        bellingcatByGroup: new Map(),
-      });
-      mockGeocodeEnrichedEvents.mockResolvedValue({
-        schemaVersion: 'v2',
-        events: [
-          {
-            schemaVersion: 'v2',
-            groupKey: 'grp-v2',
-            location: {
-              country: 'Iraq',
-              admin1: null,
-              city: 'Baghdad',
-              neighborhood: null,
-              landmark: null,
-              confidence: 0.85,
-            },
-            type: 'airstrike',
-            confidence: 0.82,
-            reasoning: 'Cross-matched with Reuters article',
-            weaponType: 'missile',
-            targetType: 'military',
-            timeOfDay: '03:15',
-            durationMinutes: null,
-            actors: ['USA', 'IRN'],
-            severity: 'high',
-            summary: 'Strike on Baghdad military installation',
-            casualties: { killed: 2, injured: 5, unknown: false },
-            sourceCount: 3,
-            resolvedLat: 33.3,
-            resolvedLng: 44.4,
-            geocodeProvenance: 'nominatim-direct',
-            precision: 'city',
-            suspect: false,
-            actionGeoDistanceKm: 5.2,
-            displayName: 'Baghdad, Iraq',
-          },
-        ],
-      });
 
       const res = await fetch(`${baseUrl}/api/events`);
       expect(res.ok).toBe(true);
-      expect(mockProcessEventGroups).toHaveBeenCalled();
-      expect(mockGeocodeEnrichedEvents).toHaveBeenCalled();
-      // The handler must pass the tagged v2 input to geocodeEnrichedEvents —
-      // confirm the mock saw the v2 schemaVersion.
-      const geoCalls = mockGeocodeEnrichedEvents.mock.calls;
-      const geoInput = geoCalls[0]?.[0] as { schemaVersion?: string };
-      expect(geoInput?.schemaVersion).toBe('v2');
+      expect(mockProcessEventGroups).not.toHaveBeenCalled();
+      expect(mockGeocodeEnrichedEvents).not.toHaveBeenCalled();
     });
   });
 
@@ -1438,7 +1223,13 @@ describe('Events Route (Redis accumulator)', () => {
       delete process.env.LLM_PIPELINE_V2;
     });
 
-    it('runEval is called after geocodeEnrichedEvents in v2 path', async () => {
+    it('Phase 27.4.6: /api/events does NOT call runEval (eval now runs inside the cron path / cron-health fold)', async () => {
+      // Pre-Phase-27.4.6 the v2 fire-and-forget block in /api/events called
+      // runEval after geocoding. After 27.4.6 the read path is cache-only —
+      // runEval fires inside server/lib/llmExtractionPipeline.ts (via the
+      // cron-driven extraction) and inside server/routes/cron-health.ts (the
+      // D-09 daily drift check). Asserting the inverse here documents the
+      // contract change.
       process.env.LLM_PIPELINE_V2 = 'true';
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
@@ -1455,73 +1246,6 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      mockProcessEventGroups.mockResolvedValue({
-        schemaVersion: 'v2',
-        events: [
-          {
-            schemaVersion: 'v2',
-            groupKey: 'grp-eval',
-            location: {
-              country: 'Iraq',
-              admin1: null,
-              city: 'Baghdad',
-              neighborhood: null,
-              landmark: null,
-              confidence: 0.85,
-            },
-            type: 'airstrike',
-            confidence: 0.82,
-            reasoning: 'Test',
-            weaponType: null,
-            targetType: null,
-            timeOfDay: null,
-            durationMinutes: null,
-            actors: ['USA'],
-            severity: 'high',
-            summary: 'Baghdad strike',
-            casualties: { killed: 1, injured: 0, unknown: false },
-            sourceCount: 2,
-          },
-        ],
-        matchedNewsByGroup: new Map(),
-        bellingcatByGroup: new Map(),
-      });
-      mockGeocodeEnrichedEvents.mockResolvedValue({
-        schemaVersion: 'v2',
-        events: [
-          {
-            schemaVersion: 'v2',
-            groupKey: 'grp-eval',
-            location: {
-              country: 'Iraq',
-              admin1: null,
-              city: 'Baghdad',
-              neighborhood: null,
-              landmark: null,
-              confidence: 0.85,
-            },
-            type: 'airstrike',
-            confidence: 0.82,
-            reasoning: 'Test',
-            weaponType: null,
-            targetType: null,
-            timeOfDay: null,
-            durationMinutes: null,
-            actors: ['USA'],
-            severity: 'high',
-            summary: 'Baghdad strike',
-            casualties: { killed: 1, injured: 0, unknown: false },
-            sourceCount: 2,
-            resolvedLat: 33.3,
-            resolvedLng: 44.4,
-            geocodeProvenance: 'nominatim-direct',
-            precision: 'city',
-            suspect: false,
-            actionGeoDistanceKm: 3,
-            displayName: 'Baghdad, Iraq',
-          },
-        ],
-      });
       mockRunEval.mockResolvedValue({
         within5km: 12,
         within20km: 18,
@@ -1532,15 +1256,12 @@ describe('Events Route (Redis accumulator)', () => {
       const res = await fetch(`${baseUrl}/api/events`);
       expect(res.ok).toBe(true);
 
-      // Background fire-and-forget means we need to let the microtask queue
-      // drain; all our mocks are synchronous-resolving promises so one macro
-      // task tick is enough.
+      // Drain microtasks so any (hypothetical) fire-and-forget would have
+      // had a chance to land. There should be no runEval call from this path.
       await new Promise((r) => setTimeout(r, 50));
 
-      // runEval should have fired exactly once in the v2 branch.
-      expect(mockRunEval).toHaveBeenCalledTimes(1);
-      // It must run AFTER geocodeEnrichedEvents — assert both were called.
-      expect(mockGeocodeEnrichedEvents).toHaveBeenCalled();
+      expect(mockRunEval).not.toHaveBeenCalled();
+      expect(mockGeocodeEnrichedEvents).not.toHaveBeenCalled();
     });
 
     it('POST /llm-replay/:groupKey is gated by dashboardAuth in production', async () => {

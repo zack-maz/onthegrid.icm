@@ -197,12 +197,12 @@ describe('DevApiStatus', () => {
     openModal();
     render(<DevApiStatus />);
 
-    // "Sites" and "Water" also appear as tab button text (Plan 12 G6),
-    // so we assert presence via getAllByText with length >= 1 for those two
-    // and direct lookup for the rest.
+    // "Sites", "Water", and (post-Phase-27.4.6) "Events" also appear as tab
+    // button text, so we assert presence via getAllByText with length >= 1
+    // for those three and direct lookup for the rest.
     expect(screen.getByText('Flights')).toBeInTheDocument();
     expect(screen.getByText('Ships')).toBeInTheDocument();
-    expect(screen.getByText('Events')).toBeInTheDocument();
+    expect(screen.getAllByText('Events').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Sites').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('News')).toBeInTheDocument();
     expect(screen.getByText('Markets')).toBeInTheDocument();
@@ -286,12 +286,15 @@ describe('DevApiStatus', () => {
     expect(screen.getByText('Sites Filters')).toBeInTheDocument();
   });
 
-  // Phase 27.3.1 HUMAN-UAT Gap 1 — tab visibility gated on layer toggles.
-  it('hides Water tab when the water layer is inactive', () => {
+  // Phase 27.4.6 — Water tab is now always visible regardless of layer state
+  // (was: hidden when `useLayerStore.activeLayers.has('water')` was false; the
+  // empty-default Set hid the tab on cold start). The dashboard surface is
+  // observability, not layer-state-driven.
+  it('Water tab stays visible even when the water layer is inactive (Phase 27.4.6)', () => {
     useLayerStore.setState({ activeLayers: new Set() }); // water off
     openModal();
     render(<DevApiStatus />);
-    expect(screen.queryByTestId('tab-water')).toBeNull();
+    expect(screen.getByTestId('tab-water')).toBeInTheDocument();
     expect(screen.getByTestId('tab-overview')).toBeInTheDocument();
     expect(screen.getByTestId('tab-sites')).toBeInTheDocument();
   });
@@ -305,19 +308,9 @@ describe('DevApiStatus', () => {
     expect(screen.getByTestId('tab-water')).toBeInTheDocument();
   });
 
-  it('redirects active Water tab back to Overview when the water layer is turned off', () => {
-    useUIStore.setState({
-      isDevApiStatusOpen: true,
-      activeDevApiStatusTab: 'water',
-    });
-    const { rerender } = render(<DevApiStatus />);
-    expect(useUIStore.getState().activeDevApiStatusTab).toBe('water');
-    act(() => {
-      useLayerStore.setState({ activeLayers: new Set() });
-    });
-    rerender(<DevApiStatus />);
-    expect(useUIStore.getState().activeDevApiStatusTab).toBe('overview');
-  });
+  // Phase 27.4.6 — the Water snap-back is gone. Water is always visible, so
+  // there is no scenario where the active Water tab can disappear under the
+  // user. The Sites snap-back remains because Sites is filter-driven.
 
   it('redirects active Sites tab back to Overview when showSites is turned off', () => {
     useUIStore.setState({
