@@ -11,8 +11,12 @@ node_modules
 .dev-cache
 dist
 dist-server
-api/*.mjs
-api/*.js
+# NOTE: api/vercel-entry.js is the tsup-bundled serverless function entry
+# that Vercel detects as a function. It MUST be tracked in git so Vercel's
+# function discovery sees it during deploy (the Vite framework preset only
+# auto-ships dist/, not api/). Build script regenerates it on every build,
+# so contributors should run `npm run build` before committing if they
+# touched server code.
 dist-ssr
 *.tsbuildinfo
 *.local
