@@ -33,20 +33,12 @@ import { BATCH_SIZE as BATCH_SIZE_V2 } from './llmEventExtractor.v2.js';
 import { groupGdeltRows } from './eventGrouping.js';
 import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { runEval } from './llmEvalHarness.js';
-import {
-  llmProgress,
-  resetProgress,
-  updateProgress,
-  buildSummary,
-} from './llmProgress.js';
+import { llmProgress, resetProgress, updateProgress, buildSummary } from './llmProgress.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import { getPipelineVersion } from '../config.js';
 import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js';
 import { logger } from './logger.js';
-import {
-  saveDevLLMCache,
-  saveDevLLMCacheV2,
-} from '../cache/devFileCache.js';
+import { saveDevLLMCache, saveDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { getHighestTier } from './sourceTiers.js';
 import type { ConflictEventEntity } from '../types.js';
 import type { GeocodeProvenance } from './llmSchema.js';
@@ -110,9 +102,7 @@ export interface RunRefreshResult {
  * fire-and-forget IIFE; this function returns synchronously after the
  * dispatch decision is made.
  */
-export async function runRefreshExtraction(
-  opts: RunRefreshOpts,
-): Promise<RunRefreshResult> {
+export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRefreshResult> {
   // 1. Resolve active pipeline keys (mirrors events.ts request handler).
   const version = getPipelineVersion();
   const pipelineV2 = version === 'v2';
@@ -133,10 +123,7 @@ export async function runRefreshExtraction(
   //    first invocation after a fresh deploy always populates the cache.
   let isColdCache = false;
   try {
-    const cachedLLM = await cacheGetSafe<ConflictEventEntity[]>(
-      LLM_EVENTS_KEY_ACTIVE,
-      999_999_999,
-    );
+    const cachedLLM = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY_ACTIVE, 999_999_999);
     isColdCache = !cachedLLM?.data || cachedLLM.data.length === 0;
   } catch {
     // Treat Redis hiccup as NOT cold — preserve cooldown so we don't
@@ -323,8 +310,7 @@ export async function runRefreshExtraction(
         const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
         let suspectCount = 0;
         for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] =
-            (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
           if (e.suspect) suspectCount++;
         }
         updateProgress({ provenanceCounts, suspectCount });
@@ -356,8 +342,7 @@ export async function runRefreshExtraction(
         const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
         let suspectCount = 0;
         for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] =
-            (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
           if (e.suspect) suspectCount++;
         }
         updateProgress({ provenanceCounts, suspectCount });

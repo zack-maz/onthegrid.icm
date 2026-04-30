@@ -34,10 +34,7 @@ vi.mock('../../lib/logger.js', () => ({
   },
 }));
 
-function createReqRes(
-  headers: Record<string, string> = {},
-  query: Record<string, string> = {},
-) {
+function createReqRes(headers: Record<string, string> = {}, query: Record<string, string> = {}) {
   const lower: Record<string, string> = {};
   for (const [k, v] of Object.entries(headers)) lower[k.toLowerCase()] = v;
   const req = {
@@ -84,9 +81,7 @@ beforeEach(() => {
 describe('/api/cron/refresh-events', () => {
   it('CRON_SECRET set + Authorization missing → 401, runRefreshExtraction NOT called', async () => {
     mockEnv.CRON_SECRET = 's3cret';
-    const { refreshEventsCronRouter } = await import(
-      '../../routes/refresh-events-cron.js'
-    );
+    const { refreshEventsCronRouter } = await import('../../routes/refresh-events-cron.js');
     const handler = extractHandler(refreshEventsCronRouter);
     const { req, res, getStatus, getBody } = createReqRes();
     await handler(req, res);
@@ -97,9 +92,7 @@ describe('/api/cron/refresh-events', () => {
 
   it('CRON_SECRET set + wrong Bearer → 401', async () => {
     mockEnv.CRON_SECRET = 's3cret';
-    const { refreshEventsCronRouter } = await import(
-      '../../routes/refresh-events-cron.js'
-    );
+    const { refreshEventsCronRouter } = await import('../../routes/refresh-events-cron.js');
     const handler = extractHandler(refreshEventsCronRouter);
     const { req, res, getStatus } = createReqRes({ Authorization: 'Bearer wrong' });
     await handler(req, res);
@@ -114,9 +107,7 @@ describe('/api/cron/refresh-events', () => {
       schemaVersion: 'v3',
       coldCacheBypass: false,
     });
-    const { refreshEventsCronRouter } = await import(
-      '../../routes/refresh-events-cron.js'
-    );
+    const { refreshEventsCronRouter } = await import('../../routes/refresh-events-cron.js');
     const handler = extractHandler(refreshEventsCronRouter);
     const { req, res, getStatus, getBody } = createReqRes({
       Authorization: 'Bearer s3cret',
@@ -138,9 +129,7 @@ describe('/api/cron/refresh-events', () => {
       reason: 'cooldown',
       schemaVersion: 'v3',
     });
-    const { refreshEventsCronRouter } = await import(
-      '../../routes/refresh-events-cron.js'
-    );
+    const { refreshEventsCronRouter } = await import('../../routes/refresh-events-cron.js');
     const handler = extractHandler(refreshEventsCronRouter);
     const { req, res, getBody } = createReqRes({ Authorization: 'Bearer s3cret' });
     await handler(req, res);
@@ -150,14 +139,9 @@ describe('/api/cron/refresh-events', () => {
   it('?force=true with correct Bearer → forceCooldown: true passed to helper (D-11)', async () => {
     mockEnv.CRON_SECRET = 's3cret';
     mockRunRefresh.mockResolvedValue({ dispatched: true, schemaVersion: 'v3' });
-    const { refreshEventsCronRouter } = await import(
-      '../../routes/refresh-events-cron.js'
-    );
+    const { refreshEventsCronRouter } = await import('../../routes/refresh-events-cron.js');
     const handler = extractHandler(refreshEventsCronRouter);
-    const { req, res } = createReqRes(
-      { Authorization: 'Bearer s3cret' },
-      { force: 'true' },
-    );
+    const { req, res } = createReqRes({ Authorization: 'Bearer s3cret' }, { force: 'true' });
     await handler(req, res);
     expect(mockRunRefresh).toHaveBeenCalledWith({
       triggeredBy: 'cron',
@@ -172,9 +156,7 @@ describe('/api/cron/refresh-events', () => {
       coldCacheBypass: true,
       schemaVersion: 'v3',
     });
-    const { refreshEventsCronRouter } = await import(
-      '../../routes/refresh-events-cron.js'
-    );
+    const { refreshEventsCronRouter } = await import('../../routes/refresh-events-cron.js');
     const handler = extractHandler(refreshEventsCronRouter);
     const { req, res, getBody } = createReqRes();
     await handler(req, res);
