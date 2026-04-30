@@ -226,7 +226,7 @@ Plans:
 
 **Wave structure:** Wave 1 (P1-P5) sequential; Wave 2 (P6-P10) sequential, P8/P9/P10 conditional on D-13 stop. P6 depends on P5 (D-02 strict CI gate before tuning).
 
-**Explicitly out-of-scope:** Phase 27.4.5 (deck.gl v9 `depthTest` TS drift — was 27.4.4; renumbered 2026-04-26 when 27.4.4 was reassigned to v3 latency remediation + cutover), Phase 27.4.6 (LLM flight-recorder Redis history — was 27.4.5; renumbered same date), Phase 27.3.3 (romanization of non-Latin water names), Vercel preview deploy failure.
+**Explicitly out-of-scope:** Phase 27.4.5 (deck.gl v9 `depthTest` TS drift — TBD slot; renumber chain since 2026-04-26 has displaced original 27.4.5/27.4.6 references — flight-recorder Redis history now backlog/TBD), Phase 27.3.3 (romanization of non-Latin water names), Vercel preview deploy failure.
 
 ### Phase 27.4.3: free-claude-code Routing Evaluation (INSERTED)
 
@@ -249,9 +249,14 @@ Plans:
 **Goal:** Solve the v3 production-latency blocker that caused Phase 27.4.3 Gate B to fail (qwen/qwen3.5-397b-a17b p99 929s, 11 watchdog timeouts, 218-min duration), then execute the deferred cutover (POST `/api/events/llm-pipeline {version: 'v3'}`) and close Phase 27.4.2 HUMAN-UAT tests 1+2. Reuses all infrastructure from 27.4.3 (vendored router, v3 extractor, observability dashboard, auto-rollback, eval harness, bake-off scripts). Approach TBD via discussion (candidate paths: alternative NIM model with lower long-tail latency, adaptive batching, provider racing, looser watchdog with cap). Success: Gate B PASS (watchdog=0, DLQ≤5, duration≤120min) + cutover live + UAT closed.
 **Depends on:** Phase 27.4.3
 **Requirements:** Derived from 27.4.4-CONTEXT.md (TBD)
-**Plans:** 0 plans
+**Plans:** Plan 01 (BAKEOFF + CUTOVER waves) shipped 2026-04-29; Plan 02 (Gate B closeout) deferred until NIM throttle clears.
 
-- [ ] (plans TBD after CONTEXT.md and research)
+### Phase 27.4.6: Cron-Driven Pipeline Trigger (INSERTED)
+
+**Goal:** Move the LLM enrichment pipeline trigger out of `/api/events` and into a daily Vercel cron at 4am UTC. `/api/events` becomes a pure cache reader — first user no longer pays the ~95-min cold-start cost. Pipeline stays warm via server-side cron. Hobby plan compliance: drops dedicated `/api/cron/eval` schedule entry (eval-drift folds into the existing `/api/cron/health` handler per D-09 in CONTEXT.md), keeps `/api/cron/warm` (still needed for Overpass site/water pre-warm). Success: `/api/events` never triggers extraction; cron self-heals on cold cache; `?force=true` query param bypasses cooldown for ops; documented NIM-throttle fallback is "accept failure, raw GDELT bridge holds the line."
+**Depends on:** Phase 27.4.4
+**Requirements:** Derived from 27.4.6-CONTEXT.md (D-01 through D-11)
+**Plans:** Plan 01 scaffolded 2026-04-29, replanned post-/gsd-discuss to incorporate D-08..D-11.
 
 ### Phase 28: Performance & Load Testing — was Phase 27
 
