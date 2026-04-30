@@ -22,6 +22,7 @@ import { healthRouter } from './routes/health.js';
 import { cronHealthRouter } from './routes/cron-health.js';
 import { cronWarmRouter } from './routes/cron-warm.js';
 import { evalCronRouter } from './routes/eval-cron.js';
+import { refreshEventsCronRouter } from './routes/refresh-events-cron.js';
 import { dashboardAuthRouter } from './routes/dashboardAuth.js';
 export function createApp() {
   const app = express();
@@ -86,6 +87,9 @@ export function createApp() {
   app.use('/api/cron/health', cronHealthRouter);
   app.use('/api/cron/warm', cronWarmRouter);
   app.use('/api/cron/eval', evalCronRouter);
+  // Phase 27.4.6 — daily LLM v3 extraction trigger. Mounts before the public
+  // rate limiter so Vercel cron's once-daily invocation is not throttled.
+  app.use('/api/cron/refresh-events', refreshEventsCronRouter);
 
   // Portfolio demo baseline rate limit — runs on every /api/* request
   // BEFORE the per-endpoint limiters below. 6 req/min per IP. Prevents
