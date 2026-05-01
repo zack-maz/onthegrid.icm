@@ -258,24 +258,48 @@ Plans:
 **Requirements:** Derived from 27.4.6-CONTEXT.md (D-01 through D-11)
 **Plans:** 1/1 plans complete
 
-### Phase 28: Performance & Load Testing — was Phase 27
+### Phase 28: Performance & Load Testing — was Phase 27 (UMBRELLA)
 
-**Goal:** Optimize initial load time and validate production handles 250 concurrent users.
-**Depends on:** Phase 27.4 (GDELT redo + water/LLM improvements complete before load testing)
-**Requirements:** TBD
+**Goal:** Close milestone v1.4 by sweeping the codebase, polishing the prod surface, and proving 1–300 concurrent users work end-to-end. Per CONTEXT.md D-01, this phase is split into three sequenced child phases (cleanup → sync → load). The umbrella retains the goal, deliverables inventory, and shared CONTEXT.md; each child carries its own PLAN train and merges to `main` before the next starts.
+**Depends on:** Phase 27.4.6
+**Requirements:** Derived from 28-CONTEXT.md (D-01 through D-21)
+**Plans:** Delivered via children (see 28.1 / 28.2 / 28.3 below)
+
+**Key deliverables (inventory, allocated across 28.1/28.2/28.3):**
+
+- Ghost code + duplicate code sweep (knip + ts-prune + manual walk) → **28.1**
+- Hardcode generalization: env-tunable operational levers, centralized domain constants, CSS @theme color migration → **28.1**
+- UI bug fixes + remaining debugging items + normalization (TS strict, Zustand selectors, Redis key naming) → **28.1**
+- Dev/prod feature promotion (per-field opt-in: event/OSM IDs, LLM confidence, EntityTooltip dev block graduate; severity score, MapDevExposer, notabilityScore stay dev-only) → **28.2**
+- Domain rename to `otg-iran-monitor.vercel.app` → **28.2**
+- Bearer-bypass for `rateLimiters.public` global tier (folds Phase 999.1) → **28.2**
+- Bearer-gated graduation of operator endpoints (`POST /api/events/llm-pipeline`, `POST /api/events/llm-replay/:groupKey`) → **28.2**
+- Edge cache + Redis fallback architecture (`s-maxage` per endpoint) → **28.3**
+- k6 sweep 50/100/150/200/250/300 VU, full-browser-loop polling per VU → **28.3**
+- PASS/FAIL bar at 300 VU: p95<500ms, p99<1500ms, error<1%, cache-hit>90% → **28.3**
+
+**Historical note:** This phase was originally numbered 27 under v1.3. It was deferred to v1.4 on 2026-04-08 alongside the GDELT redo so both can run against the stabilized v1.3 codebase. Split into 28.1/28.2/28.3 on 2026-04-30 per 28-CONTEXT.md D-01 (regression-prone cleanup, prod-surface sync, and greenfield load test each get their own commit train so bisects stay tractable).
+
+### Phase 28.1: Cleanup Sweep (umbrella child of 28)
+
+**Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 1 of 3): kill regression risk before sync and load test land. Sweep ghost code, duplicate code, normalization gaps, UI bugs, and unresolved debugging items. Generalize hardcodes per D-10 (operator-tunable env vars: polling intervals, thresholds, radii) / D-11 (domain-definitional constants centralized in `src/lib/domain.ts`, NOT env-tunable: IRAN_BBOX, IRAN_CENTER, WAR_START, ADS-B 500NM radius) / D-13 (visual constants migrate to CSS custom properties + Tailwind v4 `@theme`). Methodology per D-14: `npx knip` + `npx ts-prune` for mechanical dead-export enumeration, then a manual codebase walk for logically-dead-but-type-reachable code. Triage doc committed before deletions, then atomic per-module deletion commits. Test suites must stay green at every wave boundary.
+**Depends on:** Phase 27.4.6 (cron-driven pipeline trigger merged to main)
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-10 / D-11 / D-12 / D-13 / D-14 + Claude's-discretion items (specific UI bugs, normalization scope, knip+ts-prune triage format)
 **Plans:** 0 plans
 
-**Key deliverables:**
+### Phase 28.2: Dev/Prod Sync + Domain Rename + Rate-Limiter Fold-In (umbrella child of 28)
 
-- Staggered API calls on mount (priority: flights -> ships/events -> rest)
-- Lazy-load visualization layer components (only load when toggled)
-- Code-splitting evaluation for maplibre chunk (282KB gzipped)
-- k6 test scaled to 250 VUs with thundering herd mitigation
-- Request coalescing for concurrent identical requests (flights especially)
-- CDN cache tuning (s-maxage optimization per endpoint)
-- Vercel warm-up cron frequency evaluation
+**Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 2 of 3): polish the prod surface so 28.3's load test runs against a coherent, operator-controllable deployment. Three concerns bundled because they all touch the prod surface: (a) Per-field dev/prod feature promotion per D-05/D-06/D-07 — graduate event/OSM IDs, LLM confidence + provenance, EntityTooltip dev block to Bearer-gated prod via `shouldRenderDashboard()`; keep severity score, MapDevExposer (`window.__map`), and `notabilityScore` dev-only forever. (b) Bearer-gated graduation of operator-control endpoints per D-08: `POST /api/events/llm-pipeline` (runtime v1/v2/v3 swap) and `POST /api/events/llm-replay/:groupKey` (single-group re-extraction with current prompt — Pitfall 6 dual-gate preserved, never writes cache). (c) Domain rename to `otg-iran-monitor.vercel.app` per D-03 — vercel.json, package.json, scripts/load-test.js BASE_URL, README.md, PROJECT_SPEC.md, PROJECT_STATUS.md, .planning/PROJECT.md, memory/reference_deployment.md. (d) Phase 999.1 fold-in per D-04: Bearer-bypass for `rateLimiters.public` global 6-req/min tier — when valid `DASHBOARD_PASSWORD` Bearer is present the global tier is skipped; per-endpoint limits still apply. Old-domain redirect strategy is Claude's discretion at planning time.
+**Depends on:** Phase 28.1 (must merge to main first per D-01)
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-03 / D-04 / D-05 / D-06 / D-07 / D-08 / D-09 + Claude's-discretion items (redirect mechanic, `/api/sources` edge-cache classification handoff to 28.3)
+**Plans:** 0 plans
 
-**Historical note:** This phase was originally numbered 27 under v1.3. It was deferred to v1.4 on 2026-04-08 alongside the GDELT redo so both can run against the stabilized v1.3 codebase.
+### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
+
+**Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 3 of 3): validate production handles 1–300 concurrent users with measurable PASS/FAIL signal against a clean codebase. Performance optimization layer per D-19: add `s-maxage` CDN headers to `/api/*` (flights 5s, ships 30s, markets 60s, events/news 900s, sites/water 86400s) so Vercel CDN absorbs bulk reads at 300 VU and Redis only fires on cache miss + warm-up cron. k6 sweep per D-15 (GitHub Actions runner, results land as PR artifacts) / D-16 (six discrete tiers 50/100/150/200/250/300 VU, 60s ramp + 5min steady, ~45min wall-time per sweep) / D-20 (full browser-loop per VU: t=0 fires site/water/sources/markets/flights/ships/events/news, then polls flights@5s, ships@30s, markets@60s, events@15min, news@15min — ~0.27 req/s/VU → ~81 RPS at 300 VU). PASS/FAIL bar per D-17 (measured at 300 VU steady-state): p95<500ms hot endpoints, p99<1500ms, error<1%, no 5xx spikes, cache-hit>90% (non-negotiable). Beyond PASS/FAIL per D-18: per-endpoint latency breakdown (p50/p95/p99 tagged), 429 count (validates D-04 Bearer-bypass), Vercel cold-start frequency (validates warm-up cron sufficiency), Upstash Redis cache hit ratio. Polling parity per D-21 (D-20 shape + D-19 edge cache eliminates user-A-vs-user-B divergence). Hobby cron cap = 3, load test does NOT consume a slot.
+**Depends on:** Phase 28.2 (must merge to main first per D-01; D-03 domain rename must land before scripts/load-test.js BASE_URL update)
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-15 / D-16 / D-17 / D-18 / D-19 / D-20 / D-21 + Claude's-discretion items (k6 reporter artifact format, `/api/sources` edge-cache classification)
+**Plans:** 0 plans
 
 ## Deferred Work
 
@@ -290,15 +314,12 @@ Deferred from v1.3:
 
 ## Backlog
 
-### Phase 999.1: Remove or relax `rateLimiters.public` global tier (BACKLOG)
+### Phase 999.1: Remove or relax `rateLimiters.public` global tier — FOLDED INTO PHASE 28.2
 
 **Goal:** Resolve operator-blocking rate limit. The 6 req/min global tier in `server/middleware/rateLimit.ts` (applied at `server/index.ts:99` to all `/api/*`) blocks the operator's own browser — flights polling alone is 12 req/min. Three options scoped earlier: (a) remove global tier (per-endpoint limits already tuned for browser), (b) bump to 300/min to keep loose anti-scraper net, (c) bypass when `DASHBOARD_PASSWORD` Bearer present.
-**Requirements:** TBD
-**Plans:** 0 plans
-
-Plans:
-
-- [ ] TBD (promote with /gsd-review-backlog when ready)
+**Resolution:** Folded into Phase 28.2 on 2026-04-30 per 28-CONTEXT.md D-04 — option (c) Bearer-bypass selected. This entry remains for historical traceability.
+**Requirements:** Subsumed by 28-CONTEXT.md D-04
+**Plans:** 0 plans (delivered via Phase 28.2 plan train)
 
 ### Phase 999.2: `api/vercel-entry.js` build-artifact discipline (BACKLOG)
 
