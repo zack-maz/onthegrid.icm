@@ -284,8 +284,18 @@ Plans:
 
 **Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 1 of 3): kill regression risk before sync and load test land. Sweep ghost code, duplicate code, normalization gaps, UI bugs, and unresolved debugging items. Generalize hardcodes per D-10 (operator-tunable env vars: polling intervals, thresholds, radii) / D-11 (domain-definitional constants centralized in `src/lib/domain.ts`, NOT env-tunable: IRAN_BBOX, IRAN_CENTER, WAR_START, ADS-B 500NM radius) / D-13 (visual constants migrate to CSS custom properties + Tailwind v4 `@theme`). Methodology per D-14: `npx knip` + `npx ts-prune` for mechanical dead-export enumeration, then a manual codebase walk for logically-dead-but-type-reachable code. Triage doc committed before deletions, then atomic per-module deletion commits. Test suites must stay green at every wave boundary.
 **Depends on:** Phase 27.4.6 (cron-driven pipeline trigger merged to main)
-**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-10 / D-11 / D-12 / D-13 / D-14 + Claude's-discretion items (specific UI bugs, normalization scope, knip+ts-prune triage format)
-**Plans:** 0 plans
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-10 / D-11 / D-12 / D-13 / D-14 + 28.1-CONTEXT.md D-22 / D-23 / D-24 / D-25 / D-26 / D-27 / D-28 / D-29 (filtered + child-specific)
+**Plans:** 7 plans (7-wave API-first serial per D-28)
+
+Plans:
+
+- [ ] 28.1-01-W1-api-audit-PLAN.md — W1: hand-curated probe + fix every /api/\* endpoint and upstream adapter (D-22a, D-23)
+- [ ] 28.1-02-W2-health-endpoint-PLAN.md — W2: /api/health aggregate endpoint + DevApiStatus All APIs tab + HealthBanner (D-22b, D-24, D-25, D-26)
+- [ ] 28.1-03-W3-knip-triage-PLAN.md — W3: knip + ts-prune triage doc with confidence tags; zero source modifications (D-14, D-29)
+- [ ] 28.1-04-W4-deletions-PLAN.md — W4: atomic per-module deletion commits + manual UAT against CLAUDE.md feature inventory (D-14, D-29)
+- [ ] 28.1-05-W5-hardcode-generalization-PLAN.md — W5: src/lib/domain.ts centralization + 11 D-12 env vars (D-11, D-12)
+- [ ] 28.1-06-W6-css-theme-migration-PLAN.md — W6: CSS @theme migration + colorBridge.ts deck.gl bridge (D-13)
+- [ ] 28.1-07-W7-normalization-PLAN.md — W7: 7-sub-category normalization (TS strict / lint / Zustand / Redis audit / vitest / imports / logging) (D-27)
 
 ### Phase 28.2: Dev/Prod Sync + Domain Rename + Rate-Limiter Fold-In (umbrella child of 28)
 
