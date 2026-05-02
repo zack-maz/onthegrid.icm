@@ -11,8 +11,21 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, cleanup, waitFor } from '@testing-library/react';
+import { renderHook, cleanup, act } from '@testing-library/react';
 import type { HealthResponse } from '@/lib/healthClient';
+
+/**
+ * Flush every queued microtask + advance any pending timers by 0ms so that
+ * setState calls scheduled inside the recursive setTimeout chain are
+ * applied synchronously before assertions run. `waitFor` from
+ * @testing-library/react polls in real time and hangs under
+ * `vi.useFakeTimers()`; this helper is the documented vitest workaround.
+ */
+async function flush(): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
 
 const mockHealthResponse: HealthResponse = {
   endpoints: {
@@ -68,12 +81,12 @@ describe('useHealthStatus', () => {
     expect(result.current.loading).toBe(true);
     expect(result.current.health).toBeNull();
 
-    await vi.advanceTimersByTimeAsync(0);
+    await flush();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledWith('/api/health');
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.loading).toBe(false);
     expect(result.current.health).toEqual(mockHealthResponse);
     expect(result.current.error).toBeNull();
     expect(typeof result.current.lastSuccessAt).toBe('number');
@@ -99,13 +112,14 @@ describe('useHealthStatus', () => {
     const { result } = renderHook(() => useHealthStatus());
 
     // First poll succeeds
-    await vi.advanceTimersByTimeAsync(0);
-    await waitFor(() => expect(result.current.health).not.toBeNull());
+    await flush();
+    expect(result.current.health).not.toBeNull();
 
     // Second poll fails
     mockFetch.mockRejectedValueOnce(new Error('Network down'));
-    await vi.advanceTimersByTimeAsync(60_000);
-    await waitFor(() => expect(result.current.error).not.toBeNull());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
 
     // Health is preserved (last-known-good); error is exposed.
     expect(result.current.health).toEqual(mockHealthResponse);
@@ -176,8 +190,7 @@ describe('useHealthStatus', () => {
     const { useHealthStatus } = await import('@/hooks/useHealthStatus');
     const { result } = renderHook(() => useHealthStatus());
 
-    await vi.advanceTimersByTimeAsync(0);
-    await waitFor(() => expect(result.current.error).not.toBeNull());
+    await flush();
 
     expect(result.current.health).toBeNull();
     expect(result.current.error?.message).toContain('500');

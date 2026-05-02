@@ -10,12 +10,18 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 import {
   HealthStatusProvider,
   useHealthStatusContext,
 } from '@/components/providers/HealthStatusProvider';
 import type { HealthResponse } from '@/lib/healthClient';
+
+async function flush(): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
 
 const mockHealthResponse: HealthResponse = {
   endpoints: {
@@ -77,13 +83,15 @@ describe('HealthStatusProvider', () => {
       </HealthStatusProvider>,
     );
 
-    await vi.advanceTimersByTimeAsync(0);
+    await flush();
 
     const healthCalls = mockFetch.mock.calls.filter(([url]) => url === '/api/health');
     expect(healthCalls.length).toBe(1);
 
     // Advance past one poll cycle — still exactly ONE more (not two)
-    await vi.advanceTimersByTimeAsync(60_000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
     const healthCallsAfterCycle = mockFetch.mock.calls.filter(([url]) => url === '/api/health');
     expect(healthCallsAfterCycle.length).toBe(2);
   });
@@ -106,10 +114,8 @@ describe('HealthStatusProvider', () => {
       </HealthStatusProvider>,
     );
 
-    await vi.advanceTimersByTimeAsync(0);
+    await flush();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('consumer').textContent).toContain('crit-healthy=1'),
-    );
+    expect(screen.getByTestId('consumer').textContent).toContain('crit-healthy=1');
   });
 });
