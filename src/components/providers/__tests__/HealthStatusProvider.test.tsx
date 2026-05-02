@@ -96,15 +96,19 @@ describe('HealthStatusProvider', () => {
     expect(healthCallsAfterCycle.length).toBe(2);
   });
 
-  it('Test 8: useHealthStatusContext() outside provider throws', () => {
+  it('Test 8: useHealthStatusContext() outside provider returns the safe-default value', () => {
+    let captured: ReturnType<typeof useHealthStatusContext> | null = null;
     function ConsumerOutside() {
-      useHealthStatusContext();
+      captured = useHealthStatusContext();
       return null;
     }
-    // Suppress React's error logging in the test output
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => render(<ConsumerOutside />)).toThrow(/must be used within HealthStatusProvider/i);
-    errSpy.mockRestore();
+    render(<ConsumerOutside />);
+    expect(captured).toEqual({
+      health: null,
+      loading: false,
+      error: null,
+      lastSuccessAt: null,
+    });
   });
 
   it('Test 9: provider passes value through to consumers', async () => {
