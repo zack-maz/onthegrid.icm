@@ -289,7 +289,7 @@ Plans:
 
 Plans:
 
-- [ ] 28.1-01-W1-api-audit-PLAN.md — W1: hand-curated probe + fix every /api/\* endpoint and upstream adapter (D-22a, D-23)
+- [x] 28.1-01-W1-api-audit-PLAN.md — W1: hand-curated probe + fix every /api/\* endpoint and upstream adapter (D-22a, D-23) ✅ 2026-05-02 (audit `6876f87`, summary commits incoming; 0 BROKEN, 4 DRIFT items routed to W2 + W7 sub-4)
 - [ ] 28.1-02-W2-health-endpoint-PLAN.md — W2: /api/health aggregate endpoint + DevApiStatus All APIs tab + HealthBanner (D-22b, D-24, D-25, D-26)
 - [ ] 28.1-03-W3-knip-triage-PLAN.md — W3: knip + ts-prune triage doc with confidence tags; zero source modifications (D-14, D-29)
 - [ ] 28.1-04-W4-deletions-PLAN.md — W4: atomic per-module deletion commits + manual UAT against CLAUDE.md feature inventory (D-14, D-29)
