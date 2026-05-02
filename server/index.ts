@@ -81,7 +81,13 @@ export function createApp() {
   });
 
   // Health check (no cache, no rate limit)
+  // Phase 28.1 W2 — mounted at BOTH /health (backward compat for any
+  // operator scripts / Vercel internal probes that hit the legacy path)
+  // AND /api/health (D-22b/D-24 canonical CDN-aligned path consumed by
+  // useHealthStatus + DevApiStatus "All APIs" tab). Both paths return
+  // identical bodies (other than `generatedAt`).
   app.use('/health', healthRouter);
+  app.use('/api/health', healthRouter);
 
   // Cron endpoints (no cache, no rate limit — triggered by Vercel cron)
   app.use('/api/cron/health', cronHealthRouter);

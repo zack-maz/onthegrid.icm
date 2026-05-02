@@ -3,22 +3,15 @@ import { redis, cacheGetSafe } from '../cache/redis.js';
 import { logger } from '../lib/logger.js';
 import { env } from '../config.js';
 import { runEval } from '../lib/llmEvalHarness.js';
+import { SOURCE_KEYS } from '../lib/healthSources.js';
 
 const log = logger.child({ module: 'cron-health' });
 
 export const cronHealthRouter = Router();
 
-/** Cache keys for per-source freshness checks */
-const SOURCE_KEYS: Record<string, string> = {
-  flights: 'flights:adsblol',
-  ships: 'ships:ais',
-  events: 'events:gdelt',
-  news: 'news:gdelt',
-  markets: 'markets:yahoo:1d',
-  weather: 'weather:open-meteo',
-  sites: 'sites:v2',
-  water: 'water:facilities',
-};
+// Phase 28.1 W2 — SOURCE_KEYS deduplicated to server/lib/healthSources.ts.
+// W1 audit DRIFT-1/2/3 fixes (news:feed, sites:v3, water:facilities:v3) now
+// land here automatically because the shared module is the single writer.
 
 /** If a source's lastFresh is older than this, log a warning */
 const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour

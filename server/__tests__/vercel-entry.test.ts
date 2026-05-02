@@ -123,11 +123,15 @@ describe('Vercel entry point (server/vercel-entry.ts)', () => {
     expect(typeof mod.default).toBe('function');
   });
 
-  it('GET /health returns 200 with status ok', async () => {
+  it('GET /health returns 200 with HealthResponse shape', async () => {
+    // Phase 28.1 W2 — flat status/redis fields replaced by aggregate
+    // HealthResponse (endpoints + summary + generatedAt) per
+    // server/lib/healthSchema.ts.
     const res = await fetch(`${baseUrl}/health`);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.status).toBe('ok');
-    expect(body.redis).toBe(true);
+    expect(body.endpoints).toBeDefined();
+    expect(body.summary).toBeDefined();
+    expect(typeof body.generatedAt).toBe('number');
   });
 });
