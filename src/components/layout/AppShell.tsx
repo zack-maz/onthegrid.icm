@@ -20,6 +20,7 @@ import { DevApiStatus } from '@/components/ui/DevApiStatus';
 import { DashboardAuthModal } from '@/components/ui/DashboardAuthModal';
 import { shouldRenderDashboard } from '@/lib/dashboardAuth';
 import { HealthStatusProvider } from '@/components/providers/HealthStatusProvider';
+import { HealthBanner } from '@/components/ui/HealthBanner';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -72,6 +73,17 @@ export function AppShell() {
 
         {/* Floating markets panel */}
         <MarketsSlot />
+
+        {/* Phase 28.1 W2 — HealthBanner is intentionally NOT gated behind
+          shouldRenderDashboard() per user decision 2026-05-01. Visible to
+          anonymous users; preserves "numbers over narratives" transparency.
+          UI-SPEC §Open Questions Q1 default-recommendation OVERRIDDEN.
+          Consumes useHealthStatusContext() from the surrounding
+          HealthStatusProvider — does NOT call useHealthStatus() directly
+          (single-poll guarantee). */}
+        <ErrorBoundary>
+          <HealthBanner />
+        </ErrorBoundary>
 
         {/* Phase 27.4.4 Plan 02 — DevApiStatus now renders in dev OR when an
           operator has stored a dashboard auth key in localStorage (prod). The

@@ -152,9 +152,9 @@ describe('HealthBanner', () => {
     const sourcePath = resolve(__dirname, '../HealthBanner.tsx');
     const source = readFileSync(sourcePath, 'utf8');
     expect(source).toContain('useHealthStatusContext');
-    // Allow the import line for symmetry (e.g., 'useHealthStatusContext') but
-    // forbid a bare useHealthStatus( call (note the parens).
-    expect(source).not.toMatch(/useHealthStatus\(/);
+    // Forbid a bare useHealthStatus( call. Use a negative lookahead so
+    // useHealthStatusContext( is not flagged.
+    expect(source).not.toMatch(/useHealthStatus(?!Context)\(/);
   });
 
   it('Test 9: non-critical-tier unhealthy endpoints do NOT trigger banner', () => {

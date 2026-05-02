@@ -17,7 +17,14 @@ import { useHealthStatus, type UseHealthStatusValue } from '@/hooks/useHealthSta
 
 type HealthStatusContextValue = UseHealthStatusValue;
 
-const HealthStatusContext = createContext<HealthStatusContextValue | null>(null);
+/**
+ * The raw context handle. Exported (not just internally used) so component
+ * tests can construct a stubbed provider via
+ * `<HealthStatusContext.Provider value={...}>` without having to set up
+ * fake timers + global fetch mocks. Production code should always go
+ * through `<HealthStatusProvider>` + `useHealthStatusContext()`.
+ */
+export const HealthStatusContext = createContext<HealthStatusContextValue | null>(null);
 
 export function HealthStatusProvider({ children }: { children: ReactNode }): JSX.Element {
   const value = useHealthStatus();
