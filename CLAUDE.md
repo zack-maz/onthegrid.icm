@@ -202,7 +202,7 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 - **Bundle** — tsup bundles `server/vercel.ts` → `dist-server/vercel.cjs` (CommonJS for Vercel)
 - **vercel.json** — rewrites `/api/*` → serverless function, everything else → SPA `index.html`
 - **Rate limiting** — `express-rate-limit` middleware in `server/middleware/rateLimiter.ts`
-- **Graceful config** — `loadConfig()` returns defaults for missing env vars instead of throwing
+- **Fail-fast config** — Phase 26.3+ `parseEnv()` (Zod) throws on missing/malformed env vars at startup; the prior "Graceful config" defaults pattern was retired (see Phase 28.1 W7 SUMMARY).
 - **Node engine** — pinned `>=20` in package.json
 - **Build** — `npm run build` runs Vite (frontend) + tsup (server) + tsc (typecheck)
 
@@ -456,3 +456,17 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 - **Two-key discipline** — `events:llm:v2` (terminal, `ConflictEventEntity[]` from events.ts:1016) and `events:llm:v2:partial` (observability-only, `LLMCachePayload`) have non-overlapping writers and readers. Original Plan 03 wrote the envelope to the terminal key, which crashed every consumer (`events.map is not a function`, `llmCachedRef.data is not iterable`). Key split landed 2026-04-24 in commit `a5c8846`.
 - **Reader defense-in-depth** — `server/routes/events.ts` exports `toEntityArray(data)` + `coerceCachedEvents(cached)` helpers (commit `e26ceca`). Applied at all 3 `events:llm:v2` read sites (loadRecentEnrichedEvents, /llm-replay, main /api/events). The main-handler coerce happens immediately after read so the sync HTTP path, Pitfall 1 bridge promotion, AND the fire-and-forget `llmCachedRef` iterations (lines ~854, ~1007) all see a guaranteed `ConflictEventEntity[]` — if any future regression reintroduces envelope writes, downstream consumers degrade to "serve empty / let Pitfall 1 bridge take over" instead of HTTP 500.
 - **V1 TS cleanup** — 20 pre-existing `noUncheckedIndexedAccess` errors in `llmEventExtractor.v1.ts` fixed via D-15 local-bind + early-continue (`const current = arr[i]; if (!current) continue;`). Audit confirmed D-16 Zod schema tightening was NOT needed — all 20 were Category A compile-time noise, not runtime possibly-undefined. Total server TS error count: 29 → 8 (remaining 8 are `useEntityLayers.ts` `depthTest` deck.gl v9 drift, deferred to Phase 27.4.3).
+
+## Phase 28.1 Cleanup Sweep — closeout 2026-05-03
+
+Phase 28.1 cleanup sweep complete (all 7 waves). Highlights:
+
+- **API reliability (W2):** `/api/health` aggregate endpoint live at `/health` and `/api/health`. DevApiStatus "All APIs" tab + HealthBanner toast for critical-tier outages. Per-endpoint freshness thresholds + tier classification per D-25/D-26.
+- **Ghost code sweep (W3+W4):** modules deleted via knip + ts-prune triage. `server/adapters/acled.ts` preserved as inactive.
+- **Hardcode generalization (W5, D-12):** 11 operator-tunable env vars introduced (POLL_FLIGHTS_MS, ATTACK_RADIUS_KM, SEVERITY_HALF_LIFE_HOURS, etc. — see .env.example).
+- **Domain constants (W5, D-11):** IRAN_BBOX, IRAN_CENTER, WAR_START, ADSB_RADIUS_NM centralized at `src/lib/domain.ts`; `server/config.ts` re-exports.
+- **Drift resolutions (W5):** severity half-life 24h authoritative; ADS-B radius 1200 NM authoritative; IRAN_CENTER (28.0, 45.0) authoritative.
+- **CSS @theme migration (W6, D-13):** entity / event / site / faction colors migrated to `src/styles/app.css` `@theme` block; deck.gl bridge via `src/lib/colorBridge.ts`.
+- **Normalization pass (W7, D-27):** `tsc --noEmit` 0 errors; `npm run lint` 0 errors and 0 react-hooks/exhaustive-deps warnings (down from 6); ESLint `import/order` rule live with 0 violations across src/ + server/; cron-warm Redis keys aligned with route readers (`sites:v2` → `sites:v3`, `water:facilities` → `water:facilities:v3`); audit doc at `.planning/phases/28.1-cleanup-sweep/28.1-W7-REDIS-AUDIT.md`.
+- **Logging convention** — server-side modules use `logger.child({ module: '<name>' })` from the existing `server/lib/logger.ts` pino instance. W7 audit confirmed 0 `console.*` calls in `server/lib/llmEventExtractor.v3.ts`, `server/adapters/*.ts`, and `server/routes/*.ts` (all migrated in earlier phases). Do NOT create `server/lib/log.ts`.
+- **Redis key bridge preserved:** all Phase 27.4.x load-bearing keys (events:llm:v3, sites:v3, water:facilities:v3, events:llm:v2, events:llm:v3:partial, events:llm-dlq, events:llm-pipeline-override, events:llm-process-ts, events:llm-eval-baseline:v3, geocode:fwd:constrained:v2:\*, llm:tokens:\*, news:gdelt, news:feed, etc.) UNCHANGED. Audit at `.planning/phases/28.1-cleanup-sweep/28.1-W7-REDIS-AUDIT.md`.
