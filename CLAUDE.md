@@ -26,6 +26,16 @@ Operator-tunable runtime levers introduced in Phase 28.1 W5 D-12. All have worki
 
 See `.env.example` for current defaults and one-line purposes. Domain-definitional constants (`IRAN_BBOX`, `IRAN_CENTER`, `WAR_START`, `ADSB_RADIUS_NM`) are NOT env-tunable per D-11; they live in `src/lib/domain.ts` (canonical) with a byte-identical mirror in `server/config.ts` enforced by `src/__tests__/domain.test.ts`.
 
+## Color Tokens (Phase 28.1+)
+
+D-13 single source of truth for all entity / event / site / faction / ethnic colors. Tailwind utilities and deck.gl both pull from one definition; theme drift is mechanically impossible.
+
+- **`src/styles/app.css` `@theme` block** — canonical declaration of 24 entity color CSS vars: `--color-flight`, `--color-flight-unidentified`, `--color-ship`, `--color-event-{airstrike,on-ground,explosion,targeted,other}`, `--color-site-{healthy,attacked}`, `--color-faction-{us,iran,neutral,disputed}-aligned/disputed`, `--color-ethnic-{kurdish,arab,persian,baloch,turkmen,druze,alawite,yazidi,assyrian,pashtun}`. Hex (NOT OKLCH) so the bridge's hex parser can roundtrip cleanly to RGBA tuples.
+- **`src/lib/colorBridge.ts`** — module-load CSS-var reader. Reads each `--color-*` var ONCE via `getComputedStyle(document.documentElement)`, parses to `[r, g, b]` tuples for deck.gl `getColor` callbacks (no per-frame `getComputedStyle` cost) and re-exports as hex strings for HTML/CSS consumers. SSR/jsdom fallback returns the TS-literal default (byte-identical to runtime).
+- **Consumers** — `src/components/map/layers/constants.ts ENTITY_COLORS` / `ENTITY_DOT_COLORS` (deck.gl IconLayer + toggle dots), `src/lib/factions.ts FACTION_COLORS` (Phase 24 political boundaries), `src/lib/ethnicGroups.ts ETHNIC_GROUPS` (Phase 25 ethnic overlay) all source from `colorBridge` — no inline hex/RGBA literals remain in the consumers.
+- **Byte-identity sentinel** — `src/__tests__/lib/colorBridge.test.ts` asserts every bridge fallback default matches the corresponding `ENTITY_COLORS` / `ENTITY_DOT_COLORS` / `FACTION_COLORS` / `ETHNIC_GROUPS` value at runtime. Drift in any direction fails the test on the next `vitest run`.
+- **Stays as TS literals** (per CONTEXT D-13) — `ICON_SIZE`, `PULSE_CONFIG`, `altitudeToOpacity` in `layers/constants.ts` are deck.gl rendering props, not styling. `SITE_SUBTYPE_COLORS` / `WATER_TYPE_COLORS` (Phase 15 / 26) are out of D-13 scope. `ETHNIC_GROUPS` alpha (140 / ~55%) is owned by `ethnicGroups.ts`, not by `@theme` (alpha is a rendering attribute, not a brand color).
+
 ## Map Patterns
 
 - **DeckGLOverlay** wraps MapboxOverlay via `useControl` hook from react-maplibre
@@ -97,7 +107,7 @@ See `.env.example` for current defaults and one-line purposes. Domain-definition
 - **Event store** — `src/stores/eventStore.ts` with no stale clearing (historical data)
 - **Polling hooks** — `useShipPolling` (30s), `useEventPolling` (900s / 15 min)
 - **AppShell** — wires all four: `useFlightPolling()`, `useShipPolling()`, `useEventPolling()`, `useSiteFetch()`
-- **Entity colors** — flights yellow (#eab308), unidentified red (#ef4444), ships purple (#a78bfa), airstrikes bright red (#ff3b30), ground combat red (#ef4444), targeted dark red (#8b1e1e), other conflict red (#ef4444)
+- **Entity colors** — flights yellow (#eab308), unidentified shiny bright yellow (#ffff64 — see Color Tokens), ships purple (#a78bfa), airstrikes bright red (#ff3b30), on_ground dark burnt red (#b43214), explosion vibrant orange-red (#ff5f19), targeted dark crimson (#8b1e1e), other light red (#dc5a5a). All sourced from CSS `@theme` via `src/lib/colorBridge.ts` (Phase 28.1 W6 D-13).
 - **Entity icons** — flights/ships use chevron, airstrikes use starburst, ground combat uses explosion, targeted uses crosshair, other conflict uses xmark
 - **Icon sizing** — flights/ships 4000m base (minPixels:24, maxPixels:160); events 3000m base (minPixels:16, maxPixels:120); sites 2000m base (minPixels:12, maxPixels:80)
 
@@ -130,8 +140,8 @@ See `.env.example` for current defaults and one-line purposes. Domain-definition
 - **Precision** — `exact` | `neighborhood` | `city` | `region`, shown as radius rings on map
 - **PrecisionRingLayer** — `src/components/map/PrecisionRingLayer.tsx`, ScatterplotLayer with radiusUnits: 'meters'
 - **Toggle system** — master `showEvents` + 5 sub-toggles (one per type) in filterStore
-- **Event colors** — red spectrum: airstrike bright red (#ff3b30), on_ground dark red (#c0392b), explosion orange-red (#e74c3c), targeted crimson (#dc143c), other maroon (#800000)
-- **EVENT_TYPE_COLORS** — `src/lib/eventColors.ts`, shared color constants for layers/toggles/icons
+- **Event colors** — red spectrum: airstrike bright red (#ff3b30), on_ground dark burnt red (#b43214), explosion vibrant orange-red (#ff5f19), targeted dark crimson (#8b1e1e), other light red (#dc5a5a). Phase 28.1 W6 surfaced doc-drift here vs CONTEXT D-13's spec values (#c0392b/#e74c3c/#dc143c/#800000); per W5 Pattern 3, runtime hex values were preserved and CLAUDE.md updated to match. All values live in `src/styles/app.css` `@theme` block; see Color Tokens.
+- **Event color exports** — `src/components/map/layers/constants.ts ENTITY_COLORS` (RGBA tuples for deck.gl) and `ENTITY_DOT_COLORS` (hex strings for toggles), both sourced from `src/lib/colorBridge.ts`. There is no separate `src/lib/eventColors.ts` file (CONTEXT D-13's reference to it is doc drift; Phase 28.1 W6 confirmed absent).
 
 ## Layer Controls & Tooltips (Phase 9-10)
 
@@ -338,10 +348,10 @@ See `.env.example` for current defaults and one-line purposes. Domain-definition
 - **US-aligned** — ISR, SAU, ARE, BHR, JOR, KWT, EGY
 - **Iran-aligned** — IRN, SYR, YEM
 - **Neutral** — all others in region (TUR, QAT, OMN, PAK, AFG, IRQ, LBN, TKM, AZE, ARM, GEO, etc.)
-- **Faction data** — `src/lib/factions.ts`, `Record<string, Faction>` keyed by ISO A3 code, separate from GeoJSON
+- **Faction data** — `src/lib/factions.ts`, `Record<string, Faction>` keyed by ISO A3 code, separate from GeoJSON. Phase 28.1 W6 D-13 — `FACTION_COLORS` hex map sources from `src/lib/colorBridge.ts` (`COLOR_FACTION_*_HEX`); CSS `@theme` block in `src/styles/app.css` is the single source of truth (`--color-faction-{us,iran,neutral,disputed}-aligned/disputed`).
 - **GeoJSON sources** — Natural Earth 110m (countries) + 10m disputed areas, static imports via Vite
 - **Fill opacity** — ~15% (alpha 38/255), borders ~60% (alpha 153/255), faction-colored
-- **Disputed territories** — Gaza, West Bank, Golan Heights from Natural Earth `ne_10m_admin_0_disputed_areas`; amber fill (#f59e0b)
+- **Disputed territories** — Gaza, West Bank, Golan Heights from Natural Earth `ne_10m_admin_0_disputed_areas`; amber fill (#f59e0b — also in `@theme` as `--color-faction-disputed`)
 - **Non-interactive** — no hover/click on country polygons; entity tooltips remain primary
 - **Layer stacking** — political layers first in DeckGLOverlay array (renders below all entity/weather/threat layers)
 - **Legend** — discrete swatch legend in bottom-left via LEGEND_REGISTRY (4 swatches: US, Iran, Neutral, Disputed)
@@ -363,7 +373,7 @@ See `.env.example` for current defaults and one-line purposes. Domain-definition
 - **Click guard** — `handleDeckClick` returns early for `ethnic-*` layer IDs to prevent crash
 - **Layer stacking** — ethnic layers after political in DeckGLOverlay array (ethnic hatching on top of political fills)
 - **Legend** — discrete 10-swatch entry via `LEGEND_REGISTRY`
-- **Ethnic group config** — `src/lib/ethnicGroups.ts`, `EthnicGroup` type, `ETHNIC_GROUPS` record with color/rgba/population/context
+- **Ethnic group config** — `src/lib/ethnicGroups.ts`, `EthnicGroup` type, `ETHNIC_GROUPS` record with color/rgba/population/context. Phase 28.1 W6 D-13 — color and rgba fields source from `src/lib/colorBridge.ts` (`COLOR_ETHNIC_*` tuples + `COLOR_ETHNIC_*_HEX` strings); CSS `@theme` block declares 10 `--color-ethnic-*` vars. The fixed alpha=140 (~55% fill) is owned by `ethnicGroups.ts`, not by `@theme`.
 - **Yazidi absent** — GeoEPR maps Yazidi under Kurdish ("Kurds/Yezidis"); deferred to future patch
 
 ## Water Stress Layer (Phase 26)
