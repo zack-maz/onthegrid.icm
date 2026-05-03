@@ -10,9 +10,21 @@ import { WATER_REDIS_TTL_SEC } from '../config.js';
 /** Hard Redis TTL for sites (3 days) */
 const SITES_REDIS_TTL_SEC = 259_200;
 
-/** Redis keys matching the data routes */
-const SITES_KEY = 'sites:v2';
-const WATER_KEY = 'water:facilities';
+/**
+ * Redis keys matching the data routes.
+ *
+ * Phase 28.1 W7 sub-4 alignment: previously this module wrote to `sites:v2`
+ * and `water:facilities`, while the read-side route handlers (sites.ts:56 and
+ * water.ts:120) read from `sites:v3` and `water:facilities:v3`. The mismatch
+ * meant the cron pre-warm never warmed the live cache — every warm landed in
+ * a key no reader consumed. See .planning/phases/28.1-cleanup-sweep/28.1-W7-REDIS-AUDIT.md.
+ *
+ * The payload shapes also need to match: the route handlers persist
+ * `{ sites|facilities, filterStats }` envelopes (Plan 11 G3/G4); writing bare
+ * arrays would corrupt downstream cache reads.
+ */
+const SITES_KEY = 'sites:v3';
+const WATER_KEY = 'water:facilities:v3';
 
 export const cronWarmRouter = Router();
 
@@ -28,13 +40,19 @@ cronWarmRouter.get('/', async (_req, res) => {
 
   const results = await Promise.allSettled([
     (async () => {
-      const { sites } = await fetchSites();
-      await cacheSetSafe(SITES_KEY, sites, SITES_REDIS_TTL_SEC);
+      const { sites, stats } = await fetchSites();
+      // Plan 11 G4 envelope shape — sites.ts route handler reads
+      // SitesCachePayload = { sites, filterStats } and surfaces filterStats
+      // to DevApiStatus. Writing a bare array here would mean the first
+      // post-warm cache hit returns `cached.data.sites === undefined`.
+      await cacheSetSafe(SITES_KEY, { sites, filterStats: stats }, SITES_REDIS_TTL_SEC);
       return sites.length;
     })(),
     (async () => {
-      const { facilities } = await fetchWaterFacilities();
-      await cacheSetSafe(WATER_KEY, facilities, WATER_REDIS_TTL_SEC);
+      const { facilities, stats } = await fetchWaterFacilities();
+      // Plan 11 G3 envelope shape — water.ts route handler reads
+      // WaterCachePayload = { facilities, filterStats }.
+      await cacheSetSafe(WATER_KEY, { facilities, filterStats: stats }, WATER_REDIS_TTL_SEC);
       return facilities.length;
     })(),
   ]);
