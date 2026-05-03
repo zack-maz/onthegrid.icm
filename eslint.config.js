@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import importPlugin from 'eslint-plugin-import';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier/flat';
 
@@ -34,6 +35,7 @@ export default tseslint.config(
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
+      import: importPlugin,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
@@ -46,6 +48,27 @@ export default tseslint.config(
           varsIgnorePattern: '^_',
           caughtErrorsIgnorePattern: '^_',
           destructuredArrayIgnorePattern: '^_',
+        },
+      ],
+      // Phase 28.1 W7 sub-6: enforce a consistent import order across src/ + server/.
+      // Starts at 'warn' so a future phase can flip to 'error' once 0 sustains.
+      'import/order': [
+        'warn',
+        {
+          groups: [
+            'builtin', // node:* etc.
+            'external', // npm packages
+            'internal', // @/ alias
+            'parent', // ../
+            'sibling', // ./
+            'index',
+            'object',
+            'type',
+          ],
+          pathGroups: [{ pattern: '@/**', group: 'internal', position: 'before' }],
+          pathGroupsExcludedImportTypes: ['builtin'],
+          'newlines-between': 'always',
+          alphabetize: { order: 'asc', caseInsensitive: true },
         },
       ],
     },
