@@ -187,5 +187,8 @@ export function useSearchResults(): GroupedSearchResults {
       water: wa,
       totalCount: f.length + sh.length + ev.length + si.length + wa.length,
     };
-  }, [query, parsedQuery, proximityPin, proximityRadiusKm]);
+    // isWaterLayerActive gates the water-results loop above; recompute when it
+    // toggles so newly-active layer entities appear / disappear correctly.
+    // Per RESEARCH §Focus Area 5 decision tree branch 2 (real value dep).
+  }, [query, parsedQuery, proximityPin, proximityRadiusKm, isWaterLayerActive]);
 }
