@@ -18,7 +18,7 @@
 
 const STORAGE_KEY = 'dashboard:auth-key';
 
-export function getDashboardKey(): string | null {
+function getDashboardKey(): string | null {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
     return v && v.length > 0 ? v : null;
@@ -33,14 +33,6 @@ export function setDashboardKey(key: string): void {
   } catch {
     // localStorage unavailable (private mode); session-only auth survives
     // the React tree but not a reload — acceptable.
-  }
-}
-
-export function clearDashboardKey(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // ignore
   }
 }
 
