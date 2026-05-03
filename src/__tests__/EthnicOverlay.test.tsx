@@ -74,12 +74,6 @@ describe('EthnicOverlay component', () => {
     expect(result).toEqual([]);
   });
 
-  it('EthnicOverlay component mounts without error when active', async () => {
-    useLayerStore.setState({ activeLayers: new Set(['ethnic']) });
-    const { EthnicOverlay } = await import('@/components/map/layers/EthnicOverlay');
-    expect(() => render(<EthnicOverlay />)).not.toThrow();
-  });
-
   it('LEGEND_REGISTRY contains ethnic entry after EthnicOverlay module is imported', async () => {
     const { LEGEND_REGISTRY } = await import('@/components/map/MapLegend');
     // Force import of EthnicOverlay to trigger registration

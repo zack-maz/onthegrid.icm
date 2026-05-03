@@ -289,11 +289,3 @@ export function EthnicTooltip({ groups, x, y }: EthnicTooltipProps) {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Backward-compat null component export
-// ---------------------------------------------------------------------------
-
-export function EthnicOverlay() {
-  return null;
-}
