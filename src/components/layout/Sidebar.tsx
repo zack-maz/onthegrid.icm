@@ -307,7 +307,10 @@ export function Sidebar() {
 
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to the active section within the sidebar content panel
+  // Scroll to the active section within the sidebar content panel.
+  // sectionRefs is a fresh object literal each render (mapping stable refs);
+  // including it would re-fire this effect every render. The refs it holds
+  // are stable per RESEARCH §Focus Area 5 decision tree branch 1 (refs).
   useEffect(() => {
     if (activeSidebarSection && isSidebarOpen) {
       const ref = sectionRefs[activeSidebarSection];
@@ -317,6 +320,7 @@ export function Sidebar() {
         container.scrollTo({ top, behavior: 'smooth' });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSidebarSection, isSidebarOpen]);
 
   const filterCount = activeFilterCount();
