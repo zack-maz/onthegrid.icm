@@ -286,7 +286,7 @@ function buildDisplayNameForQuery(hierarchy: LocationHierarchyV2): string | null
 // centroid is the wrong answer — gt-009 picked up a Subdistrict at 32.87,44.22
 // that sits 20km from the actual town. For region-precision queries we keep
 // admin polygons; that IS the right answer at state level.
-export function filterAdminPolygons<T extends { type: string }>(
+function filterAdminPolygons<T extends { type: string }>(
   candidates: readonly T[],
   precision: Precision,
 ): T[] {
