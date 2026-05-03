@@ -2,9 +2,11 @@ import { useEffect, useRef } from 'react';
 import { useFlightStore } from '@/stores/flightStore';
 import type { FlightEntity, CacheResponse } from '@/types/entities';
 
-export const POLL_INTERVAL = 5_000;
+// Phase 28.1 W5 D-12 — env-tunable polling cadence + staleness threshold.
+// Defaults preserve pre-W5 behavior (5s poll, 60s stale).
+export const POLL_INTERVAL = Number(import.meta.env.VITE_POLL_FLIGHTS_MS ?? 5_000);
 // 60s threshold: flights at 250m/s drift ~15km, making positions meaningfully outdated
-export const STALE_THRESHOLD = 60_000;
+export const STALE_THRESHOLD = Number(import.meta.env.VITE_STALE_FLIGHT_MS ?? 60_000);
 
 export function useFlightPolling(): void {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
