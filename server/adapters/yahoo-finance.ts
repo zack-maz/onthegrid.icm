@@ -4,10 +4,10 @@ import { logger } from '../lib/logger.js';
 const log = logger.child({ module: 'yahoo-finance' });
 
 /** Tickers to fetch from Yahoo Finance v8 chart API */
-export const TICKERS = ['BZ=F', 'CL=F', 'XLE', 'USO', 'XOM'] as const;
+const TICKERS = ['BZ=F', 'CL=F', 'XLE', 'USO', 'XOM'] as const;
 
 /** Human-readable display names for each ticker */
-export const DISPLAY_NAMES: Record<string, string> = {
+const DISPLAY_NAMES: Record<string, string> = {
   'BZ=F': 'Brent',
   'CL=F': 'WTI',
   XLE: 'XLE',
