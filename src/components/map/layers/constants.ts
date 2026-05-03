@@ -1,32 +1,65 @@
-// Entity rendering constants for Deck.gl IconLayer configuration
+// Entity rendering constants for Deck.gl IconLayer configuration.
+//
+// Phase 28.1 W6 D-13 — color blocks (ENTITY_COLORS RGBA tuples + ENTITY_DOT_COLORS
+// hex strings) source from src/lib/colorBridge.ts which reads CSS @theme vars
+// from src/styles/app.css at module load. Single source of truth for entity
+// colors lives in the @theme block; this file's color blocks are a typed view
+// over the bridge values for deck.gl consumers. Size blocks (ICON_SIZE,
+// PULSE_CONFIG, altitudeToOpacity) stay as TS literals — they are deck.gl
+// rendering props, not styling, per CONTEXT D-13.
 
-/** RGB color tuples for entity types */
+import {
+  COLOR_FLIGHT,
+  COLOR_FLIGHT_UNIDENTIFIED,
+  COLOR_SHIP,
+  COLOR_EVENT_AIRSTRIKE,
+  COLOR_EVENT_ON_GROUND,
+  COLOR_EVENT_EXPLOSION,
+  COLOR_EVENT_TARGETED,
+  COLOR_EVENT_OTHER,
+  COLOR_SITE_HEALTHY,
+  COLOR_SITE_ATTACKED,
+  COLOR_FLIGHT_HEX,
+  COLOR_FLIGHT_UNIDENTIFIED_HEX,
+  COLOR_SHIP_HEX,
+  COLOR_EVENT_AIRSTRIKE_HEX,
+  COLOR_EVENT_ON_GROUND_HEX,
+  COLOR_EVENT_EXPLOSION_HEX,
+  COLOR_EVENT_TARGETED_HEX,
+  COLOR_EVENT_OTHER_HEX,
+  COLOR_SITE_HEALTHY_HEX,
+  COLOR_SITE_ATTACKED_HEX,
+} from '@/lib/colorBridge';
+
+/** RGB color tuples for entity types (sourced from CSS @theme via colorBridge) */
 export const ENTITY_COLORS = {
-  flight: [234, 179, 8] as const, // #eab308 yellow
-  flightUnidentified: [255, 255, 100] as const, // #ffff64 shiny bright yellow
-  ship: [167, 139, 250] as const, // #a78bfa violet-400
-  airstrike: [255, 59, 48] as const, // #ff3b30 bright red
-  on_ground: [180, 50, 20] as const, // #b43214 dark burnt red
-  explosion: [255, 95, 25] as const, // #ff5f19 vibrant orange-red
-  targeted: [139, 30, 30] as const, // #8b1e1e dark crimson
-  other: [220, 100, 90] as const, // #dc5a5a light red
-  siteHealthy: [34, 197, 94] as const, // #22c55e green
-  siteAttacked: [249, 115, 22] as const, // #f97316 orange
+  flight: COLOR_FLIGHT,
+  flightUnidentified: COLOR_FLIGHT_UNIDENTIFIED,
+  ship: COLOR_SHIP,
+  airstrike: COLOR_EVENT_AIRSTRIKE,
+  on_ground: COLOR_EVENT_ON_GROUND,
+  explosion: COLOR_EVENT_EXPLOSION,
+  targeted: COLOR_EVENT_TARGETED,
+  other: COLOR_EVENT_OTHER,
+  siteHealthy: COLOR_SITE_HEALTHY,
+  siteAttacked: COLOR_SITE_ATTACKED,
 } as const;
 
-/** CSS hex color strings for toggle row dots */
+/** CSS hex color strings for toggle row dots (sourced from CSS @theme via colorBridge) */
 export const ENTITY_DOT_COLORS = {
-  flights: '#eab308',
-  ships: '#a78bfa',
-  airstrikes: '#ff3b30',
-  on_ground: '#b43214',
-  explosion: '#ff5f19',
-  targeted: '#8b1e1e',
-  other: '#dc5a5a',
-  ground: '#eab308',
-  unidentified: '#ffff64',
-  siteHealthy: '#22c55e',
-  siteAttacked: '#f97316',
+  flights: COLOR_FLIGHT_HEX,
+  ships: COLOR_SHIP_HEX,
+  airstrikes: COLOR_EVENT_AIRSTRIKE_HEX,
+  on_ground: COLOR_EVENT_ON_GROUND_HEX,
+  explosion: COLOR_EVENT_EXPLOSION_HEX,
+  targeted: COLOR_EVENT_TARGETED_HEX,
+  other: COLOR_EVENT_OTHER_HEX,
+  ground: COLOR_FLIGHT_HEX,
+  unidentified: COLOR_FLIGHT_UNIDENTIFIED_HEX,
+  siteHealthy: COLOR_SITE_HEALTHY_HEX,
+  siteAttacked: COLOR_SITE_ATTACKED_HEX,
+  // waterAttacked stays as a literal — Phase 27 water palette is not
+  // covered by W6 D-13 (which targets entity/event/site/faction/ethnic only).
   waterAttacked: '#2d0a4e',
 } as const;
 
