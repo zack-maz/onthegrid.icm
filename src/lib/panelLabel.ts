@@ -74,7 +74,7 @@ export function findEntityById(id: string): AnyDetailEntity | null {
 }
 
 /** Derives a breadcrumb label from an entity or cluster */
-export function deriveBreadcrumbLabel(
+function deriveBreadcrumbLabel(
   entity: AnyDetailEntity | null,
   cluster: ThreatCluster | null,
 ): string {
