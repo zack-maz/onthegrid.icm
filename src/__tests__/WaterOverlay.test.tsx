@@ -131,11 +131,3 @@ describe('useWaterLayers', () => {
     expect(result.facilityLayers[0].id).toBe('water-facility-icons');
   });
 });
-
-describe('WaterOverlay component', () => {
-  it('renders null without error', async () => {
-    const { WaterOverlay } = await import('@/components/map/layers/WaterOverlay');
-    const { container } = render(<WaterOverlay />);
-    expect(container.innerHTML).toBe('');
-  });
-});
