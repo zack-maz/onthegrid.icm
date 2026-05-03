@@ -115,7 +115,7 @@ export const CITY_CENTROIDS: Array<{ name: string; lat: number; lng: number }> =
  * Extract the last comma-delimited segment from ActionGeo_FullName.
  * Returns null if no comma is present (single-segment name).
  */
-export function extractLastSegment(fullName: string): string | null {
+function extractLastSegment(fullName: string): string | null {
   const idx = fullName.lastIndexOf(',');
   if (idx === -1) return null;
   const segment = fullName.slice(idx + 1).trim();
