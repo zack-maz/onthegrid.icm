@@ -40,10 +40,10 @@ export const MIDDLE_EAST_FIPS = new Set([
 ]);
 
 // CAMEO root codes for conflict events
-export const CONFLICT_ROOT_CODES = new Set(['18', '19', '20']);
+const CONFLICT_ROOT_CODES = new Set(['18', '19', '20']);
 
 // GDELT v2 Events CSV columns (0-indexed for array access)
-export const COL = {
+const COL = {
   GLOBALEVENTID: 0,
   SQLDATE: 1,
   Actor1Name: 6,
