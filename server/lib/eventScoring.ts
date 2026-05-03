@@ -26,7 +26,7 @@ export interface BellingcatArticle {
  * Low (0.1): Catch-all / vague codes that GDELT frequently misapplies to non-conflict articles —
  *            "unconventional violence NOS", "physical assault", "conventional military force NOS".
  */
-export const CAMEO_SPECIFICITY: Record<string, number> = {
+const CAMEO_SPECIFICITY: Record<string, number> = {
   // Low — catch-all codes prone to false positives
   '180': 0.1, // Unconventional violence, not specified below
   '182': 0.1, // Physical assault (very broad)
