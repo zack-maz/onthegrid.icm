@@ -291,7 +291,7 @@ Plans:
 
 - [x] 28.1-01-W1-api-audit-PLAN.md — W1: hand-curated probe + fix every /api/\* endpoint and upstream adapter (D-22a, D-23) ✅ 2026-05-02 (audit `6876f87`, summary commits incoming; 0 BROKEN, 4 DRIFT items routed to W2 + W7 sub-4)
 - [x] 28.1-02-W2-health-endpoint-PLAN.md — W2: /api/health aggregate endpoint + DevApiStatus All APIs tab + HealthBanner (D-22b, D-24, D-25, D-26) ✅ 2026-05-02 (8 RED→GREEN commits c59ab5a→7a75f64; 1975/1975 tests; lint/prettier/tsc clean; SOURCE_KEYS dedupe folds W7 sub-4 forward; live preview UAT skipped per pre-existing Phase 26.3 fail-fast `parseEnv` issue, user-approved Path B)
-- [ ] 28.1-03-W3-knip-triage-PLAN.md — W3: knip + ts-prune triage doc with confidence tags; zero source modifications (D-14, D-29)
+- [x] 28.1-03-W3-knip-triage-PLAN.md — W3: knip + ts-prune triage doc with confidence tags; zero source modifications (D-14, D-29) ✅ 2026-05-03 (3 commits b8c28c9→6b06b7b→adb8678; 215 flags triaged: 0 high-dead, 17 probable-dead, 104 ambiguous, 22 EXCLUDED via Hardcode-Target Manifest; finding A → W5 +1 env var VITE_POLL_WEATHER_MS amended at `bd5bbce`; wave-gate green vitest 1975/1975 + lint 0err/22warn + prettier + tsc — byte-identical to W2 baseline because zero source modifications)
 - [ ] 28.1-04-W4-deletions-PLAN.md — W4: atomic per-module deletion commits + manual UAT against CLAUDE.md feature inventory (D-14, D-29)
 - [ ] 28.1-05-W5-hardcode-generalization-PLAN.md — W5: src/lib/domain.ts centralization + 11 D-12 env vars (D-11, D-12)
 - [ ] 28.1-06-W6-css-theme-migration-PLAN.md — W6: CSS @theme migration + colorBridge.ts deck.gl bridge (D-13)
