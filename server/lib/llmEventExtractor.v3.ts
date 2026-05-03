@@ -86,7 +86,7 @@ const PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
 /** D-10 — BATCH_SIZE reduced from v1's 8 to 2 because each group now carries
  *  far more context (news + Bellingcat + temporal) and fits more comfortably
  *  into the provider's attention budget when batched narrowly. */
-export const BATCH_SIZE = 2;
+const BATCH_SIZE = 2;
 
 /** Phase 27.4.3 D-08 bake-off — empty/undefined uses freeClaudeRouter's
  *  NVIDIA_NIM_DEFAULT_MODEL. Set V3_BAKEOFF_MODEL=<id> in env to swap the
