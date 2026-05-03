@@ -16,6 +16,16 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Phase boundaries** — before starting a new phase: commit, push, merge previous phase to main, update all docs, then create new branch from main
 - **TypeScript** — pinned to ~5.9.3 to avoid TS 6.0 breaking changes
 
+## Environment Variables (Phase 28.1+)
+
+Operator-tunable runtime levers introduced in Phase 28.1 W5 D-12. All have working defaults; override at Vercel deploy time only when tuning incident response. Client-tier vars use the `VITE_*` prefix so Vite exposes them to the browser bundle.
+
+- **Polling intervals (ms):** `VITE_POLL_FLIGHTS_MS` (5000), `VITE_STALE_FLIGHT_MS` (60000), `VITE_POLL_SHIPS_MS` (30000), `VITE_POLL_EVENTS_MS` (900000), `VITE_POLL_NEWS_MS` (900000), `VITE_POLL_MARKETS_MS` (300000), `VITE_POLL_WATER_PRECIP_MS` (21600000), `VITE_POLL_WEATHER_MS` (1800000), `VITE_POLL_LLM_STATUS_ACTIVE_MS` (5000), `VITE_POLL_LLM_STATUS_IDLE_MS` (30000)
+- **Spatial thresholds (km):** `VITE_ATTACK_RADIUS_KM` (5), `VITE_PROXIMITY_ALERT_KM` (5)
+- **Severity scoring (hours):** `VITE_SEVERITY_HALF_LIFE_HOURS` (24)
+
+See `.env.example` for current defaults and one-line purposes. Domain-definitional constants (`IRAN_BBOX`, `IRAN_CENTER`, `WAR_START`, `ADSB_RADIUS_NM`) are NOT env-tunable per D-11; they live in `src/lib/domain.ts` (canonical) with a byte-identical mirror in `server/config.ts` enforced by `src/__tests__/domain.test.ts`.
+
 ## Map Patterns
 
 - **DeckGLOverlay** wraps MapboxOverlay via `useControl` hook from react-maplibre
@@ -57,8 +67,8 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Entity types**: `flight`, `ship`, plus 11 `ConflictEventType` values, plus `site` (separate from MapEntity union)
 - **FlightEntity.data** — includes `unidentified: boolean` flag for hex-only/no-callsign flights
 - **API endpoints**: `/api/flights`, `/api/ships`, `/api/events`, `/api/sites`, `/api/news` (separate, independent caching)
-- **IRAN_BBOX** — covers Greater Middle East (south:15, north:42, west:30, east:70), not just Iran
-- **IRAN_CENTER** — (30.0, 50.0) with 500 NM radius for ADS-B queries
+- **IRAN_BBOX** — covers Greater Middle East + Mediterranean + Arabian Sea (south:0.0, north:50.0, west:20.0, east:80.0), defined in `src/lib/domain.ts` as of Phase 28.1 W5 D-11. Note: prior CLAUDE.md drafts said "(south:15, north:42, west:30, east:70)" — that was doc drift; the (0,50,20,80) values are the authoritative runtime behavior preserved through Phase 28.1.
+- **IRAN_CENTER** — (28.0, 45.0) with 1200 NM radius for ADS-B queries. Defined in `src/lib/domain.ts` as of Phase 28.1 W5 D-11 (canonical home moved from server/config.ts; server retains a byte-identical copy enforced by the parity test in `src/__tests__/domain.test.ts`). Note: prior CLAUDE.md drafts said "(30.0, 50.0) with 500 NM" — that was doc drift; the (28.0, 45.0) + 1200 NM values are the authoritative runtime behavior preserved through Phase 28.1.
 
 ## Flight Data Patterns (Phase 4+)
 
@@ -222,14 +232,14 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 - **Severity scoring** — `src/lib/severity.ts`, formula: typeWeight × log(mentions+1) × log(sources+1) × recencyDecay
 - **Type weights** — airstrike 10, wmd 10, ground_combat 8, shelling 8, bombing 8, mass_violence 9, assassination 7, others 3-5
-- **Recency decay** — exponential decay over 24h (halfLife = 6h)
+- **Recency decay** — exponential decay; default half-life 24h via `VITE_SEVERITY_HALF_LIFE_HOURS` (Phase 28.1 W5 D-12). Note: prior CLAUDE.md drafts said "halfLife = 6h" — that was doc drift; the 24h scale is the authoritative runtime behavior preserved through Phase 28.1.
 - **News matching** — `src/lib/newsMatching.ts`, correlates GDELT events with news clusters by temporal proximity (±6h) + geographic/keyword overlap
 - **Time grouping** — `src/lib/timeGroup.ts`, buckets: "Last hour", "Last 6 hours", "Last 24 hours"
 - **notificationStore** — `src/stores/notificationStore.ts`, derives scored notifications from eventStore + newsStore
 - **useNotifications** — `src/hooks/useNotifications.ts`, connects stores, derives notifications, provides mark-read and fly-to actions
 - **NotificationBell** — `src/components/layout/NotificationBell.tsx`, bell icon with unread badge, click opens dropdown
 - **NotificationCard** — `src/components/notifications/NotificationCard.tsx`, severity-scored card with event type and matched news headlines
-- **Proximity alerts** — `src/hooks/useProximityAlerts.ts`, detects flights/ships within 50km of key sites
+- **Proximity alerts** — `src/hooks/useProximityAlerts.ts`, detects flights/ships within `VITE_PROXIMITY_ALERT_KM` of key sites (default 5km — Phase 28.1 W5 D-12). Note: prior CLAUDE.md drafts said "within 50km of key sites" — that was doc drift; the 5km radius is the authoritative runtime behavior preserved through Phase 28.1.
 - **ProximityAlertOverlay** — `src/components/map/ProximityAlertOverlay.tsx`, animated warning badges on map with expand/collapse popover
 - **24h default window** — `useFilteredEntities` applies 24h recency filter when no custom date range is active
 - **Fly-to-event** — clicking notification flies map to event coordinates and opens detail panel
