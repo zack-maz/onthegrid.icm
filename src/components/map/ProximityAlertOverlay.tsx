@@ -101,10 +101,16 @@ export function ProximityAlertOverlay() {
     dismissTimers.current.set(siteId, timer);
   }, []);
 
-  // Cleanup timers on unmount
+  // Cleanup timers on unmount.
+  // dismissTimers.current is intentionally read in cleanup — this effect runs
+  // only at mount/unmount, and the ref's identity is stable for the component
+  // lifetime. Per W7 sub-2 RESEARCH §Pitfall 6, copying ref.current to a local
+  // variable here would prevent us from cleaning up timers added AFTER mount,
+  // which is exactly the set this cleanup is meant to drain.
   useEffect(() => {
+    const timers = dismissTimers.current;
     return () => {
-      for (const timer of dismissTimers.current.values()) clearTimeout(timer);
+      for (const timer of timers.values()) clearTimeout(timer);
     };
   }, []);
 
@@ -134,12 +140,14 @@ export function ProximityAlertOverlay() {
     };
   }, [mapRef, handleMapMove, dismissAlert, setExpandedSiteId]);
 
-  // Clear expanded state if the expanded site no longer has an alert
+  // Clear expanded state if the expanded site no longer has an alert.
+  // setExpandedSiteId is a Zustand setter — stable identity per render —
+  // safe to include in deps (per RESEARCH §Focus Area 5 decision tree branch 2).
   useEffect(() => {
     if (expandedSiteId && !alerts.some((a) => a.siteId === expandedSiteId)) {
       setExpandedSiteId(null);
     }
-  }, [alerts, expandedSiteId]);
+  }, [alerts, expandedSiteId, setExpandedSiteId]);
 
   // Dismiss alert when user selects a different entity or deselects
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
