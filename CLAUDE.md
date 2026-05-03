@@ -155,7 +155,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 ## Analytics Counters (Phase 12)
 
-- **CountersSlot** — `src/components/layout/CountersSlot.tsx`, collapsible OverlayPanel with Flights + Events sections
+- **CountersContent** — `src/components/layout/Sidebar.tsx` (function at line 76), inline section in Sidebar with Flights + Events panels (replaced standalone CountersSlot in Phase 23.1+)
 - **CounterRow** — `src/components/counters/CounterRow.tsx`, label + value with fixed-width label column (w-24) for vertical alignment, green +N delta with 3s fade animation
 - **useCounterData** — `src/components/counters/useCounterData.ts`, derives visible-only counts from filtered entities + toggle state
 - **Visibility-aware** — counters reflect only visible entities (smart filters + toggle gating matching useEntityLayers logic)
@@ -277,7 +277,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 ## Counter Entity Dropdowns (Phase 19.2)
 
-- **CountersSlot** — accordion dropdowns showing individual entities per counter row
+- **CountersContent** — accordion dropdowns showing individual entities per counter row (rendered inline in `src/components/layout/Sidebar.tsx`)
 - **Fly-to** — clicking entity in dropdown flies map and opens detail panel
 - **Proximity sorting** — flights/events sorted by distance from Tehran, ships from Strait of Hormuz, sites by attack count
 - **Scrollable lists** — 8+ items show scrollable container with "Showing X-Y of Z" indicator
@@ -313,7 +313,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 - **PanelView** — `src/types/ui.ts`, `{ entityId, cluster, breadcrumbLabel }` — represents a saved detail panel state
 - **navigationStack** — `uiStore.navigationStack: PanelView[]`, push/pop actions for back navigation
-- **pushView** — saves current panel state (entity or cluster) before navigating to a new entity; called from 8 sites (ThreatClusterDetail, CountersSlot, SearchModal, Sidebar, SiteDetail, ProximityAlertOverlay, plus BaseMap click)
+- **pushView** — saves current panel state (entity or cluster) before navigating to a new entity; called from 7 sites (ThreatClusterDetail, SearchModal, Sidebar incl. inline CountersContent, SiteDetail, ProximityAlertOverlay, plus BaseMap click)
 - **popView** — restores previous panel state from stack; wired to back button in BreadcrumbRow
 - **BreadcrumbRow** — `src/components/detail/BreadcrumbRow.tsx`, shows breadcrumb trail with back arrow + label from `panelLabel.ts`
 - **panelLabel** — `src/lib/panelLabel.ts`, `getCurrentPanelView()` derives breadcrumb label from current entity/cluster state across all stores
