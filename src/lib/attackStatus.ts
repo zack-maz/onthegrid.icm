@@ -1,6 +1,8 @@
 import type { SiteEntity, ConflictEventEntity } from '@/types/entities';
 
-const ATTACK_RADIUS_KM = 5;
+// Phase 28.1 W5 D-12 — env-tunable attack-status proximity radius. Default
+// preserves pre-W5 behavior (5km cross-reference radius).
+const ATTACK_RADIUS_KM = Number(import.meta.env.VITE_ATTACK_RADIUS_KM ?? 5);
 
 function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
