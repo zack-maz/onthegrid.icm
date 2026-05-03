@@ -3642,7 +3642,7 @@ async function getOpenRouterDaily() {
   }
 }
 async function callLLM2(messages, _schemaText, opts = {}) {
-  const log35 = logger.child({ component: "freeClaudeRouter" });
+  const log36 = logger.child({ component: "freeClaudeRouter" });
   const decisions = [];
   const includeOpenRouter = !opts.skipOpenRouter;
   const allProviders = [
@@ -3742,7 +3742,7 @@ async function callLLM2(messages, _schemaText, opts = {}) {
         recordLatency(p.name, latencyMs);
         const bucket = classifyError(err);
         recordErrorBucket(p.name, bucket);
-        log35.warn(
+        log36.warn(
           {
             provider: p.name,
             attempt,
@@ -3765,7 +3765,7 @@ async function callLLM2(messages, _schemaText, opts = {}) {
       record(p.name, "err");
     }
   }
-  log35.warn("all free providers unavailable \u2014 returning null content");
+  log36.warn("all free providers unavailable \u2014 returning null content");
   return { content: null, routing: decisions };
 }
 var LATENCY_RING_CAP = 100;
@@ -3849,7 +3849,7 @@ async function accrueShadowCost(tokensIn, tokensOut) {
   }
 }
 async function prewarmIfCold() {
-  const log35 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
+  const log36 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
   const client = getNvidiaNimClient();
   if (!client) {
     updateProgress({ prewarmState: "unknown" });
@@ -3875,7 +3875,7 @@ async function prewarmIfCold() {
       prewarmState: "cold-fired"
     });
   } catch (err) {
-    log35.warn(
+    log36.warn(
       { err: err instanceof Error ? err.message : String(err) },
       "prewarmIfCold synthetic call failed (non-fatal)"
     );
@@ -3899,7 +3899,7 @@ function computeLineageHash(eventId, prompt, model) {
 async function appendLineage(eventId, payload) {
   const lineageHash = computeLineageHash(eventId, payload.prompt, payload.model);
   const key = `${LINEAGE_KEY_PREFIX}${eventId}`;
-  const log35 = logger.child({ component: "llm-lineage" });
+  const log36 = logger.child({ component: "llm-lineage" });
   try {
     await redis.hset(key, {
       prompt: payload.prompt.slice(0, 32e3),
@@ -3919,7 +3919,7 @@ async function appendLineage(eventId, payload) {
     await redis.zremrangebyrank(LINEAGE_INDEX_KEY, 0, -LINEAGE_MAX_ENTRIES - 1);
     await redis.expire(LINEAGE_INDEX_KEY, LINEAGE_TTL_SEC);
   } catch (err) {
-    log35.warn({ err, eventId }, "lineage append failed (redis unreachable)");
+    log36.warn({ err, eventId }, "lineage append failed (redis unreachable)");
   }
   return { lineageHash };
 }
@@ -3976,8 +3976,8 @@ async function appendPipelineAudit(entry) {
     await redis.ltrim(PIPELINE_AUDIT_KEY, 0, PIPELINE_AUDIT_MAX - 1);
     await redis.expire(PIPELINE_AUDIT_KEY, PIPELINE_AUDIT_TTL_SEC);
   } catch (err) {
-    const log35 = logger.child({ component: "pipeline-audit" });
-    log35.warn({ err, entry }, "audit append failed (redis unreachable)");
+    const log36 = logger.child({ component: "pipeline-audit" });
+    log36.warn({ err, entry }, "audit append failed (redis unreachable)");
   }
 }
 async function listPipelineAudit(limit) {
@@ -84969,65 +84969,375 @@ waterRouter.get("/precip", validateQuery(waterQuerySchema), async (_req, res) =>
 
 // server/routes/health.ts
 import { Router as Router11 } from "express";
-var healthRouter = Router11();
+
+// server/lib/healthSources.ts
 var SOURCE_KEYS = {
   flights: "flights:adsblol",
   ships: "ships:ais",
   events: "events:gdelt",
-  news: "news:gdelt",
+  // DRIFT-1: route writer is news:feed. The legacy 'news:gdelt' is the LLM
+  // extractor side-input, never updated by the news route.
+  news: "news:feed",
   markets: "markets:yahoo:1d",
   weather: "weather:open-meteo",
-  sites: "sites:v2",
-  water: "water:facilities"
+  // DRIFT-2: route writer bumped to sites:v3 in Phase 27.3.1.
+  sites: "sites:v3",
+  // DRIFT-3: route writer bumped to water:facilities:v3 in Phase 27.3.2.
+  water: "water:facilities:v3"
 };
-var ESTIMATED_DAILY_COMMANDS = 15282;
-healthRouter.get("/", async (_req, res) => {
-  let redisOk = false;
-  let latencyMs = 0;
+var FRESHNESS_THRESHOLDS_MS = {
+  flights: 2 * 6e4,
+  // 2 min — D-25
+  ships: 5 * 6e4,
+  // 5 min — D-25
+  events: 30 * 6e4,
+  // 30 min — D-25
+  news: 30 * 6e4,
+  // 30 min — D-25
+  markets: 5 * 6e4,
+  // 5 min — D-25
+  weather: 30 * 6e4,
+  // 30 min — DELTA-A2 (matches WEATHER_CACHE_TTL)
+  sites: 48 * 60 * 6e4,
+  // 48 h — D-25
+  water: 48 * 60 * 6e4,
+  // 48 h — D-25
+  waterPrecip: 12 * 60 * 6e4,
+  // 12 h — D-25
+  sources: 10 * 6e4,
+  // 10 min — D-25
+  llmStatus: 5 * 6e4,
+  // 5 min — D-25
+  authCheck: 0,
+  // probe-only — D-25 "200 only"
+  geocode: 0,
+  // probe-only — D-25 "200 only"
+  cronHealth: 26 * 60 * 6e4,
+  // 26 h — D-25
+  cronWarm: 26 * 60 * 6e4,
+  // 26 h — D-25
+  cronRefreshEvents: 26 * 60 * 6e4
+  // 26 h — D-25
+};
+var TIER_BY_ENDPOINT = {
+  flights: "critical",
+  // D-26
+  ships: "critical",
+  // D-26
+  events: "critical",
+  // D-26
+  markets: "non-critical",
+  // D-26
+  news: "non-critical",
+  // D-26
+  // DELTA-A2: /api/weather is a visualization layer, not core conflict data.
+  // Treat as non-critical until W2's runtime probe surfaces a stronger signal.
+  weather: "non-critical",
+  waterPrecip: "non-critical",
+  // D-26
+  sources: "non-critical",
+  // D-26
+  llmStatus: "non-critical",
+  // D-26
+  sites: "static",
+  // D-26
+  water: "static",
+  // D-26
+  authCheck: "probe-only",
+  // D-26
+  geocode: "probe-only",
+  // D-26
+  cronHealth: "cron",
+  // D-26
+  cronWarm: "cron",
+  // D-26
+  cronRefreshEvents: "cron"
+  // D-26
+};
+function deriveStatus(freshnessMs, thresholdMs, hadError) {
+  if (hadError) return "unhealthy";
+  if (freshnessMs === null) return "unknown";
+  if (freshnessMs <= thresholdMs) return "healthy";
+  if (freshnessMs <= 2 * thresholdMs) return "degraded";
+  return "unhealthy";
+}
+
+// server/lib/healthSchema.ts
+import { z as z13 } from "zod";
+var healthStatusEnum = z13.enum(["healthy", "degraded", "unhealthy", "unknown"]);
+var healthTierEnum = z13.enum(["critical", "non-critical", "static", "probe-only", "cron"]);
+var endpointHealthSchema = z13.object({
+  name: z13.string(),
+  status: healthStatusEnum,
+  tier: healthTierEnum,
+  /** Unix ms of the last successful probe; null when never seen. */
+  lastSuccessTs: z13.number().nullable(),
+  /** Sanitized error message from the last failed probe; null when last probe succeeded. */
+  lastErrorReason: z13.string().nullable(),
+  /** Age of the cache entry / live state, in ms. null = no data observed yet. */
+  freshnessMs: z13.number().nullable(),
+  /** D-25 freshness budget per endpoint. 0 for probe-only endpoints. */
+  freshnessThresholdMs: z13.number().int().nonnegative(),
+  /** Probe round-trip duration; null when the probe failed before measurement. */
+  latencyMs: z13.number().nullable()
+}).strict();
+var tierRollupSchema = z13.object({
+  healthy: z13.number().int().nonnegative(),
+  degraded: z13.number().int().nonnegative(),
+  unhealthy: z13.number().int().nonnegative(),
+  unknown: z13.number().int().nonnegative()
+}).strict();
+var probeOnlyRollupSchema = z13.object({
+  healthy: z13.number().int().nonnegative(),
+  unhealthy: z13.number().int().nonnegative(),
+  unknown: z13.number().int().nonnegative()
+}).strict();
+var healthResponseSchema = z13.object({
+  /** Map keyed by endpoint name (matches SOURCE_KEYS keys + non-cache endpoints). */
+  endpoints: z13.record(z13.string(), endpointHealthSchema),
+  summary: z13.object({
+    critical: tierRollupSchema,
+    nonCritical: tierRollupSchema,
+    static: tierRollupSchema,
+    probeOnly: probeOnlyRollupSchema,
+    cron: tierRollupSchema
+  }).strict(),
+  /** Unix ms when the route handler assembled this response. */
+  generatedAt: z13.number()
+}).strict();
+
+// server/routes/health.ts
+var log31 = logger.child({ module: "health" });
+var healthRouter = Router11();
+var PROBE_TIMEOUT_MS = 2e3;
+function withTimeout2(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+function sanitizeError(err) {
+  const raw = err instanceof Error ? err.message : String(err);
+  const masked = raw.replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]").replace(/api[_-]?key=[A-Za-z0-9._-]+/gi, "api_key=[REDACTED]").replace(/https:\/\/[^\s]*upstash\.io[^\s]*/g, "[upstash url redacted]");
+  return masked.length > 200 ? masked.slice(0, 197) + "..." : masked;
+}
+async function probeCacheKey(name, key) {
   const start = Date.now();
   try {
-    await redis.ping();
-    redisOk = true;
-    latencyMs = Date.now() - start;
-  } catch {
-    latencyMs = Date.now() - start;
+    const entry = await withTimeout2(
+      cacheGetSafe(key, 999999999),
+      PROBE_TIMEOUT_MS,
+      `probe ${name}`
+    );
+    const latencyMs = Date.now() - start;
+    if (entry === null) {
+      return {
+        freshnessMs: null,
+        lastSuccessTs: null,
+        hadError: false,
+        errorReason: null,
+        latencyMs
+      };
+    }
+    const lastFresh = entry.lastFresh;
+    return {
+      freshnessMs: Date.now() - lastFresh,
+      lastSuccessTs: lastFresh,
+      hadError: false,
+      errorReason: null,
+      latencyMs
+    };
+  } catch (err) {
+    return {
+      freshnessMs: null,
+      lastSuccessTs: null,
+      hadError: true,
+      errorReason: sanitizeError(err),
+      latencyMs: Date.now() - start
+    };
   }
-  const sources = {};
-  await Promise.all(
-    Object.entries(SOURCE_KEYS).map(async ([name, key]) => {
-      try {
-        const entry = await cacheGetSafe(key, 999999999);
-        sources[name] = entry?.lastFresh ?? null;
-      } catch {
-        sources[name] = null;
-      }
+}
+function probeLlmStatus() {
+  const start = Date.now();
+  const latest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
+  return {
+    freshnessMs: latest === null ? null : Date.now() - latest,
+    lastSuccessTs: latest,
+    hadError: false,
+    errorReason: null,
+    latencyMs: Date.now() - start
+  };
+}
+function probeSources() {
+  return {
+    freshnessMs: 0,
+    lastSuccessTs: Date.now(),
+    hadError: false,
+    errorReason: null,
+    latencyMs: 0
+  };
+}
+function probeProbeOnly() {
+  return {
+    freshnessMs: null,
+    lastSuccessTs: Date.now(),
+    hadError: false,
+    errorReason: null,
+    latencyMs: 0
+  };
+}
+async function probeCronTick(name) {
+  const start = Date.now();
+  try {
+    const entry = await withTimeout2(
+      cacheGetSafe(`cron:lastTick:${name}`, 999999999),
+      PROBE_TIMEOUT_MS,
+      `probe cron ${name}`
+    );
+    const latencyMs = Date.now() - start;
+    if (entry === null) {
+      return {
+        freshnessMs: null,
+        lastSuccessTs: null,
+        hadError: false,
+        errorReason: null,
+        latencyMs
+      };
+    }
+    const tickTs = typeof entry.data === "number" ? entry.data : entry.lastFresh;
+    return {
+      freshnessMs: Date.now() - tickTs,
+      lastSuccessTs: tickTs,
+      hadError: false,
+      errorReason: null,
+      latencyMs
+    };
+  } catch (err) {
+    return {
+      freshnessMs: null,
+      lastSuccessTs: null,
+      hadError: true,
+      errorReason: sanitizeError(err),
+      latencyMs: Date.now() - start
+    };
+  }
+}
+var PROBE_STRATEGIES = {
+  flights: { kind: "cache", cacheKey: SOURCE_KEYS.flights },
+  ships: { kind: "cache", cacheKey: SOURCE_KEYS.ships },
+  events: { kind: "cache", cacheKey: SOURCE_KEYS.events },
+  news: { kind: "cache", cacheKey: SOURCE_KEYS.news },
+  markets: { kind: "cache", cacheKey: SOURCE_KEYS.markets },
+  weather: { kind: "cache", cacheKey: SOURCE_KEYS.weather },
+  sites: { kind: "cache", cacheKey: SOURCE_KEYS.sites },
+  water: { kind: "cache", cacheKey: SOURCE_KEYS.water },
+  waterPrecip: { kind: "cache", cacheKey: "water:precip" },
+  sources: { kind: "sources" },
+  llmStatus: { kind: "llmStatus" },
+  authCheck: { kind: "probeOnly" },
+  geocode: { kind: "probeOnly" },
+  cronHealth: { kind: "cron", cronName: "health" },
+  cronWarm: { kind: "cron", cronName: "warm" },
+  cronRefreshEvents: { kind: "cron", cronName: "refresh-events" }
+};
+async function runProbe(name, strategy) {
+  switch (strategy.kind) {
+    case "cache":
+      return probeCacheKey(name, strategy.cacheKey);
+    case "llmStatus":
+      return probeLlmStatus();
+    case "sources":
+      return probeSources();
+    case "probeOnly":
+      return probeProbeOnly();
+    case "cron":
+      return probeCronTick(strategy.cronName);
+  }
+}
+function buildSummary2(endpoints) {
+  const empty = { healthy: 0, degraded: 0, unhealthy: 0, unknown: 0 };
+  const summary = {
+    critical: { ...empty },
+    nonCritical: { ...empty },
+    static: { ...empty },
+    probeOnly: { healthy: 0, unhealthy: 0, unknown: 0 },
+    cron: { ...empty }
+  };
+  for (const ep of Object.values(endpoints)) {
+    const s = ep.status;
+    switch (ep.tier) {
+      case "critical":
+        summary.critical[s] = (summary.critical[s] ?? 0) + 1;
+        break;
+      case "non-critical":
+        summary.nonCritical[s] = (summary.nonCritical[s] ?? 0) + 1;
+        break;
+      case "static":
+        summary.static[s] = (summary.static[s] ?? 0) + 1;
+        break;
+      case "probe-only":
+        if (s === "healthy") summary.probeOnly.healthy += 1;
+        else if (s === "unknown") summary.probeOnly.unknown += 1;
+        else summary.probeOnly.unhealthy += 1;
+        break;
+      case "cron":
+        summary.cron[s] = (summary.cron[s] ?? 0) + 1;
+        break;
+    }
+  }
+  return summary;
+}
+healthRouter.get("/", async (_req, res) => {
+  const probeNames = Object.keys(PROBE_STRATEGIES);
+  const results = await Promise.all(
+    probeNames.map(async (name) => {
+      const strategy = PROBE_STRATEGIES[name];
+      const probe = await runProbe(name, strategy);
+      return { name, probe };
     })
   );
-  res.json({
-    status: redisOk ? "ok" : "degraded",
-    redis: redisOk,
-    uptime: process.uptime(),
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    latencyMs,
-    sources,
-    estimatedDailyCommands: ESTIMATED_DAILY_COMMANDS
-  });
+  const endpoints = {};
+  for (const { name, probe } of results) {
+    const tier = TIER_BY_ENDPOINT[name];
+    const threshold = FRESHNESS_THRESHOLDS_MS[name];
+    if (tier === void 0 || threshold === void 0) {
+      log31.warn({ name }, "probe ran but tier or threshold not registered; skipping");
+      continue;
+    }
+    const status = deriveStatus(probe.freshnessMs, threshold, probe.hadError);
+    endpoints[name] = {
+      name,
+      status,
+      tier,
+      lastSuccessTs: probe.lastSuccessTs,
+      lastErrorReason: probe.errorReason,
+      freshnessMs: probe.freshnessMs,
+      freshnessThresholdMs: threshold,
+      latencyMs: probe.latencyMs
+    };
+  }
+  const response = {
+    endpoints,
+    summary: buildSummary2(endpoints),
+    generatedAt: Date.now()
+  };
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      healthResponseSchema.parse(response);
+    } catch (err) {
+      log31.error({ err }, "/api/health response failed schema validation in dev");
+    }
+  }
+  res.json(response);
 });
 
 // server/routes/cron-health.ts
 import { Router as Router12 } from "express";
-var log31 = logger.child({ module: "cron-health" });
+var log32 = logger.child({ module: "cron-health" });
 var cronHealthRouter = Router12();
-var SOURCE_KEYS2 = {
-  flights: "flights:adsblol",
-  ships: "ships:ais",
-  events: "events:gdelt",
-  news: "news:gdelt",
-  markets: "markets:yahoo:1d",
-  weather: "weather:open-meteo",
-  sites: "sites:v2",
-  water: "water:facilities"
-};
 var STALE_THRESHOLD_MS2 = 60 * 60 * 1e3;
 cronHealthRouter.get("/", async (req, res) => {
   if (env.CRON_SECRET) {
@@ -85044,12 +85354,12 @@ cronHealthRouter.get("/", async (req, res) => {
     await redis.ping();
     redisOk = true;
   } catch {
-    log31.error("Redis ping failed");
+    log32.error("Redis ping failed");
   }
   const sources = {};
   const warnings = [];
   await Promise.all(
-    Object.entries(SOURCE_KEYS2).map(async ([name, key]) => {
+    Object.entries(SOURCE_KEYS).map(async ([name, key]) => {
       try {
         const entry = await cacheGetSafe(key, 999999999);
         const lastFresh = entry?.lastFresh ?? null;
@@ -85068,18 +85378,18 @@ cronHealthRouter.get("/", async (req, res) => {
     })
   );
   if (warnings.length > 0) {
-    log31.warn({ warningCount: warnings.length, warnings }, "source health warnings");
+    log32.warn({ warningCount: warnings.length, warnings }, "source health warnings");
   } else {
-    log31.info("all sources healthy");
+    log32.info("all sources healthy");
   }
   let evalScore = null;
   let evalError = null;
   try {
     evalScore = await runEval();
-    log31.info({ evalScore }, "eval drift check complete");
+    log32.info({ evalScore }, "eval drift check complete");
   } catch (err) {
     evalError = err instanceof Error ? err.message : String(err);
-    log31.warn({ err: evalError }, "eval drift check threw \u2014 continuing health response");
+    log32.warn({ err: evalError }, "eval drift check threw \u2014 continuing health response");
   }
   res.json({
     status: redisOk ? "ok" : "degraded",
@@ -85094,14 +85404,14 @@ cronHealthRouter.get("/", async (req, res) => {
 
 // server/routes/cron-warm.ts
 import { Router as Router13 } from "express";
-var log32 = logger.child({ module: "cron-warm" });
+var log33 = logger.child({ module: "cron-warm" });
 var SITES_REDIS_TTL_SEC = 259200;
 var SITES_KEY2 = "sites:v2";
 var WATER_KEY = "water:facilities";
 var cronWarmRouter = Router13();
 cronWarmRouter.get("/", async (_req, res) => {
   const start = Date.now();
-  log32.info("starting cache pre-warm");
+  log33.info("starting cache pre-warm");
   const results = await Promise.allSettled([
     (async () => {
       const { sites } = await fetchSites();
@@ -85121,13 +85431,13 @@ cronWarmRouter.get("/", async (_req, res) => {
   };
   const allOk = results.every((r) => r.status === "fulfilled");
   const logLevel = allOk ? "info" : "warn";
-  log32[logLevel](summary, "cache pre-warm complete");
+  log33[logLevel](summary, "cache pre-warm complete");
   res.json({ status: allOk ? "ok" : "partial", ...summary });
 });
 
 // server/routes/eval-cron.ts
 import { Router as Router14 } from "express";
-var log33 = logger.child({ module: "eval-cron" });
+var log34 = logger.child({ module: "eval-cron" });
 var evalCronRouter = Router14();
 evalCronRouter.post("/", async (req, res) => {
   if (env.CRON_SECRET) {
@@ -85143,7 +85453,7 @@ evalCronRouter.post("/", async (req, res) => {
     const score = await runEval();
     const durationMs = Date.now() - t0;
     const ratioWithin20km = score.total > 0 ? score.within20km / score.total : 0;
-    log33.info({ score, durationMs, ratioWithin20km }, "eval cron run complete");
+    log34.info({ score, durationMs, ratioWithin20km }, "eval cron run complete");
     res.status(200).json({
       status: "ok",
       score,
@@ -85153,14 +85463,14 @@ evalCronRouter.post("/", async (req, res) => {
   } catch (err) {
     const durationMs = Date.now() - t0;
     const message = err instanceof Error ? err.message : String(err);
-    log33.error({ err: message, durationMs }, "eval cron run failed");
+    log34.error({ err: message, durationMs }, "eval cron run failed");
     res.status(500).json({ status: "error", error: message, durationMs });
   }
 });
 
 // server/routes/refresh-events-cron.ts
 import { Router as Router15 } from "express";
-var log34 = logger.child({ module: "refresh-events-cron" });
+var log35 = logger.child({ module: "refresh-events-cron" });
 var refreshEventsCronRouter = Router15();
 refreshEventsCronRouter.get("/", async (req, res) => {
   if (env.CRON_SECRET) {
@@ -85179,12 +85489,12 @@ refreshEventsCronRouter.get("/", async (req, res) => {
       forceCooldown
     });
     const durationMs = Date.now() - t0;
-    log34.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
+    log35.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
     res.status(200).json({ ok: true, durationMs, ...result });
   } catch (err) {
     const durationMs = Date.now() - t0;
     const message = err instanceof Error ? err.message : String(err);
-    log34.error({ err: message, durationMs }, "refresh-events cron failed");
+    log35.error({ err: message, durationMs }, "refresh-events cron failed");
     res.status(500).json({
       ok: false,
       error: "refresh_failed",
@@ -85253,6 +85563,7 @@ function createApp() {
     next();
   });
   app2.use("/health", healthRouter);
+  app2.use("/api/health", healthRouter);
   app2.use("/api/cron/health", cronHealthRouter);
   app2.use("/api/cron/warm", cronWarmRouter);
   app2.use("/api/cron/eval", evalCronRouter);
