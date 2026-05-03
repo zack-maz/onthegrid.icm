@@ -29,6 +29,14 @@ export const SOURCE_TIER_MULTIPLIER: Record<number, number> = {
   3: 0.7,
 };
 
+// Phase 28.1 W5 D-12 — env-tunable recency-decay half-life for severity
+// scoring. Default 24h matches the pre-W5 runtime behavior.
+//
+// Note: CLAUDE.md "Notification Center (Phase 17)" historically said
+// "halfLife = 6h" — that was doc drift; the 24h scale here is authoritative.
+// CLAUDE.md is updated in this same wave (W5 Task 3).
+const HALF_LIFE_HOURS = Number(import.meta.env.VITE_SEVERITY_HALF_LIFE_HOURS ?? 24);
+
 /**
  * Compute a severity score for a conflict event.
  *
@@ -36,7 +44,7 @@ export const SOURCE_TIER_MULTIPLIER: Record<number, number> = {
  *
  * - Type weight: based on event type (airstrike=10, blockade=2, etc.)
  * - Mentions/sources: logarithmic scaling to dampen outliers
- * - Recency decay: 1 / (1 + ageHours / 24) — ~24h half-life
+ * - Recency decay: 1 / (1 + ageHours / HALF_LIFE_HOURS) — default ~24h half-life
  *
  * Returns a positive number. Higher = more severe/urgent.
  */
@@ -47,7 +55,7 @@ export function computeSeverityScore(event: ConflictEventEntity): number {
 
   const ageMs = Math.max(0, Date.now() - event.timestamp);
   const ageHours = ageMs / (1000 * 60 * 60);
-  const recencyDecay = 1 / (1 + ageHours / 24);
+  const recencyDecay = 1 / (1 + ageHours / HALF_LIFE_HOURS);
 
   const tierMultiplier = SOURCE_TIER_MULTIPLIER[event.data.sourceTier ?? 2] ?? 1.0;
 
