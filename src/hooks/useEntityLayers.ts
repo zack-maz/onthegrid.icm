@@ -441,7 +441,7 @@ export function useEntityLayers() {
         parameters: { depthTest: false },
         updateTriggers: { getColor: [activeId, isFilterActive, matchedIds.size, clusterEventIds] },
       }),
-    [groundCombatEvents, activeId, isFilterActive, matchedIds],
+    [groundCombatEvents, activeId, isFilterActive, matchedIds, clusterEventIds],
   );
 
   // Targeted layer (always visible)
