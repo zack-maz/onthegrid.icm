@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { useNewsStore } from '@/stores/newsStore';
 import type { NewsCluster, CacheResponse } from '@/types/entities';
 

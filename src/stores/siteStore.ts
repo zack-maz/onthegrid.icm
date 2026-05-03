@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+
 import type { SiteEntity, CacheResponse } from '@/types/entities';
 
 export type SiteConnectionStatus = 'connected' | 'stale' | 'error' | 'loading' | 'idle';

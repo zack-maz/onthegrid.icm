@@ -1,9 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
-import type { Response } from 'express';
-import { sendValidated } from '../../middleware/validateResponse.js';
+
 import { AppError } from '../../middleware/errorHandler.js';
+import { sendValidated } from '../../middleware/validateResponse.js';
+
+import type { Response } from 'express';
 
 /** Create a minimal mock Response that captures json calls */
 function mockRes(path = '/api/test') {

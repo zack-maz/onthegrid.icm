@@ -1,9 +1,11 @@
-import { RateLimitError } from '../types.js';
-import type { FlightEntity } from '../types.js';
 import { IRAN_CENTER, ADSB_RADIUS_NM } from '../config.js';
-import { normalizeAircraft } from './adsb-v2-normalize.js';
-import type { AdsbResponse } from './adsb-v2-normalize.js';
 import { logger } from '../lib/logger.js';
+import { RateLimitError } from '../types.js';
+
+import { normalizeAircraft } from './adsb-v2-normalize.js';
+
+import type { FlightEntity } from '../types.js';
+import type { AdsbResponse } from './adsb-v2-normalize.js';
 
 const log = logger.child({ module: 'adsb-lol' });
 

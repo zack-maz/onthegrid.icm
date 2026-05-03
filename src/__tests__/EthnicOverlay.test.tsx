@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import { useLayerStore } from '@/stores/layerStore';
-import { ETHNIC_GROUPS, ETHNIC_GROUP_IDS } from '@/lib/ethnicGroups';
+import { describe, it, expect, beforeEach } from 'vitest';
+
 import ethnicZonesData from '@/data/ethnic-zones.json';
+import { ETHNIC_GROUPS, ETHNIC_GROUP_IDS } from '@/lib/ethnicGroups';
+import { useLayerStore } from '@/stores/layerStore';
 
 describe('EthnicOverlay', () => {
   it('ETHNIC_GROUPS has exactly 10 entries', () => {

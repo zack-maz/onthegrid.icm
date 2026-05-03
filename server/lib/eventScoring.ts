@@ -1,8 +1,10 @@
 // Event confidence scoring, Goldstein sanity checks, CAMEO specificity, and Bellingcat corroboration for GDELT events
 
-import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 import { haversineKm } from '../../src/lib/geo.js';
+
 import { CITY_CENTROIDS } from './geoValidation.js';
+
+import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 
 // --- Bellingcat Corroboration Constants ---
 const BELLINGCAT_TEMPORAL_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours

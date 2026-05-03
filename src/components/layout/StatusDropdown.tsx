@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+
+import { useFilteredEntities } from '@/hooks/useFilteredEntities';
+import { useEventStore } from '@/stores/eventStore';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
 import { useSiteStore } from '@/stores/siteStore';
 import { useUIStore } from '@/stores/uiStore';
-import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 
 type FeedStatus = 'connected' | 'stale' | 'error' | 'loading' | 'rate_limited' | 'idle';
 

@@ -20,24 +20,26 @@
  *        reranker in Plan 05
  */
 
-import type { EventGroup } from './eventGrouping.js';
-import type { LocationHierarchyV2, EnrichedEventV2, GeocodeProvenance } from './llmSchema.js';
+import { callLLM } from '../adapters/llm-provider.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
+import { env } from '../config.js';
+
+import { extractBellingcatGeo } from './eventScoring.js';
+import { enqueueDLQ } from './llmDLQ.js';
+import { withBatchWatchdog } from './llmExtractorWatchdog.js';
+import { updateProgress, llmProgress } from './llmProgress.js';
+import { resolveLocation, type ResolveContext, type ResolvedLocation } from './llmResolver.js';
 import {
   batchResponseV2,
   EVENT_EXTRACTION_SCHEMA_V2,
   derivePrecision,
   deriveSuspect,
 } from './llmSchema.js';
-import { callLLM } from '../adapters/llm-provider.js';
-import { resolveLocation, type ResolveContext, type ResolvedLocation } from './llmResolver.js';
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
-import { getSourceTier } from './sourceTiers.js';
-import { extractBellingcatGeo } from './eventScoring.js';
-import { enqueueDLQ } from './llmDLQ.js';
-import { withBatchWatchdog } from './llmExtractorWatchdog.js';
-import { updateProgress, llmProgress } from './llmProgress.js';
-import { env } from '../config.js';
 import { logger } from './logger.js';
+import { getSourceTier } from './sourceTiers.js';
+
+import type { EventGroup } from './eventGrouping.js';
+import type { LocationHierarchyV2, EnrichedEventV2, GeocodeProvenance } from './llmSchema.js';
 
 const log = logger.child({ module: 'llm-extractor-v2' });
 

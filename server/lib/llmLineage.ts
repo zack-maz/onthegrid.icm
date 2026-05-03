@@ -12,7 +12,9 @@
  * "if-Plan-02-populated" hand-waves.
  */
 import crypto from 'node:crypto';
+
 import { redis } from '../cache/redis.js';
+
 import { logger } from './logger.js';
 
 const LINEAGE_KEY_PREFIX = 'events:llm:v3:lineage:';

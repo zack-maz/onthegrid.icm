@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Request, Response, NextFunction } from 'express';
+
 import { AppError, errorHandler } from '../../middleware/errorHandler.js';
+
+import type { Request, Response, NextFunction } from 'express';
 
 /** Create a mock Express req/res pair */
 function createMocks(overrides: { id?: string; env?: string } = {}) {

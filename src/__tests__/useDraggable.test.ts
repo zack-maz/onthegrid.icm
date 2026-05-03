@@ -1,5 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// `@/` alias is internal — the rule's resolver treats it as external without
+// a TypeScript path resolver, but separating it here documents intent.
+// eslint-disable-next-line import/order
 import { clampPosition } from '@/hooks/useDraggable';
 
 // Mock localStorage using project pattern

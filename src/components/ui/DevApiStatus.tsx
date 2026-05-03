@@ -1,24 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { useNewsStore } from '@/stores/newsStore';
-import { useMarketStore } from '@/stores/marketStore';
-import { useWeatherStore } from '@/stores/weatherStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
+
+import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
 import { shouldRenderDashboard, dashboardAuthHeaders } from '@/lib/dashboardAuth';
+import type { EndpointHealth, HealthResponse, HealthStatus, HealthTier } from '@/lib/healthClient';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useMarketStore } from '@/stores/marketStore';
+import { useNewsStore } from '@/stores/newsStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useWeatherStore } from '@/stores/weatherStore';
 // Phase 28.1 W2 — DevApiStatus All APIs tab consumes the shared
 // HealthStatusProvider context. NEVER import useHealthStatus directly here
 // (that would double the /api/health poll rate against HealthBanner).
-import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
-import type { EndpointHealth, HealthResponse, HealthStatus, HealthTier } from '@/lib/healthClient';
 
 interface FetchEntry {
   ok: boolean;

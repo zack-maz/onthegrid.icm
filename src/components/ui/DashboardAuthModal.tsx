@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useUIStore } from '@/stores/uiStore';
+
 import { setDashboardKey, probeDashboardKey } from '@/lib/dashboardAuth';
+import { useUIStore } from '@/stores/uiStore';
 
 /**
  * Phase 27.4.4 Plan 02 — Dashboard auth modal.

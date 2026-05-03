@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Server } from 'http';
+
 import type { GeocodedLocation } from '../../adapters/nominatim.js';
+import type { Server } from 'http';
 
 // Module-level mock function for the adapter
 const mockReverseGeocode = vi.fn(

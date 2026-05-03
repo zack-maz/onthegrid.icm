@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { useSearchStore } from '@/stores/searchStore';
-import { useNotificationStore } from '@/stores/notificationStore';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
+
 import { INITIAL_VIEW_STATE } from '@/components/map/constants';
+import { useFilterStore } from '@/stores/filterStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useSearchStore } from '@/stores/searchStore';
+import { useUIStore } from '@/stores/uiStore';
 
 /**
  * Centralized Escape key handler with priority stack:

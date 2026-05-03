@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { useShipStore, SHIP_STALE_THRESHOLD } from '@/stores/shipStore';
 import type { ShipEntity, CacheResponse } from '@/types/entities';
 

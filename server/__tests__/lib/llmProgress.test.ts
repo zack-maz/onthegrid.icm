@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import {
   llmProgress,
   resetProgress,
@@ -7,6 +8,7 @@ import {
   buildSummary,
   INITIAL_PROGRESS,
 } from '../../lib/llmProgress.js';
+
 import type { LLMRunSummary } from '../../lib/llmProgress.js';
 
 describe('llmProgress', () => {

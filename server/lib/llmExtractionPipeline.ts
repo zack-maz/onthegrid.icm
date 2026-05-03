@@ -23,6 +23,13 @@
  *     param bypass the 15-min cooldown for operator-driven re-extractions.
  */
 
+import { isLLMConfigured } from '../adapters/llm-provider.js';
+import { saveDevLLMCache, saveDevLLMCacheV2 } from '../cache/devFileCache.js';
+import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
+import { getPipelineVersion } from '../config.js';
+
+import { groupGdeltRows } from './eventGrouping.js';
+import { runEval } from './llmEvalHarness.js';
 import {
   processEventGroups,
   geocodeEnrichedEvents,
@@ -30,16 +37,11 @@ import {
   type GeocodedEnrichedEventV3,
 } from './llmEventExtractor.js';
 import { BATCH_SIZE as BATCH_SIZE_V2 } from './llmEventExtractor.v2.js';
-import { groupGdeltRows } from './eventGrouping.js';
-import { isLLMConfigured } from '../adapters/llm-provider.js';
-import { runEval } from './llmEvalHarness.js';
 import { llmProgress, resetProgress, updateProgress, buildSummary } from './llmProgress.js';
-import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
-import { getPipelineVersion } from '../config.js';
 import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js';
 import { logger } from './logger.js';
-import { saveDevLLMCache, saveDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { getHighestTier } from './sourceTiers.js';
+
 import type { ConflictEventEntity } from '../types.js';
 import type { GeocodeProvenance } from './llmSchema.js';
 

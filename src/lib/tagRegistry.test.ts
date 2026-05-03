@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import {
   TAG_REGISTRY,
   ALL_PREFIXES,
@@ -7,6 +8,7 @@ import {
   getTagValues,
   type EntityDataSources,
 } from './tagRegistry';
+
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '../../server/types';
 
 // --- Helpers ---

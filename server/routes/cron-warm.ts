@@ -1,11 +1,12 @@
 import { Router } from 'express';
+
+import { fetchWaterFacilities } from '../adapters/overpass-water.js';
+import { fetchSites } from '../adapters/overpass.js';
 import { cacheSetSafe } from '../cache/redis.js';
+import { WATER_REDIS_TTL_SEC } from '../config.js';
 import { logger } from '../lib/logger.js';
 
 const log = logger.child({ module: 'cron-warm' });
-import { fetchSites } from '../adapters/overpass.js';
-import { fetchWaterFacilities } from '../adapters/overpass-water.js';
-import { WATER_REDIS_TTL_SEC } from '../config.js';
 
 /** Hard Redis TTL for sites (3 days) */
 const SITES_REDIS_TTL_SEC = 259_200;

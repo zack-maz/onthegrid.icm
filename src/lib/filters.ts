@@ -1,7 +1,8 @@
-import type { MapEntity, ConflictEventEntity } from '../../server/types';
+import { haversineKm } from '@/lib/geo';
 import type { FilterState } from '@/stores/filterStore';
 import { isConflictEventType } from '@/types/ui';
-import { haversineKm } from '@/lib/geo';
+
+import type { MapEntity, ConflictEventEntity } from '../../server/types';
 
 export const KNOTS_PER_MS = 1.94384;
 export const FEET_PER_METER = 3.28084;

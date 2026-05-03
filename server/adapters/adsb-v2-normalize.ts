@@ -1,6 +1,7 @@
-import type { FlightEntity } from '../types.js';
 import { KNOTS_TO_MS, FEET_TO_METERS, FPM_TO_MS } from '../config.js';
 import { icaoToCountry } from '../lib/icaoCountry.js';
+
+import type { FlightEntity } from '../types.js';
 
 export interface AdsbAircraft {
   hex: string;

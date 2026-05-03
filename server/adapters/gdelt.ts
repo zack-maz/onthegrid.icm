@@ -1,9 +1,7 @@
 import AdmZip from 'adm-zip';
-import type { ConflictEventEntity, ConflictEventType } from '../types.js';
-import { logger } from '../lib/logger.js';
 
-const log = logger.child({ module: 'gdelt' });
-import { isGeoValid, detectCentroid } from '../lib/geoValidation.js';
+import { getConfig } from '../config.js';
+import { buildAuditRecord } from '../lib/eventAudit.js';
 import {
   computeEventConfidence,
   applyGoldsteinSanity,
@@ -11,10 +9,14 @@ import {
   checkBellingcatCorroboration,
   getCameoSpecificity,
 } from '../lib/eventScoring.js';
-import type { BellingcatArticle } from '../lib/eventScoring.js';
-import { getConfig } from '../config.js';
-import { buildAuditRecord } from '../lib/eventAudit.js';
+import { isGeoValid, detectCentroid } from '../lib/geoValidation.js';
+import { logger } from '../lib/logger.js';
+
 import type { AuditRecord, PhaseAChecks, ConfidenceSubScores } from '../lib/eventAudit.js';
+import type { BellingcatArticle } from '../lib/eventScoring.js';
+import type { ConflictEventEntity, ConflictEventType } from '../types.js';
+
+const log = logger.child({ module: 'gdelt' });
 
 // GDELT v2 lastupdate.txt endpoint (HTTP, NOT HTTPS -- TLS cert issues)
 const GDELT_LASTUPDATE_URL = 'http://data.gdeltproject.org/gdeltv2/lastupdate.txt';

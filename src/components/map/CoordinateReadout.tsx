@@ -1,5 +1,5 @@
-import { useMapStore } from '@/stores/mapStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
+import { useMapStore } from '@/stores/mapStore';
 
 export function CoordinateReadout() {
   const cursorLng = useMapStore((s) => s.cursorLng);

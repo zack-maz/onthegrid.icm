@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { useMarketStore } from '@/stores/marketStore';
 import type { MarketQuote, CacheResponse } from '@/types/entities';
 

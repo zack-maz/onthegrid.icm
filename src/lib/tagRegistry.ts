@@ -1,3 +1,5 @@
+import { GEO_NAMES } from './geoNames';
+
 import type {
   FlightEntity,
   ShipEntity,
@@ -5,7 +7,6 @@ import type {
   SiteEntity,
   WaterFacility,
 } from '../../server/types';
-import { GEO_NAMES } from './geoNames';
 
 // --- Types ---
 

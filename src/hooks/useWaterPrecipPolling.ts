@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { useWaterStore } from '@/stores/waterStore';
 import type { PrecipitationData } from '@/stores/waterStore';
 

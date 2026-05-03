@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { useFlightStore } from '@/stores/flightStore';
 import type { FlightEntity, CacheResponse } from '@/types/entities';
 

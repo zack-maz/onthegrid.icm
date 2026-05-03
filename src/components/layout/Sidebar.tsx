@@ -1,17 +1,18 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { useUIStore } from '@/stores/uiStore';
-import { useNotificationStore } from '@/stores/notificationStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { useSearchStore } from '@/stores/searchStore';
-import { useLayerStore } from '@/stores/layerStore';
-import { getCurrentPanelView } from '@/lib/panelLabel';
-import { SidebarSection } from '@/components/layout/SidebarSection';
-import { useCounterData } from '@/components/counters/useCounterData';
+
 import { CounterRow } from '@/components/counters/CounterRow';
-import { LayerTogglesContent } from '@/components/layout/LayerTogglesSlot';
-import { FilterPanelContent } from '@/components/layout/FilterPanelSlot';
-import { FilterChip } from '@/components/ui/FilterChip';
+import { useCounterData } from '@/components/counters/useCounterData';
 import type { CounterEntity } from '@/components/counters/useCounterData';
+import { FilterPanelContent } from '@/components/layout/FilterPanelSlot';
+import { LayerTogglesContent } from '@/components/layout/LayerTogglesSlot';
+import { SidebarSection } from '@/components/layout/SidebarSection';
+import { FilterChip } from '@/components/ui/FilterChip';
+import { getCurrentPanelView } from '@/lib/panelLabel';
+import { useFilterStore } from '@/stores/filterStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useSearchStore } from '@/stores/searchStore';
+import { useUIStore } from '@/stores/uiStore';
 import type { SidebarSection as SidebarSectionType } from '@/types/ui';
 
 /* SVG icons for the icon strip */

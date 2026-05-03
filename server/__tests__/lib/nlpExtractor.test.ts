@@ -1,8 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { extractTriple } from '../../lib/nlpExtractor.js';
-import type { NewsArticle } from '../../types.js';
+
 import { loadConfig } from '../../config.js';
+import { extractTriple } from '../../lib/nlpExtractor.js';
+
+import type { NewsArticle } from '../../types.js';
 
 describe('nlpExtractor', () => {
   describe('extractTriple', () => {

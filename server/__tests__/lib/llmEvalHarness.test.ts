@@ -47,15 +47,15 @@ vi.mock('../../adapters/llm-provider.js', () => ({
 }));
 
 // Imports AFTER mocks are registered.
-import { resolveLocation } from '../../lib/llmResolver.js';
-import { updateProgress } from '../../lib/llmProgress.js';
-import { cacheSetSafe } from '../../cache/redis.js';
 import { callLLM } from '../../adapters/llm-provider.js';
+import { cacheSetSafe } from '../../cache/redis.js';
 import {
   loadGroundTruth,
   runEval,
   __resetGroundTruthCacheForTests,
 } from '../../lib/llmEvalHarness.js';
+import { updateProgress } from '../../lib/llmProgress.js';
+import { resolveLocation } from '../../lib/llmResolver.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures.

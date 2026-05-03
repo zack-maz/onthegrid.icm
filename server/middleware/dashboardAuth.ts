@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import type { Request, Response, NextFunction } from 'express';
 
 /**
@@ -25,7 +27,6 @@ import type { Request, Response, NextFunction } from 'express';
  * Buffers to defang trivial timing-side-channel inference of the secret.
  * Lengths must match before calling `timingSafeEqual` per Node.js contract.
  */
-import { timingSafeEqual } from 'node:crypto';
 
 export function dashboardAuth(req: Request, res: Response, next: NextFunction): void {
   // Dev / test bypass — preserves the existing local workflow where DevApiStatus

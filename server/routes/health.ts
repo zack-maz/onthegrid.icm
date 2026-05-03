@@ -1,19 +1,20 @@
 import { Router } from 'express';
+
 import { cacheGetSafe } from '../cache/redis.js';
-import { logger } from '../lib/logger.js';
-import { llmProgress } from '../lib/llmProgress.js';
-import {
-  SOURCE_KEYS,
-  FRESHNESS_THRESHOLDS_MS,
-  TIER_BY_ENDPOINT,
-  deriveStatus,
-} from '../lib/healthSources.js';
 import {
   healthResponseSchema,
   type EndpointHealth,
   type HealthResponse,
   type HealthStatus,
 } from '../lib/healthSchema.js';
+import {
+  SOURCE_KEYS,
+  FRESHNESS_THRESHOLDS_MS,
+  TIER_BY_ENDPOINT,
+  deriveStatus,
+} from '../lib/healthSources.js';
+import { llmProgress } from '../lib/llmProgress.js';
+import { logger } from '../lib/logger.js';
 
 const log = logger.child({ module: 'health' });
 

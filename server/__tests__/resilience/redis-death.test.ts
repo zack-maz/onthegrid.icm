@@ -18,10 +18,11 @@
  *     respond) under simulated Redis death.
  *   - For each route assert: `status` is in {200, 503} and never 500.
  */
+import request from 'supertest';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import type { Server } from 'http';
 import type { AddressInfo } from 'node:net';
-import request from 'supertest';
 
 // ---------- Mocks (hoisted) ----------
 

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+
 import type { ConflictEventEntity, CacheResponse } from '@/types/entities';
 
 export type ConnectionStatus = 'connected' | 'stale' | 'error' | 'loading';

@@ -32,7 +32,9 @@
 import { writeFileSync, renameSync, mkdirSync, unlinkSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { fetchWaterFacilities } from '../server/adapters/overpass-water.js';
+
 import type { WaterFacility } from '../server/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

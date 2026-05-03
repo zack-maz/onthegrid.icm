@@ -1,6 +1,7 @@
 import { config } from '../config.js';
-import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 import { logger } from '../lib/logger.js';
+
+import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 
 const log = logger.child({ module: 'acled' });
 

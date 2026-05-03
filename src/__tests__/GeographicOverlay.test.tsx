@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import { GeographicOverlay } from '@/components/map/layers/GeographicOverlay';
+import { describe, it, expect, beforeEach } from 'vitest';
+
 import { GEO_FEATURES } from '@/components/map/layers/geoFeatures';
+import { GeographicOverlay } from '@/components/map/layers/GeographicOverlay';
 import { LEGEND_REGISTRY } from '@/components/map/MapLegend';
 import { useLayerStore } from '@/stores/layerStore';
 

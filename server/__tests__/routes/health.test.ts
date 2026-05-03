@@ -11,8 +11,9 @@
  * `/api/health` (new). Body is identical except for `generatedAt`.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Router } from 'express';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { healthResponseSchema } from '../../lib/healthSchema.js';
 
 const mockPing = vi.fn<() => Promise<string>>();

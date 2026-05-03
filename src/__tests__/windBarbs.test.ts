@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { generateWindBarbSVG, getWindBarbIcon } from '@/components/map/layers/windBarbs';
 
 describe('generateWindBarbSVG', () => {

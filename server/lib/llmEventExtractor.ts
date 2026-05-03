@@ -17,7 +17,8 @@
  * preserved per D-21 (Phase 27.4.3) for the same purpose.
  */
 
-import type { EventGroup } from './eventGrouping.js';
+import { getPipelineVersion } from '../config.js';
+
 import * as v1 from './llmEventExtractor.v1.js';
 import {
   processEventGroupsV2,
@@ -30,8 +31,9 @@ import {
   geocodeEnrichedEventsV3,
   type GeocodedEnrichedEventV3,
 } from './llmEventExtractor.v3.js';
+
+import type { EventGroup } from './eventGrouping.js';
 import type { EnrichedEventV2, EnrichedEventV3 } from './llmSchema.js';
-import { getPipelineVersion } from '../config.js';
 
 // Re-export v1 types for pre-27.4 consumers that import types directly.
 export type { EnrichedEvent } from './llmEventExtractor.v1.js';

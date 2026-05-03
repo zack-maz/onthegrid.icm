@@ -1,12 +1,13 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+
 import { DetailPanelSlot } from '@/components/layout/DetailPanelSlot';
-import { useUIStore } from '@/stores/uiStore';
+import { useEventStore } from '@/stores/eventStore';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import type { PanelView } from '@/types/ui';
+import { useUIStore } from '@/stores/uiStore';
 import type { FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/entities';
+import type { PanelView } from '@/types/ui';
 
 const mockFlight: FlightEntity = {
   id: 'flight-abc',

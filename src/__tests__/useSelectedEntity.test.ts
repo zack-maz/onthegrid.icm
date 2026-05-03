@@ -1,9 +1,10 @@
 import { renderHook, act } from '@testing-library/react';
-import { useUIStore } from '@/stores/uiStore';
+
+import { useSelectedEntity } from '@/hooks/useSelectedEntity';
+import { useEventStore } from '@/stores/eventStore';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useSelectedEntity } from '@/hooks/useSelectedEntity';
+import { useUIStore } from '@/stores/uiStore';
 import type { FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/entities';
 
 const mockFlight: FlightEntity = {

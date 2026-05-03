@@ -12,6 +12,7 @@
  * the single deterministic import path; routes is a consumer, not a provider.
  */
 import { redis } from '../cache/redis.js';
+
 import { logger } from './logger.js';
 
 const PIPELINE_AUDIT_KEY = 'events:llm-pipeline-audit';

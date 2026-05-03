@@ -1,7 +1,9 @@
+import { logger } from '../lib/logger.js';
+
+import { AppError } from './errorHandler.js';
+
 import type { Response } from 'express';
 import type { ZodTypeAny, z } from 'zod';
-import { logger } from '../lib/logger.js';
-import { AppError } from './errorHandler.js';
 
 const log = logger.child({ module: 'validateResponse' });
 

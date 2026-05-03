@@ -1,16 +1,19 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
-import { logger } from '../lib/logger.js';
 
-const log = logger.child({ module: 'markets' });
 import { fetchMarkets } from '../adapters/yahoo-finance.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { MARKETS_CACHE_TTL, MARKETS_REDIS_TTL_SEC } from '../config.js';
-import { validateQuery } from '../middleware/validate.js';
+import { logger } from '../lib/logger.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { validateQuery } from '../middleware/validate.js';
+
 import type { MarketQuote } from '../types.js';
 
 /** Zod schema for /api/markets query params */
+
+const log = logger.child({ module: 'markets' });
+
 const marketsQuerySchema = z.object({
   range: z.enum(['1d', '5d', '1mo', 'ytd']).default('1d'),
 });

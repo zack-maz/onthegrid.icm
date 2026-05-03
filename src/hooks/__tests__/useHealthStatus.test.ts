@@ -10,8 +10,9 @@
  *   - Test 6: cleanup on unmount removes the visibility listener
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, cleanup, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import type { HealthResponse } from '@/lib/healthClient';
 
 /**

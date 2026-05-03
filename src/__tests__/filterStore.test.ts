@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { useFilterStore } from '@/stores/filterStore';
 
 describe('filterStore', () => {

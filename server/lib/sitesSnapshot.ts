@@ -1,9 +1,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { SiteEntity } from '../types.js';
-import type { SiteFilterStats } from '../adapters/overpass.js';
+
 import { logger } from './logger.js';
+
+import type { SiteFilterStats } from '../adapters/overpass.js';
+import type { SiteEntity } from '../types.js';
 
 const log = logger.child({ module: 'sites-snapshot' });
 

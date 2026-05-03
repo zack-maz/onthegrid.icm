@@ -9,8 +9,9 @@
  *     through to consumers.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import {
   HealthStatusProvider,
   useHealthStatusContext,

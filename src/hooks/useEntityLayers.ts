@@ -1,14 +1,6 @@
-import { useMemo, useEffect, useRef, useState } from 'react';
 import { IconLayer, ScatterplotLayer } from '@deck.gl/layers';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { useSearchStore } from '@/stores/searchStore';
-import { useFilteredEntities } from '@/hooks/useFilteredEntities';
-import { useSiteStore } from '@/stores/siteStore';
-import { useEventStore } from '@/stores/eventStore';
-import { computeAttackStatus } from '@/lib/attackStatus';
-import { haversineKm } from '@/lib/geo';
-import { classifySeverity } from '@/lib/severity';
+import { useMemo, useEffect, useRef, useState } from 'react';
+
 import {
   ENTITY_COLORS,
   ICON_SIZE,
@@ -16,7 +8,15 @@ import {
   altitudeToOpacity,
 } from '@/components/map/layers/constants';
 import { getIconAtlasForLayer, ICON_MAPPING } from '@/components/map/layers/icons';
-import { CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
+import { useFilteredEntities } from '@/hooks/useFilteredEntities';
+import { computeAttackStatus } from '@/lib/attackStatus';
+import { haversineKm } from '@/lib/geo';
+import { classifySeverity } from '@/lib/severity';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useSearchStore } from '@/stores/searchStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
 import type {
   MapEntity,
   FlightEntity,
@@ -24,6 +24,7 @@ import type {
   ConflictEventEntity,
   SiteEntity,
 } from '@/types/entities';
+import { CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
 
 const DIM_ALPHA = 40;
 const SEARCH_DIM_ALPHA = 15;

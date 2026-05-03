@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMap } from '@vis.gl/react-maplibre';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { useProximityAlerts } from '@/hooks/useProximityAlerts';
+import type { ProximityAlert } from '@/hooks/useProximityAlerts';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useUIStore } from '@/stores/uiStore';
-import { getCurrentPanelView } from '@/lib/panelLabel';
-import type { ProximityAlert } from '@/hooks/useProximityAlerts';
 
 function AlertIcon({
   alert,

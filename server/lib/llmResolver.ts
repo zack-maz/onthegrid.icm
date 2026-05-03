@@ -11,19 +11,21 @@
  */
 
 import { z } from 'zod';
+
+import { callLLM } from '../adapters/llm-provider.js';
 import { forwardGeocodeConstrained } from '../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
-import { callLLM } from '../adapters/llm-provider.js';
-import { loadSitesSnapshot } from './sitesSnapshot.js';
-import { loadWaterSnapshot } from './waterSnapshot.js';
-import { logger } from './logger.js';
-import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
+
 import {
   derivePrecision,
   type GeocodeProvenance,
   type LocationHierarchyV2,
   type Precision,
 } from './llmSchema.js';
+import { logger } from './logger.js';
+import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
+import { loadSitesSnapshot } from './sitesSnapshot.js';
+import { loadWaterSnapshot } from './waterSnapshot.js';
 
 const log = logger.child({ module: 'llm-resolver' });
 

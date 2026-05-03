@@ -1,11 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { getWaterFacilityDisplayName } from '../waterLabel';
+
 import {
   FACILITY_TYPE_LABELS,
   type WaterFacility,
   type WaterStressIndicators,
 } from '../../../server/types';
+import { getWaterFacilityDisplayName } from '../waterLabel';
 
 const stubStress: WaterStressIndicators = {
   bws_raw: 0,

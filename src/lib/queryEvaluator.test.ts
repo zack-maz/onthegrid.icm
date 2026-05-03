@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
+
 import { evaluateQuery, evaluateTag, type EvaluationContext } from './queryEvaluator';
 import { parse } from './queryParser';
 

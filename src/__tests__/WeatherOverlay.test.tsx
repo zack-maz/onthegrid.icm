@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { renderHook } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+
 import { useWeatherLayers, WeatherTooltip } from '@/components/map/layers/WeatherOverlay';
-import { useWeatherStore } from '@/stores/weatherStore';
-import { useLayerStore } from '@/stores/layerStore';
 import { LEGEND_REGISTRY } from '@/components/map/MapLegend';
+import { useLayerStore } from '@/stores/layerStore';
+import { useWeatherStore } from '@/stores/weatherStore';
 import type { WeatherGridPoint } from '@/stores/weatherStore';
 
 const mockGrid: WeatherGridPoint[] = [

@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import type { Server } from 'node:http';
+
 import type { FlightEntity, CacheResponse } from '../types.js';
+import type { Server } from 'node:http';
 
 // In-memory store backing the Redis mock
 interface CacheEntry<T> {

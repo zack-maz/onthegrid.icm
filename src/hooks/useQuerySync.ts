@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { useSearchStore } from '@/stores/searchStore';
+
+import { findGeoName, GEO_NAMES } from '@/lib/geoNames';
+import { parseTemporalValue, parseRangeValue } from '@/lib/queryEvaluator';
+import { type QueryNode } from '@/lib/queryParser';
 import { useFilterStore } from '@/stores/filterStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useSearchStore } from '@/stores/searchStore';
 import { useSiteStore } from '@/stores/siteStore';
 import { useUIStore } from '@/stores/uiStore';
-import { type QueryNode } from '@/lib/queryParser';
-import { parseTemporalValue, parseRangeValue } from '@/lib/queryEvaluator';
-import { findGeoName, GEO_NAMES } from '@/lib/geoNames';
 
 // ─── Sync Maps ───────────────────────────────────────────────
 

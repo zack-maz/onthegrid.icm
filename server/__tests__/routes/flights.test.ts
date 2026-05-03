@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Server } from 'http';
+
 import type { FlightEntity } from '../../types.js';
 import type { CacheResponse } from '../../types.js';
+import type { Server } from 'http';
 
 const mockOpenSkyFlights: FlightEntity[] = [
   {

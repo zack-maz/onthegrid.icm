@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { useNotificationStore } from '@/stores/notificationStore';
+
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 export function NotificationBell() {
   const unreadCount = useNotificationStore((s) => s.unreadCount);

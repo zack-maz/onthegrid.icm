@@ -15,15 +15,17 @@
  *      bug.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
+
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import * as ProviderModule from '@/components/providers/HealthStatusProvider';
 import { DevApiStatus } from '@/components/ui/DevApiStatus';
 import type { HealthResponse, EndpointHealth } from '@/lib/healthClient';
+import { useFilterStore } from '@/stores/filterStore';
+import { useUIStore } from '@/stores/uiStore';
 
 function makeEndpoint(overrides: Partial<EndpointHealth>): EndpointHealth {
   return {

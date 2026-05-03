@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { useEventStore } from '@/stores/eventStore';
-import { useUIStore } from '@/stores/uiStore';
-import { useNotificationStore } from '@/stores/notificationStore';
-import { getCurrentPanelView } from '@/lib/panelLabel';
-import { useGeoContext } from '@/hooks/useGeoContext';
+
 import { computeThreatWeight } from '@/components/map/layers/ThreatHeatmapOverlay';
+import { useGeoContext } from '@/hooks/useGeoContext';
+import { getCurrentPanelView } from '@/lib/panelLabel';
+import { useEventStore } from '@/stores/eventStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useUIStore } from '@/stores/uiStore';
 import { EVENT_TYPE_LABELS } from '@/types/ui';
 import type { ThreatCluster } from '@/types/ui';
 

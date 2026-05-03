@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+
 import { EntityListItem } from './EntityListItem';
+
 import type { CounterEntity } from './useCounterData';
 
 interface CounterRowProps {

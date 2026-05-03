@@ -1,6 +1,6 @@
-import { useUIStore } from '@/stores/uiStore';
-import { useLayerStore, type VisualizationLayerId } from '@/stores/layerStore';
 import { OverlayPanel } from '@/components/ui/OverlayPanel';
+import { useLayerStore, type VisualizationLayerId } from '@/stores/layerStore';
+import { useUIStore } from '@/stores/uiStore';
 
 const LAYER_CONFIGS: {
   id: VisualizationLayerId;

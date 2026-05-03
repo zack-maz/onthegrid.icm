@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Server } from 'http';
+
 import type { FlightEntity, ConflictEventEntity } from '../types.js';
+import type { Server } from 'http';
 
 // Mock config module with test credentials (spread actual to preserve constants)
 vi.mock('../config.js', async (importOriginal) => {

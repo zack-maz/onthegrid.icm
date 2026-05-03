@@ -1,19 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
-import { logger } from '../lib/logger.js';
 
-const log = logger.child({ module: 'flights' });
-import { fetchFlights as fetchOpenSky } from '../adapters/opensky.js';
 import { fetchFlights as fetchAdsbLol } from '../adapters/adsb-lol.js';
+import { fetchFlights as fetchOpenSky } from '../adapters/opensky.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { IRAN_BBOX, CACHE_TTL } from '../config.js';
+import { logger } from '../lib/logger.js';
 import { validateQuery } from '../middleware/validate.js';
 import { sendValidated } from '../middleware/validateResponse.js';
 import { flightsResponseSchema } from '../schemas/cacheResponse.js';
 import { RateLimitError } from '../types.js';
+
 import type { FlightEntity, FlightSource } from '../types.js';
 
 /** Zod schema for /api/flights query params */
+
+const log = logger.child({ module: 'flights' });
+
 const flightsQuerySchema = z.object({
   source: z.enum(['opensky', 'adsblol']).default('adsblol'),
 });

@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
-import type { FlightEntity, SiteEntity } from '@/types/entities';
-import { useFlightStore } from '@/stores/flightStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { useLayerStore } from '@/stores/layerStore';
-import { useFilterStore } from '@/stores/filterStore';
+
 import { haversineKm } from '@/lib/geo';
 import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useWaterStore } from '@/stores/waterStore';
+import type { FlightEntity, SiteEntity } from '@/types/entities';
+
 import type { WaterFacility } from '../../server/types';
 
 // Phase 28.1 W5 D-12 — env-tunable proximity-alert radius. Default preserves

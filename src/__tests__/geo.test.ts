@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { haversineKm } from '@/lib/geo';
 
 describe('haversineKm', () => {

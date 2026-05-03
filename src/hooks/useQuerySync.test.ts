@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock localStorage before importing stores
 const localStorageMock = {
@@ -9,7 +9,6 @@ const localStorageMock = {
 };
 vi.stubGlobal('localStorage', localStorageMock);
 
-import { parse } from '@/lib/queryParser';
 import {
   extractTags,
   deriveFiltersFromAST,
@@ -19,10 +18,11 @@ import {
   useQuerySync,
   type SyncableState,
 } from '@/hooks/useQuerySync';
-import { useSearchStore } from '@/stores/searchStore';
-import { useNotificationStore } from '@/stores/notificationStore';
-import { useFilterStore } from '@/stores/filterStore';
+import { parse } from '@/lib/queryParser';
 import { serialize } from '@/lib/querySerializer';
+import { useFilterStore } from '@/stores/filterStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useSearchStore } from '@/stores/searchStore';
 
 // Helper: default syncable state with everything null/empty
 const DEFAULT_STATE: SyncableState = {

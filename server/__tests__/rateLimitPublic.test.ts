@@ -12,6 +12,7 @@
  * reach the per-endpoint limiter anyway).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import type { Request, Response, NextFunction } from 'express';
 
 // Track arguments passed into Ratelimit.slidingWindow so we can assert the

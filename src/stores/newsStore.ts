@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+
 import type { NewsCluster, CacheResponse } from '@/types/entities';
 
 export type ConnectionStatus = 'connected' | 'stale' | 'error' | 'loading';

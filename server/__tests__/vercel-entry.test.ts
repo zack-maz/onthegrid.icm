@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+
 import type { Server } from 'node:http';
 
 // Mock config before importing the entry point (spread actual to preserve constants)

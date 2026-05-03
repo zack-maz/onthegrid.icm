@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { useWeatherStore } from '@/stores/weatherStore';
 import type { WeatherGridPoint } from '@/stores/weatherStore';
 

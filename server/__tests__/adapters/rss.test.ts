@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import type { NewsArticle } from '../../types.js';
 
 const RSS_FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>

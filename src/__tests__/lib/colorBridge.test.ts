@@ -16,10 +16,11 @@
  * runtime drift" sentinel.
  */
 import { describe, it, expect } from 'vitest';
-import * as bridge from '@/lib/colorBridge';
+
 import { ENTITY_COLORS, ENTITY_DOT_COLORS } from '@/components/map/layers/constants';
-import { FACTION_COLORS } from '@/lib/factions';
+import * as bridge from '@/lib/colorBridge';
 import { ETHNIC_GROUPS } from '@/lib/ethnicGroups';
+import { FACTION_COLORS } from '@/lib/factions';
 
 describe('colorBridge', () => {
   describe('RGBA tuple shape', () => {

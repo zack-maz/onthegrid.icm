@@ -1,10 +1,11 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
 import { ThreatClusterDetail } from '@/components/detail/ThreatClusterDetail';
 import { useEventStore } from '@/stores/eventStore';
 import { useUIStore } from '@/stores/uiStore';
-import type { ThreatCluster } from '@/types/ui';
 import type { ConflictEventEntity } from '@/types/entities';
+import type { ThreatCluster } from '@/types/ui';
 
 // Mock useGeoContext
 const mockGeoContext = vi.fn();

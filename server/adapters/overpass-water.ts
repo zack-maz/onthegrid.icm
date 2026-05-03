@@ -1,15 +1,15 @@
+import riversData from '../../src/data/rivers.json' with { type: 'json' };
+import { assignBasinStress } from '../lib/basinLookup.js';
+import { logger } from '../lib/logger.js';
 import {
   FACILITY_TYPE_LABELS,
   type WaterFacility,
   type WaterFacilityType,
   type WaterStressIndicators,
 } from '../types.js';
-import { assignBasinStress } from '../lib/basinLookup.js';
-import { logger } from '../lib/logger.js';
 // Phase 27.4.4 Plan 02 deploy fix — match basinLookup.ts: switch from
 // runtime readFileSync to build-time JSON import. The bundle includes the
 // rivers polygons inline; no fs reads at function cold-start.
-import riversData from '../../src/data/rivers.json' with { type: 'json' };
 
 const log = logger.child({ module: 'overpass-water' });
 

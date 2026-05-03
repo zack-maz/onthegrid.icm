@@ -143,11 +143,12 @@ vi.mock('../../lib/sourceTiers.js', () => ({
 // Imports — must come AFTER vi.mock so the module loader picks up the stubs.
 // ---------------------------------------------------------------------------
 
-import { computeGroupLineageHash, GROUP_LINEAGE_KEY_PREFIX } from '../../lib/llmLineage.js';
 import { callLLM as freeClaudeCallLLM } from '../../lib/freeClaudeRouter.js';
-import { withBatchWatchdog } from '../../lib/llmExtractorWatchdog.js';
 import { processEventGroupsV3 } from '../../lib/llmEventExtractor.v3.js';
+import { withBatchWatchdog } from '../../lib/llmExtractorWatchdog.js';
+import { computeGroupLineageHash, GROUP_LINEAGE_KEY_PREFIX } from '../../lib/llmLineage.js';
 import { llmProgress } from '../../lib/llmProgress.js';
+
 import type { EventGroup } from '../../lib/eventGrouping.js';
 import type { ConflictEventEntity } from '../../types.js';
 

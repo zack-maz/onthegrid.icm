@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
+
 import {
   NEWS_CLUSTER_WINDOW_MS,
   NEWS_JACCARD_THRESHOLD,
   NEWS_MIN_TOKENS_FOR_FUZZY,
 } from '../config.js';
+
 import type { NewsArticle, NewsCluster } from '../types.js';
 
 /**

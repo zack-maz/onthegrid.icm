@@ -1,5 +1,6 @@
-import type { MarketQuote } from '../types.js';
 import { logger } from '../lib/logger.js';
+
+import type { MarketQuote } from '../types.js';
 
 const log = logger.child({ module: 'yahoo-finance' });
 

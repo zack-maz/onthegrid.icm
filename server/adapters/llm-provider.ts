@@ -1,9 +1,10 @@
 import OpenAI from 'openai';
+
 import { env, isPipelineV2 } from '../config.js';
-import { logger } from '../lib/logger.js';
 import { record, isAvailable, getBreakerState, type Provider } from '../lib/llmCircuitBreaker.js';
-import { incrDailyTokens, getDailyTokens, budgetState } from '../lib/llmTokenBudget.js';
 import { updateProgress, llmProgress } from '../lib/llmProgress.js';
+import { incrDailyTokens, getDailyTokens, budgetState } from '../lib/llmTokenBudget.js';
+import { logger } from '../lib/logger.js';
 
 const log = logger.child({ module: 'llm' });
 // Cerebras: gpt-oss-120b is gated to higher tiers; qwen-3-235b-a22b is open on

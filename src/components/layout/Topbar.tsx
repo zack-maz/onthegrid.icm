@@ -1,24 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { StatusDropdown } from '@/components/layout/StatusDropdown';
+
 import { NotificationBell } from '@/components/layout/NotificationBell';
-import { SearchModal } from '@/components/search/SearchModal';
-import { useSearchStore } from '@/stores/searchStore';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { useNotificationStore } from '@/stores/notificationStore';
-import { useLayerStore } from '@/stores/layerStore';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { useNewsStore } from '@/stores/newsStore';
-import { useMarketStore } from '@/stores/marketStore';
-import { useWeatherStore } from '@/stores/weatherStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { effectiveStatus } from '@/lib/apiStatus';
+import { StatusDropdown } from '@/components/layout/StatusDropdown';
 import { INITIAL_VIEW_STATE } from '@/components/map/constants';
+import { SearchModal } from '@/components/search/SearchModal';
+import { effectiveStatus } from '@/lib/apiStatus';
 import { hasDashboardKey, shouldRenderDashboard, dashboardAuthHeaders } from '@/lib/dashboardAuth';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useMarketStore } from '@/stores/marketStore';
+import { useNewsStore } from '@/stores/newsStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useSearchStore } from '@/stores/searchStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useWeatherStore } from '@/stores/weatherStore';
 
 function ResetButton() {
   const handleReset = useCallback(() => {

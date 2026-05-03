@@ -5,8 +5,10 @@
  */
 
 import React from 'react';
-import { stressToRGBA, healthToScore, scoreToLabel } from '@/lib/waterStress';
+
 import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+import { stressToRGBA, healthToScore, scoreToLabel } from '@/lib/waterStress';
+
 import type { WaterFacility, WaterFacilityType } from '../../../../server/types';
 
 /** Human-readable labels for water facility types */

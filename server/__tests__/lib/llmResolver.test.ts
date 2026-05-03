@@ -31,11 +31,9 @@ vi.mock('../../adapters/llm-provider.js', () => ({
   callLLM: vi.fn().mockResolvedValue(null),
 }));
 
-import { loadSitesSnapshot } from '../../lib/sitesSnapshot.js';
-import { loadWaterSnapshot } from '../../lib/waterSnapshot.js';
+import { callLLM } from '../../adapters/llm-provider.js';
 import { forwardGeocodeConstrained } from '../../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../../cache/redis.js';
-import { callLLM } from '../../adapters/llm-provider.js';
 import {
   resolveLocation,
   fuzzyNameMatch,
@@ -45,6 +43,9 @@ import {
   __resetThrottleForTests,
   type ResolveContext,
 } from '../../lib/llmResolver.js';
+import { loadSitesSnapshot } from '../../lib/sitesSnapshot.js';
+import { loadWaterSnapshot } from '../../lib/waterSnapshot.js';
+
 import type { LocationHierarchyV2 } from '../../lib/llmSchema.js';
 
 function hierarchy(partial: Partial<LocationHierarchyV2> = {}): LocationHierarchyV2 {

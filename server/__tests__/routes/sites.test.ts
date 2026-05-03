@@ -12,8 +12,9 @@
  *   - Upstream error + no cache → 502
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Server } from 'http';
+
 import type { SiteEntity, CacheResponse } from '../../types.js';
+import type { Server } from 'http';
 
 // In-memory store backing the Redis mock
 interface CacheEntry<T> {

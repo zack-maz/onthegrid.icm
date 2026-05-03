@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
 import { Source, Layer } from '@vis.gl/react-maplibre';
-import { useWeatherStore, type WeatherGridPoint } from '@/stores/weatherStore';
+import { useMemo } from 'react';
+
 import { useLayerStore } from '@/stores/layerStore';
+import { useWeatherStore, type WeatherGridPoint } from '@/stores/weatherStore';
 
 // Data grid bounds (from server/adapters/open-meteo.ts)
 const DATA_LAT_MIN = 15;

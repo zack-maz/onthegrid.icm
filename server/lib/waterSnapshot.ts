@@ -1,9 +1,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { WaterFacility } from '../types.js';
-import type { WaterFilterStats } from '../adapters/overpass-water.js';
+
 import { logger } from './logger.js';
+
+import type { WaterFilterStats } from '../adapters/overpass-water.js';
+import type { WaterFacility } from '../types.js';
 
 const log = logger.child({ module: 'water-snapshot' });
 

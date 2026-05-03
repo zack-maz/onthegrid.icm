@@ -3,14 +3,16 @@
  * Covers MAP-01a (renders inside container), MAP-01d (hides road labels on load),
  * and tooltip handling (search filter suppression, no entity toggle gating).
  */
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
-import { BaseMap } from '@/components/map/BaseMap';
-import { __capturedOnLoad } from '@vis.gl/react-maplibre';
 import { __lastOverlayProps } from '@deck.gl/mapbox';
+import { render, screen, act } from '@testing-library/react';
+import { __capturedOnLoad } from '@vis.gl/react-maplibre';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+import { BaseMap } from '@/components/map/BaseMap';
 import { useUIStore } from '@/stores/uiStore';
-import type { PickingInfo } from '@deck.gl/core';
 import type { ConflictEventEntity, FlightEntity } from '@/types/entities';
+
+import type { PickingInfo } from '@deck.gl/core';
 
 function createMockMap() {
   return {

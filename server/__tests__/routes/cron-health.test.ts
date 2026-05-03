@@ -8,8 +8,8 @@
  *   3. runEval throws → response still 200 with evalScore=null + evalError populated.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Router } from 'express';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockEnv } = vi.hoisted(() => ({ mockEnv: { CRON_SECRET: '' } }));
 vi.mock('../../config.js', () => ({ env: mockEnv }));

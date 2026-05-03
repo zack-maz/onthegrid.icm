@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import type { WaterFacility } from '../../../server/types';
-import { stressToRGBA, bwsScoreToLabel, healthToScore, scoreToLabel } from '@/lib/waterStress';
-import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+
+import { useSiteImage } from '@/hooks/useSiteImage';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import { WATER_ATTACK_EVENT_TYPES } from '@/lib/waterAttackEvents';
+import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+import { stressToRGBA, bwsScoreToLabel, healthToScore, scoreToLabel } from '@/lib/waterStress';
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useUIStore } from '@/stores/uiStore';
-import { getCurrentPanelView } from '@/lib/panelLabel';
-import { useSiteImage } from '@/hooks/useSiteImage';
-import { DetailValue } from './DetailValue';
-import { EVENT_TYPE_LABELS } from '@/types/ui';
 import type { ConflictEventEntity } from '@/types/entities';
+import { EVENT_TYPE_LABELS } from '@/types/ui';
+
+import { DetailValue } from './DetailValue';
+
+import type { WaterFacility } from '../../../server/types';
 
 /** Human-readable labels for water facility types */
 const WATER_TYPE_LABELS: Record<string, string> = {

@@ -1,12 +1,14 @@
 import { Router } from 'express';
+
+import { fetchWeather } from '../adapters/open-meteo.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
+import { WEATHER_CACHE_TTL, WEATHER_REDIS_TTL_SEC, WEATHER_CACHE_KEY } from '../config.js';
 import { logger } from '../lib/logger.js';
+import { AppError } from '../middleware/errorHandler.js';
+
+import type { WeatherGridPoint } from '../types.js';
 
 const log = logger.child({ module: 'weather' });
-import { fetchWeather } from '../adapters/open-meteo.js';
-import { WEATHER_CACHE_TTL, WEATHER_REDIS_TTL_SEC, WEATHER_CACHE_KEY } from '../config.js';
-import { AppError } from '../middleware/errorHandler.js';
-import type { WeatherGridPoint } from '../types.js';
 
 export const weatherRouter = Router();
 

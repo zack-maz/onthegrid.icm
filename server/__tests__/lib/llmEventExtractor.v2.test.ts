@@ -77,12 +77,8 @@ vi.mock('../../config.js', () => ({
 
 import { callLLM } from '../../adapters/llm-provider.js';
 import { cacheGetSafe, cacheSetSafe } from '../../cache/redis.js';
-import { resolveLocation } from '../../lib/llmResolver.js';
 import { extractBellingcatGeo } from '../../lib/eventScoring.js';
-import { getSourceTier } from '../../lib/sourceTiers.js';
 import { enqueueDLQ } from '../../lib/llmDLQ.js';
-import { withBatchWatchdog } from '../../lib/llmExtractorWatchdog.js';
-import { updateProgress } from '../../lib/llmProgress.js';
 import {
   processEventGroupsV2,
   geocodeEnrichedEventsV2,
@@ -90,6 +86,11 @@ import {
   BATCH_SIZE,
   SYSTEM_PROMPT_V2,
 } from '../../lib/llmEventExtractor.v2.js';
+import { withBatchWatchdog } from '../../lib/llmExtractorWatchdog.js';
+import { updateProgress } from '../../lib/llmProgress.js';
+import { resolveLocation } from '../../lib/llmResolver.js';
+import { getSourceTier } from '../../lib/sourceTiers.js';
+
 import type { EventGroup } from '../../lib/eventGrouping.js';
 import type { ConflictEventEntity } from '../../types.js';
 

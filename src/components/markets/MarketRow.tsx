@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { MarketQuote } from '@/types/entities';
-import { Sparkline } from '@/components/markets/Sparkline';
+
 import { ExpandedChart } from '@/components/markets/ExpandedChart';
+import { Sparkline } from '@/components/markets/Sparkline';
+import type { MarketQuote } from '@/types/entities';
 
 interface MarketRowProps {
   quote: MarketQuote;

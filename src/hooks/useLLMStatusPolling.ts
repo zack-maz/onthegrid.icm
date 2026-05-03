@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+
 import type { GeocodeProvenance } from '@/types/llm';
 
 // Phase 28.1 W5 D-12 — env-tunable LLM-status polling cadence. Defaults

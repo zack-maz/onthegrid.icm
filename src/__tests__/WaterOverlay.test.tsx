@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+
+import { WaterTooltip } from '@/components/map/layers/WaterOverlay';
 import { useLayerStore } from '@/stores/layerStore';
 import { useWaterStore } from '@/stores/waterStore';
-import { WaterTooltip } from '@/components/map/layers/WaterOverlay';
+
 import type { WaterFacility } from '../../server/types';
 
 const mockFacility: WaterFacility = {

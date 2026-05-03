@@ -1,8 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Server } from 'http';
-import type { NewsArticle, NewsCluster, CacheResponse } from '../../types.js';
+
 import { hashUrl } from '../../lib/newsClustering.js';
+
+import type { NewsArticle, NewsCluster, CacheResponse } from '../../types.js';
+import type { Server } from 'http';
 
 // Sample article fixtures
 const makeArticle = (overrides: Partial<NewsArticle> = {}): NewsArticle => ({

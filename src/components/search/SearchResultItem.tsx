@@ -1,8 +1,9 @@
-import type { MapEntity, SiteEntity } from '@/types/entities';
-import type { WaterFacility } from '../../../server/types';
 import { ENTITY_DOT_COLORS } from '@/components/map/layers/constants';
-import { EVENT_TYPE_LABELS } from '@/types/ui';
 import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+import type { MapEntity, SiteEntity } from '@/types/entities';
+import { EVENT_TYPE_LABELS } from '@/types/ui';
+
+import type { WaterFacility } from '../../../server/types';
 
 type SearchableEntity = MapEntity | SiteEntity | WaterFacility;
 

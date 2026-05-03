@@ -1,24 +1,25 @@
 import { useMemo } from 'react';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore, ALL_SITE_TYPES, ALL_WATER_TYPES } from '@/stores/filterStore';
-import { useEventStore } from '@/stores/eventStore';
-import { OverlayPanel } from '@/components/ui/OverlayPanel';
-import { RangeSlider } from '@/components/filter/RangeSlider';
+
 import { CountryFilter } from '@/components/filter/CountryFilter';
-import { ProximityFilter } from '@/components/filter/ProximityFilter';
 import { DateRangeFilter } from '@/components/filter/DateRangeFilter';
-import { TextSearchInput } from '@/components/filter/TextSearchInput';
-import { HeadingSlider } from '@/components/filter/HeadingSlider';
-import { SeverityToggles } from '@/components/filter/SeverityToggles';
 import { FilterButton } from '@/components/filter/FilterButton';
+import { HeadingSlider } from '@/components/filter/HeadingSlider';
+import { ProximityFilter } from '@/components/filter/ProximityFilter';
+import { RangeSlider } from '@/components/filter/RangeSlider';
+import { SeverityToggles } from '@/components/filter/SeverityToggles';
 import { SliderToggle } from '@/components/filter/SliderToggle';
+import { TextSearchInput } from '@/components/filter/TextSearchInput';
 import {
   ENTITY_DOT_COLORS,
   SITE_SUBTYPE_COLORS,
   WATER_TYPE_COLORS,
 } from '@/components/map/layers/constants';
-import { SITE_TYPE_LABELS, WATER_TYPE_LABELS } from '@/types/ui';
+import { OverlayPanel } from '@/components/ui/OverlayPanel';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore, ALL_SITE_TYPES, ALL_WATER_TYPES } from '@/stores/filterStore';
 import type { FilterKey } from '@/stores/filterStore';
+import { useUIStore } from '@/stores/uiStore';
+import { SITE_TYPE_LABELS, WATER_TYPE_LABELS } from '@/types/ui';
 
 function SectionHeader({
   label,

@@ -1,9 +1,10 @@
 import { Router } from 'express';
+
 import { redis, cacheGetSafe } from '../cache/redis.js';
-import { logger } from '../lib/logger.js';
 import { env } from '../config.js';
-import { runEval } from '../lib/llmEvalHarness.js';
 import { SOURCE_KEYS } from '../lib/healthSources.js';
+import { runEval } from '../lib/llmEvalHarness.js';
+import { logger } from '../lib/logger.js';
 
 const log = logger.child({ module: 'cron-health' });
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { useEventStore } from '@/stores/eventStore';
 import type { ConflictEventEntity, CacheResponse } from '@/types/entities';
 

@@ -1,14 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useSiteStore, type SiteFilterStats } from '@/stores/siteStore';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
+
+import { DevApiStatus } from '@/components/ui/DevApiStatus';
 import { useEventStore } from '@/stores/eventStore';
-import { useNewsStore } from '@/stores/newsStore';
+import { useFlightStore } from '@/stores/flightStore';
 import { useMarketStore } from '@/stores/marketStore';
-import { useWeatherStore } from '@/stores/weatherStore';
-import { useWaterStore } from '@/stores/waterStore';
+import { useNewsStore } from '@/stores/newsStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useSiteStore, type SiteFilterStats } from '@/stores/siteStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useWeatherStore } from '@/stores/weatherStore';
 
 // Mock useLLMStatusPolling (same pattern as devApiStatus.test.tsx)
 const mockLLMStatus = { stage: 'idle' as const, lastRun: null };
@@ -17,7 +19,6 @@ vi.mock('@/hooks/useLLMStatusPolling', () => ({
 }));
 
 // Import AFTER mocks
-import { DevApiStatus } from '@/components/ui/DevApiStatus';
 
 function makeSiteFilterStats(overrides: Partial<SiteFilterStats> = {}): SiteFilterStats {
   return {

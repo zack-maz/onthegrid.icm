@@ -1,5 +1,6 @@
-import type { ConflictEventEntity, NewsCluster } from '../../server/types';
 import { haversineKm } from './geo';
+
+import type { ConflictEventEntity, NewsCluster } from '../../server/types';
 
 /** A matched headline to display alongside a conflict event. */
 export interface MatchedHeadline {

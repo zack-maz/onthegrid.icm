@@ -10,6 +10,8 @@
  * Falls back to "No Data" if no country is within 200km.
  */
 
+import basinsData from '../../src/data/aqueduct-basins.json' with { type: 'json' };
+
 import type { WaterStressIndicators } from '../types.js';
 // Phase 27.4.4 Plan 02 deploy fix — switch from runtime readFileSync to
 // build-time import. The previous `readFileSync(resolve(__dirname,
@@ -18,7 +20,6 @@ import type { WaterStressIndicators } from '../types.js';
 // bundle. Importing the JSON inlines it into the api/vercel-entry.js
 // bundle directly (tsup + esbuild handle JSON modules natively under
 // `with { type: 'json' }`). +1.5 MB to the bundle but no runtime fs reads.
-import basinsData from '../../src/data/aqueduct-basins.json' with { type: 'json' };
 
 // Compute compositeHealth and bwsScoreToLabel inline to avoid cross-module
 // import from src/ (server should not depend on frontend lib)

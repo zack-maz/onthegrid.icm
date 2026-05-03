@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import type { EventGroup } from '../../lib/eventGrouping.js';
 import type { ConflictEventEntity } from '../../types.js';
 

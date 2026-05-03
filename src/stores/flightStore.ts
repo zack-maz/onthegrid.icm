@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+
 import type { FlightEntity, CacheResponse } from '@/types/entities';
 import type { FlightSource } from '@/types/ui';
 

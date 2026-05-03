@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { Request, Response, NextFunction } from 'express';
+
 import { dashboardAuth } from './dashboardAuth.js';
+
+import type { Request, Response, NextFunction } from 'express';
 
 function makeReq(authHeader?: string): Request {
   return { headers: authHeader ? { authorization: authHeader } : {} } as unknown as Request;

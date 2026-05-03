@@ -9,6 +9,7 @@
  */
 
 import { redis } from '../cache/redis.js';
+
 import { logger } from './logger.js';
 
 const log = logger.child({ module: 'llm-dlq' });

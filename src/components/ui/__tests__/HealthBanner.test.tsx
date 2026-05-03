@@ -13,17 +13,19 @@
  *      regression guard against the double-poll bug.
  */
 
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+
+import * as ProviderModule from '@/components/providers/HealthStatusProvider';
 import { HealthBanner } from '@/components/ui/HealthBanner';
 import type { HealthResponse, EndpointHealth } from '@/lib/healthClient';
 
 // Reach into the provider module to grab the raw context for test mocking.
 // This pattern is acceptable for a test wrapper — the production code path
 // always uses HealthStatusProvider.
-import * as ProviderModule from '@/components/providers/HealthStatusProvider';
 
 function makeEndpoint(overrides: Partial<EndpointHealth>): EndpointHealth {
   return {

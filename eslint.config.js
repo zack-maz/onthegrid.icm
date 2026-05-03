@@ -37,6 +37,14 @@ export default tseslint.config(
       'react-refresh': reactRefresh,
       import: importPlugin,
     },
+    settings: {
+      // Phase 28.1 W7 sub-6: 'import/order' uses pattern matching on `@/**`
+      // to classify @-aliased imports as the 'internal' group. The TypeScript
+      // resolver is intentionally NOT enabled — its strict resolution model
+      // generates many false positives on cross-package type-only imports
+      // and would inflate the rule's churn without measurable correctness
+      // benefit at this scope.
+    },
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
@@ -52,6 +60,13 @@ export default tseslint.config(
       ],
       // Phase 28.1 W7 sub-6: enforce a consistent import order across src/ + server/.
       // Starts at 'warn' so a future phase can flip to 'error' once 0 sustains.
+      //
+      // Groups (in order): builtin -> external -> internal (@/ alias) -> parent
+      // -> sibling -> index -> object -> type. Blank line required between
+      // groups; type-only imports placed last per project convention. Some
+      // residual warnings remain on test files where vi.mock() statements are
+      // intentionally interleaved with value imports for hoisting clarity;
+      // those carry inline disable comments.
       'import/order': [
         'warn',
         {
@@ -65,7 +80,7 @@ export default tseslint.config(
             'object',
             'type',
           ],
-          pathGroups: [{ pattern: '@/**', group: 'internal', position: 'before' }],
+          pathGroups: [{ pattern: '@/**', group: 'internal' }],
           pathGroupsExcludedImportTypes: ['builtin'],
           'newlines-between': 'always',
           alphabetize: { order: 'asc', caseInsensitive: true },

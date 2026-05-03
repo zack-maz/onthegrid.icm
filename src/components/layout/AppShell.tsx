@@ -1,26 +1,27 @@
-import { Topbar } from '@/components/layout/Topbar';
-import { Sidebar } from '@/components/layout/Sidebar';
+import { Component, type ReactNode } from 'react';
+
 import { DetailPanelSlot } from '@/components/layout/DetailPanelSlot';
 import { MarketsSlot } from '@/components/layout/MarketsSlot';
+import { Sidebar } from '@/components/layout/Sidebar';
+import { Topbar } from '@/components/layout/Topbar';
 import { BaseMap } from '@/components/map/BaseMap';
-import { useFlightPolling } from '@/hooks/useFlightPolling';
-import { useShipPolling } from '@/hooks/useShipPolling';
+import { HealthStatusProvider } from '@/components/providers/HealthStatusProvider';
+import { DashboardAuthModal } from '@/components/ui/DashboardAuthModal';
+import { DevApiStatus } from '@/components/ui/DevApiStatus';
+import { HealthBanner } from '@/components/ui/HealthBanner';
+import { useEscapeKeyHandler } from '@/hooks/useEscapeKeyHandler';
 import { useEventPolling } from '@/hooks/useEventPolling';
-import { useSiteFetch } from '@/hooks/useSiteFetch';
-import { useNewsPolling } from '@/hooks/useNewsPolling';
+import { useFlightPolling } from '@/hooks/useFlightPolling';
 import { useMarketPolling } from '@/hooks/useMarketPolling';
-import { useWeatherPolling } from '@/hooks/useWeatherPolling';
+import { useNewsPolling } from '@/hooks/useNewsPolling';
+import { useNotifications } from '@/hooks/useNotifications';
+import { useQuerySync } from '@/hooks/useQuerySync';
+import { useShipPolling } from '@/hooks/useShipPolling';
+import { useSiteFetch } from '@/hooks/useSiteFetch';
 import { useWaterFetch } from '@/hooks/useWaterFetch';
 import { useWaterPrecipPolling } from '@/hooks/useWaterPrecipPolling';
-import { useNotifications } from '@/hooks/useNotifications';
-import { useEscapeKeyHandler } from '@/hooks/useEscapeKeyHandler';
-import { Component, type ReactNode } from 'react';
-import { useQuerySync } from '@/hooks/useQuerySync';
-import { DevApiStatus } from '@/components/ui/DevApiStatus';
-import { DashboardAuthModal } from '@/components/ui/DashboardAuthModal';
+import { useWeatherPolling } from '@/hooks/useWeatherPolling';
 import { shouldRenderDashboard } from '@/lib/dashboardAuth';
-import { HealthStatusProvider } from '@/components/providers/HealthStatusProvider';
-import { HealthBanner } from '@/components/ui/HealthBanner';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };

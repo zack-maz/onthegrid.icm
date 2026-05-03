@@ -1,11 +1,13 @@
-import { useMemo } from 'react';
 import { GeoJsonLayer } from '@deck.gl/layers';
-import type { Feature, FeatureCollection } from 'geojson';
-import { useLayerStore } from '@/stores/layerStore';
-import { FACTION_COLORS, getFaction } from '@/lib/factions';
+import { useMemo } from 'react';
+
 import { LEGEND_REGISTRY } from '@/components/map/MapLegend';
 import countriesData from '@/data/countries.json';
 import disputedData from '@/data/disputed.json';
+import { FACTION_COLORS, getFaction } from '@/lib/factions';
+import { useLayerStore } from '@/stores/layerStore';
+
+import type { Feature, FeatureCollection } from 'geojson';
 
 /** Parse hex color to [r, g, b] */
 function hexToRgb(hex: string): [number, number, number] {

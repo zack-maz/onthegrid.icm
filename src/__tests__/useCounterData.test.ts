@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+
+import { useCounterData } from '@/components/counters/useCounterData';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
 import { useSiteStore } from '@/stores/siteStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { useCounterData } from '@/components/counters/useCounterData';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
 import type { ConflictEventType } from '@/types/ui';
 

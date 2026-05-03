@@ -12,8 +12,9 @@
  * but test the full route integration logic end-to-end via supertest.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Server } from 'http';
+
 import type { ConflictEventEntity, CacheResponse } from '../../types.js';
+import type { Server } from 'http';
 
 // ---------------------------------------------------------------------------
 // Fixtures

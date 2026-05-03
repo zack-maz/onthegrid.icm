@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+
 import { computeSeverityScore, classifySeverity, SOURCE_TIER_MULTIPLIER } from '../lib/severity';
+
 import type { ConflictEventEntity } from '../../server/types';
 
 /** Helper to create a ConflictEventEntity with sensible defaults */

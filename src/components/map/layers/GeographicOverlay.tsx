@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
 import { Source, Layer } from '@vis.gl/react-maplibre';
+import { useEffect } from 'react';
+
 import { useLayerStore } from '@/stores/layerStore';
-import { GEO_FEATURES } from './geoFeatures';
+
 import { setupContourProtocol, CONTOUR_TILE_URL } from './contourSetup';
+import { GEO_FEATURES } from './geoFeatures';
 
 /**
  * Color-relief elevation tinting layer.

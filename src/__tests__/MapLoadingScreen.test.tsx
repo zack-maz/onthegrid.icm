@@ -2,8 +2,9 @@
  * MapLoadingScreen component tests
  * Covers MAP-01f (loading screen fade behavior)
  */
-import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+
 import { MapLoadingScreen } from '@/components/map/MapLoadingScreen';
 
 describe('MapLoadingScreen', () => {

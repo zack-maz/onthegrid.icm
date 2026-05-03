@@ -1,4 +1,5 @@
 import { useCallback, useRef, useMemo } from 'react';
+
 import { WAR_START, STEP_MS, LOOKBACK_MS, snapToStep } from '@/lib/constants';
 import type { Granularity } from '@/stores/filterStore';
 

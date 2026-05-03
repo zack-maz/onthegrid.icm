@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+
 import {
   SOURCE_KEYS,
   FRESHNESS_THRESHOLDS_MS,

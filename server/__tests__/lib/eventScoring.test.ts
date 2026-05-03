@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ConflictEventEntity, ConflictEventType } from '../../types.js';
+
 import {
   computeEventConfidence,
   applyGoldsteinSanity,
@@ -8,7 +8,9 @@ import {
   checkBellingcatCorroboration,
   extractBellingcatGeo,
 } from '../../lib/eventScoring.js';
+
 import type { BellingcatArticle } from '../../lib/eventScoring.js';
+import type { ConflictEventEntity, ConflictEventType } from '../../types.js';
 
 /** Helper to create a test ConflictEventEntity with configurable fields */
 function makeTestEvent(

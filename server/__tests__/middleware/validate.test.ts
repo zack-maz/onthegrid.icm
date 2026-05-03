@@ -1,8 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import type { Request, Response } from 'express';
+
 import { validateQuery } from '../../middleware/validate.js';
+
+import type { Request, Response } from 'express';
 
 /** Create a minimal mock Request with given query params */
 function mockReq(query: Record<string, string> = {}): Request {

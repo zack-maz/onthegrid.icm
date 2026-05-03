@@ -9,6 +9,7 @@
  * Usage: npx tsx scripts/check-env-example.ts
  */
 import { readFileSync } from 'node:fs';
+
 import { z } from 'zod';
 
 // Force test mode BEFORE the dynamic import of server/config.ts so that

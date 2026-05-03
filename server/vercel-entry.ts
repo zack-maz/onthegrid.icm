@@ -1,5 +1,6 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createApp } from './index.js';
+
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 // Vercel handles its own SIGTERM (500ms window) — no custom shutdown handler needed.
 // Upstash Redis is REST-based, so there are no persistent connections to drain.

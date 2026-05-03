@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { useSearchStore } from '@/stores/searchStore';
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import { SearchModal } from '@/components/search/SearchModal';
+import { useSearchStore } from '@/stores/searchStore';
 
 describe('SearchModal', () => {
   beforeEach(() => {

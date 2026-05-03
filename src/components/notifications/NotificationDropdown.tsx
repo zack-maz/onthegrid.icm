@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
-import { useNotificationStore } from '@/stores/notificationStore';
+
 import { getTimeGroup, TIME_GROUP_LABELS, TIME_GROUP_ORDER } from '@/lib/timeGroup';
-import { NotificationCard } from './NotificationCard';
-import type { Notification } from '@/stores/notificationStore';
 import type { TimeGroup } from '@/lib/timeGroup';
+import { useNotificationStore } from '@/stores/notificationStore';
+import type { Notification } from '@/stores/notificationStore';
+
+import { NotificationCard } from './NotificationCard';
 
 export function NotificationDropdown() {
   const notifications = useNotificationStore((s) => s.notifications);

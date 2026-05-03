@@ -1,6 +1,8 @@
-import type { Request, Response, NextFunction } from 'express';
 import { Ratelimit } from '@upstash/ratelimit';
+
 import { redis } from '../cache/redis.js';
+
+import type { Request, Response, NextFunction } from 'express';
 
 /**
  * Create a sliding-window rate limiter middleware backed by Upstash Redis.

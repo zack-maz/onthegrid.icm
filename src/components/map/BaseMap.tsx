@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Map,
   Source,
@@ -8,27 +7,25 @@ import {
   useMap,
   type MapRef,
 } from '@vis.gl/react-maplibre';
-import type { MapEvent, MapMouseEvent } from '@vis.gl/react-maplibre';
-import type { PickingInfo } from '@deck.gl/core';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { DeckGLOverlay } from './DeckGLOverlay';
-import { EntityTooltip } from './EntityTooltip';
-import { WeatherTooltip, useWeatherLayers } from './layers/WeatherOverlay';
-import { ThreatTooltip, useThreatHeatmapLayers } from './layers/ThreatHeatmapOverlay';
-import type { ThreatZoneData } from './layers/ThreatHeatmapOverlay';
-import type { ThreatCluster } from '@/types/ui';
 import { UtcClock } from '@/components/layout/UtcClock';
-import { useMapStore } from '@/stores/mapStore';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { useNotificationStore } from '@/stores/notificationStore';
 import { useEntityLayers } from '@/hooks/useEntityLayers';
-import { useSearchStore } from '@/stores/searchStore';
-import { useLayerStore } from '@/stores/layerStore';
+import { useWaterLayers } from '@/hooks/useWaterLayers';
 import { getCurrentPanelView } from '@/lib/panelLabel';
-import type { MapEntity, SiteEntity } from '@/types/entities';
+import { useFilterStore } from '@/stores/filterStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useMapStore } from '@/stores/mapStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useSearchStore } from '@/stores/searchStore';
+import { useUIStore } from '@/stores/uiStore';
 import type { WeatherGridPoint } from '@/stores/weatherStore';
+import type { MapEntity, SiteEntity } from '@/types/entities';
+import type { ThreatCluster } from '@/types/ui';
+
+import { CompassControl } from './CompassControl';
 import {
   INITIAL_VIEW_STATE,
   MAX_BOUNDS,
@@ -41,20 +38,26 @@ import {
   WATER_LAYERS,
   MINOR_FEATURE_LAYERS,
 } from './constants';
+import { CoordinateReadout } from './CoordinateReadout';
+import { DeckGLOverlay } from './DeckGLOverlay';
+import { EntityTooltip } from './EntityTooltip';
+import { useEthnicLayers, EthnicTooltip } from './layers/EthnicOverlay';
+import { GeographicOverlay } from './layers/GeographicOverlay';
+import { PoliticalOverlay, usePoliticalLayers } from './layers/PoliticalOverlay';
+import { ThreatTooltip, useThreatHeatmapLayers } from './layers/ThreatHeatmapOverlay';
+import { WaterTooltip } from './layers/WaterOverlay';
+import { WeatherHeatmap } from './layers/WeatherHeatmap';
+import { WeatherTooltip, useWeatherLayers } from './layers/WeatherOverlay';
+import { MapLegend } from './MapLegend';
 import { MapLoadingScreen } from './MapLoadingScreen';
 import { MapVignette } from './MapVignette';
-import { CoordinateReadout } from './CoordinateReadout';
-import { CompassControl } from './CompassControl';
-import { ProximityAlertOverlay } from './ProximityAlertOverlay';
-import { MapLegend } from './MapLegend';
-import { GeographicOverlay } from './layers/GeographicOverlay';
-import { WeatherHeatmap } from './layers/WeatherHeatmap';
-import { PoliticalOverlay, usePoliticalLayers } from './layers/PoliticalOverlay';
-import { useEthnicLayers, EthnicTooltip } from './layers/EthnicOverlay';
-import { useWaterLayers } from '@/hooks/useWaterLayers';
-import { WaterTooltip } from './layers/WaterOverlay';
 import { usePrecisionRingLayer } from './PrecisionRingLayer';
+import { ProximityAlertOverlay } from './ProximityAlertOverlay';
+
+import type { ThreatZoneData } from './layers/ThreatHeatmapOverlay';
 import type { WaterFacility } from '../../../server/types';
+import type { PickingInfo } from '@deck.gl/core';
+import type { MapEvent, MapMouseEvent } from '@vis.gl/react-maplibre';
 
 /** Watches notificationStore.flyToTarget and animates the map. Renders null. */
 function FlyToHandler() {
