@@ -36,7 +36,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - `src/components/map/constants.ts` — map configuration (terrain, bounds, styles)
 - `src/components/map/BaseMap.tsx` — main map component with all overlays
 - `src/components/layout/AppShell.tsx` — root layout shell (wires all four polling hooks)
-- `src/components/ui/StatusPanel.tsx` — HUD status panel (visible entity counts + connection dots)
+- `src/components/layout/StatusDropdown.tsx` — Topbar HUD status dropdown (visible entity counts + connection dots; replaces Phase 19-displaced StatusPanel)
 - `src/components/layout/LayerTogglesSlot.tsx` — layer toggle panel (8 rows)
 - `src/components/layout/DetailPanelSlot.tsx` — right-side detail panel (360px slide-out)
 - `src/hooks/useSelectedEntity.ts` — cross-store entity lookup with lost contact tracking
@@ -77,7 +77,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **FlightSource type** — defined in `src/types/ui.ts` to avoid circular imports with server types
 - **Polling intervals** — OpenSky 5s, ADS-B Exchange 260s, adsb.lol 30s
 - **V2 normalizer** — shared normalizer in `server/adapters/adsb-v2-normalize.ts` for ADS-B Exchange and adsb.lol
-- **StatusPanel** — replaces SourceSelector, shows 3-line HUD (flights/ships/events with colored health dots)
+- **StatusDropdown** — Topbar-housed 3-line HUD (flights/ships/events with colored health dots; introduced Phase 19 to replace StatusPanel + SourceSelector)
 - **/api/sources** — returns per-source configuration status
 - **Persistence** — selected flight source stored in `localStorage`
 
@@ -134,7 +134,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **EntityTooltip** — `src/components/map/EntityTooltip.tsx`, renders per-type content (flight metadata, ship AIS, GDELT event data with source link)
 - **Hover/highlight** — glow (2x, alpha 60) + highlight (1.2x, full alpha) layers with `pickable: false` to prevent blink
 - **Active entity dimming** — non-active entities dim to alpha 80; active entity stays full opacity (no alpha=0)
-- **StatusPanel counts** — derived from actual entity arrays filtered by toggle state and entity type
+- **StatusDropdown counts** — derived from actual entity arrays filtered by toggle state and entity type
 - **Zoom controls** — NavigationControl showZoom enabled
 - **localStorage migration** — old showDrones/showMissiles/showNews keys auto-detected and reset to new defaults
 

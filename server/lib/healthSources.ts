@@ -79,7 +79,7 @@ export const FRESHNESS_THRESHOLDS_MS: Record<string, number> = {
 /**
  * Per-endpoint reaction tier per CONTEXT D-26. Drives:
  *   - critical  → HealthBanner toast
- *   - non-critical → StatusPanel HUD dot color
+ *   - non-critical → StatusDropdown HUD dot color
  *   - static    → server log only
  *   - probe-only → 200 check, no freshness concept
  *   - cron      → DevApiStatus "Cron" group, banner only if all three stale
