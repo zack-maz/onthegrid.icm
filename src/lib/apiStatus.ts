@@ -10,7 +10,7 @@
  */
 
 /** Stuck threshold: no update in 2 minutes while still 'loading' */
-export const STUCK_THRESHOLD_MS = 120_000;
+const STUCK_THRESHOLD_MS = 120_000;
 
 /**
  * Normalise raw connection status + count + lastFetch into an "effective"
