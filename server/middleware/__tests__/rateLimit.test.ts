@@ -1,0 +1,265 @@
+// @vitest-environment node
+/**
+ * Phase 28.2 Plan 02 — D-04 Bearer-bypass test matrix for `rateLimiters.public`.
+ *
+ * Folds Phase 999.1: when a valid `DASHBOARD_PASSWORD` Bearer is present on a
+ * request hitting the global `ratelimit:public` 60-req/min tier, the limiter
+ * is skipped. Per-endpoint tiers (`ratelimit:prod` prefix) STILL throttle
+ * privileged callers — Test 7 codifies this so a future regression that
+ * widens the bypass scope will fail loudly.
+ *
+ * Behavior contract (CONTEXT D-04 + PLAN truths):
+ *   1. NODE_ENV !== 'production' AND no VERCEL — handler calls next() (existing
+ *      dev-bypass; Test 1 verifies we did NOT regress it).
+ *   2. NODE_ENV === 'production', no Bearer — handler delegates to limiter.limit().
+ *   3. NODE_ENV === 'production', valid Bearer matches DASHBOARD_PASSWORD —
+ *      handler skips limiter.limit() entirely on the public tier.
+ *   4. NODE_ENV === 'production', wrong-length Bearer — handler does NOT skip,
+ *      delegates to limiter.limit() (length precheck rejects before
+ *      timingSafeEqual is reached).
+ *   5. NODE_ENV === 'production', correct-length but wrong-bytes Bearer —
+ *      handler does NOT skip, delegates to limiter.limit().
+ *   6. NODE_ENV === 'production', DASHBOARD_PASSWORD unset (empty string) AND
+ *      Bearer present — handler does NOT skip (no privileged caller is
+ *      configured; this differs from `dashboardAuth` middleware which 503s).
+ *   7. Per-endpoint tier (prefix !== 'ratelimit:public') with valid Bearer —
+ *      handler does NOT skip; per-endpoint limit still applies.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+import type { Request, Response, NextFunction } from 'express';
+
+// Module-level limit spy. The MockRatelimit class instances all share this so
+// tests can assert "limit was called" / "limit was NOT called" regardless of
+// which specific limiter (public vs flights) ran.
+const mockLimit = vi.fn();
+
+class MockRatelimit {
+  limit = mockLimit;
+  static slidingWindow(_tokens: number, _window: string) {
+    return 'sliding-window-config';
+  }
+}
+
+vi.mock('@upstash/ratelimit', () => ({
+  Ratelimit: MockRatelimit,
+}));
+
+// Stub redis so module load doesn't try to connect to Upstash.
+vi.mock('../../cache/redis.js', () => ({
+  redis: { ping: vi.fn(async () => 'PONG') },
+}));
+
+// Force production so the limiter actually runs (it's a no-op in dev outside
+// Test 1, which explicitly resets NODE_ENV).
+vi.stubEnv('NODE_ENV', 'production');
+
+// Import AFTER mocks. Both `rateLimiters.public` (prefix 'ratelimit:public')
+// and `rateLimiters.flights` (default prefix 'ratelimit:prod') are needed to
+// exercise the scope-of-bypass contract from Test 7.
+const { rateLimiters, createRateLimiter } = await import('../rateLimit.js');
+
+function createMockReq(authHeader: string | null): Partial<Request> {
+  return {
+    ip: '127.0.0.1',
+    headers: authHeader ? { authorization: authHeader } : {},
+  };
+}
+
+function createMockRes(): {
+  res: Response;
+  _status: { value: number };
+  _json: { value: unknown };
+  _headers: Record<string, string>;
+} {
+  const _status = { value: 200 };
+  const _json = { value: null as unknown };
+  const _headers: Record<string, string> = {};
+  const res = {
+    status(code: number) {
+      _status.value = code;
+      return res;
+    },
+    json(body: unknown) {
+      _json.value = body;
+      return res;
+    },
+    set(name: string, value: string) {
+      _headers[name] = value;
+      return res;
+    },
+  } as unknown as Response;
+  return { res, _status, _json, _headers };
+}
+
+describe('rate-limit bearer bypass (D-04, Phase 999.1 fold-in)', () => {
+  const ORIG_NODE_ENV = process.env.NODE_ENV;
+  const ORIG_VERCEL = process.env.VERCEL;
+  const ORIG_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
+  beforeEach(() => {
+    mockLimit.mockReset();
+    // Default: limiter approves the request. Tests that expect bypass assert
+    // mockLimit was NEVER called; tests that expect throttle delegation
+    // assert it WAS called.
+    mockLimit.mockResolvedValue({
+      success: true,
+      limit: 60,
+      remaining: 59,
+      reset: Date.now() + 60_000,
+    });
+    // Reset env per test. Production is the "interesting" mode; Test 1 flips
+    // it explicitly.
+    process.env.NODE_ENV = 'production';
+    delete process.env.VERCEL;
+    delete process.env.DASHBOARD_PASSWORD;
+  });
+
+  afterEach(() => {
+    if (ORIG_NODE_ENV === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = ORIG_NODE_ENV;
+    }
+    if (ORIG_VERCEL === undefined) {
+      delete process.env.VERCEL;
+    } else {
+      process.env.VERCEL = ORIG_VERCEL;
+    }
+    if (ORIG_PASSWORD === undefined) {
+      delete process.env.DASHBOARD_PASSWORD;
+    } else {
+      process.env.DASHBOARD_PASSWORD = ORIG_PASSWORD;
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 1 — existing dev-bypass: must continue calling next() immediately
+  // -------------------------------------------------------------------------
+  it('Test 1: dev short-circuit (NODE_ENV !== production AND no VERCEL) calls next() immediately', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.VERCEL;
+    const req = createMockReq(null);
+    const { res } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(mockLimit).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 2 — production, no Bearer: delegates to limiter.limit()
+  // -------------------------------------------------------------------------
+  it('Test 2: production with no Bearer header delegates to limiter.limit()', async () => {
+    // DASHBOARD_PASSWORD set so the bypass branch can theoretically fire,
+    // but the absent Authorization header rules it out.
+    process.env.DASHBOARD_PASSWORD = 'op-secret-32characters-of-bytes!';
+    const req = createMockReq(null);
+    const { res } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+
+    expect(mockLimit).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 3 — production, valid Bearer: SKIPS limiter.limit() on public tier
+  // -------------------------------------------------------------------------
+  it('Test 3: production with valid Bearer skips ratelimit:public limiter entirely', async () => {
+    const password = 'op-secret-32characters-of-bytes!';
+    process.env.DASHBOARD_PASSWORD = password;
+    const req = createMockReq(`Bearer ${password}`);
+    const { res } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+
+    // Bypass MUST fire — limiter never consulted, no Redis round-trip,
+    // no X-RateLimit-* headers set.
+    expect(mockLimit).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 4 — wrong-length Bearer: NO bypass; delegates to limiter
+  // -------------------------------------------------------------------------
+  it('Test 4: production with wrong-length Bearer does NOT skip; delegates to limiter.limit()', async () => {
+    process.env.DASHBOARD_PASSWORD = 'op-secret-32characters-of-bytes!';
+    // Shorter than the configured password → length precheck rejects before
+    // timingSafeEqual is reached (timingSafeEqual would throw on length
+    // mismatch per Node.js contract, but we never get there).
+    const req = createMockReq('Bearer too-short');
+    const { res } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+
+    expect(mockLimit).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 5 — correct-length but wrong-bytes Bearer: NO bypass
+  // -------------------------------------------------------------------------
+  it('Test 5: production with same-length but wrong-bytes Bearer does NOT skip; delegates to limiter.limit()', async () => {
+    const password = 'op-secret-32characters-of-bytes!';
+    process.env.DASHBOARD_PASSWORD = password;
+    // Same length, last byte differs (constant-time compare must reject).
+    const wrongBytes = 'op-secret-32characters-of-bytes?';
+    expect(wrongBytes.length).toBe(password.length);
+    const req = createMockReq(`Bearer ${wrongBytes}`);
+    const { res } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+
+    expect(mockLimit).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 6 — DASHBOARD_PASSWORD unset (empty): NO bypass even with Bearer
+  // -------------------------------------------------------------------------
+  it('Test 6: production with empty DASHBOARD_PASSWORD does NOT bypass — falls through to limiter (differs from dashboardAuth which 503s)', async () => {
+    // Explicitly leave DASHBOARD_PASSWORD unset.
+    delete process.env.DASHBOARD_PASSWORD;
+    const req = createMockReq('Bearer anything-even-correct-length-bytes-here');
+    const { res } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+
+    // No privileged caller is configured → bypass MUST NOT fire. Limiter is
+    // consulted as if the Bearer weren't present.
+    expect(mockLimit).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 7 — per-endpoint tier (prefix 'ratelimit:prod') still throttles
+  //          privileged callers; bypass scope is 'ratelimit:public' only.
+  // -------------------------------------------------------------------------
+  it('Test 7: per-endpoint tier (ratelimit:prod prefix) does NOT bypass even with valid Bearer', async () => {
+    const password = 'op-secret-32characters-of-bytes!';
+    process.env.DASHBOARD_PASSWORD = password;
+    // Use the `flights` per-endpoint limiter (default prefix 'ratelimit:prod').
+    // Build a fresh one to be explicit about the prefix scope; using
+    // rateLimiters.flights would also work since it's already prod-prefixed.
+    const flightsTier = createRateLimiter(120, 60); // default prefix 'ratelimit:prod'
+    const req = createMockReq(`Bearer ${password}`);
+    const { res } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await flightsTier(req as Request, res, next);
+
+    // Privileged Bearer is irrelevant for non-public tiers — limiter MUST
+    // still be consulted. Defense-in-depth: a leaked operator Bearer cannot
+    // exhaust per-route budgets.
+    expect(mockLimit).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+});
