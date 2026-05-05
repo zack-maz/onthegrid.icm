@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useSiteImage } from '@/hooks/useSiteImage';
+import { shouldRenderDashboard } from '@/lib/dashboardAuth';
 import { getCurrentPanelView } from '@/lib/panelLabel';
 import { WATER_ATTACK_EVENT_TYPES } from '@/lib/waterAttackEvents';
 import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
@@ -114,7 +115,7 @@ export function WaterFacilityDetail({ facility }: WaterFacilityDetailProps) {
       </h3>
       <DetailValue label="Type" value={typeLabel} />
       <DetailValue label="Operator" value={facility.operator || 'Unknown'} />
-      <DetailValue label="OSM ID" value={String(facility.osmId)} />
+      {shouldRenderDashboard() && <DetailValue label="OSM ID" value={String(facility.osmId)} />}
 
       {/* Water Stress */}
       <h3 className="text-[10px] uppercase tracking-wider text-text-muted mb-1 mt-3">
