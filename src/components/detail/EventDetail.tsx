@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useSiteImage } from '@/hooks/useSiteImage';
+import { shouldRenderDashboard } from '@/lib/dashboardAuth';
 import type { ConflictEventEntity } from '@/types/entities';
 import { EVENT_TYPE_LABELS } from '@/types/ui';
 
@@ -53,7 +54,7 @@ export function EventDetail({ entity }: EventDetailProps) {
       )}
 
       <h3 className="text-[10px] uppercase tracking-wider text-text-muted mb-1 mt-0">Event</h3>
-      {import.meta.env.DEV && <DetailValue label="ID" value={entity.id} />}
+      {shouldRenderDashboard() && <DetailValue label="ID" value={entity.id} />}
       <DetailValue label="Type" value={typeLabel} />
 
       {/* LLM badge */}
@@ -162,7 +163,7 @@ export function EventDetail({ entity }: EventDetailProps) {
         </div>
       )}
 
-      {import.meta.env.DEV && d.confidence != null && (
+      {shouldRenderDashboard() && d.confidence != null && (
         <div className="mt-2 border-t border-white/5 pt-2">
           <DetailValue label="Confidence" value={d.confidence.toFixed(3)} />
           {d.geoPrecision && <DetailValue label="Geo Precision" value={d.geoPrecision} />}
