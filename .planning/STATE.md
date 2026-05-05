@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
-status: phase-28.1-complete
-last_updated: '2026-05-03T05:43:45Z'
+status: unknown
+last_updated: "2026-05-05T15:58:26.270Z"
 progress:
   total_phases: 20
-  completed_phases: 10
-  total_plans: 82
-  completed_plans: 76
-  percent: 93
+  completed_phases: 9
+  total_plans: 88
+  completed_plans: 75
+  percent: 85
 ---
 
 # Project State
@@ -362,4 +362,4 @@ None.
 - Phase 27.4.2 inserted after Phase 27.4.1 (2026-04-24): CI Health + LLM v2 Quality Tuning — bundled phase greens main CI (32 filter-test failures, 4 npm-audit vulns, prettier format drift, lint warnings) so regression-watch is trustworthy during Track B — then runs one clean 184-batch v2 extraction to capture eval baseline and iterates prompts/resolver until eval ≥v1+5pp AND gdelt-actiongeo-fallback provenance <25%. Scope levers + hang-recurrence policy open for /gsd-discuss-phase. Out-of-scope: 27.4.3 (deck.gl v9 TS drift), 27.4.5 (LLM flight-recorder), 27.3.3 (romanization).
 - Phase 27.4.3 inserted after Phase 27.4.2 (2026-04-25): free-claude-code Routing Evaluation (URGENT) — pivoted from the originally-deferred "Cerebras hang root-cause investigation" to evaluate https://github.com/Alishahryar1/free-claude-code as a replacement for the manual Cerebras/Groq routing in `server/adapters/llm-provider.ts`. Five evaluation criteria (feasibility, reliability, cost/quota, integration shape, eval quality parity ±5pp of Plan 07's 0.940 baseline). Phase 27.4.2 HUMAN-UAT.md tests 1+2 are blocked on this phase landing. Reassigned 27.4.3 number from the prior deck.gl v9 depthTest TS-drift placeholder to this evaluation; deck.gl v9 work renumbers to 27.4.4.
 
-**Planned Phase:** 28.1 (cleanup-sweep) — 7 plans — 2026-05-01T18:34:28.789Z
+**Planned Phase:** 28.2 (Dev/Prod Sync + Domain Rename + Rate-Limiter Fold-In) — 6 plans — 2026-05-05T15:58:26.247Z
