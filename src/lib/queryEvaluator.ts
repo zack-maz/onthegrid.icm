@@ -1,7 +1,6 @@
 // Query evaluator: walks AST and matches entities
 // Pure functions -- all context injected via EvaluationContext
 
-import type { QueryNode } from './queryParser';
 import type {
   MapEntity,
   FlightEntity,
@@ -9,11 +8,14 @@ import type {
   ConflictEventEntity,
   SiteEntity,
 } from '@/types/entities';
-import type { WaterFacility } from '../../server/types';
-import { getSearchableFields, type SearchableEntity } from './searchUtils';
-import { computeSeverityScore } from './severity';
+
 import { computeAttackStatus } from './attackStatus';
 import { findGeoName } from './geoNames';
+import { getSearchableFields, type SearchableEntity } from './searchUtils';
+import { computeSeverityScore } from './severity';
+
+import type { QueryNode } from './queryParser';
+import type { WaterFacility } from '../../server/types';
 
 // ─── Types ────────────────────────────────────────────────────
 

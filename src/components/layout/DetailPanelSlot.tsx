@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useUIStore } from '@/stores/uiStore';
-import { useNotificationStore } from '@/stores/notificationStore';
-import { useSelectedEntity } from '@/hooks/useSelectedEntity';
+
+import { BreadcrumbRow } from '@/components/detail/BreadcrumbRow';
+import { EventDetail } from '@/components/detail/EventDetail';
 import { FlightDetail } from '@/components/detail/FlightDetail';
 import { ShipDetail } from '@/components/detail/ShipDetail';
-import { EventDetail } from '@/components/detail/EventDetail';
 import { SiteDetail } from '@/components/detail/SiteDetail';
-import { WaterFacilityDetail } from '@/components/detail/WaterFacilityDetail';
 import { ThreatClusterDetail } from '@/components/detail/ThreatClusterDetail';
-import { BreadcrumbRow } from '@/components/detail/BreadcrumbRow';
+import { WaterFacilityDetail } from '@/components/detail/WaterFacilityDetail';
 import { ENTITY_DOT_COLORS } from '@/components/map/layers/constants';
-import { isConflictEventType, CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
+import { useSelectedEntity } from '@/hooks/useSelectedEntity';
 import { getTypeLabel, getEntityName, findEntityById } from '@/lib/panelLabel';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useUIStore } from '@/stores/uiStore';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
+import { isConflictEventType, CONFLICT_TOGGLE_GROUPS } from '@/types/ui';
+
 import type { WaterFacility } from '../../../server/types';
 
 /** Maps entity type to the ENTITY_DOT_COLORS key */

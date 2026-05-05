@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
 import { useMap } from '@vis.gl/react-maplibre';
+import { useEffect } from 'react';
+
 import { INITIAL_VIEW_STATE } from './constants';
 
 export function CompassControl() {

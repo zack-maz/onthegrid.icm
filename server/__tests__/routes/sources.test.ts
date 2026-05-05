@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import type { Server } from 'http';
 
 // Mock rate limiter -- pass through for route tests

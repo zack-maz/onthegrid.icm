@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+
+import { MIDDLE_EAST_FIPS } from '../../adapters/gdelt.js';
 import {
   isGeoValid,
   detectCentroid,
@@ -6,7 +8,6 @@ import {
   FIPS_TO_EXPECTED_COUNTRY,
   CITY_CENTROIDS,
 } from '../../lib/geoValidation.js';
-import { MIDDLE_EAST_FIPS } from '../../adapters/gdelt.js';
 
 describe('geoValidation', () => {
   describe('data constants', () => {

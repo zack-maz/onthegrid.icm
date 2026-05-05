@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Server } from 'http';
+
 import type { ShipEntity, CacheResponse } from '../../types.js';
+import type { Server } from 'http';
 
 // Sample ship entities for testing
 const shipA: ShipEntity = {

@@ -15,3 +15,21 @@ package-lock.json
 # touching files outside .planning/, server/, src/, docs/, repo root).
 # Mirrors vite.config.ts test.exclude precedent established by Plan 27.4.2-01.
 .claude/
+
+# Phase 28.1 W2/W7 plan files contain TS code in prose (no fence) with
+# numeric-separator underscore literals (60_000). Prettier interprets the
+# underscores as markdown italic emphasis and corrupts the content
+# (e.g. `2 * 60_000` becomes `2 _ 60_000` becomes `2 * 60*000`).
+# Adding to ignore list per W1 wave-gate ritual (gate must exit 0 without
+# semantic corruption). Owner: planner re-fences these blocks if/when revised.
+.planning/phases/28.1-cleanup-sweep/28.1-02-W2-health-endpoint-PLAN.md
+.planning/phases/28.1-cleanup-sweep/28.1-07-W7-normalization-PLAN.md
+
+# STATE.md wave-summary entries embed nested code spans containing patterns
+# like `__tests__`, `*Content`, and underscore-separator numeric literals.
+# Prettier oscillates on these (escaping/unescaping) without reaching a
+# fixed point — pre-push format:check fails repeatedly even after lint-staged
+# prettier --write. Same root cause as the W2/W7 plan carve-outs above.
+# Carving STATE.md out of the canonical sweep so phase-close commits land
+# cleanly. Owner: GSD orchestrator on the next state.md template revision.
+.planning/STATE.md

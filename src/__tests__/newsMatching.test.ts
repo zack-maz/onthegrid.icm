@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
 import { matchNewsToEvent } from '../lib/newsMatching';
+
 import type { ConflictEventEntity, NewsCluster, NewsArticle } from '../../server/types';
 
 function makeArticle(overrides: Partial<NewsArticle> = {}): NewsArticle {

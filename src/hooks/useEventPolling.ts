@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
+
 import { useEventStore } from '@/stores/eventStore';
 import type { ConflictEventEntity, CacheResponse } from '@/types/entities';
 
-export const EVENT_POLL_INTERVAL = 900_000;
+// Phase 28.1 W5 D-12 — env-tunable event polling cadence. Default preserves
+// pre-W5 behavior (15min poll, matching GDELT 15-min update frequency).
+export const EVENT_POLL_INTERVAL = Number(import.meta.env.VITE_POLL_EVENTS_MS ?? 900_000);
 
 export function useEventPolling(): void {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -1,5 +1,6 @@
-import type { NewsArticle } from '../types.js';
 import { hashUrl } from '../lib/newsClustering.js';
+
+import type { NewsArticle } from '../types.js';
 
 /** GDELT DOC 2.0 API base URL */
 const GDELT_DOC_BASE = 'https://api.gdeltproject.org/api/v2/doc/doc';

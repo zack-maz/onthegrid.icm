@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
 import { ScatterplotLayer } from '@deck.gl/layers';
+import { useMemo } from 'react';
+
 import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 import { useFilterStore } from '@/stores/filterStore';
 import { useUIStore } from '@/stores/uiStore';

@@ -1,8 +1,10 @@
-import type { NewsArticle } from '../types.js';
+import { getConfig } from '../config.js';
+
 import { extractTriple } from './nlpExtractor.js';
 import { computeRelevanceScore, EXCLUSION_PATTERNS } from './relevanceScorer.js';
-import { getConfig } from '../config.js';
 import { getSourceTier, extractDomain } from './sourceTiers.js';
+
+import type { NewsArticle } from '../types.js';
 
 /**
  * Strict non-ambiguous keywords -- pass on their own.

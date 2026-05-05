@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
+
 import { hashUrl, deduplicateAndCluster } from '../../lib/newsClustering.js';
+
 import type { NewsArticle } from '../../types.js';
 
 const makeArticle = (overrides: Partial<NewsArticle> = {}): NewsArticle => ({

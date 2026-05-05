@@ -110,9 +110,10 @@ vi.mock('../../config.js', () => ({
 
 import { callLLM as freeClaudeCallLLM } from '../../lib/freeClaudeRouter.js';
 import { enqueueDLQ } from '../../lib/llmDLQ.js';
+import { processEventGroupsV3 } from '../../lib/llmEventExtractor.v3.js';
 import { withBatchWatchdog } from '../../lib/llmExtractorWatchdog.js';
 import { updateProgress, llmProgress } from '../../lib/llmProgress.js';
-import { processEventGroupsV3 } from '../../lib/llmEventExtractor.v3.js';
+
 import type { EventGroup } from '../../lib/eventGrouping.js';
 import type { ConflictEventEntity } from '../../types.js';
 

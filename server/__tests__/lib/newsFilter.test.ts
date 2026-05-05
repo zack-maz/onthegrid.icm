@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import type { NewsArticle } from '../../types.js';
 
 // Mock config module (spread actual to preserve constants)

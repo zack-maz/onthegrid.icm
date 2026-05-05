@@ -28,10 +28,11 @@
  *   npm run capture:hero -- --shots  # screenshots only
  */
 
-import { chromium, type Page } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+
+import { chromium, type Page } from '@playwright/test';
 
 // ---------- Configuration ----------
 

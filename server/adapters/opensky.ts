@@ -1,7 +1,8 @@
 import { config } from '../config.js';
-import { RateLimitError } from '../types.js';
-import type { FlightEntity, BoundingBox } from '../types.js';
 import { logger } from '../lib/logger.js';
+import { RateLimitError } from '../types.js';
+
+import type { FlightEntity, BoundingBox } from '../types.js';
 
 const log = logger.child({ module: 'opensky' });
 

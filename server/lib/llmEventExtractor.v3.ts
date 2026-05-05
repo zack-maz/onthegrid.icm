@@ -20,17 +20,15 @@
  * multi-model evaluation; not load-bearing in production.
  */
 
-import type { EventGroup } from './eventGrouping.js';
-import type { LocationHierarchyV2, EnrichedEventV3, GeocodeProvenance } from './llmSchema.js';
-import {
-  batchResponseV3,
-  EVENT_EXTRACTION_SCHEMA_V3,
-  derivePrecision,
-  deriveSuspect,
-} from './llmSchema.js';
 // Phase 27.4.3 D-03 — LLM call source swapped from llm-provider to
 // freeClaudeRouter (NVIDIA NIM → OpenRouter cascade). Routing decisions feed
 // llmProgress.routingTrace below.
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
+import { redis } from '../cache/redis.js';
+import { env, isPipelineV3, setPipelineOverride } from '../config.js';
+
+import { createLimit } from './concurrencyLimit.js';
+import { extractBellingcatGeo } from './eventScoring.js';
 import {
   callLLM as freeClaudeCallLLM,
   prewarmIfCold,
@@ -38,6 +36,8 @@ import {
 } from './freeClaudeRouter.js';
 // Phase 27.4.3 B-2 — lineage persistence after each per-event extract.
 // Phase 27.4.4 D-18 — group-level lineage pre-filter helpers (read-side).
+import { enqueueDLQ } from './llmDLQ.js';
+import { withBatchWatchdog } from './llmExtractorWatchdog.js';
 import {
   appendLineage,
   computeGroupLineageHash,
@@ -45,16 +45,25 @@ import {
   GROUP_LINEAGE_TTL_SEC,
   type GroupLineageCachePayload,
 } from './llmLineage.js';
-import { resolveLocation, type ResolveContext, type ResolvedLocation } from './llmResolver.js';
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
-import { getSourceTier } from './sourceTiers.js';
-import { extractBellingcatGeo } from './eventScoring.js';
-import { enqueueDLQ } from './llmDLQ.js';
-import { withBatchWatchdog } from './llmExtractorWatchdog.js';
-import { createLimit } from './concurrencyLimit.js';
 import { updateProgress, llmProgress } from './llmProgress.js';
+import { resolveLocation, type ResolveContext, type ResolvedLocation } from './llmResolver.js';
+import {
+  batchResponseV3,
+  EVENT_EXTRACTION_SCHEMA_V3,
+  derivePrecision,
+  deriveSuspect,
+} from './llmSchema.js';
+import { logger } from './logger.js';
+import { appendPipelineAudit } from './pipelineAudit.js';
+import { getSourceTier } from './sourceTiers.js';
+
+// Type imports are intentionally separated from value imports above by a
+// blank line plus this rationale comment (the comment is what breaks the
+// rule's "same import group" detection). Per W7 sub-6 normalization.
+import type { EventGroup } from './eventGrouping.js';
 import type { RecentEnrichedEvent } from './llmProgress.js';
-import { env, isPipelineV3, setPipelineOverride } from '../config.js';
+import type { LocationHierarchyV2, EnrichedEventV3, GeocodeProvenance } from './llmSchema.js';
+
 // Phase 27.4.3 Plan 05 D-17 — auto-rollback wiring.
 //   Trigger 1 (watchdog recurrence) flips the pipeline override + records an
 //   audit entry from inside processEventGroupsV3 when watchdogTimeoutCount >= 3
@@ -64,9 +73,6 @@ import { env, isPipelineV3, setPipelineOverride } from '../config.js';
 // B-3 fix: appendPipelineAudit is canonically defined in server/lib/pipelineAudit.ts
 // (Plan 02b Task 1). routes/events.ts imports the same symbol from the same lib.
 // No cyclic import (routes → lib → routes) possible.
-import { appendPipelineAudit } from './pipelineAudit.js';
-import { redis } from '../cache/redis.js';
-import { logger } from './logger.js';
 
 const log = logger.child({ module: 'llm-extractor-v3' });
 
@@ -86,7 +92,7 @@ const PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
 /** D-10 — BATCH_SIZE reduced from v1's 8 to 2 because each group now carries
  *  far more context (news + Bellingcat + temporal) and fits more comfortably
  *  into the provider's attention budget when batched narrowly. */
-export const BATCH_SIZE = 2;
+const BATCH_SIZE = 2;
 
 /** Phase 27.4.3 D-08 bake-off — empty/undefined uses freeClaudeRouter's
  *  NVIDIA_NIM_DEFAULT_MODEL. Set V3_BAKEOFF_MODEL=<id> in env to swap the

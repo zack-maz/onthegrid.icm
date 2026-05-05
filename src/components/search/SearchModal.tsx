@@ -1,18 +1,20 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useSearchStore } from '@/stores/searchStore';
-import { useNotificationStore } from '@/stores/notificationStore';
-import { useUIStore } from '@/stores/uiStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { getCurrentPanelView } from '@/lib/panelLabel';
-import { useSearchResults } from '@/hooks/useSearchResults';
-import { useAutocomplete, type AutocompleteSuggestion } from '@/hooks/useAutocomplete';
-import { SearchResultGroup } from '@/components/search/SearchResultGroup';
-import { TagChipRow } from '@/components/search/TagChipRow';
-import { SyntaxOverlay } from '@/components/search/SyntaxOverlay';
+
 import { AutocompleteDropdown } from '@/components/search/AutocompleteDropdown';
 import { CheatSheet } from '@/components/search/CheatSheet';
+import { SearchResultGroup } from '@/components/search/SearchResultGroup';
+import { SyntaxOverlay } from '@/components/search/SyntaxOverlay';
+import { TagChipRow } from '@/components/search/TagChipRow';
+import { useAutocomplete, type AutocompleteSuggestion } from '@/hooks/useAutocomplete';
+import { useSearchResults } from '@/hooks/useSearchResults';
 import { findGeoName } from '@/lib/geoNames';
+import { getCurrentPanelView } from '@/lib/panelLabel';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useSearchStore } from '@/stores/searchStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
 import type { MapEntity, SiteEntity } from '@/types/entities';
+
 import type { WaterFacility } from '../../../server/types';
 
 type SearchableEntity = MapEntity | SiteEntity | WaterFacility;

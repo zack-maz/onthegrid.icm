@@ -1,7 +1,9 @@
 // @vitest-environment node
-import { describe, it, expect, beforeEach } from 'vitest';
 import { Writable } from 'node:stream';
+
 import pino from 'pino';
+import { describe, it, expect, beforeEach } from 'vitest';
+
 import { redactPaths } from '../../lib/logger.js';
 
 /**

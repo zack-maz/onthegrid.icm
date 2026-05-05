@@ -16,14 +16,16 @@
  */
 
 import OpenAI from 'openai';
-import { env } from '../config.js';
-import { logger } from './logger.js';
-import { isAvailable, record, type Provider } from './llmCircuitBreaker.js';
+
 import { redis } from '../cache/redis.js';
+import { env } from '../config.js';
+
+import { isAvailable, record, type Provider } from './llmCircuitBreaker.js';
 // Phase 27.4.3 Plan 02b B-1 — instrumentation hooks. Writes per-attempt
 // latency, headroom, error-taxonomy, and shadow-cost into the live progress
 // singleton so DevApiStatus / /llm-status surfaces them under v3.
 import { llmProgress, updateProgress } from './llmProgress.js';
+import { logger } from './logger.js';
 
 // ---------------------------------------------------------------------------
 // Public types

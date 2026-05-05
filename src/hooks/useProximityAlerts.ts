@@ -1,15 +1,25 @@
 import { useMemo } from 'react';
-import type { FlightEntity, SiteEntity } from '@/types/entities';
-import { useFlightStore } from '@/stores/flightStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { useLayerStore } from '@/stores/layerStore';
-import { useFilterStore } from '@/stores/filterStore';
+
 import { haversineKm } from '@/lib/geo';
 import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useWaterStore } from '@/stores/waterStore';
+import type { FlightEntity, SiteEntity } from '@/types/entities';
+
 import type { WaterFacility } from '../../server/types';
 
-const PROXIMITY_THRESHOLD_KM = 5;
+// Phase 28.1 W5 D-12 — env-tunable proximity-alert radius. Default preserves
+// pre-W5 behavior (5km — flight/ship within this distance of a key site
+// triggers a proximity alert). NOTE: the amended W5 plan listed default 50
+// (citing CLAUDE.md "50km" doc text); the actual pre-W5 runtime literal was
+// 5km. Preserved verbatim per the "byte-identical default" contract — the
+// plan-body and CLAUDE.md doc were both incorrect about the runtime value.
+// Surfaced for the W5 SUMMARY as a third doc-vs-code drift (alongside ADSB
+// 1200 NM and severity 24h).
+const PROXIMITY_THRESHOLD_KM = Number(import.meta.env.VITE_PROXIMITY_ALERT_KM ?? 5);
 const COARSE_DEG = 0.05; // ~5km coarse bbox pre-filter
 
 export interface ProximityAlert {

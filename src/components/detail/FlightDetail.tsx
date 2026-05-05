@@ -1,4 +1,5 @@
 import type { FlightEntity } from '@/types/entities';
+
 import { DetailValue } from './DetailValue';
 
 // Unit conversion constants

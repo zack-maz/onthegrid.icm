@@ -1,8 +1,13 @@
 import { useEffect, useRef } from 'react';
+
 import { useWeatherStore } from '@/stores/weatherStore';
 import type { WeatherGridPoint } from '@/stores/weatherStore';
 
-export const WEATHER_POLL_INTERVAL = 1_800_000; // 30 minutes
+// Phase 28.1 W5 D-12 — env-tunable weather polling cadence. Default preserves
+// pre-W5 behavior (30min poll, matches Open-Meteo hourly grid refresh).
+// Added 2026-05-02 per W3 triage finding A (8th polling hook missing from
+// the original D-12 list).
+export const WEATHER_POLL_INTERVAL = Number(import.meta.env.VITE_POLL_WEATHER_MS ?? 1_800_000);
 
 interface CacheResponse<T> {
   data: T;

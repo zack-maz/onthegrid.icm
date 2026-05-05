@@ -1,5 +1,9 @@
-import { vi } from 'vitest';
+/* eslint-disable import/order -- vi.mock and post-mock value imports are
+ * intentionally interleaved for test-mock boundary clarity. vitest hoists
+ * vi.mock to the top regardless of source position, so the deferred imports
+ * below still see the mock. */
 import { MapboxOverlay } from '@deck.gl/mapbox';
+import { vi } from 'vitest';
 
 // Mock useControl from react-maplibre
 const mockSetProps = vi.fn();
@@ -12,9 +16,11 @@ vi.mock('@vis.gl/react-maplibre', () => ({
   }),
 }));
 
-import { DeckGLOverlay } from '@/components/map/DeckGLOverlay';
-import { useControl } from '@vis.gl/react-maplibre';
 import { render } from '@testing-library/react';
+import { useControl } from '@vis.gl/react-maplibre';
+
+import { DeckGLOverlay } from '@/components/map/DeckGLOverlay';
+/* eslint-enable import/order */
 
 describe('DeckGLOverlay', () => {
   beforeEach(() => {

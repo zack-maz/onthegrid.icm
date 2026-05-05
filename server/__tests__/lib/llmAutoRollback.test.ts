@@ -104,11 +104,11 @@ vi.mock('../../lib/llmDLQ.js', () => ({
 }));
 
 // Imports AFTER mocks are registered.
-import { llmProgress } from '../../lib/llmProgress.js';
 import {
   checkWatchdogRecurrenceTrigger,
   checkEvalDropTrigger,
 } from '../../lib/llmEventExtractor.v3.js';
+import { llmProgress } from '../../lib/llmProgress.js';
 
 // ---------------------------------------------------------------------------
 // Per-test reset.

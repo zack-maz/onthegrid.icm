@@ -1,7 +1,9 @@
 import { useState } from 'react';
+
+import { useSiteImage } from '@/hooks/useSiteImage';
 import type { ConflictEventEntity } from '@/types/entities';
 import { EVENT_TYPE_LABELS } from '@/types/ui';
-import { useSiteImage } from '@/hooks/useSiteImage';
+
 import { DetailValue } from './DetailValue';
 
 interface EventDetailProps {

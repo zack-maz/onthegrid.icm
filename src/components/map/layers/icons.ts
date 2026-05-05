@@ -50,7 +50,7 @@ export function getIconAtlasForLayer(): any {
  * Lazily generates a 576x32 canvas icon atlas with 18 white shapes.
  * All shapes drawn white -- Deck.gl mask mode tints via getColor.
  */
-export function getIconAtlas(): HTMLCanvasElement {
+function getIconAtlas(): HTMLCanvasElement {
   // Guard against stale cache in dev HMR (old atlas was 544px)
   if (atlas && atlas.width === 576) return atlas;
   atlas = null;

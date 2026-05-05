@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+
 import { MapLegend, LEGEND_REGISTRY } from '@/components/map/MapLegend';
 import { useLayerStore } from '@/stores/layerStore';
 

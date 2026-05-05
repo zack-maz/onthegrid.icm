@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import importPlugin from 'eslint-plugin-import';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier/flat';
 
@@ -34,6 +35,15 @@ export default tseslint.config(
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
+      import: importPlugin,
+    },
+    settings: {
+      // Phase 28.1 W7 sub-6: 'import/order' uses pattern matching on `@/**`
+      // to classify @-aliased imports as the 'internal' group. The TypeScript
+      // resolver is intentionally NOT enabled — its strict resolution model
+      // generates many false positives on cross-package type-only imports
+      // and would inflate the rule's churn without measurable correctness
+      // benefit at this scope.
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
@@ -46,6 +56,34 @@ export default tseslint.config(
           varsIgnorePattern: '^_',
           caughtErrorsIgnorePattern: '^_',
           destructuredArrayIgnorePattern: '^_',
+        },
+      ],
+      // Phase 28.1 W7 sub-6: enforce a consistent import order across src/ + server/.
+      // Starts at 'warn' so a future phase can flip to 'error' once 0 sustains.
+      //
+      // Groups (in order): builtin -> external -> internal (@/ alias) -> parent
+      // -> sibling -> index -> object -> type. Blank line required between
+      // groups; type-only imports placed last per project convention. Some
+      // residual warnings remain on test files where vi.mock() statements are
+      // intentionally interleaved with value imports for hoisting clarity;
+      // those carry inline disable comments.
+      'import/order': [
+        'warn',
+        {
+          groups: [
+            'builtin', // node:* etc.
+            'external', // npm packages
+            'internal', // @/ alias
+            'parent', // ../
+            'sibling', // ./
+            'index',
+            'object',
+            'type',
+          ],
+          pathGroups: [{ pattern: '@/**', group: 'internal' }],
+          pathGroupsExcludedImportTypes: ['builtin'],
+          'newlines-between': 'always',
+          alphabetize: { order: 'asc', caseInsensitive: true },
         },
       ],
     },

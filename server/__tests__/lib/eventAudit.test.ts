@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
+
 import { buildAuditRecord, type PipelineTrace, type AuditRecord } from '../../lib/eventAudit.js';
+
 import type { ConflictEventEntity } from '../../types.js';
 
 /** Build a minimal ConflictEventEntity for testing. */

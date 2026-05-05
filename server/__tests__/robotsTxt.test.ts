@@ -8,9 +8,10 @@
  * upstream-API-backed routes so we don't burn Redis budget on search
  * engine hits after the portfolio demo URL is published.
  */
-import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { describe, it, expect } from 'vitest';
 
 const robotsPath = resolve(process.cwd(), 'public/robots.txt');
 

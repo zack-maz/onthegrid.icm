@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
+
 import {
   classifyWaterType,
   normalizeWaterElement,
@@ -15,6 +16,8 @@ import {
   computeAdmissionDecision,
   RIVER_BBOXES,
 } from '../../adapters/overpass-water.js';
+import { fetchWaterFacilities, nearestCountryName } from '../../adapters/overpass-water.js';
+
 import type { WaterStressIndicators } from '../../types.js';
 
 describe('classifyWaterType', () => {
@@ -1259,8 +1262,12 @@ describe('normalized facility includes notabilityScore', () => {
 
 // ---------- Phase 27.3.1 R-08 stats population tests ----------
 
+// Intentional mid-file import — vi.mock setup for the R-08 test block must
+// run AFTER the test fixtures defined above so the mock targets the correct
+// module identity in the resolver chain. Mid-file `import` is hoisted by
+// Node's ES module loader regardless of textual position.
+// eslint-disable-next-line import/order
 import { vi, beforeEach, afterEach } from 'vitest';
-import { fetchWaterFacilities, nearestCountryName } from '../../adapters/overpass-water.js';
 
 /**
  * Build an Overpass-style success response for a single facility-type query.

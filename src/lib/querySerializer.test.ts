@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { serialize } from './querySerializer';
+
 import { parse } from './queryParser';
+import { serialize } from './querySerializer';
+
 import type { QueryNode } from './queryParser';
 
 describe('serialize', () => {

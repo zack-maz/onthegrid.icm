@@ -28,13 +28,15 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { writeFileSync, appendFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { writeFileSync, appendFileSync } from 'node:fs';
+
 import { callLLM } from '../server/lib/freeClaudeRouter.js';
-import { batchResponseV3, EVENT_EXTRACTION_SCHEMA_V3 } from '../server/lib/llmSchema.js';
-import { resolveLocation, __resetThrottleForTests } from '../server/lib/llmResolver.js';
 import { runEval } from '../server/lib/llmEvalHarness.js';
+import { resolveLocation, __resetThrottleForTests } from '../server/lib/llmResolver.js';
+import { batchResponseV3, EVENT_EXTRACTION_SCHEMA_V3 } from '../server/lib/llmSchema.js';
+
 import type { LocationHierarchyV2 } from '../server/lib/llmSchema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

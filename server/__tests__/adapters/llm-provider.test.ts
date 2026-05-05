@@ -64,12 +64,12 @@ import {
   isAvailable as mockIsAvailable,
   record as mockRecord,
 } from '../../lib/llmCircuitBreaker.js';
+import { updateProgress as mockUpdateProgress } from '../../lib/llmProgress.js';
 import {
   getDailyTokens as mockGetDailyTokens,
   incrDailyTokens as mockIncrDailyTokens,
   budgetState as mockBudgetState,
 } from '../../lib/llmTokenBudget.js';
-import { updateProgress as mockUpdateProgress } from '../../lib/llmProgress.js';
 
 const isAvailableFn = vi.mocked(mockIsAvailable);
 const recordFn = vi.mocked(mockRecord);

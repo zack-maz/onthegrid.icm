@@ -6,8 +6,8 @@
 // warm starts. Cold starts reset to idle; Redis summary provides fallback.
 // ---------------------------------------------------------------------------
 
-import type { GeocodeProvenance } from './llmSchema.js';
 import type { Provider } from './llmCircuitBreaker.js';
+import type { GeocodeProvenance } from './llmSchema.js';
 
 /**
  * Live progress state for the LLM enrichment pipeline.

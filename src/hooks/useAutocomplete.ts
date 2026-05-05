@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useSiteStore } from '@/stores/siteStore';
+
 import { ALL_PREFIXES, TAG_REGISTRY, getTagValues } from '@/lib/tagRegistry';
 import type { EntityDataSources, TagValue } from '@/lib/tagRegistry';
+import { useEventStore } from '@/stores/eventStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useSiteStore } from '@/stores/siteStore';
 
 // --- Types ---
 

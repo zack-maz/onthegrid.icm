@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+
 import { parse, type QueryNode } from '@/lib/queryParser';
 import { serialize } from '@/lib/querySerializer';
 

@@ -1,17 +1,19 @@
 import { render, screen, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { useNewsStore } from '@/stores/newsStore';
-import { useMarketStore } from '@/stores/marketStore';
-import { useWeatherStore } from '@/stores/weatherStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { useUIStore } from '@/stores/uiStore';
-import { useLayerStore } from '@/stores/layerStore';
-import { useFilterStore } from '@/stores/filterStore';
+
+import { DevApiStatus } from '@/components/ui/DevApiStatus';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useMarketStore } from '@/stores/marketStore';
+import { useNewsStore } from '@/stores/newsStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useWeatherStore } from '@/stores/weatherStore';
 
 /**
  * Phase 27.4 Plan 09 — DevApiStatus Events tab render tests. Follows the
@@ -27,7 +29,6 @@ vi.mock('@/hooks/useLLMStatusPolling', () => ({
 }));
 
 // Import AFTER the mock so the component reads the mocked hook.
-import { DevApiStatus } from '@/components/ui/DevApiStatus';
 
 const now = Date.now();
 

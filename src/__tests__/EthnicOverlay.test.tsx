@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import { useLayerStore } from '@/stores/layerStore';
-import { ETHNIC_GROUPS, ETHNIC_GROUP_IDS } from '@/lib/ethnicGroups';
+import { describe, it, expect, beforeEach } from 'vitest';
+
 import ethnicZonesData from '@/data/ethnic-zones.json';
+import { ETHNIC_GROUPS, ETHNIC_GROUP_IDS } from '@/lib/ethnicGroups';
+import { useLayerStore } from '@/stores/layerStore';
 
 describe('EthnicOverlay', () => {
   it('ETHNIC_GROUPS has exactly 10 entries', () => {
@@ -72,12 +73,6 @@ describe('EthnicOverlay component', () => {
     }
     render(<TestComponent />);
     expect(result).toEqual([]);
-  });
-
-  it('EthnicOverlay component mounts without error when active', async () => {
-    useLayerStore.setState({ activeLayers: new Set(['ethnic']) });
-    const { EthnicOverlay } = await import('@/components/map/layers/EthnicOverlay');
-    expect(() => render(<EthnicOverlay />)).not.toThrow();
   });
 
   it('LEGEND_REGISTRY contains ethnic entry after EthnicOverlay module is imported', async () => {

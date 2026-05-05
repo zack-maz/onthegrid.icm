@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
+
 import { useShipStore, SHIP_STALE_THRESHOLD } from '@/stores/shipStore';
 import type { ShipEntity, CacheResponse } from '@/types/entities';
 
-export const SHIP_POLL_INTERVAL = 30_000;
+// Phase 28.1 W5 D-12 — env-tunable ship polling cadence. Default preserves
+// pre-W5 behavior (30s poll).
+export const SHIP_POLL_INTERVAL = Number(import.meta.env.VITE_POLL_SHIPS_MS ?? 30_000);
 
 export function useShipPolling(): void {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

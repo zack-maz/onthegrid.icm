@@ -1,4 +1,8 @@
 import { useRef, useLayoutEffect, useState } from 'react';
+
+import { computeAttackStatus } from '@/lib/attackStatus';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
 import type {
   MapEntity,
   FlightEntity,
@@ -7,9 +11,6 @@ import type {
   SiteEntity,
 } from '@/types/entities';
 import { isConflictEventType, EVENT_TYPE_LABELS, SITE_TYPE_LABELS } from '@/types/ui';
-import { useEventStore } from '@/stores/eventStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { computeAttackStatus } from '@/lib/attackStatus';
 
 interface EntityTooltipProps {
   entity: MapEntity | SiteEntity;

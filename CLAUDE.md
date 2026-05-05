@@ -16,6 +16,26 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Phase boundaries** — before starting a new phase: commit, push, merge previous phase to main, update all docs, then create new branch from main
 - **TypeScript** — pinned to ~5.9.3 to avoid TS 6.0 breaking changes
 
+## Environment Variables (Phase 28.1+)
+
+Operator-tunable runtime levers introduced in Phase 28.1 W5 D-12. All have working defaults; override at Vercel deploy time only when tuning incident response. Client-tier vars use the `VITE_*` prefix so Vite exposes them to the browser bundle.
+
+- **Polling intervals (ms):** `VITE_POLL_FLIGHTS_MS` (5000), `VITE_STALE_FLIGHT_MS` (60000), `VITE_POLL_SHIPS_MS` (30000), `VITE_POLL_EVENTS_MS` (900000), `VITE_POLL_NEWS_MS` (900000), `VITE_POLL_MARKETS_MS` (300000), `VITE_POLL_WATER_PRECIP_MS` (21600000), `VITE_POLL_WEATHER_MS` (1800000), `VITE_POLL_LLM_STATUS_ACTIVE_MS` (5000), `VITE_POLL_LLM_STATUS_IDLE_MS` (30000)
+- **Spatial thresholds (km):** `VITE_ATTACK_RADIUS_KM` (5), `VITE_PROXIMITY_ALERT_KM` (5)
+- **Severity scoring (hours):** `VITE_SEVERITY_HALF_LIFE_HOURS` (24)
+
+See `.env.example` for current defaults and one-line purposes. Domain-definitional constants (`IRAN_BBOX`, `IRAN_CENTER`, `WAR_START`, `ADSB_RADIUS_NM`) are NOT env-tunable per D-11; they live in `src/lib/domain.ts` (canonical) with a byte-identical mirror in `server/config.ts` enforced by `src/__tests__/domain.test.ts`.
+
+## Color Tokens (Phase 28.1+)
+
+D-13 single source of truth for all entity / event / site / faction / ethnic colors. Tailwind utilities and deck.gl both pull from one definition; theme drift is mechanically impossible.
+
+- **`src/styles/app.css` `@theme` block** — canonical declaration of 24 entity color CSS vars: `--color-flight`, `--color-flight-unidentified`, `--color-ship`, `--color-event-{airstrike,on-ground,explosion,targeted,other}`, `--color-site-{healthy,attacked}`, `--color-faction-{us,iran,neutral,disputed}-aligned/disputed`, `--color-ethnic-{kurdish,arab,persian,baloch,turkmen,druze,alawite,yazidi,assyrian,pashtun}`. Hex (NOT OKLCH) so the bridge's hex parser can roundtrip cleanly to RGBA tuples.
+- **`src/lib/colorBridge.ts`** — module-load CSS-var reader. Reads each `--color-*` var ONCE via `getComputedStyle(document.documentElement)`, parses to `[r, g, b]` tuples for deck.gl `getColor` callbacks (no per-frame `getComputedStyle` cost) and re-exports as hex strings for HTML/CSS consumers. SSR/jsdom fallback returns the TS-literal default (byte-identical to runtime).
+- **Consumers** — `src/components/map/layers/constants.ts ENTITY_COLORS` / `ENTITY_DOT_COLORS` (deck.gl IconLayer + toggle dots), `src/lib/factions.ts FACTION_COLORS` (Phase 24 political boundaries), `src/lib/ethnicGroups.ts ETHNIC_GROUPS` (Phase 25 ethnic overlay) all source from `colorBridge` — no inline hex/RGBA literals remain in the consumers.
+- **Byte-identity sentinel** — `src/__tests__/lib/colorBridge.test.ts` asserts every bridge fallback default matches the corresponding `ENTITY_COLORS` / `ENTITY_DOT_COLORS` / `FACTION_COLORS` / `ETHNIC_GROUPS` value at runtime. Drift in any direction fails the test on the next `vitest run`.
+- **Stays as TS literals** (per CONTEXT D-13) — `ICON_SIZE`, `PULSE_CONFIG`, `altitudeToOpacity` in `layers/constants.ts` are deck.gl rendering props, not styling. `SITE_SUBTYPE_COLORS` / `WATER_TYPE_COLORS` (Phase 15 / 26) are out of D-13 scope. `ETHNIC_GROUPS` alpha (140 / ~55%) is owned by `ethnicGroups.ts`, not by `@theme` (alpha is a rendering attribute, not a brand color).
+
 ## Map Patterns
 
 - **DeckGLOverlay** wraps MapboxOverlay via `useControl` hook from react-maplibre
@@ -36,7 +56,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - `src/components/map/constants.ts` — map configuration (terrain, bounds, styles)
 - `src/components/map/BaseMap.tsx` — main map component with all overlays
 - `src/components/layout/AppShell.tsx` — root layout shell (wires all four polling hooks)
-- `src/components/ui/StatusPanel.tsx` — HUD status panel (visible entity counts + connection dots)
+- `src/components/layout/StatusDropdown.tsx` — Topbar HUD status dropdown (visible entity counts + connection dots; replaces Phase 19-displaced StatusPanel)
 - `src/components/layout/LayerTogglesSlot.tsx` — layer toggle panel (8 rows)
 - `src/components/layout/DetailPanelSlot.tsx` — right-side detail panel (360px slide-out)
 - `src/hooks/useSelectedEntity.ts` — cross-store entity lookup with lost contact tracking
@@ -57,8 +77,8 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Entity types**: `flight`, `ship`, plus 11 `ConflictEventType` values, plus `site` (separate from MapEntity union)
 - **FlightEntity.data** — includes `unidentified: boolean` flag for hex-only/no-callsign flights
 - **API endpoints**: `/api/flights`, `/api/ships`, `/api/events`, `/api/sites`, `/api/news` (separate, independent caching)
-- **IRAN_BBOX** — covers Greater Middle East (south:15, north:42, west:30, east:70), not just Iran
-- **IRAN_CENTER** — (30.0, 50.0) with 500 NM radius for ADS-B queries
+- **IRAN_BBOX** — covers Greater Middle East + Mediterranean + Arabian Sea (south:0.0, north:50.0, west:20.0, east:80.0), defined in `src/lib/domain.ts` as of Phase 28.1 W5 D-11. Note: prior CLAUDE.md drafts said "(south:15, north:42, west:30, east:70)" — that was doc drift; the (0,50,20,80) values are the authoritative runtime behavior preserved through Phase 28.1.
+- **IRAN_CENTER** — (28.0, 45.0) with 1200 NM radius for ADS-B queries. Defined in `src/lib/domain.ts` as of Phase 28.1 W5 D-11 (canonical home moved from server/config.ts; server retains a byte-identical copy enforced by the parity test in `src/__tests__/domain.test.ts`). Note: prior CLAUDE.md drafts said "(30.0, 50.0) with 500 NM" — that was doc drift; the (28.0, 45.0) + 1200 NM values are the authoritative runtime behavior preserved through Phase 28.1.
 
 ## Flight Data Patterns (Phase 4+)
 
@@ -77,7 +97,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **FlightSource type** — defined in `src/types/ui.ts` to avoid circular imports with server types
 - **Polling intervals** — OpenSky 5s, ADS-B Exchange 260s, adsb.lol 30s
 - **V2 normalizer** — shared normalizer in `server/adapters/adsb-v2-normalize.ts` for ADS-B Exchange and adsb.lol
-- **StatusPanel** — replaces SourceSelector, shows 3-line HUD (flights/ships/events with colored health dots)
+- **StatusDropdown** — Topbar-housed 3-line HUD (flights/ships/events with colored health dots; introduced Phase 19 to replace StatusPanel + SourceSelector)
 - **/api/sources** — returns per-source configuration status
 - **Persistence** — selected flight source stored in `localStorage`
 
@@ -87,7 +107,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Event store** — `src/stores/eventStore.ts` with no stale clearing (historical data)
 - **Polling hooks** — `useShipPolling` (30s), `useEventPolling` (900s / 15 min)
 - **AppShell** — wires all four: `useFlightPolling()`, `useShipPolling()`, `useEventPolling()`, `useSiteFetch()`
-- **Entity colors** — flights yellow (#eab308), unidentified red (#ef4444), ships purple (#a78bfa), airstrikes bright red (#ff3b30), ground combat red (#ef4444), targeted dark red (#8b1e1e), other conflict red (#ef4444)
+- **Entity colors** — flights yellow (#eab308), unidentified shiny bright yellow (#ffff64 — see Color Tokens), ships purple (#a78bfa), airstrikes bright red (#ff3b30), on_ground dark burnt red (#b43214), explosion vibrant orange-red (#ff5f19), targeted dark crimson (#8b1e1e), other light red (#dc5a5a). All sourced from CSS `@theme` via `src/lib/colorBridge.ts` (Phase 28.1 W6 D-13).
 - **Entity icons** — flights/ships use chevron, airstrikes use starburst, ground combat uses explosion, targeted uses crosshair, other conflict uses xmark
 - **Icon sizing** — flights/ships 4000m base (minPixels:24, maxPixels:160); events 3000m base (minPixels:16, maxPixels:120); sites 2000m base (minPixels:12, maxPixels:80)
 
@@ -120,8 +140,8 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Precision** — `exact` | `neighborhood` | `city` | `region`, shown as radius rings on map
 - **PrecisionRingLayer** — `src/components/map/PrecisionRingLayer.tsx`, ScatterplotLayer with radiusUnits: 'meters'
 - **Toggle system** — master `showEvents` + 5 sub-toggles (one per type) in filterStore
-- **Event colors** — red spectrum: airstrike bright red (#ff3b30), on_ground dark red (#c0392b), explosion orange-red (#e74c3c), targeted crimson (#dc143c), other maroon (#800000)
-- **EVENT_TYPE_COLORS** — `src/lib/eventColors.ts`, shared color constants for layers/toggles/icons
+- **Event colors** — red spectrum: airstrike bright red (#ff3b30), on_ground dark burnt red (#b43214), explosion vibrant orange-red (#ff5f19), targeted dark crimson (#8b1e1e), other light red (#dc5a5a). Phase 28.1 W6 surfaced doc-drift here vs CONTEXT D-13's spec values (#c0392b/#e74c3c/#dc143c/#800000); per W5 Pattern 3, runtime hex values were preserved and CLAUDE.md updated to match. All values live in `src/styles/app.css` `@theme` block; see Color Tokens.
+- **Event color exports** — `src/components/map/layers/constants.ts ENTITY_COLORS` (RGBA tuples for deck.gl) and `ENTITY_DOT_COLORS` (hex strings for toggles), both sourced from `src/lib/colorBridge.ts`. There is no separate `src/lib/eventColors.ts` file (CONTEXT D-13's reference to it is doc drift; Phase 28.1 W6 confirmed absent).
 
 ## Layer Controls & Tooltips (Phase 9-10)
 
@@ -134,7 +154,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **EntityTooltip** — `src/components/map/EntityTooltip.tsx`, renders per-type content (flight metadata, ship AIS, GDELT event data with source link)
 - **Hover/highlight** — glow (2x, alpha 60) + highlight (1.2x, full alpha) layers with `pickable: false` to prevent blink
 - **Active entity dimming** — non-active entities dim to alpha 80; active entity stays full opacity (no alpha=0)
-- **StatusPanel counts** — derived from actual entity arrays filtered by toggle state and entity type
+- **StatusDropdown counts** — derived from actual entity arrays filtered by toggle state and entity type
 - **Zoom controls** — NavigationControl showZoom enabled
 - **localStorage migration** — old showDrones/showMissiles/showNews keys auto-detected and reset to new defaults
 
@@ -155,7 +175,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 ## Analytics Counters (Phase 12)
 
-- **CountersSlot** — `src/components/layout/CountersSlot.tsx`, collapsible OverlayPanel with Flights + Events sections
+- **CountersContent** — `src/components/layout/Sidebar.tsx` (function at line 76), inline section in Sidebar with Flights + Events panels (replaced standalone CountersSlot in Phase 23.1+)
 - **CounterRow** — `src/components/counters/CounterRow.tsx`, label + value with fixed-width label column (w-24) for vertical alignment, green +N delta with 3s fade animation
 - **useCounterData** — `src/components/counters/useCounterData.ts`, derives visible-only counts from filtered entities + toggle state
 - **Visibility-aware** — counters reflect only visible entities (smart filters + toggle gating matching useEntityLayers logic)
@@ -182,7 +202,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Bundle** — tsup bundles `server/vercel.ts` → `dist-server/vercel.cjs` (CommonJS for Vercel)
 - **vercel.json** — rewrites `/api/*` → serverless function, everything else → SPA `index.html`
 - **Rate limiting** — `express-rate-limit` middleware in `server/middleware/rateLimiter.ts`
-- **Graceful config** — `loadConfig()` returns defaults for missing env vars instead of throwing
+- **Fail-fast config** — Phase 26.3+ `parseEnv()` (Zod) throws on missing/malformed env vars at startup; the prior "Graceful config" defaults pattern was retired (see Phase 28.1 W7 SUMMARY).
 - **Node engine** — pinned `>=20` in package.json
 - **Build** — `npm run build` runs Vite (frontend) + tsup (server) + tsc (typecheck)
 
@@ -222,14 +242,14 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 - **Severity scoring** — `src/lib/severity.ts`, formula: typeWeight × log(mentions+1) × log(sources+1) × recencyDecay
 - **Type weights** — airstrike 10, wmd 10, ground_combat 8, shelling 8, bombing 8, mass_violence 9, assassination 7, others 3-5
-- **Recency decay** — exponential decay over 24h (halfLife = 6h)
+- **Recency decay** — exponential decay; default half-life 24h via `VITE_SEVERITY_HALF_LIFE_HOURS` (Phase 28.1 W5 D-12). Note: prior CLAUDE.md drafts said "halfLife = 6h" — that was doc drift; the 24h scale is the authoritative runtime behavior preserved through Phase 28.1.
 - **News matching** — `src/lib/newsMatching.ts`, correlates GDELT events with news clusters by temporal proximity (±6h) + geographic/keyword overlap
 - **Time grouping** — `src/lib/timeGroup.ts`, buckets: "Last hour", "Last 6 hours", "Last 24 hours"
 - **notificationStore** — `src/stores/notificationStore.ts`, derives scored notifications from eventStore + newsStore
 - **useNotifications** — `src/hooks/useNotifications.ts`, connects stores, derives notifications, provides mark-read and fly-to actions
 - **NotificationBell** — `src/components/layout/NotificationBell.tsx`, bell icon with unread badge, click opens dropdown
 - **NotificationCard** — `src/components/notifications/NotificationCard.tsx`, severity-scored card with event type and matched news headlines
-- **Proximity alerts** — `src/hooks/useProximityAlerts.ts`, detects flights/ships within 50km of key sites
+- **Proximity alerts** — `src/hooks/useProximityAlerts.ts`, detects flights/ships within `VITE_PROXIMITY_ALERT_KM` of key sites (default 5km — Phase 28.1 W5 D-12). Note: prior CLAUDE.md drafts said "within 50km of key sites" — that was doc drift; the 5km radius is the authoritative runtime behavior preserved through Phase 28.1.
 - **ProximityAlertOverlay** — `src/components/map/ProximityAlertOverlay.tsx`, animated warning badges on map with expand/collapse popover
 - **24h default window** — `useFilteredEntities` applies 24h recency filter when no custom date range is active
 - **Fly-to-event** — clicking notification flies map to event coordinates and opens detail panel
@@ -277,7 +297,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 ## Counter Entity Dropdowns (Phase 19.2)
 
-- **CountersSlot** — accordion dropdowns showing individual entities per counter row
+- **CountersContent** — accordion dropdowns showing individual entities per counter row (rendered inline in `src/components/layout/Sidebar.tsx`)
 - **Fly-to** — clicking entity in dropdown flies map and opens detail panel
 - **Proximity sorting** — flights/events sorted by distance from Tehran, ships from Strait of Hormuz, sites by attack count
 - **Scrollable lists** — 8+ items show scrollable container with "Showing X-Y of Z" indicator
@@ -313,7 +333,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 
 - **PanelView** — `src/types/ui.ts`, `{ entityId, cluster, breadcrumbLabel }` — represents a saved detail panel state
 - **navigationStack** — `uiStore.navigationStack: PanelView[]`, push/pop actions for back navigation
-- **pushView** — saves current panel state (entity or cluster) before navigating to a new entity; called from 8 sites (ThreatClusterDetail, CountersSlot, SearchModal, Sidebar, SiteDetail, ProximityAlertOverlay, plus BaseMap click)
+- **pushView** — saves current panel state (entity or cluster) before navigating to a new entity; called from 7 sites (ThreatClusterDetail, SearchModal, Sidebar incl. inline CountersContent, SiteDetail, ProximityAlertOverlay, plus BaseMap click)
 - **popView** — restores previous panel state from stack; wired to back button in BreadcrumbRow
 - **BreadcrumbRow** — `src/components/detail/BreadcrumbRow.tsx`, shows breadcrumb trail with back arrow + label from `panelLabel.ts`
 - **panelLabel** — `src/lib/panelLabel.ts`, `getCurrentPanelView()` derives breadcrumb label from current entity/cluster state across all stores
@@ -328,10 +348,10 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **US-aligned** — ISR, SAU, ARE, BHR, JOR, KWT, EGY
 - **Iran-aligned** — IRN, SYR, YEM
 - **Neutral** — all others in region (TUR, QAT, OMN, PAK, AFG, IRQ, LBN, TKM, AZE, ARM, GEO, etc.)
-- **Faction data** — `src/lib/factions.ts`, `Record<string, Faction>` keyed by ISO A3 code, separate from GeoJSON
+- **Faction data** — `src/lib/factions.ts`, `Record<string, Faction>` keyed by ISO A3 code, separate from GeoJSON. Phase 28.1 W6 D-13 — `FACTION_COLORS` hex map sources from `src/lib/colorBridge.ts` (`COLOR_FACTION_*_HEX`); CSS `@theme` block in `src/styles/app.css` is the single source of truth (`--color-faction-{us,iran,neutral,disputed}-aligned/disputed`).
 - **GeoJSON sources** — Natural Earth 110m (countries) + 10m disputed areas, static imports via Vite
 - **Fill opacity** — ~15% (alpha 38/255), borders ~60% (alpha 153/255), faction-colored
-- **Disputed territories** — Gaza, West Bank, Golan Heights from Natural Earth `ne_10m_admin_0_disputed_areas`; amber fill (#f59e0b)
+- **Disputed territories** — Gaza, West Bank, Golan Heights from Natural Earth `ne_10m_admin_0_disputed_areas`; amber fill (#f59e0b — also in `@theme` as `--color-faction-disputed`)
 - **Non-interactive** — no hover/click on country polygons; entity tooltips remain primary
 - **Layer stacking** — political layers first in DeckGLOverlay array (renders below all entity/weather/threat layers)
 - **Legend** — discrete swatch legend in bottom-left via LEGEND_REGISTRY (4 swatches: US, Iran, Neutral, Disputed)
@@ -353,7 +373,7 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Click guard** — `handleDeckClick` returns early for `ethnic-*` layer IDs to prevent crash
 - **Layer stacking** — ethnic layers after political in DeckGLOverlay array (ethnic hatching on top of political fills)
 - **Legend** — discrete 10-swatch entry via `LEGEND_REGISTRY`
-- **Ethnic group config** — `src/lib/ethnicGroups.ts`, `EthnicGroup` type, `ETHNIC_GROUPS` record with color/rgba/population/context
+- **Ethnic group config** — `src/lib/ethnicGroups.ts`, `EthnicGroup` type, `ETHNIC_GROUPS` record with color/rgba/population/context. Phase 28.1 W6 D-13 — color and rgba fields source from `src/lib/colorBridge.ts` (`COLOR_ETHNIC_*` tuples + `COLOR_ETHNIC_*_HEX` strings); CSS `@theme` block declares 10 `--color-ethnic-*` vars. The fixed alpha=140 (~55% fill) is owned by `ethnicGroups.ts`, not by `@theme`.
 - **Yazidi absent** — GeoEPR maps Yazidi under Kurdish ("Kurds/Yezidis"); deferred to future patch
 
 ## Water Stress Layer (Phase 26)
@@ -436,3 +456,17 @@ Personal real-time intelligence dashboard for monitoring the Iran conflict. 2.5D
 - **Two-key discipline** — `events:llm:v2` (terminal, `ConflictEventEntity[]` from events.ts:1016) and `events:llm:v2:partial` (observability-only, `LLMCachePayload`) have non-overlapping writers and readers. Original Plan 03 wrote the envelope to the terminal key, which crashed every consumer (`events.map is not a function`, `llmCachedRef.data is not iterable`). Key split landed 2026-04-24 in commit `a5c8846`.
 - **Reader defense-in-depth** — `server/routes/events.ts` exports `toEntityArray(data)` + `coerceCachedEvents(cached)` helpers (commit `e26ceca`). Applied at all 3 `events:llm:v2` read sites (loadRecentEnrichedEvents, /llm-replay, main /api/events). The main-handler coerce happens immediately after read so the sync HTTP path, Pitfall 1 bridge promotion, AND the fire-and-forget `llmCachedRef` iterations (lines ~854, ~1007) all see a guaranteed `ConflictEventEntity[]` — if any future regression reintroduces envelope writes, downstream consumers degrade to "serve empty / let Pitfall 1 bridge take over" instead of HTTP 500.
 - **V1 TS cleanup** — 20 pre-existing `noUncheckedIndexedAccess` errors in `llmEventExtractor.v1.ts` fixed via D-15 local-bind + early-continue (`const current = arr[i]; if (!current) continue;`). Audit confirmed D-16 Zod schema tightening was NOT needed — all 20 were Category A compile-time noise, not runtime possibly-undefined. Total server TS error count: 29 → 8 (remaining 8 are `useEntityLayers.ts` `depthTest` deck.gl v9 drift, deferred to Phase 27.4.3).
+
+## Phase 28.1 Cleanup Sweep — closeout 2026-05-03
+
+Phase 28.1 cleanup sweep complete (all 7 waves). Highlights:
+
+- **API reliability (W2):** `/api/health` aggregate endpoint live at `/health` and `/api/health`. DevApiStatus "All APIs" tab + HealthBanner toast for critical-tier outages. Per-endpoint freshness thresholds + tier classification per D-25/D-26.
+- **Ghost code sweep (W3+W4):** modules deleted via knip + ts-prune triage. `server/adapters/acled.ts` preserved as inactive.
+- **Hardcode generalization (W5, D-12):** 11 operator-tunable env vars introduced (POLL_FLIGHTS_MS, ATTACK_RADIUS_KM, SEVERITY_HALF_LIFE_HOURS, etc. — see .env.example).
+- **Domain constants (W5, D-11):** IRAN_BBOX, IRAN_CENTER, WAR_START, ADSB_RADIUS_NM centralized at `src/lib/domain.ts`; `server/config.ts` re-exports.
+- **Drift resolutions (W5):** severity half-life 24h authoritative; ADS-B radius 1200 NM authoritative; IRAN_CENTER (28.0, 45.0) authoritative.
+- **CSS @theme migration (W6, D-13):** entity / event / site / faction colors migrated to `src/styles/app.css` `@theme` block; deck.gl bridge via `src/lib/colorBridge.ts`.
+- **Normalization pass (W7, D-27):** `tsc --noEmit` 0 errors; `npm run lint` 0 errors and 0 react-hooks/exhaustive-deps warnings (down from 6); ESLint `import/order` rule live with 0 violations across src/ + server/; cron-warm Redis keys aligned with route readers (`sites:v2` → `sites:v3`, `water:facilities` → `water:facilities:v3`); audit doc at `.planning/phases/28.1-cleanup-sweep/28.1-W7-REDIS-AUDIT.md`.
+- **Logging convention** — server-side modules use `logger.child({ module: '<name>' })` from the existing `server/lib/logger.ts` pino instance. W7 audit confirmed 0 `console.*` calls in `server/lib/llmEventExtractor.v3.ts`, `server/adapters/*.ts`, and `server/routes/*.ts` (all migrated in earlier phases). Do NOT create `server/lib/log.ts`.
+- **Redis key bridge preserved:** all Phase 27.4.x load-bearing keys (events:llm:v3, sites:v3, water:facilities:v3, events:llm:v2, events:llm:v3:partial, events:llm-dlq, events:llm-pipeline-override, events:llm-process-ts, events:llm-eval-baseline:v3, geocode:fwd:constrained:v2:\*, llm:tokens:\*, news:gdelt, news:feed, etc.) UNCHANGED. Audit at `.planning/phases/28.1-cleanup-sweep/28.1-W7-REDIS-AUDIT.md`.

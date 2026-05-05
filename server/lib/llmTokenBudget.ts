@@ -8,8 +8,13 @@
  */
 
 import { redis } from '../cache/redis.js';
+
 import { logger } from './logger.js';
+
+// Type imports separated from value imports for readability (W7 sub-6).
+import type { EventGroup } from './eventGrouping.js';
 import type { Provider as BreakerProvider } from './llmCircuitBreaker.js';
+import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 
 const log = logger.child({ module: 'llm-token-budget' });
 
@@ -90,9 +95,6 @@ export function budgetState(provider: Provider, used: number): 'ok' | 'soft' | '
 //                             the highest-severity events; no-op when not
 //                             soft-capped to avoid overhead on the hot path.
 // ---------------------------------------------------------------------------
-
-import type { EventGroup } from './eventGrouping.js';
-import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 
 /**
  * Type-based severity weights for conflict event types. Same weights as the

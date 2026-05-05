@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import type { SiteEntity } from '@/types/entities';
-import { SITE_TYPE_LABELS, EVENT_TYPE_LABELS } from '@/types/ui';
+
+import { useSiteImage } from '@/hooks/useSiteImage';
+import { computeAttackStatus } from '@/lib/attackStatus';
+import { getCurrentPanelView } from '@/lib/panelLabel';
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useUIStore } from '@/stores/uiStore';
-import { getCurrentPanelView } from '@/lib/panelLabel';
-import { computeAttackStatus } from '@/lib/attackStatus';
-import { useSiteImage } from '@/hooks/useSiteImage';
+import type { SiteEntity } from '@/types/entities';
+import { SITE_TYPE_LABELS, EVENT_TYPE_LABELS } from '@/types/ui';
+
 import { DetailValue } from './DetailValue';
 
 interface SiteDetailProps {

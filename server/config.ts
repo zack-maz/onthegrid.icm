@@ -2,6 +2,7 @@
 // Single source of truth for all server environment variables and constants.
 
 import { z } from 'zod';
+
 import type { BoundingBox } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -227,7 +228,15 @@ export function loadConfig(): AppConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Constants (moved from server/constants.ts — same export names)
+// Domain-definitional constants (Phase 28.1 W5 D-11)
+//
+// Canonical home for the client tier is `src/lib/domain.ts`. This server-side
+// copy exists because tsconfig.server.json (`include: ["server","api"]`)
+// excludes the src/ tree, so a cross-tier re-export is not buildable.
+//
+// Drift sentinel: `src/__tests__/domain.test.ts` asserts byte-identity between
+// the two copies on every CI run. Editing any of these values here REQUIRES
+// the same edit to src/lib/domain.ts in the same commit.
 // ---------------------------------------------------------------------------
 
 /** Start of the US-Iran war — earliest date for historical event data */

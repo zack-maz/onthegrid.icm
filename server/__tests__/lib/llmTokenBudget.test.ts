@@ -52,6 +52,7 @@ import {
   shouldPauseNewEvents,
   prioritizeBySeverity,
 } from '../../lib/llmTokenBudget.js';
+
 import type { EventGroup } from '../../lib/eventGrouping.js';
 import type { ConflictEventEntity } from '../../types.js';
 

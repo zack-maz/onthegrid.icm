@@ -1,6 +1,8 @@
-import type { Request, Response, NextFunction } from 'express';
 import { Ratelimit } from '@upstash/ratelimit';
+
 import { redis } from '../cache/redis.js';
+
+import type { Request, Response, NextFunction } from 'express';
 
 /**
  * Create a sliding-window rate limiter middleware backed by Upstash Redis.
@@ -98,23 +100,33 @@ export const rateLimiters = {
   /** 10 req/min — water facilities are static, fetched once on mount. */
   water: createRateLimiter(10, 60),
   /**
-   * 6 req/min — portfolio demo baseline tier.
+   * 60 req/min — public global pre-filter for /api/* routes.
    *
    * Applied as a _global_ pre-filter across all `/api/*` routes in
    * `server/index.ts`, running _before_ the per-endpoint limiters above.
-   * Its job is to protect the live demo URL (published in the README hero
-   * after Phase 26.4-04) from scraper abuse. The Redis command budget is
-   * already at ~92% per `.planning/STATE.md`; a single aggressive crawler
-   * could otherwise tip it over.
+   * Job: catch obvious scraper abuse / runaway client recursion while
+   * staying out of the way of legitimate dashboard sessions.
    *
-   * Why 6 and not 10? The smallest per-endpoint tier (sites/weather/water/
-   * geocode) is 10 req/min, so 6 is strictly tighter. A legitimate browser
-   * session that respects the UI polling cadence will never touch this
-   * ceiling — it only bites scrapers and `curl` loops. A user who bumps
-   * into it gets the canonical 429 envelope and can back off politely.
+   * Sized for the live dashboard's actual cold-start + steady-state cost:
+   * AppShell mounts ~9 polling hooks (flights, ships, events, news,
+   * markets, weather, water, waterPrecip, llmStatus) which burst-fire
+   * their first fetch in <50ms. Steady-state ~20-25 req/min per tab from
+   * flight polling + llm-status + health probe. Two open tabs ≈ 50/min.
+   * 60/min handles both with margin.
    *
-   * Key prefix `'ratelimit:public'` namespaces this tier's counters so they
-   * don't collide with per-endpoint counters under `'ratelimit:prod'`.
+   * History: was 6/min (Plan 26.4-04). At that cap the dashboard tripped
+   * its own rate limit on cold-start because hooks 7+ in the burst hit
+   * 429 → setError → red dots. Raised in Phase 28.1 hot-fix on the same
+   * branch as the cleanup sweep. Phase 28.2 D-04 will add Bearer bypass
+   * for operator browsers, restoring tighter caps for anonymous traffic.
+   *
+   * The "strictly tighter than per-endpoint" property no longer holds —
+   * sites/weather/water/geocode are 10/min, public is 60/min, so per-
+   * endpoint limiters dominate for those routes. That's intentional:
+   * public is a coarse abuse filter, per-endpoint is the real budget.
+   *
+   * Key prefix `'ratelimit:public'` namespaces this tier's counters so
+   * they don't collide with per-endpoint counters under `'ratelimit:prod'`.
    */
-  public: createRateLimiter(6, 60, 'ratelimit:public'),
+  public: createRateLimiter(60, 60, 'ratelimit:public'),
 } as const;

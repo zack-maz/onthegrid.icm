@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { FACTION_ASSIGNMENTS, FACTION_COLORS, getFaction } from '@/lib/factions';
 
 // Import static GeoJSON data for integrity checks
 import countriesData from '@/data/countries.json';
 import disputedData from '@/data/disputed.json';
+import { FACTION_ASSIGNMENTS, FACTION_COLORS, getFaction } from '@/lib/factions';
 
 describe('factions', () => {
   describe('FACTION_ASSIGNMENTS', () => {

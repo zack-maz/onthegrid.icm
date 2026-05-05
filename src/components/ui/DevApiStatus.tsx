@@ -1,19 +1,25 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { useNewsStore } from '@/stores/newsStore';
-import { useMarketStore } from '@/stores/marketStore';
-import { useWeatherStore } from '@/stores/weatherStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
+
+import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
 import { shouldRenderDashboard, dashboardAuthHeaders } from '@/lib/dashboardAuth';
+import type { EndpointHealth, HealthResponse, HealthStatus, HealthTier } from '@/lib/healthClient';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useMarketStore } from '@/stores/marketStore';
+import { useNewsStore } from '@/stores/newsStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
+import { useWaterStore } from '@/stores/waterStore';
+import { useWeatherStore } from '@/stores/weatherStore';
+// Phase 28.1 W2 — DevApiStatus All APIs tab consumes the shared
+// HealthStatusProvider context. NEVER import useHealthStatus directly here
+// (that would double the /api/health poll rate against HealthBanner).
 
 interface FetchEntry {
   ok: boolean;
@@ -741,6 +747,20 @@ export function DevApiStatus() {
   const showWaterTab = true;
   const showSitesTab = useFilterStore((s) => s.showSites);
   const showEventsTab = shouldRenderDashboard();
+  // Phase 28.1 W2 — All APIs tab is operator-observability surface and is
+  // always visible whenever the modal renders. Mirrors the Phase 27.4.6
+  // always-visible-tab contract for Events + Water.
+  const showAllApisTab = true;
+
+  // Phase 28.1 W2 — read shared health context. Single-poll guarantee:
+  // HealthBanner + this tab BOTH consume from one HealthStatusProvider
+  // instance wrapping AppShell, so /api/health is fetched once per cycle.
+  const {
+    health: aggregateHealth,
+    loading: healthLoading,
+    error: healthError,
+  } = useHealthStatusContext();
+  const hasCriticalUnhealthy = !!aggregateHealth && aggregateHealth.summary.critical.unhealthy > 0;
 
   // Escape key — capture-phase so DevApiStatus closes BEFORE nav-stack pop /
   // detail panel close / search modal close (Plan 12 G6 priority contract).
@@ -832,6 +852,16 @@ export function DevApiStatus() {
                 Events
               </TabButton>
             )}
+            {showAllApisTab && (
+              <TabButton
+                active={activeTab === 'allApis'}
+                onClick={() => setTab('allApis')}
+                indicator={hasCriticalUnhealthy ? 'red' : undefined}
+                testid="tab-all-apis"
+              >
+                All APIs
+              </TabButton>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -886,8 +916,238 @@ export function DevApiStatus() {
             ) : (
               <EventsFiltersSectionV3 llmStatus={llmStatus} />
             ))}
+          {activeTab === 'allApis' && showAllApisTab && (
+            <DevApiStatusAllApisTab
+              health={aggregateHealth}
+              loading={healthLoading}
+              error={healthError}
+            />
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------- Phase 28.1 W2 — All APIs Tab ---------- */
+
+const STATUS_PILL_CLASSES: Record<HealthStatus, string> = {
+  healthy: 'bg-accent-green/20 text-accent-green',
+  degraded: 'bg-accent-yellow/20 text-accent-yellow',
+  unhealthy: 'bg-accent-red/20 text-accent-red',
+  unknown: 'bg-text-muted/20 text-text-muted',
+};
+
+const TIER_BORDER_CLASSES: Record<HealthTier, string> = {
+  critical: 'border-accent-red',
+  'non-critical': 'border-accent-yellow',
+  static: 'border-text-muted',
+  'probe-only': 'border-text-muted',
+  cron: 'border-accent-blue',
+};
+
+const TIER_LABEL: Record<HealthTier, string> = {
+  critical: 'CRITICAL',
+  'non-critical': 'NON-CRITICAL',
+  static: 'STATIC',
+  'probe-only': 'PROBE',
+  cron: 'CRON',
+};
+
+const TIER_GROUP_LABEL: Record<HealthTier, string> = {
+  critical: 'Critical',
+  'non-critical': 'Non-critical',
+  static: 'Static',
+  'probe-only': 'Probe-only',
+  cron: 'Cron',
+};
+
+const STATUS_SORT_ORDER: Record<HealthStatus, number> = {
+  unhealthy: 0,
+  degraded: 1,
+  unknown: 2,
+  healthy: 3,
+};
+
+const TIER_SORT_ORDER: Record<HealthTier, number> = {
+  critical: 0,
+  'non-critical': 1,
+  static: 2,
+  'probe-only': 3,
+  cron: 4,
+};
+
+function freshnessText(ms: number | null): string {
+  if (ms === null) return '--';
+  if (ms < 1_000) return `${ms}ms`;
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h`;
+  return `${Math.round(ms / 86_400_000)}d`;
+}
+
+function freshnessCellClass(ep: EndpointHealth): string {
+  if (ep.status === 'unhealthy') return 'text-accent-red';
+  if (ep.status === 'degraded') return 'text-accent-yellow';
+  return 'text-white/50';
+}
+
+function DevApiStatusAllApisTab({
+  health,
+  loading,
+  error,
+}: {
+  health: HealthResponse | null;
+  loading: boolean;
+  error: Error | null;
+}) {
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  // Sorted, tier-grouped row list. Stable across re-renders so the
+  // expanded-row anchor doesn't jump as polling cycles update freshness.
+  const groupedRows = useMemo(() => {
+    if (!health) return [] as Array<{ tier: HealthTier; rows: EndpointHealth[] }>;
+    const all = Object.values(health.endpoints);
+    all.sort((a, b) => {
+      const tierDelta = TIER_SORT_ORDER[a.tier] - TIER_SORT_ORDER[b.tier];
+      if (tierDelta !== 0) return tierDelta;
+      const statusDelta = STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status];
+      if (statusDelta !== 0) return statusDelta;
+      // Tertiary: largest freshness first (most stale at top within status)
+      const af = a.freshnessMs ?? -1;
+      const bf = b.freshnessMs ?? -1;
+      return bf - af;
+    });
+    const groups: Array<{ tier: HealthTier; rows: EndpointHealth[] }> = [];
+    let current: { tier: HealthTier; rows: EndpointHealth[] } | null = null;
+    for (const row of all) {
+      if (!current || current.tier !== row.tier) {
+        current = { tier: row.tier, rows: [] };
+        groups.push(current);
+      }
+      current.rows.push(row);
+    }
+    return groups;
+  }, [health]);
+
+  // Loading state — initial fetch in flight, no prior data
+  if (loading && !health) {
+    return (
+      <div className="space-y-2" data-testid="all-apis-loading">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-6 animate-pulse rounded bg-white/5" />
+        ))}
+      </div>
+    );
+  }
+
+  // Error state — poll failed AND no prior data
+  if (error && !health) {
+    return (
+      <div className="py-6 text-center text-text-muted" data-testid="all-apis-error-no-data">
+        /api/health unreachable since page load. Check server logs.
+      </div>
+    );
+  }
+
+  if (!health) {
+    return (
+      <div className="py-6 text-center text-text-muted" data-testid="all-apis-empty">
+        No endpoints configured.
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="all-apis-tab">
+      {error && health && (
+        <div
+          className="mb-2 border-l-2 border-accent-yellow bg-yellow-950/40 px-3 py-1 text-[10px] text-accent-yellow"
+          data-testid="all-apis-stale-banner"
+        >
+          Last poll failed at {new Date().toUTCString()}. Showing cached values.
+        </div>
+      )}
+      <table className="w-full">
+        <thead>
+          <tr className="text-white/40">
+            <th className="pr-1 text-left font-normal">Endpoint</th>
+            <th className="pr-1 text-left font-normal">Tier</th>
+            <th className="pr-1 text-left font-normal">Status</th>
+            <th className="pr-1 text-right font-normal">Freshness</th>
+            <th className="pr-1 text-right font-normal">Latency</th>
+            <th className="text-left font-normal">Last error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groupedRows.map((group) => (
+            <React.Fragment key={group.tier}>
+              <tr>
+                <td
+                  colSpan={6}
+                  className="border-t border-white/10 py-1 text-[9px] uppercase tracking-wider text-white/40"
+                >
+                  {TIER_GROUP_LABEL[group.tier]}
+                </td>
+              </tr>
+              {group.rows.map((ep) => {
+                const isExpanded = expandedRow === ep.name;
+                const errorTruncated =
+                  ep.lastErrorReason && ep.lastErrorReason.length > 80
+                    ? `…${ep.lastErrorReason.slice(-80)}`
+                    : (ep.lastErrorReason ?? '');
+                return (
+                  <React.Fragment key={ep.name}>
+                    <tr
+                      className="cursor-pointer hover:bg-white/5"
+                      onClick={() => setExpandedRow(isExpanded ? null : ep.name)}
+                      data-testid={`all-apis-row-${ep.name}`}
+                    >
+                      <td className="pr-1">{ep.name}</td>
+                      <td className="pr-1">
+                        <span
+                          className={`rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TIER_BORDER_CLASSES[ep.tier]}`}
+                        >
+                          {TIER_LABEL[ep.tier]}
+                        </span>
+                      </td>
+                      <td className="pr-1">
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${STATUS_PILL_CLASSES[ep.status]}`}
+                        >
+                          {ep.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td
+                        className={`pr-1 text-right tabular-nums ${freshnessCellClass(ep)}`}
+                        title={ep.lastSuccessTs ? new Date(ep.lastSuccessTs).toISOString() : ''}
+                      >
+                        {freshnessText(ep.freshnessMs)}
+                      </td>
+                      <td className="pr-1 text-right tabular-nums text-white/50">
+                        {ep.latencyMs === null ? '--' : `${ep.latencyMs}ms`}
+                      </td>
+                      <td className="truncate text-white/40">{errorTruncated}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={6} className="rounded border border-white/5 bg-white/5 p-1.5">
+                          <pre
+                            className="whitespace-pre-wrap text-[9px] text-white/60"
+                            data-testid={`all-apis-row-expanded-${ep.name}`}
+                          >
+                            {JSON.stringify(ep, null, 2)}
+                          </pre>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

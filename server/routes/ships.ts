@@ -1,10 +1,12 @@
 import { Router } from 'express';
+
+import { collectShips } from '../adapters/aisstream.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { logger } from '../lib/logger.js';
 
-const log = logger.child({ module: 'ships' });
-import { collectShips } from '../adapters/aisstream.js';
 import type { ShipEntity } from '../types.js';
+
+const log = logger.child({ module: 'ships' });
 
 export const shipsRouter = Router();
 

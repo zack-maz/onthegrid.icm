@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { createLimit } from './concurrencyLimit.js';
 
 function deferred<T>(): {

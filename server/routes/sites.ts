@@ -1,14 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
-import { logger } from '../lib/logger.js';
+
 import { fetchSites, type SiteFilterStats } from '../adapters/overpass.js';
-import { loadSitesSnapshot } from '../lib/sitesSnapshot.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { SITES_CACHE_TTL } from '../config.js';
+import { logger } from '../lib/logger.js';
+import { loadSitesSnapshot } from '../lib/sitesSnapshot.js';
+import { AppError } from '../middleware/errorHandler.js';
 import { validateQuery } from '../middleware/validate.js';
 import { sendValidated } from '../middleware/validateResponse.js';
 import { sitesResponseSchema } from '../schemas/cacheResponse.js';
-import { AppError } from '../middleware/errorHandler.js';
+
 import type { SiteEntity } from '../types.js';
 
 const log = logger.child({ module: 'sites' });

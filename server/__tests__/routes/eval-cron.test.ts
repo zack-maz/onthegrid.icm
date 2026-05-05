@@ -14,8 +14,8 @@
  * Mock pattern mirrors server/__tests__/routes/health.test.ts.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Router } from 'express';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mutable env mock so per-test CRON_SECRET overrides drive the
 // auth gate path. The real config.ts reads CRON_SECRET via Zod at module-init;

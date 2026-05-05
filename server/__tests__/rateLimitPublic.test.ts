@@ -12,6 +12,7 @@
  * reach the per-endpoint limiter anyway).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import type { Request, Response, NextFunction } from 'express';
 
 // Track arguments passed into Ratelimit.slidingWindow so we can assert the
@@ -80,28 +81,20 @@ describe('rateLimiters.public — portfolio demo tier', () => {
     expect(typeof rateLimiters.public).toBe('function');
   });
 
-  it('is configured with a strict 6 req/60s ceiling', () => {
+  it('is configured with a 60 req/60s ceiling', () => {
     // slidingWindow was called once per limiter at module load. The public
-    // tier must be 6 per 60s — tighter than the smallest per-endpoint tier
-    // (10 req/min) so it acts as a baseline gate before per-endpoint limits.
+    // tier is 60 per 60s — sized to absorb AppShell's ~9-hook mount burst
+    // plus steady-state polling for one or two open tabs without tripping
+    // legitimate dashboard sessions. Per-endpoint limiters underneath
+    // dominate for the 10-req/min routes (sites/water/weather/geocode);
+    // public is a coarse abuse filter, not the route-level budget.
+    // History: was 6/60s pre-Phase-28.1; raised when the dashboard's own
+    // mount burst started self-tripping. See Phase 28.2 D-04 for the
+    // planned Bearer-bypass that will tighten anonymous traffic again.
     const publicConfigCall = slidingWindowSpy.mock.calls.find(
-      ([tokens, window]) => tokens === 6 && window === '60 s',
+      ([tokens, window]) => tokens === 60 && window === '60 s',
     );
     expect(publicConfigCall).toBeDefined();
-  });
-
-  it('is tighter than the smallest per-endpoint limiter (sites/weather/geocode/water = 10 req/min)', () => {
-    // We can't read the tokens back off the mock directly, so instead we
-    // assert the public tier config (6,60) was registered AND the smallest
-    // per-endpoint tier (10,60) was also registered. 6 < 10 proves tighter.
-    const publicCfg = slidingWindowSpy.mock.calls.find(
-      ([tokens, window]) => tokens === 6 && window === '60 s',
-    );
-    const smallestPerEndpointCfg = slidingWindowSpy.mock.calls.find(
-      ([tokens, window]) => tokens === 10 && window === '60 s',
-    );
-    expect(publicCfg).toBeDefined();
-    expect(smallestPerEndpointCfg).toBeDefined();
   });
 
   it('returns the canonical 429 error envelope when the ceiling is exceeded', async () => {

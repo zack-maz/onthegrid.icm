@@ -1,10 +1,11 @@
 import { useState, useCallback, useMemo } from 'react';
-import { useMarketStore } from '@/stores/marketStore';
-import { useUIStore } from '@/stores/uiStore';
-import type { ConnectionStatus, MarketRange } from '@/stores/marketStore';
-import { OverlayPanel } from '@/components/ui/OverlayPanel';
+
 import { MarketRow } from '@/components/markets/MarketRow';
+import { OverlayPanel } from '@/components/ui/OverlayPanel';
 import { useDraggable } from '@/hooks/useDraggable';
+import { useMarketStore } from '@/stores/marketStore';
+import type { ConnectionStatus, MarketRange } from '@/stores/marketStore';
+import { useUIStore } from '@/stores/uiStore';
 
 const STATUS_DOT_CLASS: Record<ConnectionStatus, string> = {
   connected: 'bg-accent-green',

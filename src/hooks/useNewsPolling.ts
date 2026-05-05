@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
+
 import { useNewsStore } from '@/stores/newsStore';
 import type { NewsCluster, CacheResponse } from '@/types/entities';
 
-export const NEWS_POLL_INTERVAL = 900_000;
+// Phase 28.1 W5 D-12 — env-tunable news polling cadence. Default preserves
+// pre-W5 behavior (15min poll, matching GDELT DOC update frequency).
+export const NEWS_POLL_INTERVAL = Number(import.meta.env.VITE_POLL_NEWS_MS ?? 900_000);
 
 export function useNewsPolling(): void {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

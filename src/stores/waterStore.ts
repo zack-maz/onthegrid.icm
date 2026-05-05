@@ -1,6 +1,8 @@
 import { create } from 'zustand';
-import type { WaterFacility, CacheResponse } from '../../server/types';
+
 import { compositeHealth } from '@/lib/waterStress';
+
+import type { WaterFacility, CacheResponse } from '../../server/types';
 
 export type WaterConnectionStatus = 'connected' | 'stale' | 'error' | 'loading' | 'idle';
 

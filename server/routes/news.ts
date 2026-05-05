@@ -1,19 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
-import { logger } from '../lib/logger.js';
 
-const log = logger.child({ module: 'news' });
 import { fetchGdeltArticles } from '../adapters/gdelt-doc.js';
 import { fetchAllRssFeeds } from '../adapters/rss.js';
-import { filterAndScoreArticles } from '../lib/newsFilter.js';
-import { deduplicateAndCluster } from '../lib/newsClustering.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { NEWS_CACHE_TTL, NEWS_REDIS_TTL_SEC, NEWS_SLIDING_WINDOW_MS } from '../config.js';
-import { validateQuery } from '../middleware/validate.js';
+import { logger } from '../lib/logger.js';
+import { deduplicateAndCluster } from '../lib/newsClustering.js';
+import { filterAndScoreArticles } from '../lib/newsFilter.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { validateQuery } from '../middleware/validate.js';
+
 import type { NewsArticle, NewsCluster } from '../types.js';
 
 /** Zod schema for /api/news query params */
+
+const log = logger.child({ module: 'news' });
+
 const newsQuerySchema = z.object({
   refresh: z
     .enum(['true', 'false'])

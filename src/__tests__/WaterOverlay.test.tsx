@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+
+import { WaterTooltip } from '@/components/map/layers/WaterOverlay';
 import { useLayerStore } from '@/stores/layerStore';
 import { useWaterStore } from '@/stores/waterStore';
-import { WaterTooltip } from '@/components/map/layers/WaterOverlay';
+
 import type { WaterFacility } from '../../server/types';
 
 const mockFacility: WaterFacility = {
@@ -129,13 +131,5 @@ describe('useWaterLayers', () => {
     expect(result.riverLayers[0].id).toBe('water-rivers');
     expect(result.riverLayers[1].id).toBe('water-river-labels');
     expect(result.facilityLayers[0].id).toBe('water-facility-icons');
-  });
-});
-
-describe('WaterOverlay component', () => {
-  it('renders null without error', async () => {
-    const { WaterOverlay } = await import('@/components/map/layers/WaterOverlay');
-    const { container } = render(<WaterOverlay />);
-    expect(container.innerHTML).toBe('');
   });
 });

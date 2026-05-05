@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+
 import type { GeocodeProvenance } from '@/types/llm';
 
-const ACTIVE_INTERVAL = 5_000;
-const IDLE_INTERVAL = 30_000;
+// Phase 28.1 W5 D-12 — env-tunable LLM-status polling cadence. Defaults
+// preserve pre-W5 behavior (5s active, 30s idle). Two literals because the
+// poller adapts based on pipeline stage (active = mid-extraction, idle =
+// done/error).
+const ACTIVE_INTERVAL = Number(import.meta.env.VITE_POLL_LLM_STATUS_ACTIVE_MS ?? 5_000);
+const IDLE_INTERVAL = Number(import.meta.env.VITE_POLL_LLM_STATUS_IDLE_MS ?? 30_000);
 
 export interface LLMRunSummary {
   lastRun: number;

@@ -1,7 +1,9 @@
 import { XMLParser } from 'fast-xml-parser';
-import type { NewsArticle } from '../types.js';
-import { hashUrl } from '../lib/newsClustering.js';
+
 import { logger } from '../lib/logger.js';
+import { hashUrl } from '../lib/newsClustering.js';
+
+import type { NewsArticle } from '../types.js';
 
 const log = logger.child({ module: 'rss' });
 

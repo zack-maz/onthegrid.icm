@@ -1,11 +1,13 @@
 import { useMemo, useRef } from 'react';
-import { useUIStore } from '@/stores/uiStore';
+
+import { useEventStore } from '@/stores/eventStore';
 import { useFlightStore } from '@/stores/flightStore';
 import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
 import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
 import { useWaterStore } from '@/stores/waterStore';
 import type { MapEntity, SiteEntity } from '@/types/entities';
+
 import type { WaterFacility } from '../../server/types';
 
 export interface SelectedEntityResult {

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+
 import type { UIState, PanelView } from '@/types/ui';
 
 function readBool(key: string, fallback: boolean): boolean {

@@ -1,5 +1,6 @@
-import type { ShipEntity } from '../types.js';
 import { IRAN_BBOX } from '../config.js';
+
+import type { ShipEntity } from '../types.js';
 
 const DEFAULT_COLLECT_MS = 5000;
 

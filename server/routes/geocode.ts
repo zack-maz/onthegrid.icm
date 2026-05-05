@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
+
 import { reverseGeocode } from '../adapters/nominatim.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { validateQuery } from '../middleware/validate.js';
+
 import type { GeocodedLocation } from '../adapters/nominatim.js';
 
 /** Zod schema for /api/geocode query params */

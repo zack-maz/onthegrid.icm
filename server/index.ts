@@ -1,29 +1,31 @@
-import express from 'express';
-import cors from 'cors';
+import { randomUUID } from 'node:crypto';
+
 import compression from 'compression';
+import cors from 'cors';
+import express from 'express';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
-import { randomUUID } from 'node:crypto';
+
 import { logger } from './lib/logger.js';
-import { errorHandler } from './middleware/errorHandler.js';
 import { cacheControl } from './middleware/cacheControl.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import { rateLimiters } from './middleware/rateLimit.js';
-import { flightsRouter } from './routes/flights.js';
-import { shipsRouter } from './routes/ships.js';
-import { eventsRouter } from './routes/events.js';
-import { sourcesRouter } from './routes/sources.js';
-import { sitesRouter } from './routes/sites.js';
-import { newsRouter } from './routes/news.js';
-import { marketsRouter } from './routes/markets.js';
-import { weatherRouter } from './routes/weather.js';
-import { geocodeRouter } from './routes/geocode.js';
-import { waterRouter } from './routes/water.js';
-import { healthRouter } from './routes/health.js';
 import { cronHealthRouter } from './routes/cron-health.js';
 import { cronWarmRouter } from './routes/cron-warm.js';
-import { evalCronRouter } from './routes/eval-cron.js';
-import { refreshEventsCronRouter } from './routes/refresh-events-cron.js';
 import { dashboardAuthRouter } from './routes/dashboardAuth.js';
+import { evalCronRouter } from './routes/eval-cron.js';
+import { eventsRouter } from './routes/events.js';
+import { flightsRouter } from './routes/flights.js';
+import { geocodeRouter } from './routes/geocode.js';
+import { healthRouter } from './routes/health.js';
+import { marketsRouter } from './routes/markets.js';
+import { newsRouter } from './routes/news.js';
+import { refreshEventsCronRouter } from './routes/refresh-events-cron.js';
+import { shipsRouter } from './routes/ships.js';
+import { sitesRouter } from './routes/sites.js';
+import { sourcesRouter } from './routes/sources.js';
+import { waterRouter } from './routes/water.js';
+import { weatherRouter } from './routes/weather.js';
 export function createApp() {
   const app = express();
 
@@ -81,7 +83,13 @@ export function createApp() {
   });
 
   // Health check (no cache, no rate limit)
+  // Phase 28.1 W2 — mounted at BOTH /health (backward compat for any
+  // operator scripts / Vercel internal probes that hit the legacy path)
+  // AND /api/health (D-22b/D-24 canonical CDN-aligned path consumed by
+  // useHealthStatus + DevApiStatus "All APIs" tab). Both paths return
+  // identical bodies (other than `generatedAt`).
   app.use('/health', healthRouter);
+  app.use('/api/health', healthRouter);
 
   // Cron endpoints (no cache, no rate limit — triggered by Vercel cron)
   app.use('/api/cron/health', cronHealthRouter);

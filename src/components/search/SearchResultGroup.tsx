@@ -1,7 +1,8 @@
-import type { MapEntity, SiteEntity } from '@/types/entities';
-import type { WaterFacility } from '../../../server/types';
-import type { SearchResult } from '@/lib/searchUtils';
 import { SearchResultItem } from '@/components/search/SearchResultItem';
+import type { SearchResult } from '@/lib/searchUtils';
+import type { MapEntity, SiteEntity } from '@/types/entities';
+
+import type { WaterFacility } from '../../../server/types';
 
 type SearchableEntity = MapEntity | SiteEntity | WaterFacility;
 

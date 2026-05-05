@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+
 import { tokenize } from '@/lib/queryParser';
 import { getTagColor, isValidPrefix } from '@/lib/tagRegistry';
 

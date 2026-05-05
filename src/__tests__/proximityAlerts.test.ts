@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { computeProximityAlerts } from '../hooks/useProximityAlerts';
+
 import type { FlightEntity, SiteEntity } from '@/types/entities';
+
+import { computeProximityAlerts } from '../hooks/useProximityAlerts';
 
 function makeFlight(
   overrides: Partial<FlightEntity> & { data?: Partial<FlightEntity['data']> } = {},

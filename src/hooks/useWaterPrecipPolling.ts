@@ -1,8 +1,13 @@
 import { useEffect, useRef } from 'react';
+
 import { useWaterStore } from '@/stores/waterStore';
 import type { PrecipitationData } from '@/stores/waterStore';
 
-export const WATER_PRECIP_POLL_INTERVAL = 21_600_000; // 6 hours
+// Phase 28.1 W5 D-12 — env-tunable water-precip polling cadence. Default
+// preserves pre-W5 behavior (6h poll, matches Open-Meteo precip refresh).
+export const WATER_PRECIP_POLL_INTERVAL = Number(
+  import.meta.env.VITE_POLL_WATER_PRECIP_MS ?? 21_600_000,
+);
 
 interface PrecipResponse {
   data: PrecipitationData[];

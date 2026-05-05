@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest';
-import type { Request, Response, NextFunction } from 'express';
 
 import { cacheControl } from '../../middleware/cacheControl.js';
+
+import type { Request, Response, NextFunction } from 'express';
 
 function createMockRes(): { set: ReturnType<typeof vi.fn>; _headers: Record<string, string> } {
   const headers: Record<string, string> = {};

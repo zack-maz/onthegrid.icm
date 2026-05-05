@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+
 import type { CacheResponse } from '../types.js';
 
 /**

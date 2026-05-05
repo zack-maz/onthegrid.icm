@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+
 import { useNewsStore } from '@/stores/newsStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import type { Notification } from '@/stores/notificationStore';

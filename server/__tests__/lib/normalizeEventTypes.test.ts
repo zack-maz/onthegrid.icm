@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
 import { normalizeEventTypes } from '../../lib/normalizeEventTypes.js';
+
 import type { ConflictEventEntity } from '../../types.js';
 
 /** Helper to create a minimal ConflictEventEntity for testing */

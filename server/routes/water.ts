@@ -9,25 +9,27 @@
 // 27.3.1-02-SUMMARY).
 import { Router } from 'express';
 import { z } from 'zod';
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
-import { logger } from '../lib/logger.js';
 
-const log = logger.child({ module: 'water' });
+import { fetchPrecipitation } from '../adapters/open-meteo-precip.js';
 import { fetchWaterFacilities, type WaterFilterStats } from '../adapters/overpass-water.js';
 import { saveDevWaterCache, loadDevWaterCache } from '../cache/devFileCache.js';
-import { fetchPrecipitation } from '../adapters/open-meteo-precip.js';
-import { loadWaterSnapshot } from '../lib/waterSnapshot.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import {
   WATER_CACHE_TTL,
   WATER_REDIS_TTL_SEC,
   WATER_PRECIP_CACHE_TTL,
   WATER_PRECIP_REDIS_TTL_SEC,
 } from '../config.js';
+import { logger } from '../lib/logger.js';
+import { loadWaterSnapshot } from '../lib/waterSnapshot.js';
 import { validateQuery } from '../middleware/validate.js';
 import { sendValidated } from '../middleware/validateResponse.js';
 import { waterResponseSchema } from '../schemas/cacheResponse.js';
-import type { WaterFacility } from '../types.js';
+
 import type { PrecipitationData } from '../adapters/open-meteo-precip.js';
+import type { WaterFacility } from '../types.js';
+
+const log = logger.child({ module: 'water' });
 
 /**
  * Phase 27.3.1 Plan 11 G3 — Redis envelope shape.

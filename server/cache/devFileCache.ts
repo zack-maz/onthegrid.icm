@@ -13,6 +13,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { logger } from '../lib/logger.js';
 
 const log = logger.child({ module: 'dev-file-cache' });

@@ -1,4 +1,5 @@
 import type { ShipEntity } from '@/types/entities';
+
 import { DetailValue } from './DetailValue';
 
 interface ShipDetailProps {

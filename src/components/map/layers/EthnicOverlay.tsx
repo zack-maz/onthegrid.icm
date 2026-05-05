@@ -1,11 +1,13 @@
-import { useMemo } from 'react';
-import { GeoJsonLayer, TextLayer } from '@deck.gl/layers';
 import { FillStyleExtension } from '@deck.gl/extensions';
-import type { FeatureCollection } from 'geojson';
-import { useLayerStore } from '@/stores/layerStore';
-import { ETHNIC_GROUPS, type EthnicGroup } from '@/lib/ethnicGroups';
+import { GeoJsonLayer, TextLayer } from '@deck.gl/layers';
+import { useMemo } from 'react';
+
 import { LEGEND_REGISTRY } from '@/components/map/MapLegend';
 import ethnicZonesData from '@/data/ethnic-zones.json';
+import { ETHNIC_GROUPS, type EthnicGroup } from '@/lib/ethnicGroups';
+import { useLayerStore } from '@/stores/layerStore';
+
+import type { FeatureCollection } from 'geojson';
 
 // ---------------------------------------------------------------------------
 // Module-level data partitioning
@@ -288,12 +290,4 @@ export function EthnicTooltip({ groups, x, y }: EthnicTooltipProps) {
       </div>
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Backward-compat null component export
-// ---------------------------------------------------------------------------
-
-export function EthnicOverlay() {
-  return null;
 }

@@ -1,16 +1,18 @@
 import { useMemo, useRef, useEffect } from 'react';
-import { useSearchStore } from '@/stores/searchStore';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { useLayerStore } from '@/stores/layerStore';
-import { useFilterStore } from '@/stores/filterStore';
+
+import { haversineKm } from '@/lib/geo';
 import { evaluateQuery, type EvaluationContext } from '@/lib/queryEvaluator';
 import type { SearchableEntity } from '@/lib/searchUtils';
-import { haversineKm } from '@/lib/geo';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useSearchStore } from '@/stores/searchStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useWaterStore } from '@/stores/waterStore';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
+
 import type { WaterFacility } from '../../server/types';
 
 const MAX_PER_TYPE = 10;
@@ -187,5 +189,8 @@ export function useSearchResults(): GroupedSearchResults {
       water: wa,
       totalCount: f.length + sh.length + ev.length + si.length + wa.length,
     };
-  }, [query, parsedQuery, proximityPin, proximityRadiusKm]);
+    // isWaterLayerActive gates the water-results loop above; recompute when it
+    // toggles so newly-active layer entities appear / disappear correctly.
+    // Per RESEARCH §Focus Area 5 decision tree branch 2 (real value dep).
+  }, [query, parsedQuery, proximityPin, proximityRadiusKm, isWaterLayerActive]);
 }

@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useNewsStore } from '@/stores/newsStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { entityPassesFilters } from '@/lib/filters';
+
 import { disperseEvents } from '@/lib/dispersion';
+import { entityPassesFilters } from '@/lib/filters';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useNewsStore } from '@/stores/newsStore';
+import { useShipStore } from '@/stores/shipStore';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, NewsCluster } from '@/types/entities';
 
 /**

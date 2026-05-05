@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+
 import type { AutocompleteSuggestion } from '@/hooks/useAutocomplete';
 
 interface AutocompleteDropdownProps {

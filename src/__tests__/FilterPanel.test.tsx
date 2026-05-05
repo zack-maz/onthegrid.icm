@@ -1,8 +1,8 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { useUIStore } from '@/stores/uiStore';
-import { useFilterStore } from '@/stores/filterStore';
 
 import { FilterPanelSlot } from '@/components/layout/FilterPanelSlot';
+import { useFilterStore } from '@/stores/filterStore';
+import { useUIStore } from '@/stores/uiStore';
 
 describe('FilterPanelSlot', () => {
   beforeEach(() => {

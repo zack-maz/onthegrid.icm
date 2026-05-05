@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import type { ConflictEventEntity } from '../../types.js';
 
 // Helper to create a test entity

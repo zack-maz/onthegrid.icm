@@ -1,13 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import { useLayerStore } from '@/stores/layerStore';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 // Import the overlay component (uses mocked react-maplibre from vite.config alias)
 import { PoliticalOverlay } from '@/components/map/layers/PoliticalOverlay';
-
 // Import static data for integrity checks
 import countriesData from '@/data/countries.json';
 import disputedData from '@/data/disputed.json';
+import { useLayerStore } from '@/stores/layerStore';
 
 describe('PoliticalOverlay', () => {
   beforeEach(() => {

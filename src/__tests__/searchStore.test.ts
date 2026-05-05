@@ -8,9 +8,9 @@ const localStorageMock = {
 };
 vi.stubGlobal('localStorage', localStorageMock);
 
-import { useSearchStore } from '@/stores/searchStore';
-import { useFilterStore } from '@/stores/filterStore';
 import { searchEntities, getSearchableFields } from '@/lib/searchUtils';
+import { useFilterStore } from '@/stores/filterStore';
+import { useSearchStore } from '@/stores/searchStore';
 import type { FlightEntity, ShipEntity, ConflictEventEntity, SiteEntity } from '@/types/entities';
 
 // Mock entities for testing

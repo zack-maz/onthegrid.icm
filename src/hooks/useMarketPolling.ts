@@ -1,8 +1,13 @@
 import { useEffect, useRef } from 'react';
+
 import { useMarketStore } from '@/stores/marketStore';
 import type { MarketQuote, CacheResponse } from '@/types/entities';
 
-export const MARKET_POLL_INTERVAL = 300_000; // 5 minutes
+// Phase 28.1 W5 D-12 — env-tunable markets polling cadence. Default preserves
+// pre-W5 behavior (5min poll, matches Yahoo Finance refresh cadence). NOTE:
+// the amended W5 plan listed default 60000 — the actual pre-W5 runtime value
+// was 300000ms; preserved verbatim per "byte-identical default" contract.
+export const MARKET_POLL_INTERVAL = Number(import.meta.env.VITE_POLL_MARKETS_MS ?? 300_000);
 
 export function useMarketPolling(): void {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

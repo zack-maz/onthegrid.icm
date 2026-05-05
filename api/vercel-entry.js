@@ -1,10 +1,10 @@
 // server/index.ts
-import express from "express";
-import cors from "cors";
+import { randomUUID } from "crypto";
 import compression from "compression";
+import cors from "cors";
+import express from "express";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
-import { randomUUID } from "crypto";
 
 // server/lib/logger.ts
 import pino from "pino";
@@ -31,6 +31,21 @@ var logger = pino({
     }
   } : {}
 });
+
+// server/middleware/cacheControl.ts
+function cacheControl(sMaxAge, staleWhileRevalidate) {
+  return (_req, res, next) => {
+    if (sMaxAge === 0 && staleWhileRevalidate === 0) {
+      res.set("Cache-Control", "no-store");
+    } else {
+      res.set(
+        "Cache-Control",
+        `public, max-age=0, s-maxage=${sMaxAge}, stale-while-revalidate=${staleWhileRevalidate}`
+      );
+    }
+    next();
+  };
+}
 
 // server/middleware/errorHandler.ts
 var AppError = class extends Error {
@@ -61,21 +76,6 @@ function errorHandler(err, req, res, _next) {
     reqWithLog.log.error({ err, statusCode, code }, "request error");
   }
   res.status(statusCode).json(body);
-}
-
-// server/middleware/cacheControl.ts
-function cacheControl(sMaxAge, staleWhileRevalidate) {
-  return (_req, res, next) => {
-    if (sMaxAge === 0 && staleWhileRevalidate === 0) {
-      res.set("Cache-Control", "no-store");
-    } else {
-      res.set(
-        "Cache-Control",
-        `public, max-age=0, s-maxage=${sMaxAge}, stale-while-revalidate=${staleWhileRevalidate}`
-      );
-    }
-    next();
-  };
 }
 
 // server/middleware/rateLimit.ts
@@ -261,9 +261,8 @@ var rateLimiters = {
   public: createRateLimiter(6, 60, "ratelimit:public")
 };
 
-// server/routes/flights.ts
+// server/routes/cron-health.ts
 import { Router } from "express";
-import { z as z3 } from "zod";
 
 // server/config.ts
 import { z } from "zod";
@@ -483,584 +482,148 @@ function getPipelineVersion() {
   return "v1";
 }
 
-// server/types.ts
-var FACILITY_TYPE_LABELS = {
-  dam: "Dam",
-  reservoir: "Reservoir",
-  desalination: "Desalination Plant"
+// server/lib/healthSources.ts
+var SOURCE_KEYS = {
+  flights: "flights:adsblol",
+  ships: "ships:ais",
+  events: "events:gdelt",
+  // DRIFT-1: route writer is news:feed. The legacy 'news:gdelt' is the LLM
+  // extractor side-input, never updated by the news route.
+  news: "news:feed",
+  markets: "markets:yahoo:1d",
+  weather: "weather:open-meteo",
+  // DRIFT-2: route writer bumped to sites:v3 in Phase 27.3.1.
+  sites: "sites:v3",
+  // DRIFT-3: route writer bumped to water:facilities:v3 in Phase 27.3.2.
+  water: "water:facilities:v3"
 };
-var RateLimitError = class extends Error {
-  name;
-  constructor(message) {
-    super(message);
-    this.name = "RateLimitError";
-  }
+var FRESHNESS_THRESHOLDS_MS = {
+  flights: 2 * 6e4,
+  // 2 min — D-25
+  ships: 5 * 6e4,
+  // 5 min — D-25
+  events: 30 * 6e4,
+  // 30 min — D-25
+  news: 30 * 6e4,
+  // 30 min — D-25
+  markets: 5 * 6e4,
+  // 5 min — D-25
+  weather: 30 * 6e4,
+  // 30 min — DELTA-A2 (matches WEATHER_CACHE_TTL)
+  sites: 48 * 60 * 6e4,
+  // 48 h — D-25
+  water: 48 * 60 * 6e4,
+  // 48 h — D-25
+  waterPrecip: 12 * 60 * 6e4,
+  // 12 h — D-25
+  sources: 10 * 6e4,
+  // 10 min — D-25
+  llmStatus: 5 * 6e4,
+  // 5 min — D-25
+  authCheck: 0,
+  // probe-only — D-25 "200 only"
+  geocode: 0,
+  // probe-only — D-25 "200 only"
+  cronHealth: 26 * 60 * 6e4,
+  // 26 h — D-25
+  cronWarm: 26 * 60 * 6e4,
+  // 26 h — D-25
+  cronRefreshEvents: 26 * 60 * 6e4
+  // 26 h — D-25
 };
-
-// server/adapters/opensky.ts
-var log = logger.child({ module: "opensky" });
-var OPENSKY_TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
-var OPENSKY_API_URL = "https://opensky-network.org/api";
-var FETCH_TIMEOUT = 1e4;
-var cachedToken = null;
-async function getOAuthToken() {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
-    return cachedToken.token;
-  }
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: config.opensky.clientId,
-    client_secret: config.opensky.clientSecret
-  });
-  const res = await fetch(OPENSKY_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT)
-  });
-  if (!res.ok) {
-    cachedToken = null;
-    throw new Error(`OpenSky OAuth2 token request failed: ${res.status}`);
-  }
-  const data = await res.json();
-  cachedToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + 25 * 60 * 1e3
-    // 25 minutes
-  };
-  return cachedToken.token;
-}
-function normalizeFlightState(state2) {
-  const lat = state2[6];
-  const lng = state2[5];
-  if (lat == null || lng == null) return null;
-  const onGround = state2[8] ?? false;
-  const icao24 = state2[0];
-  const callsign = typeof state2[1] === "string" ? state2[1].trim() : "";
-  return {
-    id: `flight-${icao24}`,
-    type: "flight",
-    lat,
-    lng,
-    timestamp: Date.now(),
-    label: callsign || icao24,
-    data: {
-      icao24,
-      callsign: callsign || icao24,
-      originCountry: state2[2] ?? "",
-      velocity: state2[9] ?? null,
-      heading: state2[10] ?? null,
-      altitude: state2[7] ?? null,
-      onGround,
-      verticalRate: state2[11] ?? null,
-      unidentified: callsign === ""
-      // hex-only flights (often military)
-    }
-  };
-}
-async function fetchFlights(bbox) {
-  const start = Date.now();
-  const token = await getOAuthToken();
-  const url = `${OPENSKY_API_URL}/states/all?lamin=${bbox.south}&lomin=${bbox.west}&lamax=${bbox.north}&lomax=${bbox.east}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT)
-  });
-  if (res.status === 429) {
-    throw new RateLimitError("OpenSky rate limit exceeded");
-  }
-  if (!res.ok) {
-    throw new Error(`OpenSky API request failed: ${res.status}`);
-  }
-  const data = await res.json();
-  const states = data.states ?? [];
-  const flights = states.map(normalizeFlightState).filter((f) => f !== null);
-  log.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
-  return flights;
-}
-
-// server/lib/icaoCountry.ts
-var ICAO_RANGES = [
-  { start: 32768, end: 65535, country: "South Africa" },
-  { start: 65536, end: 98303, country: "Egypt" },
-  { start: 98304, end: 131071, country: "Libya" },
-  { start: 131072, end: 163839, country: "Morocco" },
-  { start: 163840, end: 196607, country: "Tunisia" },
-  { start: 262144, end: 266239, country: "Ethiopia" },
-  { start: 311296, end: 315391, country: "Kenya" },
-  { start: 434176, end: 435199, country: "Qatar" },
-  { start: 655360, end: 688127, country: "Algeria" },
-  { start: 1048576, end: 2097151, country: "Russia" },
-  { start: 3145728, end: 3407871, country: "Italy" },
-  { start: 3670016, end: 3932159, country: "France" },
-  { start: 3932160, end: 4194303, country: "Germany" },
-  { start: 4194304, end: 4456447, country: "UK" },
-  { start: 4620288, end: 4653055, country: "Greece" },
-  { start: 4947968, end: 4980735, country: "Turkey" },
-  { start: 7364608, end: 7368703, country: "Kuwait" },
-  { start: 7389184, end: 7390207, country: "Oman" },
-  { start: 7405568, end: 7438335, country: "Saudi Arabia" },
-  { start: 7438336, end: 7471103, country: "South Korea" },
-  { start: 7471104, end: 7503871, country: "Yemen" },
-  { start: 7503872, end: 7536639, country: "Iraq" },
-  { start: 7536640, end: 7569407, country: "Iran" },
-  { start: 7569408, end: 7602175, country: "Israel" },
-  { start: 7602176, end: 7634943, country: "Jordan" },
-  { start: 7634944, end: 7667711, country: "Lebanon" },
-  { start: 7667712, end: 7700479, country: "Malaysia" },
-  { start: 7733248, end: 7766015, country: "Pakistan" },
-  { start: 7766016, end: 7798783, country: "Singapore" },
-  { start: 7831552, end: 7864319, country: "Syria" },
-  { start: 7864320, end: 8126463, country: "China" },
-  { start: 8126464, end: 8388607, country: "Australia" },
-  { start: 8388608, end: 8650751, country: "India" },
-  { start: 8650752, end: 8912895, country: "Japan" },
-  { start: 8912896, end: 8945663, country: "Thailand" },
-  { start: 8978432, end: 8982527, country: "Yemen" },
-  { start: 8994816, end: 8998911, country: "Bahrain" },
-  { start: 9003008, end: 9007103, country: "UAE" },
-  { start: 9043968, end: 9076735, country: "Indonesia" },
-  { start: 10485760, end: 11534335, country: "USA" },
-  { start: 12582912, end: 12845055, country: "Canada" }
-];
-function icaoToCountry(hex) {
-  const addr = parseInt(hex.replace(/^~/, ""), 16);
-  if (isNaN(addr)) return "";
-  let lo = 0;
-  let hi = ICAO_RANGES.length - 1;
-  while (lo <= hi) {
-    const mid = lo + hi >>> 1;
-    const range = ICAO_RANGES[mid];
-    if (!range) break;
-    if (addr < range.start) {
-      hi = mid - 1;
-    } else if (addr > range.end) {
-      lo = mid + 1;
-    } else {
-      return range.country;
-    }
-  }
-  return "";
-}
-
-// server/adapters/adsb-v2-normalize.ts
-function normalizeAircraft(ac) {
-  if (ac.lat == null || ac.lon == null) return null;
-  const onGround = ac.alt_baro === "ground";
-  const callsign = typeof ac.flight === "string" ? ac.flight.trim() : "";
-  const cleanHex = ac.hex.replace(/^~/, "");
-  return {
-    id: `flight-${cleanHex}`,
-    type: "flight",
-    lat: ac.lat,
-    lng: ac.lon,
-    timestamp: Date.now(),
-    label: callsign || ac.hex,
-    data: {
-      icao24: ac.hex,
-      callsign: callsign || ac.hex,
-      originCountry: icaoToCountry(ac.hex),
-      velocity: ac.gs != null ? ac.gs * KNOTS_TO_MS : null,
-      heading: ac.track ?? null,
-      altitude: typeof ac.alt_baro === "number" ? ac.alt_baro * FEET_TO_METERS : null,
-      onGround,
-      verticalRate: ac.baro_rate != null ? ac.baro_rate * FPM_TO_MS : null,
-      unidentified: callsign === ""
-    }
-  };
-}
-
-// server/adapters/adsb-lol.ts
-var log2 = logger.child({ module: "adsb-lol" });
-var BASE_URL = "https://api.adsb.lol";
-var FETCH_TIMEOUT2 = 1e4;
-async function fetchFlights2() {
-  const start = Date.now();
-  const url = `${BASE_URL}/v2/lat/${IRAN_CENTER.lat}/lon/${IRAN_CENTER.lon}/dist/${ADSB_RADIUS_NM}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT2) });
-  if (res.status === 429) {
-    throw new RateLimitError("adsb.lol rate limit exceeded");
-  }
-  if (!res.ok) {
-    throw new Error(`adsb.lol API error: ${res.status}`);
-  }
-  const data = await res.json();
-  const aircraft = data.ac ?? [];
-  const flights = aircraft.map(normalizeAircraft).filter((f) => f !== null);
-  log2.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
-  return flights;
-}
-
-// server/middleware/validate.ts
-function validateQuery(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.query);
-    if (!result.success) {
-      res.status(400).json({
-        error: "Invalid query parameters",
-        code: "VALIDATION_ERROR",
-        statusCode: 400,
-        details: result.error.flatten().fieldErrors
-      });
-      return;
-    }
-    res.locals.validatedQuery = result.data;
-    next();
-  };
-}
-
-// server/middleware/validateResponse.ts
-var log3 = logger.child({ module: "validateResponse" });
-function sendValidated(res, schema, payload) {
-  const parsed = schema.safeParse(payload);
-  if (!parsed.success) {
-    const issues = parsed.error.issues;
-    const path = res.req?.path ?? "unknown";
-    if (process.env.NODE_ENV !== "production") {
-      throw new AppError(
-        500,
-        "RESPONSE_SCHEMA_MISMATCH",
-        `Response validation failed at ${path}: ${JSON.stringify(issues)}`
-      );
-    }
-    log3.warn({ issues, path }, "response schema mismatch \u2014 sending unvalidated payload");
-    res.json(payload);
-    return;
-  }
-  res.json(parsed.data);
-}
-
-// server/schemas/cacheResponse.ts
-import { z as z2 } from "zod";
-function cacheResponseSchema(dataSchema) {
-  return z2.object({
-    data: dataSchema,
-    stale: z2.boolean(),
-    lastFresh: z2.number(),
-    rateLimited: z2.boolean().optional(),
-    degraded: z2.boolean().optional()
-  });
-}
-var flightEntitySchema = z2.object({
-  id: z2.string(),
-  type: z2.literal("flight"),
-  lat: z2.number(),
-  lng: z2.number(),
-  timestamp: z2.number(),
-  label: z2.string(),
-  data: z2.object({
-    icao24: z2.string(),
-    callsign: z2.string(),
-    originCountry: z2.string(),
-    onGround: z2.boolean(),
-    unidentified: z2.boolean()
-  }).passthrough()
-}).passthrough();
-var conflictEventEntitySchema = z2.object({
-  id: z2.string(),
-  type: z2.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
-  lat: z2.number(),
-  lng: z2.number(),
-  timestamp: z2.number(),
-  label: z2.string(),
-  data: z2.object({
-    eventType: z2.string(),
-    subEventType: z2.string(),
-    fatalities: z2.number(),
-    cameoCode: z2.string(),
-    // LLM-enriched fields (all optional, present when LLM processed)
-    summary: z2.string().optional(),
-    casualties: z2.object({
-      killed: z2.number().optional(),
-      injured: z2.number().optional(),
-      unknown: z2.boolean().optional()
-    }).optional(),
-    precision: z2.enum(["exact", "neighborhood", "city", "region"]).optional(),
-    actors: z2.array(z2.string()).optional(),
-    sourceCount: z2.number().optional(),
-    llmProcessed: z2.boolean().optional()
-  }).passthrough()
-}).passthrough();
-var waterFacilityEntitySchema = z2.object({
-  id: z2.string(),
-  type: z2.literal("water"),
-  facilityType: z2.enum(["dam", "reservoir", "desalination"]),
-  lat: z2.number(),
-  lng: z2.number(),
-  label: z2.string(),
-  osmId: z2.number(),
-  stress: z2.object({
-    compositeHealth: z2.number()
-  }).passthrough(),
-  capacity: z2.object({
-    height: z2.number().optional(),
-    volume: z2.number().optional(),
-    area: z2.number().optional()
-  }).optional(),
-  nearestCity: z2.object({
-    name: z2.string(),
-    distanceKm: z2.number(),
-    population: z2.number()
-  }).optional(),
-  linkedRiver: z2.object({
-    name: z2.string(),
-    distanceKm: z2.number()
-  }).optional(),
-  notabilityScore: z2.number().optional()
-}).passthrough();
-var rejectionsSchema = z2.object({
-  excluded_location: z2.number(),
-  excluded_turkey: z2.number(),
-  not_notable: z2.number(),
-  no_name: z2.number(),
-  no_resolved_name: z2.number().int().nonnegative(),
-  duplicate: z2.number(),
-  low_score: z2.number(),
-  no_city: z2.number()
-}).strict();
-var overpassFetchRecordSchema = z2.object({
-  facilityType: z2.string(),
-  mirror: z2.string(),
-  status: z2.number(),
-  durationMs: z2.number(),
-  attempts: z2.number(),
-  ok: z2.boolean()
-});
-var waterFilterStatsSchema = z2.object({
-  rawCounts: z2.record(z2.string(), z2.number()),
-  filteredCounts: z2.record(z2.string(), z2.number()),
-  rejections: rejectionsSchema,
-  // Phase 27.3.1 R-08 D-31
-  byTypeRejections: z2.record(z2.string(), rejectionsSchema),
-  // Phase 27.3.1 R-08 D-28
-  byCountry: z2.record(z2.string(), z2.record(z2.string(), z2.number())),
-  // Phase 27.3.1 R-08 D-29
-  overpass: z2.array(overpassFetchRecordSchema),
-  // Phase 27.3.1 R-08 D-30
-  source: z2.enum(["snapshot", "redis", "overpass"]),
-  generatedAt: z2.string(),
-  enrichment: z2.object({
-    withCapacity: z2.number(),
-    withCity: z2.number(),
-    withRiver: z2.number()
-  }),
-  scoreHistogram: z2.array(z2.object({ bucket: z2.string(), count: z2.number() }))
-}).strict().optional();
-var siteEntitySchema = z2.object({
-  id: z2.string(),
-  type: z2.literal("site"),
-  siteType: z2.enum(["nuclear", "naval", "oil", "airbase", "port"]),
-  lat: z2.number(),
-  lng: z2.number(),
-  label: z2.string(),
-  operator: z2.string().optional(),
-  wikidata: z2.string().optional(),
-  osmId: z2.number()
-}).passthrough();
-var siteRejectionsSchema = z2.object({
-  excluded_turkey: z2.number(),
-  no_coords: z2.number(),
-  no_type: z2.number(),
-  duplicate: z2.number()
-});
-var siteFilterStatsSchema = z2.object({
-  rawCount: z2.number(),
-  filteredCount: z2.number(),
-  rejections: siteRejectionsSchema,
-  byCountry: z2.record(z2.string(), z2.record(z2.string(), z2.number())),
-  byType: z2.record(z2.string(), z2.number()),
-  overpass: z2.array(overpassFetchRecordSchema),
-  source: z2.enum(["snapshot", "redis", "overpass"]),
-  generatedAt: z2.string()
-}).strict().optional();
-var flightsResponseSchema = cacheResponseSchema(z2.array(flightEntitySchema));
-var eventsResponseSchema = cacheResponseSchema(z2.array(conflictEventEntitySchema));
-var waterResponseSchema = cacheResponseSchema(z2.array(waterFacilityEntitySchema)).extend({
-  filterStats: waterFilterStatsSchema
-});
-var sitesResponseSchema = cacheResponseSchema(z2.array(siteEntitySchema)).extend({
-  filterStats: siteFilterStatsSchema
-});
-
-// server/routes/flights.ts
-var log4 = logger.child({ module: "flights" });
-var flightsQuerySchema = z3.object({
-  source: z3.enum(["opensky", "adsblol"]).default("adsblol")
-});
-var CACHE_KEYS = {
-  opensky: "flights:opensky",
-  adsblol: "flights:adsblol"
+var TIER_BY_ENDPOINT = {
+  flights: "critical",
+  // D-26
+  ships: "critical",
+  // D-26
+  events: "critical",
+  // D-26
+  markets: "non-critical",
+  // D-26
+  news: "non-critical",
+  // D-26
+  // DELTA-A2: /api/weather is a visualization layer, not core conflict data.
+  // Treat as non-critical until W2's runtime probe surfaces a stronger signal.
+  weather: "non-critical",
+  waterPrecip: "non-critical",
+  // D-26
+  sources: "non-critical",
+  // D-26
+  llmStatus: "non-critical",
+  // D-26
+  sites: "static",
+  // D-26
+  water: "static",
+  // D-26
+  authCheck: "probe-only",
+  // D-26
+  geocode: "probe-only",
+  // D-26
+  cronHealth: "cron",
+  // D-26
+  cronWarm: "cron",
+  // D-26
+  cronRefreshEvents: "cron"
+  // D-26
 };
-var LOGICAL_TTLS = {
-  opensky: CACHE_TTL.flights,
-  adsblol: CACHE_TTL.adsblolFlights
-};
-function getFetcher(source) {
-  switch (source) {
-    case "opensky":
-      return () => fetchFlights(IRAN_BBOX);
-    case "adsblol":
-      return fetchFlights2;
-  }
+function deriveStatus(freshnessMs, thresholdMs, hadError) {
+  if (hadError) return "unhealthy";
+  if (freshnessMs === null) return "unknown";
+  if (freshnessMs <= thresholdMs) return "healthy";
+  if (freshnessMs <= 2 * thresholdMs) return "degraded";
+  return "unhealthy";
 }
-var flightsRouter = Router();
-flightsRouter.get("/", validateQuery(flightsQuerySchema), async (_req, res) => {
-  const { source } = res.locals.validatedQuery;
-  const cacheKey2 = CACHE_KEYS[source];
-  const logicalTtl = LOGICAL_TTLS[source];
-  const redisTtl = Math.ceil(logicalTtl * 10 / 1e3);
-  if (source === "opensky" && !(process.env.OPENSKY_CLIENT_ID && process.env.OPENSKY_CLIENT_SECRET)) {
-    return res.status(503).json({
-      error: "OpenSky credentials not configured",
-      code: "UPSTREAM_ERROR",
-      statusCode: 503
-    });
-  }
-  const cached = await cacheGetSafe(cacheKey2, logicalTtl);
-  if (cached && !cached.stale) {
-    return sendValidated(res, flightsResponseSchema, cached);
-  }
-  try {
-    const flights = await getFetcher(source)();
-    await cacheSetSafe(cacheKey2, flights, redisTtl);
-    sendValidated(res, flightsResponseSchema, {
-      data: flights,
-      stale: false,
-      lastFresh: Date.now()
-    });
-  } catch (err) {
-    log4.error({ err, source }, "upstream error");
-    if (err instanceof RateLimitError) {
-      if (cached) {
-        return sendValidated(res, flightsResponseSchema, { ...cached, rateLimited: true });
-      }
-      return res.status(429).json({ error: "Rate limited", code: "RATE_LIMITED", statusCode: 429, rateLimited: true });
-    }
-    if (cached) {
-      sendValidated(res, flightsResponseSchema, cached);
-    } else {
-      throw err;
-    }
-  }
-});
 
-// server/routes/ships.ts
-import { Router as Router2 } from "express";
+// server/lib/llmEvalHarness.ts
+import { readFileSync as readFileSync3, existsSync as existsSync3 } from "fs";
+import { resolve as resolve3, dirname as dirname3 } from "path";
+import { fileURLToPath as fileURLToPath3 } from "url";
 
-// server/adapters/aisstream.ts
-var DEFAULT_COLLECT_MS = 5e3;
-async function collectShips() {
-  const apiKey = process.env.AISSTREAM_API_KEY;
-  if (!apiKey) {
-    throw new Error("AISSTREAM_API_KEY is not set");
+// server/lib/concurrencyLimit.ts
+function createLimit(maxConcurrent) {
+  if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) {
+    throw new Error(`createLimit: maxConcurrent must be a positive integer, got ${maxConcurrent}`);
   }
-  const collectMs = Number(process.env.AISSTREAM_COLLECT_MS) || DEFAULT_COLLECT_MS;
-  return new Promise((resolve4, reject) => {
-    const collected = /* @__PURE__ */ new Map();
-    const ws = new WebSocket("wss://stream.aisstream.io/v0/stream");
-    let timer;
-    ws.addEventListener("open", () => {
-      ws.send(
-        JSON.stringify({
-          APIKey: apiKey,
-          BoundingBoxes: [
-            [
-              [IRAN_BBOX.south, IRAN_BBOX.west],
-              [IRAN_BBOX.north, IRAN_BBOX.east]
-            ]
-          ],
-          FilterMessageTypes: ["PositionReport"]
-        })
-      );
-    });
-    ws.addEventListener("message", async (event) => {
-      const raw = event.data instanceof Blob ? await event.data.text() : String(event.data);
-      const msg = JSON.parse(raw);
-      if (msg.MessageType === "PositionReport") {
-        const report = msg.Message.PositionReport;
-        const meta = msg.MetaData;
-        const entity = {
-          id: `ship-${meta.MMSI}`,
-          type: "ship",
-          lat: report.Latitude,
-          lng: report.Longitude,
-          timestamp: new Date(meta.time_utc).getTime(),
-          label: meta.ShipName?.trim() || `MMSI ${meta.MMSI}`,
-          data: {
-            mmsi: meta.MMSI,
-            shipName: meta.ShipName?.trim() || "",
-            speedOverGround: report.Sog,
-            courseOverGround: report.Cog,
-            trueHeading: report.TrueHeading
+  let inFlight = 0;
+  const queue = [];
+  const next = () => {
+    if (inFlight >= maxConcurrent) return;
+    const runner = queue.shift();
+    if (!runner) return;
+    inFlight++;
+    runner();
+  };
+  return (fn) => {
+    return new Promise((resolve4, reject) => {
+      const runner = () => {
+        Promise.resolve().then(fn).then(
+          (value) => {
+            inFlight--;
+            resolve4(value);
+            next();
+          },
+          (err) => {
+            inFlight--;
+            reject(err);
+            next();
           }
-        };
-        collected.set(meta.MMSI, entity);
-      }
+        );
+      };
+      queue.push(runner);
+      next();
     });
-    timer = setTimeout(() => {
-      ws.close();
-      resolve4(Array.from(collected.values()));
-    }, collectMs);
-    ws.addEventListener("error", () => {
-      if (timer !== void 0) clearTimeout(timer);
-      try {
-        ws.close();
-      } catch {
-      }
-      reject(new Error("AISStream WebSocket connection failed"));
-    });
-  });
+  };
 }
 
-// server/routes/ships.ts
-var log5 = logger.child({ module: "ships" });
-var shipsRouter = Router2();
-var SHIPS_KEY = "ships:ais";
-var LOGICAL_TTL_MS = 3e4;
-var REDIS_TTL_SEC = 300;
-var STALE_THRESHOLD_MS = 6e5;
-shipsRouter.get("/", async (_req, res) => {
-  const cached = await cacheGetSafe(SHIPS_KEY, LOGICAL_TTL_MS);
-  if (cached && !cached.stale) {
-    res.json(cached);
-    return;
-  }
-  try {
-    const fresh = await collectShips();
-    const shipMap = /* @__PURE__ */ new Map();
-    if (cached) {
-      for (const ship of cached.data) {
-        shipMap.set(ship.id, ship);
-      }
-    }
-    for (const ship of fresh) {
-      shipMap.set(ship.id, ship);
-    }
-    const now = Date.now();
-    for (const [id, ship] of shipMap) {
-      if (ship.timestamp < now - STALE_THRESHOLD_MS) {
-        shipMap.delete(id);
-      }
-    }
-    const merged = Array.from(shipMap.values());
-    await cacheSetSafe(SHIPS_KEY, merged, REDIS_TTL_SEC);
-    res.json({ data: merged, stale: false, lastFresh: Date.now() });
-  } catch (err) {
-    log5.error({ err }, "collectShips error");
-    if (cached) {
-      res.json({ ...cached, stale: true });
-    } else {
-      res.status(500).json({ error: "Ship data unavailable", code: "UPSTREAM_ERROR", statusCode: 500 });
-    }
-  }
-});
-
-// server/routes/events.ts
-import { Router as Router3 } from "express";
-import { z as z7 } from "zod";
-
-// server/adapters/gdelt.ts
-import AdmZip from "adm-zip";
+// src/lib/geo.ts
+var R_KM = 6371;
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => deg * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 // server/lib/geoValidation.ts
 var NON_ME_FULLNAME_COUNTRIES = /* @__PURE__ */ new Set([
@@ -1197,16 +760,6 @@ function detectCentroid(lat, lng) {
   return "precise";
 }
 
-// src/lib/geo.ts
-var R_KM = 6371;
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const toRad = (deg) => deg * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 // server/lib/eventScoring.ts
 var BELLINGCAT_TEMPORAL_WINDOW_MS = 24 * 60 * 60 * 1e3;
 var BELLINGCAT_GEO_RADIUS_KM = 200;
@@ -1340,396 +893,7 @@ function checkBellingcatCorroboration(event, articles) {
   return { matched: false };
 }
 
-// server/adapters/gdelt.ts
-var log6 = logger.child({ module: "gdelt" });
-var GDELT_LASTUPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt";
-var MIDDLE_EAST_FIPS = /* @__PURE__ */ new Set([
-  "IR",
-  // Iran
-  "IZ",
-  // Iraq (FIPS, not ISO "IQ")
-  "SY",
-  // Syria
-  "TU",
-  // Turkey (FIPS, not ISO "TR")
-  "SA",
-  // Saudi Arabia
-  "YM",
-  // Yemen
-  "MU",
-  // Oman
-  "AE",
-  // United Arab Emirates
-  "QA",
-  // Qatar
-  "BA",
-  // Bahrain
-  "KU",
-  // Kuwait
-  "JO",
-  // Jordan
-  "IS",
-  // Israel (FIPS, not ISO "IL")
-  "LE",
-  // Lebanon
-  "AF",
-  // Afghanistan
-  "PK"
-  // Pakistan
-]);
-var CONFLICT_ROOT_CODES = /* @__PURE__ */ new Set(["18", "19", "20"]);
-var COL = {
-  GLOBALEVENTID: 0,
-  SQLDATE: 1,
-  Actor1Name: 6,
-  Actor1CountryCode: 7,
-  Actor2Name: 16,
-  Actor2CountryCode: 17,
-  EventCode: 26,
-  EventBaseCode: 27,
-  EventRootCode: 28,
-  GoldsteinScale: 30,
-  NumMentions: 31,
-  NumSources: 32,
-  ActionGeo_Type: 51,
-  ActionGeo_FullName: 52,
-  ActionGeo_CountryCode: 53,
-  ActionGeo_ADM1Code: 54,
-  ActionGeo_ADM2Code: 55,
-  ActionGeo_Lat: 56,
-  ActionGeo_Long: 57,
-  ActionGeo_FeatureID: 58,
-  SOURCEURL: 60
-};
-async function getExportUrl() {
-  const res = await fetch(GDELT_LASTUPDATE_URL);
-  if (!res.ok) {
-    throw new Error(`GDELT lastupdate.txt failed: ${res.status}`);
-  }
-  const text = await res.text();
-  const lines = text.trim().split("\n");
-  const exportLine = lines.find((l) => l.includes(".export.CSV.zip"));
-  if (!exportLine) {
-    throw new Error("No export URL found in lastupdate.txt");
-  }
-  const parts = exportLine.trim().split(" ");
-  const url = parts[2];
-  if (!url) {
-    throw new Error("Malformed lastupdate.txt: missing URL column");
-  }
-  return url;
-}
-async function downloadAndUnzip(url) {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`GDELT export download failed: ${res.status}`);
-  }
-  const buffer = Buffer.from(await res.arrayBuffer());
-  const zip = new AdmZip(buffer);
-  const entries = zip.getEntries();
-  const firstEntry = entries[0];
-  if (!firstEntry) {
-    throw new Error("GDELT ZIP archive contained no entries");
-  }
-  return firstEntry.getData().toString("utf8");
-}
-function getCol(cols, idx) {
-  return cols[idx] ?? "";
-}
-var BASE_CODE_MAP = {
-  "181": "targeted",
-  // Abduction / hostage-taking
-  "182": "on_ground",
-  // Physical assault
-  "183": "explosion",
-  // Bombing
-  "184": "on_ground",
-  // Use as human shield
-  "185": "targeted",
-  // Assassination attempt
-  "186": "targeted",
-  // Assassination
-  "190": "on_ground",
-  // Conventional military force
-  "191": "other",
-  // Blockade
-  "193": "on_ground",
-  // Small arms / light weapons
-  "194": "explosion",
-  // Artillery / tank support (shelling)
-  "195": "airstrike",
-  // Aerial weapons
-  "196": "other",
-  // Ceasefire violation
-  "200": "other",
-  // Unconventional mass violence
-  "201": "other",
-  // Mass expulsion
-  "202": "other",
-  // Mass killings
-  "203": "other",
-  // Ethnic cleansing
-  "204": "other"
-  // WMD
-};
-var ROOT_FALLBACK = {
-  "18": "on_ground",
-  "19": "on_ground",
-  "20": "other"
-};
-function classifyByBaseCode(eventBaseCode, eventRootCode) {
-  return BASE_CODE_MAP[eventBaseCode] ?? ROOT_FALLBACK[eventRootCode] ?? "on_ground";
-}
-function parseSqlDate(sqlDate) {
-  const year = parseInt(sqlDate.slice(0, 4), 10);
-  const month = parseInt(sqlDate.slice(4, 6), 10) - 1;
-  const day = parseInt(sqlDate.slice(6, 8), 10);
-  return Date.UTC(year, month, day);
-}
-var BASE_CODE_DESCRIPTIONS = {
-  "180": "Unconventional violence",
-  "181": "Abduction / hostage-taking",
-  "182": "Physical assault",
-  "183": "Bombing",
-  "184": "Use as human shield",
-  "185": "Assassination attempt",
-  "186": "Assassination",
-  "190": "Conventional military force",
-  "191": "Blockade / movement restriction",
-  "193": "Small arms / light weapons",
-  "194": "Artillery / tank support",
-  "195": "Aerial weapons",
-  "196": "Ceasefire violation",
-  "200": "Unconventional mass violence",
-  "201": "Mass expulsion",
-  "202": "Mass killings",
-  "203": "Ethnic cleansing",
-  "204": "Weapons of mass destruction"
-};
-function describeEvent(eventBaseCode) {
-  return BASE_CODE_DESCRIPTIONS[eventBaseCode] ?? "Unknown conflict";
-}
-function actionGeoTypeToPrecision(geoType) {
-  switch (geoType) {
-    case 4:
-      return "exact";
-    // landmark — most precise GDELT geocoding
-    case 3:
-      return "city";
-    // city-level — ~5km uncertainty
-    case 2:
-      return "region";
-    // ADM1/state — ~25km uncertainty
-    case 1:
-      return "region";
-    // country-level — ~25km uncertainty
-    default:
-      return void 0;
-  }
-}
-function normalizeGdeltEvent(cols, lat, lng) {
-  const eventBaseCode = getCol(cols, COL.EventBaseCode);
-  const eventRootCode = getCol(cols, COL.EventRootCode);
-  const eventCode = getCol(cols, COL.EventCode);
-  const sqlDate = getCol(cols, COL.SQLDATE);
-  const actionGeoType = parseInt(getCol(cols, COL.ActionGeo_Type), 10) || void 0;
-  const precision = actionGeoTypeToPrecision(actionGeoType);
-  return {
-    id: `gdelt-${getCol(cols, COL.GLOBALEVENTID)}`,
-    type: classifyByBaseCode(eventBaseCode, eventRootCode),
-    lat,
-    lng,
-    timestamp: parseSqlDate(sqlDate),
-    label: `${getCol(cols, COL.ActionGeo_FullName)}: ${describeEvent(eventBaseCode)}`,
-    data: {
-      eventType: describeEvent(eventBaseCode),
-      subEventType: `CAMEO ${eventCode}`,
-      fatalities: 0,
-      // GDELT does not track fatalities
-      actor1: getCol(cols, COL.Actor1Name),
-      actor2: getCol(cols, COL.Actor2Name),
-      notes: "",
-      source: getCol(cols, COL.SOURCEURL),
-      goldsteinScale: parseFloat(getCol(cols, COL.GoldsteinScale)) || 0,
-      locationName: getCol(cols, COL.ActionGeo_FullName),
-      cameoCode: eventCode,
-      numMentions: parseInt(getCol(cols, COL.NumMentions), 10) || void 0,
-      numSources: parseInt(getCol(cols, COL.NumSources), 10) || void 0,
-      actionGeoType,
-      precision
-    }
-  };
-}
-function parseAndFilter(csv, bellingcatArticles) {
-  const lines = csv.trim().split("\n");
-  const rawCount = lines.length;
-  const config2 = getConfig();
-  const excludedCameo = new Set(config2.eventExcludedCameo);
-  const best = /* @__PURE__ */ new Map();
-  let geoDiscardCount = 0;
-  for (const line of lines) {
-    const cols = line.split("	");
-    if (cols.length < 61) continue;
-    const eventRootCode = getCol(cols, COL.EventRootCode);
-    const countryCode = getCol(cols, COL.ActionGeo_CountryCode);
-    if (!CONFLICT_ROOT_CODES.has(eventRootCode)) continue;
-    const eventBaseCode = getCol(cols, COL.EventBaseCode);
-    if (excludedCameo.has(eventBaseCode)) continue;
-    if (!MIDDLE_EAST_FIPS.has(countryCode)) continue;
-    const fullName = getCol(cols, COL.ActionGeo_FullName);
-    if (!isGeoValid(fullName, countryCode)) {
-      geoDiscardCount++;
-      log6.warn(
-        { eventId: getCol(cols, COL.GLOBALEVENTID), fullName, countryCode },
-        "discarded: FullName contradicts FIPS"
-      );
-      continue;
-    }
-    const numSources = parseInt(getCol(cols, COL.NumSources), 10) || 0;
-    if (numSources < config2.eventMinSources) continue;
-    const actor1Country = getCol(cols, COL.Actor1CountryCode).trim();
-    const actor2Country = getCol(cols, COL.Actor2CountryCode).trim();
-    if (!actor1Country && !actor2Country) continue;
-    const lat = parseFloat(getCol(cols, COL.ActionGeo_Lat));
-    const lng = parseFloat(getCol(cols, COL.ActionGeo_Long));
-    if (isNaN(lat) || isNaN(lng)) continue;
-    const key = `${getCol(cols, COL.SQLDATE)}|${getCol(cols, COL.EventCode)}|${lat}|${lng}`;
-    const mentions = parseInt(getCol(cols, COL.NumMentions), 10) || 0;
-    const existing = best.get(key);
-    if (!existing || mentions > existing.mentions) {
-      best.set(key, { cols, lat, lng, mentions });
-    }
-  }
-  const geoValidCount = best.size;
-  const { eventConfidenceThreshold, eventCentroidPenalty } = config2;
-  let reclassifyCount = 0;
-  let thresholdDiscardCount = 0;
-  const results = [];
-  for (const entry of best.values()) {
-    let entity = normalizeGdeltEvent(entry.cols, entry.lat, entry.lng);
-    const origType = entity.type;
-    entity = applyGoldsteinSanity(entity);
-    if (entity.type !== origType) {
-      reclassifyCount++;
-      const ceiling = GOLDSTEIN_CEILINGS[origType]?.ceiling;
-      log6.info(
-        {
-          id: entity.id,
-          from: origType,
-          to: entity.type,
-          goldstein: entity.data.goldsteinScale,
-          ceiling
-        },
-        "reclassified event"
-      );
-    }
-    const geoPrecision = detectCentroid(entity.lat, entity.lng);
-    entity = { ...entity, data: { ...entity.data, geoPrecision } };
-    let confidence = computeEventConfidence(entity, geoPrecision);
-    const actionGeoType = entity.data.actionGeoType;
-    if (actionGeoType === 3 || actionGeoType === 4) {
-      confidence *= eventCentroidPenalty;
-    }
-    entity = { ...entity, data: { ...entity.data, confidence } };
-    if (confidence < eventConfidenceThreshold) {
-      thresholdDiscardCount++;
-      log6.warn(
-        { id: entity.id, confidence: +confidence.toFixed(3), threshold: eventConfidenceThreshold },
-        "discarded: below confidence threshold"
-      );
-      continue;
-    }
-    if (bellingcatArticles && bellingcatArticles.length > 0) {
-      const corroboration = checkBellingcatCorroboration(entity, bellingcatArticles);
-      if (corroboration.matched) {
-        confidence = Math.min(1, confidence + config2.bellingcatCorroborationBoost);
-        entity = { ...entity, data: { ...entity.data, confidence } };
-        log6.info(
-          {
-            id: entity.id,
-            boost: config2.bellingcatCorroborationBoost,
-            confidence: +confidence.toFixed(3),
-            article: corroboration.article.url
-          },
-          "Bellingcat corroboration boost"
-        );
-      }
-    }
-    results.push(entity);
-  }
-  log6.info(
-    {
-      rawCount,
-      geoValidCount,
-      geoDiscardCount,
-      reclassifyCount,
-      aboveThreshold: geoValidCount - thresholdDiscardCount,
-      finalCount: results.length
-    },
-    "pipeline summary"
-  );
-  return results;
-}
-async function fetchEvents(bellingcatArticles) {
-  const start = Date.now();
-  const exportUrl = await getExportUrl();
-  const csv = await downloadAndUnzip(exportUrl);
-  const events = parseAndFilter(csv, bellingcatArticles);
-  log6.info({ count: events.length, durationMs: Date.now() - start }, "fetched events");
-  return events;
-}
-function generateBackfillUrls(fromTs, toTs, intervalMs) {
-  const urls = [];
-  const interval = intervalMs ?? 6 * 60 * 60 * 1e3;
-  const start = new Date(fromTs);
-  start.setUTCHours(0, 0, 0, 0);
-  let cursor = start.getTime();
-  while (cursor <= toTs) {
-    const d = new Date(cursor);
-    const yyyy = d.getUTCFullYear();
-    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(d.getUTCDate()).padStart(2, "0");
-    const hh = String(d.getUTCHours()).padStart(2, "0");
-    urls.push(`http://data.gdeltproject.org/gdeltv2/${yyyy}${mm}${dd}${hh}0000.export.CSV.zip`);
-    cursor += interval;
-  }
-  return urls;
-}
-async function backfillEvents(days) {
-  const toTs = Date.now();
-  const fromTs = toTs - days * 24 * 60 * 60 * 1e3;
-  const start = Date.now();
-  const urls = generateBackfillUrls(fromTs, toTs);
-  log6.info({ fileCount: urls.length, days, sampling: "4/day" }, "backfill started");
-  const merged = /* @__PURE__ */ new Map();
-  const BATCH_SIZE5 = 5;
-  for (let i = 0; i < urls.length; i += BATCH_SIZE5) {
-    const batch = urls.slice(i, i + BATCH_SIZE5);
-    const results = await Promise.allSettled(
-      batch.map(async (url) => {
-        const csv = await downloadAndUnzip(url);
-        return parseAndFilter(csv);
-      })
-    );
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        for (const e of result.value) {
-          if (!merged.has(e.id)) {
-            merged.set(e.id, e);
-          }
-        }
-      }
-    }
-  }
-  const events = Array.from(merged.values());
-  log6.info(
-    { count: events.length, fileCount: urls.length, durationMs: Date.now() - start },
-    "backfill complete"
-  );
-  return events;
-}
-
-// server/adapters/llm-provider.ts
+// server/lib/freeClaudeRouter.ts
 import OpenAI from "openai";
 
 // server/lib/llmCircuitBreaker.ts
@@ -1767,87 +931,6 @@ function getBreakerState() {
     nvidia_nim: isAvailable("nvidia_nim") ? "ok" : "paused",
     openrouter: isAvailable("openrouter") ? "ok" : "paused"
   };
-}
-
-// server/lib/llmTokenBudget.ts
-var log7 = logger.child({ module: "llm-token-budget" });
-var DAILY_LIMITS = {
-  cerebras: 1e6,
-  groq: 2e5,
-  // Phase 27.4.3: v3 path uses freeClaudeRouter, not this module. These zero
-  // limits are present purely for Record<Provider, number> exhaustiveness
-  // and would force a 'hard' budgetState if ever invoked — safe fail-closed.
-  nvidia_nim: 0,
-  openrouter: 0
-};
-var TTL_48H_SEC = 172800;
-var SOFT_CAP_RATIO = 0.8;
-var HARD_CAP_RATIO = 0.95;
-function todayKey(provider) {
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  return `llm:tokens:${provider}:${today}`;
-}
-async function incrDailyTokens(provider, n) {
-  if (n <= 0) return await getDailyTokens(provider);
-  try {
-    const key = todayKey(provider);
-    const res = await redis.multi().incrby(key, n).expire(key, TTL_48H_SEC).exec();
-    const newVal = Array.isArray(res) ? res[0] : void 0;
-    return typeof newVal === "number" ? newVal : 0;
-  } catch (err) {
-    log7.warn({ err, provider, n }, "incrDailyTokens failed (redis unreachable)");
-    return 0;
-  }
-}
-async function getDailyTokens(provider) {
-  try {
-    const v = await redis.get(todayKey(provider));
-    return typeof v === "number" ? v : 0;
-  } catch {
-    return 0;
-  }
-}
-function budgetState(provider, used) {
-  const limit = DAILY_LIMITS[provider];
-  if (used >= limit * HARD_CAP_RATIO) return "hard";
-  if (used >= limit * SOFT_CAP_RATIO) return "soft";
-  return "ok";
-}
-var TYPE_WEIGHTS = {
-  airstrike: 10,
-  explosion: 8,
-  targeted: 8,
-  on_ground: 6,
-  other: 3
-};
-function scoreEntity(e) {
-  const typeWeight = TYPE_WEIGHTS[e.type] ?? 3;
-  const mentions = e.data.numMentions ?? 1;
-  const sources = e.data.numSources ?? 1;
-  const ageHours = Math.max(0, (Date.now() - e.timestamp) / 36e5);
-  const recency = 1 / (1 + ageHours / 24);
-  return typeWeight * Math.log2(1 + mentions) * Math.log2(1 + sources) * recency;
-}
-function computeSeverityScore(group) {
-  if (group.entities.length === 0) return 0;
-  let best = 0;
-  for (const e of group.entities) {
-    const s = scoreEntity(e);
-    if (s > best) best = s;
-  }
-  return best;
-}
-async function shouldPauseNewEvents() {
-  const [cerebrasUsed, groqUsed] = await Promise.all([
-    getDailyTokens("cerebras"),
-    getDailyTokens("groq")
-  ]);
-  return budgetState("cerebras", cerebrasUsed) === "soft" || budgetState("groq", groqUsed) === "soft";
-}
-async function prioritizeBySeverity(groups) {
-  const paused = await shouldPauseNewEvents();
-  if (!paused) return groups;
-  return groups.slice().sort((a, b) => computeSeverityScore(b) - computeSeverityScore(a) || b.timestamp - a.timestamp);
 }
 
 // server/lib/llmProgress.ts
@@ -1932,33 +1015,629 @@ function buildSummary() {
   };
 }
 
-// server/adapters/llm-provider.ts
-var log8 = logger.child({ module: "llm" });
-var CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
-var GROQ_MODEL = "openai/gpt-oss-120b";
-var LLM_TIMEOUT_MS = 3e4;
+// server/lib/freeClaudeRouter.ts
+var NVIDIA_NIM_BASE = "https://integrate.api.nvidia.com/v1";
+var OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+var LLM_TIMEOUT_MS = 12e4;
 var RETRY_ATTEMPTS = 2;
 var BACKOFF_MS = [1e3, 4e3];
 var JITTER_MS = 250;
+var NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? "qwen/qwen3.5-397b-a17b";
+var OPENROUTER_DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+var OPENROUTER_DAILY_CAP = 200;
+var MAX_TOKENS_PER_MODEL = {
+  // Phase 27.4.4 Plan 02 dev-pass bump: 425 → 2048 after live dev /api/events?force=true
+  // showed ~89% truncation rate (50 v3:malformed DLQ in 7 batches) — the
+  // 20-event preflight characterization underestimated production hierarchy
+  // verbosity. 2048 keeps a 5× safety margin against the 4096 default.
+  "qwen/qwen3.5-397b-a17b": 2048,
+  "meta/llama-3.3-70b-instruct": 380,
+  // p99 315 + 20% buffer
+  "nvidia/nemotron-3-super-120b-a12b": 1240,
+  // p99 1031 + 20% buffer (verbose, schema-fails)
+  "z-ai/glm4.7": 1024
+  // conservative — no traceable records (NIM 400s)
+};
+var MAX_TOKENS_DEFAULT = 4096;
+var RollingWindow = class {
+  cap;
+  windowMs;
+  timestamps = [];
+  constructor(cap, windowMs) {
+    this.cap = cap;
+    this.windowMs = windowMs;
+  }
+  evict(now) {
+    this.timestamps = this.timestamps.filter((t) => now - t < this.windowMs);
+  }
+  canRequest() {
+    this.evict(Date.now());
+    return this.timestamps.length < this.cap;
+  }
+  consume() {
+    this.timestamps.push(Date.now());
+  }
+  headroom() {
+    this.evict(Date.now());
+    return { used: this.timestamps.length, cap: this.cap };
+  }
+};
+var nvidiaNimWindow = new RollingWindow(40, 6e4);
+var lastNimCallTs = 0;
+var PREWARM_COLD_THRESHOLD_MS = 6e4;
+function getNvidiaNimClient() {
+  if (!env.NVIDIA_NIM_API_KEY) return null;
+  return new OpenAI({
+    apiKey: env.NVIDIA_NIM_API_KEY,
+    baseURL: NVIDIA_NIM_BASE,
+    timeout: LLM_TIMEOUT_MS
+  });
+}
+function getOpenRouterClient() {
+  if (!env.OPENROUTER_API_KEY) return null;
+  return new OpenAI({
+    apiKey: env.OPENROUTER_API_KEY,
+    baseURL: OPENROUTER_BASE,
+    timeout: LLM_TIMEOUT_MS
+  });
+}
+function stripReasoningBlocks(raw, _reasoningContent) {
+  if (!raw) return raw;
+  let s = raw.replace(/<think>[\s\S]*?<\/think>/g, "");
+  s = s.replace(/^reasoning_content:[^\n]*\n/m, "");
+  return s.trim();
+}
+function classifyError(err) {
+  if (err instanceof Error) {
+    const m = err.message.toLowerCase();
+    if (m.includes("429") || m.includes("rate limit")) return "rate_limit";
+    if (m.includes("timeout") || m.includes("timed out")) return "timeout";
+    if (m.includes("enotfound") || m.includes("econnreset") || m.includes("eai_again"))
+      return "network";
+    if (/\b5\d\d\b/.test(m)) return "upstream_500";
+  }
+  return "other";
+}
+async function sleepWithJitter(base) {
+  const jitter = (Math.random() * 2 - 1) * JITTER_MS;
+  await new Promise((r) => setTimeout(r, Math.max(0, base + jitter)));
+}
+function todayKey() {
+  const d = /* @__PURE__ */ new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    d.getUTCDate()
+  ).padStart(2, "0")}`;
+}
+async function incrOpenRouterDaily() {
+  try {
+    const key = `llm:tokens:openrouter:${todayKey()}`;
+    const next = await redis.incr(key);
+    await redis.expire(key, 48 * 3600);
+    return typeof next === "number" ? next : 0;
+  } catch {
+    return 0;
+  }
+}
+async function getOpenRouterDaily() {
+  try {
+    const key = `llm:tokens:openrouter:${todayKey()}`;
+    const v = await redis.get(key);
+    return typeof v === "number" ? v : typeof v === "string" ? parseInt(v, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+async function callLLM(messages, _schemaText, opts = {}) {
+  const log36 = logger.child({ component: "freeClaudeRouter" });
+  const decisions = [];
+  const includeOpenRouter = !opts.skipOpenRouter;
+  const allProviders = [
+    {
+      name: "nvidia_nim",
+      model: opts.modelOverride ?? NVIDIA_NIM_DEFAULT_MODEL,
+      client: getNvidiaNimClient()
+    },
+    {
+      name: "openrouter",
+      model: OPENROUTER_DEFAULT_MODEL,
+      client: getOpenRouterClient()
+    }
+  ];
+  const providers = includeOpenRouter ? allProviders : allProviders.filter((p) => p.name !== "openrouter");
+  for (let idx = 0; idx < providers.length; idx++) {
+    const p = providers[idx];
+    if (!p) continue;
+    const isPrimary = idx === 0;
+    const prevName = idx > 0 ? providers[idx - 1]?.name : null;
+    const buildReason = (suffix) => isPrimary ? `skipped:${suffix}` : `fall_through:${prevName}_${suffix}`;
+    if (!p.client) {
+      decisions.push({
+        provider: p.name,
+        model: p.model,
+        reason: buildReason("no_client"),
+        timestamp: Date.now()
+      });
+      continue;
+    }
+    if (!isAvailable(p.name)) {
+      decisions.push({
+        provider: p.name,
+        model: p.model,
+        reason: buildReason("breaker"),
+        timestamp: Date.now()
+      });
+      continue;
+    }
+    if (p.name === "nvidia_nim" && !nvidiaNimWindow.canRequest()) {
+      decisions.push({
+        provider: p.name,
+        model: p.model,
+        reason: buildReason("rate_limit_window"),
+        timestamp: Date.now()
+      });
+      continue;
+    }
+    if (p.name === "openrouter" && await getOpenRouterDaily() >= OPENROUTER_DAILY_CAP) {
+      decisions.push({
+        provider: p.name,
+        model: p.model,
+        reason: buildReason("daily_cap"),
+        timestamp: Date.now()
+      });
+      continue;
+    }
+    decisions.push({
+      provider: p.name,
+      model: p.model,
+      reason: isPrimary ? "primary" : `fall_through:${prevName}_429`,
+      timestamp: Date.now()
+    });
+    let callFailed = false;
+    for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+      const t0 = Date.now();
+      try {
+        if (p.name === "nvidia_nim") nvidiaNimWindow.consume();
+        if (p.name === "openrouter") await incrOpenRouterDaily();
+        const res = await p.client.chat.completions.create({
+          model: p.model,
+          messages,
+          response_format: { type: "json_object" },
+          // D-10: NO strict mode
+          temperature: 0,
+          max_tokens: MAX_TOKENS_PER_MODEL[p.model] ?? MAX_TOKENS_DEFAULT
+          // D-06
+        });
+        const latencyMs = Date.now() - t0;
+        recordLatency(p.name, latencyMs);
+        recordHeadroom(p.name);
+        const usage = res.usage;
+        const tokensIn = usage?.prompt_tokens ?? 0;
+        const tokensOut = usage?.completion_tokens ?? 0;
+        if (tokensIn > 0 || tokensOut > 0) {
+          await accrueShadowCost(tokensIn, tokensOut);
+        }
+        const raw = res.choices[0]?.message?.content ?? null;
+        const reasoningField = res.choices[0]?.message?.reasoning_content;
+        const content = stripReasoningBlocks(raw, reasoningField);
+        const finishReason = res.choices[0]?.finish_reason ?? null;
+        record(p.name, "ok");
+        if (p.name === "nvidia_nim") lastNimCallTs = Date.now();
+        return { content, routing: decisions, finishReason };
+      } catch (err) {
+        const latencyMs = Date.now() - t0;
+        recordLatency(p.name, latencyMs);
+        const bucket = classifyError(err);
+        recordErrorBucket(p.name, bucket);
+        log36.warn(
+          {
+            provider: p.name,
+            attempt,
+            bucket,
+            latencyMs,
+            err: err instanceof Error ? err.message : String(err)
+          },
+          "router attempt failed"
+        );
+        if (bucket === "rate_limit" && attempt < RETRY_ATTEMPTS - 1) {
+          const base = BACKOFF_MS[attempt] ?? BACKOFF_MS[0] ?? 1e3;
+          await sleepWithJitter(base);
+          continue;
+        }
+        callFailed = true;
+        break;
+      }
+    }
+    if (callFailed) {
+      record(p.name, "err");
+    }
+  }
+  log36.warn("all free providers unavailable \u2014 returning null content");
+  return { content: null, routing: decisions };
+}
+var LATENCY_RING_CAP = 100;
+function quantile(sorted, q) {
+  if (sorted.length === 0) return 0;
+  const idx = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q));
+  return sorted[idx] ?? 0;
+}
+function recordLatency(provider, latencyMs) {
+  const current = llmProgress.latencyHistogram ?? {
+    nvidia_nim: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] },
+    openrouter: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] }
+  };
+  const bucket = current[provider];
+  const samples = [...bucket.samples ?? [], latencyMs].slice(-LATENCY_RING_CAP);
+  const sorted = [...samples].sort((a, b) => a - b);
+  const next = {
+    ...current,
+    [provider]: {
+      p50: quantile(sorted, 0.5),
+      p95: quantile(sorted, 0.95),
+      p99: quantile(sorted, 0.99),
+      sparkline: samples.slice(-30),
+      // last 30 for the SVG sparkline
+      samples
+    }
+  };
+  updateProgress({ latencyHistogram: next });
+}
+function recordHeadroom(provider) {
+  const current = llmProgress.rateLimit ?? {
+    nvidia_nim: { used: 0, cap: 40, window: "minute", perModel: {} },
+    openrouter: { used: 0, cap: OPENROUTER_DAILY_CAP, window: "day", perModel: {} }
+  };
+  if (provider === "nvidia_nim") {
+    const h = nvidiaNimWindow.headroom();
+    current.nvidia_nim = { ...current.nvidia_nim, used: h.used, cap: h.cap };
+  } else {
+    getOpenRouterDaily().then((used) => {
+      const rl = llmProgress.rateLimit;
+      if (!rl) return;
+      updateProgress({
+        rateLimit: {
+          ...rl,
+          openrouter: { ...current.openrouter, used }
+        }
+      });
+    }).catch(() => {
+    });
+  }
+  updateProgress({ rateLimit: current });
+}
+function recordErrorBucket(provider, bucket) {
+  const current = llmProgress.errorTaxonomy ?? {
+    nvidia_nim: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 },
+    openrouter: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 }
+  };
+  const next = {
+    ...current,
+    [provider]: { ...current[provider], [bucket]: (current[provider][bucket] ?? 0) + 1 }
+  };
+  updateProgress({ errorTaxonomy: next });
+}
+async function accrueShadowCost(tokensIn, tokensOut) {
+  const usd = (tokensIn * 0.2 + tokensOut * 0.4) / 1e6;
+  const current = llmProgress.costShadow ?? { tokensIn: 0, tokensOut: 0, usd: 0 };
+  updateProgress({
+    costShadow: {
+      tokensIn: current.tokensIn + tokensIn,
+      tokensOut: current.tokensOut + tokensOut,
+      usd: current.usd + usd
+    }
+  });
+  try {
+    const key = `events:llm-cost-shadow:v3:${todayKey()}`;
+    await redis.hincrby(key, "tokensIn", tokensIn);
+    await redis.hincrby(key, "tokensOut", tokensOut);
+    await redis.hincrby(key, "usdMicrocents", Math.round(usd * 1e6));
+    await redis.expire(key, 90 * 24 * 3600);
+  } catch {
+  }
+}
+async function prewarmIfCold() {
+  const log36 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
+  const client = getNvidiaNimClient();
+  if (!client) {
+    updateProgress({ prewarmState: "unknown" });
+    return;
+  }
+  const now = Date.now();
+  const elapsed = lastNimCallTs > 0 ? now - lastNimCallTs : Number.POSITIVE_INFINITY;
+  if (elapsed <= PREWARM_COLD_THRESHOLD_MS) {
+    updateProgress({ prewarmState: "warm" });
+    return;
+  }
+  try {
+    await client.chat.completions.create({
+      model: NVIDIA_NIM_DEFAULT_MODEL,
+      messages: [{ role: "user", content: "ok" }],
+      max_tokens: 1,
+      temperature: 0
+    });
+    lastNimCallTs = Date.now();
+    updateProgress({
+      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
+      lastPrewarmTs: lastNimCallTs,
+      prewarmState: "cold-fired"
+    });
+  } catch (err) {
+    log36.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "prewarmIfCold synthetic call failed (non-fatal)"
+    );
+    updateProgress({
+      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
+      lastPrewarmTs: Date.now(),
+      prewarmState: "cold-fired"
+    });
+  }
+}
+
+// server/lib/llmDLQ.ts
+var log = logger.child({ module: "llm-dlq" });
+var DLQ_KEY = "events:llm-dlq";
+var DLQ_TTL_SEC = 7 * 24 * 3600;
+var DLQ_MAX = 200;
+var LAST_ERROR_MAX_CHARS = 500;
+function parseEntry(raw) {
+  try {
+    if (typeof raw === "string") return JSON.parse(raw);
+    if (raw && typeof raw === "object") return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+async function enqueueDLQ(entry) {
+  const capped = {
+    ...entry,
+    lastError: entry.lastError.slice(0, LAST_ERROR_MAX_CHARS)
+  };
+  const payload = JSON.stringify(capped);
+  try {
+    await redis.sadd(DLQ_KEY, payload);
+    await redis.expire(DLQ_KEY, DLQ_TTL_SEC);
+    const size = await redis.scard(DLQ_KEY);
+    if (size > DLQ_MAX) {
+      const all = await redis.smembers(DLQ_KEY);
+      const withParsed = all.map((raw) => {
+        const rawStr = typeof raw === "string" ? raw : JSON.stringify(raw);
+        return { raw: rawStr, parsed: parseEntry(raw) };
+      }).filter((x) => x.parsed !== null);
+      withParsed.sort((a, b) => a.parsed.timestamp - b.parsed.timestamp);
+      const toRemove = withParsed.slice(0, size - DLQ_MAX).map((x) => x.raw);
+      if (toRemove.length > 0) await redis.srem(DLQ_KEY, ...toRemove);
+    }
+  } catch (err) {
+    log.warn({ err, id: entry.id }, "DLQ enqueue failed (redis unreachable)");
+  }
+}
+async function listDLQ(limit = 50) {
+  try {
+    const all = await redis.smembers(DLQ_KEY);
+    const parsed = [];
+    for (const s of all) {
+      const p = parseEntry(s);
+      if (p) parsed.push(p);
+    }
+    return parsed.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+// server/lib/llmExtractorWatchdog.ts
+var log2 = logger.child({ module: "llm-watchdog" });
+async function withBatchWatchdog(batchFn, opts) {
+  let timedOut = false;
+  let hardTimer;
+  const workPromise = batchFn();
+  workPromise.catch(() => {
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    hardTimer = setTimeout(() => {
+      timedOut = true;
+      reject(
+        new Error(`batch ${opts.batchIndex} (${opts.label}) timed out after ${opts.timeoutMs}ms`)
+      );
+    }, opts.timeoutMs);
+  });
+  const softWarnTimer = setTimeout(() => {
+    if (!timedOut) {
+      try {
+        opts.onSoftWarn?.(opts.softWarnMs);
+        log2.info(
+          { batchIndex: opts.batchIndex, label: opts.label, softWarnMs: opts.softWarnMs },
+          "batch crossed soft-warn threshold (still running)"
+        );
+      } catch (err) {
+        log2.warn({ err }, "onSoftWarn handler threw \u2014 suppressed");
+      }
+    }
+  }, opts.softWarnMs);
+  try {
+    const result = await Promise.race([workPromise, timeoutPromise]);
+    return result;
+  } catch (err) {
+    if (timedOut) {
+      log2.warn(
+        { batchIndex: opts.batchIndex, label: opts.label, timeoutMs: opts.timeoutMs },
+        "batch hard-timeout triggered"
+      );
+      try {
+        await opts.onTimeout();
+      } catch (hookErr) {
+        log2.error(
+          { err: hookErr, batchIndex: opts.batchIndex, label: opts.label },
+          "onTimeout hook threw \u2014 suppressed, returning null"
+        );
+      }
+      return null;
+    }
+    throw err;
+  } finally {
+    if (softWarnTimer) clearTimeout(softWarnTimer);
+    if (hardTimer) clearTimeout(hardTimer);
+  }
+}
+
+// server/lib/llmLineage.ts
+import crypto from "crypto";
+var LINEAGE_KEY_PREFIX = "events:llm:v3:lineage:";
+var LINEAGE_INDEX_KEY = "events:llm:v3:lineage-keys";
+var LINEAGE_TTL_SEC = 7 * 24 * 3600;
+var LINEAGE_MAX_ENTRIES = 500;
+function computeLineageHash(eventId, prompt, model) {
+  return crypto.createHash("sha256").update(prompt).update("|").update(model).update("|").update(eventId).digest("hex");
+}
+async function appendLineage(eventId, payload) {
+  const lineageHash = computeLineageHash(eventId, payload.prompt, payload.model);
+  const key = `${LINEAGE_KEY_PREFIX}${eventId}`;
+  const log36 = logger.child({ component: "llm-lineage" });
+  try {
+    await redis.hset(key, {
+      prompt: payload.prompt.slice(0, 32e3),
+      // safety bound; prompts ~10-15k typical
+      response: payload.response.slice(0, 32e3),
+      parsed: JSON.stringify(payload.parsed).slice(0, 32e3),
+      coord: JSON.stringify(payload.coord),
+      provenance: payload.provenance,
+      resolverPath: payload.resolverPath,
+      reasoningTrace: payload.reasoningTrace.slice(0, 8e3),
+      model: payload.model,
+      lineageHash,
+      ts: String(Date.now())
+    });
+    await redis.expire(key, LINEAGE_TTL_SEC);
+    await redis.zadd(LINEAGE_INDEX_KEY, { score: Date.now(), member: eventId });
+    await redis.zremrangebyrank(LINEAGE_INDEX_KEY, 0, -LINEAGE_MAX_ENTRIES - 1);
+    await redis.expire(LINEAGE_INDEX_KEY, LINEAGE_TTL_SEC);
+  } catch (err) {
+    log36.warn({ err, eventId }, "lineage append failed (redis unreachable)");
+  }
+  return { lineageHash };
+}
+var GROUP_LINEAGE_KEY_PREFIX = "events:llm:v3:group-lineage:";
+var GROUP_LINEAGE_TTL_SEC = 7 * 24 * 3600;
+function computeGroupLineageHash(input) {
+  const sortedUrls = [...input.sourceUrls].sort().join("|");
+  return crypto.createHash("sha256").update(input.key).update("|").update(sortedUrls).update("|").update(String(input.totalMentions)).digest("hex");
+}
+
+// server/lib/llmResolver.ts
+import { z as z3 } from "zod";
+
+// server/adapters/llm-provider.ts
+import OpenAI2 from "openai";
+
+// server/lib/llmTokenBudget.ts
+var log3 = logger.child({ module: "llm-token-budget" });
+var DAILY_LIMITS = {
+  cerebras: 1e6,
+  groq: 2e5,
+  // Phase 27.4.3: v3 path uses freeClaudeRouter, not this module. These zero
+  // limits are present purely for Record<Provider, number> exhaustiveness
+  // and would force a 'hard' budgetState if ever invoked — safe fail-closed.
+  nvidia_nim: 0,
+  openrouter: 0
+};
+var TTL_48H_SEC = 172800;
+var SOFT_CAP_RATIO = 0.8;
+var HARD_CAP_RATIO = 0.95;
+function todayKey2(provider) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  return `llm:tokens:${provider}:${today}`;
+}
+async function incrDailyTokens(provider, n) {
+  if (n <= 0) return await getDailyTokens(provider);
+  try {
+    const key = todayKey2(provider);
+    const res = await redis.multi().incrby(key, n).expire(key, TTL_48H_SEC).exec();
+    const newVal = Array.isArray(res) ? res[0] : void 0;
+    return typeof newVal === "number" ? newVal : 0;
+  } catch (err) {
+    log3.warn({ err, provider, n }, "incrDailyTokens failed (redis unreachable)");
+    return 0;
+  }
+}
+async function getDailyTokens(provider) {
+  try {
+    const v = await redis.get(todayKey2(provider));
+    return typeof v === "number" ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+function budgetState(provider, used) {
+  const limit = DAILY_LIMITS[provider];
+  if (used >= limit * HARD_CAP_RATIO) return "hard";
+  if (used >= limit * SOFT_CAP_RATIO) return "soft";
+  return "ok";
+}
+var TYPE_WEIGHTS = {
+  airstrike: 10,
+  explosion: 8,
+  targeted: 8,
+  on_ground: 6,
+  other: 3
+};
+function scoreEntity(e) {
+  const typeWeight = TYPE_WEIGHTS[e.type] ?? 3;
+  const mentions = e.data.numMentions ?? 1;
+  const sources = e.data.numSources ?? 1;
+  const ageHours = Math.max(0, (Date.now() - e.timestamp) / 36e5);
+  const recency = 1 / (1 + ageHours / 24);
+  return typeWeight * Math.log2(1 + mentions) * Math.log2(1 + sources) * recency;
+}
+function computeSeverityScore(group) {
+  if (group.entities.length === 0) return 0;
+  let best = 0;
+  for (const e of group.entities) {
+    const s = scoreEntity(e);
+    if (s > best) best = s;
+  }
+  return best;
+}
+async function shouldPauseNewEvents() {
+  const [cerebrasUsed, groqUsed] = await Promise.all([
+    getDailyTokens("cerebras"),
+    getDailyTokens("groq")
+  ]);
+  return budgetState("cerebras", cerebrasUsed) === "soft" || budgetState("groq", groqUsed) === "soft";
+}
+async function prioritizeBySeverity(groups) {
+  const paused = await shouldPauseNewEvents();
+  if (!paused) return groups;
+  return groups.slice().sort((a, b) => computeSeverityScore(b) - computeSeverityScore(a) || b.timestamp - a.timestamp);
+}
+
+// server/adapters/llm-provider.ts
+var log4 = logger.child({ module: "llm" });
+var CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
+var GROQ_MODEL = "openai/gpt-oss-120b";
+var LLM_TIMEOUT_MS2 = 3e4;
+var RETRY_ATTEMPTS2 = 2;
+var BACKOFF_MS2 = [1e3, 4e3];
+var JITTER_MS2 = 250;
 var CALL_HISTORY_MAX = 20;
 function getCerebrasClient() {
   if (!env.CEREBRAS_API_KEY) return null;
-  return new OpenAI({
+  return new OpenAI2({
     apiKey: env.CEREBRAS_API_KEY,
     baseURL: "https://api.cerebras.ai/v1",
-    timeout: LLM_TIMEOUT_MS
+    timeout: LLM_TIMEOUT_MS2
   });
 }
 function getGroqClient() {
   if (!env.GROQ_API_KEY) return null;
-  return new OpenAI({
+  return new OpenAI2({
     apiKey: env.GROQ_API_KEY,
     baseURL: "https://api.groq.com/openai/v1",
-    timeout: LLM_TIMEOUT_MS
+    timeout: LLM_TIMEOUT_MS2
   });
 }
-async function sleepWithJitter(base) {
-  const jitter = (Math.random() * 2 - 1) * JITTER_MS;
+async function sleepWithJitter2(base) {
+  const jitter = (Math.random() * 2 - 1) * JITTER_MS2;
   await new Promise((r) => setTimeout(r, Math.max(0, base + jitter)));
 }
 function appendCallHistory(entry) {
@@ -2052,7 +1731,7 @@ async function tryProviderOnce(provider, messages, jsonSchema, batchSize) {
       batchSize,
       timestamp: Date.now()
     });
-    log8.warn({ err, provider }, "LLM call threw");
+    log4.warn({ err, provider }, "LLM call threw");
     throw err;
   }
 }
@@ -2061,145 +1740,128 @@ function getProviderOrder() {
   if (_providerOrderOverride) return _providerOrderOverride;
   return ["cerebras", "groq"];
 }
-async function callLLM(messages, jsonSchema, opts = {}) {
+async function callLLM2(messages, jsonSchema, opts = {}) {
   const batchSize = opts.batchSize ?? 1;
   const providers = getProviderOrder();
   for (const provider of providers) {
     if (!isAvailable(provider)) {
-      log8.info({ provider }, "circuit breaker paused, skipping provider");
+      log4.info({ provider }, "circuit breaker paused, skipping provider");
       recordSkippedAttempt(provider, batchSize, "breaker");
       continue;
     }
     const used = await getDailyTokens(provider);
     if (budgetState(provider, used) === "hard") {
-      log8.warn({ provider, used }, "hard cap reached, skipping provider");
+      log4.warn({ provider, used }, "hard cap reached, skipping provider");
       recordSkippedAttempt(provider, batchSize, "hard_cap");
       continue;
     }
-    for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+    for (let attempt = 0; attempt < RETRY_ATTEMPTS2; attempt++) {
       try {
         const result = await tryProviderOnce(provider, messages, jsonSchema, batchSize);
         if (result.content) {
-          log8.info({ provider, tokens: result.tokens, attempt }, "LLM call succeeded");
+          log4.info({ provider, tokens: result.tokens, attempt }, "LLM call succeeded");
           return result.content;
         }
         break;
       } catch {
-        if (attempt < RETRY_ATTEMPTS - 1) {
-          const base = BACKOFF_MS[attempt] ?? BACKOFF_MS[0] ?? 1e3;
-          await sleepWithJitter(base);
+        if (attempt < RETRY_ATTEMPTS2 - 1) {
+          const base = BACKOFF_MS2[attempt] ?? BACKOFF_MS2[0] ?? 1e3;
+          await sleepWithJitter2(base);
         }
       }
     }
     updateProgress({ breakerState: getBreakerState() });
   }
-  log8.warn("both LLM providers unavailable \u2014 falling back to raw GDELT");
+  log4.warn("both LLM providers unavailable \u2014 falling back to raw GDELT");
   return null;
 }
 function isLLMConfigured() {
   return !!(env.CEREBRAS_API_KEY || env.GROQ_API_KEY);
 }
 
-// server/lib/normalizeEventTypes.ts
-var OLD_TO_NEW_TYPE = {
-  ground_combat: "on_ground",
-  assault: "on_ground",
-  shelling: "explosion",
-  bombing: "explosion",
-  assassination: "targeted",
-  abduction: "targeted",
-  blockade: "other",
-  ceasefire_violation: "other",
-  mass_violence: "other",
-  wmd: "other"
-};
-function normalizeEventTypes(events) {
-  return events.map((event) => {
-    const mappedType = OLD_TO_NEW_TYPE[event.type];
-    const mappedDataType = OLD_TO_NEW_TYPE[event.data.eventType];
-    if (!mappedType && !mappedDataType) {
-      return event;
-    }
-    return {
-      ...event,
-      type: mappedType ?? event.type,
-      data: mappedDataType ? { ...event.data, eventType: mappedDataType } : event.data
-    };
-  });
-}
+// server/lib/meBounds.ts
+var ME_VIEWBOX = [30, 15, 70, 42];
+var ME_COUNTRY_CODES = "ir,iq,sy,lb,il,ps,jo,eg,sa,ae,bh,kw,om,qa,ye,tr,af,pk,tm,az,am,ge";
 
-// server/lib/eventGrouping.ts
-function haversineKm2(lat1, lng1, lat2, lng2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-var GROUP_RADIUS_KM = 50;
-var MS_PER_DAY = 864e5;
-function cameoRoot(cameoCode) {
-  return cameoCode.slice(0, 2);
-}
-function dayBucket(timestamp) {
-  return Math.floor(timestamp / MS_PER_DAY);
-}
-function computeCentroid(entities) {
-  let latSum = 0;
-  let lngSum = 0;
-  for (const e of entities) {
-    latSum += e.lat;
-    lngSum += e.lng;
+// server/adapters/nominatim.ts
+var NOMINATIM_FETCH_TIMEOUT_MS = (() => {
+  const raw = Number(process.env.NOMINATIM_FETCH_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 1e4;
+})();
+async function fetchWithTimeout(url, init) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NOMINATIM_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
-  return { lat: latSum / entities.length, lng: lngSum / entities.length };
 }
-function groupGdeltRows(entities) {
-  const sorted = [...entities].sort((a, b) => a.timestamp - b.timestamp);
-  const groups = [];
-  for (const entity of sorted) {
-    const entityDay = dayBucket(entity.timestamp);
-    const entityRoot = cameoRoot(entity.data.cameoCode);
-    let matched = false;
-    for (const group of groups) {
-      const groupDay = dayBucket(group.timestamp);
-      if (groupDay !== entityDay) continue;
-      if (cameoRoot(group.primaryCameo) !== entityRoot) continue;
-      if (haversineKm2(group.centroidLat, group.centroidLng, entity.lat, entity.lng) > GROUP_RADIUS_KM)
-        continue;
-      group.entities.push(entity);
-      const centroid = computeCentroid(group.entities);
-      group.centroidLat = centroid.lat;
-      group.centroidLng = centroid.lng;
-      group.totalMentions += entity.data.numMentions ?? 0;
-      group.totalSources += entity.data.numSources ?? 0;
-      if (entity.data.source) {
-        group.sourceUrls.push(entity.data.source);
-      }
-      if (entity.timestamp < group.timestamp) {
-        group.timestamp = entity.timestamp;
-      }
-      matched = true;
-      break;
-    }
-    if (!matched) {
-      groups.push({
-        key: `grp-${entityDay}-${entityRoot}-${groups.length}`,
-        entities: [entity],
-        centroidLat: entity.lat,
-        centroidLng: entity.lng,
-        primaryCameo: entity.data.cameoCode,
-        timestamp: entity.timestamp,
-        totalMentions: entity.data.numMentions ?? 0,
-        totalSources: entity.data.numSources ?? 0,
-        sourceUrls: entity.data.source ? [entity.data.source] : []
-      });
-    }
+async function forwardGeocodeConstrained(placeName, opts = {}) {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    "accept-language": "en",
+    limit: String(opts.limit ?? 1)
+  });
+  if (opts.amenity) {
+    params.set("amenity", opts.amenity);
+  } else {
+    params.set("q", placeName);
   }
-  return groups;
+  params.set("countrycodes", opts.countrycodes ?? ME_COUNTRY_CODES);
+  const viewbox = opts.viewbox ?? ME_VIEWBOX;
+  params.set("viewbox", viewbox.join(","));
+  if (opts.bounded ?? true) params.set("bounded", "1");
+  if (opts.addressdetails) params.set("addressdetails", "1");
+  const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+  try {
+    const res = await fetchWithTimeout(url, {
+      headers: { "User-Agent": "IranConflictMonitor/1.0 (personal project)" }
+    });
+    if (!res || !res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data.map((d) => {
+      const dd = d;
+      return {
+        lat: typeof dd.lat === "string" ? parseFloat(dd.lat) : Number(dd.lat ?? 0),
+        lng: typeof dd.lon === "string" ? parseFloat(dd.lon) : Number(dd.lon ?? 0),
+        displayName: dd.display_name ?? "",
+        type: dd.type ?? "unknown",
+        ...dd.address ? { address: dd.address } : {}
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+async function reverseGeocode(lat, lon) {
+  const qLat = Math.round(lat * 100) / 100;
+  const qLon = Math.round(lon * 100) / 100;
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${qLat}&lon=${qLon}&zoom=10&accept-language=en`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "IranConflictMonitor/1.0 (personal project)"
+      }
+    });
+    if (!res.ok) {
+      return { display: "Unknown location" };
+    }
+    const data = await res.json();
+    const city = data.address?.city ?? data.address?.town ?? data.address?.village;
+    const country = data.address?.country;
+    const display = data.display_name;
+    return { city, country, display };
+  } catch {
+    return { display: "Unknown location" };
+  }
 }
 
 // server/lib/llmSchema.ts
-import { z as z4 } from "zod";
+import { z as z2 } from "zod";
 var GEOCODE_PROVENANCE_VALUES = [
   "own-site-snapshot",
   "poi-amenity-nominatim",
@@ -2208,43 +1870,43 @@ var GEOCODE_PROVENANCE_VALUES = [
   "gdelt-actiongeo-fallback",
   "bellingcat-coord-passthrough"
 ];
-var geocodeProvenanceSchema = z4.enum(GEOCODE_PROVENANCE_VALUES);
-var casualtiesSchema = z4.object({
-  killed: z4.number().int().nullable(),
-  injured: z4.number().int().nullable(),
-  unknown: z4.boolean()
+var geocodeProvenanceSchema = z2.enum(GEOCODE_PROVENANCE_VALUES);
+var casualtiesSchema = z2.object({
+  killed: z2.number().int().nullable(),
+  injured: z2.number().int().nullable(),
+  unknown: z2.boolean()
 });
-var enrichedEventV1 = z4.object({
-  schemaVersion: z4.literal("v1"),
-  groupKey: z4.string(),
-  location: z4.object({
-    name: z4.string(),
-    precision: z4.enum(["exact", "neighborhood", "city", "region"])
+var enrichedEventV1 = z2.object({
+  schemaVersion: z2.literal("v1"),
+  groupKey: z2.string(),
+  location: z2.object({
+    name: z2.string(),
+    precision: z2.enum(["exact", "neighborhood", "city", "region"])
   }),
-  type: z4.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
-  actors: z4.array(z4.string()),
-  severity: z4.enum(["critical", "high", "medium", "low"]),
-  summary: z4.string(),
+  type: z2.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
+  actors: z2.array(z2.string()),
+  severity: z2.enum(["critical", "high", "medium", "low"]),
+  summary: z2.string(),
   casualties: casualtiesSchema,
-  sourceCount: z4.number().int()
+  sourceCount: z2.number().int()
 });
-var locationHierarchyV2 = z4.object({
-  country: z4.string().min(1).nullable(),
-  admin1: z4.string().min(1).nullable(),
-  city: z4.string().min(1).nullable(),
-  neighborhood: z4.string().min(1).nullable(),
-  landmark: z4.string().min(1).nullable(),
-  confidence: z4.number().min(0).max(1)
+var locationHierarchyV2 = z2.object({
+  country: z2.string().min(1).nullable(),
+  admin1: z2.string().min(1).nullable(),
+  city: z2.string().min(1).nullable(),
+  neighborhood: z2.string().min(1).nullable(),
+  landmark: z2.string().min(1).nullable(),
+  confidence: z2.number().min(0).max(1)
 }).strict();
-var enrichedEventV2 = z4.object({
-  schemaVersion: z4.literal("v2"),
-  groupKey: z4.string(),
+var enrichedEventV2 = z2.object({
+  schemaVersion: z2.literal("v2"),
+  groupKey: z2.string(),
   location: locationHierarchyV2,
-  type: z4.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
+  type: z2.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
   // D-12: per-event confidence alongside location-level confidence. Location
   // confidence reflects "where"; event confidence reflects overall LLM
   // certainty about the whole extraction (type/actors/casualties/etc).
-  confidence: z4.number().min(0).max(1),
+  confidence: z2.number().min(0).max(1),
   // D-12: ≤200 char rationale citing which signals led to the pick.
   // Auditable in DevApiStatus drill-down (D-18).
   //
@@ -2256,27 +1918,27 @@ var enrichedEventV2 = z4.object({
   // events in the batch, which is worse than silently truncating one field.
   // The system prompt still says "≤200 chars"; Zod is the enforcement-of-
   // last-resort that keeps the v2 cache compact.
-  reasoning: z4.string().transform((s) => s.length > 200 ? `${s.slice(0, 197)}\u2026` : s),
+  reasoning: z2.string().transform((s) => s.length > 200 ? `${s.slice(0, 197)}\u2026` : s),
   // D-13: weapon classification (nullable — not all events specify).
-  weaponType: z4.enum(["airstrike", "drone", "missile", "artillery", "small_arms", "IED"]).nullable(),
+  weaponType: z2.enum(["airstrike", "drone", "missile", "artillery", "small_arms", "IED"]).nullable(),
   // D-13: target classification (nullable — not all events specify).
-  targetType: z4.enum(["military", "infrastructure", "civilian", "leadership"]).nullable(),
+  targetType: z2.enum(["military", "infrastructure", "civilian", "leadership"]).nullable(),
   // D-14: UTC time-of-day in HH:MM. Strict regex rejects 24:00+ and bad
   // minute ranges (60+). Format-only validation — calendar math lives
   // outside this schema.
-  timeOfDay: z4.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
+  timeOfDay: z2.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
   // D-14: duration in minutes. Nullable for instantaneous events.
-  durationMinutes: z4.number().int().nonnegative().nullable(),
-  actors: z4.array(z4.string()),
-  severity: z4.enum(["critical", "high", "medium", "low"]),
-  summary: z4.string(),
+  durationMinutes: z2.number().int().nonnegative().nullable(),
+  actors: z2.array(z2.string()),
+  severity: z2.enum(["critical", "high", "medium", "low"]),
+  summary: z2.string(),
   casualties: casualtiesSchema,
-  sourceCount: z4.number().int()
+  sourceCount: z2.number().int()
 }).strict();
 var enrichedEventV3 = enrichedEventV2.extend({
-  schemaVersion: z4.literal("v3")
+  schemaVersion: z2.literal("v3")
 });
-var enrichedEventAny = z4.discriminatedUnion("schemaVersion", [
+var enrichedEventAny = z2.discriminatedUnion("schemaVersion", [
   enrichedEventV1,
   enrichedEventV2,
   enrichedEventV3
@@ -2380,9 +2042,9 @@ var EVENT_EXTRACTION_SCHEMA_V2 = {
   additionalProperties: false
 };
 var EVENT_EXTRACTION_SCHEMA_V3 = EVENT_EXTRACTION_SCHEMA_V2;
-var batchResponseV2 = z4.object({
-  events: z4.array(
-    z4.preprocess((v) => {
+var batchResponseV2 = z2.object({
+  events: z2.array(
+    z2.preprocess((v) => {
       if (v && typeof v === "object" && !("schemaVersion" in v)) {
         return { ...v, schemaVersion: "v2" };
       }
@@ -2390,9 +2052,9 @@ var batchResponseV2 = z4.object({
     }, enrichedEventV2)
   )
 });
-var batchResponseV3 = z4.object({
-  events: z4.array(
-    z4.preprocess((v) => {
+var batchResponseV3 = z2.object({
+  events: z2.array(
+    z2.preprocess((v) => {
       if (v && typeof v === "object" && !("schemaVersion" in v)) {
         return { ...v, schemaVersion: "v3" };
       }
@@ -2401,95 +2063,11 @@ var batchResponseV3 = z4.object({
   )
 });
 
-// server/lib/llmResolver.ts
-import { z as z5 } from "zod";
-
-// server/lib/meBounds.ts
-var ME_VIEWBOX = [30, 15, 70, 42];
-var ME_COUNTRY_CODES = "ir,iq,sy,lb,il,ps,jo,eg,sa,ae,bh,kw,om,qa,ye,tr,af,pk,tm,az,am,ge";
-
-// server/adapters/nominatim.ts
-var NOMINATIM_FETCH_TIMEOUT_MS = (() => {
-  const raw = Number(process.env.NOMINATIM_FETCH_TIMEOUT_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : 1e4;
-})();
-async function fetchWithTimeout(url, init) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), NOMINATIM_FETCH_TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-async function forwardGeocodeConstrained(placeName, opts = {}) {
-  const params = new URLSearchParams({
-    format: "jsonv2",
-    "accept-language": "en",
-    limit: String(opts.limit ?? 1)
-  });
-  if (opts.amenity) {
-    params.set("amenity", opts.amenity);
-  } else {
-    params.set("q", placeName);
-  }
-  params.set("countrycodes", opts.countrycodes ?? ME_COUNTRY_CODES);
-  const viewbox = opts.viewbox ?? ME_VIEWBOX;
-  params.set("viewbox", viewbox.join(","));
-  if (opts.bounded ?? true) params.set("bounded", "1");
-  if (opts.addressdetails) params.set("addressdetails", "1");
-  const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
-  try {
-    const res = await fetchWithTimeout(url, {
-      headers: { "User-Agent": "IranConflictMonitor/1.0 (personal project)" }
-    });
-    if (!res || !res.ok) return [];
-    const data = await res.json();
-    if (!Array.isArray(data)) return [];
-    return data.map((d) => {
-      const dd = d;
-      return {
-        lat: typeof dd.lat === "string" ? parseFloat(dd.lat) : Number(dd.lat ?? 0),
-        lng: typeof dd.lon === "string" ? parseFloat(dd.lon) : Number(dd.lon ?? 0),
-        displayName: dd.display_name ?? "",
-        type: dd.type ?? "unknown",
-        ...dd.address ? { address: dd.address } : {}
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-async function reverseGeocode(lat, lon) {
-  const qLat = Math.round(lat * 100) / 100;
-  const qLon = Math.round(lon * 100) / 100;
-  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${qLat}&lon=${qLon}&zoom=10&accept-language=en`;
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "IranConflictMonitor/1.0 (personal project)"
-      }
-    });
-    if (!res.ok) {
-      return { display: "Unknown location" };
-    }
-    const data = await res.json();
-    const city = data.address?.city ?? data.address?.town ?? data.address?.village;
-    const country = data.address?.country;
-    const display = data.display_name;
-    return { city, country, display };
-  } catch {
-    return { display: "Unknown location" };
-  }
-}
-
 // server/lib/sitesSnapshot.ts
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-var log9 = logger.child({ module: "sites-snapshot" });
+var log5 = logger.child({ module: "sites-snapshot" });
 var __dirname = dirname(fileURLToPath(import.meta.url));
 var SNAPSHOT_PATH = resolve(__dirname, "../../src/data/sites.json");
 var cachedSnapshot = void 0;
@@ -2497,7 +2075,7 @@ function loadSitesSnapshot() {
   if (cachedSnapshot !== void 0) return cachedSnapshot;
   try {
     if (!existsSync(SNAPSHOT_PATH)) {
-      log9.info(
+      log5.info(
         { path: SNAPSHOT_PATH },
         "sites snapshot file absent; cold-start will hit Overpass on refresh"
       );
@@ -2509,12 +2087,12 @@ function loadSitesSnapshot() {
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      log9.warn({ err: parseErr, path: SNAPSHOT_PATH }, "sites snapshot JSON parse failed");
+      log5.warn({ err: parseErr, path: SNAPSHOT_PATH }, "sites snapshot JSON parse failed");
       cachedSnapshot = null;
       return null;
     }
     if (!isValidSnapshot(parsed)) {
-      log9.warn({ path: SNAPSHOT_PATH }, "sites snapshot failed structural validation; ignoring");
+      log5.warn({ path: SNAPSHOT_PATH }, "sites snapshot failed structural validation; ignoring");
       cachedSnapshot = null;
       return null;
     }
@@ -2527,14 +2105,14 @@ function loadSitesSnapshot() {
         generatedAt: parsed.generatedAt
       }
     };
-    log9.info(
+    log5.info(
       { count: snapshot.sites.length, generatedAt: snapshot.generatedAt },
       "loaded sites snapshot"
     );
     cachedSnapshot = snapshot;
     return snapshot;
   } catch (err) {
-    log9.warn({ err, path: SNAPSHOT_PATH }, "failed to load sites snapshot");
+    log5.warn({ err, path: SNAPSHOT_PATH }, "failed to load sites snapshot");
     cachedSnapshot = null;
     return null;
   }
@@ -2552,7 +2130,7 @@ function isValidSnapshot(v) {
 import { readFileSync as readFileSync2, existsSync as existsSync2 } from "fs";
 import { resolve as resolve2, dirname as dirname2 } from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
-var log10 = logger.child({ module: "water-snapshot" });
+var log6 = logger.child({ module: "water-snapshot" });
 var __dirname2 = dirname2(fileURLToPath2(import.meta.url));
 var SNAPSHOT_PATH2 = resolve2(__dirname2, "../../src/data/water-facilities.json");
 var cachedSnapshot2 = void 0;
@@ -2560,7 +2138,7 @@ function loadWaterSnapshot() {
   if (cachedSnapshot2 !== void 0) return cachedSnapshot2;
   try {
     if (!existsSync2(SNAPSHOT_PATH2)) {
-      log10.info(
+      log6.info(
         { path: SNAPSHOT_PATH2 },
         "water snapshot file absent; cold-start will fall through to Overpass"
       );
@@ -2572,12 +2150,12 @@ function loadWaterSnapshot() {
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      log10.warn({ err: parseErr, path: SNAPSHOT_PATH2 }, "water snapshot JSON parse failed");
+      log6.warn({ err: parseErr, path: SNAPSHOT_PATH2 }, "water snapshot JSON parse failed");
       cachedSnapshot2 = null;
       return null;
     }
     if (!isValidSnapshot2(parsed)) {
-      log10.warn({ path: SNAPSHOT_PATH2 }, "water snapshot failed structural validation; ignoring");
+      log6.warn({ path: SNAPSHOT_PATH2 }, "water snapshot failed structural validation; ignoring");
       cachedSnapshot2 = null;
       return null;
     }
@@ -2590,14 +2168,14 @@ function loadWaterSnapshot() {
         generatedAt: parsed.generatedAt
       }
     };
-    log10.info(
+    log6.info(
       { count: snapshot.facilities.length, generatedAt: snapshot.generatedAt },
       "loaded water snapshot"
     );
     cachedSnapshot2 = snapshot;
     return snapshot;
   } catch (err) {
-    log10.warn({ err, path: SNAPSHOT_PATH2 }, "failed to load water snapshot");
+    log6.warn({ err, path: SNAPSHOT_PATH2 }, "failed to load water snapshot");
     cachedSnapshot2 = null;
     return null;
   }
@@ -2612,7 +2190,7 @@ function isValidSnapshot2(v) {
 }
 
 // server/lib/llmResolver.ts
-var log11 = logger.child({ module: "llm-resolver" });
+var log7 = logger.child({ module: "llm-resolver" });
 var GEOCODE_CACHE_PREFIX = "geocode:fwd:constrained:v2:";
 var GEOCODE_CACHE_LOGICAL_TTL_MS = 30 * 24 * 3600 * 1e3;
 var GEOCODE_CACHE_REDIS_TTL_SEC = 30 * 24 * 3600;
@@ -2629,7 +2207,7 @@ function cacheKey(kind, parts) {
   const ordered = Object.keys(parts).sort().filter((k) => parts[k] !== void 0).map((k) => `${k}=${parts[k]}`).join("|");
   return `${GEOCODE_CACHE_PREFIX}${kind}:${ordered}`;
 }
-function haversineKm3(lat1, lng1, lat2, lng2) {
+function haversineKm2(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -2766,7 +2344,7 @@ async function resolveViaPoiAmenity(hierarchy) {
     await cacheSetSafe(key, hit, GEOCODE_CACHE_REDIS_TTL_SEC);
     return hit;
   } catch (err) {
-    log11.warn({ err, landmark: hierarchy.landmark }, "resolveViaPoiAmenity failed");
+    log7.warn({ err, landmark: hierarchy.landmark }, "resolveViaPoiAmenity failed");
     return null;
   }
 }
@@ -2814,13 +2392,13 @@ async function resolveViaNominatimDirect(hierarchy) {
     await cacheSetSafe(key, hit, GEOCODE_CACHE_REDIS_TTL_SEC);
     return hit;
   } catch (err) {
-    log11.warn({ err, query }, "nominatim-direct failed");
+    log7.warn({ err, query }, "nominatim-direct failed");
     return null;
   }
 }
-var rerankerResponseSchema = z5.object({
-  pick: z5.number().int().min(1).max(5),
-  reasoning: z5.string().max(100)
+var rerankerResponseSchema = z3.object({
+  pick: z3.number().int().min(1).max(5),
+  reasoning: z3.string().max(100)
 }).strict();
 var RERANKER_JSON_SCHEMA = {
   type: "object",
@@ -2899,7 +2477,7 @@ async function resolveViaVerifiedTwoPass(hierarchy, ctx) {
       return hit2;
     }
     const userPrompt = buildRerankerUserPrompt(hierarchy, candidates, ctx);
-    const raw = await callLLM(
+    const raw = await callLLM2(
       [
         { role: "system", content: RERANKER_SYSTEM_PROMPT },
         { role: "user", content: userPrompt }
@@ -2918,7 +2496,7 @@ async function resolveViaVerifiedTwoPass(hierarchy, ctx) {
     }
     const validated = rerankerResponseSchema.safeParse(parsed);
     if (!validated.success) {
-      log11.warn({ issues: validated.error.issues }, "reranker response failed Zod parse");
+      log7.warn({ issues: validated.error.issues }, "reranker response failed Zod parse");
       return null;
     }
     const idx = validated.data.pick - 1;
@@ -2928,7 +2506,7 @@ async function resolveViaVerifiedTwoPass(hierarchy, ctx) {
     await cacheSetSafe(key, hit, GEOCODE_CACHE_REDIS_TTL_SEC);
     return hit;
   } catch (err) {
-    log11.warn({ err, query }, "two-pass verify failed");
+    log7.warn({ err, query }, "two-pass verify failed");
     return null;
   }
 }
@@ -2954,11 +2532,11 @@ async function resolveLocation(hierarchy, ctx) {
       return {
         ...hit2,
         provenance: "own-site-snapshot",
-        actionGeoDistanceKm: haversineKm3(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
+        actionGeoDistanceKm: haversineKm2(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
       };
     }
   } catch (err) {
-    log11.warn({ err }, "own-site-snapshot path threw");
+    log7.warn({ err }, "own-site-snapshot path threw");
   }
   if (isPoiLandmark(hierarchy.landmark)) {
     try {
@@ -2967,21 +2545,21 @@ async function resolveLocation(hierarchy, ctx) {
         return {
           ...hit2,
           provenance: "poi-amenity-nominatim",
-          actionGeoDistanceKm: haversineKm3(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
+          actionGeoDistanceKm: haversineKm2(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
         };
       }
     } catch (err) {
-      log11.warn({ err }, "poi-amenity-nominatim path threw");
+      log7.warn({ err }, "poi-amenity-nominatim path threw");
     }
   }
   let directHit = null;
   try {
     directHit = await resolveViaNominatimDirect(hierarchy);
   } catch (err) {
-    log11.warn({ err }, "nominatim-direct path threw");
+    log7.warn({ err }, "nominatim-direct path threw");
   }
   const precision = derivePrecision(hierarchy);
-  const shouldVerify = precision === "city" || precision === "region" || precision === "neighborhood" || directHit !== null && haversineKm3(directHit.lat, directHit.lng, ctx.centroidLat, ctx.centroidLng) > 250;
+  const shouldVerify = precision === "city" || precision === "region" || precision === "neighborhood" || directHit !== null && haversineKm2(directHit.lat, directHit.lng, ctx.centroidLat, ctx.centroidLng) > 250;
   if (shouldVerify) {
     try {
       const verified = await resolveViaVerifiedTwoPass(hierarchy, ctx);
@@ -2989,7 +2567,7 @@ async function resolveLocation(hierarchy, ctx) {
         return {
           ...verified,
           provenance: "nominatim-verified-2pass",
-          actionGeoDistanceKm: haversineKm3(
+          actionGeoDistanceKm: haversineKm2(
             verified.lat,
             verified.lng,
             ctx.centroidLat,
@@ -2998,14 +2576,14 @@ async function resolveLocation(hierarchy, ctx) {
         };
       }
     } catch (err) {
-      log11.warn({ err }, "two-pass verify path threw; accepting direct hit");
+      log7.warn({ err }, "two-pass verify path threw; accepting direct hit");
     }
   }
   if (directHit) {
     return {
       ...directHit,
       provenance: "nominatim-direct",
-      actionGeoDistanceKm: haversineKm3(
+      actionGeoDistanceKm: haversineKm2(
         directHit.lat,
         directHit.lng,
         ctx.centroidLat,
@@ -3019,14 +2597,43 @@ async function resolveLocation(hierarchy, ctx) {
       return {
         ...hit2,
         provenance: "bellingcat-coord-passthrough",
-        actionGeoDistanceKm: haversineKm3(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
+        actionGeoDistanceKm: haversineKm2(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
       };
     }
   } catch (err) {
-    log11.warn({ err }, "bellingcat path threw");
+    log7.warn({ err }, "bellingcat path threw");
   }
   const hit = resolveViaActionGeoFallback(ctx);
   return { ...hit, provenance: "gdelt-actiongeo-fallback", actionGeoDistanceKm: 0 };
+}
+
+// server/lib/pipelineAudit.ts
+var PIPELINE_AUDIT_KEY = "events:llm-pipeline-audit";
+var PIPELINE_AUDIT_TTL_SEC = 90 * 24 * 3600;
+var PIPELINE_AUDIT_MAX = 200;
+async function appendPipelineAudit(entry) {
+  try {
+    await redis.lpush(PIPELINE_AUDIT_KEY, JSON.stringify(entry));
+    await redis.ltrim(PIPELINE_AUDIT_KEY, 0, PIPELINE_AUDIT_MAX - 1);
+    await redis.expire(PIPELINE_AUDIT_KEY, PIPELINE_AUDIT_TTL_SEC);
+  } catch (err) {
+    const log36 = logger.child({ component: "pipeline-audit" });
+    log36.warn({ err, entry }, "audit append failed (redis unreachable)");
+  }
+}
+async function listPipelineAudit(limit) {
+  try {
+    const raw = await redis.lrange(PIPELINE_AUDIT_KEY, 0, limit - 1);
+    return raw.map((s) => {
+      try {
+        return JSON.parse(typeof s === "string" ? s : JSON.stringify(s));
+      } catch {
+        return null;
+      }
+    }).filter((e) => e !== null);
+  } catch {
+    return [];
+  }
 }
 
 // server/lib/sourceTiers.ts
@@ -3095,125 +2702,20 @@ function getHighestTier(sourceUrls) {
   return best;
 }
 
-// server/lib/llmDLQ.ts
-var log12 = logger.child({ module: "llm-dlq" });
-var DLQ_KEY = "events:llm-dlq";
-var DLQ_TTL_SEC = 7 * 24 * 3600;
-var DLQ_MAX = 200;
-var LAST_ERROR_MAX_CHARS = 500;
-function parseEntry(raw) {
-  try {
-    if (typeof raw === "string") return JSON.parse(raw);
-    if (raw && typeof raw === "object") return raw;
-    return null;
-  } catch {
-    return null;
-  }
-}
-async function enqueueDLQ(entry) {
-  const capped = {
-    ...entry,
-    lastError: entry.lastError.slice(0, LAST_ERROR_MAX_CHARS)
-  };
-  const payload = JSON.stringify(capped);
-  try {
-    await redis.sadd(DLQ_KEY, payload);
-    await redis.expire(DLQ_KEY, DLQ_TTL_SEC);
-    const size = await redis.scard(DLQ_KEY);
-    if (size > DLQ_MAX) {
-      const all = await redis.smembers(DLQ_KEY);
-      const withParsed = all.map((raw) => {
-        const rawStr = typeof raw === "string" ? raw : JSON.stringify(raw);
-        return { raw: rawStr, parsed: parseEntry(raw) };
-      }).filter((x) => x.parsed !== null);
-      withParsed.sort((a, b) => a.parsed.timestamp - b.parsed.timestamp);
-      const toRemove = withParsed.slice(0, size - DLQ_MAX).map((x) => x.raw);
-      if (toRemove.length > 0) await redis.srem(DLQ_KEY, ...toRemove);
-    }
-  } catch (err) {
-    log12.warn({ err, id: entry.id }, "DLQ enqueue failed (redis unreachable)");
-  }
-}
-async function listDLQ(limit = 50) {
-  try {
-    const all = await redis.smembers(DLQ_KEY);
-    const parsed = [];
-    for (const s of all) {
-      const p = parseEntry(s);
-      if (p) parsed.push(p);
-    }
-    return parsed.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
-  } catch {
-    return [];
-  }
-}
-
-// server/lib/llmExtractorWatchdog.ts
-var log13 = logger.child({ module: "llm-watchdog" });
-async function withBatchWatchdog(batchFn, opts) {
-  let timedOut = false;
-  let hardTimer;
-  const workPromise = batchFn();
-  workPromise.catch(() => {
-  });
-  const timeoutPromise = new Promise((_, reject) => {
-    hardTimer = setTimeout(() => {
-      timedOut = true;
-      reject(
-        new Error(`batch ${opts.batchIndex} (${opts.label}) timed out after ${opts.timeoutMs}ms`)
-      );
-    }, opts.timeoutMs);
-  });
-  const softWarnTimer = setTimeout(() => {
-    if (!timedOut) {
-      try {
-        opts.onSoftWarn?.(opts.softWarnMs);
-        log13.info(
-          { batchIndex: opts.batchIndex, label: opts.label, softWarnMs: opts.softWarnMs },
-          "batch crossed soft-warn threshold (still running)"
-        );
-      } catch (err) {
-        log13.warn({ err }, "onSoftWarn handler threw \u2014 suppressed");
-      }
-    }
-  }, opts.softWarnMs);
-  try {
-    const result = await Promise.race([workPromise, timeoutPromise]);
-    return result;
-  } catch (err) {
-    if (timedOut) {
-      log13.warn(
-        { batchIndex: opts.batchIndex, label: opts.label, timeoutMs: opts.timeoutMs },
-        "batch hard-timeout triggered"
-      );
-      try {
-        await opts.onTimeout();
-      } catch (hookErr) {
-        log13.error(
-          { err: hookErr, batchIndex: opts.batchIndex, label: opts.label },
-          "onTimeout hook threw \u2014 suppressed, returning null"
-        );
-      }
-      return null;
-    }
-    throw err;
-  } finally {
-    if (softWarnTimer) clearTimeout(softWarnTimer);
-    if (hardTimer) clearTimeout(hardTimer);
-  }
-}
-
-// server/lib/llmEventExtractor.v2.ts
-var log14 = logger.child({ module: "llm-extractor-v2" });
+// server/lib/llmEventExtractor.v3.ts
+var log8 = logger.child({ module: "llm-extractor-v3" });
+var PIPELINE_OVERRIDE_KEY = "events:llm-pipeline-override";
+var PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
 var BATCH_SIZE = 2;
+var V3_BAKEOFF_MODEL = process.env.V3_BAKEOFF_MODEL;
 var TEMPORAL_CONTEXT_COUNT = 3;
 var TEMPORAL_CONTEXT_BBOX_DEG = 1;
 var TEMPORAL_CONTEXT_WINDOW_MS = 72 * 36e5;
 var NEWS_MATCH_WINDOW_MS = 24 * 36e5;
 var NEWS_KEY = "news:gdelt";
-var EVENTS_LLM_V2_KEY = "events:llm:v2";
-var EVENTS_LLM_V2_PARTIAL_KEY = "events:llm:v2:partial";
-var SYSTEM_PROMPT_V2 = [
+var EVENTS_LLM_V3_KEY = "events:llm:v3";
+var EVENTS_LLM_V3_PARTIAL_KEY = "events:llm:v3:partial";
+var SYSTEM_PROMPT_V3 = [
   "You are a conflict event analyst extracting structured data from GDELT event records.",
   "",
   "For each event group, extract (all fields REQUIRED unless stated nullable):",
@@ -3242,10 +2744,15 @@ var SYSTEM_PROMPT_V2 = [
   '- NEVER emit a "precision" field \u2014 the server derives it from which hierarchy fields you populated.',
   "- Use null when a field is not supported by the source text \u2014 do NOT guess.",
   "- Prefer the NEWS BLOCK and BELLINGCAT BLOCK when present; they are higher-tier signals than GDELT metadata alone.",
-  '- The TEMPORAL BLOCK lists prior events in the same region \u2014 use it to normalize names (e.g., "the Jobar substation").'
+  '- The TEMPORAL BLOCK lists prior events in the same region \u2014 use it to normalize names (e.g., "the Jobar substation").',
+  "",
+  "JSON Schema (this is the contract \u2014 your output MUST validate):",
+  JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3, null, 2),
+  "",
+  '- Output ONLY the JSON object. Any reasoning must go in the "reasoning" field, not in <think> blocks (those are stripped).'
 ].join("\n");
 var LLM_REDIS_TTL_SEC = 9e3;
-function buildBatchUserPromptV2(contexts) {
+function buildBatchUserPromptV3(contexts) {
   const lines = ["Analyze these GDELT event groups and extract structured data:\n"];
   for (let i = 0; i < contexts.length; i++) {
     const ctx = contexts[i];
@@ -3326,14 +2833,14 @@ async function buildPromptContext(group) {
       }
     }
   } catch (err) {
-    log14.warn({ err }, "news cross-match failed, omitting NEWS+BELLINGCAT blocks");
+    log8.warn({ err }, "news cross-match failed, omitting NEWS+BELLINGCAT blocks");
   }
   const temporalEvents = await loadTemporalContext(group);
   return { group, matchedNews, bellingcatHits, temporalEvents };
 }
 async function loadTemporalContext(group) {
   try {
-    const cached = await cacheGetSafe(EVENTS_LLM_V2_KEY, 0);
+    const cached = await cacheGetSafe(EVENTS_LLM_V3_KEY, 0);
     if (!cached?.data) return [];
     const out = [];
     for (const e of cached.data) {
@@ -3363,809 +2870,9 @@ async function writePartialCache(events, completed, total, complete) {
     generatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
   try {
-    await cacheSetSafe(EVENTS_LLM_V2_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC);
+    await cacheSetSafe(EVENTS_LLM_V3_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC);
   } catch (err) {
-    log14.warn({ err, completed, total, complete }, "partial cache write failed");
-  }
-}
-async function processEventGroupsV2(groups, onBatchComplete) {
-  const matchedNewsByGroup = /* @__PURE__ */ new Map();
-  const bellingcatByGroup = /* @__PURE__ */ new Map();
-  if (groups.length === 0) {
-    return { events: [], matchedNewsByGroup, bellingcatByGroup };
-  }
-  const results = [];
-  let allFailed = true;
-  const totalBatches = Math.ceil(groups.length / BATCH_SIZE);
-  for (let i = 0; i < groups.length; i += BATCH_SIZE) {
-    const batch = groups.slice(i, i + BATCH_SIZE);
-    const batchIndex = Math.floor(i / BATCH_SIZE);
-    const contexts = await Promise.all(batch.map(buildPromptContext));
-    for (const ctx of contexts) {
-      matchedNewsByGroup.set(ctx.group.key, ctx.matchedNews);
-      const firstBellingcat = ctx.bellingcatHits[0];
-      if (firstBellingcat) {
-        bellingcatByGroup.set(ctx.group.key, {
-          lat: firstBellingcat.lat,
-          lng: firstBellingcat.lng
-        });
-      }
-    }
-    const userPrompt = buildBatchUserPromptV2(contexts);
-    const content = await withBatchWatchdog(
-      () => callLLM(
-        [
-          { role: "system", content: SYSTEM_PROMPT_V2 },
-          { role: "user", content: userPrompt }
-        ],
-        EVENT_EXTRACTION_SCHEMA_V2,
-        { batchSize: batch.length }
-      ),
-      {
-        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 6e4,
-        // D-02 hard-coded — only hard cap is env-tunable
-        batchIndex,
-        label: "v2",
-        onTimeout: async () => {
-          for (const g of batch) {
-            await enqueueDLQ({
-              id: g.key,
-              reason: "timeout_watchdog",
-              lastError: `v2 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
-              timestamp: Date.now()
-            });
-          }
-          updateProgress({
-            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
-          });
-        },
-        onSoftWarn: (elapsedMs) => {
-          const history = llmProgress.callHistory ?? [];
-          updateProgress({
-            callHistory: [
-              {
-                provider: "cerebras",
-                model: "watchdog-soft-warn",
-                tokensIn: 0,
-                tokensOut: 0,
-                durationMs: elapsedMs,
-                ok: true,
-                batchSize: batch.length,
-                timestamp: Date.now()
-              },
-              ...history
-            ].slice(0, 20)
-          });
-        }
-      }
-    );
-    if (content === null) {
-      log14.warn({ batchIndex }, "batch yielded no content (null or watchdog timeout)");
-      onBatchComplete?.(batchIndex + 1, totalBatches);
-      await writePartialCache(results, batchIndex + 1, totalBatches, false);
-      continue;
-    }
-    try {
-      const parsed = JSON.parse(content);
-      const validated = batchResponseV2.safeParse(parsed);
-      if (!validated.success) {
-        log14.warn({ issues: validated.error.issues.slice(0, 3), batchIndex }, "v2 Zod parse failed");
-        const errPayload = JSON.stringify(validated.error.issues.slice(0, 3));
-        for (const g of batch) {
-          await enqueueDLQ({
-            id: g.key,
-            reason: "zod_fail",
-            lastError: errPayload,
-            timestamp: Date.now()
-          });
-        }
-        onBatchComplete?.(batchIndex + 1, totalBatches);
-        await writePartialCache(results, batchIndex + 1, totalBatches, false);
-        continue;
-      }
-      results.push(...validated.data.events);
-      allFailed = false;
-    } catch (err) {
-      log14.warn({ err, batchIndex }, "JSON.parse failed");
-    }
-    onBatchComplete?.(batchIndex + 1, totalBatches);
-    await writePartialCache(results, batchIndex + 1, totalBatches, false);
-  }
-  await writePartialCache(results, totalBatches, totalBatches, true);
-  return {
-    events: allFailed ? null : results,
-    matchedNewsByGroup,
-    bellingcatByGroup
-  };
-}
-async function geocodeEnrichedEventsV2(events, groupsByKey, matchedNewsByGroup, bellingcatByGroup, onComplete) {
-  const out = [];
-  for (let i = 0; i < events.length; i++) {
-    const ev = events[i];
-    if (!ev) continue;
-    const group = groupsByKey.get(ev.groupKey);
-    const matchedNews = matchedNewsByGroup.get(ev.groupKey) ?? [];
-    const ctx = {
-      centroidLat: group?.centroidLat ?? 0,
-      centroidLng: group?.centroidLng ?? 0,
-      // W3 fix — article TITLES, not URLs.
-      articleTitles: matchedNews.slice(0, 3).map((a) => a.title),
-      summary: ev.summary,
-      // W2 fix — bellingcat coord flows through when parse hit in the news
-      // read; null when nothing matched (the resolver's branch 5 falls through
-      // naturally on null).
-      bellingcatCoord: bellingcatByGroup.get(ev.groupKey) ?? null
-    };
-    const resolved = await resolveLocation(ev.location, ctx);
-    const precision = derivePrecision(ev.location);
-    const sourceHostnames = (group?.sourceUrls ?? []).map((u) => hostnameOf(u));
-    const tiers = [];
-    for (const h of sourceHostnames) {
-      const t = getSourceTier("", h);
-      if (t === 1) tiers.push("gold");
-      else if (t === 2) tiers.push("silver");
-      else if (t === 3) tiers.push("bronze");
-    }
-    const suspect = deriveSuspect({
-      confidence: ev.confidence,
-      precision,
-      actionGeoDistanceKm: resolved.actionGeoDistanceKm,
-      tiers
-    });
-    out.push({
-      ...ev,
-      resolvedLat: resolved.lat,
-      resolvedLng: resolved.lng,
-      geocodeProvenance: resolved.provenance,
-      precision,
-      suspect,
-      actionGeoDistanceKm: resolved.actionGeoDistanceKm,
-      displayName: resolved.displayName
-    });
-    onComplete?.(i + 1, events.length);
-  }
-  return out;
-}
-
-// server/lib/freeClaudeRouter.ts
-import OpenAI2 from "openai";
-var NVIDIA_NIM_BASE = "https://integrate.api.nvidia.com/v1";
-var OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-var LLM_TIMEOUT_MS2 = 12e4;
-var RETRY_ATTEMPTS2 = 2;
-var BACKOFF_MS2 = [1e3, 4e3];
-var JITTER_MS2 = 250;
-var NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? "qwen/qwen3.5-397b-a17b";
-var OPENROUTER_DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
-var OPENROUTER_DAILY_CAP = 200;
-var MAX_TOKENS_PER_MODEL = {
-  // Phase 27.4.4 Plan 02 dev-pass bump: 425 → 2048 after live dev /api/events?force=true
-  // showed ~89% truncation rate (50 v3:malformed DLQ in 7 batches) — the
-  // 20-event preflight characterization underestimated production hierarchy
-  // verbosity. 2048 keeps a 5× safety margin against the 4096 default.
-  "qwen/qwen3.5-397b-a17b": 2048,
-  "meta/llama-3.3-70b-instruct": 380,
-  // p99 315 + 20% buffer
-  "nvidia/nemotron-3-super-120b-a12b": 1240,
-  // p99 1031 + 20% buffer (verbose, schema-fails)
-  "z-ai/glm4.7": 1024
-  // conservative — no traceable records (NIM 400s)
-};
-var MAX_TOKENS_DEFAULT = 4096;
-var RollingWindow = class {
-  cap;
-  windowMs;
-  timestamps = [];
-  constructor(cap, windowMs) {
-    this.cap = cap;
-    this.windowMs = windowMs;
-  }
-  evict(now) {
-    this.timestamps = this.timestamps.filter((t) => now - t < this.windowMs);
-  }
-  canRequest() {
-    this.evict(Date.now());
-    return this.timestamps.length < this.cap;
-  }
-  consume() {
-    this.timestamps.push(Date.now());
-  }
-  headroom() {
-    this.evict(Date.now());
-    return { used: this.timestamps.length, cap: this.cap };
-  }
-};
-var nvidiaNimWindow = new RollingWindow(40, 6e4);
-var lastNimCallTs = 0;
-var PREWARM_COLD_THRESHOLD_MS = 6e4;
-function getNvidiaNimClient() {
-  if (!env.NVIDIA_NIM_API_KEY) return null;
-  return new OpenAI2({
-    apiKey: env.NVIDIA_NIM_API_KEY,
-    baseURL: NVIDIA_NIM_BASE,
-    timeout: LLM_TIMEOUT_MS2
-  });
-}
-function getOpenRouterClient() {
-  if (!env.OPENROUTER_API_KEY) return null;
-  return new OpenAI2({
-    apiKey: env.OPENROUTER_API_KEY,
-    baseURL: OPENROUTER_BASE,
-    timeout: LLM_TIMEOUT_MS2
-  });
-}
-function stripReasoningBlocks(raw, _reasoningContent) {
-  if (!raw) return raw;
-  let s = raw.replace(/<think>[\s\S]*?<\/think>/g, "");
-  s = s.replace(/^reasoning_content:[^\n]*\n/m, "");
-  return s.trim();
-}
-function classifyError(err) {
-  if (err instanceof Error) {
-    const m = err.message.toLowerCase();
-    if (m.includes("429") || m.includes("rate limit")) return "rate_limit";
-    if (m.includes("timeout") || m.includes("timed out")) return "timeout";
-    if (m.includes("enotfound") || m.includes("econnreset") || m.includes("eai_again"))
-      return "network";
-    if (/\b5\d\d\b/.test(m)) return "upstream_500";
-  }
-  return "other";
-}
-async function sleepWithJitter2(base) {
-  const jitter = (Math.random() * 2 - 1) * JITTER_MS2;
-  await new Promise((r) => setTimeout(r, Math.max(0, base + jitter)));
-}
-function todayKey2() {
-  const d = /* @__PURE__ */ new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    d.getUTCDate()
-  ).padStart(2, "0")}`;
-}
-async function incrOpenRouterDaily() {
-  try {
-    const key = `llm:tokens:openrouter:${todayKey2()}`;
-    const next = await redis.incr(key);
-    await redis.expire(key, 48 * 3600);
-    return typeof next === "number" ? next : 0;
-  } catch {
-    return 0;
-  }
-}
-async function getOpenRouterDaily() {
-  try {
-    const key = `llm:tokens:openrouter:${todayKey2()}`;
-    const v = await redis.get(key);
-    return typeof v === "number" ? v : typeof v === "string" ? parseInt(v, 10) : 0;
-  } catch {
-    return 0;
-  }
-}
-async function callLLM2(messages, _schemaText, opts = {}) {
-  const log35 = logger.child({ component: "freeClaudeRouter" });
-  const decisions = [];
-  const includeOpenRouter = !opts.skipOpenRouter;
-  const allProviders = [
-    {
-      name: "nvidia_nim",
-      model: opts.modelOverride ?? NVIDIA_NIM_DEFAULT_MODEL,
-      client: getNvidiaNimClient()
-    },
-    {
-      name: "openrouter",
-      model: OPENROUTER_DEFAULT_MODEL,
-      client: getOpenRouterClient()
-    }
-  ];
-  const providers = includeOpenRouter ? allProviders : allProviders.filter((p) => p.name !== "openrouter");
-  for (let idx = 0; idx < providers.length; idx++) {
-    const p = providers[idx];
-    if (!p) continue;
-    const isPrimary = idx === 0;
-    const prevName = idx > 0 ? providers[idx - 1]?.name : null;
-    const buildReason = (suffix) => isPrimary ? `skipped:${suffix}` : `fall_through:${prevName}_${suffix}`;
-    if (!p.client) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason("no_client"),
-        timestamp: Date.now()
-      });
-      continue;
-    }
-    if (!isAvailable(p.name)) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason("breaker"),
-        timestamp: Date.now()
-      });
-      continue;
-    }
-    if (p.name === "nvidia_nim" && !nvidiaNimWindow.canRequest()) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason("rate_limit_window"),
-        timestamp: Date.now()
-      });
-      continue;
-    }
-    if (p.name === "openrouter" && await getOpenRouterDaily() >= OPENROUTER_DAILY_CAP) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason("daily_cap"),
-        timestamp: Date.now()
-      });
-      continue;
-    }
-    decisions.push({
-      provider: p.name,
-      model: p.model,
-      reason: isPrimary ? "primary" : `fall_through:${prevName}_429`,
-      timestamp: Date.now()
-    });
-    let callFailed = false;
-    for (let attempt = 0; attempt < RETRY_ATTEMPTS2; attempt++) {
-      const t0 = Date.now();
-      try {
-        if (p.name === "nvidia_nim") nvidiaNimWindow.consume();
-        if (p.name === "openrouter") await incrOpenRouterDaily();
-        const res = await p.client.chat.completions.create({
-          model: p.model,
-          messages,
-          response_format: { type: "json_object" },
-          // D-10: NO strict mode
-          temperature: 0,
-          max_tokens: MAX_TOKENS_PER_MODEL[p.model] ?? MAX_TOKENS_DEFAULT
-          // D-06
-        });
-        const latencyMs = Date.now() - t0;
-        recordLatency(p.name, latencyMs);
-        recordHeadroom(p.name);
-        const usage = res.usage;
-        const tokensIn = usage?.prompt_tokens ?? 0;
-        const tokensOut = usage?.completion_tokens ?? 0;
-        if (tokensIn > 0 || tokensOut > 0) {
-          await accrueShadowCost(tokensIn, tokensOut);
-        }
-        const raw = res.choices[0]?.message?.content ?? null;
-        const reasoningField = res.choices[0]?.message?.reasoning_content;
-        const content = stripReasoningBlocks(raw, reasoningField);
-        const finishReason = res.choices[0]?.finish_reason ?? null;
-        record(p.name, "ok");
-        if (p.name === "nvidia_nim") lastNimCallTs = Date.now();
-        return { content, routing: decisions, finishReason };
-      } catch (err) {
-        const latencyMs = Date.now() - t0;
-        recordLatency(p.name, latencyMs);
-        const bucket = classifyError(err);
-        recordErrorBucket(p.name, bucket);
-        log35.warn(
-          {
-            provider: p.name,
-            attempt,
-            bucket,
-            latencyMs,
-            err: err instanceof Error ? err.message : String(err)
-          },
-          "router attempt failed"
-        );
-        if (bucket === "rate_limit" && attempt < RETRY_ATTEMPTS2 - 1) {
-          const base = BACKOFF_MS2[attempt] ?? BACKOFF_MS2[0] ?? 1e3;
-          await sleepWithJitter2(base);
-          continue;
-        }
-        callFailed = true;
-        break;
-      }
-    }
-    if (callFailed) {
-      record(p.name, "err");
-    }
-  }
-  log35.warn("all free providers unavailable \u2014 returning null content");
-  return { content: null, routing: decisions };
-}
-var LATENCY_RING_CAP = 100;
-function quantile(sorted, q) {
-  if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q));
-  return sorted[idx] ?? 0;
-}
-function recordLatency(provider, latencyMs) {
-  const current = llmProgress.latencyHistogram ?? {
-    nvidia_nim: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] },
-    openrouter: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] }
-  };
-  const bucket = current[provider];
-  const samples = [...bucket.samples ?? [], latencyMs].slice(-LATENCY_RING_CAP);
-  const sorted = [...samples].sort((a, b) => a - b);
-  const next = {
-    ...current,
-    [provider]: {
-      p50: quantile(sorted, 0.5),
-      p95: quantile(sorted, 0.95),
-      p99: quantile(sorted, 0.99),
-      sparkline: samples.slice(-30),
-      // last 30 for the SVG sparkline
-      samples
-    }
-  };
-  updateProgress({ latencyHistogram: next });
-}
-function recordHeadroom(provider) {
-  const current = llmProgress.rateLimit ?? {
-    nvidia_nim: { used: 0, cap: 40, window: "minute", perModel: {} },
-    openrouter: { used: 0, cap: OPENROUTER_DAILY_CAP, window: "day", perModel: {} }
-  };
-  if (provider === "nvidia_nim") {
-    const h = nvidiaNimWindow.headroom();
-    current.nvidia_nim = { ...current.nvidia_nim, used: h.used, cap: h.cap };
-  } else {
-    getOpenRouterDaily().then((used) => {
-      const rl = llmProgress.rateLimit;
-      if (!rl) return;
-      updateProgress({
-        rateLimit: {
-          ...rl,
-          openrouter: { ...current.openrouter, used }
-        }
-      });
-    }).catch(() => {
-    });
-  }
-  updateProgress({ rateLimit: current });
-}
-function recordErrorBucket(provider, bucket) {
-  const current = llmProgress.errorTaxonomy ?? {
-    nvidia_nim: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 },
-    openrouter: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 }
-  };
-  const next = {
-    ...current,
-    [provider]: { ...current[provider], [bucket]: (current[provider][bucket] ?? 0) + 1 }
-  };
-  updateProgress({ errorTaxonomy: next });
-}
-async function accrueShadowCost(tokensIn, tokensOut) {
-  const usd = (tokensIn * 0.2 + tokensOut * 0.4) / 1e6;
-  const current = llmProgress.costShadow ?? { tokensIn: 0, tokensOut: 0, usd: 0 };
-  updateProgress({
-    costShadow: {
-      tokensIn: current.tokensIn + tokensIn,
-      tokensOut: current.tokensOut + tokensOut,
-      usd: current.usd + usd
-    }
-  });
-  try {
-    const key = `events:llm-cost-shadow:v3:${todayKey2()}`;
-    await redis.hincrby(key, "tokensIn", tokensIn);
-    await redis.hincrby(key, "tokensOut", tokensOut);
-    await redis.hincrby(key, "usdMicrocents", Math.round(usd * 1e6));
-    await redis.expire(key, 90 * 24 * 3600);
-  } catch {
-  }
-}
-async function prewarmIfCold() {
-  const log35 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
-  const client = getNvidiaNimClient();
-  if (!client) {
-    updateProgress({ prewarmState: "unknown" });
-    return;
-  }
-  const now = Date.now();
-  const elapsed = lastNimCallTs > 0 ? now - lastNimCallTs : Number.POSITIVE_INFINITY;
-  if (elapsed <= PREWARM_COLD_THRESHOLD_MS) {
-    updateProgress({ prewarmState: "warm" });
-    return;
-  }
-  try {
-    await client.chat.completions.create({
-      model: NVIDIA_NIM_DEFAULT_MODEL,
-      messages: [{ role: "user", content: "ok" }],
-      max_tokens: 1,
-      temperature: 0
-    });
-    lastNimCallTs = Date.now();
-    updateProgress({
-      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
-      lastPrewarmTs: lastNimCallTs,
-      prewarmState: "cold-fired"
-    });
-  } catch (err) {
-    log35.warn(
-      { err: err instanceof Error ? err.message : String(err) },
-      "prewarmIfCold synthetic call failed (non-fatal)"
-    );
-    updateProgress({
-      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
-      lastPrewarmTs: Date.now(),
-      prewarmState: "cold-fired"
-    });
-  }
-}
-
-// server/lib/llmLineage.ts
-import crypto from "crypto";
-var LINEAGE_KEY_PREFIX = "events:llm:v3:lineage:";
-var LINEAGE_INDEX_KEY = "events:llm:v3:lineage-keys";
-var LINEAGE_TTL_SEC = 7 * 24 * 3600;
-var LINEAGE_MAX_ENTRIES = 500;
-function computeLineageHash(eventId, prompt, model) {
-  return crypto.createHash("sha256").update(prompt).update("|").update(model).update("|").update(eventId).digest("hex");
-}
-async function appendLineage(eventId, payload) {
-  const lineageHash = computeLineageHash(eventId, payload.prompt, payload.model);
-  const key = `${LINEAGE_KEY_PREFIX}${eventId}`;
-  const log35 = logger.child({ component: "llm-lineage" });
-  try {
-    await redis.hset(key, {
-      prompt: payload.prompt.slice(0, 32e3),
-      // safety bound; prompts ~10-15k typical
-      response: payload.response.slice(0, 32e3),
-      parsed: JSON.stringify(payload.parsed).slice(0, 32e3),
-      coord: JSON.stringify(payload.coord),
-      provenance: payload.provenance,
-      resolverPath: payload.resolverPath,
-      reasoningTrace: payload.reasoningTrace.slice(0, 8e3),
-      model: payload.model,
-      lineageHash,
-      ts: String(Date.now())
-    });
-    await redis.expire(key, LINEAGE_TTL_SEC);
-    await redis.zadd(LINEAGE_INDEX_KEY, { score: Date.now(), member: eventId });
-    await redis.zremrangebyrank(LINEAGE_INDEX_KEY, 0, -LINEAGE_MAX_ENTRIES - 1);
-    await redis.expire(LINEAGE_INDEX_KEY, LINEAGE_TTL_SEC);
-  } catch (err) {
-    log35.warn({ err, eventId }, "lineage append failed (redis unreachable)");
-  }
-  return { lineageHash };
-}
-var GROUP_LINEAGE_KEY_PREFIX = "events:llm:v3:group-lineage:";
-var GROUP_LINEAGE_TTL_SEC = 7 * 24 * 3600;
-function computeGroupLineageHash(input) {
-  const sortedUrls = [...input.sourceUrls].sort().join("|");
-  return crypto.createHash("sha256").update(input.key).update("|").update(sortedUrls).update("|").update(String(input.totalMentions)).digest("hex");
-}
-
-// server/lib/concurrencyLimit.ts
-function createLimit(maxConcurrent) {
-  if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) {
-    throw new Error(`createLimit: maxConcurrent must be a positive integer, got ${maxConcurrent}`);
-  }
-  let inFlight = 0;
-  const queue = [];
-  const next = () => {
-    if (inFlight >= maxConcurrent) return;
-    const runner = queue.shift();
-    if (!runner) return;
-    inFlight++;
-    runner();
-  };
-  return (fn) => {
-    return new Promise((resolve4, reject) => {
-      const runner = () => {
-        Promise.resolve().then(fn).then(
-          (value) => {
-            inFlight--;
-            resolve4(value);
-            next();
-          },
-          (err) => {
-            inFlight--;
-            reject(err);
-            next();
-          }
-        );
-      };
-      queue.push(runner);
-      next();
-    });
-  };
-}
-
-// server/lib/pipelineAudit.ts
-var PIPELINE_AUDIT_KEY = "events:llm-pipeline-audit";
-var PIPELINE_AUDIT_TTL_SEC = 90 * 24 * 3600;
-var PIPELINE_AUDIT_MAX = 200;
-async function appendPipelineAudit(entry) {
-  try {
-    await redis.lpush(PIPELINE_AUDIT_KEY, JSON.stringify(entry));
-    await redis.ltrim(PIPELINE_AUDIT_KEY, 0, PIPELINE_AUDIT_MAX - 1);
-    await redis.expire(PIPELINE_AUDIT_KEY, PIPELINE_AUDIT_TTL_SEC);
-  } catch (err) {
-    const log35 = logger.child({ component: "pipeline-audit" });
-    log35.warn({ err, entry }, "audit append failed (redis unreachable)");
-  }
-}
-async function listPipelineAudit(limit) {
-  try {
-    const raw = await redis.lrange(PIPELINE_AUDIT_KEY, 0, limit - 1);
-    return raw.map((s) => {
-      try {
-        return JSON.parse(typeof s === "string" ? s : JSON.stringify(s));
-      } catch {
-        return null;
-      }
-    }).filter((e) => e !== null);
-  } catch {
-    return [];
-  }
-}
-
-// server/lib/llmEventExtractor.v3.ts
-var log15 = logger.child({ module: "llm-extractor-v3" });
-var PIPELINE_OVERRIDE_KEY = "events:llm-pipeline-override";
-var PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
-var BATCH_SIZE2 = 2;
-var V3_BAKEOFF_MODEL = process.env.V3_BAKEOFF_MODEL;
-var TEMPORAL_CONTEXT_COUNT2 = 3;
-var TEMPORAL_CONTEXT_BBOX_DEG2 = 1;
-var TEMPORAL_CONTEXT_WINDOW_MS2 = 72 * 36e5;
-var NEWS_MATCH_WINDOW_MS2 = 24 * 36e5;
-var NEWS_KEY2 = "news:gdelt";
-var EVENTS_LLM_V3_KEY = "events:llm:v3";
-var EVENTS_LLM_V3_PARTIAL_KEY = "events:llm:v3:partial";
-var SYSTEM_PROMPT_V3 = [
-  "You are a conflict event analyst extracting structured data from GDELT event records.",
-  "",
-  "For each event group, extract (all fields REQUIRED unless stated nullable):",
-  "1. location: A structured place hierarchy \u2014 each field NULLABLE when the source text does not support it:",
-  '   - country: full English name (e.g., "Iran", "Iraq") or null',
-  "   - admin1: province / state / governorate name or null",
-  "   - city: city or town name or null",
-  "   - neighborhood: neighborhood / district / suburb name or null",
-  '   - landmark: specific facility / site name (e.g., "Natanz nuclear facility") or null',
-  "   - confidence: number between 0 and 1 indicating how confident you are in this location",
-  '2. type: one of "airstrike", "on_ground", "explosion", "targeted", "other"',
-  "3. confidence: number between 0 and 1 for overall extraction confidence",
-  "4. reasoning: <=200 characters \u2014 cite which signals led to the location pick (news source, Bellingcat, GDELT metadata, etc.)",
-  '5. weaponType: one of "airstrike","drone","missile","artillery","small_arms","IED", or null if not stated',
-  '6. targetType: one of "military","infrastructure","civilian","leadership", or null if not stated',
-  '7. timeOfDay: UTC HH:MM (e.g., "03:15") if the source mentions a specific strike time, else null',
-  "8. durationMinutes: non-negative integer if the source mentions duration, else null",
-  "9. actors: array of actor names involved",
-  '10. severity: "critical" | "high" | "medium" | "low"',
-  "11. summary: 2-3 sentence description of what happened",
-  "12. casualties: { killed: integer | null, injured: integer | null, unknown: boolean }",
-  "13. sourceCount: integer \u2014 count of independent sources",
-  "",
-  "Hard rules:",
-  "- NEVER emit coordinates (lat/lng). Only output place names.",
-  '- NEVER emit a "precision" field \u2014 the server derives it from which hierarchy fields you populated.',
-  "- Use null when a field is not supported by the source text \u2014 do NOT guess.",
-  "- Prefer the NEWS BLOCK and BELLINGCAT BLOCK when present; they are higher-tier signals than GDELT metadata alone.",
-  '- The TEMPORAL BLOCK lists prior events in the same region \u2014 use it to normalize names (e.g., "the Jobar substation").',
-  "",
-  "JSON Schema (this is the contract \u2014 your output MUST validate):",
-  JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3, null, 2),
-  "",
-  '- Output ONLY the JSON object. Any reasoning must go in the "reasoning" field, not in <think> blocks (those are stripped).'
-].join("\n");
-var LLM_REDIS_TTL_SEC2 = 9e3;
-function buildBatchUserPromptV3(contexts) {
-  const lines = ["Analyze these GDELT event groups and extract structured data:\n"];
-  for (let i = 0; i < contexts.length; i++) {
-    const ctx = contexts[i];
-    if (!ctx) continue;
-    const { group, matchedNews, bellingcatHits, temporalEvents } = ctx;
-    const e = group.entities[0];
-    lines.push(`--- Event Group ${i + 1} (key: ${group.key}) ---`);
-    lines.push(`Date: ${new Date(group.timestamp).toISOString().slice(0, 10)}`);
-    lines.push(`CAMEO Code: ${group.primaryCameo}`);
-    lines.push(`Location (GDELT ActionGeo): ${e?.data.locationName ?? "unknown"}`);
-    lines.push(`Actors: ${e?.data.actor1 ?? "?"} vs ${e?.data.actor2 ?? "?"}`);
-    lines.push(`Goldstein Scale: ${e?.data.goldsteinScale ?? "n/a"}`);
-    lines.push(`Total Mentions: ${group.totalMentions}, Total Sources: ${group.totalSources}`);
-    lines.push(`Rows in group: ${group.entities.length}`);
-    if (group.sourceUrls.length > 0) {
-      lines.push(`Source URLs: ${group.sourceUrls.slice(0, 3).join(", ")}`);
-    } else {
-      lines.push("Source URLs: (none)");
-    }
-    if (matchedNews.length > 0) {
-      lines.push("");
-      lines.push("--- NEWS BLOCK (tier-tagged) ---");
-      for (const art of matchedNews.slice(0, 5)) {
-        const tier = getSourceTier("", hostnameOf2(art.url));
-        const tag = tier === 1 ? "T1" : tier === 2 ? "T2" : "T3";
-        lines.push(`[${tag}] ${art.title.slice(0, 160)}`);
-      }
-    }
-    if (bellingcatHits.length > 0) {
-      lines.push("");
-      lines.push("--- BELLINGCAT OSINT (high-trust) ---");
-      for (const b of bellingcatHits.slice(0, 3)) {
-        lines.push(
-          `${b.title.slice(0, 160)} [Bellingcat coord hint: ${b.lat.toFixed(2)}, ${b.lng.toFixed(2)}]`
-        );
-      }
-    }
-    if (temporalEvents.length > 0) {
-      lines.push("");
-      lines.push(`--- TEMPORAL CONTEXT (${temporalEvents.length} recent events in region) ---`);
-      for (const t of temporalEvents) {
-        const locStr = [t.location.landmark, t.location.neighborhood, t.location.city].filter(Boolean).join(", ") || t.location.country || "unknown";
-        const ago = `${Math.round((group.timestamp - t.timestamp) / 36e5)}h ago`;
-        lines.push(`- ${locStr} (${ago}): ${t.summary.slice(0, 120)}`);
-      }
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
-}
-function hostnameOf2(url) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
-}
-async function buildPromptContext2(group) {
-  const matchedNews = [];
-  const bellingcatHits = [];
-  try {
-    const news = await cacheGetSafe(NEWS_KEY2, 0);
-    if (news?.data) {
-      for (const cluster of news.data) {
-        for (const art of cluster.articles ?? []) {
-          const pubMs = typeof art.publishedAt === "number" ? art.publishedAt : NaN;
-          if (!Number.isFinite(pubMs)) continue;
-          if (Math.abs(pubMs - group.timestamp) > NEWS_MATCH_WINDOW_MS2) continue;
-          matchedNews.push({
-            title: art.title,
-            url: art.url,
-            sourceCountry: art.sourceCountry,
-            publishedAt: pubMs
-          });
-          const geo = extractBellingcatGeo(art.title);
-          if (geo) bellingcatHits.push({ title: art.title, lat: geo.lat, lng: geo.lng });
-        }
-      }
-    }
-  } catch (err) {
-    log15.warn({ err }, "news cross-match failed, omitting NEWS+BELLINGCAT blocks");
-  }
-  const temporalEvents = await loadTemporalContext2(group);
-  return { group, matchedNews, bellingcatHits, temporalEvents };
-}
-async function loadTemporalContext2(group) {
-  try {
-    const cached = await cacheGetSafe(EVENTS_LLM_V3_KEY, 0);
-    if (!cached?.data) return [];
-    const out = [];
-    for (const e of cached.data) {
-      if (!e.data?.location || !e.data?.summary || !e.timestamp) continue;
-      if (Math.abs(group.timestamp - e.timestamp) > TEMPORAL_CONTEXT_WINDOW_MS2) continue;
-      if (typeof e.lat === "number" && typeof e.lng === "number") {
-        if (Math.abs(e.lat - group.centroidLat) > TEMPORAL_CONTEXT_BBOX_DEG2) continue;
-        if (Math.abs(e.lng - group.centroidLng) > TEMPORAL_CONTEXT_BBOX_DEG2) continue;
-      }
-      out.push({
-        summary: e.data.summary,
-        location: e.data.location,
-        timestamp: e.timestamp
-      });
-      if (out.length >= TEMPORAL_CONTEXT_COUNT2) break;
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
-async function writePartialCache2(events, completed, total, complete) {
-  const payload = {
-    events,
-    progress: `${completed}/${total}`,
-    complete,
-    generatedAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  try {
-    await cacheSetSafe(EVENTS_LLM_V3_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC2);
-  } catch (err) {
-    log15.warn({ err, completed, total, complete }, "partial cache write failed");
+    log8.warn({ err, completed, total, complete }, "partial cache write failed");
   }
 }
 async function processEventGroupsV3(groups, onBatchComplete) {
@@ -4202,7 +2909,7 @@ async function processEventGroupsV3(groups, onBatchComplete) {
           }
         }
       } catch (readErr) {
-        log15.warn(
+        log8.warn(
           {
             cacheKey: cacheKey2,
             err: readErr instanceof Error ? readErr.message : String(readErr)
@@ -4219,7 +2926,7 @@ async function processEventGroupsV3(groups, onBatchComplete) {
           stats.hitCount += 1;
           continue;
         }
-        log15.warn(
+        log8.warn(
           { cacheKey: cacheKey2 },
           "lineage pre-filter cache payload failed v3 reparse; treating as miss"
         );
@@ -4230,21 +2937,21 @@ async function processEventGroupsV3(groups, onBatchComplete) {
     updateProgress({ lineagePrefilterStats: stats });
     groupsToProcess = queue;
   }
-  const totalBatches = Math.ceil(groupsToProcess.length / BATCH_SIZE2);
+  const totalBatches = Math.ceil(groupsToProcess.length / BATCH_SIZE);
   const limit = createLimit(env.LLM_V3_CONCURRENCY);
   let completedBatchesCounter = 0;
   const finishBatch = async () => {
     const c = ++completedBatchesCounter;
     onBatchComplete?.(c, totalBatches);
-    await writePartialCache2(results, c, totalBatches, false);
+    await writePartialCache(results, c, totalBatches, false);
   };
   const tasks = [];
-  for (let i = 0; i < groupsToProcess.length; i += BATCH_SIZE2) {
-    const batch = groupsToProcess.slice(i, i + BATCH_SIZE2);
-    const batchIndex = Math.floor(i / BATCH_SIZE2);
+  for (let i = 0; i < groupsToProcess.length; i += BATCH_SIZE) {
+    const batch = groupsToProcess.slice(i, i + BATCH_SIZE);
+    const batchIndex = Math.floor(i / BATCH_SIZE);
     tasks.push(
       limit(async () => {
-        const contexts = await Promise.all(batch.map(buildPromptContext2));
+        const contexts = await Promise.all(batch.map(buildPromptContext));
         for (const ctx of contexts) {
           matchedNewsByGroup.set(ctx.group.key, ctx.matchedNews);
           const firstBellingcat = ctx.bellingcatHits[0];
@@ -4262,7 +2969,7 @@ async function processEventGroupsV3(groups, onBatchComplete) {
         const t0 = Date.now();
         const content = await withBatchWatchdog(
           async () => {
-            const result = await callLLM2(
+            const result = await callLLM(
               [
                 { role: "system", content: SYSTEM_PROMPT_V3 },
                 { role: "user", content: userPrompt }
@@ -4352,7 +3059,7 @@ async function processEventGroupsV3(groups, onBatchComplete) {
             await finishBatch();
             return;
           }
-          log15.warn({ batchIndex }, "v3 batch yielded no content (null or watchdog timeout)");
+          log8.warn({ batchIndex }, "v3 batch yielded no content (null or watchdog timeout)");
           await finishBatch();
           return;
         }
@@ -4363,7 +3070,7 @@ async function processEventGroupsV3(groups, onBatchComplete) {
           const errMsg = jsonErr instanceof Error ? jsonErr.message : String(jsonErr);
           const isTruncation = finishReason === "length" || /unterminated string/i.test(errMsg);
           const dlqReason = isTruncation ? "v3:max_tokens_truncation" : "v3:malformed";
-          log15.warn(
+          log8.warn(
             {
               batchIndex,
               jsonErr: errMsg,
@@ -4393,7 +3100,7 @@ async function processEventGroupsV3(groups, onBatchComplete) {
         }
         const validated = batchResponseV3.safeParse(parsed);
         if (!validated.success) {
-          log15.warn(
+          log8.warn(
             { issues: validated.error.issues.slice(0, 3), batchIndex },
             "v3 Zod parse failed"
           );
@@ -4463,7 +3170,7 @@ ${userPrompt}`;
           const recents = (llmProgress.recentEvents ?? []).slice(0, 49);
           updateProgress({ recentEvents: [recentEvent, ...recents] });
         }
-        log15.debug(
+        log8.debug(
           { batchIndex, durationMs: batchDurationMs, events: validated.data.events.length },
           "v3 batch processed"
         );
@@ -4472,7 +3179,7 @@ ${userPrompt}`;
     );
   }
   await Promise.all(tasks);
-  await writePartialCache2(results, totalBatches, totalBatches, true);
+  await writePartialCache(results, totalBatches, totalBatches, true);
   await checkWatchdogRecurrenceTrigger();
   return {
     events: allFailed ? null : results,
@@ -4509,7 +3216,7 @@ async function splitBatchOnTimeout(contexts, batchIndex) {
     let halfTimedOut = false;
     const halfContent = await withBatchWatchdog(
       async () => {
-        const r = await callLLM2(
+        const r = await callLLM(
           [
             { role: "system", content: SYSTEM_PROMPT_V3 },
             { role: "user", content: halfPrompt }
@@ -4576,7 +3283,7 @@ async function performAutoRollbackToV2(opts) {
   try {
     await redis.set(PIPELINE_OVERRIDE_KEY, "v2", { ex: PIPELINE_OVERRIDE_TTL_SEC });
   } catch (err) {
-    log15.warn({ err }, "failed to persist auto-rollback override to redis");
+    log8.warn({ err }, "failed to persist auto-rollback override to redis");
   }
   await appendPipelineAudit({
     ts: Date.now(),
@@ -4592,7 +3299,7 @@ async function checkWatchdogRecurrenceTrigger() {
   const wdCount = llmProgress.watchdogTimeoutCount ?? 0;
   const threshold = env.V3_WATCHDOG_ROLLBACK_THRESHOLD;
   if (wdCount < threshold) return { rolledBack: false };
-  log15.warn(
+  log8.warn(
     { watchdogTimeoutCount: wdCount, threshold },
     "D-17 Trigger 1: watchdog recurrence \u2014 auto-rollback v3 -> v2"
   );
@@ -4625,7 +3332,7 @@ async function checkEvalDropTrigger(opts) {
     const baselineRatio = baselineScore.within20km / baselineScore.total;
     const drop = baselineRatio - opts.newWithin20kmRatio;
     if (drop >= 0.05) {
-      log15.warn(
+      log8.warn(
         { drop, baselineRatio, newRatio: opts.newWithin20kmRatio },
         "D-17 Trigger 2: eval drop >= 5pp \u2014 auto-rollback v3 -> v2"
       );
@@ -4634,7 +3341,7 @@ async function checkEvalDropTrigger(opts) {
       return { rolledBack: true, reason };
     }
   } catch (err) {
-    log15.warn({ err }, "eval-drop trigger check failed (redis unreachable?)");
+    log8.warn({ err }, "eval-drop trigger check failed (redis unreachable?)");
   }
   return { rolledBack: false };
 }
@@ -4660,7 +3367,7 @@ async function geocodeEnrichedEventsV3(events, groupsByKey, matchedNewsByGroup, 
     try {
       resolved = await resolveLocation(ev.location, ctx);
     } catch (err) {
-      log15.warn(
+      log8.warn(
         { err: err instanceof Error ? err.message : String(err), groupKey: ev.groupKey },
         "resolveLocation threw \u2014 using GDELT centroid fallback for this event"
       );
@@ -4673,7 +3380,7 @@ async function geocodeEnrichedEventsV3(events, groupsByKey, matchedNewsByGroup, 
       };
     }
     const precision = derivePrecision(ev.location);
-    const sourceHostnames = (group?.sourceUrls ?? []).map((u) => hostnameOf2(u));
+    const sourceHostnames = (group?.sourceUrls ?? []).map((u) => hostnameOf(u));
     const tiers = [];
     for (const h of sourceHostnames) {
       const t = getSourceTier("", h);
@@ -4702,332 +3409,8 @@ async function geocodeEnrichedEventsV3(events, groupsByKey, matchedNewsByGroup, 
   return out;
 }
 
-// server/lib/llmEventExtractor.v1.ts
-import { z as z6 } from "zod";
-var log16 = logger.child({ module: "llm-extractor" });
-var casualtiesSchema2 = z6.object({
-  killed: z6.number().int().nullable(),
-  injured: z6.number().int().nullable(),
-  unknown: z6.boolean()
-});
-var enrichedEventSchema = z6.object({
-  groupKey: z6.string(),
-  location: z6.object({
-    name: z6.string(),
-    precision: z6.enum(["exact", "neighborhood", "city", "region"])
-  }),
-  type: z6.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
-  actors: z6.array(z6.string()),
-  severity: z6.enum(["critical", "high", "medium", "low"]),
-  summary: z6.string(),
-  casualties: casualtiesSchema2,
-  sourceCount: z6.number().int()
-});
-var batchResponseSchema = z6.object({
-  events: z6.array(enrichedEventSchema)
-});
-var SYSTEM_PROMPT = `You are a conflict event analyst extracting structured data from GDELT event records.
-
-For each event group, extract:
-1. location: The most specific place name mentioned. Output the name as a string, NOT coordinates.
-2. type: One of: "airstrike", "on_ground", "explosion", "targeted", "other"
-3. actors: Array of actor names involved (military forces, organizations, individuals)
-4. severity: "critical" | "high" | "medium" | "low" based on event impact
-5. summary: 2-3 sentence description of what happened
-6. casualties: { killed, injured, unknown } - only if mentioned in source data
-7. sources: Count of independent sources reporting this event
-
-Rules:
-- Location must be a real place name (city, neighborhood, facility, checkpoint), NOT a country name alone
-- If only a country is identifiable, set precision to "region"
-- If a specific city is identifiable, set precision to "city"
-- If a neighborhood or specific location is identifiable, set precision to "neighborhood" or "exact"
-- Never invent coordinates. Only output place names.
-- If multiple events in the batch, return them as an array.`;
-var EVENT_EXTRACTION_SCHEMA = {
-  type: "object",
-  properties: {
-    events: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          groupKey: { type: "string" },
-          location: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              precision: { type: "string", enum: ["exact", "neighborhood", "city", "region"] }
-            },
-            required: ["name", "precision"],
-            additionalProperties: false
-          },
-          type: {
-            type: "string",
-            enum: ["airstrike", "on_ground", "explosion", "targeted", "other"]
-          },
-          actors: { type: "array", items: { type: "string" } },
-          severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
-          summary: { type: "string" },
-          casualties: {
-            type: "object",
-            properties: {
-              killed: { type: ["integer", "null"] },
-              injured: { type: ["integer", "null"] },
-              unknown: { type: "boolean" }
-            },
-            required: ["killed", "injured", "unknown"],
-            additionalProperties: false
-          },
-          sourceCount: { type: "integer" }
-        },
-        required: [
-          "groupKey",
-          "location",
-          "type",
-          "actors",
-          "severity",
-          "summary",
-          "casualties",
-          "sourceCount"
-        ],
-        additionalProperties: false
-      }
-    }
-  },
-  required: ["events"],
-  additionalProperties: false
-};
-var BATCH_SIZE3 = 8;
-var GEOCODE_CACHE_PREFIX2 = "geocode:fwd:";
-var GEOCODE_CACHE_TTL_SEC = 2592e3;
-var GEOCODE_DELAY_MS2 = 1e3;
-function buildBatchUserPrompt(groups) {
-  const lines = ["Analyze these GDELT event groups and extract structured data:\n"];
-  for (let i = 0; i < groups.length; i++) {
-    const g = groups[i];
-    if (!g) continue;
-    const entity = g.entities[0];
-    if (!entity) continue;
-    lines.push(`--- Event Group ${i + 1} (key: ${g.key}) ---`);
-    lines.push(`Date: ${new Date(g.timestamp).toISOString().slice(0, 10)}`);
-    lines.push(`CAMEO Code: ${g.primaryCameo}`);
-    lines.push(`Location: ${entity.data.locationName}`);
-    lines.push(`Actors: ${entity.data.actor1} vs ${entity.data.actor2}`);
-    lines.push(`Goldstein Scale: ${entity.data.goldsteinScale}`);
-    lines.push(`Total Mentions: ${g.totalMentions}, Total Sources: ${g.totalSources}`);
-    lines.push(`Rows in group: ${g.entities.length}`);
-    if (g.sourceUrls.length > 0) {
-      lines.push(`Source URLs: ${g.sourceUrls.slice(0, 3).join(", ")}`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
-}
-async function processEventGroups(groups, onBatchComplete) {
-  if (groups.length === 0) return [];
-  const results = [];
-  let allFailed = true;
-  const totalBatches = Math.ceil(groups.length / BATCH_SIZE3);
-  for (let i = 0; i < groups.length; i += BATCH_SIZE3) {
-    const batch = groups.slice(i, i + BATCH_SIZE3);
-    const batchIndex = Math.floor(i / BATCH_SIZE3);
-    const userPrompt = buildBatchUserPrompt(batch);
-    const content = await withBatchWatchdog(
-      () => callLLM(
-        [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt }
-        ],
-        EVENT_EXTRACTION_SCHEMA,
-        { batchSize: batch.length }
-      ),
-      {
-        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 6e4,
-        // D-02 — hard-coded soft-warn threshold
-        batchIndex,
-        label: "v1",
-        onTimeout: async () => {
-          for (const g of batch) {
-            await enqueueDLQ({
-              id: g.key,
-              reason: "timeout_watchdog",
-              lastError: `v1 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
-              timestamp: Date.now()
-            });
-          }
-          updateProgress({
-            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
-          });
-        },
-        onSoftWarn: (elapsedMs) => {
-          const history = llmProgress.callHistory ?? [];
-          const softWarnEntry = {
-            provider: "cerebras",
-            model: "watchdog-soft-warn",
-            tokensIn: 0,
-            tokensOut: 0,
-            durationMs: elapsedMs,
-            ok: true,
-            batchSize: batch.length,
-            timestamp: Date.now()
-          };
-          updateProgress({
-            callHistory: [softWarnEntry, ...history].slice(0, 20)
-          });
-        }
-      }
-    );
-    if (content === null) {
-      log16.warn({ batchIndex }, "LLM returned null for batch (null or watchdog timeout)");
-      onBatchComplete?.(batchIndex + 1, totalBatches);
-      continue;
-    }
-    allFailed = false;
-    try {
-      const parsed = JSON.parse(content);
-      const validated = batchResponseSchema.safeParse(parsed);
-      if (!validated.success) {
-        log16.warn(
-          { errors: validated.error.issues, batchIndex },
-          "Zod validation failed for LLM batch response"
-        );
-        onBatchComplete?.(batchIndex + 1, totalBatches);
-        continue;
-      }
-      results.push(...validated.data.events);
-    } catch (err) {
-      log16.warn({ err, batchIndex }, "Failed to parse LLM response JSON");
-    }
-    onBatchComplete?.(batchIndex + 1, totalBatches);
-  }
-  if (allFailed) return null;
-  return results;
-}
-async function geocodeEnrichedEvents(events, groups, onGeocodeComplete) {
-  const groupMap = /* @__PURE__ */ new Map();
-  for (const g of groups) {
-    groupMap.set(g.key, g);
-  }
-  const results = [];
-  for (let i = 0; i < events.length; i++) {
-    const event = events[i];
-    if (!event) continue;
-    const placeName = event.location.name;
-    const cacheKey2 = `${GEOCODE_CACHE_PREFIX2}${placeName.toLowerCase().trim()}`;
-    const cached = await cacheGetSafe(
-      cacheKey2,
-      GEOCODE_CACHE_TTL_SEC * 1e3
-    );
-    if (cached?.data) {
-      results.push({
-        ...event,
-        resolvedLat: cached.data.lat,
-        resolvedLng: cached.data.lng
-      });
-      onGeocodeComplete?.(i + 1, events.length);
-      continue;
-    }
-    if (i > 0) {
-      await new Promise((resolve4) => setTimeout(resolve4, GEOCODE_DELAY_MS2));
-    }
-    const [geocoded] = await forwardGeocodeConstrained(placeName, {
-      countrycodes: ME_COUNTRY_CODES,
-      viewbox: ME_VIEWBOX,
-      limit: 1
-    });
-    if (geocoded) {
-      await cacheSetSafe(
-        cacheKey2,
-        { lat: geocoded.lat, lng: geocoded.lng, displayName: geocoded.displayName },
-        GEOCODE_CACHE_TTL_SEC
-      );
-      results.push({
-        ...event,
-        resolvedLat: geocoded.lat,
-        resolvedLng: geocoded.lng
-      });
-    } else {
-      const group = groupMap.get(event.groupKey);
-      if (group) {
-        log16.warn(
-          { placeName, groupKey: event.groupKey },
-          "Nominatim failed, falling back to GDELT ActionGeo coordinates"
-        );
-        results.push({
-          ...event,
-          resolvedLat: group.centroidLat,
-          resolvedLng: group.centroidLng
-        });
-      } else {
-        log16.warn(
-          { placeName, groupKey: event.groupKey },
-          "No geocoding fallback available, skipping event"
-        );
-      }
-    }
-    onGeocodeComplete?.(i + 1, events.length);
-  }
-  return results;
-}
-
-// server/lib/llmEventExtractor.ts
-async function processEventGroups2(groups, onBatchComplete) {
-  const version = getPipelineVersion();
-  if (version === "v3") {
-    const run = await processEventGroupsV3(groups, onBatchComplete);
-    return {
-      schemaVersion: "v3",
-      events: run.events,
-      matchedNewsByGroup: run.matchedNewsByGroup,
-      bellingcatByGroup: run.bellingcatByGroup
-    };
-  }
-  if (version === "v2") {
-    const run = await processEventGroupsV2(groups, onBatchComplete);
-    return {
-      schemaVersion: "v2",
-      events: run.events,
-      matchedNewsByGroup: run.matchedNewsByGroup,
-      bellingcatByGroup: run.bellingcatByGroup
-    };
-  }
-  const events = await processEventGroups(groups, onBatchComplete);
-  return { schemaVersion: "v1", events };
-}
-async function geocodeEnrichedEvents2(input, groups, onComplete) {
-  if (input.schemaVersion === "v3") {
-    const groupsByKey = new Map(groups.map((g) => [g.key, g]));
-    const events2 = await geocodeEnrichedEventsV3(
-      input.events,
-      groupsByKey,
-      input.matchedNewsByGroup,
-      input.bellingcatByGroup,
-      onComplete
-    );
-    return { schemaVersion: "v3", events: events2 };
-  }
-  if (input.schemaVersion === "v2") {
-    const groupsByKey = new Map(groups.map((g) => [g.key, g]));
-    const events2 = await geocodeEnrichedEventsV2(
-      input.events,
-      groupsByKey,
-      input.matchedNewsByGroup,
-      input.bellingcatByGroup,
-      onComplete
-    );
-    return { schemaVersion: "v2", events: events2 };
-  }
-  const events = await geocodeEnrichedEvents(input.events, groups, onComplete);
-  return { schemaVersion: "v1", events };
-}
-
 // server/lib/llmEvalHarness.ts
-import { readFileSync as readFileSync3, existsSync as existsSync3 } from "fs";
-import { resolve as resolve3, dirname as dirname3 } from "path";
-import { fileURLToPath as fileURLToPath3 } from "url";
-var log17 = logger.child({ module: "llm-eval-harness" });
+var log9 = logger.child({ module: "llm-eval-harness" });
 var __dirname3 = dirname3(fileURLToPath3(import.meta.url));
 var GROUND_TRUTH_PATH = resolve3(__dirname3, "../../.planning/eval/ground-truth-events.json");
 var BASELINE_KEY = "events:llm-eval-baseline:v3";
@@ -5037,7 +3420,7 @@ function loadGroundTruth() {
   if (cachedGroundTruth !== void 0) return cachedGroundTruth;
   try {
     if (!existsSync3(GROUND_TRUTH_PATH)) {
-      log17.info(
+      log9.info(
         { path: GROUND_TRUTH_PATH },
         "ground-truth file absent; eval harness will report zeros"
       );
@@ -5049,23 +3432,23 @@ function loadGroundTruth() {
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      log17.warn({ err: parseErr, path: GROUND_TRUTH_PATH }, "ground-truth JSON parse failed");
+      log9.warn({ err: parseErr, path: GROUND_TRUTH_PATH }, "ground-truth JSON parse failed");
       cachedGroundTruth = null;
       return null;
     }
     if (!isValidGroundTruth(parsed)) {
-      log17.warn({ path: GROUND_TRUTH_PATH }, "ground-truth failed structural validation");
+      log9.warn({ path: GROUND_TRUTH_PATH }, "ground-truth failed structural validation");
       cachedGroundTruth = null;
       return null;
     }
     cachedGroundTruth = parsed;
-    log17.info(
+    log9.info(
       { count: parsed.events.length, curatedAt: parsed.curatedAt },
       "loaded ground-truth event set"
     );
     return parsed;
   } catch (err) {
-    log17.warn({ err, path: GROUND_TRUTH_PATH }, "failed to load ground-truth file");
+    log9.warn({ err, path: GROUND_TRUTH_PATH }, "failed to load ground-truth file");
     cachedGroundTruth = null;
     return null;
   }
@@ -5076,7 +3459,7 @@ function isValidGroundTruth(v) {
   if (!Array.isArray(o.events)) return false;
   return true;
 }
-function haversineKm4(lat1, lng1, lat2, lng2) {
+function haversineKm3(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -5099,12 +3482,12 @@ async function runEval(opts = {}) {
         centroidLat: ev.truth.lat,
         centroidLng: ev.truth.lng
       });
-      const dKm = haversineKm4(resolved.lat, resolved.lng, ev.truth.lat, ev.truth.lng);
+      const dKm = haversineKm3(resolved.lat, resolved.lng, ev.truth.lat, ev.truth.lng);
       if (dKm <= 5) w5++;
       if (dKm <= 20) w20++;
       if (dKm <= 100) w100++;
     } catch (err) {
-      log17.warn({ err, id: ev.id }, "eval harness resolve failed for event");
+      log9.warn({ err, id: ev.id }, "eval harness resolve failed for event");
     }
   }
   const score = {
@@ -5118,941 +3501,396 @@ async function runEval(opts = {}) {
   try {
     await cacheSetSafe(key, score, BASELINE_TTL_SEC);
   } catch (err) {
-    log17.warn({ err, key }, "failed to persist eval baseline to Redis");
+    log9.warn({ err, key }, "failed to persist eval baseline to Redis");
   }
   if (score.total > 0 && !opts.model) {
     const ratio = score.within20km / score.total;
     await checkEvalDropTrigger({ newWithin20kmRatio: ratio }).catch((err) => {
-      log17.warn({ err }, "D-17 eval-drop trigger check failed (swallowed)");
+      log9.warn({ err }, "D-17 eval-drop trigger check failed (swallowed)");
     });
   }
   return score;
 }
 
-// server/cache/devFileCache.ts
-import { readFileSync as readFileSync4, writeFileSync, mkdirSync, existsSync as existsSync4 } from "fs";
-import { join } from "path";
-var log18 = logger.child({ module: "dev-file-cache" });
-var DEV_CACHE_DIR = join(process.cwd(), ".dev-cache");
-var LLM_EVENTS_FILE = join(DEV_CACHE_DIR, "llm-events.json");
-var LLM_EVENTS_FILE_V2 = join(DEV_CACHE_DIR, "llm-events-v2.json");
-var MAX_AGE_MS = 48 * 60 * 60 * 1e3;
-var isDev = process.env.NODE_ENV === "development";
-function saveDevLLMCache(data) {
-  if (!isDev) return;
-  try {
-    if (!existsSync4(DEV_CACHE_DIR)) {
-      mkdirSync(DEV_CACHE_DIR, { recursive: true });
+// server/routes/cron-health.ts
+var log10 = logger.child({ module: "cron-health" });
+var cronHealthRouter = Router();
+var STALE_THRESHOLD_MS = 60 * 60 * 1e3;
+cronHealthRouter.get("/", async (req, res) => {
+  if (env.CRON_SECRET) {
+    const auth = req.header("Authorization") ?? req.header("authorization") ?? "";
+    const expected = `Bearer ${env.CRON_SECRET}`;
+    if (auth !== expected) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
     }
-    const entry = { data, savedAt: Date.now() };
-    writeFileSync(LLM_EVENTS_FILE, JSON.stringify(entry));
-    log18.info("saved LLM events to dev file cache");
-  } catch (err) {
-    log18.warn({ err }, "failed to write dev file cache");
   }
-}
-function loadDevLLMCache() {
-  if (!isDev) return null;
+  const now = Date.now();
+  let redisOk = false;
   try {
-    if (!existsSync4(LLM_EVENTS_FILE)) return null;
-    const raw = readFileSync4(LLM_EVENTS_FILE, "utf-8");
-    const entry = JSON.parse(raw);
-    const age = Date.now() - entry.savedAt;
-    if (age > MAX_AGE_MS) {
-      log18.info({ ageMs: age }, "dev file cache too old, ignoring");
-      return null;
-    }
-    log18.info(
-      { ageMs: age, ageMin: Math.round(age / 6e4) },
-      "loaded LLM events from dev file cache"
-    );
-    return entry.data;
-  } catch (err) {
-    log18.warn({ err }, "failed to read dev file cache");
-    return null;
-  }
-}
-function saveDevLLMCacheV2(data) {
-  if (!isDev) return;
-  try {
-    if (!existsSync4(DEV_CACHE_DIR)) {
-      mkdirSync(DEV_CACHE_DIR, { recursive: true });
-    }
-    const entry = { data, savedAt: Date.now() };
-    writeFileSync(LLM_EVENTS_FILE_V2, JSON.stringify(entry));
-    log18.info("saved LLM events to dev file cache (v2)");
-  } catch (err) {
-    log18.warn({ err }, "failed to write dev file cache (v2)");
-  }
-}
-function loadDevLLMCacheV2() {
-  if (!isDev) return null;
-  try {
-    if (!existsSync4(LLM_EVENTS_FILE_V2)) return null;
-    const raw = readFileSync4(LLM_EVENTS_FILE_V2, "utf-8");
-    const entry = JSON.parse(raw);
-    const age = Date.now() - entry.savedAt;
-    if (age > MAX_AGE_MS) {
-      log18.info({ ageMs: age }, "dev file cache (v2) too old, ignoring");
-      return null;
-    }
-    log18.info(
-      { ageMs: age, ageMin: Math.round(age / 6e4) },
-      "loaded LLM events from dev file cache (v2)"
-    );
-    return entry.data;
-  } catch (err) {
-    log18.warn({ err }, "failed to read dev file cache (v2)");
-    return null;
-  }
-}
-var WATER_FACILITIES_FILE = join(DEV_CACHE_DIR, "water-facilities.json");
-var WATER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
-function saveDevWaterCache(data) {
-  if (!isDev) return;
-  try {
-    if (!existsSync4(DEV_CACHE_DIR)) mkdirSync(DEV_CACHE_DIR, { recursive: true });
-    const entry = { data, savedAt: Date.now() };
-    writeFileSync(WATER_FACILITIES_FILE, JSON.stringify(entry));
-    log18.info("saved water facilities to dev file cache");
-  } catch (err) {
-    log18.warn({ err }, "failed to write water facilities dev cache");
-  }
-}
-function loadDevWaterCache() {
-  if (!isDev) return null;
-  try {
-    if (!existsSync4(WATER_FACILITIES_FILE)) return null;
-    const raw = readFileSync4(WATER_FACILITIES_FILE, "utf-8");
-    const entry = JSON.parse(raw);
-    const age = Date.now() - entry.savedAt;
-    if (age > WATER_MAX_AGE_MS) {
-      log18.info({ ageMs: age }, "water facility dev cache too old, ignoring");
-      return null;
-    }
-    log18.info(
-      { ageMs: age, ageHr: Math.round(age / 36e5) },
-      "loaded water facilities from dev file cache"
-    );
-    return entry.data;
-  } catch (err) {
-    log18.warn({ err }, "failed to read water facility dev cache");
-    return null;
-  }
-}
-
-// server/lib/llmExtractionPipeline.ts
-var log19 = logger.child({ module: "llm-extraction-pipeline" });
-var EVENTS_KEY = "events:gdelt";
-var LLM_EVENTS_KEY = "events:llm";
-var LLM_PROCESS_KEY = "events:llm-process-ts";
-var LLM_COOLDOWN_MS = 9e5;
-var LLM_REDIS_TTL_SEC3 = 9e3;
-var LLM_SUMMARY_KEY = "events:llm-summary";
-var LLM_SUMMARY_TTL_SEC = 86400;
-var BATCH_SIZE_V1 = 8;
-async function runRefreshExtraction(opts) {
-  const version = getPipelineVersion();
-  const pipelineV2 = version === "v2";
-  const pipelineV3 = version === "v3";
-  const LLM_EVENTS_KEY_ACTIVE = pipelineV3 ? "events:llm:v3" : pipelineV2 ? "events:llm:v2" : LLM_EVENTS_KEY;
-  const LLM_SUMMARY_KEY_ACTIVE = pipelineV3 ? "events:llm-summary:v3" : pipelineV2 ? "events:llm-summary:v2" : LLM_SUMMARY_KEY;
-  let isColdCache = false;
-  try {
-    const cachedLLM = await cacheGetSafe(LLM_EVENTS_KEY_ACTIVE, 999999999);
-    isColdCache = !cachedLLM?.data || cachedLLM.data.length === 0;
+    await redis.ping();
+    redisOk = true;
   } catch {
-    isColdCache = false;
+    log10.error("Redis ping failed");
   }
-  const effectiveForceCooldown = opts.forceCooldown === true || isColdCache;
-  if (!effectiveForceCooldown) {
-    try {
-      const lastTs = await redis.get(LLM_PROCESS_KEY);
-      if (lastTs !== null && lastTs !== void 0) {
-        if (Date.now() - lastTs <= LLM_COOLDOWN_MS) {
-          return { dispatched: false, reason: "cooldown", schemaVersion: version };
-        }
-      }
-    } catch {
-    }
-  }
-  if (!isLLMConfigured()) {
-    return { dispatched: false, reason: "llm_unconfigured", schemaVersion: version };
-  }
-  let rawCached = null;
-  try {
-    rawCached = await cacheGetSafe(EVENTS_KEY, 999999999);
-  } catch {
-    rawCached = null;
-  }
-  if (!rawCached?.data || rawCached.data.length === 0) {
-    return { dispatched: false, reason: "no_raw_events", schemaVersion: version };
-  }
-  const merged = rawCached.data;
-  if (llmProgress.stage !== "idle" && llmProgress.stage !== "done" && llmProgress.stage !== "error") {
-    return { dispatched: false, reason: "pipeline_busy", schemaVersion: version };
-  }
-  try {
-    await redis.set(LLM_PROCESS_KEY, Date.now(), { ex: LLM_REDIS_TTL_SEC3 });
-  } catch {
-  }
-  updateProgress({ lastTriggerSource: opts.triggeredBy });
-  const llmCachedRef = await cacheGetSafe(
-    LLM_EVENTS_KEY_ACTIVE,
-    LLM_COOLDOWN_MS
-  );
-  void (async () => {
-    resetProgress();
-    updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
-    try {
-      const groups = groupGdeltRows(merged);
-      updateProgress({ totalGroups: groups.length, stage: "grouping" });
-      const cachedLlmKeys = /* @__PURE__ */ new Set();
-      if (llmCachedRef?.data) {
-        for (const e of llmCachedRef.data) {
-          if (e.id) cachedLlmKeys.add(e.id);
-        }
-      }
-      const newGroups = cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
-      updateProgress({ newGroups: newGroups.length });
-      if (newGroups.length === 0) {
-        log19.info("LLM: no new groups to process");
-        updateProgress({
-          stage: "done",
-          completedAt: Date.now(),
-          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-        });
-        try {
-          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-        } catch {
-        }
-        return;
-      }
-      const paused = await shouldPauseNewEvents();
-      if (paused) {
-        log19.info("LLM_PAUSED_SOFT_CAP");
-        updateProgress({
-          stage: "done",
-          completedAt: Date.now(),
-          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-        });
-        try {
-          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-        } catch {
-        }
-        return;
-      }
-      const prioritizedGroups = await prioritizeBySeverity(newGroups);
-      const effectiveBatchSize = pipelineV3 || pipelineV2 ? BATCH_SIZE : BATCH_SIZE_V1;
-      updateProgress({
-        stage: "llm-processing",
-        totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize)
-      });
-      const extractResult = await processEventGroups2(prioritizedGroups, (completed, total) => {
-        updateProgress({ completedBatches: completed, totalBatches: total });
-      });
-      if (!extractResult.events || extractResult.events.length === 0) {
-        log19.warn("LLM processing returned null \u2014 raw GDELT serving continues");
-        updateProgress({
-          stage: "error",
-          errorMessage: "LLM returned null for all batches",
-          completedAt: Date.now(),
-          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-        });
-        try {
-          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-        } catch {
-        }
-        return;
-      }
-      updateProgress({
-        stage: "geocoding",
-        enrichedCount: extractResult.events.length,
-        totalGeocodes: extractResult.events.length
-      });
-      let llmEntities;
-      if (extractResult.schemaVersion === "v3") {
-        const geoResult = await geocodeEnrichedEvents2(
-          {
-            schemaVersion: "v3",
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup
-          },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          }
-        );
-        if (geoResult.schemaVersion !== "v3") {
-          throw new Error("geocoder schemaVersion mismatch (expected v3)");
-        }
-        const provenanceCounts = {};
-        let suspectCount = 0;
-        for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-          if (e.suspect) suspectCount++;
-        }
-        updateProgress({ provenanceCounts, suspectCount });
-        try {
-          const evalScore = await runEval();
-          log19.info({ evalScore, schemaVersion: "v3" }, "eval harness completed");
-        } catch (evalErr) {
-          log19.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
-        }
-        llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
-      } else if (extractResult.schemaVersion === "v2") {
-        const geoResult = await geocodeEnrichedEvents2(
-          {
-            schemaVersion: "v2",
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup
-          },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          }
-        );
-        if (geoResult.schemaVersion !== "v2") {
-          throw new Error("geocoder schemaVersion mismatch (expected v2)");
-        }
-        const provenanceCounts = {};
-        let suspectCount = 0;
-        for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-          if (e.suspect) suspectCount++;
-        }
-        updateProgress({ provenanceCounts, suspectCount });
-        try {
-          const evalScore = await runEval();
-          log19.info({ evalScore }, "eval harness completed");
-        } catch (evalErr) {
-          log19.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
-        }
-        llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
-      } else {
-        const geoResult = await geocodeEnrichedEvents2(
-          { schemaVersion: "v1", events: extractResult.events },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          }
-        );
-        if (geoResult.schemaVersion !== "v1") {
-          throw new Error("geocoder schemaVersion mismatch (expected v1)");
-        }
-        llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
-      }
-      const llmMergeMap = /* @__PURE__ */ new Map();
-      if (llmCachedRef?.data) {
-        for (const e of llmCachedRef.data) {
-          llmMergeMap.set(e.id, e);
-        }
-      }
-      for (const e of llmEntities) {
-        llmMergeMap.set(e.id, e);
-      }
-      const llmMerged = Array.from(llmMergeMap.values());
-      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, llmMerged, LLM_REDIS_TTL_SEC3);
-      if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
-      else saveDevLLMCache(llmMerged);
-      log19.info(
-        { count: llmEntities.length, total: llmMerged.length },
-        "LLM: processed and cached enriched events (background)"
-      );
-      updateProgress({
-        stage: "done",
-        completedAt: Date.now(),
-        durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-      });
+  const sources = {};
+  const warnings = [];
+  await Promise.all(
+    Object.entries(SOURCE_KEYS).map(async ([name, key]) => {
       try {
-        await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+        const entry = await cacheGetSafe(key, 999999999);
+        const lastFresh = entry?.lastFresh ?? null;
+        const stale = lastFresh !== null && now - lastFresh > STALE_THRESHOLD_MS;
+        sources[name] = { lastFresh, stale };
+        if (stale) {
+          const ageMin = Math.round((now - lastFresh) / 6e4);
+          warnings.push(`${name}: stale (${ageMin}min old)`);
+        } else if (lastFresh === null) {
+          warnings.push(`${name}: no data`);
+        }
       } catch {
+        sources[name] = { lastFresh: null, stale: false };
+        warnings.push(`${name}: fetch error`);
       }
-    } catch (llmErr) {
-      updateProgress({
-        stage: "error",
-        errorMessage: llmErr instanceof Error ? llmErr.message : "Unknown LLM error",
-        completedAt: Date.now(),
-        durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-      });
-      try {
-        await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-      } catch {
-      }
-      log19.warn({ err: llmErr }, "LLM background processing failed");
-    }
-  })();
-  return {
-    dispatched: true,
-    coldCacheBypass: isColdCache,
-    schemaVersion: version
-  };
-}
-function enrichedV1ToEntities(geocoded, groups) {
-  const groupMap = /* @__PURE__ */ new Map();
-  const groupSourceUrls = /* @__PURE__ */ new Map();
-  for (const g of groups) {
-    groupMap.set(g.key, g.entities);
-    groupSourceUrls.set(g.key, g.sourceUrls);
-  }
-  const results = [];
-  for (const enriched of geocoded) {
-    const entities = groupMap.get(enriched.groupKey);
-    if (!entities || entities.length === 0) continue;
-    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
-    const sourceTier = getHighestTier(sourceUrls) ?? void 0;
-    const template = entities[0];
-    if (!template) continue;
-    results.push({
-      ...template,
-      lat: enriched.resolvedLat,
-      lng: enriched.resolvedLng,
-      type: enriched.type,
-      label: `${enriched.location.name}: ${enriched.summary.slice(0, 60)}`,
-      data: {
-        ...template.data,
-        locationName: enriched.location.name,
-        summary: enriched.summary,
-        precision: enriched.location.precision,
-        llmProcessed: true,
-        actors: enriched.actors,
-        sourceCount: enriched.sourceCount,
-        sourceTier,
-        casualties: {
-          killed: enriched.casualties.killed ?? void 0,
-          injured: enriched.casualties.injured ?? void 0,
-          unknown: enriched.casualties.unknown
-        }
-      }
-    });
-  }
-  return results;
-}
-function enrichedV2ToEntities(geocoded, groups) {
-  const groupMap = /* @__PURE__ */ new Map();
-  const groupSourceUrls = /* @__PURE__ */ new Map();
-  for (const g of groups) {
-    groupMap.set(g.key, g.entities);
-    groupSourceUrls.set(g.key, g.sourceUrls);
-  }
-  const results = [];
-  for (const enriched of geocoded) {
-    const entities = groupMap.get(enriched.groupKey);
-    if (!entities || entities.length === 0) continue;
-    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
-    const sourceTier = getHighestTier(sourceUrls) ?? void 0;
-    const template = entities[0];
-    if (!template) continue;
-    const placeLabel = enriched.location.landmark || enriched.location.city || enriched.location.admin1 || enriched.location.country || enriched.displayName || "unknown";
-    results.push({
-      ...template,
-      id: `llm-v2-${enriched.groupKey}`,
-      lat: enriched.resolvedLat,
-      lng: enriched.resolvedLng,
-      type: enriched.type,
-      label: `${placeLabel}: ${enriched.summary.slice(0, 60)}`,
-      data: {
-        ...template.data,
-        locationName: placeLabel,
-        summary: enriched.summary,
-        precision: enriched.precision,
-        llmProcessed: true,
-        actors: enriched.actors,
-        sourceCount: enriched.sourceCount,
-        sourceTier,
-        casualties: {
-          killed: enriched.casualties.killed ?? void 0,
-          injured: enriched.casualties.injured ?? void 0,
-          unknown: enriched.casualties.unknown
-        }
-      }
-    });
-  }
-  return results;
-}
-function enrichedV3ToEntities(geocoded, groups) {
-  const groupMap = /* @__PURE__ */ new Map();
-  const groupSourceUrls = /* @__PURE__ */ new Map();
-  for (const g of groups) {
-    groupMap.set(g.key, g.entities);
-    groupSourceUrls.set(g.key, g.sourceUrls);
-  }
-  const results = [];
-  for (const enriched of geocoded) {
-    const entities = groupMap.get(enriched.groupKey);
-    if (!entities || entities.length === 0) continue;
-    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
-    const sourceTier = getHighestTier(sourceUrls) ?? void 0;
-    const template = entities[0];
-    if (!template) continue;
-    const placeLabel = enriched.location.landmark || enriched.location.city || enriched.location.admin1 || enriched.location.country || enriched.displayName || "unknown";
-    results.push({
-      ...template,
-      id: `llm-v3-${enriched.groupKey}`,
-      lat: enriched.resolvedLat,
-      lng: enriched.resolvedLng,
-      type: enriched.type,
-      label: `${placeLabel}: ${enriched.summary.slice(0, 60)}`,
-      data: {
-        ...template.data,
-        locationName: placeLabel,
-        summary: enriched.summary,
-        precision: enriched.precision,
-        llmProcessed: true,
-        actors: enriched.actors,
-        sourceCount: enriched.sourceCount,
-        sourceTier,
-        casualties: {
-          killed: enriched.casualties.killed ?? void 0,
-          injured: enriched.casualties.injured ?? void 0,
-          unknown: enriched.casualties.unknown
-        },
-        severity: enriched.severity,
-        suspect: enriched.suspect,
-        geocodeProvenance: enriched.geocodeProvenance,
-        weaponType: enriched.weaponType,
-        targetType: enriched.targetType,
-        timeOfDay: enriched.timeOfDay,
-        durationMinutes: enriched.durationMinutes,
-        reasoning: enriched.reasoning,
-        geocodeDisplayName: enriched.displayName
-      }
-    });
-  }
-  return results;
-}
-
-// server/middleware/dashboardAuth.ts
-import { timingSafeEqual } from "crypto";
-function dashboardAuth(req, res, next) {
-  if (process.env.NODE_ENV !== "production") {
-    next();
-    return;
-  }
-  const expected = process.env.DASHBOARD_PASSWORD ?? "";
-  if (expected === "") {
-    res.status(503).json({ error: "auth_not_configured" });
-    return;
-  }
-  const header = req.headers.authorization ?? "";
-  const prefix = "Bearer ";
-  if (!header.startsWith(prefix)) {
-    res.status(401).json({ error: "unauthorized" });
-    return;
-  }
-  const provided = header.slice(prefix.length);
-  if (provided.length !== expected.length) {
-    res.status(401).json({ error: "unauthorized" });
-    return;
-  }
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (!timingSafeEqual(a, b)) {
-    res.status(401).json({ error: "unauthorized" });
-    return;
-  }
-  next();
-}
-
-// server/routes/events.ts
-var log20 = logger.child({ module: "events" });
-var eventsQuerySchema = z7.object({
-  backfill: z7.enum(["true", "false"]).optional().transform((v) => v === "true")
-});
-var EVENTS_KEY2 = "events:gdelt";
-var LOGICAL_TTL_MS2 = CACHE_TTL.events;
-var REDIS_TTL_SEC2 = 9e3;
-var BACKFILL_KEY = "events:backfill-ts";
-var BACKFILL_COOLDOWN_MS = 36e5;
-var LLM_EVENTS_KEY2 = "events:llm";
-var LLM_PROCESS_KEY2 = "events:llm-process-ts";
-var LLM_LOGICAL_TTL_MS = 9e5;
-var LLM_REDIS_TTL_SEC4 = 9e3;
-var LLM_SUMMARY_KEY2 = "events:llm-summary";
-var LLM_SUMMARY_TTL_SEC2 = 86400;
-async function loadRecentEnrichedEvents(limit) {
-  const version = getPipelineVersion();
-  const key = version === "v3" ? "events:llm:v3" : version === "v2" ? "events:llm:v2" : LLM_EVENTS_KEY2;
-  try {
-    const cached = await cacheGetSafe(key, 0);
-    const events = toEntityArray(cached?.data);
-    if (events.length === 0) return [];
-    return events.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit).map((e) => {
-      const d = e.data ?? {};
-      const groupKey = e.id.replace(/^llm-v2-/, "").replace(/-\d+$/, "");
-      return {
-        groupKey,
-        location: d.location ?? {
-          // Best-effort: if the entity only carries locationName we
-          // surface it in the city slot so the summary row is useful.
-          country: null,
-          admin1: null,
-          city: d.locationName ?? null,
-          neighborhood: null,
-          landmark: null
-        },
-        precision: d.precision ?? "region",
-        confidence: d.confidence ?? 0,
-        reasoning: d.reasoning ?? "",
-        weaponType: d.weaponType ?? null,
-        targetType: d.targetType ?? null,
-        tokensIn: d.tokensIn ?? null,
-        tokensOut: d.tokensOut ?? null,
-        provenance: d.geocodeProvenance ?? "gdelt-actiongeo-fallback",
-        sources: d.sourceUrls ?? (d.source ? [d.source] : []),
-        fetchedAt: e.timestamp
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-async function shouldBackfill() {
-  try {
-    const lastTs = await redis.get(BACKFILL_KEY);
-    if (lastTs === null || lastTs === void 0) return true;
-    return Date.now() - lastTs > BACKFILL_COOLDOWN_MS;
-  } catch {
-    return true;
-  }
-}
-async function recordBackfillTimestamp() {
-  try {
-    await redis.set(BACKFILL_KEY, Date.now(), { ex: REDIS_TTL_SEC2 });
-  } catch {
-  }
-}
-async function recordLLMTimestamp() {
-  try {
-    await redis.set(LLM_PROCESS_KEY2, Date.now(), { ex: LLM_REDIS_TTL_SEC4 });
-  } catch {
-  }
-}
-function sendNormalizedEvents(res, payload) {
-  sendValidated(res, eventsResponseSchema, {
-    ...payload,
-    data: normalizeEventTypes(payload.data)
-  });
-}
-function toEntityArray(data) {
-  return Array.isArray(data) ? data : [];
-}
-function coerceCachedEvents(cached) {
-  return { ...cached, data: toEntityArray(cached.data) };
-}
-var eventsRouter = Router3();
-var PIPELINE_OVERRIDE_KEY2 = "events:llm-pipeline-override";
-var PIPELINE_OVERRIDE_TTL_SEC2 = 7 * 24 * 3600;
-async function refreshPipelineOverride() {
-  try {
-    const v = await redis.get(PIPELINE_OVERRIDE_KEY2);
-    if (v === "v1" || v === "v2" || v === "v3") {
-      setPipelineOverride(v);
-    } else {
-      setPipelineOverride(null);
-    }
-  } catch {
-  }
-}
-eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
-  await refreshPipelineOverride();
-  const version = getPipelineVersion();
-  const LLM_SUMMARY_KEY_ACTIVE = version === "v3" ? "events:llm-summary:v3" : version === "v2" ? "events:llm-summary:v2" : LLM_SUMMARY_KEY2;
-  const [dlqRecent, recentEvents, paused, pipelineFlips] = await Promise.all([
-    listDLQ(50).catch(() => []),
-    loadRecentEnrichedEvents(50).catch(() => []),
-    shouldPauseNewEvents().catch(() => false),
-    listPipelineAudit(50).catch(() => [])
-  ]);
-  const common = {
-    schemaVersion: llmProgress.schemaVersion,
-    callHistory: llmProgress.callHistory,
-    tokenCounters: llmProgress.tokenCounters,
-    dlqCount: llmProgress.dlqCount ?? dlqRecent.length,
-    dlqRecent,
-    recentEvents,
-    paused,
-    breakerState: llmProgress.breakerState,
-    evalScore: llmProgress.evalScore,
-    provenanceCounts: llmProgress.provenanceCounts,
-    suspectCount: llmProgress.suspectCount,
-    // ===== Phase 27.4.3 Plan 02b — v3 observability fields =====
-    routingTrace: llmProgress.routingTrace,
-    // I-9 inline naming asymmetry note: server uses `latencyHistogram` (with
-    // the `samples` ring buffer); the wire contract drops `samples` and
-    // renames to `latency` to match the UI-SPEC client field. See
-    // useLLMStatusPolling.ts.
-    latency: llmProgress.latencyHistogram,
-    rateLimit: llmProgress.rateLimit,
-    schemaFailures: llmProgress.schemaFailures,
-    errorTaxonomy: llmProgress.errorTaxonomy,
-    costShadow: llmProgress.costShadow,
-    pipelineFlips
-  };
-  if (llmProgress.stage !== "idle") {
-    return res.json({ ...llmProgress, ...common });
-  }
-  try {
-    const summary = await cacheGetSafe(LLM_SUMMARY_KEY_ACTIVE, 0);
-    if (summary?.data) {
-      return res.json({ stage: "idle", lastRun: summary.data, ...common });
-    }
-  } catch {
-  }
-  res.json({ stage: "idle", lastRun: null, ...common });
-});
-{
-  eventsRouter.post("/llm-replay/:groupKey", dashboardAuth, async (req, res) => {
-    const { groupKey } = req.params;
-    if (!groupKey || typeof groupKey !== "string" || groupKey.length > 200) {
-      return res.status(400).json({ error: "invalid_group_key" });
-    }
-    const replayVersion = getPipelineVersion();
-    const cacheKey2 = replayVersion === "v3" ? "events:llm:v3" : "events:llm:v2";
-    const cached = await cacheGetSafe(cacheKey2, 0);
-    const existing = toEntityArray(cached?.data).find((e) => e.id.includes(groupKey));
-    if (!existing) return res.status(404).json({ error: "not_found" });
-    const rawCache = await cacheGetSafe(EVENTS_KEY2, 0);
-    if (!rawCache?.data) return res.status(404).json({ error: "gdelt_cache_empty" });
-    const groups = groupGdeltRows(rawCache.data);
-    const group = groups.find((g) => g.key === groupKey);
-    if (!group) return res.status(404).json({ error: "group_gone" });
-    try {
-      if (replayVersion === "v3") {
-        const extraction2 = await processEventGroupsV3([group]);
-        const first2 = extraction2?.events?.[0] ?? null;
-        return res.json({ old: existing, new: first2 });
-      }
-      const extraction = await processEventGroupsV2([group]);
-      const first = extraction?.events?.[0] ?? null;
-      return res.json({ old: existing, new: first });
-    } catch (err) {
-      return res.status(500).json({
-        error: "extract_failed",
-        detail: String(err).slice(0, 200)
-      });
-    }
-  });
-}
-{
-  eventsRouter.get("/llm-pipeline", dashboardAuth, async (_req, res) => {
-    await refreshPipelineOverride();
-    const override = getPipelineOverride();
-    const effective = getPipelineVersion();
-    return res.json({ effective, override, source: override ? "override" : "env" });
-  });
-  eventsRouter.post("/llm-pipeline", dashboardAuth, async (req, res) => {
-    const body = req.body ?? {};
-    const version = body.version;
-    if (version !== "v1" && version !== "v2" && version !== "v3" && version !== null) {
-      return res.status(400).json({ error: 'version must be "v1", "v2", "v3", or null' });
-    }
-    await refreshPipelineOverride();
-    const fromVersion = getPipelineVersion();
-    try {
-      if (version === null) {
-        await redis.del(PIPELINE_OVERRIDE_KEY2);
-        setPipelineOverride(null);
-      } else {
-        await redis.set(PIPELINE_OVERRIDE_KEY2, version, { ex: PIPELINE_OVERRIDE_TTL_SEC2 });
-        setPipelineOverride(version);
-      }
-    } catch (err) {
-      return res.status(500).json({
-        error: "override_write_failed",
-        detail: String(err).slice(0, 200)
-      });
-    }
-    const toVersion = getPipelineVersion();
-    if (fromVersion !== toVersion) {
-      await appendPipelineAudit({
-        ts: Date.now(),
-        from: fromVersion,
-        to: toVersion,
-        trigger: "manual:operator_post",
-        operator: process.env.NODE_ENV === "production" ? "production" : "dev",
-        reason: typeof body.reason === "string" ? body.reason.slice(0, 500) : void 0
-      });
-    }
-    const effective = getPipelineVersion();
-    return res.json({
-      effective,
-      override: getPipelineOverride(),
-      source: version ? "override" : "env"
-    });
-  });
-}
-eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
-  const { backfill: forceBackfill } = res.locals.validatedQuery;
-  await refreshPipelineOverride();
-  const version = getPipelineVersion();
-  const pipelineV2 = version === "v2";
-  const pipelineV3 = version === "v3";
-  const LLM_EVENTS_KEY_ACTIVE = pipelineV3 ? "events:llm:v3" : pipelineV2 ? "events:llm:v2" : LLM_EVENTS_KEY2;
-  const LLM_SUMMARY_KEY_ACTIVE = pipelineV3 ? "events:llm-summary:v3" : pipelineV2 ? "events:llm-summary:v2" : LLM_SUMMARY_KEY2;
-  let llmCached = await cacheGetSafe(
-    LLM_EVENTS_KEY_ACTIVE,
-    LLM_LOGICAL_TTL_MS
+    })
   );
-  if (llmCached) llmCached = coerceCachedEvents(llmCached);
-  if (llmCached && !llmCached.stale) {
-    return sendNormalizedEvents(res, llmCached);
+  if (warnings.length > 0) {
+    log10.warn({ warningCount: warnings.length, warnings }, "source health warnings");
+  } else {
+    log10.info("all sources healthy");
   }
-  if (pipelineV3 && !llmCached?.data) {
-    let bridgeV2 = await cacheGetSafe("events:llm:v2", LLM_LOGICAL_TTL_MS);
-    if (bridgeV2) bridgeV2 = coerceCachedEvents(bridgeV2);
-    if (bridgeV2 && !bridgeV2.stale) {
-      return sendNormalizedEvents(res, bridgeV2);
-    }
-    let bridgeV1 = await cacheGetSafe(LLM_EVENTS_KEY2, LLM_LOGICAL_TTL_MS);
-    if (bridgeV1) bridgeV1 = coerceCachedEvents(bridgeV1);
-    if (bridgeV1 && !bridgeV1.stale) {
-      return sendNormalizedEvents(res, bridgeV1);
-    }
-    if (bridgeV2?.data) {
-      llmCached = bridgeV2;
-    } else if (bridgeV1?.data) {
-      llmCached = bridgeV1;
-    }
-  }
-  if (pipelineV2 && !llmCached?.data) {
-    let llmCachedV1 = await cacheGetSafe(LLM_EVENTS_KEY2, LLM_LOGICAL_TTL_MS);
-    if (llmCachedV1) llmCachedV1 = coerceCachedEvents(llmCachedV1);
-    if (llmCachedV1 && !llmCachedV1.stale) {
-      return sendNormalizedEvents(res, llmCachedV1);
-    }
-    if (llmCachedV1?.data && !llmCached?.data) {
-      llmCached = llmCachedV1;
-    }
-  }
-  if (!llmCached?.data) {
-    const devData = pipelineV3 || pipelineV2 ? loadDevLLMCacheV2() : loadDevLLMCache();
-    if (devData) {
-      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, devData, LLM_REDIS_TTL_SEC4);
-      const geocoded = devData.filter(
-        (e) => e.data.precision && e.data.precision !== "region"
-      ).length;
-      const summary = {
-        lastRun: Date.now(),
-        groupCount: devData.length,
-        batchCount: 0,
-        geocodeCount: geocoded,
-        enrichedCount: devData.length,
-        durationMs: 0,
-        error: null,
-        source: "dev-file-cache",
-        schemaVersion: version
-      };
-      await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, summary, LLM_SUMMARY_TTL_SEC2);
-      await recordLLMTimestamp();
-      log20.info({ count: devData.length }, "served LLM events from dev file cache");
-      return sendNormalizedEvents(res, { data: devData, stale: false, lastFresh: Date.now() });
-    }
-  }
-  const cached = forceBackfill ? null : await cacheGetSafe(EVENTS_KEY2, LOGICAL_TTL_MS2);
-  if (cached && !cached.stale && !isLLMConfigured()) {
-    return sendNormalizedEvents(res, cached);
-  }
+  let evalScore = null;
+  let evalError = null;
   try {
-    let bellingcatArticles = [];
-    try {
-      const newsCache = await cacheGetSafe("news:gdelt", 0);
-      if (newsCache?.data) {
-        bellingcatArticles = newsCache.data.flatMap((cluster) => cluster.articles).filter((a) => a.source === "Bellingcat").map((a) => ({
-          title: a.title,
-          url: a.url,
-          publishedAt: a.publishedAt,
-          ...extractBellingcatGeo(a.title)
-        }));
-      }
-    } catch {
-      log20.warn("failed to fetch Bellingcat articles for corroboration");
-    }
-    const fresh = await fetchEvents(bellingcatArticles);
-    const eventMap = /* @__PURE__ */ new Map();
-    if (cached) {
-      for (const event of cached.data) {
-        eventMap.set(event.id, event);
-      }
-    }
-    if ((!cached || forceBackfill) && (forceBackfill || await shouldBackfill())) {
-      try {
-        const backfillDays = Math.ceil((Date.now() - WAR_START) / 864e5);
-        const backfillData = await backfillEvents(backfillDays);
-        for (const event of backfillData) {
-          eventMap.set(event.id, event);
-        }
-        await recordBackfillTimestamp();
-        log20.info({ count: backfillData.length }, "backfill: merged historical events");
-      } catch (backfillErr) {
-        log20.warn({ err: backfillErr }, "backfill failed (non-fatal)");
-      }
-    }
-    for (const event of fresh) {
-      eventMap.set(event.id, event);
-    }
-    for (const [id, event] of eventMap) {
-      if (event.timestamp < WAR_START) {
-        eventMap.delete(id);
-      }
-    }
-    const merged = Array.from(eventMap.values());
-    for (const event of merged) {
-      if (event.data.sourceTier === void 0 && event.data.source) {
-        const domain = extractDomain(event.data.source);
-        const tier = domain ? getSourceTier("", domain) : null;
-        if (tier !== null) {
-          event.data.sourceTier = tier;
-        }
-      }
-    }
-    await cacheSetSafe(EVENTS_KEY2, merged, REDIS_TTL_SEC2);
-    if (llmCached?.data) {
-      return sendNormalizedEvents(res, {
-        data: llmCached.data,
-        stale: true,
-        lastFresh: llmCached.lastFresh
-      });
-    }
-    sendNormalizedEvents(res, {
-      data: merged,
-      stale: false,
-      lastFresh: Date.now()
-    });
+    evalScore = await runEval();
+    log10.info({ evalScore }, "eval drift check complete");
   } catch (err) {
-    log20.error({ err }, "upstream error");
-    if (cached) {
-      const pruned = cached.data.filter((e) => e.timestamp >= WAR_START);
-      sendNormalizedEvents(res, {
-        data: pruned,
-        stale: true,
-        lastFresh: cached.lastFresh
-      });
-    } else {
-      throw new AppError(502, "UPSTREAM_FAIL", `gdelt fetch failed: ${err.message}`);
-    }
+    evalError = err instanceof Error ? err.message : String(err);
+    log10.warn({ err: evalError }, "eval drift check threw \u2014 continuing health response");
   }
-});
-
-// server/routes/sources.ts
-import { Router as Router4 } from "express";
-var sourcesRouter = Router4();
-sourcesRouter.get("/", (_req, res) => {
   res.json({
-    opensky: {
-      configured: !!(process.env.OPENSKY_CLIENT_ID && process.env.OPENSKY_CLIENT_SECRET)
-    },
-    adsblol: {
-      configured: true
-    }
+    status: redisOk ? "ok" : "degraded",
+    redis: redisOk,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    sources,
+    warnings,
+    evalScore,
+    evalError
   });
 });
 
-// server/routes/sites.ts
-import { Router as Router5 } from "express";
-import { z as z8 } from "zod";
+// server/routes/cron-warm.ts
+import { Router as Router2 } from "express";
+
+// src/data/rivers.json
+var rivers_default = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      properties: { name: "Jordan", scalerank: 6, compositeHealth: 0 },
+      geometry: {
+        type: "MultiLineString",
+        coordinates: [
+          [
+            [35.577, 32.72],
+            [35.599, 32.9]
+          ],
+          [
+            [35.559, 31.765],
+            [35.423, 31.325]
+          ],
+          [
+            [35.864, 33.596],
+            [35.665, 33.389],
+            [35.599, 32.9]
+          ],
+          [
+            [35.577, 32.72],
+            [35.559, 31.765]
+          ],
+          [
+            [35.401, 31.23],
+            [35.423, 31.325]
+          ]
+        ]
+      }
+    },
+    {
+      type: "Feature",
+      properties: { name: "Nile", scalerank: 1, compositeHealth: 0 },
+      geometry: {
+        type: "MultiLineString",
+        coordinates: [
+          [
+            [33.693, 18.49],
+            [33.791, 18.352]
+          ],
+          [
+            [32.49, 15.635],
+            [32.608, 16.251],
+            [32.863, 16.499],
+            [33.127, 16.535],
+            [33.599, 16.765],
+            [33.729, 16.964],
+            [33.753, 17.294],
+            [33.982, 17.635],
+            [33.928, 18.265],
+            [33.685, 18.501],
+            [33.672, 18.716],
+            [33.563, 18.749],
+            [33.562, 19.179],
+            [33.425, 19.269],
+            [33.351, 19.444],
+            [33.058, 19.529],
+            [32.87, 19.436],
+            [32.657, 19.165],
+            [32.509, 19.148],
+            [32.344, 18.889],
+            [32.192, 18.892],
+            [32.037, 18.785],
+            [32.046, 18.619],
+            [31.879, 18.567],
+            [31.529, 18.081],
+            [31.207, 17.984],
+            [30.769, 18.169],
+            [30.703, 18.468],
+            [30.485, 18.86],
+            [30.489, 19.371],
+            [30.303, 19.828],
+            [30.587, 19.972],
+            [30.587, 20.272],
+            [30.388, 20.362],
+            [30.299, 20.582],
+            [30.349, 20.802],
+            [30.567, 20.858],
+            [30.604, 21.028],
+            [30.714, 21.092],
+            [30.693, 21.205],
+            [30.973, 21.381],
+            [31.091, 21.609]
+          ],
+          [
+            [32.879, 23.988],
+            [32.934, 24.689],
+            [32.882, 25.015],
+            [32.56, 25.283],
+            [32.483, 25.55],
+            [32.764, 25.802],
+            [32.763, 26.112],
+            [32.649, 26.18],
+            [32.266, 26.03],
+            [32.117, 26.218],
+            [32.016, 26.181],
+            [31.824, 26.413],
+            [31.808, 26.541],
+            [31.704, 26.544],
+            [31.714, 26.626],
+            [31.28, 27.158],
+            [31.115, 27.202],
+            [30.849, 27.46],
+            [30.886, 27.801],
+            [30.741, 28.322],
+            [30.91, 28.83],
+            [31.221, 29.233],
+            [31.304, 29.669],
+            [31.237, 30.124]
+          ],
+          [
+            [31.091, 21.609],
+            [31.343, 21.923],
+            [31.419, 22.15],
+            [31.861, 22.474],
+            [31.994, 22.682],
+            [32.185, 22.751],
+            [32.373, 22.62],
+            [32.571, 22.772],
+            [32.592, 22.91],
+            [32.943, 23.307],
+            [32.856, 23.539],
+            [32.918, 23.749],
+            [32.879, 23.988]
+          ],
+          [
+            [32.893, 1.311],
+            [32.545, 1.522]
+          ],
+          [
+            [32.475, 1.552],
+            [32.241, 1.666]
+          ],
+          [
+            [31.768, -0.936],
+            [32.467, -0.74],
+            [32.837, -0.48],
+            [33.078, 0.091],
+            [33.283, 0.362],
+            [33.187, 0.428]
+          ],
+          [
+            [33.187, 0.428],
+            [33.051, 0.642],
+            [32.893, 1.311]
+          ],
+          [
+            [32.545, 1.522],
+            [32.475, 1.552]
+          ],
+          [
+            [32.241, 1.666],
+            [32.104, 1.648],
+            [32.104, 1.716],
+            [32.342, 1.868],
+            [32.277, 2.249],
+            [32.157, 2.232],
+            [31.879, 2.367],
+            [31.366, 2.193]
+          ],
+          [
+            [31.475, 2.4],
+            [31.352, 2.274],
+            [31.367, 2.193]
+          ],
+          [
+            [31.475, 2.401],
+            [31.529, 2.501],
+            [31.371, 2.821],
+            [31.415, 2.994],
+            [31.693, 3.486],
+            [31.908, 3.499],
+            [32.016, 3.614]
+          ]
+        ]
+      }
+    },
+    {
+      type: "Feature",
+      properties: { name: "Tigris", scalerank: 4, compositeHealth: 0.35 },
+      geometry: {
+        type: "MultiLineString",
+        coordinates: [
+          [
+            [47.434, 31.019],
+            [47.434, 31.375],
+            [47.15, 31.711],
+            [47.135, 31.864],
+            [46.966, 31.869],
+            [46.863, 32.062],
+            [46.719, 32.129],
+            [46.75, 32.358],
+            [46.673, 32.471],
+            [46.104, 32.655],
+            [45.807, 32.511]
+          ],
+          [
+            [42.377, 37.063],
+            [42.508, 36.973],
+            [42.515, 36.843],
+            [42.892, 36.706],
+            [42.751, 36.505],
+            [43.124, 36.398],
+            [43.303, 36.141],
+            [43.361, 35.881],
+            [43.241, 35.645],
+            [43.269, 35.412],
+            [43.584, 35.031],
+            [43.522, 34.933],
+            [43.77, 34.53],
+            [43.823, 34.236],
+            [43.929, 34.106],
+            [44.291, 34.042],
+            [44.448, 33.935],
+            [44.426, 33.725],
+            [44.309, 33.55],
+            [44.38, 33.295],
+            [44.728, 32.974],
+            [45.267, 32.774],
+            [45.256, 32.693],
+            [45.426, 32.574],
+            [45.809, 32.502]
+          ]
+        ]
+      }
+    },
+    {
+      type: "Feature",
+      properties: { name: "Euphrates", scalerank: 3, compositeHealth: 0.31 },
+      geometry: {
+        type: "MultiLineString",
+        coordinates: [
+          [
+            [45.467, 31.305],
+            [44.786, 31.464],
+            [44.494, 31.659],
+            [44.478, 31.936],
+            [44.223, 32.57],
+            [44.29, 32.8],
+            [44.159, 33.032],
+            [44.07, 33.142],
+            [43.861, 33.183],
+            [43.669, 33.388],
+            [42.932, 33.53],
+            [42.712, 33.718],
+            [42.759, 33.853],
+            [42.537, 33.86],
+            [42.556, 33.971],
+            [42.371, 34.088],
+            [42.387, 34.191],
+            [42.313, 34.245],
+            [42.384, 34.321],
+            [42.145, 34.279],
+            [41.968, 34.472],
+            [41.78, 34.522],
+            [41.527, 34.424],
+            [41.224, 34.449],
+            [41.161, 34.374],
+            [40.993, 34.428]
+          ],
+          [
+            [45.463, 31.305],
+            [45.567, 31.203],
+            [46.041, 31.126],
+            [46.511, 30.884],
+            [46.748, 30.962],
+            [47.469, 30.968]
+          ]
+        ]
+      }
+    },
+    {
+      type: "Feature",
+      properties: { name: "Karun", scalerank: 5, compositeHealth: 0 },
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [50.07, 32.42],
+          [50.35, 32.05],
+          [50.55, 31.6],
+          [50.35, 31.32],
+          [49.75, 31.05],
+          [48.95, 30.85],
+          [48.35, 30.38],
+          [47.95, 30.6],
+          [47.8, 30.9]
+        ]
+      }
+    },
+    {
+      type: "Feature",
+      properties: { name: "Litani", scalerank: 7, compositeHealth: 0 },
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [36.08, 34],
+          [35.8, 33.4],
+          [35.55, 33.3],
+          [35.42, 33.35],
+          [35.32, 33.2]
+        ]
+      }
+    }
+  ]
+};
 
 // src/data/aqueduct-basins.json
 var aqueduct_basins_default = [
@@ -82638,7 +80476,7 @@ var COUNTRY_CENTROIDS = {
   Yemen: [15.6, 48.5]
 };
 var EARTH_RADIUS_KM = 6371;
-function haversineKm5(lat1, lng1, lat2, lng2) {
+function haversineKm4(lat1, lng1, lat2, lng2) {
   const toRad = (deg) => deg * (Math.PI / 180);
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
@@ -82659,7 +80497,7 @@ function assignBasinStress(lat, lng) {
   let minDist = Infinity;
   let nearestCountry = null;
   for (const [country, [clat, clng]] of Object.entries(COUNTRY_CENTROIDS)) {
-    const dist = haversineKm5(lat, lng, clat, clng);
+    const dist = haversineKm4(lat, lng, clat, clng);
     if (dist < minDist) {
       minDist = dist;
       nearestCountry = country;
@@ -82702,318 +80540,22 @@ function assignBasinStress(lat, lng) {
   };
 }
 
-// src/data/rivers.json
-var rivers_default = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      properties: { name: "Jordan", scalerank: 6, compositeHealth: 0 },
-      geometry: {
-        type: "MultiLineString",
-        coordinates: [
-          [
-            [35.577, 32.72],
-            [35.599, 32.9]
-          ],
-          [
-            [35.559, 31.765],
-            [35.423, 31.325]
-          ],
-          [
-            [35.864, 33.596],
-            [35.665, 33.389],
-            [35.599, 32.9]
-          ],
-          [
-            [35.577, 32.72],
-            [35.559, 31.765]
-          ],
-          [
-            [35.401, 31.23],
-            [35.423, 31.325]
-          ]
-        ]
-      }
-    },
-    {
-      type: "Feature",
-      properties: { name: "Nile", scalerank: 1, compositeHealth: 0 },
-      geometry: {
-        type: "MultiLineString",
-        coordinates: [
-          [
-            [33.693, 18.49],
-            [33.791, 18.352]
-          ],
-          [
-            [32.49, 15.635],
-            [32.608, 16.251],
-            [32.863, 16.499],
-            [33.127, 16.535],
-            [33.599, 16.765],
-            [33.729, 16.964],
-            [33.753, 17.294],
-            [33.982, 17.635],
-            [33.928, 18.265],
-            [33.685, 18.501],
-            [33.672, 18.716],
-            [33.563, 18.749],
-            [33.562, 19.179],
-            [33.425, 19.269],
-            [33.351, 19.444],
-            [33.058, 19.529],
-            [32.87, 19.436],
-            [32.657, 19.165],
-            [32.509, 19.148],
-            [32.344, 18.889],
-            [32.192, 18.892],
-            [32.037, 18.785],
-            [32.046, 18.619],
-            [31.879, 18.567],
-            [31.529, 18.081],
-            [31.207, 17.984],
-            [30.769, 18.169],
-            [30.703, 18.468],
-            [30.485, 18.86],
-            [30.489, 19.371],
-            [30.303, 19.828],
-            [30.587, 19.972],
-            [30.587, 20.272],
-            [30.388, 20.362],
-            [30.299, 20.582],
-            [30.349, 20.802],
-            [30.567, 20.858],
-            [30.604, 21.028],
-            [30.714, 21.092],
-            [30.693, 21.205],
-            [30.973, 21.381],
-            [31.091, 21.609]
-          ],
-          [
-            [32.879, 23.988],
-            [32.934, 24.689],
-            [32.882, 25.015],
-            [32.56, 25.283],
-            [32.483, 25.55],
-            [32.764, 25.802],
-            [32.763, 26.112],
-            [32.649, 26.18],
-            [32.266, 26.03],
-            [32.117, 26.218],
-            [32.016, 26.181],
-            [31.824, 26.413],
-            [31.808, 26.541],
-            [31.704, 26.544],
-            [31.714, 26.626],
-            [31.28, 27.158],
-            [31.115, 27.202],
-            [30.849, 27.46],
-            [30.886, 27.801],
-            [30.741, 28.322],
-            [30.91, 28.83],
-            [31.221, 29.233],
-            [31.304, 29.669],
-            [31.237, 30.124]
-          ],
-          [
-            [31.091, 21.609],
-            [31.343, 21.923],
-            [31.419, 22.15],
-            [31.861, 22.474],
-            [31.994, 22.682],
-            [32.185, 22.751],
-            [32.373, 22.62],
-            [32.571, 22.772],
-            [32.592, 22.91],
-            [32.943, 23.307],
-            [32.856, 23.539],
-            [32.918, 23.749],
-            [32.879, 23.988]
-          ],
-          [
-            [32.893, 1.311],
-            [32.545, 1.522]
-          ],
-          [
-            [32.475, 1.552],
-            [32.241, 1.666]
-          ],
-          [
-            [31.768, -0.936],
-            [32.467, -0.74],
-            [32.837, -0.48],
-            [33.078, 0.091],
-            [33.283, 0.362],
-            [33.187, 0.428]
-          ],
-          [
-            [33.187, 0.428],
-            [33.051, 0.642],
-            [32.893, 1.311]
-          ],
-          [
-            [32.545, 1.522],
-            [32.475, 1.552]
-          ],
-          [
-            [32.241, 1.666],
-            [32.104, 1.648],
-            [32.104, 1.716],
-            [32.342, 1.868],
-            [32.277, 2.249],
-            [32.157, 2.232],
-            [31.879, 2.367],
-            [31.366, 2.193]
-          ],
-          [
-            [31.475, 2.4],
-            [31.352, 2.274],
-            [31.367, 2.193]
-          ],
-          [
-            [31.475, 2.401],
-            [31.529, 2.501],
-            [31.371, 2.821],
-            [31.415, 2.994],
-            [31.693, 3.486],
-            [31.908, 3.499],
-            [32.016, 3.614]
-          ]
-        ]
-      }
-    },
-    {
-      type: "Feature",
-      properties: { name: "Tigris", scalerank: 4, compositeHealth: 0.35 },
-      geometry: {
-        type: "MultiLineString",
-        coordinates: [
-          [
-            [47.434, 31.019],
-            [47.434, 31.375],
-            [47.15, 31.711],
-            [47.135, 31.864],
-            [46.966, 31.869],
-            [46.863, 32.062],
-            [46.719, 32.129],
-            [46.75, 32.358],
-            [46.673, 32.471],
-            [46.104, 32.655],
-            [45.807, 32.511]
-          ],
-          [
-            [42.377, 37.063],
-            [42.508, 36.973],
-            [42.515, 36.843],
-            [42.892, 36.706],
-            [42.751, 36.505],
-            [43.124, 36.398],
-            [43.303, 36.141],
-            [43.361, 35.881],
-            [43.241, 35.645],
-            [43.269, 35.412],
-            [43.584, 35.031],
-            [43.522, 34.933],
-            [43.77, 34.53],
-            [43.823, 34.236],
-            [43.929, 34.106],
-            [44.291, 34.042],
-            [44.448, 33.935],
-            [44.426, 33.725],
-            [44.309, 33.55],
-            [44.38, 33.295],
-            [44.728, 32.974],
-            [45.267, 32.774],
-            [45.256, 32.693],
-            [45.426, 32.574],
-            [45.809, 32.502]
-          ]
-        ]
-      }
-    },
-    {
-      type: "Feature",
-      properties: { name: "Euphrates", scalerank: 3, compositeHealth: 0.31 },
-      geometry: {
-        type: "MultiLineString",
-        coordinates: [
-          [
-            [45.467, 31.305],
-            [44.786, 31.464],
-            [44.494, 31.659],
-            [44.478, 31.936],
-            [44.223, 32.57],
-            [44.29, 32.8],
-            [44.159, 33.032],
-            [44.07, 33.142],
-            [43.861, 33.183],
-            [43.669, 33.388],
-            [42.932, 33.53],
-            [42.712, 33.718],
-            [42.759, 33.853],
-            [42.537, 33.86],
-            [42.556, 33.971],
-            [42.371, 34.088],
-            [42.387, 34.191],
-            [42.313, 34.245],
-            [42.384, 34.321],
-            [42.145, 34.279],
-            [41.968, 34.472],
-            [41.78, 34.522],
-            [41.527, 34.424],
-            [41.224, 34.449],
-            [41.161, 34.374],
-            [40.993, 34.428]
-          ],
-          [
-            [45.463, 31.305],
-            [45.567, 31.203],
-            [46.041, 31.126],
-            [46.511, 30.884],
-            [46.748, 30.962],
-            [47.469, 30.968]
-          ]
-        ]
-      }
-    },
-    {
-      type: "Feature",
-      properties: { name: "Karun", scalerank: 5, compositeHealth: 0 },
-      geometry: {
-        type: "LineString",
-        coordinates: [
-          [50.07, 32.42],
-          [50.35, 32.05],
-          [50.55, 31.6],
-          [50.35, 31.32],
-          [49.75, 31.05],
-          [48.95, 30.85],
-          [48.35, 30.38],
-          [47.95, 30.6],
-          [47.8, 30.9]
-        ]
-      }
-    },
-    {
-      type: "Feature",
-      properties: { name: "Litani", scalerank: 7, compositeHealth: 0 },
-      geometry: {
-        type: "LineString",
-        coordinates: [
-          [36.08, 34],
-          [35.8, 33.4],
-          [35.55, 33.3],
-          [35.42, 33.35],
-          [35.32, 33.2]
-        ]
-      }
-    }
-  ]
+// server/types.ts
+var FACILITY_TYPE_LABELS = {
+  dam: "Dam",
+  reservoir: "Reservoir",
+  desalination: "Desalination Plant"
+};
+var RateLimitError = class extends Error {
+  name;
+  constructor(message) {
+    super(message);
+    this.name = "RateLimitError";
+  }
 };
 
 // server/adapters/overpass-water.ts
-var log21 = logger.child({ module: "overpass-water" });
+var log11 = logger.child({ module: "overpass-water" });
 var OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 var OVERPASS_FALLBACK = "https://overpass.private.coffee/api/interpreter";
 var TIMEOUT_MS = 9e4;
@@ -83401,7 +80943,7 @@ async function fetchFacilityType(entry, stats) {
       });
       statusCode = res.status;
       if (!res.ok) {
-        log21.warn(
+        log11.warn(
           { facilityType: entry.label, url, status: res.status },
           "Overpass returned error status"
         );
@@ -83431,13 +80973,13 @@ async function fetchFacilityType(entry, stats) {
         attempts,
         ok: true
       });
-      log21.info(
+      log11.info(
         { facilityType: entry.label, raw: json.elements.length, kept: facilities.length },
         "fetched facilities"
       );
       return facilities;
     } catch (err) {
-      log21.warn({ err, facilityType: entry.label, url }, "Overpass request failed");
+      log11.warn({ err, facilityType: entry.label, url }, "Overpass request failed");
       stats.overpass.push({
         facilityType: entry.label,
         mirror: mirrorLabel,
@@ -83448,7 +80990,7 @@ async function fetchFacilityType(entry, stats) {
       });
     }
   }
-  log21.warn({ facilityType: entry.label }, "all URLs failed, skipping");
+  log11.warn({ facilityType: entry.label }, "all URLs failed, skipping");
   return [];
 }
 async function fetchWaterFacilities() {
@@ -83492,7 +81034,7 @@ async function fetchWaterFacilities() {
         all.push(...facilities);
       }
     } catch (err) {
-      log21.warn({ facilityType: entry.label, err }, "query failed, continuing");
+      log11.warn({ facilityType: entry.label, err }, "query failed, continuing");
     }
   }
   if (succeeded === 0) {
@@ -83529,7 +81071,7 @@ async function fetchWaterFacilities() {
     count: deduped.filter((f) => (f.notabilityScore ?? 0) >= lo && (f.notabilityScore ?? 0) < hi).length
   }));
   stats.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  log21.info(
+  log11.info(
     { total: deduped.length, succeeded, totalQueries: FACILITY_QUERIES.length, stats },
     "water facilities fetch complete"
   );
@@ -83537,7 +81079,7 @@ async function fetchWaterFacilities() {
 }
 
 // server/adapters/overpass.ts
-var log22 = logger.child({ module: "overpass" });
+var log12 = logger.child({ module: "overpass" });
 var OVERPASS_URL2 = "https://overpass-api.de/api/interpreter";
 var OVERPASS_FALLBACK2 = "https://overpass.private.coffee/api/interpreter";
 var TIMEOUT_MS2 = 6e4;
@@ -83675,7 +81217,7 @@ async function fetchSites() {
       });
       statusCode = res.status;
       if (!res.ok) {
-        log22.warn({ url, status: res.status }, "Overpass returned error status");
+        log12.warn({ url, status: res.status }, "Overpass returned error status");
         stats.overpass.push({
           facilityType: "sites",
           mirror: mirrorLabel,
@@ -83744,7 +81286,7 @@ async function fetchSites() {
       stats.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
       return { sites: kept, stats };
     } catch (err) {
-      log22.warn({ err, url }, "Overpass request failed");
+      log12.warn({ err, url }, "Overpass request failed");
       stats.overpass.push({
         facilityType: "sites",
         mirror: mirrorLabel,
@@ -83758,84 +81300,3019 @@ async function fetchSites() {
   throw new Error("All Overpass API instances failed");
 }
 
-// server/routes/sites.ts
-var log23 = logger.child({ module: "sites" });
-var sitesQuerySchema = z8.object({
-  refresh: z8.enum(["true", "false"]).optional().transform((v) => v === "true")
-});
+// server/routes/cron-warm.ts
+var log13 = logger.child({ module: "cron-warm" });
+var SITES_REDIS_TTL_SEC = 259200;
 var SITES_KEY = "sites:v3";
-var LOGICAL_TTL_MS3 = SITES_CACHE_TTL;
-var REDIS_TTL_SEC3 = 259200;
-var sitesRouter = Router5();
-sitesRouter.get("/", validateQuery(sitesQuerySchema), async (_req, res) => {
-  const { refresh: forceRefresh } = res.locals.validatedQuery;
-  const cached = await cacheGetSafe(SITES_KEY, LOGICAL_TTL_MS3);
-  if (cached && !cached.stale && !forceRefresh) {
-    const payload = cached.data;
-    return sendValidated(res, sitesResponseSchema, {
-      data: payload.sites,
-      stale: cached.stale,
-      lastFresh: cached.lastFresh,
-      filterStats: {
-        ...payload.filterStats,
-        source: "redis",
-        generatedAt: new Date(cached.lastFresh).toISOString()
-      }
-    });
+var WATER_KEY = "water:facilities:v3";
+var cronWarmRouter = Router2();
+cronWarmRouter.get("/", async (_req, res) => {
+  const start = Date.now();
+  log13.info("starting cache pre-warm");
+  const results = await Promise.allSettled([
+    (async () => {
+      const { sites, stats } = await fetchSites();
+      await cacheSetSafe(SITES_KEY, { sites, filterStats: stats }, SITES_REDIS_TTL_SEC);
+      return sites.length;
+    })(),
+    (async () => {
+      const { facilities, stats } = await fetchWaterFacilities();
+      await cacheSetSafe(WATER_KEY, { facilities, filterStats: stats }, WATER_REDIS_TTL_SEC);
+      return facilities.length;
+    })()
+  ]);
+  const summary = {
+    sites: results[0].status === "fulfilled" ? { ok: true, count: results[0].value } : { ok: false, error: String(results[0].reason) },
+    water: results[1].status === "fulfilled" ? { ok: true, count: results[1].value } : { ok: false, error: String(results[1].reason) },
+    durationMs: Date.now() - start
+  };
+  const allOk = results.every((r) => r.status === "fulfilled");
+  const logLevel = allOk ? "info" : "warn";
+  log13[logLevel](summary, "cache pre-warm complete");
+  res.json({ status: allOk ? "ok" : "partial", ...summary });
+});
+
+// server/routes/dashboardAuth.ts
+import { Router as Router3 } from "express";
+
+// server/middleware/dashboardAuth.ts
+import { timingSafeEqual } from "crypto";
+function dashboardAuth(req, res, next) {
+  if (process.env.NODE_ENV !== "production") {
+    next();
+    return;
   }
-  if (!forceRefresh) {
-    const snapshot = loadSitesSnapshot();
-    if (snapshot) {
-      await cacheSetSafe(
-        SITES_KEY,
-        { sites: snapshot.sites, filterStats: snapshot.stats },
-        REDIS_TTL_SEC3
+  const expected = process.env.DASHBOARD_PASSWORD ?? "";
+  if (expected === "") {
+    res.status(503).json({ error: "auth_not_configured" });
+    return;
+  }
+  const header = req.headers.authorization ?? "";
+  const prefix = "Bearer ";
+  if (!header.startsWith(prefix)) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  const provided = header.slice(prefix.length);
+  if (provided.length !== expected.length) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (!timingSafeEqual(a, b)) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  next();
+}
+
+// server/routes/dashboardAuth.ts
+var dashboardAuthRouter = Router3();
+dashboardAuthRouter.get("/auth-check", dashboardAuth, (_req, res) => {
+  const isProd2 = process.env.NODE_ENV === "production";
+  res.json({ ok: true, mode: isProd2 ? "authenticated" : "dev-bypass" });
+});
+
+// server/routes/eval-cron.ts
+import { Router as Router4 } from "express";
+var log14 = logger.child({ module: "eval-cron" });
+var evalCronRouter = Router4();
+evalCronRouter.post("/", async (req, res) => {
+  if (env.CRON_SECRET) {
+    const auth = req.header("Authorization") ?? req.header("authorization") ?? "";
+    const expected = `Bearer ${env.CRON_SECRET}`;
+    if (auth !== expected) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+  }
+  const t0 = Date.now();
+  try {
+    const score = await runEval();
+    const durationMs = Date.now() - t0;
+    const ratioWithin20km = score.total > 0 ? score.within20km / score.total : 0;
+    log14.info({ score, durationMs, ratioWithin20km }, "eval cron run complete");
+    res.status(200).json({
+      status: "ok",
+      score,
+      durationMs,
+      ratioWithin20km
+    });
+  } catch (err) {
+    const durationMs = Date.now() - t0;
+    const message = err instanceof Error ? err.message : String(err);
+    log14.error({ err: message, durationMs }, "eval cron run failed");
+    res.status(500).json({ status: "error", error: message, durationMs });
+  }
+});
+
+// server/routes/events.ts
+import { Router as Router5 } from "express";
+import { z as z6 } from "zod";
+
+// server/adapters/gdelt.ts
+import AdmZip from "adm-zip";
+var log15 = logger.child({ module: "gdelt" });
+var GDELT_LASTUPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt";
+var MIDDLE_EAST_FIPS = /* @__PURE__ */ new Set([
+  "IR",
+  // Iran
+  "IZ",
+  // Iraq (FIPS, not ISO "IQ")
+  "SY",
+  // Syria
+  "TU",
+  // Turkey (FIPS, not ISO "TR")
+  "SA",
+  // Saudi Arabia
+  "YM",
+  // Yemen
+  "MU",
+  // Oman
+  "AE",
+  // United Arab Emirates
+  "QA",
+  // Qatar
+  "BA",
+  // Bahrain
+  "KU",
+  // Kuwait
+  "JO",
+  // Jordan
+  "IS",
+  // Israel (FIPS, not ISO "IL")
+  "LE",
+  // Lebanon
+  "AF",
+  // Afghanistan
+  "PK"
+  // Pakistan
+]);
+var CONFLICT_ROOT_CODES = /* @__PURE__ */ new Set(["18", "19", "20"]);
+var COL = {
+  GLOBALEVENTID: 0,
+  SQLDATE: 1,
+  Actor1Name: 6,
+  Actor1CountryCode: 7,
+  Actor2Name: 16,
+  Actor2CountryCode: 17,
+  EventCode: 26,
+  EventBaseCode: 27,
+  EventRootCode: 28,
+  GoldsteinScale: 30,
+  NumMentions: 31,
+  NumSources: 32,
+  ActionGeo_Type: 51,
+  ActionGeo_FullName: 52,
+  ActionGeo_CountryCode: 53,
+  ActionGeo_ADM1Code: 54,
+  ActionGeo_ADM2Code: 55,
+  ActionGeo_Lat: 56,
+  ActionGeo_Long: 57,
+  ActionGeo_FeatureID: 58,
+  SOURCEURL: 60
+};
+async function getExportUrl() {
+  const res = await fetch(GDELT_LASTUPDATE_URL);
+  if (!res.ok) {
+    throw new Error(`GDELT lastupdate.txt failed: ${res.status}`);
+  }
+  const text = await res.text();
+  const lines = text.trim().split("\n");
+  const exportLine = lines.find((l) => l.includes(".export.CSV.zip"));
+  if (!exportLine) {
+    throw new Error("No export URL found in lastupdate.txt");
+  }
+  const parts = exportLine.trim().split(" ");
+  const url = parts[2];
+  if (!url) {
+    throw new Error("Malformed lastupdate.txt: missing URL column");
+  }
+  return url;
+}
+async function downloadAndUnzip(url) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`GDELT export download failed: ${res.status}`);
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const zip = new AdmZip(buffer);
+  const entries = zip.getEntries();
+  const firstEntry = entries[0];
+  if (!firstEntry) {
+    throw new Error("GDELT ZIP archive contained no entries");
+  }
+  return firstEntry.getData().toString("utf8");
+}
+function getCol(cols, idx) {
+  return cols[idx] ?? "";
+}
+var BASE_CODE_MAP = {
+  "181": "targeted",
+  // Abduction / hostage-taking
+  "182": "on_ground",
+  // Physical assault
+  "183": "explosion",
+  // Bombing
+  "184": "on_ground",
+  // Use as human shield
+  "185": "targeted",
+  // Assassination attempt
+  "186": "targeted",
+  // Assassination
+  "190": "on_ground",
+  // Conventional military force
+  "191": "other",
+  // Blockade
+  "193": "on_ground",
+  // Small arms / light weapons
+  "194": "explosion",
+  // Artillery / tank support (shelling)
+  "195": "airstrike",
+  // Aerial weapons
+  "196": "other",
+  // Ceasefire violation
+  "200": "other",
+  // Unconventional mass violence
+  "201": "other",
+  // Mass expulsion
+  "202": "other",
+  // Mass killings
+  "203": "other",
+  // Ethnic cleansing
+  "204": "other"
+  // WMD
+};
+var ROOT_FALLBACK = {
+  "18": "on_ground",
+  "19": "on_ground",
+  "20": "other"
+};
+function classifyByBaseCode(eventBaseCode, eventRootCode) {
+  return BASE_CODE_MAP[eventBaseCode] ?? ROOT_FALLBACK[eventRootCode] ?? "on_ground";
+}
+function parseSqlDate(sqlDate) {
+  const year = parseInt(sqlDate.slice(0, 4), 10);
+  const month = parseInt(sqlDate.slice(4, 6), 10) - 1;
+  const day = parseInt(sqlDate.slice(6, 8), 10);
+  return Date.UTC(year, month, day);
+}
+var BASE_CODE_DESCRIPTIONS = {
+  "180": "Unconventional violence",
+  "181": "Abduction / hostage-taking",
+  "182": "Physical assault",
+  "183": "Bombing",
+  "184": "Use as human shield",
+  "185": "Assassination attempt",
+  "186": "Assassination",
+  "190": "Conventional military force",
+  "191": "Blockade / movement restriction",
+  "193": "Small arms / light weapons",
+  "194": "Artillery / tank support",
+  "195": "Aerial weapons",
+  "196": "Ceasefire violation",
+  "200": "Unconventional mass violence",
+  "201": "Mass expulsion",
+  "202": "Mass killings",
+  "203": "Ethnic cleansing",
+  "204": "Weapons of mass destruction"
+};
+function describeEvent(eventBaseCode) {
+  return BASE_CODE_DESCRIPTIONS[eventBaseCode] ?? "Unknown conflict";
+}
+function actionGeoTypeToPrecision(geoType) {
+  switch (geoType) {
+    case 4:
+      return "exact";
+    // landmark — most precise GDELT geocoding
+    case 3:
+      return "city";
+    // city-level — ~5km uncertainty
+    case 2:
+      return "region";
+    // ADM1/state — ~25km uncertainty
+    case 1:
+      return "region";
+    // country-level — ~25km uncertainty
+    default:
+      return void 0;
+  }
+}
+function normalizeGdeltEvent(cols, lat, lng) {
+  const eventBaseCode = getCol(cols, COL.EventBaseCode);
+  const eventRootCode = getCol(cols, COL.EventRootCode);
+  const eventCode = getCol(cols, COL.EventCode);
+  const sqlDate = getCol(cols, COL.SQLDATE);
+  const actionGeoType = parseInt(getCol(cols, COL.ActionGeo_Type), 10) || void 0;
+  const precision = actionGeoTypeToPrecision(actionGeoType);
+  return {
+    id: `gdelt-${getCol(cols, COL.GLOBALEVENTID)}`,
+    type: classifyByBaseCode(eventBaseCode, eventRootCode),
+    lat,
+    lng,
+    timestamp: parseSqlDate(sqlDate),
+    label: `${getCol(cols, COL.ActionGeo_FullName)}: ${describeEvent(eventBaseCode)}`,
+    data: {
+      eventType: describeEvent(eventBaseCode),
+      subEventType: `CAMEO ${eventCode}`,
+      fatalities: 0,
+      // GDELT does not track fatalities
+      actor1: getCol(cols, COL.Actor1Name),
+      actor2: getCol(cols, COL.Actor2Name),
+      notes: "",
+      source: getCol(cols, COL.SOURCEURL),
+      goldsteinScale: parseFloat(getCol(cols, COL.GoldsteinScale)) || 0,
+      locationName: getCol(cols, COL.ActionGeo_FullName),
+      cameoCode: eventCode,
+      numMentions: parseInt(getCol(cols, COL.NumMentions), 10) || void 0,
+      numSources: parseInt(getCol(cols, COL.NumSources), 10) || void 0,
+      actionGeoType,
+      precision
+    }
+  };
+}
+function parseAndFilter(csv, bellingcatArticles) {
+  const lines = csv.trim().split("\n");
+  const rawCount = lines.length;
+  const config2 = getConfig();
+  const excludedCameo = new Set(config2.eventExcludedCameo);
+  const best = /* @__PURE__ */ new Map();
+  let geoDiscardCount = 0;
+  for (const line of lines) {
+    const cols = line.split("	");
+    if (cols.length < 61) continue;
+    const eventRootCode = getCol(cols, COL.EventRootCode);
+    const countryCode = getCol(cols, COL.ActionGeo_CountryCode);
+    if (!CONFLICT_ROOT_CODES.has(eventRootCode)) continue;
+    const eventBaseCode = getCol(cols, COL.EventBaseCode);
+    if (excludedCameo.has(eventBaseCode)) continue;
+    if (!MIDDLE_EAST_FIPS.has(countryCode)) continue;
+    const fullName = getCol(cols, COL.ActionGeo_FullName);
+    if (!isGeoValid(fullName, countryCode)) {
+      geoDiscardCount++;
+      log15.warn(
+        { eventId: getCol(cols, COL.GLOBALEVENTID), fullName, countryCode },
+        "discarded: FullName contradicts FIPS"
       );
-      log23.info(
-        { count: snapshot.sites.length, generatedAt: snapshot.generatedAt },
-        "serving sites from committed snapshot; Overpass untouched"
+      continue;
+    }
+    const numSources = parseInt(getCol(cols, COL.NumSources), 10) || 0;
+    if (numSources < config2.eventMinSources) continue;
+    const actor1Country = getCol(cols, COL.Actor1CountryCode).trim();
+    const actor2Country = getCol(cols, COL.Actor2CountryCode).trim();
+    if (!actor1Country && !actor2Country) continue;
+    const lat = parseFloat(getCol(cols, COL.ActionGeo_Lat));
+    const lng = parseFloat(getCol(cols, COL.ActionGeo_Long));
+    if (isNaN(lat) || isNaN(lng)) continue;
+    const key = `${getCol(cols, COL.SQLDATE)}|${getCol(cols, COL.EventCode)}|${lat}|${lng}`;
+    const mentions = parseInt(getCol(cols, COL.NumMentions), 10) || 0;
+    const existing = best.get(key);
+    if (!existing || mentions > existing.mentions) {
+      best.set(key, { cols, lat, lng, mentions });
+    }
+  }
+  const geoValidCount = best.size;
+  const { eventConfidenceThreshold, eventCentroidPenalty } = config2;
+  let reclassifyCount = 0;
+  let thresholdDiscardCount = 0;
+  const results = [];
+  for (const entry of best.values()) {
+    let entity = normalizeGdeltEvent(entry.cols, entry.lat, entry.lng);
+    const origType = entity.type;
+    entity = applyGoldsteinSanity(entity);
+    if (entity.type !== origType) {
+      reclassifyCount++;
+      const ceiling = GOLDSTEIN_CEILINGS[origType]?.ceiling;
+      log15.info(
+        {
+          id: entity.id,
+          from: origType,
+          to: entity.type,
+          goldstein: entity.data.goldsteinScale,
+          ceiling
+        },
+        "reclassified event"
       );
-      return sendValidated(res, sitesResponseSchema, {
-        data: snapshot.sites,
-        stale: false,
-        lastFresh: Date.now(),
-        filterStats: snapshot.stats
-        // source='snapshot' already forced in loadSitesSnapshot
+    }
+    const geoPrecision = detectCentroid(entity.lat, entity.lng);
+    entity = { ...entity, data: { ...entity.data, geoPrecision } };
+    let confidence = computeEventConfidence(entity, geoPrecision);
+    const actionGeoType = entity.data.actionGeoType;
+    if (actionGeoType === 3 || actionGeoType === 4) {
+      confidence *= eventCentroidPenalty;
+    }
+    entity = { ...entity, data: { ...entity.data, confidence } };
+    if (confidence < eventConfidenceThreshold) {
+      thresholdDiscardCount++;
+      log15.warn(
+        { id: entity.id, confidence: +confidence.toFixed(3), threshold: eventConfidenceThreshold },
+        "discarded: below confidence threshold"
+      );
+      continue;
+    }
+    if (bellingcatArticles && bellingcatArticles.length > 0) {
+      const corroboration = checkBellingcatCorroboration(entity, bellingcatArticles);
+      if (corroboration.matched) {
+        confidence = Math.min(1, confidence + config2.bellingcatCorroborationBoost);
+        entity = { ...entity, data: { ...entity.data, confidence } };
+        log15.info(
+          {
+            id: entity.id,
+            boost: config2.bellingcatCorroborationBoost,
+            confidence: +confidence.toFixed(3),
+            article: corroboration.article.url
+          },
+          "Bellingcat corroboration boost"
+        );
+      }
+    }
+    results.push(entity);
+  }
+  log15.info(
+    {
+      rawCount,
+      geoValidCount,
+      geoDiscardCount,
+      reclassifyCount,
+      aboveThreshold: geoValidCount - thresholdDiscardCount,
+      finalCount: results.length
+    },
+    "pipeline summary"
+  );
+  return results;
+}
+async function fetchEvents(bellingcatArticles) {
+  const start = Date.now();
+  const exportUrl = await getExportUrl();
+  const csv = await downloadAndUnzip(exportUrl);
+  const events = parseAndFilter(csv, bellingcatArticles);
+  log15.info({ count: events.length, durationMs: Date.now() - start }, "fetched events");
+  return events;
+}
+function generateBackfillUrls(fromTs, toTs, intervalMs) {
+  const urls = [];
+  const interval = intervalMs ?? 6 * 60 * 60 * 1e3;
+  const start = new Date(fromTs);
+  start.setUTCHours(0, 0, 0, 0);
+  let cursor = start.getTime();
+  while (cursor <= toTs) {
+    const d = new Date(cursor);
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const hh = String(d.getUTCHours()).padStart(2, "0");
+    urls.push(`http://data.gdeltproject.org/gdeltv2/${yyyy}${mm}${dd}${hh}0000.export.CSV.zip`);
+    cursor += interval;
+  }
+  return urls;
+}
+async function backfillEvents(days) {
+  const toTs = Date.now();
+  const fromTs = toTs - days * 24 * 60 * 60 * 1e3;
+  const start = Date.now();
+  const urls = generateBackfillUrls(fromTs, toTs);
+  log15.info({ fileCount: urls.length, days, sampling: "4/day" }, "backfill started");
+  const merged = /* @__PURE__ */ new Map();
+  const BATCH_SIZE5 = 5;
+  for (let i = 0; i < urls.length; i += BATCH_SIZE5) {
+    const batch = urls.slice(i, i + BATCH_SIZE5);
+    const results = await Promise.allSettled(
+      batch.map(async (url) => {
+        const csv = await downloadAndUnzip(url);
+        return parseAndFilter(csv);
+      })
+    );
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        for (const e of result.value) {
+          if (!merged.has(e.id)) {
+            merged.set(e.id, e);
+          }
+        }
+      }
+    }
+  }
+  const events = Array.from(merged.values());
+  log15.info(
+    { count: events.length, fileCount: urls.length, durationMs: Date.now() - start },
+    "backfill complete"
+  );
+  return events;
+}
+
+// server/cache/devFileCache.ts
+import { readFileSync as readFileSync4, writeFileSync, mkdirSync, existsSync as existsSync4 } from "fs";
+import { join } from "path";
+var log16 = logger.child({ module: "dev-file-cache" });
+var DEV_CACHE_DIR = join(process.cwd(), ".dev-cache");
+var LLM_EVENTS_FILE = join(DEV_CACHE_DIR, "llm-events.json");
+var LLM_EVENTS_FILE_V2 = join(DEV_CACHE_DIR, "llm-events-v2.json");
+var MAX_AGE_MS = 48 * 60 * 60 * 1e3;
+var isDev = process.env.NODE_ENV === "development";
+function saveDevLLMCache(data) {
+  if (!isDev) return;
+  try {
+    if (!existsSync4(DEV_CACHE_DIR)) {
+      mkdirSync(DEV_CACHE_DIR, { recursive: true });
+    }
+    const entry = { data, savedAt: Date.now() };
+    writeFileSync(LLM_EVENTS_FILE, JSON.stringify(entry));
+    log16.info("saved LLM events to dev file cache");
+  } catch (err) {
+    log16.warn({ err }, "failed to write dev file cache");
+  }
+}
+function loadDevLLMCache() {
+  if (!isDev) return null;
+  try {
+    if (!existsSync4(LLM_EVENTS_FILE)) return null;
+    const raw = readFileSync4(LLM_EVENTS_FILE, "utf-8");
+    const entry = JSON.parse(raw);
+    const age = Date.now() - entry.savedAt;
+    if (age > MAX_AGE_MS) {
+      log16.info({ ageMs: age }, "dev file cache too old, ignoring");
+      return null;
+    }
+    log16.info(
+      { ageMs: age, ageMin: Math.round(age / 6e4) },
+      "loaded LLM events from dev file cache"
+    );
+    return entry.data;
+  } catch (err) {
+    log16.warn({ err }, "failed to read dev file cache");
+    return null;
+  }
+}
+function saveDevLLMCacheV2(data) {
+  if (!isDev) return;
+  try {
+    if (!existsSync4(DEV_CACHE_DIR)) {
+      mkdirSync(DEV_CACHE_DIR, { recursive: true });
+    }
+    const entry = { data, savedAt: Date.now() };
+    writeFileSync(LLM_EVENTS_FILE_V2, JSON.stringify(entry));
+    log16.info("saved LLM events to dev file cache (v2)");
+  } catch (err) {
+    log16.warn({ err }, "failed to write dev file cache (v2)");
+  }
+}
+function loadDevLLMCacheV2() {
+  if (!isDev) return null;
+  try {
+    if (!existsSync4(LLM_EVENTS_FILE_V2)) return null;
+    const raw = readFileSync4(LLM_EVENTS_FILE_V2, "utf-8");
+    const entry = JSON.parse(raw);
+    const age = Date.now() - entry.savedAt;
+    if (age > MAX_AGE_MS) {
+      log16.info({ ageMs: age }, "dev file cache (v2) too old, ignoring");
+      return null;
+    }
+    log16.info(
+      { ageMs: age, ageMin: Math.round(age / 6e4) },
+      "loaded LLM events from dev file cache (v2)"
+    );
+    return entry.data;
+  } catch (err) {
+    log16.warn({ err }, "failed to read dev file cache (v2)");
+    return null;
+  }
+}
+var WATER_FACILITIES_FILE = join(DEV_CACHE_DIR, "water-facilities.json");
+var WATER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
+function saveDevWaterCache(data) {
+  if (!isDev) return;
+  try {
+    if (!existsSync4(DEV_CACHE_DIR)) mkdirSync(DEV_CACHE_DIR, { recursive: true });
+    const entry = { data, savedAt: Date.now() };
+    writeFileSync(WATER_FACILITIES_FILE, JSON.stringify(entry));
+    log16.info("saved water facilities to dev file cache");
+  } catch (err) {
+    log16.warn({ err }, "failed to write water facilities dev cache");
+  }
+}
+function loadDevWaterCache() {
+  if (!isDev) return null;
+  try {
+    if (!existsSync4(WATER_FACILITIES_FILE)) return null;
+    const raw = readFileSync4(WATER_FACILITIES_FILE, "utf-8");
+    const entry = JSON.parse(raw);
+    const age = Date.now() - entry.savedAt;
+    if (age > WATER_MAX_AGE_MS) {
+      log16.info({ ageMs: age }, "water facility dev cache too old, ignoring");
+      return null;
+    }
+    log16.info(
+      { ageMs: age, ageHr: Math.round(age / 36e5) },
+      "loaded water facilities from dev file cache"
+    );
+    return entry.data;
+  } catch (err) {
+    log16.warn({ err }, "failed to read water facility dev cache");
+    return null;
+  }
+}
+
+// server/lib/eventGrouping.ts
+function haversineKm5(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+var GROUP_RADIUS_KM = 50;
+var MS_PER_DAY = 864e5;
+function cameoRoot(cameoCode) {
+  return cameoCode.slice(0, 2);
+}
+function dayBucket(timestamp) {
+  return Math.floor(timestamp / MS_PER_DAY);
+}
+function computeCentroid(entities) {
+  let latSum = 0;
+  let lngSum = 0;
+  for (const e of entities) {
+    latSum += e.lat;
+    lngSum += e.lng;
+  }
+  return { lat: latSum / entities.length, lng: lngSum / entities.length };
+}
+function groupGdeltRows(entities) {
+  const sorted = [...entities].sort((a, b) => a.timestamp - b.timestamp);
+  const groups = [];
+  for (const entity of sorted) {
+    const entityDay = dayBucket(entity.timestamp);
+    const entityRoot = cameoRoot(entity.data.cameoCode);
+    let matched = false;
+    for (const group of groups) {
+      const groupDay = dayBucket(group.timestamp);
+      if (groupDay !== entityDay) continue;
+      if (cameoRoot(group.primaryCameo) !== entityRoot) continue;
+      if (haversineKm5(group.centroidLat, group.centroidLng, entity.lat, entity.lng) > GROUP_RADIUS_KM)
+        continue;
+      group.entities.push(entity);
+      const centroid = computeCentroid(group.entities);
+      group.centroidLat = centroid.lat;
+      group.centroidLng = centroid.lng;
+      group.totalMentions += entity.data.numMentions ?? 0;
+      group.totalSources += entity.data.numSources ?? 0;
+      if (entity.data.source) {
+        group.sourceUrls.push(entity.data.source);
+      }
+      if (entity.timestamp < group.timestamp) {
+        group.timestamp = entity.timestamp;
+      }
+      matched = true;
+      break;
+    }
+    if (!matched) {
+      groups.push({
+        key: `grp-${entityDay}-${entityRoot}-${groups.length}`,
+        entities: [entity],
+        centroidLat: entity.lat,
+        centroidLng: entity.lng,
+        primaryCameo: entity.data.cameoCode,
+        timestamp: entity.timestamp,
+        totalMentions: entity.data.numMentions ?? 0,
+        totalSources: entity.data.numSources ?? 0,
+        sourceUrls: entity.data.source ? [entity.data.source] : []
       });
     }
   }
+  return groups;
+}
+
+// server/lib/llmEventExtractor.v2.ts
+var log17 = logger.child({ module: "llm-extractor-v2" });
+var BATCH_SIZE2 = 2;
+var TEMPORAL_CONTEXT_COUNT2 = 3;
+var TEMPORAL_CONTEXT_BBOX_DEG2 = 1;
+var TEMPORAL_CONTEXT_WINDOW_MS2 = 72 * 36e5;
+var NEWS_MATCH_WINDOW_MS2 = 24 * 36e5;
+var NEWS_KEY2 = "news:gdelt";
+var EVENTS_LLM_V2_KEY = "events:llm:v2";
+var EVENTS_LLM_V2_PARTIAL_KEY = "events:llm:v2:partial";
+var SYSTEM_PROMPT_V2 = [
+  "You are a conflict event analyst extracting structured data from GDELT event records.",
+  "",
+  "For each event group, extract (all fields REQUIRED unless stated nullable):",
+  "1. location: A structured place hierarchy \u2014 each field NULLABLE when the source text does not support it:",
+  '   - country: full English name (e.g., "Iran", "Iraq") or null',
+  "   - admin1: province / state / governorate name or null",
+  "   - city: city or town name or null",
+  "   - neighborhood: neighborhood / district / suburb name or null",
+  '   - landmark: specific facility / site name (e.g., "Natanz nuclear facility") or null',
+  "   - confidence: number between 0 and 1 indicating how confident you are in this location",
+  '2. type: one of "airstrike", "on_ground", "explosion", "targeted", "other"',
+  "3. confidence: number between 0 and 1 for overall extraction confidence",
+  "4. reasoning: <=200 characters \u2014 cite which signals led to the location pick (news source, Bellingcat, GDELT metadata, etc.)",
+  '5. weaponType: one of "airstrike","drone","missile","artillery","small_arms","IED", or null if not stated',
+  '6. targetType: one of "military","infrastructure","civilian","leadership", or null if not stated',
+  '7. timeOfDay: UTC HH:MM (e.g., "03:15") if the source mentions a specific strike time, else null',
+  "8. durationMinutes: non-negative integer if the source mentions duration, else null",
+  "9. actors: array of actor names involved",
+  '10. severity: "critical" | "high" | "medium" | "low"',
+  "11. summary: 2-3 sentence description of what happened",
+  "12. casualties: { killed: integer | null, injured: integer | null, unknown: boolean }",
+  "13. sourceCount: integer \u2014 count of independent sources",
+  "",
+  "Hard rules:",
+  "- NEVER emit coordinates (lat/lng). Only output place names.",
+  '- NEVER emit a "precision" field \u2014 the server derives it from which hierarchy fields you populated.',
+  "- Use null when a field is not supported by the source text \u2014 do NOT guess.",
+  "- Prefer the NEWS BLOCK and BELLINGCAT BLOCK when present; they are higher-tier signals than GDELT metadata alone.",
+  '- The TEMPORAL BLOCK lists prior events in the same region \u2014 use it to normalize names (e.g., "the Jobar substation").'
+].join("\n");
+var LLM_REDIS_TTL_SEC2 = 9e3;
+function buildBatchUserPromptV2(contexts) {
+  const lines = ["Analyze these GDELT event groups and extract structured data:\n"];
+  for (let i = 0; i < contexts.length; i++) {
+    const ctx = contexts[i];
+    if (!ctx) continue;
+    const { group, matchedNews, bellingcatHits, temporalEvents } = ctx;
+    const e = group.entities[0];
+    lines.push(`--- Event Group ${i + 1} (key: ${group.key}) ---`);
+    lines.push(`Date: ${new Date(group.timestamp).toISOString().slice(0, 10)}`);
+    lines.push(`CAMEO Code: ${group.primaryCameo}`);
+    lines.push(`Location (GDELT ActionGeo): ${e?.data.locationName ?? "unknown"}`);
+    lines.push(`Actors: ${e?.data.actor1 ?? "?"} vs ${e?.data.actor2 ?? "?"}`);
+    lines.push(`Goldstein Scale: ${e?.data.goldsteinScale ?? "n/a"}`);
+    lines.push(`Total Mentions: ${group.totalMentions}, Total Sources: ${group.totalSources}`);
+    lines.push(`Rows in group: ${group.entities.length}`);
+    if (group.sourceUrls.length > 0) {
+      lines.push(`Source URLs: ${group.sourceUrls.slice(0, 3).join(", ")}`);
+    } else {
+      lines.push("Source URLs: (none)");
+    }
+    if (matchedNews.length > 0) {
+      lines.push("");
+      lines.push("--- NEWS BLOCK (tier-tagged) ---");
+      for (const art of matchedNews.slice(0, 5)) {
+        const tier = getSourceTier("", hostnameOf2(art.url));
+        const tag = tier === 1 ? "T1" : tier === 2 ? "T2" : "T3";
+        lines.push(`[${tag}] ${art.title.slice(0, 160)}`);
+      }
+    }
+    if (bellingcatHits.length > 0) {
+      lines.push("");
+      lines.push("--- BELLINGCAT OSINT (high-trust) ---");
+      for (const b of bellingcatHits.slice(0, 3)) {
+        lines.push(
+          `${b.title.slice(0, 160)} [Bellingcat coord hint: ${b.lat.toFixed(2)}, ${b.lng.toFixed(2)}]`
+        );
+      }
+    }
+    if (temporalEvents.length > 0) {
+      lines.push("");
+      lines.push(`--- TEMPORAL CONTEXT (${temporalEvents.length} recent events in region) ---`);
+      for (const t of temporalEvents) {
+        const locStr = [t.location.landmark, t.location.neighborhood, t.location.city].filter(Boolean).join(", ") || t.location.country || "unknown";
+        const ago = `${Math.round((group.timestamp - t.timestamp) / 36e5)}h ago`;
+        lines.push(`- ${locStr} (${ago}): ${t.summary.slice(0, 120)}`);
+      }
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+function hostnameOf2(url) {
   try {
-    const { sites, stats } = await fetchSites();
-    await cacheSetSafe(SITES_KEY, { sites, filterStats: stats }, REDIS_TTL_SEC3);
-    sendValidated(res, sitesResponseSchema, {
-      data: sites,
-      stale: false,
-      lastFresh: Date.now(),
-      filterStats: stats
-    });
-  } catch (err) {
-    log23.error({ err }, "Overpass error");
-    if (cached) {
-      const payload = cached.data;
-      sendValidated(res, sitesResponseSchema, {
-        data: payload.sites,
-        stale: true,
-        lastFresh: cached.lastFresh,
-        filterStats: {
-          ...payload.filterStats,
-          source: "redis",
-          generatedAt: new Date(cached.lastFresh).toISOString()
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+async function buildPromptContext2(group) {
+  const matchedNews = [];
+  const bellingcatHits = [];
+  try {
+    const news = await cacheGetSafe(NEWS_KEY2, 0);
+    if (news?.data) {
+      for (const cluster of news.data) {
+        for (const art of cluster.articles ?? []) {
+          const pubMs = typeof art.publishedAt === "number" ? art.publishedAt : NaN;
+          if (!Number.isFinite(pubMs)) continue;
+          if (Math.abs(pubMs - group.timestamp) > NEWS_MATCH_WINDOW_MS2) continue;
+          matchedNews.push({
+            title: art.title,
+            url: art.url,
+            sourceCountry: art.sourceCountry,
+            publishedAt: pubMs
+          });
+          const geo = extractBellingcatGeo(art.title);
+          if (geo) bellingcatHits.push({ title: art.title, lat: geo.lat, lng: geo.lng });
         }
+      }
+    }
+  } catch (err) {
+    log17.warn({ err }, "news cross-match failed, omitting NEWS+BELLINGCAT blocks");
+  }
+  const temporalEvents = await loadTemporalContext2(group);
+  return { group, matchedNews, bellingcatHits, temporalEvents };
+}
+async function loadTemporalContext2(group) {
+  try {
+    const cached = await cacheGetSafe(EVENTS_LLM_V2_KEY, 0);
+    if (!cached?.data) return [];
+    const out = [];
+    for (const e of cached.data) {
+      if (!e.data?.location || !e.data?.summary || !e.timestamp) continue;
+      if (Math.abs(group.timestamp - e.timestamp) > TEMPORAL_CONTEXT_WINDOW_MS2) continue;
+      if (typeof e.lat === "number" && typeof e.lng === "number") {
+        if (Math.abs(e.lat - group.centroidLat) > TEMPORAL_CONTEXT_BBOX_DEG2) continue;
+        if (Math.abs(e.lng - group.centroidLng) > TEMPORAL_CONTEXT_BBOX_DEG2) continue;
+      }
+      out.push({
+        summary: e.data.summary,
+        location: e.data.location,
+        timestamp: e.timestamp
+      });
+      if (out.length >= TEMPORAL_CONTEXT_COUNT2) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+async function writePartialCache2(events, completed, total, complete) {
+  const payload = {
+    events,
+    progress: `${completed}/${total}`,
+    complete,
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  try {
+    await cacheSetSafe(EVENTS_LLM_V2_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC2);
+  } catch (err) {
+    log17.warn({ err, completed, total, complete }, "partial cache write failed");
+  }
+}
+async function processEventGroupsV2(groups, onBatchComplete) {
+  const matchedNewsByGroup = /* @__PURE__ */ new Map();
+  const bellingcatByGroup = /* @__PURE__ */ new Map();
+  if (groups.length === 0) {
+    return { events: [], matchedNewsByGroup, bellingcatByGroup };
+  }
+  const results = [];
+  let allFailed = true;
+  const totalBatches = Math.ceil(groups.length / BATCH_SIZE2);
+  for (let i = 0; i < groups.length; i += BATCH_SIZE2) {
+    const batch = groups.slice(i, i + BATCH_SIZE2);
+    const batchIndex = Math.floor(i / BATCH_SIZE2);
+    const contexts = await Promise.all(batch.map(buildPromptContext2));
+    for (const ctx of contexts) {
+      matchedNewsByGroup.set(ctx.group.key, ctx.matchedNews);
+      const firstBellingcat = ctx.bellingcatHits[0];
+      if (firstBellingcat) {
+        bellingcatByGroup.set(ctx.group.key, {
+          lat: firstBellingcat.lat,
+          lng: firstBellingcat.lng
+        });
+      }
+    }
+    const userPrompt = buildBatchUserPromptV2(contexts);
+    const content = await withBatchWatchdog(
+      () => callLLM2(
+        [
+          { role: "system", content: SYSTEM_PROMPT_V2 },
+          { role: "user", content: userPrompt }
+        ],
+        EVENT_EXTRACTION_SCHEMA_V2,
+        { batchSize: batch.length }
+      ),
+      {
+        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+        softWarnMs: 6e4,
+        // D-02 hard-coded — only hard cap is env-tunable
+        batchIndex,
+        label: "v2",
+        onTimeout: async () => {
+          for (const g of batch) {
+            await enqueueDLQ({
+              id: g.key,
+              reason: "timeout_watchdog",
+              lastError: `v2 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+              timestamp: Date.now()
+            });
+          }
+          updateProgress({
+            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
+          });
+        },
+        onSoftWarn: (elapsedMs) => {
+          const history = llmProgress.callHistory ?? [];
+          updateProgress({
+            callHistory: [
+              {
+                provider: "cerebras",
+                model: "watchdog-soft-warn",
+                tokensIn: 0,
+                tokensOut: 0,
+                durationMs: elapsedMs,
+                ok: true,
+                batchSize: batch.length,
+                timestamp: Date.now()
+              },
+              ...history
+            ].slice(0, 20)
+          });
+        }
+      }
+    );
+    if (content === null) {
+      log17.warn({ batchIndex }, "batch yielded no content (null or watchdog timeout)");
+      onBatchComplete?.(batchIndex + 1, totalBatches);
+      await writePartialCache2(results, batchIndex + 1, totalBatches, false);
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(content);
+      const validated = batchResponseV2.safeParse(parsed);
+      if (!validated.success) {
+        log17.warn({ issues: validated.error.issues.slice(0, 3), batchIndex }, "v2 Zod parse failed");
+        const errPayload = JSON.stringify(validated.error.issues.slice(0, 3));
+        for (const g of batch) {
+          await enqueueDLQ({
+            id: g.key,
+            reason: "zod_fail",
+            lastError: errPayload,
+            timestamp: Date.now()
+          });
+        }
+        onBatchComplete?.(batchIndex + 1, totalBatches);
+        await writePartialCache2(results, batchIndex + 1, totalBatches, false);
+        continue;
+      }
+      results.push(...validated.data.events);
+      allFailed = false;
+    } catch (err) {
+      log17.warn({ err, batchIndex }, "JSON.parse failed");
+    }
+    onBatchComplete?.(batchIndex + 1, totalBatches);
+    await writePartialCache2(results, batchIndex + 1, totalBatches, false);
+  }
+  await writePartialCache2(results, totalBatches, totalBatches, true);
+  return {
+    events: allFailed ? null : results,
+    matchedNewsByGroup,
+    bellingcatByGroup
+  };
+}
+async function geocodeEnrichedEventsV2(events, groupsByKey, matchedNewsByGroup, bellingcatByGroup, onComplete) {
+  const out = [];
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    if (!ev) continue;
+    const group = groupsByKey.get(ev.groupKey);
+    const matchedNews = matchedNewsByGroup.get(ev.groupKey) ?? [];
+    const ctx = {
+      centroidLat: group?.centroidLat ?? 0,
+      centroidLng: group?.centroidLng ?? 0,
+      // W3 fix — article TITLES, not URLs.
+      articleTitles: matchedNews.slice(0, 3).map((a) => a.title),
+      summary: ev.summary,
+      // W2 fix — bellingcat coord flows through when parse hit in the news
+      // read; null when nothing matched (the resolver's branch 5 falls through
+      // naturally on null).
+      bellingcatCoord: bellingcatByGroup.get(ev.groupKey) ?? null
+    };
+    const resolved = await resolveLocation(ev.location, ctx);
+    const precision = derivePrecision(ev.location);
+    const sourceHostnames = (group?.sourceUrls ?? []).map((u) => hostnameOf2(u));
+    const tiers = [];
+    for (const h of sourceHostnames) {
+      const t = getSourceTier("", h);
+      if (t === 1) tiers.push("gold");
+      else if (t === 2) tiers.push("silver");
+      else if (t === 3) tiers.push("bronze");
+    }
+    const suspect = deriveSuspect({
+      confidence: ev.confidence,
+      precision,
+      actionGeoDistanceKm: resolved.actionGeoDistanceKm,
+      tiers
+    });
+    out.push({
+      ...ev,
+      resolvedLat: resolved.lat,
+      resolvedLng: resolved.lng,
+      geocodeProvenance: resolved.provenance,
+      precision,
+      suspect,
+      actionGeoDistanceKm: resolved.actionGeoDistanceKm,
+      displayName: resolved.displayName
+    });
+    onComplete?.(i + 1, events.length);
+  }
+  return out;
+}
+
+// server/lib/llmEventExtractor.v1.ts
+import { z as z4 } from "zod";
+var log18 = logger.child({ module: "llm-extractor" });
+var casualtiesSchema2 = z4.object({
+  killed: z4.number().int().nullable(),
+  injured: z4.number().int().nullable(),
+  unknown: z4.boolean()
+});
+var enrichedEventSchema = z4.object({
+  groupKey: z4.string(),
+  location: z4.object({
+    name: z4.string(),
+    precision: z4.enum(["exact", "neighborhood", "city", "region"])
+  }),
+  type: z4.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
+  actors: z4.array(z4.string()),
+  severity: z4.enum(["critical", "high", "medium", "low"]),
+  summary: z4.string(),
+  casualties: casualtiesSchema2,
+  sourceCount: z4.number().int()
+});
+var batchResponseSchema = z4.object({
+  events: z4.array(enrichedEventSchema)
+});
+var SYSTEM_PROMPT = `You are a conflict event analyst extracting structured data from GDELT event records.
+
+For each event group, extract:
+1. location: The most specific place name mentioned. Output the name as a string, NOT coordinates.
+2. type: One of: "airstrike", "on_ground", "explosion", "targeted", "other"
+3. actors: Array of actor names involved (military forces, organizations, individuals)
+4. severity: "critical" | "high" | "medium" | "low" based on event impact
+5. summary: 2-3 sentence description of what happened
+6. casualties: { killed, injured, unknown } - only if mentioned in source data
+7. sources: Count of independent sources reporting this event
+
+Rules:
+- Location must be a real place name (city, neighborhood, facility, checkpoint), NOT a country name alone
+- If only a country is identifiable, set precision to "region"
+- If a specific city is identifiable, set precision to "city"
+- If a neighborhood or specific location is identifiable, set precision to "neighborhood" or "exact"
+- Never invent coordinates. Only output place names.
+- If multiple events in the batch, return them as an array.`;
+var EVENT_EXTRACTION_SCHEMA = {
+  type: "object",
+  properties: {
+    events: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          groupKey: { type: "string" },
+          location: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              precision: { type: "string", enum: ["exact", "neighborhood", "city", "region"] }
+            },
+            required: ["name", "precision"],
+            additionalProperties: false
+          },
+          type: {
+            type: "string",
+            enum: ["airstrike", "on_ground", "explosion", "targeted", "other"]
+          },
+          actors: { type: "array", items: { type: "string" } },
+          severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
+          summary: { type: "string" },
+          casualties: {
+            type: "object",
+            properties: {
+              killed: { type: ["integer", "null"] },
+              injured: { type: ["integer", "null"] },
+              unknown: { type: "boolean" }
+            },
+            required: ["killed", "injured", "unknown"],
+            additionalProperties: false
+          },
+          sourceCount: { type: "integer" }
+        },
+        required: [
+          "groupKey",
+          "location",
+          "type",
+          "actors",
+          "severity",
+          "summary",
+          "casualties",
+          "sourceCount"
+        ],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["events"],
+  additionalProperties: false
+};
+var BATCH_SIZE3 = 8;
+var GEOCODE_CACHE_PREFIX2 = "geocode:fwd:";
+var GEOCODE_CACHE_TTL_SEC = 2592e3;
+var GEOCODE_DELAY_MS2 = 1e3;
+function buildBatchUserPrompt(groups) {
+  const lines = ["Analyze these GDELT event groups and extract structured data:\n"];
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    if (!g) continue;
+    const entity = g.entities[0];
+    if (!entity) continue;
+    lines.push(`--- Event Group ${i + 1} (key: ${g.key}) ---`);
+    lines.push(`Date: ${new Date(g.timestamp).toISOString().slice(0, 10)}`);
+    lines.push(`CAMEO Code: ${g.primaryCameo}`);
+    lines.push(`Location: ${entity.data.locationName}`);
+    lines.push(`Actors: ${entity.data.actor1} vs ${entity.data.actor2}`);
+    lines.push(`Goldstein Scale: ${entity.data.goldsteinScale}`);
+    lines.push(`Total Mentions: ${g.totalMentions}, Total Sources: ${g.totalSources}`);
+    lines.push(`Rows in group: ${g.entities.length}`);
+    if (g.sourceUrls.length > 0) {
+      lines.push(`Source URLs: ${g.sourceUrls.slice(0, 3).join(", ")}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+async function processEventGroups(groups, onBatchComplete) {
+  if (groups.length === 0) return [];
+  const results = [];
+  let allFailed = true;
+  const totalBatches = Math.ceil(groups.length / BATCH_SIZE3);
+  for (let i = 0; i < groups.length; i += BATCH_SIZE3) {
+    const batch = groups.slice(i, i + BATCH_SIZE3);
+    const batchIndex = Math.floor(i / BATCH_SIZE3);
+    const userPrompt = buildBatchUserPrompt(batch);
+    const content = await withBatchWatchdog(
+      () => callLLM2(
+        [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userPrompt }
+        ],
+        EVENT_EXTRACTION_SCHEMA,
+        { batchSize: batch.length }
+      ),
+      {
+        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+        softWarnMs: 6e4,
+        // D-02 — hard-coded soft-warn threshold
+        batchIndex,
+        label: "v1",
+        onTimeout: async () => {
+          for (const g of batch) {
+            await enqueueDLQ({
+              id: g.key,
+              reason: "timeout_watchdog",
+              lastError: `v1 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+              timestamp: Date.now()
+            });
+          }
+          updateProgress({
+            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
+          });
+        },
+        onSoftWarn: (elapsedMs) => {
+          const history = llmProgress.callHistory ?? [];
+          const softWarnEntry = {
+            provider: "cerebras",
+            model: "watchdog-soft-warn",
+            tokensIn: 0,
+            tokensOut: 0,
+            durationMs: elapsedMs,
+            ok: true,
+            batchSize: batch.length,
+            timestamp: Date.now()
+          };
+          updateProgress({
+            callHistory: [softWarnEntry, ...history].slice(0, 20)
+          });
+        }
+      }
+    );
+    if (content === null) {
+      log18.warn({ batchIndex }, "LLM returned null for batch (null or watchdog timeout)");
+      onBatchComplete?.(batchIndex + 1, totalBatches);
+      continue;
+    }
+    allFailed = false;
+    try {
+      const parsed = JSON.parse(content);
+      const validated = batchResponseSchema.safeParse(parsed);
+      if (!validated.success) {
+        log18.warn(
+          { errors: validated.error.issues, batchIndex },
+          "Zod validation failed for LLM batch response"
+        );
+        onBatchComplete?.(batchIndex + 1, totalBatches);
+        continue;
+      }
+      results.push(...validated.data.events);
+    } catch (err) {
+      log18.warn({ err, batchIndex }, "Failed to parse LLM response JSON");
+    }
+    onBatchComplete?.(batchIndex + 1, totalBatches);
+  }
+  if (allFailed) return null;
+  return results;
+}
+async function geocodeEnrichedEvents(events, groups, onGeocodeComplete) {
+  const groupMap = /* @__PURE__ */ new Map();
+  for (const g of groups) {
+    groupMap.set(g.key, g);
+  }
+  const results = [];
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    if (!event) continue;
+    const placeName = event.location.name;
+    const cacheKey2 = `${GEOCODE_CACHE_PREFIX2}${placeName.toLowerCase().trim()}`;
+    const cached = await cacheGetSafe(
+      cacheKey2,
+      GEOCODE_CACHE_TTL_SEC * 1e3
+    );
+    if (cached?.data) {
+      results.push({
+        ...event,
+        resolvedLat: cached.data.lat,
+        resolvedLng: cached.data.lng
+      });
+      onGeocodeComplete?.(i + 1, events.length);
+      continue;
+    }
+    if (i > 0) {
+      await new Promise((resolve4) => setTimeout(resolve4, GEOCODE_DELAY_MS2));
+    }
+    const [geocoded] = await forwardGeocodeConstrained(placeName, {
+      countrycodes: ME_COUNTRY_CODES,
+      viewbox: ME_VIEWBOX,
+      limit: 1
+    });
+    if (geocoded) {
+      await cacheSetSafe(
+        cacheKey2,
+        { lat: geocoded.lat, lng: geocoded.lng, displayName: geocoded.displayName },
+        GEOCODE_CACHE_TTL_SEC
+      );
+      results.push({
+        ...event,
+        resolvedLat: geocoded.lat,
+        resolvedLng: geocoded.lng
       });
     } else {
-      throw new AppError(502, "UPSTREAM_FAIL", `overpass fetch failed: ${err.message}`);
+      const group = groupMap.get(event.groupKey);
+      if (group) {
+        log18.warn(
+          { placeName, groupKey: event.groupKey },
+          "Nominatim failed, falling back to GDELT ActionGeo coordinates"
+        );
+        results.push({
+          ...event,
+          resolvedLat: group.centroidLat,
+          resolvedLng: group.centroidLng
+        });
+      } else {
+        log18.warn(
+          { placeName, groupKey: event.groupKey },
+          "No geocoding fallback available, skipping event"
+        );
+      }
+    }
+    onGeocodeComplete?.(i + 1, events.length);
+  }
+  return results;
+}
+
+// server/lib/llmEventExtractor.ts
+async function processEventGroups2(groups, onBatchComplete) {
+  const version = getPipelineVersion();
+  if (version === "v3") {
+    const run = await processEventGroupsV3(groups, onBatchComplete);
+    return {
+      schemaVersion: "v3",
+      events: run.events,
+      matchedNewsByGroup: run.matchedNewsByGroup,
+      bellingcatByGroup: run.bellingcatByGroup
+    };
+  }
+  if (version === "v2") {
+    const run = await processEventGroupsV2(groups, onBatchComplete);
+    return {
+      schemaVersion: "v2",
+      events: run.events,
+      matchedNewsByGroup: run.matchedNewsByGroup,
+      bellingcatByGroup: run.bellingcatByGroup
+    };
+  }
+  const events = await processEventGroups(groups, onBatchComplete);
+  return { schemaVersion: "v1", events };
+}
+async function geocodeEnrichedEvents2(input, groups, onComplete) {
+  if (input.schemaVersion === "v3") {
+    const groupsByKey = new Map(groups.map((g) => [g.key, g]));
+    const events2 = await geocodeEnrichedEventsV3(
+      input.events,
+      groupsByKey,
+      input.matchedNewsByGroup,
+      input.bellingcatByGroup,
+      onComplete
+    );
+    return { schemaVersion: "v3", events: events2 };
+  }
+  if (input.schemaVersion === "v2") {
+    const groupsByKey = new Map(groups.map((g) => [g.key, g]));
+    const events2 = await geocodeEnrichedEventsV2(
+      input.events,
+      groupsByKey,
+      input.matchedNewsByGroup,
+      input.bellingcatByGroup,
+      onComplete
+    );
+    return { schemaVersion: "v2", events: events2 };
+  }
+  const events = await geocodeEnrichedEvents(input.events, groups, onComplete);
+  return { schemaVersion: "v1", events };
+}
+
+// server/lib/llmExtractionPipeline.ts
+var log19 = logger.child({ module: "llm-extraction-pipeline" });
+var EVENTS_KEY = "events:gdelt";
+var LLM_EVENTS_KEY = "events:llm";
+var LLM_PROCESS_KEY = "events:llm-process-ts";
+var LLM_COOLDOWN_MS = 9e5;
+var LLM_REDIS_TTL_SEC3 = 9e3;
+var LLM_SUMMARY_KEY = "events:llm-summary";
+var LLM_SUMMARY_TTL_SEC = 86400;
+var BATCH_SIZE_V1 = 8;
+async function runRefreshExtraction(opts) {
+  const version = getPipelineVersion();
+  const pipelineV2 = version === "v2";
+  const pipelineV3 = version === "v3";
+  const LLM_EVENTS_KEY_ACTIVE = pipelineV3 ? "events:llm:v3" : pipelineV2 ? "events:llm:v2" : LLM_EVENTS_KEY;
+  const LLM_SUMMARY_KEY_ACTIVE = pipelineV3 ? "events:llm-summary:v3" : pipelineV2 ? "events:llm-summary:v2" : LLM_SUMMARY_KEY;
+  let isColdCache = false;
+  try {
+    const cachedLLM = await cacheGetSafe(LLM_EVENTS_KEY_ACTIVE, 999999999);
+    isColdCache = !cachedLLM?.data || cachedLLM.data.length === 0;
+  } catch {
+    isColdCache = false;
+  }
+  const effectiveForceCooldown = opts.forceCooldown === true || isColdCache;
+  if (!effectiveForceCooldown) {
+    try {
+      const lastTs = await redis.get(LLM_PROCESS_KEY);
+      if (lastTs !== null && lastTs !== void 0) {
+        if (Date.now() - lastTs <= LLM_COOLDOWN_MS) {
+          return { dispatched: false, reason: "cooldown", schemaVersion: version };
+        }
+      }
+    } catch {
+    }
+  }
+  if (!isLLMConfigured()) {
+    return { dispatched: false, reason: "llm_unconfigured", schemaVersion: version };
+  }
+  let rawCached = null;
+  try {
+    rawCached = await cacheGetSafe(EVENTS_KEY, 999999999);
+  } catch {
+    rawCached = null;
+  }
+  if (!rawCached?.data || rawCached.data.length === 0) {
+    return { dispatched: false, reason: "no_raw_events", schemaVersion: version };
+  }
+  const merged = rawCached.data;
+  if (llmProgress.stage !== "idle" && llmProgress.stage !== "done" && llmProgress.stage !== "error") {
+    return { dispatched: false, reason: "pipeline_busy", schemaVersion: version };
+  }
+  try {
+    await redis.set(LLM_PROCESS_KEY, Date.now(), { ex: LLM_REDIS_TTL_SEC3 });
+  } catch {
+  }
+  updateProgress({ lastTriggerSource: opts.triggeredBy });
+  const llmCachedRef = await cacheGetSafe(
+    LLM_EVENTS_KEY_ACTIVE,
+    LLM_COOLDOWN_MS
+  );
+  void (async () => {
+    resetProgress();
+    updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
+    try {
+      const groups = groupGdeltRows(merged);
+      updateProgress({ totalGroups: groups.length, stage: "grouping" });
+      const cachedLlmKeys = /* @__PURE__ */ new Set();
+      if (llmCachedRef?.data) {
+        for (const e of llmCachedRef.data) {
+          if (e.id) cachedLlmKeys.add(e.id);
+        }
+      }
+      const newGroups = cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
+      updateProgress({ newGroups: newGroups.length });
+      if (newGroups.length === 0) {
+        log19.info("LLM: no new groups to process");
+        updateProgress({
+          stage: "done",
+          completedAt: Date.now(),
+          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+        });
+        try {
+          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+        } catch {
+        }
+        return;
+      }
+      const paused = await shouldPauseNewEvents();
+      if (paused) {
+        log19.info("LLM_PAUSED_SOFT_CAP");
+        updateProgress({
+          stage: "done",
+          completedAt: Date.now(),
+          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+        });
+        try {
+          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+        } catch {
+        }
+        return;
+      }
+      const prioritizedGroups = await prioritizeBySeverity(newGroups);
+      const effectiveBatchSize = pipelineV3 || pipelineV2 ? BATCH_SIZE2 : BATCH_SIZE_V1;
+      updateProgress({
+        stage: "llm-processing",
+        totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize)
+      });
+      const extractResult = await processEventGroups2(prioritizedGroups, (completed, total) => {
+        updateProgress({ completedBatches: completed, totalBatches: total });
+      });
+      if (!extractResult.events || extractResult.events.length === 0) {
+        log19.warn("LLM processing returned null \u2014 raw GDELT serving continues");
+        updateProgress({
+          stage: "error",
+          errorMessage: "LLM returned null for all batches",
+          completedAt: Date.now(),
+          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+        });
+        try {
+          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+        } catch {
+        }
+        return;
+      }
+      updateProgress({
+        stage: "geocoding",
+        enrichedCount: extractResult.events.length,
+        totalGeocodes: extractResult.events.length
+      });
+      let llmEntities;
+      if (extractResult.schemaVersion === "v3") {
+        const geoResult = await geocodeEnrichedEvents2(
+          {
+            schemaVersion: "v3",
+            events: extractResult.events,
+            matchedNewsByGroup: extractResult.matchedNewsByGroup,
+            bellingcatByGroup: extractResult.bellingcatByGroup
+          },
+          prioritizedGroups,
+          (completed, total) => {
+            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+          }
+        );
+        if (geoResult.schemaVersion !== "v3") {
+          throw new Error("geocoder schemaVersion mismatch (expected v3)");
+        }
+        const provenanceCounts = {};
+        let suspectCount = 0;
+        for (const e of geoResult.events) {
+          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+          if (e.suspect) suspectCount++;
+        }
+        updateProgress({ provenanceCounts, suspectCount });
+        try {
+          const evalScore = await runEval();
+          log19.info({ evalScore, schemaVersion: "v3" }, "eval harness completed");
+        } catch (evalErr) {
+          log19.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
+        }
+        llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
+      } else if (extractResult.schemaVersion === "v2") {
+        const geoResult = await geocodeEnrichedEvents2(
+          {
+            schemaVersion: "v2",
+            events: extractResult.events,
+            matchedNewsByGroup: extractResult.matchedNewsByGroup,
+            bellingcatByGroup: extractResult.bellingcatByGroup
+          },
+          prioritizedGroups,
+          (completed, total) => {
+            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+          }
+        );
+        if (geoResult.schemaVersion !== "v2") {
+          throw new Error("geocoder schemaVersion mismatch (expected v2)");
+        }
+        const provenanceCounts = {};
+        let suspectCount = 0;
+        for (const e of geoResult.events) {
+          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+          if (e.suspect) suspectCount++;
+        }
+        updateProgress({ provenanceCounts, suspectCount });
+        try {
+          const evalScore = await runEval();
+          log19.info({ evalScore }, "eval harness completed");
+        } catch (evalErr) {
+          log19.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
+        }
+        llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
+      } else {
+        const geoResult = await geocodeEnrichedEvents2(
+          { schemaVersion: "v1", events: extractResult.events },
+          prioritizedGroups,
+          (completed, total) => {
+            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+          }
+        );
+        if (geoResult.schemaVersion !== "v1") {
+          throw new Error("geocoder schemaVersion mismatch (expected v1)");
+        }
+        llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
+      }
+      const llmMergeMap = /* @__PURE__ */ new Map();
+      if (llmCachedRef?.data) {
+        for (const e of llmCachedRef.data) {
+          llmMergeMap.set(e.id, e);
+        }
+      }
+      for (const e of llmEntities) {
+        llmMergeMap.set(e.id, e);
+      }
+      const llmMerged = Array.from(llmMergeMap.values());
+      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, llmMerged, LLM_REDIS_TTL_SEC3);
+      if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
+      else saveDevLLMCache(llmMerged);
+      log19.info(
+        { count: llmEntities.length, total: llmMerged.length },
+        "LLM: processed and cached enriched events (background)"
+      );
+      updateProgress({
+        stage: "done",
+        completedAt: Date.now(),
+        durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+      });
+      try {
+        await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+      } catch {
+      }
+    } catch (llmErr) {
+      updateProgress({
+        stage: "error",
+        errorMessage: llmErr instanceof Error ? llmErr.message : "Unknown LLM error",
+        completedAt: Date.now(),
+        durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+      });
+      try {
+        await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+      } catch {
+      }
+      log19.warn({ err: llmErr }, "LLM background processing failed");
+    }
+  })();
+  return {
+    dispatched: true,
+    coldCacheBypass: isColdCache,
+    schemaVersion: version
+  };
+}
+function enrichedV1ToEntities(geocoded, groups) {
+  const groupMap = /* @__PURE__ */ new Map();
+  const groupSourceUrls = /* @__PURE__ */ new Map();
+  for (const g of groups) {
+    groupMap.set(g.key, g.entities);
+    groupSourceUrls.set(g.key, g.sourceUrls);
+  }
+  const results = [];
+  for (const enriched of geocoded) {
+    const entities = groupMap.get(enriched.groupKey);
+    if (!entities || entities.length === 0) continue;
+    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
+    const sourceTier = getHighestTier(sourceUrls) ?? void 0;
+    const template = entities[0];
+    if (!template) continue;
+    results.push({
+      ...template,
+      lat: enriched.resolvedLat,
+      lng: enriched.resolvedLng,
+      type: enriched.type,
+      label: `${enriched.location.name}: ${enriched.summary.slice(0, 60)}`,
+      data: {
+        ...template.data,
+        locationName: enriched.location.name,
+        summary: enriched.summary,
+        precision: enriched.location.precision,
+        llmProcessed: true,
+        actors: enriched.actors,
+        sourceCount: enriched.sourceCount,
+        sourceTier,
+        casualties: {
+          killed: enriched.casualties.killed ?? void 0,
+          injured: enriched.casualties.injured ?? void 0,
+          unknown: enriched.casualties.unknown
+        }
+      }
+    });
+  }
+  return results;
+}
+function enrichedV2ToEntities(geocoded, groups) {
+  const groupMap = /* @__PURE__ */ new Map();
+  const groupSourceUrls = /* @__PURE__ */ new Map();
+  for (const g of groups) {
+    groupMap.set(g.key, g.entities);
+    groupSourceUrls.set(g.key, g.sourceUrls);
+  }
+  const results = [];
+  for (const enriched of geocoded) {
+    const entities = groupMap.get(enriched.groupKey);
+    if (!entities || entities.length === 0) continue;
+    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
+    const sourceTier = getHighestTier(sourceUrls) ?? void 0;
+    const template = entities[0];
+    if (!template) continue;
+    const placeLabel = enriched.location.landmark || enriched.location.city || enriched.location.admin1 || enriched.location.country || enriched.displayName || "unknown";
+    results.push({
+      ...template,
+      id: `llm-v2-${enriched.groupKey}`,
+      lat: enriched.resolvedLat,
+      lng: enriched.resolvedLng,
+      type: enriched.type,
+      label: `${placeLabel}: ${enriched.summary.slice(0, 60)}`,
+      data: {
+        ...template.data,
+        locationName: placeLabel,
+        summary: enriched.summary,
+        precision: enriched.precision,
+        llmProcessed: true,
+        actors: enriched.actors,
+        sourceCount: enriched.sourceCount,
+        sourceTier,
+        casualties: {
+          killed: enriched.casualties.killed ?? void 0,
+          injured: enriched.casualties.injured ?? void 0,
+          unknown: enriched.casualties.unknown
+        }
+      }
+    });
+  }
+  return results;
+}
+function enrichedV3ToEntities(geocoded, groups) {
+  const groupMap = /* @__PURE__ */ new Map();
+  const groupSourceUrls = /* @__PURE__ */ new Map();
+  for (const g of groups) {
+    groupMap.set(g.key, g.entities);
+    groupSourceUrls.set(g.key, g.sourceUrls);
+  }
+  const results = [];
+  for (const enriched of geocoded) {
+    const entities = groupMap.get(enriched.groupKey);
+    if (!entities || entities.length === 0) continue;
+    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
+    const sourceTier = getHighestTier(sourceUrls) ?? void 0;
+    const template = entities[0];
+    if (!template) continue;
+    const placeLabel = enriched.location.landmark || enriched.location.city || enriched.location.admin1 || enriched.location.country || enriched.displayName || "unknown";
+    results.push({
+      ...template,
+      id: `llm-v3-${enriched.groupKey}`,
+      lat: enriched.resolvedLat,
+      lng: enriched.resolvedLng,
+      type: enriched.type,
+      label: `${placeLabel}: ${enriched.summary.slice(0, 60)}`,
+      data: {
+        ...template.data,
+        locationName: placeLabel,
+        summary: enriched.summary,
+        precision: enriched.precision,
+        llmProcessed: true,
+        actors: enriched.actors,
+        sourceCount: enriched.sourceCount,
+        sourceTier,
+        casualties: {
+          killed: enriched.casualties.killed ?? void 0,
+          injured: enriched.casualties.injured ?? void 0,
+          unknown: enriched.casualties.unknown
+        },
+        severity: enriched.severity,
+        suspect: enriched.suspect,
+        geocodeProvenance: enriched.geocodeProvenance,
+        weaponType: enriched.weaponType,
+        targetType: enriched.targetType,
+        timeOfDay: enriched.timeOfDay,
+        durationMinutes: enriched.durationMinutes,
+        reasoning: enriched.reasoning,
+        geocodeDisplayName: enriched.displayName
+      }
+    });
+  }
+  return results;
+}
+
+// server/lib/normalizeEventTypes.ts
+var OLD_TO_NEW_TYPE = {
+  ground_combat: "on_ground",
+  assault: "on_ground",
+  shelling: "explosion",
+  bombing: "explosion",
+  assassination: "targeted",
+  abduction: "targeted",
+  blockade: "other",
+  ceasefire_violation: "other",
+  mass_violence: "other",
+  wmd: "other"
+};
+function normalizeEventTypes(events) {
+  return events.map((event) => {
+    const mappedType = OLD_TO_NEW_TYPE[event.type];
+    const mappedDataType = OLD_TO_NEW_TYPE[event.data.eventType];
+    if (!mappedType && !mappedDataType) {
+      return event;
+    }
+    return {
+      ...event,
+      type: mappedType ?? event.type,
+      data: mappedDataType ? { ...event.data, eventType: mappedDataType } : event.data
+    };
+  });
+}
+
+// server/middleware/validate.ts
+function validateQuery(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.query);
+    if (!result.success) {
+      res.status(400).json({
+        error: "Invalid query parameters",
+        code: "VALIDATION_ERROR",
+        statusCode: 400,
+        details: result.error.flatten().fieldErrors
+      });
+      return;
+    }
+    res.locals.validatedQuery = result.data;
+    next();
+  };
+}
+
+// server/middleware/validateResponse.ts
+var log20 = logger.child({ module: "validateResponse" });
+function sendValidated(res, schema, payload) {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    const issues = parsed.error.issues;
+    const path = res.req?.path ?? "unknown";
+    if (process.env.NODE_ENV !== "production") {
+      throw new AppError(
+        500,
+        "RESPONSE_SCHEMA_MISMATCH",
+        `Response validation failed at ${path}: ${JSON.stringify(issues)}`
+      );
+    }
+    log20.warn({ issues, path }, "response schema mismatch \u2014 sending unvalidated payload");
+    res.json(payload);
+    return;
+  }
+  res.json(parsed.data);
+}
+
+// server/schemas/cacheResponse.ts
+import { z as z5 } from "zod";
+function cacheResponseSchema(dataSchema) {
+  return z5.object({
+    data: dataSchema,
+    stale: z5.boolean(),
+    lastFresh: z5.number(),
+    rateLimited: z5.boolean().optional(),
+    degraded: z5.boolean().optional()
+  });
+}
+var flightEntitySchema = z5.object({
+  id: z5.string(),
+  type: z5.literal("flight"),
+  lat: z5.number(),
+  lng: z5.number(),
+  timestamp: z5.number(),
+  label: z5.string(),
+  data: z5.object({
+    icao24: z5.string(),
+    callsign: z5.string(),
+    originCountry: z5.string(),
+    onGround: z5.boolean(),
+    unidentified: z5.boolean()
+  }).passthrough()
+}).passthrough();
+var conflictEventEntitySchema = z5.object({
+  id: z5.string(),
+  type: z5.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
+  lat: z5.number(),
+  lng: z5.number(),
+  timestamp: z5.number(),
+  label: z5.string(),
+  data: z5.object({
+    eventType: z5.string(),
+    subEventType: z5.string(),
+    fatalities: z5.number(),
+    cameoCode: z5.string(),
+    // LLM-enriched fields (all optional, present when LLM processed)
+    summary: z5.string().optional(),
+    casualties: z5.object({
+      killed: z5.number().optional(),
+      injured: z5.number().optional(),
+      unknown: z5.boolean().optional()
+    }).optional(),
+    precision: z5.enum(["exact", "neighborhood", "city", "region"]).optional(),
+    actors: z5.array(z5.string()).optional(),
+    sourceCount: z5.number().optional(),
+    llmProcessed: z5.boolean().optional()
+  }).passthrough()
+}).passthrough();
+var waterFacilityEntitySchema = z5.object({
+  id: z5.string(),
+  type: z5.literal("water"),
+  facilityType: z5.enum(["dam", "reservoir", "desalination"]),
+  lat: z5.number(),
+  lng: z5.number(),
+  label: z5.string(),
+  osmId: z5.number(),
+  stress: z5.object({
+    compositeHealth: z5.number()
+  }).passthrough(),
+  capacity: z5.object({
+    height: z5.number().optional(),
+    volume: z5.number().optional(),
+    area: z5.number().optional()
+  }).optional(),
+  nearestCity: z5.object({
+    name: z5.string(),
+    distanceKm: z5.number(),
+    population: z5.number()
+  }).optional(),
+  linkedRiver: z5.object({
+    name: z5.string(),
+    distanceKm: z5.number()
+  }).optional(),
+  notabilityScore: z5.number().optional()
+}).passthrough();
+var rejectionsSchema = z5.object({
+  excluded_location: z5.number(),
+  excluded_turkey: z5.number(),
+  not_notable: z5.number(),
+  no_name: z5.number(),
+  no_resolved_name: z5.number().int().nonnegative(),
+  duplicate: z5.number(),
+  low_score: z5.number(),
+  no_city: z5.number()
+}).strict();
+var overpassFetchRecordSchema = z5.object({
+  facilityType: z5.string(),
+  mirror: z5.string(),
+  status: z5.number(),
+  durationMs: z5.number(),
+  attempts: z5.number(),
+  ok: z5.boolean()
+});
+var waterFilterStatsSchema = z5.object({
+  rawCounts: z5.record(z5.string(), z5.number()),
+  filteredCounts: z5.record(z5.string(), z5.number()),
+  rejections: rejectionsSchema,
+  // Phase 27.3.1 R-08 D-31
+  byTypeRejections: z5.record(z5.string(), rejectionsSchema),
+  // Phase 27.3.1 R-08 D-28
+  byCountry: z5.record(z5.string(), z5.record(z5.string(), z5.number())),
+  // Phase 27.3.1 R-08 D-29
+  overpass: z5.array(overpassFetchRecordSchema),
+  // Phase 27.3.1 R-08 D-30
+  source: z5.enum(["snapshot", "redis", "overpass"]),
+  generatedAt: z5.string(),
+  enrichment: z5.object({
+    withCapacity: z5.number(),
+    withCity: z5.number(),
+    withRiver: z5.number()
+  }),
+  scoreHistogram: z5.array(z5.object({ bucket: z5.string(), count: z5.number() }))
+}).strict().optional();
+var siteEntitySchema = z5.object({
+  id: z5.string(),
+  type: z5.literal("site"),
+  siteType: z5.enum(["nuclear", "naval", "oil", "airbase", "port"]),
+  lat: z5.number(),
+  lng: z5.number(),
+  label: z5.string(),
+  operator: z5.string().optional(),
+  wikidata: z5.string().optional(),
+  osmId: z5.number()
+}).passthrough();
+var siteRejectionsSchema = z5.object({
+  excluded_turkey: z5.number(),
+  no_coords: z5.number(),
+  no_type: z5.number(),
+  duplicate: z5.number()
+});
+var siteFilterStatsSchema = z5.object({
+  rawCount: z5.number(),
+  filteredCount: z5.number(),
+  rejections: siteRejectionsSchema,
+  byCountry: z5.record(z5.string(), z5.record(z5.string(), z5.number())),
+  byType: z5.record(z5.string(), z5.number()),
+  overpass: z5.array(overpassFetchRecordSchema),
+  source: z5.enum(["snapshot", "redis", "overpass"]),
+  generatedAt: z5.string()
+}).strict().optional();
+var flightsResponseSchema = cacheResponseSchema(z5.array(flightEntitySchema));
+var eventsResponseSchema = cacheResponseSchema(z5.array(conflictEventEntitySchema));
+var waterResponseSchema = cacheResponseSchema(z5.array(waterFacilityEntitySchema)).extend({
+  filterStats: waterFilterStatsSchema
+});
+var sitesResponseSchema = cacheResponseSchema(z5.array(siteEntitySchema)).extend({
+  filterStats: siteFilterStatsSchema
+});
+
+// server/routes/events.ts
+var log21 = logger.child({ module: "events" });
+var eventsQuerySchema = z6.object({
+  backfill: z6.enum(["true", "false"]).optional().transform((v) => v === "true")
+});
+var EVENTS_KEY2 = "events:gdelt";
+var LOGICAL_TTL_MS = CACHE_TTL.events;
+var REDIS_TTL_SEC = 9e3;
+var BACKFILL_KEY = "events:backfill-ts";
+var BACKFILL_COOLDOWN_MS = 36e5;
+var LLM_EVENTS_KEY2 = "events:llm";
+var LLM_PROCESS_KEY2 = "events:llm-process-ts";
+var LLM_LOGICAL_TTL_MS = 9e5;
+var LLM_REDIS_TTL_SEC4 = 9e3;
+var LLM_SUMMARY_KEY2 = "events:llm-summary";
+var LLM_SUMMARY_TTL_SEC2 = 86400;
+async function loadRecentEnrichedEvents(limit) {
+  const version = getPipelineVersion();
+  const key = version === "v3" ? "events:llm:v3" : version === "v2" ? "events:llm:v2" : LLM_EVENTS_KEY2;
+  try {
+    const cached = await cacheGetSafe(key, 0);
+    const events = toEntityArray(cached?.data);
+    if (events.length === 0) return [];
+    return events.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit).map((e) => {
+      const d = e.data ?? {};
+      const groupKey = e.id.replace(/^llm-v2-/, "").replace(/-\d+$/, "");
+      return {
+        groupKey,
+        location: d.location ?? {
+          // Best-effort: if the entity only carries locationName we
+          // surface it in the city slot so the summary row is useful.
+          country: null,
+          admin1: null,
+          city: d.locationName ?? null,
+          neighborhood: null,
+          landmark: null
+        },
+        precision: d.precision ?? "region",
+        confidence: d.confidence ?? 0,
+        reasoning: d.reasoning ?? "",
+        weaponType: d.weaponType ?? null,
+        targetType: d.targetType ?? null,
+        tokensIn: d.tokensIn ?? null,
+        tokensOut: d.tokensOut ?? null,
+        provenance: d.geocodeProvenance ?? "gdelt-actiongeo-fallback",
+        sources: d.sourceUrls ?? (d.source ? [d.source] : []),
+        fetchedAt: e.timestamp
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+async function shouldBackfill() {
+  try {
+    const lastTs = await redis.get(BACKFILL_KEY);
+    if (lastTs === null || lastTs === void 0) return true;
+    return Date.now() - lastTs > BACKFILL_COOLDOWN_MS;
+  } catch {
+    return true;
+  }
+}
+async function recordBackfillTimestamp() {
+  try {
+    await redis.set(BACKFILL_KEY, Date.now(), { ex: REDIS_TTL_SEC });
+  } catch {
+  }
+}
+async function recordLLMTimestamp() {
+  try {
+    await redis.set(LLM_PROCESS_KEY2, Date.now(), { ex: LLM_REDIS_TTL_SEC4 });
+  } catch {
+  }
+}
+function sendNormalizedEvents(res, payload) {
+  sendValidated(res, eventsResponseSchema, {
+    ...payload,
+    data: normalizeEventTypes(payload.data)
+  });
+}
+function toEntityArray(data) {
+  return Array.isArray(data) ? data : [];
+}
+function coerceCachedEvents(cached) {
+  return { ...cached, data: toEntityArray(cached.data) };
+}
+var eventsRouter = Router5();
+var PIPELINE_OVERRIDE_KEY2 = "events:llm-pipeline-override";
+var PIPELINE_OVERRIDE_TTL_SEC2 = 7 * 24 * 3600;
+async function refreshPipelineOverride() {
+  try {
+    const v = await redis.get(PIPELINE_OVERRIDE_KEY2);
+    if (v === "v1" || v === "v2" || v === "v3") {
+      setPipelineOverride(v);
+    } else {
+      setPipelineOverride(null);
+    }
+  } catch {
+  }
+}
+eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
+  await refreshPipelineOverride();
+  const version = getPipelineVersion();
+  const LLM_SUMMARY_KEY_ACTIVE = version === "v3" ? "events:llm-summary:v3" : version === "v2" ? "events:llm-summary:v2" : LLM_SUMMARY_KEY2;
+  const [dlqRecent, recentEvents, paused, pipelineFlips] = await Promise.all([
+    listDLQ(50).catch(() => []),
+    loadRecentEnrichedEvents(50).catch(() => []),
+    shouldPauseNewEvents().catch(() => false),
+    listPipelineAudit(50).catch(() => [])
+  ]);
+  const common = {
+    schemaVersion: llmProgress.schemaVersion,
+    callHistory: llmProgress.callHistory,
+    tokenCounters: llmProgress.tokenCounters,
+    dlqCount: llmProgress.dlqCount ?? dlqRecent.length,
+    dlqRecent,
+    recentEvents,
+    paused,
+    breakerState: llmProgress.breakerState,
+    evalScore: llmProgress.evalScore,
+    provenanceCounts: llmProgress.provenanceCounts,
+    suspectCount: llmProgress.suspectCount,
+    // ===== Phase 27.4.3 Plan 02b — v3 observability fields =====
+    routingTrace: llmProgress.routingTrace,
+    // I-9 inline naming asymmetry note: server uses `latencyHistogram` (with
+    // the `samples` ring buffer); the wire contract drops `samples` and
+    // renames to `latency` to match the UI-SPEC client field. See
+    // useLLMStatusPolling.ts.
+    latency: llmProgress.latencyHistogram,
+    rateLimit: llmProgress.rateLimit,
+    schemaFailures: llmProgress.schemaFailures,
+    errorTaxonomy: llmProgress.errorTaxonomy,
+    costShadow: llmProgress.costShadow,
+    pipelineFlips
+  };
+  if (llmProgress.stage !== "idle") {
+    return res.json({ ...llmProgress, ...common });
+  }
+  try {
+    const summary = await cacheGetSafe(LLM_SUMMARY_KEY_ACTIVE, 0);
+    if (summary?.data) {
+      return res.json({ stage: "idle", lastRun: summary.data, ...common });
+    }
+  } catch {
+  }
+  res.json({ stage: "idle", lastRun: null, ...common });
+});
+{
+  eventsRouter.post("/llm-replay/:groupKey", dashboardAuth, async (req, res) => {
+    const { groupKey } = req.params;
+    if (!groupKey || typeof groupKey !== "string" || groupKey.length > 200) {
+      return res.status(400).json({ error: "invalid_group_key" });
+    }
+    const replayVersion = getPipelineVersion();
+    const cacheKey2 = replayVersion === "v3" ? "events:llm:v3" : "events:llm:v2";
+    const cached = await cacheGetSafe(cacheKey2, 0);
+    const existing = toEntityArray(cached?.data).find((e) => e.id.includes(groupKey));
+    if (!existing) return res.status(404).json({ error: "not_found" });
+    const rawCache = await cacheGetSafe(EVENTS_KEY2, 0);
+    if (!rawCache?.data) return res.status(404).json({ error: "gdelt_cache_empty" });
+    const groups = groupGdeltRows(rawCache.data);
+    const group = groups.find((g) => g.key === groupKey);
+    if (!group) return res.status(404).json({ error: "group_gone" });
+    try {
+      if (replayVersion === "v3") {
+        const extraction2 = await processEventGroupsV3([group]);
+        const first2 = extraction2?.events?.[0] ?? null;
+        return res.json({ old: existing, new: first2 });
+      }
+      const extraction = await processEventGroupsV2([group]);
+      const first = extraction?.events?.[0] ?? null;
+      return res.json({ old: existing, new: first });
+    } catch (err) {
+      return res.status(500).json({
+        error: "extract_failed",
+        detail: String(err).slice(0, 200)
+      });
+    }
+  });
+}
+{
+  eventsRouter.get("/llm-pipeline", dashboardAuth, async (_req, res) => {
+    await refreshPipelineOverride();
+    const override = getPipelineOverride();
+    const effective = getPipelineVersion();
+    return res.json({ effective, override, source: override ? "override" : "env" });
+  });
+  eventsRouter.post("/llm-pipeline", dashboardAuth, async (req, res) => {
+    const body = req.body ?? {};
+    const version = body.version;
+    if (version !== "v1" && version !== "v2" && version !== "v3" && version !== null) {
+      return res.status(400).json({ error: 'version must be "v1", "v2", "v3", or null' });
+    }
+    await refreshPipelineOverride();
+    const fromVersion = getPipelineVersion();
+    try {
+      if (version === null) {
+        await redis.del(PIPELINE_OVERRIDE_KEY2);
+        setPipelineOverride(null);
+      } else {
+        await redis.set(PIPELINE_OVERRIDE_KEY2, version, { ex: PIPELINE_OVERRIDE_TTL_SEC2 });
+        setPipelineOverride(version);
+      }
+    } catch (err) {
+      return res.status(500).json({
+        error: "override_write_failed",
+        detail: String(err).slice(0, 200)
+      });
+    }
+    const toVersion = getPipelineVersion();
+    if (fromVersion !== toVersion) {
+      await appendPipelineAudit({
+        ts: Date.now(),
+        from: fromVersion,
+        to: toVersion,
+        trigger: "manual:operator_post",
+        operator: process.env.NODE_ENV === "production" ? "production" : "dev",
+        reason: typeof body.reason === "string" ? body.reason.slice(0, 500) : void 0
+      });
+    }
+    const effective = getPipelineVersion();
+    return res.json({
+      effective,
+      override: getPipelineOverride(),
+      source: version ? "override" : "env"
+    });
+  });
+}
+eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
+  const { backfill: forceBackfill } = res.locals.validatedQuery;
+  await refreshPipelineOverride();
+  const version = getPipelineVersion();
+  const pipelineV2 = version === "v2";
+  const pipelineV3 = version === "v3";
+  const LLM_EVENTS_KEY_ACTIVE = pipelineV3 ? "events:llm:v3" : pipelineV2 ? "events:llm:v2" : LLM_EVENTS_KEY2;
+  const LLM_SUMMARY_KEY_ACTIVE = pipelineV3 ? "events:llm-summary:v3" : pipelineV2 ? "events:llm-summary:v2" : LLM_SUMMARY_KEY2;
+  let llmCached = await cacheGetSafe(
+    LLM_EVENTS_KEY_ACTIVE,
+    LLM_LOGICAL_TTL_MS
+  );
+  if (llmCached) llmCached = coerceCachedEvents(llmCached);
+  if (llmCached && !llmCached.stale) {
+    return sendNormalizedEvents(res, llmCached);
+  }
+  if (pipelineV3 && !llmCached?.data) {
+    let bridgeV2 = await cacheGetSafe("events:llm:v2", LLM_LOGICAL_TTL_MS);
+    if (bridgeV2) bridgeV2 = coerceCachedEvents(bridgeV2);
+    if (bridgeV2 && !bridgeV2.stale) {
+      return sendNormalizedEvents(res, bridgeV2);
+    }
+    let bridgeV1 = await cacheGetSafe(LLM_EVENTS_KEY2, LLM_LOGICAL_TTL_MS);
+    if (bridgeV1) bridgeV1 = coerceCachedEvents(bridgeV1);
+    if (bridgeV1 && !bridgeV1.stale) {
+      return sendNormalizedEvents(res, bridgeV1);
+    }
+    if (bridgeV2?.data) {
+      llmCached = bridgeV2;
+    } else if (bridgeV1?.data) {
+      llmCached = bridgeV1;
+    }
+  }
+  if (pipelineV2 && !llmCached?.data) {
+    let llmCachedV1 = await cacheGetSafe(LLM_EVENTS_KEY2, LLM_LOGICAL_TTL_MS);
+    if (llmCachedV1) llmCachedV1 = coerceCachedEvents(llmCachedV1);
+    if (llmCachedV1 && !llmCachedV1.stale) {
+      return sendNormalizedEvents(res, llmCachedV1);
+    }
+    if (llmCachedV1?.data && !llmCached?.data) {
+      llmCached = llmCachedV1;
+    }
+  }
+  if (!llmCached?.data) {
+    const devData = pipelineV3 || pipelineV2 ? loadDevLLMCacheV2() : loadDevLLMCache();
+    if (devData) {
+      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, devData, LLM_REDIS_TTL_SEC4);
+      const geocoded = devData.filter(
+        (e) => e.data.precision && e.data.precision !== "region"
+      ).length;
+      const summary = {
+        lastRun: Date.now(),
+        groupCount: devData.length,
+        batchCount: 0,
+        geocodeCount: geocoded,
+        enrichedCount: devData.length,
+        durationMs: 0,
+        error: null,
+        source: "dev-file-cache",
+        schemaVersion: version
+      };
+      await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, summary, LLM_SUMMARY_TTL_SEC2);
+      await recordLLMTimestamp();
+      log21.info({ count: devData.length }, "served LLM events from dev file cache");
+      return sendNormalizedEvents(res, { data: devData, stale: false, lastFresh: Date.now() });
+    }
+  }
+  const cached = forceBackfill ? null : await cacheGetSafe(EVENTS_KEY2, LOGICAL_TTL_MS);
+  if (cached && !cached.stale && !isLLMConfigured()) {
+    return sendNormalizedEvents(res, cached);
+  }
+  try {
+    let bellingcatArticles = [];
+    try {
+      const newsCache = await cacheGetSafe("news:gdelt", 0);
+      if (newsCache?.data) {
+        bellingcatArticles = newsCache.data.flatMap((cluster) => cluster.articles).filter((a) => a.source === "Bellingcat").map((a) => ({
+          title: a.title,
+          url: a.url,
+          publishedAt: a.publishedAt,
+          ...extractBellingcatGeo(a.title)
+        }));
+      }
+    } catch {
+      log21.warn("failed to fetch Bellingcat articles for corroboration");
+    }
+    const fresh = await fetchEvents(bellingcatArticles);
+    const eventMap = /* @__PURE__ */ new Map();
+    if (cached) {
+      for (const event of cached.data) {
+        eventMap.set(event.id, event);
+      }
+    }
+    if ((!cached || forceBackfill) && (forceBackfill || await shouldBackfill())) {
+      try {
+        const backfillDays = Math.ceil((Date.now() - WAR_START) / 864e5);
+        const backfillData = await backfillEvents(backfillDays);
+        for (const event of backfillData) {
+          eventMap.set(event.id, event);
+        }
+        await recordBackfillTimestamp();
+        log21.info({ count: backfillData.length }, "backfill: merged historical events");
+      } catch (backfillErr) {
+        log21.warn({ err: backfillErr }, "backfill failed (non-fatal)");
+      }
+    }
+    for (const event of fresh) {
+      eventMap.set(event.id, event);
+    }
+    for (const [id, event] of eventMap) {
+      if (event.timestamp < WAR_START) {
+        eventMap.delete(id);
+      }
+    }
+    const merged = Array.from(eventMap.values());
+    for (const event of merged) {
+      if (event.data.sourceTier === void 0 && event.data.source) {
+        const domain = extractDomain(event.data.source);
+        const tier = domain ? getSourceTier("", domain) : null;
+        if (tier !== null) {
+          event.data.sourceTier = tier;
+        }
+      }
+    }
+    await cacheSetSafe(EVENTS_KEY2, merged, REDIS_TTL_SEC);
+    if (llmCached?.data) {
+      return sendNormalizedEvents(res, {
+        data: llmCached.data,
+        stale: true,
+        lastFresh: llmCached.lastFresh
+      });
+    }
+    sendNormalizedEvents(res, {
+      data: merged,
+      stale: false,
+      lastFresh: Date.now()
+    });
+  } catch (err) {
+    log21.error({ err }, "upstream error");
+    if (cached) {
+      const pruned = cached.data.filter((e) => e.timestamp >= WAR_START);
+      sendNormalizedEvents(res, {
+        data: pruned,
+        stale: true,
+        lastFresh: cached.lastFresh
+      });
+    } else {
+      throw new AppError(502, "UPSTREAM_FAIL", `gdelt fetch failed: ${err.message}`);
+    }
+  }
+});
+
+// server/routes/flights.ts
+import { Router as Router6 } from "express";
+import { z as z7 } from "zod";
+
+// server/lib/icaoCountry.ts
+var ICAO_RANGES = [
+  { start: 32768, end: 65535, country: "South Africa" },
+  { start: 65536, end: 98303, country: "Egypt" },
+  { start: 98304, end: 131071, country: "Libya" },
+  { start: 131072, end: 163839, country: "Morocco" },
+  { start: 163840, end: 196607, country: "Tunisia" },
+  { start: 262144, end: 266239, country: "Ethiopia" },
+  { start: 311296, end: 315391, country: "Kenya" },
+  { start: 434176, end: 435199, country: "Qatar" },
+  { start: 655360, end: 688127, country: "Algeria" },
+  { start: 1048576, end: 2097151, country: "Russia" },
+  { start: 3145728, end: 3407871, country: "Italy" },
+  { start: 3670016, end: 3932159, country: "France" },
+  { start: 3932160, end: 4194303, country: "Germany" },
+  { start: 4194304, end: 4456447, country: "UK" },
+  { start: 4620288, end: 4653055, country: "Greece" },
+  { start: 4947968, end: 4980735, country: "Turkey" },
+  { start: 7364608, end: 7368703, country: "Kuwait" },
+  { start: 7389184, end: 7390207, country: "Oman" },
+  { start: 7405568, end: 7438335, country: "Saudi Arabia" },
+  { start: 7438336, end: 7471103, country: "South Korea" },
+  { start: 7471104, end: 7503871, country: "Yemen" },
+  { start: 7503872, end: 7536639, country: "Iraq" },
+  { start: 7536640, end: 7569407, country: "Iran" },
+  { start: 7569408, end: 7602175, country: "Israel" },
+  { start: 7602176, end: 7634943, country: "Jordan" },
+  { start: 7634944, end: 7667711, country: "Lebanon" },
+  { start: 7667712, end: 7700479, country: "Malaysia" },
+  { start: 7733248, end: 7766015, country: "Pakistan" },
+  { start: 7766016, end: 7798783, country: "Singapore" },
+  { start: 7831552, end: 7864319, country: "Syria" },
+  { start: 7864320, end: 8126463, country: "China" },
+  { start: 8126464, end: 8388607, country: "Australia" },
+  { start: 8388608, end: 8650751, country: "India" },
+  { start: 8650752, end: 8912895, country: "Japan" },
+  { start: 8912896, end: 8945663, country: "Thailand" },
+  { start: 8978432, end: 8982527, country: "Yemen" },
+  { start: 8994816, end: 8998911, country: "Bahrain" },
+  { start: 9003008, end: 9007103, country: "UAE" },
+  { start: 9043968, end: 9076735, country: "Indonesia" },
+  { start: 10485760, end: 11534335, country: "USA" },
+  { start: 12582912, end: 12845055, country: "Canada" }
+];
+function icaoToCountry(hex) {
+  const addr = parseInt(hex.replace(/^~/, ""), 16);
+  if (isNaN(addr)) return "";
+  let lo = 0;
+  let hi = ICAO_RANGES.length - 1;
+  while (lo <= hi) {
+    const mid = lo + hi >>> 1;
+    const range = ICAO_RANGES[mid];
+    if (!range) break;
+    if (addr < range.start) {
+      hi = mid - 1;
+    } else if (addr > range.end) {
+      lo = mid + 1;
+    } else {
+      return range.country;
+    }
+  }
+  return "";
+}
+
+// server/adapters/adsb-v2-normalize.ts
+function normalizeAircraft(ac) {
+  if (ac.lat == null || ac.lon == null) return null;
+  const onGround = ac.alt_baro === "ground";
+  const callsign = typeof ac.flight === "string" ? ac.flight.trim() : "";
+  const cleanHex = ac.hex.replace(/^~/, "");
+  return {
+    id: `flight-${cleanHex}`,
+    type: "flight",
+    lat: ac.lat,
+    lng: ac.lon,
+    timestamp: Date.now(),
+    label: callsign || ac.hex,
+    data: {
+      icao24: ac.hex,
+      callsign: callsign || ac.hex,
+      originCountry: icaoToCountry(ac.hex),
+      velocity: ac.gs != null ? ac.gs * KNOTS_TO_MS : null,
+      heading: ac.track ?? null,
+      altitude: typeof ac.alt_baro === "number" ? ac.alt_baro * FEET_TO_METERS : null,
+      onGround,
+      verticalRate: ac.baro_rate != null ? ac.baro_rate * FPM_TO_MS : null,
+      unidentified: callsign === ""
+    }
+  };
+}
+
+// server/adapters/adsb-lol.ts
+var log22 = logger.child({ module: "adsb-lol" });
+var BASE_URL = "https://api.adsb.lol";
+var FETCH_TIMEOUT = 1e4;
+async function fetchFlights() {
+  const start = Date.now();
+  const url = `${BASE_URL}/v2/lat/${IRAN_CENTER.lat}/lon/${IRAN_CENTER.lon}/dist/${ADSB_RADIUS_NM}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) });
+  if (res.status === 429) {
+    throw new RateLimitError("adsb.lol rate limit exceeded");
+  }
+  if (!res.ok) {
+    throw new Error(`adsb.lol API error: ${res.status}`);
+  }
+  const data = await res.json();
+  const aircraft = data.ac ?? [];
+  const flights = aircraft.map(normalizeAircraft).filter((f) => f !== null);
+  log22.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
+  return flights;
+}
+
+// server/adapters/opensky.ts
+var log23 = logger.child({ module: "opensky" });
+var OPENSKY_TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
+var OPENSKY_API_URL = "https://opensky-network.org/api";
+var FETCH_TIMEOUT2 = 1e4;
+var cachedToken = null;
+async function getOAuthToken() {
+  if (cachedToken && Date.now() < cachedToken.expiresAt) {
+    return cachedToken.token;
+  }
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: config.opensky.clientId,
+    client_secret: config.opensky.clientSecret
+  });
+  const res = await fetch(OPENSKY_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT2)
+  });
+  if (!res.ok) {
+    cachedToken = null;
+    throw new Error(`OpenSky OAuth2 token request failed: ${res.status}`);
+  }
+  const data = await res.json();
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + 25 * 60 * 1e3
+    // 25 minutes
+  };
+  return cachedToken.token;
+}
+function normalizeFlightState(state2) {
+  const lat = state2[6];
+  const lng = state2[5];
+  if (lat == null || lng == null) return null;
+  const onGround = state2[8] ?? false;
+  const icao24 = state2[0];
+  const callsign = typeof state2[1] === "string" ? state2[1].trim() : "";
+  return {
+    id: `flight-${icao24}`,
+    type: "flight",
+    lat,
+    lng,
+    timestamp: Date.now(),
+    label: callsign || icao24,
+    data: {
+      icao24,
+      callsign: callsign || icao24,
+      originCountry: state2[2] ?? "",
+      velocity: state2[9] ?? null,
+      heading: state2[10] ?? null,
+      altitude: state2[7] ?? null,
+      onGround,
+      verticalRate: state2[11] ?? null,
+      unidentified: callsign === ""
+      // hex-only flights (often military)
+    }
+  };
+}
+async function fetchFlights2(bbox) {
+  const start = Date.now();
+  const token = await getOAuthToken();
+  const url = `${OPENSKY_API_URL}/states/all?lamin=${bbox.south}&lomin=${bbox.west}&lamax=${bbox.north}&lomax=${bbox.east}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT2)
+  });
+  if (res.status === 429) {
+    throw new RateLimitError("OpenSky rate limit exceeded");
+  }
+  if (!res.ok) {
+    throw new Error(`OpenSky API request failed: ${res.status}`);
+  }
+  const data = await res.json();
+  const states = data.states ?? [];
+  const flights = states.map(normalizeFlightState).filter((f) => f !== null);
+  log23.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
+  return flights;
+}
+
+// server/routes/flights.ts
+var log24 = logger.child({ module: "flights" });
+var flightsQuerySchema = z7.object({
+  source: z7.enum(["opensky", "adsblol"]).default("adsblol")
+});
+var CACHE_KEYS = {
+  opensky: "flights:opensky",
+  adsblol: "flights:adsblol"
+};
+var LOGICAL_TTLS = {
+  opensky: CACHE_TTL.flights,
+  adsblol: CACHE_TTL.adsblolFlights
+};
+function getFetcher(source) {
+  switch (source) {
+    case "opensky":
+      return () => fetchFlights2(IRAN_BBOX);
+    case "adsblol":
+      return fetchFlights;
+  }
+}
+var flightsRouter = Router6();
+flightsRouter.get("/", validateQuery(flightsQuerySchema), async (_req, res) => {
+  const { source } = res.locals.validatedQuery;
+  const cacheKey2 = CACHE_KEYS[source];
+  const logicalTtl = LOGICAL_TTLS[source];
+  const redisTtl = Math.ceil(logicalTtl * 10 / 1e3);
+  if (source === "opensky" && !(process.env.OPENSKY_CLIENT_ID && process.env.OPENSKY_CLIENT_SECRET)) {
+    return res.status(503).json({
+      error: "OpenSky credentials not configured",
+      code: "UPSTREAM_ERROR",
+      statusCode: 503
+    });
+  }
+  const cached = await cacheGetSafe(cacheKey2, logicalTtl);
+  if (cached && !cached.stale) {
+    return sendValidated(res, flightsResponseSchema, cached);
+  }
+  try {
+    const flights = await getFetcher(source)();
+    await cacheSetSafe(cacheKey2, flights, redisTtl);
+    sendValidated(res, flightsResponseSchema, {
+      data: flights,
+      stale: false,
+      lastFresh: Date.now()
+    });
+  } catch (err) {
+    log24.error({ err, source }, "upstream error");
+    if (err instanceof RateLimitError) {
+      if (cached) {
+        return sendValidated(res, flightsResponseSchema, { ...cached, rateLimited: true });
+      }
+      return res.status(429).json({ error: "Rate limited", code: "RATE_LIMITED", statusCode: 429, rateLimited: true });
+    }
+    if (cached) {
+      sendValidated(res, flightsResponseSchema, cached);
+    } else {
+      throw err;
+    }
+  }
+});
+
+// server/routes/geocode.ts
+import { Router as Router7 } from "express";
+import { z as z8 } from "zod";
+var geocodeQuerySchema = z8.object({
+  lat: z8.coerce.number().min(-90).max(90),
+  lon: z8.coerce.number().min(-180).max(180)
+});
+var GEOCODE_CACHE_PREFIX3 = "geocode:";
+var GEOCODE_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
+var GEOCODE_REDIS_TTL_SEC = 90 * 24 * 60 * 60;
+var geocodeRouter = Router7();
+geocodeRouter.get("/", validateQuery(geocodeQuerySchema), async (_req, res) => {
+  const { lat, lon } = res.locals.validatedQuery;
+  const qLat = Math.round(lat * 100) / 100;
+  const qLon = Math.round(lon * 100) / 100;
+  const cacheKey2 = `${GEOCODE_CACHE_PREFIX3}${qLat},${qLon}`;
+  const cached = await cacheGetSafe(cacheKey2, GEOCODE_TTL_MS);
+  if (cached) {
+    res.json(cached);
+    return;
+  }
+  const result = await reverseGeocode(qLat, qLon);
+  await cacheSetSafe(cacheKey2, result, GEOCODE_REDIS_TTL_SEC);
+  res.json({ data: result, stale: false, lastFresh: Date.now() });
+});
+
+// server/routes/health.ts
+import { Router as Router8 } from "express";
+
+// server/lib/healthSchema.ts
+import { z as z9 } from "zod";
+var healthStatusEnum = z9.enum(["healthy", "degraded", "unhealthy", "unknown"]);
+var healthTierEnum = z9.enum(["critical", "non-critical", "static", "probe-only", "cron"]);
+var endpointHealthSchema = z9.object({
+  name: z9.string(),
+  status: healthStatusEnum,
+  tier: healthTierEnum,
+  /** Unix ms of the last successful probe; null when never seen. */
+  lastSuccessTs: z9.number().nullable(),
+  /** Sanitized error message from the last failed probe; null when last probe succeeded. */
+  lastErrorReason: z9.string().nullable(),
+  /** Age of the cache entry / live state, in ms. null = no data observed yet. */
+  freshnessMs: z9.number().nullable(),
+  /** D-25 freshness budget per endpoint. 0 for probe-only endpoints. */
+  freshnessThresholdMs: z9.number().int().nonnegative(),
+  /** Probe round-trip duration; null when the probe failed before measurement. */
+  latencyMs: z9.number().nullable()
+}).strict();
+var tierRollupSchema = z9.object({
+  healthy: z9.number().int().nonnegative(),
+  degraded: z9.number().int().nonnegative(),
+  unhealthy: z9.number().int().nonnegative(),
+  unknown: z9.number().int().nonnegative()
+}).strict();
+var probeOnlyRollupSchema = z9.object({
+  healthy: z9.number().int().nonnegative(),
+  unhealthy: z9.number().int().nonnegative(),
+  unknown: z9.number().int().nonnegative()
+}).strict();
+var healthResponseSchema = z9.object({
+  /** Map keyed by endpoint name (matches SOURCE_KEYS keys + non-cache endpoints). */
+  endpoints: z9.record(z9.string(), endpointHealthSchema),
+  summary: z9.object({
+    critical: tierRollupSchema,
+    nonCritical: tierRollupSchema,
+    static: tierRollupSchema,
+    probeOnly: probeOnlyRollupSchema,
+    cron: tierRollupSchema
+  }).strict(),
+  /** Unix ms when the route handler assembled this response. */
+  generatedAt: z9.number()
+}).strict();
+
+// server/routes/health.ts
+var log25 = logger.child({ module: "health" });
+var healthRouter = Router8();
+var PROBE_TIMEOUT_MS = 2e3;
+function withTimeout2(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+function sanitizeError(err) {
+  const raw = err instanceof Error ? err.message : String(err);
+  const masked = raw.replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]").replace(/api[_-]?key=[A-Za-z0-9._-]+/gi, "api_key=[REDACTED]").replace(/https:\/\/[^\s]*upstash\.io[^\s]*/g, "[upstash url redacted]");
+  return masked.length > 200 ? masked.slice(0, 197) + "..." : masked;
+}
+async function probeCacheKey(name, key) {
+  const start = Date.now();
+  try {
+    const entry = await withTimeout2(
+      cacheGetSafe(key, 999999999),
+      PROBE_TIMEOUT_MS,
+      `probe ${name}`
+    );
+    const latencyMs = Date.now() - start;
+    if (entry === null) {
+      return {
+        freshnessMs: null,
+        lastSuccessTs: null,
+        hadError: false,
+        errorReason: null,
+        latencyMs
+      };
+    }
+    const lastFresh = entry.lastFresh;
+    return {
+      freshnessMs: Date.now() - lastFresh,
+      lastSuccessTs: lastFresh,
+      hadError: false,
+      errorReason: null,
+      latencyMs
+    };
+  } catch (err) {
+    return {
+      freshnessMs: null,
+      lastSuccessTs: null,
+      hadError: true,
+      errorReason: sanitizeError(err),
+      latencyMs: Date.now() - start
+    };
+  }
+}
+function probeLlmStatus() {
+  const start = Date.now();
+  const latest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
+  return {
+    freshnessMs: latest === null ? null : Date.now() - latest,
+    lastSuccessTs: latest,
+    hadError: false,
+    errorReason: null,
+    latencyMs: Date.now() - start
+  };
+}
+function probeSources() {
+  return {
+    freshnessMs: 0,
+    lastSuccessTs: Date.now(),
+    hadError: false,
+    errorReason: null,
+    latencyMs: 0
+  };
+}
+function probeProbeOnly() {
+  return {
+    freshnessMs: null,
+    lastSuccessTs: Date.now(),
+    hadError: false,
+    errorReason: null,
+    latencyMs: 0
+  };
+}
+async function probeCronTick(name) {
+  const start = Date.now();
+  try {
+    const entry = await withTimeout2(
+      cacheGetSafe(`cron:lastTick:${name}`, 999999999),
+      PROBE_TIMEOUT_MS,
+      `probe cron ${name}`
+    );
+    const latencyMs = Date.now() - start;
+    if (entry === null) {
+      return {
+        freshnessMs: null,
+        lastSuccessTs: null,
+        hadError: false,
+        errorReason: null,
+        latencyMs
+      };
+    }
+    const tickTs = typeof entry.data === "number" ? entry.data : entry.lastFresh;
+    return {
+      freshnessMs: Date.now() - tickTs,
+      lastSuccessTs: tickTs,
+      hadError: false,
+      errorReason: null,
+      latencyMs
+    };
+  } catch (err) {
+    return {
+      freshnessMs: null,
+      lastSuccessTs: null,
+      hadError: true,
+      errorReason: sanitizeError(err),
+      latencyMs: Date.now() - start
+    };
+  }
+}
+var PROBE_STRATEGIES = {
+  flights: { kind: "cache", cacheKey: SOURCE_KEYS.flights },
+  ships: { kind: "cache", cacheKey: SOURCE_KEYS.ships },
+  events: { kind: "cache", cacheKey: SOURCE_KEYS.events },
+  news: { kind: "cache", cacheKey: SOURCE_KEYS.news },
+  markets: { kind: "cache", cacheKey: SOURCE_KEYS.markets },
+  weather: { kind: "cache", cacheKey: SOURCE_KEYS.weather },
+  sites: { kind: "cache", cacheKey: SOURCE_KEYS.sites },
+  water: { kind: "cache", cacheKey: SOURCE_KEYS.water },
+  waterPrecip: { kind: "cache", cacheKey: "water:precip" },
+  sources: { kind: "sources" },
+  llmStatus: { kind: "llmStatus" },
+  authCheck: { kind: "probeOnly" },
+  geocode: { kind: "probeOnly" },
+  cronHealth: { kind: "cron", cronName: "health" },
+  cronWarm: { kind: "cron", cronName: "warm" },
+  cronRefreshEvents: { kind: "cron", cronName: "refresh-events" }
+};
+async function runProbe(name, strategy) {
+  switch (strategy.kind) {
+    case "cache":
+      return probeCacheKey(name, strategy.cacheKey);
+    case "llmStatus":
+      return probeLlmStatus();
+    case "sources":
+      return probeSources();
+    case "probeOnly":
+      return probeProbeOnly();
+    case "cron":
+      return probeCronTick(strategy.cronName);
+  }
+}
+function buildSummary2(endpoints) {
+  const empty = { healthy: 0, degraded: 0, unhealthy: 0, unknown: 0 };
+  const summary = {
+    critical: { ...empty },
+    nonCritical: { ...empty },
+    static: { ...empty },
+    probeOnly: { healthy: 0, unhealthy: 0, unknown: 0 },
+    cron: { ...empty }
+  };
+  for (const ep of Object.values(endpoints)) {
+    const s = ep.status;
+    switch (ep.tier) {
+      case "critical":
+        summary.critical[s] = (summary.critical[s] ?? 0) + 1;
+        break;
+      case "non-critical":
+        summary.nonCritical[s] = (summary.nonCritical[s] ?? 0) + 1;
+        break;
+      case "static":
+        summary.static[s] = (summary.static[s] ?? 0) + 1;
+        break;
+      case "probe-only":
+        if (s === "healthy") summary.probeOnly.healthy += 1;
+        else if (s === "unknown") summary.probeOnly.unknown += 1;
+        else summary.probeOnly.unhealthy += 1;
+        break;
+      case "cron":
+        summary.cron[s] = (summary.cron[s] ?? 0) + 1;
+        break;
+    }
+  }
+  return summary;
+}
+healthRouter.get("/", async (_req, res) => {
+  const probeNames = Object.keys(PROBE_STRATEGIES);
+  const results = await Promise.all(
+    probeNames.map(async (name) => {
+      const strategy = PROBE_STRATEGIES[name];
+      const probe = await runProbe(name, strategy);
+      return { name, probe };
+    })
+  );
+  const endpoints = {};
+  for (const { name, probe } of results) {
+    const tier = TIER_BY_ENDPOINT[name];
+    const threshold = FRESHNESS_THRESHOLDS_MS[name];
+    if (tier === void 0 || threshold === void 0) {
+      log25.warn({ name }, "probe ran but tier or threshold not registered; skipping");
+      continue;
+    }
+    const status = deriveStatus(probe.freshnessMs, threshold, probe.hadError);
+    endpoints[name] = {
+      name,
+      status,
+      tier,
+      lastSuccessTs: probe.lastSuccessTs,
+      lastErrorReason: probe.errorReason,
+      freshnessMs: probe.freshnessMs,
+      freshnessThresholdMs: threshold,
+      latencyMs: probe.latencyMs
+    };
+  }
+  const response = {
+    endpoints,
+    summary: buildSummary2(endpoints),
+    generatedAt: Date.now()
+  };
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      healthResponseSchema.parse(response);
+    } catch (err) {
+      log25.error({ err }, "/api/health response failed schema validation in dev");
+    }
+  }
+  res.json(response);
+});
+
+// server/routes/markets.ts
+import { Router as Router9 } from "express";
+import { z as z10 } from "zod";
+
+// server/adapters/yahoo-finance.ts
+var log26 = logger.child({ module: "yahoo-finance" });
+var TICKERS = ["BZ=F", "CL=F", "XLE", "USO", "XOM"];
+var DISPLAY_NAMES = {
+  "BZ=F": "Brent",
+  "CL=F": "WTI",
+  XLE: "XLE",
+  USO: "USO",
+  XOM: "XOM"
+};
+var RANGE_CONFIG = {
+  "1d": { range: "5d", interval: "2m" },
+  "5d": { range: "5d", interval: "15m" },
+  "1mo": { range: "1mo", interval: "30m" },
+  ytd: { range: "ytd", interval: "1d" }
+};
+async function fetchTicker(symbol, range = "1d") {
+  try {
+    const cfg = RANGE_CONFIG[range];
+    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${cfg.range}&interval=${cfg.interval}&includePrePost=false`;
+    const resp = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
+      signal: AbortSignal.timeout(1e4)
+    });
+    if (!resp.ok) {
+      log26.warn({ symbol, status: resp.status }, "HTTP error");
+      return null;
+    }
+    const json = await resp.json();
+    const result = json.chart?.result?.[0];
+    if (!result) {
+      log26.warn({ symbol }, "no chart result");
+      return null;
+    }
+    const { meta, timestamp: rawTimestamps, indicators } = result;
+    const quote = indicators?.quote?.[0];
+    if (!meta || !rawTimestamps || !quote) {
+      log26.warn({ symbol }, "missing meta/timestamps/quote");
+      return null;
+    }
+    const price = meta.regularMarketPrice;
+    const previousClose = meta.previousClose ?? meta.chartPreviousClose ?? price;
+    const nowSec = Math.floor(Date.now() / 1e3);
+    const tradingPeriod = meta.currentTradingPeriod?.regular;
+    const marketOpen = tradingPeriod ? nowSec >= tradingPeriod.start && nowSec <= tradingPeriod.end : false;
+    const timestamps = [];
+    const closes = [];
+    const highs = [];
+    const lows = [];
+    for (let i = 0; i < rawTimestamps.length; i++) {
+      const ts = rawTimestamps[i];
+      const c = quote.close?.[i];
+      const h = quote.high?.[i];
+      const l = quote.low?.[i];
+      if (ts != null && c != null && h != null && l != null) {
+        timestamps.push(ts * 1e3);
+        closes.push(c);
+        highs.push(h);
+        lows.push(l);
+      }
+    }
+    return {
+      symbol,
+      displayName: DISPLAY_NAMES[symbol] ?? symbol,
+      price,
+      previousClose,
+      change: price - previousClose,
+      changePercent: previousClose !== 0 ? (price - previousClose) / previousClose * 100 : 0,
+      currency: meta.currency ?? "USD",
+      marketOpen,
+      lastTradeTime: meta.regularMarketTime * 1e3,
+      history: { timestamps, closes, highs, lows }
+    };
+  } catch (err) {
+    log26.warn({ err, symbol }, "fetch error");
+    return null;
+  }
+}
+async function fetchMarkets(range = "1d") {
+  const results = await Promise.allSettled(TICKERS.map((t) => fetchTicker(t, range)));
+  return results.filter((r) => r.status === "fulfilled").map((r) => r.value).filter((q) => q !== null);
+}
+
+// server/routes/markets.ts
+var log27 = logger.child({ module: "markets" });
+var marketsQuerySchema = z10.object({
+  range: z10.enum(["1d", "5d", "1mo", "ytd"]).default("1d")
+});
+var marketsRouter = Router9();
+marketsRouter.get("/", validateQuery(marketsQuerySchema), async (_req, res) => {
+  const { range } = res.locals.validatedQuery;
+  const cacheKey2 = `markets:yahoo:${range}`;
+  const cached = await cacheGetSafe(cacheKey2, MARKETS_CACHE_TTL);
+  if (cached && !cached.stale) {
+    return res.json(cached);
+  }
+  try {
+    const quotes = await fetchMarkets(range);
+    if (quotes.length > 0) {
+      await cacheSetSafe(cacheKey2, quotes, MARKETS_REDIS_TTL_SEC);
+      log27.info(
+        { count: quotes.length, total: 5, range, tickers: quotes.map((q) => q.symbol) },
+        "fetched tickers"
+      );
+      res.json({ data: quotes, stale: false, lastFresh: Date.now() });
+    } else if (cached) {
+      log27.warn("all tickers failed, serving stale cache");
+      res.json({
+        data: cached.data,
+        stale: true,
+        lastFresh: cached.lastFresh
+      });
+    } else {
+      log27.error("all tickers failed with no cache available");
+      res.status(502).json({ error: "No market data available", code: "UPSTREAM_ERROR", statusCode: 502 });
+    }
+  } catch (err) {
+    log27.error({ err }, "upstream error");
+    if (cached) {
+      res.json({
+        data: cached.data,
+        stale: true,
+        lastFresh: cached.lastFresh
+      });
+    } else {
+      throw new AppError(
+        502,
+        "UPSTREAM_FAIL",
+        `yahoo-finance fetch failed: ${err.message}`
+      );
     }
   }
 });
 
 // server/routes/news.ts
-import { Router as Router6 } from "express";
-import { z as z9 } from "zod";
+import { Router as Router10 } from "express";
+import { z as z11 } from "zod";
 
 // server/lib/newsClustering.ts
 import { createHash } from "crypto";
@@ -83962,7 +84439,7 @@ async function fetchGdeltArticles() {
 
 // server/adapters/rss.ts
 import { XMLParser } from "fast-xml-parser";
-var log24 = logger.child({ module: "rss" });
+var log28 = logger.child({ module: "rss" });
 function stripHtml(html) {
   return html.replace(/<[^>]*>/g, "").trim();
 }
@@ -84022,7 +84499,7 @@ async function fetchAllRssFeeds() {
     if (result.status === "fulfilled") {
       articles.push(...result.value);
     } else {
-      log24.warn({ err: result.reason }, "feed fetch failed");
+      log28.warn({ err: result.reason }, "feed fetch failed");
     }
   }
   return articles;
@@ -84397,12 +84874,12 @@ function filterAndScoreArticles(articles) {
 }
 
 // server/routes/news.ts
-var log25 = logger.child({ module: "news" });
-var newsQuerySchema = z9.object({
-  refresh: z9.enum(["true", "false"]).optional().transform((v) => v === "true")
+var log29 = logger.child({ module: "news" });
+var newsQuerySchema = z11.object({
+  refresh: z11.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
 var NEWS_FEED_KEY = "news:feed";
-var newsRouter = Router6();
+var newsRouter = Router10();
 newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
   const { refresh: forceRefresh } = res.locals.validatedQuery;
   const cached = forceRefresh ? null : await cacheGetSafe(NEWS_FEED_KEY, NEWS_CACHE_TTL);
@@ -84413,7 +84890,7 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
     const [gdeltArticles, rssArticles] = await Promise.all([
       fetchGdeltArticles(),
       fetchAllRssFeeds().catch((err) => {
-        log25.warn({ err }, "RSS fetch failed (non-fatal)");
+        log29.warn({ err }, "RSS fetch failed (non-fatal)");
         return [];
       })
     ]);
@@ -84437,10 +84914,10 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
     await cacheSetSafe(NEWS_FEED_KEY, clusters, NEWS_REDIS_TTL_SEC);
     const gdeltCount = gdeltArticles.length;
     const rssCount = rssArticles.length;
-    log25.info({ gdeltCount, rssCount, clusterCount: clusters.length }, "fetched and clustered news");
+    log29.info({ gdeltCount, rssCount, clusterCount: clusters.length }, "fetched and clustered news");
     res.json({ data: clusters, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log25.error({ err }, "upstream error");
+    log29.error({ err }, "upstream error");
     if (cached) {
       res.json({ data: cached.data, stale: true, lastFresh: cached.lastFresh });
     } else {
@@ -84449,258 +84926,250 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
   }
 });
 
-// server/routes/markets.ts
-import { Router as Router7 } from "express";
-import { z as z10 } from "zod";
-
-// server/adapters/yahoo-finance.ts
-var log26 = logger.child({ module: "yahoo-finance" });
-var TICKERS = ["BZ=F", "CL=F", "XLE", "USO", "XOM"];
-var DISPLAY_NAMES = {
-  "BZ=F": "Brent",
-  "CL=F": "WTI",
-  XLE: "XLE",
-  USO: "USO",
-  XOM: "XOM"
-};
-var RANGE_CONFIG = {
-  "1d": { range: "5d", interval: "2m" },
-  "5d": { range: "5d", interval: "15m" },
-  "1mo": { range: "1mo", interval: "30m" },
-  ytd: { range: "ytd", interval: "1d" }
-};
-async function fetchTicker(symbol, range = "1d") {
+// server/routes/refresh-events-cron.ts
+import { Router as Router11 } from "express";
+var log30 = logger.child({ module: "refresh-events-cron" });
+var refreshEventsCronRouter = Router11();
+refreshEventsCronRouter.get("/", async (req, res) => {
+  if (env.CRON_SECRET) {
+    const auth = req.header("Authorization") ?? req.header("authorization") ?? "";
+    const expected = `Bearer ${env.CRON_SECRET}`;
+    if (auth !== expected) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+  }
+  const forceCooldown = req.query.force === "true";
+  const t0 = Date.now();
   try {
-    const cfg = RANGE_CONFIG[range];
-    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${cfg.range}&interval=${cfg.interval}&includePrePost=false`;
-    const resp = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
-      signal: AbortSignal.timeout(1e4)
+    const result = await runRefreshExtraction({
+      triggeredBy: "cron",
+      forceCooldown
     });
-    if (!resp.ok) {
-      log26.warn({ symbol, status: resp.status }, "HTTP error");
-      return null;
-    }
-    const json = await resp.json();
-    const result = json.chart?.result?.[0];
-    if (!result) {
-      log26.warn({ symbol }, "no chart result");
-      return null;
-    }
-    const { meta, timestamp: rawTimestamps, indicators } = result;
-    const quote = indicators?.quote?.[0];
-    if (!meta || !rawTimestamps || !quote) {
-      log26.warn({ symbol }, "missing meta/timestamps/quote");
-      return null;
-    }
-    const price = meta.regularMarketPrice;
-    const previousClose = meta.previousClose ?? meta.chartPreviousClose ?? price;
-    const nowSec = Math.floor(Date.now() / 1e3);
-    const tradingPeriod = meta.currentTradingPeriod?.regular;
-    const marketOpen = tradingPeriod ? nowSec >= tradingPeriod.start && nowSec <= tradingPeriod.end : false;
-    const timestamps = [];
-    const closes = [];
-    const highs = [];
-    const lows = [];
-    for (let i = 0; i < rawTimestamps.length; i++) {
-      const ts = rawTimestamps[i];
-      const c = quote.close?.[i];
-      const h = quote.high?.[i];
-      const l = quote.low?.[i];
-      if (ts != null && c != null && h != null && l != null) {
-        timestamps.push(ts * 1e3);
-        closes.push(c);
-        highs.push(h);
-        lows.push(l);
+    const durationMs = Date.now() - t0;
+    log30.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
+    res.status(200).json({ ok: true, durationMs, ...result });
+  } catch (err) {
+    const durationMs = Date.now() - t0;
+    const message = err instanceof Error ? err.message : String(err);
+    log30.error({ err: message, durationMs }, "refresh-events cron failed");
+    res.status(500).json({
+      ok: false,
+      error: "refresh_failed",
+      detail: message.slice(0, 200),
+      durationMs
+    });
+  }
+});
+
+// server/routes/ships.ts
+import { Router as Router12 } from "express";
+
+// server/adapters/aisstream.ts
+var DEFAULT_COLLECT_MS = 5e3;
+async function collectShips() {
+  const apiKey = process.env.AISSTREAM_API_KEY;
+  if (!apiKey) {
+    throw new Error("AISSTREAM_API_KEY is not set");
+  }
+  const collectMs = Number(process.env.AISSTREAM_COLLECT_MS) || DEFAULT_COLLECT_MS;
+  return new Promise((resolve4, reject) => {
+    const collected = /* @__PURE__ */ new Map();
+    const ws = new WebSocket("wss://stream.aisstream.io/v0/stream");
+    let timer;
+    ws.addEventListener("open", () => {
+      ws.send(
+        JSON.stringify({
+          APIKey: apiKey,
+          BoundingBoxes: [
+            [
+              [IRAN_BBOX.south, IRAN_BBOX.west],
+              [IRAN_BBOX.north, IRAN_BBOX.east]
+            ]
+          ],
+          FilterMessageTypes: ["PositionReport"]
+        })
+      );
+    });
+    ws.addEventListener("message", async (event) => {
+      const raw = event.data instanceof Blob ? await event.data.text() : String(event.data);
+      const msg = JSON.parse(raw);
+      if (msg.MessageType === "PositionReport") {
+        const report = msg.Message.PositionReport;
+        const meta = msg.MetaData;
+        const entity = {
+          id: `ship-${meta.MMSI}`,
+          type: "ship",
+          lat: report.Latitude,
+          lng: report.Longitude,
+          timestamp: new Date(meta.time_utc).getTime(),
+          label: meta.ShipName?.trim() || `MMSI ${meta.MMSI}`,
+          data: {
+            mmsi: meta.MMSI,
+            shipName: meta.ShipName?.trim() || "",
+            speedOverGround: report.Sog,
+            courseOverGround: report.Cog,
+            trueHeading: report.TrueHeading
+          }
+        };
+        collected.set(meta.MMSI, entity);
       }
-    }
-    return {
-      symbol,
-      displayName: DISPLAY_NAMES[symbol] ?? symbol,
-      price,
-      previousClose,
-      change: price - previousClose,
-      changePercent: previousClose !== 0 ? (price - previousClose) / previousClose * 100 : 0,
-      currency: meta.currency ?? "USD",
-      marketOpen,
-      lastTradeTime: meta.regularMarketTime * 1e3,
-      history: { timestamps, closes, highs, lows }
-    };
-  } catch (err) {
-    log26.warn({ err, symbol }, "fetch error");
-    return null;
-  }
-}
-async function fetchMarkets(range = "1d") {
-  const results = await Promise.allSettled(TICKERS.map((t) => fetchTicker(t, range)));
-  return results.filter((r) => r.status === "fulfilled").map((r) => r.value).filter((q) => q !== null);
-}
-
-// server/routes/markets.ts
-var log27 = logger.child({ module: "markets" });
-var marketsQuerySchema = z10.object({
-  range: z10.enum(["1d", "5d", "1mo", "ytd"]).default("1d")
-});
-var marketsRouter = Router7();
-marketsRouter.get("/", validateQuery(marketsQuerySchema), async (_req, res) => {
-  const { range } = res.locals.validatedQuery;
-  const cacheKey2 = `markets:yahoo:${range}`;
-  const cached = await cacheGetSafe(cacheKey2, MARKETS_CACHE_TTL);
-  if (cached && !cached.stale) {
-    return res.json(cached);
-  }
-  try {
-    const quotes = await fetchMarkets(range);
-    if (quotes.length > 0) {
-      await cacheSetSafe(cacheKey2, quotes, MARKETS_REDIS_TTL_SEC);
-      log27.info(
-        { count: quotes.length, total: 5, range, tickers: quotes.map((q) => q.symbol) },
-        "fetched tickers"
-      );
-      res.json({ data: quotes, stale: false, lastFresh: Date.now() });
-    } else if (cached) {
-      log27.warn("all tickers failed, serving stale cache");
-      res.json({
-        data: cached.data,
-        stale: true,
-        lastFresh: cached.lastFresh
-      });
-    } else {
-      log27.error("all tickers failed with no cache available");
-      res.status(502).json({ error: "No market data available", code: "UPSTREAM_ERROR", statusCode: 502 });
-    }
-  } catch (err) {
-    log27.error({ err }, "upstream error");
-    if (cached) {
-      res.json({
-        data: cached.data,
-        stale: true,
-        lastFresh: cached.lastFresh
-      });
-    } else {
-      throw new AppError(
-        502,
-        "UPSTREAM_FAIL",
-        `yahoo-finance fetch failed: ${err.message}`
-      );
-    }
-  }
-});
-
-// server/routes/weather.ts
-import { Router as Router8 } from "express";
-
-// server/adapters/open-meteo.ts
-var BASE_URL2 = "https://api.open-meteo.com/v1/forecast";
-var TIMEOUT_MS3 = 3e4;
-var LAT_MIN = 15;
-var LAT_MAX = 42;
-var LNG_MIN = 30;
-var LNG_MAX = 70;
-var LAT_SPLIT = 28;
-function buildCoords(latStart, latEnd) {
-  const latValues = [];
-  const lngValues = [];
-  for (let lat = latStart; lat <= latEnd; lat++) {
-    for (let lng = LNG_MIN; lng <= LNG_MAX; lng++) {
-      latValues.push(lat);
-      lngValues.push(lng);
-    }
-  }
-  return {
-    lats: latValues.join(","),
-    lngs: lngValues.join(",")
-  };
-}
-async function fetchBand(latStart, latEnd) {
-  const { lats, lngs } = buildCoords(latStart, latEnd);
-  const url = `${BASE_URL2}?latitude=${lats}&longitude=${lngs}&current=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&forecast_days=1`;
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(TIMEOUT_MS3)
+    });
+    timer = setTimeout(() => {
+      ws.close();
+      resolve4(Array.from(collected.values()));
+    }, collectMs);
+    ws.addEventListener("error", () => {
+      if (timer !== void 0) clearTimeout(timer);
+      try {
+        ws.close();
+      } catch {
+      }
+      reject(new Error("AISStream WebSocket connection failed"));
+    });
   });
-  if (!res.ok) {
-    throw new Error(`Open-Meteo API returned ${res.status}`);
-  }
-  const data = await res.json();
-  return data.map((r) => ({
-    lat: r.latitude,
-    lng: r.longitude,
-    temperature: r.current.temperature_2m,
-    windSpeed: r.current.wind_speed_10m,
-    windDirection: r.current.wind_direction_10m
-  }));
-}
-async function fetchWeather() {
-  const [band1, band2] = await Promise.all([
-    fetchBand(LAT_MIN, LAT_SPLIT),
-    fetchBand(LAT_SPLIT + 1, LAT_MAX)
-  ]);
-  return [...band1, ...band2];
 }
 
-// server/routes/weather.ts
-var log28 = logger.child({ module: "weather" });
-var weatherRouter = Router8();
-weatherRouter.get("/", async (_req, res) => {
-  const cached = await cacheGetSafe(WEATHER_CACHE_KEY, WEATHER_CACHE_TTL);
+// server/routes/ships.ts
+var log31 = logger.child({ module: "ships" });
+var shipsRouter = Router12();
+var SHIPS_KEY = "ships:ais";
+var LOGICAL_TTL_MS2 = 3e4;
+var REDIS_TTL_SEC2 = 300;
+var STALE_THRESHOLD_MS2 = 6e5;
+shipsRouter.get("/", async (_req, res) => {
+  const cached = await cacheGetSafe(SHIPS_KEY, LOGICAL_TTL_MS2);
   if (cached && !cached.stale) {
-    return res.json(cached);
-  }
-  try {
-    const points = await fetchWeather();
-    await cacheSetSafe(WEATHER_CACHE_KEY, points, WEATHER_REDIS_TTL_SEC);
-    log28.info({ count: points.length }, "fetched grid points");
-    res.json({ data: points, stale: false, lastFresh: Date.now() });
-  } catch (err) {
-    log28.error({ err }, "upstream error");
-    if (cached) {
-      res.json({
-        data: cached.data,
-        stale: true,
-        lastFresh: cached.lastFresh
-      });
-    } else {
-      throw new AppError(
-        502,
-        "UPSTREAM_FAIL",
-        `open-meteo fetch failed: ${err.message}`
-      );
-    }
-  }
-});
-
-// server/routes/geocode.ts
-import { Router as Router9 } from "express";
-import { z as z11 } from "zod";
-var geocodeQuerySchema = z11.object({
-  lat: z11.coerce.number().min(-90).max(90),
-  lon: z11.coerce.number().min(-180).max(180)
-});
-var GEOCODE_CACHE_PREFIX3 = "geocode:";
-var GEOCODE_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
-var GEOCODE_REDIS_TTL_SEC = 90 * 24 * 60 * 60;
-var geocodeRouter = Router9();
-geocodeRouter.get("/", validateQuery(geocodeQuerySchema), async (_req, res) => {
-  const { lat, lon } = res.locals.validatedQuery;
-  const qLat = Math.round(lat * 100) / 100;
-  const qLon = Math.round(lon * 100) / 100;
-  const cacheKey2 = `${GEOCODE_CACHE_PREFIX3}${qLat},${qLon}`;
-  const cached = await cacheGetSafe(cacheKey2, GEOCODE_TTL_MS);
-  if (cached) {
     res.json(cached);
     return;
   }
-  const result = await reverseGeocode(qLat, qLon);
-  await cacheSetSafe(cacheKey2, result, GEOCODE_REDIS_TTL_SEC);
-  res.json({ data: result, stale: false, lastFresh: Date.now() });
+  try {
+    const fresh = await collectShips();
+    const shipMap = /* @__PURE__ */ new Map();
+    if (cached) {
+      for (const ship of cached.data) {
+        shipMap.set(ship.id, ship);
+      }
+    }
+    for (const ship of fresh) {
+      shipMap.set(ship.id, ship);
+    }
+    const now = Date.now();
+    for (const [id, ship] of shipMap) {
+      if (ship.timestamp < now - STALE_THRESHOLD_MS2) {
+        shipMap.delete(id);
+      }
+    }
+    const merged = Array.from(shipMap.values());
+    await cacheSetSafe(SHIPS_KEY, merged, REDIS_TTL_SEC2);
+    res.json({ data: merged, stale: false, lastFresh: Date.now() });
+  } catch (err) {
+    log31.error({ err }, "collectShips error");
+    if (cached) {
+      res.json({ ...cached, stale: true });
+    } else {
+      res.status(500).json({ error: "Ship data unavailable", code: "UPSTREAM_ERROR", statusCode: 500 });
+    }
+  }
+});
+
+// server/routes/sites.ts
+import { Router as Router13 } from "express";
+import { z as z12 } from "zod";
+var log32 = logger.child({ module: "sites" });
+var sitesQuerySchema = z12.object({
+  refresh: z12.enum(["true", "false"]).optional().transform((v) => v === "true")
+});
+var SITES_KEY2 = "sites:v3";
+var LOGICAL_TTL_MS3 = SITES_CACHE_TTL;
+var REDIS_TTL_SEC3 = 259200;
+var sitesRouter = Router13();
+sitesRouter.get("/", validateQuery(sitesQuerySchema), async (_req, res) => {
+  const { refresh: forceRefresh } = res.locals.validatedQuery;
+  const cached = await cacheGetSafe(SITES_KEY2, LOGICAL_TTL_MS3);
+  if (cached && !cached.stale && !forceRefresh) {
+    const payload = cached.data;
+    return sendValidated(res, sitesResponseSchema, {
+      data: payload.sites,
+      stale: cached.stale,
+      lastFresh: cached.lastFresh,
+      filterStats: {
+        ...payload.filterStats,
+        source: "redis",
+        generatedAt: new Date(cached.lastFresh).toISOString()
+      }
+    });
+  }
+  if (!forceRefresh) {
+    const snapshot = loadSitesSnapshot();
+    if (snapshot) {
+      await cacheSetSafe(
+        SITES_KEY2,
+        { sites: snapshot.sites, filterStats: snapshot.stats },
+        REDIS_TTL_SEC3
+      );
+      log32.info(
+        { count: snapshot.sites.length, generatedAt: snapshot.generatedAt },
+        "serving sites from committed snapshot; Overpass untouched"
+      );
+      return sendValidated(res, sitesResponseSchema, {
+        data: snapshot.sites,
+        stale: false,
+        lastFresh: Date.now(),
+        filterStats: snapshot.stats
+        // source='snapshot' already forced in loadSitesSnapshot
+      });
+    }
+  }
+  try {
+    const { sites, stats } = await fetchSites();
+    await cacheSetSafe(SITES_KEY2, { sites, filterStats: stats }, REDIS_TTL_SEC3);
+    sendValidated(res, sitesResponseSchema, {
+      data: sites,
+      stale: false,
+      lastFresh: Date.now(),
+      filterStats: stats
+    });
+  } catch (err) {
+    log32.error({ err }, "Overpass error");
+    if (cached) {
+      const payload = cached.data;
+      sendValidated(res, sitesResponseSchema, {
+        data: payload.sites,
+        stale: true,
+        lastFresh: cached.lastFresh,
+        filterStats: {
+          ...payload.filterStats,
+          source: "redis",
+          generatedAt: new Date(cached.lastFresh).toISOString()
+        }
+      });
+    } else {
+      throw new AppError(502, "UPSTREAM_FAIL", `overpass fetch failed: ${err.message}`);
+    }
+  }
+});
+
+// server/routes/sources.ts
+import { Router as Router14 } from "express";
+var sourcesRouter = Router14();
+sourcesRouter.get("/", (_req, res) => {
+  res.json({
+    opensky: {
+      configured: !!(process.env.OPENSKY_CLIENT_ID && process.env.OPENSKY_CLIENT_SECRET)
+    },
+    adsblol: {
+      configured: true
+    }
+  });
 });
 
 // server/routes/water.ts
-import { Router as Router10 } from "express";
-import { z as z12 } from "zod";
+import { Router as Router15 } from "express";
+import { z as z13 } from "zod";
 
 // server/adapters/open-meteo-precip.ts
-var log29 = logger.child({ module: "open-meteo-precip" });
+var log33 = logger.child({ module: "open-meteo-precip" });
 var REGIONAL_NORMALS_MM = {
   arid: 20,
   // Arabian Peninsula, central Iran, Sahara
@@ -84714,7 +85183,7 @@ function estimateNormalMm(lat, lng) {
   return REGIONAL_NORMALS_MM.arid;
 }
 var BATCH_SIZE4 = 100;
-var TIMEOUT_MS4 = 3e4;
+var TIMEOUT_MS3 = 3e4;
 var GRID_STEP = 0.5;
 function quantize(v) {
   return Math.round(v / GRID_STEP) * GRID_STEP;
@@ -84732,7 +85201,7 @@ async function fetchPrecipitation(locations) {
     }
   }
   const uniqueCells = Array.from(cellMap.values());
-  log29.info(
+  log33.info(
     {
       locations: locations.length,
       uniqueCells: uniqueCells.length,
@@ -84748,10 +85217,10 @@ async function fetchPrecipitation(locations) {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}&daily=precipitation_sum&past_days=30&forecast_days=0&timezone=UTC`;
     try {
       const res = await fetch(url, {
-        signal: AbortSignal.timeout(TIMEOUT_MS4)
+        signal: AbortSignal.timeout(TIMEOUT_MS3)
       });
       if (!res.ok) {
-        log29.warn(
+        log33.warn(
           { batch: Math.floor(i / BATCH_SIZE4), status: res.status },
           "batch returned error, skipping"
         );
@@ -84775,7 +85244,7 @@ async function fetchPrecipitation(locations) {
         });
       }
     } catch (batchErr) {
-      log29.warn({ err: batchErr, batch: Math.floor(i / BATCH_SIZE4) }, "batch failed, skipping");
+      log33.warn({ err: batchErr, batch: Math.floor(i / BATCH_SIZE4) }, "batch failed, skipping");
       continue;
     }
   }
@@ -84792,7 +85261,7 @@ async function fetchPrecipitation(locations) {
       updatedAt: now
     });
   }
-  log29.info(
+  log33.info(
     { cells: cellResults.size, mappedLocations: results.length },
     "precipitation fetch complete"
   );
@@ -84800,7 +85269,7 @@ async function fetchPrecipitation(locations) {
 }
 
 // server/routes/water.ts
-var log30 = logger.child({ module: "water" });
+var log34 = logger.child({ module: "water" });
 function buildEmptyFilterStats(source, generatedAt) {
   return {
     rawCounts: {},
@@ -84825,19 +85294,19 @@ function buildEmptyFilterStats(source, generatedAt) {
     scoreHistogram: []
   };
 }
-var waterQuerySchema = z12.object({
-  refresh: z12.enum(["true", "false"]).optional().transform((v) => v === "true")
+var waterQuerySchema = z13.object({
+  refresh: z13.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
 var FACILITIES_KEY = "water:facilities:v3";
 var PRECIP_KEY = "water:precip";
-var waterRouter = Router10();
+var waterRouter = Router15();
 waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
-  log30.info("GET /api/water hit");
+  log34.info("GET /api/water hit");
   const isCron = req.headers["user-agent"]?.includes("vercel-cron");
   const { refresh } = res.locals.validatedQuery;
   const forceRefresh = refresh && (isCron || process.env.NODE_ENV !== "production");
   const cached = await cacheGetSafe(FACILITIES_KEY, WATER_CACHE_TTL);
-  log30.info(
+  log34.info(
     { cacheHit: !!cached, count: cached?.data.facilities.length, stale: cached?.stale },
     "cache result"
   );
@@ -84883,7 +85352,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
         { facilities: snapshot.facilities, filterStats: snapshot.stats },
         WATER_REDIS_TTL_SEC
       );
-      log30.info(
+      log34.info(
         { count: snapshot.facilities.length, generatedAt: snapshot.generatedAt },
         "serving water facilities from committed snapshot; Overpass untouched"
       );
@@ -84907,7 +85376,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
       filterStats
     });
   } catch (err) {
-    log30.error({ err }, "Overpass error");
+    log34.error({ err }, "Overpass error");
     if (cached) {
       const payload = cached.data;
       sendValidated(res, waterResponseSchema, {
@@ -84921,7 +85390,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
         }
       });
     } else {
-      log30.warn("Overpass failed, returning empty");
+      log34.warn("Overpass failed, returning empty");
       sendValidated(res, waterResponseSchema, {
         data: [],
         stale: true,
@@ -84958,7 +85427,7 @@ waterRouter.get("/precip", validateQuery(waterQuerySchema), async (_req, res) =>
     }
     res.json({ data: precipData, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log30.error({ err }, "precipitation fetch error");
+    log34.error({ err }, "precipitation fetch error");
     if (cachedPrecip) {
       res.json({ data: cachedPrecip.data, stale: true, lastFresh: cachedPrecip.lastFresh });
     } else {
@@ -84967,239 +85436,86 @@ waterRouter.get("/precip", validateQuery(waterQuerySchema), async (_req, res) =>
   }
 });
 
-// server/routes/health.ts
-import { Router as Router11 } from "express";
-var healthRouter = Router11();
-var SOURCE_KEYS = {
-  flights: "flights:adsblol",
-  ships: "ships:ais",
-  events: "events:gdelt",
-  news: "news:gdelt",
-  markets: "markets:yahoo:1d",
-  weather: "weather:open-meteo",
-  sites: "sites:v2",
-  water: "water:facilities"
-};
-var ESTIMATED_DAILY_COMMANDS = 15282;
-healthRouter.get("/", async (_req, res) => {
-  let redisOk = false;
-  let latencyMs = 0;
-  const start = Date.now();
-  try {
-    await redis.ping();
-    redisOk = true;
-    latencyMs = Date.now() - start;
-  } catch {
-    latencyMs = Date.now() - start;
-  }
-  const sources = {};
-  await Promise.all(
-    Object.entries(SOURCE_KEYS).map(async ([name, key]) => {
-      try {
-        const entry = await cacheGetSafe(key, 999999999);
-        sources[name] = entry?.lastFresh ?? null;
-      } catch {
-        sources[name] = null;
-      }
-    })
-  );
-  res.json({
-    status: redisOk ? "ok" : "degraded",
-    redis: redisOk,
-    uptime: process.uptime(),
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    latencyMs,
-    sources,
-    estimatedDailyCommands: ESTIMATED_DAILY_COMMANDS
-  });
-});
-
-// server/routes/cron-health.ts
-import { Router as Router12 } from "express";
-var log31 = logger.child({ module: "cron-health" });
-var cronHealthRouter = Router12();
-var SOURCE_KEYS2 = {
-  flights: "flights:adsblol",
-  ships: "ships:ais",
-  events: "events:gdelt",
-  news: "news:gdelt",
-  markets: "markets:yahoo:1d",
-  weather: "weather:open-meteo",
-  sites: "sites:v2",
-  water: "water:facilities"
-};
-var STALE_THRESHOLD_MS2 = 60 * 60 * 1e3;
-cronHealthRouter.get("/", async (req, res) => {
-  if (env.CRON_SECRET) {
-    const auth = req.header("Authorization") ?? req.header("authorization") ?? "";
-    const expected = `Bearer ${env.CRON_SECRET}`;
-    if (auth !== expected) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-  }
-  const now = Date.now();
-  let redisOk = false;
-  try {
-    await redis.ping();
-    redisOk = true;
-  } catch {
-    log31.error("Redis ping failed");
-  }
-  const sources = {};
-  const warnings = [];
-  await Promise.all(
-    Object.entries(SOURCE_KEYS2).map(async ([name, key]) => {
-      try {
-        const entry = await cacheGetSafe(key, 999999999);
-        const lastFresh = entry?.lastFresh ?? null;
-        const stale = lastFresh !== null && now - lastFresh > STALE_THRESHOLD_MS2;
-        sources[name] = { lastFresh, stale };
-        if (stale) {
-          const ageMin = Math.round((now - lastFresh) / 6e4);
-          warnings.push(`${name}: stale (${ageMin}min old)`);
-        } else if (lastFresh === null) {
-          warnings.push(`${name}: no data`);
-        }
-      } catch {
-        sources[name] = { lastFresh: null, stale: false };
-        warnings.push(`${name}: fetch error`);
-      }
-    })
-  );
-  if (warnings.length > 0) {
-    log31.warn({ warningCount: warnings.length, warnings }, "source health warnings");
-  } else {
-    log31.info("all sources healthy");
-  }
-  let evalScore = null;
-  let evalError = null;
-  try {
-    evalScore = await runEval();
-    log31.info({ evalScore }, "eval drift check complete");
-  } catch (err) {
-    evalError = err instanceof Error ? err.message : String(err);
-    log31.warn({ err: evalError }, "eval drift check threw \u2014 continuing health response");
-  }
-  res.json({
-    status: redisOk ? "ok" : "degraded",
-    redis: redisOk,
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    sources,
-    warnings,
-    evalScore,
-    evalError
-  });
-});
-
-// server/routes/cron-warm.ts
-import { Router as Router13 } from "express";
-var log32 = logger.child({ module: "cron-warm" });
-var SITES_REDIS_TTL_SEC = 259200;
-var SITES_KEY2 = "sites:v2";
-var WATER_KEY = "water:facilities";
-var cronWarmRouter = Router13();
-cronWarmRouter.get("/", async (_req, res) => {
-  const start = Date.now();
-  log32.info("starting cache pre-warm");
-  const results = await Promise.allSettled([
-    (async () => {
-      const { sites } = await fetchSites();
-      await cacheSetSafe(SITES_KEY2, sites, SITES_REDIS_TTL_SEC);
-      return sites.length;
-    })(),
-    (async () => {
-      const { facilities } = await fetchWaterFacilities();
-      await cacheSetSafe(WATER_KEY, facilities, WATER_REDIS_TTL_SEC);
-      return facilities.length;
-    })()
-  ]);
-  const summary = {
-    sites: results[0].status === "fulfilled" ? { ok: true, count: results[0].value } : { ok: false, error: String(results[0].reason) },
-    water: results[1].status === "fulfilled" ? { ok: true, count: results[1].value } : { ok: false, error: String(results[1].reason) },
-    durationMs: Date.now() - start
-  };
-  const allOk = results.every((r) => r.status === "fulfilled");
-  const logLevel = allOk ? "info" : "warn";
-  log32[logLevel](summary, "cache pre-warm complete");
-  res.json({ status: allOk ? "ok" : "partial", ...summary });
-});
-
-// server/routes/eval-cron.ts
-import { Router as Router14 } from "express";
-var log33 = logger.child({ module: "eval-cron" });
-var evalCronRouter = Router14();
-evalCronRouter.post("/", async (req, res) => {
-  if (env.CRON_SECRET) {
-    const auth = req.header("Authorization") ?? req.header("authorization") ?? "";
-    const expected = `Bearer ${env.CRON_SECRET}`;
-    if (auth !== expected) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-  }
-  const t0 = Date.now();
-  try {
-    const score = await runEval();
-    const durationMs = Date.now() - t0;
-    const ratioWithin20km = score.total > 0 ? score.within20km / score.total : 0;
-    log33.info({ score, durationMs, ratioWithin20km }, "eval cron run complete");
-    res.status(200).json({
-      status: "ok",
-      score,
-      durationMs,
-      ratioWithin20km
-    });
-  } catch (err) {
-    const durationMs = Date.now() - t0;
-    const message = err instanceof Error ? err.message : String(err);
-    log33.error({ err: message, durationMs }, "eval cron run failed");
-    res.status(500).json({ status: "error", error: message, durationMs });
-  }
-});
-
-// server/routes/refresh-events-cron.ts
-import { Router as Router15 } from "express";
-var log34 = logger.child({ module: "refresh-events-cron" });
-var refreshEventsCronRouter = Router15();
-refreshEventsCronRouter.get("/", async (req, res) => {
-  if (env.CRON_SECRET) {
-    const auth = req.header("Authorization") ?? req.header("authorization") ?? "";
-    const expected = `Bearer ${env.CRON_SECRET}`;
-    if (auth !== expected) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-  }
-  const forceCooldown = req.query.force === "true";
-  const t0 = Date.now();
-  try {
-    const result = await runRefreshExtraction({
-      triggeredBy: "cron",
-      forceCooldown
-    });
-    const durationMs = Date.now() - t0;
-    log34.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
-    res.status(200).json({ ok: true, durationMs, ...result });
-  } catch (err) {
-    const durationMs = Date.now() - t0;
-    const message = err instanceof Error ? err.message : String(err);
-    log34.error({ err: message, durationMs }, "refresh-events cron failed");
-    res.status(500).json({
-      ok: false,
-      error: "refresh_failed",
-      detail: message.slice(0, 200),
-      durationMs
-    });
-  }
-});
-
-// server/routes/dashboardAuth.ts
+// server/routes/weather.ts
 import { Router as Router16 } from "express";
-var dashboardAuthRouter = Router16();
-dashboardAuthRouter.get("/auth-check", dashboardAuth, (_req, res) => {
-  const isProd2 = process.env.NODE_ENV === "production";
-  res.json({ ok: true, mode: isProd2 ? "authenticated" : "dev-bypass" });
+
+// server/adapters/open-meteo.ts
+var BASE_URL2 = "https://api.open-meteo.com/v1/forecast";
+var TIMEOUT_MS4 = 3e4;
+var LAT_MIN = 15;
+var LAT_MAX = 42;
+var LNG_MIN = 30;
+var LNG_MAX = 70;
+var LAT_SPLIT = 28;
+function buildCoords(latStart, latEnd) {
+  const latValues = [];
+  const lngValues = [];
+  for (let lat = latStart; lat <= latEnd; lat++) {
+    for (let lng = LNG_MIN; lng <= LNG_MAX; lng++) {
+      latValues.push(lat);
+      lngValues.push(lng);
+    }
+  }
+  return {
+    lats: latValues.join(","),
+    lngs: lngValues.join(",")
+  };
+}
+async function fetchBand(latStart, latEnd) {
+  const { lats, lngs } = buildCoords(latStart, latEnd);
+  const url = `${BASE_URL2}?latitude=${lats}&longitude=${lngs}&current=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&forecast_days=1`;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(TIMEOUT_MS4)
+  });
+  if (!res.ok) {
+    throw new Error(`Open-Meteo API returned ${res.status}`);
+  }
+  const data = await res.json();
+  return data.map((r) => ({
+    lat: r.latitude,
+    lng: r.longitude,
+    temperature: r.current.temperature_2m,
+    windSpeed: r.current.wind_speed_10m,
+    windDirection: r.current.wind_direction_10m
+  }));
+}
+async function fetchWeather() {
+  const [band1, band2] = await Promise.all([
+    fetchBand(LAT_MIN, LAT_SPLIT),
+    fetchBand(LAT_SPLIT + 1, LAT_MAX)
+  ]);
+  return [...band1, ...band2];
+}
+
+// server/routes/weather.ts
+var log35 = logger.child({ module: "weather" });
+var weatherRouter = Router16();
+weatherRouter.get("/", async (_req, res) => {
+  const cached = await cacheGetSafe(WEATHER_CACHE_KEY, WEATHER_CACHE_TTL);
+  if (cached && !cached.stale) {
+    return res.json(cached);
+  }
+  try {
+    const points = await fetchWeather();
+    await cacheSetSafe(WEATHER_CACHE_KEY, points, WEATHER_REDIS_TTL_SEC);
+    log35.info({ count: points.length }, "fetched grid points");
+    res.json({ data: points, stale: false, lastFresh: Date.now() });
+  } catch (err) {
+    log35.error({ err }, "upstream error");
+    if (cached) {
+      res.json({
+        data: cached.data,
+        stale: true,
+        lastFresh: cached.lastFresh
+      });
+    } else {
+      throw new AppError(
+        502,
+        "UPSTREAM_FAIL",
+        `open-meteo fetch failed: ${err.message}`
+      );
+    }
+  }
 });
 
 // server/index.ts
@@ -85253,6 +85569,7 @@ function createApp() {
     next();
   });
   app2.use("/health", healthRouter);
+  app2.use("/api/health", healthRouter);
   app2.use("/api/cron/health", cronHealthRouter);
   app2.use("/api/cron/warm", cronWarmRouter);
   app2.use("/api/cron/eval", evalCronRouter);

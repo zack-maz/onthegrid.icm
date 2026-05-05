@@ -10,6 +10,7 @@
  * @module relevanceScorer
  */
 import nlp from 'compromise';
+
 import type { ArticleTriple } from './nlpExtractor.js';
 
 export interface ScoringInput {

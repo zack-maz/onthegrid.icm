@@ -2,8 +2,9 @@
  * CoordinateReadout component tests
  * Covers MAP-01e (displays formatted coordinates from store)
  */
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
 import { CoordinateReadout } from '@/components/map/CoordinateReadout';
 
 // Mock mapStore to return specific cursor coordinates

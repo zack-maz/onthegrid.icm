@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { renderHook } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+
+import { RadialGradientExtension } from '@/components/map/layers/RadialGradientExtension';
 import {
   useThreatHeatmapLayers,
   ThreatTooltip,
@@ -10,13 +12,12 @@ import {
   mergeClusters,
   THERMAL_COLOR_RANGE,
 } from '@/components/map/layers/ThreatHeatmapOverlay';
-import { RadialGradientExtension } from '@/components/map/layers/RadialGradientExtension';
-import type { ThreatCluster } from '@/types/ui';
-import { useEventStore } from '@/stores/eventStore';
-import { useLayerStore } from '@/stores/layerStore';
-import { useFilterStore } from '@/stores/filterStore';
 import { LEGEND_REGISTRY } from '@/components/map/MapLegend';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useLayerStore } from '@/stores/layerStore';
 import type { ConflictEventEntity } from '@/types/entities';
+import type { ThreatCluster } from '@/types/ui';
 
 function makeEvent(
   overrides: Partial<ConflictEventEntity> & { type: ConflictEventEntity['type'] },

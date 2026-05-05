@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
 import { IconLayer, ScatterplotLayer } from '@deck.gl/layers';
-import { useWeatherStore, type WeatherGridPoint } from '@/stores/weatherStore';
+import { useMemo } from 'react';
+
+import { useLayerStore } from '@/stores/layerStore';
 import { useWaterStore } from '@/stores/waterStore';
 import type { PrecipitationData } from '@/stores/waterStore';
-import { useLayerStore } from '@/stores/layerStore';
+import { useWeatherStore, type WeatherGridPoint } from '@/stores/weatherStore';
+
 import { getWindBarbIcon } from './windBarbs';
 
 /**

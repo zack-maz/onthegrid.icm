@@ -34,6 +34,43 @@
   --width-sidebar: 280px;
   --width-icon-strip: 48px;
   --height-topbar: 48px;
+
+  /* Phase 28.1 W6 D-13 — entity colors (used by deck.gl bridge in src/lib/colorBridge.ts
+     AND by HTML/Tailwind utilities like text-flight, bg-event-airstrike). Hex format
+     (NOT OKLCH) so colorBridge's hex parser can roundtrip cleanly to RGBA tuples for
+     deck.gl getColor callbacks. Values are byte-identical to current
+     src/components/map/layers/constants.ts ENTITY_COLORS RGBA tuples — preserves runtime
+     visual per W5 Pattern 3 (cleanup waves never silently change runtime values). */
+  --color-flight: #eab308;
+  --color-flight-unidentified: #ffff64;
+  --color-ship: #a78bfa;
+
+  --color-event-airstrike: #ff3b30;
+  --color-event-on-ground: #b43214;
+  --color-event-explosion: #ff5f19;
+  --color-event-targeted: #8b1e1e;
+  --color-event-other: #dc5a5a;
+
+  --color-site-healthy: #22c55e;
+  --color-site-attacked: #f97316;
+
+  /* Faction palette (consumed by src/lib/factions.ts via colorBridge hex re-exports) */
+  --color-faction-us-aligned: #3b82f6;
+  --color-faction-iran-aligned: #dc2626;
+  --color-faction-neutral: #64748b;
+  --color-faction-disputed: #f59e0b;
+
+  /* Ethnic palette (consumed by src/lib/ethnicGroups.ts via colorBridge) */
+  --color-ethnic-kurdish: #f59e0b;
+  --color-ethnic-arab: #10b981;
+  --color-ethnic-persian: #6366f1;
+  --color-ethnic-baloch: #ec4899;
+  --color-ethnic-turkmen: #14b8a6;
+  --color-ethnic-druze: #f97316;
+  --color-ethnic-alawite: #8b5cf6;
+  --color-ethnic-yazidi: #eab308;
+  --color-ethnic-assyrian: #06b6d4;
+  --color-ethnic-pashtun: #84cc16;
 }
 
 @layer base {

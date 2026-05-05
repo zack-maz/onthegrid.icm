@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { useSearchStore } from '@/stores/searchStore';
+
 import { WAR_START, STEP_MS, LOOKBACK_MS, snapToStep } from '@/lib/constants';
+import { useSearchStore } from '@/stores/searchStore';
 import type { SiteType, WaterFacilityType } from '@/types/entities';
 
 export const ALL_SITE_TYPES: SiteType[] = ['nuclear', 'naval', 'oil', 'airbase', 'port'];

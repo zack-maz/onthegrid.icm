@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { useSearchStore } from '@/stores/searchStore';
+
+import { findGeoName, GEO_NAMES } from '@/lib/geoNames';
+import { parseTemporalValue, parseRangeValue } from '@/lib/queryEvaluator';
+import { type QueryNode } from '@/lib/queryParser';
 import { useFilterStore } from '@/stores/filterStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useSearchStore } from '@/stores/searchStore';
 import { useSiteStore } from '@/stores/siteStore';
 import { useUIStore } from '@/stores/uiStore';
-import { type QueryNode } from '@/lib/queryParser';
-import { parseTemporalValue, parseRangeValue } from '@/lib/queryEvaluator';
-import { findGeoName, GEO_NAMES } from '@/lib/geoNames';
 
 // ─── Sync Maps ───────────────────────────────────────────────
 
@@ -645,6 +646,13 @@ export function useQuerySync(): void {
         syncSourceRef.current = null;
       }
     });
+    // syncState is intentionally excluded — it's a derived object literal
+    // rebuilt on every render. Including it would re-fire this effect every
+    // render and break the change-detection logic. The deps below enumerate
+    // every primitive field that flows into syncState (per RESEARCH §Focus
+    // Area 5 decision tree: derived objects are NOT real deps; underlying
+    // primitives are).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     altitudeMin,
     altitudeMax,

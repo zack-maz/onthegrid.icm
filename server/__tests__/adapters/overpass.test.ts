@@ -11,6 +11,7 @@
  *  - stats.overpass records fallback attempt on primary-fail
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import { classifySiteType, normalizeElement, fetchSites } from '../../adapters/overpass.js';
 
 function overpassSuccess(elements: unknown[]): Response {

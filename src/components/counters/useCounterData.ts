@@ -1,17 +1,17 @@
 import { useMemo } from 'react';
+
 import { useFilteredEntities } from '@/hooks/useFilteredEntities';
-import { useSiteStore } from '@/stores/siteStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { useLayerStore } from '@/stores/layerStore';
 import { computeAttackStatus } from '@/lib/attackStatus';
 import { haversineKm } from '@/lib/geo';
 import { classifySeverity } from '@/lib/severity';
-import { healthToScore, scoreToLabel } from '@/lib/waterStress';
-import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
 import { WATER_ATTACK_EVENT_TYPES } from '@/lib/waterAttackEvents';
-import { CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS } from '@/types/ui';
+import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+import { healthToScore, scoreToLabel } from '@/lib/waterStress';
+import { useEventStore } from '@/stores/eventStore';
+import { useFilterStore } from '@/stores/filterStore';
+import { useLayerStore } from '@/stores/layerStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useWaterStore } from '@/stores/waterStore';
 import type {
   FlightEntity,
   ShipEntity,
@@ -19,6 +19,8 @@ import type {
   SiteEntity,
   SiteType,
 } from '@/types/entities';
+import { CONFLICT_TOGGLE_GROUPS, EVENT_TYPE_LABELS } from '@/types/ui';
+
 import type { WaterFacility, WaterFacilityType } from '../../../server/types';
 
 export interface SiteCounts {

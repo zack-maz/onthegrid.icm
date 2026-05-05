@@ -1,15 +1,16 @@
-import { useMemo } from 'react';
 import { ScatterplotLayer } from '@deck.gl/layers';
-import { useLayerStore } from '@/stores/layerStore';
-import { useFilterStore } from '@/stores/filterStore';
-import { useFilteredEntities } from '@/hooks/useFilteredEntities';
+import { useMemo } from 'react';
 
+import { LEGEND_REGISTRY } from '@/components/map/MapLegend';
+import { useFilteredEntities } from '@/hooks/useFilteredEntities';
 import { TYPE_WEIGHTS } from '@/lib/severity';
+import { useFilterStore } from '@/stores/filterStore';
+import { useLayerStore } from '@/stores/layerStore';
+import type { ConflictEventEntity } from '@/types/entities';
 import { EVENT_TYPE_LABELS } from '@/types/ui';
 import type { ThreatCluster } from '@/types/ui';
-import { LEGEND_REGISTRY } from '@/components/map/MapLegend';
+
 import { RadialGradientExtension } from './RadialGradientExtension';
-import type { ConflictEventEntity } from '@/types/entities';
 
 // --- Constants ---
 

@@ -1,6 +1,8 @@
-import type { SiteEntity, SiteType } from '../types.js';
 import { logger } from '../lib/logger.js';
+
 import { nearestCountryName } from './overpass-water.js';
+
+import type { SiteEntity, SiteType } from '../types.js';
 import type { OverpassFetchRecord, WaterDataSource } from './overpass-water.js';
 
 const log = logger.child({ module: 'overpass' });

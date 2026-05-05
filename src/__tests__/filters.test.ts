@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
 import { entityPassesFilters, KNOTS_PER_MS, FEET_PER_METER } from '@/lib/filters';
 import type { FilterState } from '@/stores/filterStore';
+
 import type { FlightEntity, ShipEntity, ConflictEventEntity } from '../../server/types';
 
 // ---------------------------------------------------------------------------

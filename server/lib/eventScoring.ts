@@ -1,8 +1,10 @@
 // Event confidence scoring, Goldstein sanity checks, CAMEO specificity, and Bellingcat corroboration for GDELT events
 
-import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 import { haversineKm } from '../../src/lib/geo.js';
+
 import { CITY_CENTROIDS } from './geoValidation.js';
+
+import type { ConflictEventEntity, ConflictEventType } from '../types.js';
 
 // --- Bellingcat Corroboration Constants ---
 const BELLINGCAT_TEMPORAL_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -26,7 +28,7 @@ export interface BellingcatArticle {
  * Low (0.1): Catch-all / vague codes that GDELT frequently misapplies to non-conflict articles —
  *            "unconventional violence NOS", "physical assault", "conventional military force NOS".
  */
-export const CAMEO_SPECIFICITY: Record<string, number> = {
+const CAMEO_SPECIFICITY: Record<string, number> = {
   // Low — catch-all codes prone to false positives
   '180': 0.1, // Unconventional violence, not specified below
   '182': 0.1, // Physical assault (very broad)

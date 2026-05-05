@@ -1,29 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
-import { logger } from '../lib/logger.js';
 
-const log = logger.child({ module: 'events' });
 import { fetchEvents, backfillEvents } from '../adapters/gdelt.js';
 import { isLLMConfigured } from '../adapters/llm-provider.js';
-import { extractBellingcatGeo } from '../lib/eventScoring.js';
-import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
-import { groupGdeltRows } from '../lib/eventGrouping.js';
-// Phase 27.4 Plan 08 D-21 — v2-only replay path re-extracts a single group
-// without writing to cache (Pitfall 6 defense-in-depth).
-import { processEventGroupsV2 } from '../lib/llmEventExtractor.v2.js';
-// Phase 27.4.3 Plan 02b — v3 replay path mirrors v2: re-extracts a single
-// group without writing to events:llm:v3 (Pitfall 6 defense-in-depth).
-import { processEventGroupsV3 } from '../lib/llmEventExtractor.v3.js';
-// Phase 27.4.3 Plan 02b B-3 — pipeline-flip audit log; canonical home is lib
-// (routes is consumer, not provider). Cyclic-import fix in place.
-import { appendPipelineAudit, listPipelineAudit } from '../lib/pipelineAudit.js';
-// Phase 27.4.6 — entity adapters live with the cron-driven extraction
-// helper. The legacy `enrichedToEntities` alias re-exported from this file
-// pulls from there so existing import sites continue to type-check.
-import { enrichedV1ToEntities } from '../lib/llmExtractionPipeline.js';
-import { llmProgress } from '../lib/llmProgress.js';
-import type { LLMRunSummary } from '../lib/llmProgress.js';
+import { loadDevLLMCache, loadDevLLMCacheV2 } from '../cache/devFileCache.js';
+import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import {
   WAR_START,
   CACHE_TTL,
@@ -31,19 +12,41 @@ import {
   setPipelineOverride,
   getPipelineOverride,
 } from '../config.js';
-import { shouldPauseNewEvents } from '../lib/llmTokenBudget.js';
+import { groupGdeltRows } from '../lib/eventGrouping.js';
+import { extractBellingcatGeo } from '../lib/eventScoring.js';
 import { listDLQ } from '../lib/llmDLQ.js';
-import type { GeocodeProvenance } from '../lib/llmSchema.js';
-import { validateQuery } from '../middleware/validate.js';
-import { dashboardAuth } from '../middleware/dashboardAuth.js';
-import { sendValidated } from '../middleware/validateResponse.js';
-import { AppError } from '../middleware/errorHandler.js';
-import { eventsResponseSchema } from '../schemas/cacheResponse.js';
-import type { ConflictEventEntity, NewsCluster } from '../types.js';
+import { processEventGroupsV2 } from '../lib/llmEventExtractor.v2.js';
+import { processEventGroupsV3 } from '../lib/llmEventExtractor.v3.js';
+import { enrichedV1ToEntities } from '../lib/llmExtractionPipeline.js';
+import { llmProgress } from '../lib/llmProgress.js';
+import { shouldPauseNewEvents } from '../lib/llmTokenBudget.js';
+import { logger } from '../lib/logger.js';
+import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
+// Phase 27.4 Plan 08 D-21 — v2-only replay path re-extracts a single group
+// without writing to cache (Pitfall 6 defense-in-depth).
+// Phase 27.4.3 Plan 02b — v3 replay path mirrors v2: re-extracts a single
+// group without writing to events:llm:v3 (Pitfall 6 defense-in-depth).
+// Phase 27.4.3 Plan 02b B-3 — pipeline-flip audit log; canonical home is lib
+// (routes is consumer, not provider). Cyclic-import fix in place.
+import { appendPipelineAudit, listPipelineAudit } from '../lib/pipelineAudit.js';
+// Phase 27.4.6 — entity adapters live with the cron-driven extraction
+// helper. The legacy `enrichedToEntities` alias re-exported from this file
+// pulls from there so existing import sites continue to type-check.
 import { extractDomain, getSourceTier } from '../lib/sourceTiers.js';
-import { loadDevLLMCache, loadDevLLMCacheV2 } from '../cache/devFileCache.js';
+import { dashboardAuth } from '../middleware/dashboardAuth.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { validateQuery } from '../middleware/validate.js';
+import { sendValidated } from '../middleware/validateResponse.js';
+import { eventsResponseSchema } from '../schemas/cacheResponse.js';
+
+import type { LLMRunSummary } from '../lib/llmProgress.js';
+import type { GeocodeProvenance } from '../lib/llmSchema.js';
+import type { ConflictEventEntity, NewsCluster } from '../types.js';
 
 /** Zod schema for /api/events query params */
+
+const log = logger.child({ module: 'events' });
+
 const eventsQuerySchema = z.object({
   backfill: z
     .enum(['true', 'false'])

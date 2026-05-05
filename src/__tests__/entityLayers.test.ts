@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+
 import {
   altitudeToOpacity,
   ENTITY_COLORS,
@@ -7,12 +8,13 @@ import {
   PULSE_CONFIG,
 } from '@/components/map/layers/constants';
 import { ICON_MAPPING } from '@/components/map/layers/icons';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
+import { useEntityLayers } from '@/hooks/useEntityLayers';
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
-import { useEntityLayers } from '@/hooks/useEntityLayers';
+import { useFlightStore } from '@/stores/flightStore';
+import { useShipStore } from '@/stores/shipStore';
 import type { FlightEntity, ShipEntity, ConflictEventEntity } from '@/types/entities';
+
 import type { IconLayer } from '@deck.gl/layers';
 
 describe('Entity Layer Constants', () => {

@@ -1,3 +1,10 @@
+import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+import { useEventStore } from '@/stores/eventStore';
+import { useFlightStore } from '@/stores/flightStore';
+import { useShipStore } from '@/stores/shipStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useUIStore } from '@/stores/uiStore';
+import { useWaterStore } from '@/stores/waterStore';
 import type {
   MapEntity,
   SiteEntity,
@@ -5,16 +12,10 @@ import type {
   ShipEntity,
   ConflictEventEntity,
 } from '@/types/entities';
-import type { WaterFacility } from '../../server/types';
 import type { PanelView, ThreatCluster } from '@/types/ui';
 import { isConflictEventType, EVENT_TYPE_LABELS } from '@/types/ui';
-import { useUIStore } from '@/stores/uiStore';
-import { useFlightStore } from '@/stores/flightStore';
-import { useShipStore } from '@/stores/shipStore';
-import { useEventStore } from '@/stores/eventStore';
-import { useSiteStore } from '@/stores/siteStore';
-import { useWaterStore } from '@/stores/waterStore';
-import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+
+import type { WaterFacility } from '../../server/types';
 
 /** Broader entity union supported by the detail panel + breadcrumb. */
 export type AnyDetailEntity = MapEntity | SiteEntity | WaterFacility;
@@ -74,7 +75,7 @@ export function findEntityById(id: string): AnyDetailEntity | null {
 }
 
 /** Derives a breadcrumb label from an entity or cluster */
-export function deriveBreadcrumbLabel(
+function deriveBreadcrumbLabel(
   entity: AnyDetailEntity | null,
   cluster: ThreatCluster | null,
 ): string {

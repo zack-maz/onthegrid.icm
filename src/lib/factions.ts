@@ -23,11 +23,24 @@ export const FACTION_ASSIGNMENTS: Record<string, Faction> = {
   YEM: 'iran',
 };
 
+// Phase 28.1 W6 D-13 — faction hex strings sourced from src/lib/colorBridge.ts
+// which reads --color-faction-* CSS @theme vars at module load. Single source
+// of truth at the @theme level. Note: COLOR_FACTION_DISPUTED_HEX is exported
+// by the bridge but not consumed here — Faction type has 3 values
+// (us/iran/neutral); disputed-territory styling is owned by the
+// political-disputed GeoJSON layer (Phase 24 PoliticalOverlay), not by
+// FACTION_COLORS.
+import {
+  COLOR_FACTION_US_ALIGNED_HEX,
+  COLOR_FACTION_IRAN_ALIGNED_HEX,
+  COLOR_FACTION_NEUTRAL_HEX,
+} from '@/lib/colorBridge';
+
 /** Faction display colors (muted military palette). */
 export const FACTION_COLORS: Record<Faction, string> = {
-  us: '#3b82f6',
-  iran: '#dc2626',
-  neutral: '#64748b',
+  us: COLOR_FACTION_US_ALIGNED_HEX,
+  iran: COLOR_FACTION_IRAN_ALIGNED_HEX,
+  neutral: COLOR_FACTION_NEUTRAL_HEX,
 };
 
 /** Look up faction for a country by ISO A3 code. Returns 'neutral' for unlisted countries. */

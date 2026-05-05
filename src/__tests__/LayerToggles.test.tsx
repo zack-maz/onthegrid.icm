@@ -1,5 +1,7 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
 import { useLayerStore } from '@/stores/layerStore';
 
 vi.mock('@/stores/uiStore', () => ({
@@ -9,8 +11,6 @@ vi.mock('@/stores/uiStore', () => ({
       toggleLayers: vi.fn(),
     }),
 }));
-
-import { LayerTogglesSlot } from '@/components/layout/LayerTogglesSlot';
 
 describe('LayerTogglesSlot', () => {
   beforeEach(() => {

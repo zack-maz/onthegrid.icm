@@ -2,12 +2,13 @@
  * Water Overlay components.
  *
  * WaterTooltip: hover display for water facilities (name, type, stress, precipitation).
- * WaterOverlay: renders null (behavior-only pattern, consistent with other overlays).
  */
 
 import React from 'react';
-import { stressToRGBA, healthToScore, scoreToLabel } from '@/lib/waterStress';
+
 import { getWaterFacilityDisplayName } from '@/lib/waterLabel';
+import { stressToRGBA, healthToScore, scoreToLabel } from '@/lib/waterStress';
+
 import type { WaterFacility, WaterFacilityType } from '../../../../server/types';
 
 /** Human-readable labels for water facility types */
@@ -56,13 +57,4 @@ export function WaterTooltip({ facility, isAttacked }: WaterTooltipProps): React
       )}
     </div>
   );
-}
-
-/**
- * Behavior-only overlay component.
- * Water layers are rendered via useWaterLayers hook; this component
- * exists for consistency with the overlay pattern.
- */
-export function WaterOverlay(): React.ReactElement | null {
-  return null;
 }

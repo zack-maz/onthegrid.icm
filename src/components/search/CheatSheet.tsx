@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { TAG_REGISTRY } from '@/lib/tagRegistry';
 
 interface CheatSheetProps {

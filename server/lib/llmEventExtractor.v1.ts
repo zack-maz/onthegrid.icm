@@ -25,15 +25,18 @@
  *     on the `...event` spread).
  */
 import { z } from 'zod';
+
 import { callLLM } from '../adapters/llm-provider.js';
 import { forwardGeocodeConstrained } from '../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { env } from '../config.js';
-import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
-import { withBatchWatchdog } from './llmExtractorWatchdog.js';
+
 import { enqueueDLQ } from './llmDLQ.js';
+import { withBatchWatchdog } from './llmExtractorWatchdog.js';
 import { updateProgress, llmProgress } from './llmProgress.js';
 import { logger } from './logger.js';
+import { ME_VIEWBOX, ME_COUNTRY_CODES } from './meBounds.js';
+
 import type { EventGroup } from './eventGrouping.js';
 
 const log = logger.child({ module: 'llm-extractor' });

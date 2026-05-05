@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import { useEventStore } from '@/stores/eventStore';
 import type { ConflictEventEntity, CacheResponse } from '@/types/entities';
 

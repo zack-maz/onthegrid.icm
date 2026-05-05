@@ -258,24 +258,58 @@ Plans:
 **Requirements:** Derived from 27.4.6-CONTEXT.md (D-01 through D-11)
 **Plans:** 1/1 plans complete
 
-### Phase 28: Performance & Load Testing — was Phase 27
+### Phase 28: Performance & Load Testing — was Phase 27 (UMBRELLA)
 
-**Goal:** Optimize initial load time and validate production handles 250 concurrent users.
-**Depends on:** Phase 27.4 (GDELT redo + water/LLM improvements complete before load testing)
-**Requirements:** TBD
+**Goal:** Close milestone v1.4 by sweeping the codebase, polishing the prod surface, and proving 1–300 concurrent users work end-to-end. Per CONTEXT.md D-01, this phase is split into three sequenced child phases (cleanup → sync → load). The umbrella retains the goal, deliverables inventory, and shared CONTEXT.md; each child carries its own PLAN train and merges to `main` before the next starts.
+**Depends on:** Phase 27.4.6
+**Requirements:** Derived from 28-CONTEXT.md (D-01 through D-21)
+**Plans:** Delivered via children (see 28.1 / 28.2 / 28.3 below)
+
+**Key deliverables (inventory, allocated across 28.1/28.2/28.3):**
+
+- Ghost code + duplicate code sweep (knip + ts-prune + manual walk) → **28.1**
+- Hardcode generalization: env-tunable operational levers, centralized domain constants, CSS @theme color migration → **28.1**
+- UI bug fixes + remaining debugging items + normalization (TS strict, Zustand selectors, Redis key naming) → **28.1**
+- Dev/prod feature promotion (per-field opt-in: event/OSM IDs, LLM confidence, EntityTooltip dev block graduate; severity score, MapDevExposer, notabilityScore stay dev-only) → **28.2**
+- Domain rename to `otg-iran-monitor.vercel.app` → **28.2**
+- Bearer-bypass for `rateLimiters.public` global tier (folds Phase 999.1) → **28.2**
+- Bearer-gated graduation of operator endpoints (`POST /api/events/llm-pipeline`, `POST /api/events/llm-replay/:groupKey`) → **28.2**
+- Edge cache + Redis fallback architecture (`s-maxage` per endpoint) → **28.3**
+- k6 sweep 50/100/150/200/250/300 VU, full-browser-loop polling per VU → **28.3**
+- PASS/FAIL bar at 300 VU: p95<500ms, p99<1500ms, error<1%, cache-hit>90% → **28.3**
+
+**Historical note:** This phase was originally numbered 27 under v1.3. It was deferred to v1.4 on 2026-04-08 alongside the GDELT redo so both can run against the stabilized v1.3 codebase. Split into 28.1/28.2/28.3 on 2026-04-30 per 28-CONTEXT.md D-01 (regression-prone cleanup, prod-surface sync, and greenfield load test each get their own commit train so bisects stay tractable).
+
+### Phase 28.1: Cleanup Sweep (umbrella child of 28)
+
+**Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 1 of 3): kill regression risk before sync and load test land. Sweep ghost code, duplicate code, normalization gaps, UI bugs, and unresolved debugging items. Generalize hardcodes per D-10 (operator-tunable env vars: polling intervals, thresholds, radii) / D-11 (domain-definitional constants centralized in `src/lib/domain.ts`, NOT env-tunable: IRAN_BBOX, IRAN_CENTER, WAR_START, ADS-B 500NM radius) / D-13 (visual constants migrate to CSS custom properties + Tailwind v4 `@theme`). Methodology per D-14: `npx knip` + `npx ts-prune` for mechanical dead-export enumeration, then a manual codebase walk for logically-dead-but-type-reachable code. Triage doc committed before deletions, then atomic per-module deletion commits. Test suites must stay green at every wave boundary.
+**Depends on:** Phase 27.4.6 (cron-driven pipeline trigger merged to main)
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-10 / D-11 / D-12 / D-13 / D-14 + 28.1-CONTEXT.md D-22 / D-23 / D-24 / D-25 / D-26 / D-27 / D-28 / D-29 (filtered + child-specific)
+**Plans:** 7 plans (7-wave API-first serial per D-28)
+
+Plans:
+
+- [x] 28.1-01-W1-api-audit-PLAN.md — W1: hand-curated probe + fix every /api/\* endpoint and upstream adapter (D-22a, D-23) ✅ 2026-05-02 (audit `6876f87`, summary commits incoming; 0 BROKEN, 4 DRIFT items routed to W2 + W7 sub-4)
+- [x] 28.1-02-W2-health-endpoint-PLAN.md — W2: /api/health aggregate endpoint + DevApiStatus All APIs tab + HealthBanner (D-22b, D-24, D-25, D-26) ✅ 2026-05-02 (8 RED→GREEN commits c59ab5a→7a75f64; 1975/1975 tests; lint/prettier/tsc clean; SOURCE_KEYS dedupe folds W7 sub-4 forward; live preview UAT skipped per pre-existing Phase 26.3 fail-fast `parseEnv` issue, user-approved Path B)
+- [x] 28.1-03-W3-knip-triage-PLAN.md — W3: knip + ts-prune triage doc with confidence tags; zero source modifications (D-14, D-29) ✅ 2026-05-03 (3 commits b8c28c9→6b06b7b→adb8678; 215 flags triaged: 0 high-dead, 17 probable-dead, 104 ambiguous, 22 EXCLUDED via Hardcode-Target Manifest; finding A → W5 +1 env var VITE_POLL_WEATHER_MS amended at `bd5bbce`; wave-gate green vitest 1975/1975 + lint 0err/22warn + prettier + tsc — byte-identical to W2 baseline because zero source modifications)
+- [x] 28.1-04-W4-deletions-PLAN.md — W4: atomic per-module deletion commits + manual UAT against CLAUDE.md feature inventory (D-14, D-29) ✅ 2026-05-01 (16 commits 13fcc74→39934bd including plan amendment 857cceb; Group A 9 lose-export narrowings (12 W3 rows bundled per file) + Group B 4 file/wrapper deletions (dispersion + CountersSlot + EthnicOverlay + WaterOverlay) + Group D StatusPanel deletion + Group E clearDashboardKey bundled with #49; –43 dead tests (1975 → 1932) all traced to confirmed deletions; 6 CLAUDE.md sections scrubbed (3 CountersSlot in e1e1812 + 3 StatusPanel in 39934bd) + healthSources.ts:82 doc-comment scrub bundled into Group D atomic commit per Pattern 2; Group C wrapper deletions (FilterPanelSlot + LayerTogglesSlot W3 rows #T16/#T17) reclassified as deferred — would have lost ~24 indirect tests on live `*Content` siblings, future test-retargeting phase resolves; manual UAT skipped per user-approved Path B fast-path (targeted-deletion-only nature accepted as sufficient with local audit); EXCLUDED bucket invariant 22/22 PASS including W2-added health files + W5-added useWeatherPolling.ts; wave-gate green vitest 1932/1932 + lint 0err/22warn (byte-identical to W2 baseline) + prettier + tsc + npm run build green; W4-knip-output.txt captured 155 lines vs W3 168 — every Group A narrowing + Group B/D file deletion no longer surfaces as dead-export flag)
+- [x] 28.1-05-W5-hardcode-generalization-PLAN.md — W5: src/lib/domain.ts centralization + 12 D-12 env vars across 11 files (D-10, D-11, D-12) ✅ 2026-05-01 (13 atomic commits 0dcfd17→bd3b629; src/lib/domain.ts created as canonical client-tier home for IRAN*BBOX/IRAN_CENTER/WAR_START/ADSB_RADIUS_NM with cross-tier byte-identity parity-test sentinel at src/**tests**/domain.test.ts (8 tests = 4 byte-identity + 4 cross-tier parity); server/config.ts retains byte-identical mirror per Plan body Task 1 fallback option (a) because tsconfig.server.json excludes src/ — single-canonical re-export not buildable; src/lib/constants.ts WAR_START collapsed from third in-line copy to re-export from @/lib/domain; 12 D-12 env vars introduced with byte-identical defaults preserving pre-W5 runtime (13 entries in .env.example because useLLMStatusPolling has dual ACTIVE/IDLE); 4 doc-vs-code drifts surfaced and resolved with code values authoritative + CLAUDE.md updated (IRAN_BBOX coords + IRAN_CENTER/ADSB + severity 24h half-life + proximity 5km radius); 3 plan-body literals overridden by actual file values per "byte-identical default" D-12 contract trumping plan-body documentation when conflict (markets 60000→300000 actual, proximity 50→5 actual, severity 24→24 match); vitest 1932→1940 net +8 (all 8 new domain.ts tests; zero regressions across 142 files); wave-gate green vitest 1940/1940 + lint 0err/22warn (byte-identical to W4 baseline) + prettier + tsc + npm run build all exit 0; new "Environment Variables (Phase 28.1+)" section added to CLAUDE.md after Conventions; patterns established: tier-bridging via duplicate-with-invariant + Vite VITE*\* env-tunable client lever + cleanup-waves-preserve-runtime canon + plan-body-literals-non-authoritative-for-byte-identical-default-contracts; W6 unblocked)
+- [x] 28.1-06-W6-css-theme-migration-PLAN.md — W6: CSS @theme migration + colorBridge.ts deck.gl bridge (D-13) ✅ 2026-05-02 (5 commits 39a84a3→01418d8; @theme block extended with 24 entity color CSS vars; colorBridge module-load reader with 24 RGBA tuples + 24 hex re-exports; 3 consumers migrated; 5 doc-vs-code drifts surfaced and resolved per W5 Pattern 3 — runtime preserved byte-identical, CLAUDE.md updated; vitest 1940 → 2025 +85 byte-identity sentinel tests; 5 gates green)
+- [x] 28.1-07-W7-normalization-PLAN.md — W7: 7-sub-category normalization (TS strict / lint / Zustand / Redis audit / vitest / imports / logging) (D-27) ✅ 2026-05-03 (10 commits d175e43→7ec184c; sub-1 TS strict already 0; sub-2 cleared 6 react-hooks/exhaustive-deps via per-site decision-tree fixes; sub-3 Zustand audit clean; sub-4 W7-REDIS-AUDIT.md doc + cron-warm sites:v2→v3 + water:facilities→v3 alignment closing W1 DRIFT-2/3; sub-5 vitest patterns clean; sub-6 ESLint import/order rule enabled, 1027 → 0 violations via 273-file autofix sweep; sub-7 logging migration NO-OP — already 0 console.\* in target paths; wave-gate green vitest 2025/2025 + lint 0err/16warn (down from 22 — react-hooks cleared) + prettier + tsc + build; PHASE 28.1 COMPLETE)
+
+### Phase 28.2: Dev/Prod Sync + Domain Rename + Rate-Limiter Fold-In (umbrella child of 28)
+
+**Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 2 of 3): polish the prod surface so 28.3's load test runs against a coherent, operator-controllable deployment. Three concerns bundled because they all touch the prod surface: (a) Per-field dev/prod feature promotion per D-05/D-06/D-07 — graduate event/OSM IDs, LLM confidence + provenance, EntityTooltip dev block to Bearer-gated prod via `shouldRenderDashboard()`; keep severity score, MapDevExposer (`window.__map`), and `notabilityScore` dev-only forever. (b) Bearer-gated graduation of operator-control endpoints per D-08: `POST /api/events/llm-pipeline` (runtime v1/v2/v3 swap) and `POST /api/events/llm-replay/:groupKey` (single-group re-extraction with current prompt — Pitfall 6 dual-gate preserved, never writes cache). (c) Domain rename to `otg-iran-monitor.vercel.app` per D-03 — vercel.json, package.json, scripts/load-test.js BASE_URL, README.md, PROJECT_SPEC.md, PROJECT_STATUS.md, .planning/PROJECT.md, memory/reference_deployment.md. (d) Phase 999.1 fold-in per D-04: Bearer-bypass for `rateLimiters.public` global 6-req/min tier — when valid `DASHBOARD_PASSWORD` Bearer is present the global tier is skipped; per-endpoint limits still apply. Old-domain redirect strategy is Claude's discretion at planning time.
+**Depends on:** Phase 28.1 (must merge to main first per D-01)
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-03 / D-04 / D-05 / D-06 / D-07 / D-08 / D-09 + Claude's-discretion items (redirect mechanic, `/api/sources` edge-cache classification handoff to 28.3)
 **Plans:** 0 plans
 
-**Key deliverables:**
+### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 
-- Staggered API calls on mount (priority: flights -> ships/events -> rest)
-- Lazy-load visualization layer components (only load when toggled)
-- Code-splitting evaluation for maplibre chunk (282KB gzipped)
-- k6 test scaled to 250 VUs with thundering herd mitigation
-- Request coalescing for concurrent identical requests (flights especially)
-- CDN cache tuning (s-maxage optimization per endpoint)
-- Vercel warm-up cron frequency evaluation
-
-**Historical note:** This phase was originally numbered 27 under v1.3. It was deferred to v1.4 on 2026-04-08 alongside the GDELT redo so both can run against the stabilized v1.3 codebase.
+**Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 3 of 3): validate production handles 1–300 concurrent users with measurable PASS/FAIL signal against a clean codebase. Performance optimization layer per D-19: add `s-maxage` CDN headers to `/api/*` (flights 5s, ships 30s, markets 60s, events/news 900s, sites/water 86400s) so Vercel CDN absorbs bulk reads at 300 VU and Redis only fires on cache miss + warm-up cron. k6 sweep per D-15 (GitHub Actions runner, results land as PR artifacts) / D-16 (six discrete tiers 50/100/150/200/250/300 VU, 60s ramp + 5min steady, ~45min wall-time per sweep) / D-20 (full browser-loop per VU: t=0 fires site/water/sources/markets/flights/ships/events/news, then polls flights@5s, ships@30s, markets@60s, events@15min, news@15min — ~0.27 req/s/VU → ~81 RPS at 300 VU). PASS/FAIL bar per D-17 (measured at 300 VU steady-state): p95<500ms hot endpoints, p99<1500ms, error<1%, no 5xx spikes, cache-hit>90% (non-negotiable). Beyond PASS/FAIL per D-18: per-endpoint latency breakdown (p50/p95/p99 tagged), 429 count (validates D-04 Bearer-bypass), Vercel cold-start frequency (validates warm-up cron sufficiency), Upstash Redis cache hit ratio. Polling parity per D-21 (D-20 shape + D-19 edge cache eliminates user-A-vs-user-B divergence). Hobby cron cap = 3, load test does NOT consume a slot.
+**Depends on:** Phase 28.2 (must merge to main first per D-01; D-03 domain rename must land before scripts/load-test.js BASE_URL update)
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-15 / D-16 / D-17 / D-18 / D-19 / D-20 / D-21 + Claude's-discretion items (k6 reporter artifact format, `/api/sources` edge-cache classification)
+**Plans:** 0 plans
 
 ## Deferred Work
 
@@ -290,15 +324,12 @@ Deferred from v1.3:
 
 ## Backlog
 
-### Phase 999.1: Remove or relax `rateLimiters.public` global tier (BACKLOG)
+### Phase 999.1: Remove or relax `rateLimiters.public` global tier — FOLDED INTO PHASE 28.2
 
 **Goal:** Resolve operator-blocking rate limit. The 6 req/min global tier in `server/middleware/rateLimit.ts` (applied at `server/index.ts:99` to all `/api/*`) blocks the operator's own browser — flights polling alone is 12 req/min. Three options scoped earlier: (a) remove global tier (per-endpoint limits already tuned for browser), (b) bump to 300/min to keep loose anti-scraper net, (c) bypass when `DASHBOARD_PASSWORD` Bearer present.
-**Requirements:** TBD
-**Plans:** 0 plans
-
-Plans:
-
-- [ ] TBD (promote with /gsd-review-backlog when ready)
+**Resolution:** Folded into Phase 28.2 on 2026-04-30 per 28-CONTEXT.md D-04 — option (c) Bearer-bypass selected. This entry remains for historical traceability.
+**Requirements:** Subsumed by 28-CONTEXT.md D-04
+**Plans:** 0 plans (delivered via Phase 28.2 plan train)
 
 ### Phase 999.2: `api/vercel-entry.js` build-artifact discipline (BACKLOG)
 
