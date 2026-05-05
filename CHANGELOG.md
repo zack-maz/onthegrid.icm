@@ -75,7 +75,7 @@ All notable changes to the Iran Conflict Monitor project.
 - Playwright browser validation test (`scripts/load-test.spec.ts`) with parallel mode for 3 concurrent browser workers
 - Pre/post-test health snapshots comparing Redis latency and source freshness
 
-#### Results (Production — https://irt-monitoring.vercel.app)
+#### Results (Production — https://otg-iran-monitor.vercel.app)
 
 - 100% application checks (9536/9536) across all endpoints
 - Flights p95: 136ms, Ships p95: 145ms, Overall p95: 153ms
