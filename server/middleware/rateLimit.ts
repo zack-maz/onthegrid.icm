@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import { Ratelimit } from '@upstash/ratelimit';
 
 import { redis } from '../cache/redis.js';
@@ -47,6 +49,40 @@ export function createRateLimiter(
       next();
       return;
     }
+
+    // D-04 (Phase 999.1 fold-in): when a valid DASHBOARD_PASSWORD Bearer is
+    // present, skip ONLY the global 'ratelimit:public' tier. Per-endpoint
+    // tiers under 'ratelimit:prod' continue to throttle privileged callers
+    // so a buggy operator script (or a leaked Bearer) can't accidentally
+    // exhaust per-route budgets — defense in depth.
+    //
+    // Empty DASHBOARD_PASSWORD means "no privileged callers configured",
+    // so the bypass falls through to the existing limiter (NOT a 503;
+    // differs from `dashboardAuth.ts` which fail-closes on missing config).
+    //
+    // Bypass scope is keyed off the closure-captured `prefix` so the branch
+    // is dead code for the 10 per-endpoint limiters at module load.
+    if (prefix === 'ratelimit:public') {
+      const expected = process.env.DASHBOARD_PASSWORD ?? '';
+      if (expected !== '') {
+        const header = req.headers.authorization ?? '';
+        const bearerPrefix = 'Bearer ';
+        if (header.startsWith(bearerPrefix)) {
+          const provided = header.slice(bearerPrefix.length);
+          // Length check is required before timingSafeEqual — Node throws
+          // RangeError on unequal-length Buffers. Length is not the secret.
+          if (provided.length === expected.length) {
+            const a = Buffer.from(provided);
+            const b = Buffer.from(expected);
+            if (timingSafeEqual(a, b)) {
+              next();
+              return;
+            }
+          }
+        }
+      }
+    }
+    // Fall through to existing limiter.limit() pathway.
 
     const identifier = req.ip ?? (req.headers['x-forwarded-for'] as string) ?? 'anonymous';
 
