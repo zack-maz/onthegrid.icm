@@ -1,6 +1,7 @@
 import { useRef, useLayoutEffect, useState } from 'react';
 
 import { computeAttackStatus } from '@/lib/attackStatus';
+import { shouldRenderDashboard } from '@/lib/dashboardAuth';
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
 import type {
@@ -122,7 +123,7 @@ function EventContent({ entity }: { entity: ConflictEventEntity }) {
       >
         {EVENT_TYPE_LABELS[entity.type] ?? entity.type}
       </span>
-      {import.meta.env.DEV && (
+      {shouldRenderDashboard() && (
         <span style={{ color: '#6b7280', fontSize: '8px', marginLeft: '4px' }}>
           {entity.id.slice(0, 12)}
         </span>
