@@ -506,7 +506,7 @@ entity layers are blank because their fetch calls fail.
    unauthenticated.
 2. **For production:** set `CORS_ORIGIN` to the exact origin of
    the production frontend URL (e.g.
-   `https://irt-monitoring.vercel.app`), save, and redeploy.
+   `https://otg-iran-monitor.vercel.app`), save, and redeploy.
 3. Test after the redeploy with:
 
    ```bash
