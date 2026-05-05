@@ -301,8 +301,17 @@ Plans:
 
 **Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 2 of 3): polish the prod surface so 28.3's load test runs against a coherent, operator-controllable deployment. Three concerns bundled because they all touch the prod surface: (a) Per-field dev/prod feature promotion per D-05/D-06/D-07 — graduate event/OSM IDs, LLM confidence + provenance, EntityTooltip dev block to Bearer-gated prod via `shouldRenderDashboard()`; keep severity score, MapDevExposer (`window.__map`), and `notabilityScore` dev-only forever. (b) Bearer-gated graduation of operator-control endpoints per D-08: `POST /api/events/llm-pipeline` (runtime v1/v2/v3 swap) and `POST /api/events/llm-replay/:groupKey` (single-group re-extraction with current prompt — Pitfall 6 dual-gate preserved, never writes cache). (c) Domain rename to `otg-iran-monitor.vercel.app` per D-03 — vercel.json, package.json, scripts/load-test.js BASE_URL, README.md, PROJECT_SPEC.md, PROJECT_STATUS.md, .planning/PROJECT.md, memory/reference_deployment.md. (d) Phase 999.1 fold-in per D-04: Bearer-bypass for `rateLimiters.public` global 6-req/min tier — when valid `DASHBOARD_PASSWORD` Bearer is present the global tier is skipped; per-endpoint limits still apply. Old-domain redirect strategy is Claude's discretion at planning time.
 **Depends on:** Phase 28.1 (must merge to main first per D-01)
-**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-03 / D-04 / D-05 / D-06 / D-07 / D-08 / D-09 + Claude's-discretion items (redirect mechanic, `/api/sources` edge-cache classification handoff to 28.3)
-**Plans:** 0 plans
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-03 / D-04 / D-05 / D-06 / D-07 / D-08 / D-09 + 28.2-CONTEXT.md D-22 / D-23 / D-24 / D-25 / D-26 / D-27 / D-28 / D-29 / D-30 (dashboard merge + connectivity audit) + Claude's-discretion items (redirect mechanic, `/api/sources` edge-cache classification handoff to 28.3)
+**Plans:** 6 plans (6-wave train)
+
+Plans:
+
+- [ ] 28.2-01-PLAN.md — W1: domain rename (D-03) — string substitutions across 5 files + Vercel-side redirect-strategy checkpoint
+- [ ] 28.2-02-PLAN.md — W2: rate-limiter Bearer-bypass (D-04, folds Phase 999.1) — `ratelimit:public` tier skips when valid Bearer present; per-endpoint tiers unaffected
+- [ ] 28.2-03-PLAN.md — W3: operator-control endpoint hardening (D-08) — replay quota 50/24h + operator-action audit log; Pitfall 6 dual-gate preserved
+- [ ] 28.2-04-PLAN.md — W4: per-field gate-swaps (D-05/D-06/D-07) — EntityTooltip + EventDetail × 2 + WaterFacilityDetail OSM ID (Path B); lockdown regression tests for 3 dev-only-forever fields
+- [ ] 28.2-05-PLAN.md — W5: dashboard merge (D-22/D-23/D-26/D-27) — delete Overview tab, fold into API Health; 4 new diagnostic blocks; confirm modal + 429 alert
+- [ ] 28.2-06-PLAN.md — W6: connectivity audit (D-24/D-25/D-28/D-29/D-30) — vitest smoke suite + GitHub Actions workflow against prod; sidecar audit-status route; HealthBanner outage trace; phase-close gate
 
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 
