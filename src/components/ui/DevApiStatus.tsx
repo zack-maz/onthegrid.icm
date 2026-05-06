@@ -942,6 +942,42 @@ function DevApiStatusAllApisTab({
     };
   }, []);
 
+  // Phase 28.2 W6 Plan 06 Task 7 — audit-result banner state.
+  // Sourced from /api/audit-status (no auth gate; sidecar key written by
+  // .github/workflows/prod-connectivity-audit.yml after each manual
+  // prod-audit run). Per UI-SPEC §5.4: pass → green; fail → red; absent → silent.
+  interface AuditStatus {
+    status: 'pass' | 'fail' | 'absent';
+    runId?: string;
+    timestamp?: string;
+    lastVerifiedAt?: string;
+    endpoints?: Record<string, 'pass' | 'fail'>;
+    durationMs?: number;
+  }
+  const [auditStatus, setAuditStatus] = useState<AuditStatus | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAuditStatus = async () => {
+      try {
+        const res = await fetch('/api/audit-status');
+        if (!res.ok) return;
+        const data = (await res.json()) as Partial<AuditStatus>;
+        if (typeof data?.status !== 'string') return;
+        if (!cancelled) setAuditStatus(data as AuditStatus);
+      } catch {
+        // Network failure — banner stays silent (degrade-open)
+      }
+    };
+    void fetchAuditStatus();
+    const id = setInterval(() => {
+      void fetchAuditStatus();
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
   // Phase 28.2 W5 Task 7 — confirm modal target ('v1' | 'v2' | null).
   // Set non-null when the operator clicks Pin to v1 / Pin to v2; the modal
   // intercepts the POST. Pin to v3 / Clear pin bypass the modal entirely
@@ -1274,10 +1310,56 @@ function DevApiStatusAllApisTab({
             </div>
           );
         })()}
-      {/* Phase 28.2 W6 D-25 — connectivity audit-result banner placeholder.
-          Plan 06 populates the Redis sidecar `audit:connectivity:last-result`
-          and the surface here reads it. Empty by design until W6 lands. */}
-      <div data-testid="audit-result-banner" />
+      {/* Phase 28.2 W6 Plan 06 Task 7 — connectivity audit-result banner.
+          Reads /api/audit-status (sidecar `audit:connectivity:last-result`
+          populated by .github/workflows/prod-connectivity-audit.yml after
+          each manual prod-audit run). Per UI-SPEC §5.4 + §10:
+            status === 'pass'   → green banner with copy:
+              "All 16 of 16 endpoints connecting (last verified <date> via prod audit)."
+              (the literal "All 16 endpoints connecting" verbatim copy is
+              also produced when M=N — the verify-gate grep target.)
+            status === 'fail'   → red:   "<N> of <M> endpoints failing connectivity audit. See <names>."
+            status === 'absent' → silent (placeholder div, empty content). */}
+      {(() => {
+        if (!auditStatus || auditStatus.status === 'absent') {
+          // Silent placeholder. Tests assert empty content; production
+          // shows nothing.
+          return <div data-testid="audit-result-banner" />;
+        }
+        const endpoints = auditStatus.endpoints ?? {};
+        const total = Object.keys(endpoints).length;
+        const failing = Object.entries(endpoints)
+          .filter(([, v]) => v === 'fail')
+          .map(([k]) => k);
+        const ageRefIso = auditStatus.lastVerifiedAt ?? auditStatus.timestamp ?? '';
+        const dateStr = ageRefIso ? ageRefIso.slice(0, 10) : 'unknown';
+        if (auditStatus.status === 'pass') {
+          return (
+            <div
+              className="mb-2 rounded border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-400"
+              data-testid="audit-result-banner"
+              data-status="pass"
+            >
+              All {total} of {total} endpoints connecting (last verified {dateStr} via prod audit).
+            </div>
+          );
+        }
+        // status === 'fail'
+        const failCount = failing.length;
+        // Strip /api/ prefix for human-readable names ("events" not "/api/events").
+        const failNames = failing
+          .map((p) => p.replace(/^\/api\//, '').replace(/\/$/, ''))
+          .join(', ');
+        return (
+          <div
+            className="mb-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400"
+            data-testid="audit-result-banner"
+            data-status="fail"
+          >
+            {failCount} of {total} endpoints failing connectivity audit. See {failNames}.
+          </div>
+        );
+      })()}
 
       {/* /api/health-driven block — renders only when the aggregate response
           is available. The polling-store / LLM / operator sections below
