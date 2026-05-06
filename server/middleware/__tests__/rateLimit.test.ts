@@ -240,15 +240,16 @@ describe('rate-limit bearer bypass (D-04, Phase 999.1 fold-in)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test 7 — per-endpoint tier (prefix 'ratelimit:prod') still throttles
-  //          privileged callers; bypass scope is 'ratelimit:public' only.
+  // Test 7 — Phase 28.2 W6 audit-extension: per-endpoint tier ALSO bypasses
+  //          on valid Bearer (was: per-endpoint tier still throttles). The
+  //          original D-04 "defense in depth" carve-out was loosened after the
+  //          W6 prod connectivity audit (run 25467532661) surfaced that
+  //          per-endpoint 10/min limits reject the audit's own Bearer probes
+  //          from a single GH-runner IP.
   // -------------------------------------------------------------------------
-  it('Test 7: per-endpoint tier (ratelimit:prod prefix) does NOT bypass even with valid Bearer', async () => {
+  it('Test 7: per-endpoint tier (ratelimit:prod prefix) DOES bypass on valid Bearer (W6 extension)', async () => {
     const password = 'op-secret-32characters-of-bytes!';
     process.env.DASHBOARD_PASSWORD = password;
-    // Use the `flights` per-endpoint limiter (default prefix 'ratelimit:prod').
-    // Build a fresh one to be explicit about the prefix scope; using
-    // rateLimiters.flights would also work since it's already prod-prefixed.
     const flightsTier = createRateLimiter(120, 60); // default prefix 'ratelimit:prod'
     const req = createMockReq(`Bearer ${password}`);
     const { res } = createMockRes();
@@ -256,10 +257,8 @@ describe('rate-limit bearer bypass (D-04, Phase 999.1 fold-in)', () => {
 
     await flightsTier(req as Request, res, next);
 
-    // Privileged Bearer is irrelevant for non-public tiers — limiter MUST
-    // still be consulted. Defense-in-depth: a leaked operator Bearer cannot
-    // exhaust per-route budgets.
-    expect(mockLimit).toHaveBeenCalledTimes(1);
+    // Bearer-attached operator/audit traffic skips the limiter on every tier.
+    expect(mockLimit).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
   });
 });

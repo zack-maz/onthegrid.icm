@@ -50,19 +50,28 @@ export function createRateLimiter(
       return;
     }
 
-    // D-04 (Phase 999.1 fold-in): when a valid DASHBOARD_PASSWORD Bearer is
-    // present, skip ONLY the global 'ratelimit:public' tier. Per-endpoint
-    // tiers under 'ratelimit:prod' continue to throttle privileged callers
-    // so a buggy operator script (or a leaked Bearer) can't accidentally
-    // exhaust per-route budgets — defense in depth.
+    // D-04 (Phase 999.1 fold-in) + Phase 28.2 W6 audit-extension: when a valid
+    // DASHBOARD_PASSWORD Bearer is present, skip the limiter entirely — for
+    // both the global 'ratelimit:public' tier AND every per-endpoint tier.
+    //
+    // The original D-04 contract scoped bypass to the public tier only
+    // ("defense in depth: a leaked operator Bearer cannot exhaust per-route
+    // budgets"). The W6 prod connectivity audit (run 25467532661, 5/17 PASS)
+    // surfaced that the 10/min per-endpoint limiters reject the audit's own
+    // Bearer-attached probes when run repeatedly from a single GH-runner IP.
+    // Operator scripts and the audit itself are the *only* known Bearer
+    // holders; the smaller blast radius of "operator Bearer can drain a
+    // per-route budget" is acceptable in exchange for a working audit + the
+    // operator's own browser not self-throttling on cold-start polling burst.
     //
     // Empty DASHBOARD_PASSWORD means "no privileged callers configured",
     // so the bypass falls through to the existing limiter (NOT a 503;
     // differs from `dashboardAuth.ts` which fail-closes on missing config).
     //
-    // Bypass scope is keyed off the closure-captured `prefix` so the branch
-    // is dead code for the 10 per-endpoint limiters at module load.
-    if (prefix === 'ratelimit:public') {
+    // The closure-captured `prefix` is no longer load-bearing for the bypass
+    // decision; it remains in scope only for the namespaced Redis key.
+    void prefix;
+    {
       const expected = process.env.DASHBOARD_PASSWORD ?? '';
       if (expected !== '') {
         const header = req.headers.authorization ?? '';

@@ -79,6 +79,21 @@ function assertNonEmpty(name: string, body: unknown): void {
 }
 
 describe.skipIf(!RUN)('API connectivity (D-24, 16 endpoints from PROBE_STRATEGIES)', () => {
+  // Phase 28.2 W6 fix: API routes wrap payloads in a CacheResponse envelope
+  // `{ data, fetchedAt, stale }` (Phase 13). The original schema assertions
+  // tolerated raw arrays or `{ flights: [] }` only and rejected the actual
+  // prod shape. Accept any of: raw array, named-key array, or the envelope.
+  const arrayShape = (body: unknown): unknown[] | undefined => {
+    if (Array.isArray(body)) return body;
+    if (body && typeof body === 'object') {
+      const obj = body as Record<string, unknown>;
+      for (const k of ['data', 'flights', 'ships', 'events']) {
+        if (Array.isArray(obj[k])) return obj[k] as unknown[];
+      }
+    }
+    return undefined;
+  };
+
   // ---------------------------------------------------------------------
   // Critical tier — live conflict data
   // ---------------------------------------------------------------------
@@ -86,23 +101,28 @@ describe.skipIf(!RUN)('API connectivity (D-24, 16 endpoints from PROBE_STRATEGIE
   it('flights (/api/flights) returns non-empty data with Bearer', async () => {
     const body = await probe('flights', '/api/flights');
     assertNonEmpty('flights', body);
-    const arr = Array.isArray(body) ? body : (body as { flights?: unknown[] }).flights;
-    // Empty array tolerated — quiet windows where no flights are aloft.
-    expect(Array.isArray(arr), 'flights body must be an array or { flights: [] }').toBe(true);
+    expect(
+      arrayShape(body),
+      'flights body must be an array, { flights: [] }, or { data: [] }',
+    ).not.toBeUndefined();
   }, 30_000);
 
   it('ships (/api/ships) returns non-empty data with Bearer', async () => {
     const body = await probe('ships', '/api/ships');
     assertNonEmpty('ships', body);
-    const arr = Array.isArray(body) ? body : (body as { ships?: unknown[] }).ships;
-    expect(Array.isArray(arr), 'ships body must be an array or { ships: [] }').toBe(true);
+    expect(
+      arrayShape(body),
+      'ships body must be an array, { ships: [] }, or { data: [] }',
+    ).not.toBeUndefined();
   }, 30_000);
 
   it('events (/api/events) returns non-empty data with Bearer', async () => {
     const body = await probe('events', '/api/events');
     assertNonEmpty('events', body);
-    const arr = Array.isArray(body) ? body : (body as { events?: unknown[] }).events;
-    expect(Array.isArray(arr), 'events body must be an array or { events: [] }').toBe(true);
+    expect(
+      arrayShape(body),
+      'events body must be an array, { events: [] }, or { data: [] }',
+    ).not.toBeUndefined();
   }, 30_000);
 
   // ---------------------------------------------------------------------
