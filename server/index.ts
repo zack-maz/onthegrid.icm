@@ -20,6 +20,7 @@ import { geocodeRouter } from './routes/geocode.js';
 import { healthRouter } from './routes/health.js';
 import { marketsRouter } from './routes/markets.js';
 import { newsRouter } from './routes/news.js';
+import { operatorStatusRouter } from './routes/operator-status.js';
 import { refreshEventsCronRouter } from './routes/refresh-events-cron.js';
 import { shipsRouter } from './routes/ships.js';
 import { sitesRouter } from './routes/sites.js';
@@ -124,6 +125,12 @@ export function createApp() {
   // /api/events/llm-pipeline + /api/events/llm-replay so the cutover POST
   // and per-group replay reach the operator's laptop in production.
   app.use('/api/dashboard', cacheControl(0, 0), dashboardAuthRouter);
+
+  // Phase 28.2 W5 Plan 05 Task 7.5 — `/api/operator-status` aggregates
+  // operator:audit-log + events:llm-pipeline-override TTL +
+  // events:llm-eval-adversarial:v3 into a single Bearer-gated read for the
+  // merged DevApiStatus API Health tab Operator Actions block.
+  app.use('/api', cacheControl(0, 0), operatorStatusRouter);
 
   // Error handler -- must be after routes
   app.use(errorHandler);
