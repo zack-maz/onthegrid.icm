@@ -81,11 +81,23 @@ function wrapWithPrefix(client: Redis): Redis {
   }) as Redis;
 }
 
-/** Shared Upstash Redis client (REST-based, safe for serverless) */
+/** Shared Upstash Redis client (REST-based, safe for serverless).
+ *
+ * `enableAutoPipelining: false` — `@upstash/redis` 1.37 defaults this to true,
+ * which silently batches `redis.eval(...)` from `@upstash/ratelimit` with any
+ * other commands in flight on the same tick. Under Vercel's Fluid Compute the
+ * batched wire format corrupts the script string and Upstash returns
+ * `ERR Error running script: @user_script line:2(column:7) near 'local': syntax error`.
+ * Single-call local repros never trigger the bug. Disabling autopipeline
+ * forces serial command dispatch — the rate-limiter stays correct, throughput
+ * is unaffected because we run one limiter check per request anyway.
+ * Surfaced by Phase 28.2 W6 prod connectivity audit (run 25466712222).
+ */
 export const redis = wrapWithPrefix(
   new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    enableAutoPipelining: false,
   }),
 );
 
