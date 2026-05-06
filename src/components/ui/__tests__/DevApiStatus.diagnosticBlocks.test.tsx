@@ -17,13 +17,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HealthStatusContext } from '@/components/providers/HealthStatusProvider';
 import { DevApiStatus } from '@/components/ui/DevApiStatus';
 import type { HealthResponse, EndpointHealth } from '@/lib/healthClient';
-
-type HealthSummary = HealthResponse['summary'];
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useFlightStore } from '@/stores/flightStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useWaterStore } from '@/stores/waterStore';
+
+type HealthSummary = HealthResponse['summary'];
 
 vi.mock('@/lib/dashboardAuth', async () => {
   const actual = await vi.importActual<typeof import('@/lib/dashboardAuth')>('@/lib/dashboardAuth');

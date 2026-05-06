@@ -891,6 +891,57 @@ function DevApiStatusAllApisTab({
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
+  // Phase 28.2 W5 Task 7.5 — Operator Actions block state. Sourced from
+  // /api/operator-status (Bearer-gated read-only aggregator). One fetch
+  // on mount + every 30s while the tab is open.
+  interface OperatorStatus {
+    audit24h: number;
+    byBearer: Array<{
+      bearerFingerprint: string;
+      actions: number;
+      swaps: number;
+      replays: number;
+    }>;
+    pinTtl: { version: string | null; ttlSeconds: number; human: string } | null;
+    advEval: { total: number; blocked: number; leaked: number } | null;
+  }
+  const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchOpStatus = async () => {
+      try {
+        const res = await fetch('/api/operator-status', {
+          headers: { ...dashboardAuthHeaders() },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as Partial<OperatorStatus>;
+        // Defensive shape check — if the response doesn't carry the
+        // operator-status fields (e.g., a test fetch spy returning a
+        // /api/health body, or a mid-deploy schema regression) hide
+        // the block entirely instead of crashing on missing fields.
+        if (
+          typeof data?.audit24h !== 'number' ||
+          !Array.isArray(data?.byBearer) ||
+          !('pinTtl' in data) ||
+          !('advEval' in data)
+        ) {
+          return;
+        }
+        if (!cancelled) setOpStatus(data as OperatorStatus);
+      } catch {
+        // Network failure — block hides gracefully (degrade-open)
+      }
+    };
+    void fetchOpStatus();
+    const id = setInterval(() => {
+      void fetchOpStatus();
+    }, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
   // Phase 28.2 W5 Task 7 — confirm modal target ('v1' | 'v2' | null).
   // Set non-null when the operator clicks Pin to v1 / Pin to v2; the modal
   // intercepts the POST. Pin to v3 / Clear pin bypass the modal entirely
@@ -1490,6 +1541,43 @@ function DevApiStatusAllApisTab({
           the new /api/operator-status endpoint. */}
       <section className="mt-4 px-3 py-2 text-xs" data-testid="operator-actions">
         <h3 className="mb-2 text-xs font-semibold text-text-primary">Operator Actions</h3>
+
+        {/* Phase 28.2 W5 Task 7.5 — Operator Actions live content (AI-SPEC
+            §7). Sourced from /api/operator-status; renders only when the
+            aggregator returns data. Rows: 24h count, per-Bearer breakdown,
+            pin TTL countdown, prompt-injection robustness (adversarial
+            eval row — B-2). */}
+        {opStatus && (
+          <>
+            <div className="text-text-muted" data-testid="operator-actions-24h-count">
+              24h actions: {opStatus.audit24h}
+            </div>
+            {opStatus.byBearer.length > 0 && (
+              <div className="mt-1 flex flex-col gap-1">
+                {opStatus.byBearer.map((b) => (
+                  <div
+                    key={b.bearerFingerprint}
+                    data-testid={`operator-actions-bearer-row-${b.bearerFingerprint}`}
+                    className="text-text-muted"
+                  >
+                    {b.bearerFingerprint.slice(0, 8)}…: {b.actions} actions / {b.swaps} swaps /{' '}
+                    {b.replays} replays
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-2 text-text-muted" data-testid="operator-actions-pin-ttl">
+              {opStatus.pinTtl
+                ? `Pinned to ${opStatus.pinTtl.version} — ${opStatus.pinTtl.human}`
+                : 'no pin active'}
+            </div>
+            {opStatus.advEval && (
+              <div className="mt-1 text-text-muted" data-testid="adversarial-eval-row">
+                Prompt-injection robustness: {opStatus.advEval.blocked}/{opStatus.advEval.total}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Phase 28.2 W5 Task 7 (UI-SPEC §6.2) — 429 replay-quota alert.
             px-2 py-1 spacing — multiples of 4. Renders ABOVE the Pin

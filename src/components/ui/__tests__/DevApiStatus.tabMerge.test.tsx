@@ -26,6 +26,7 @@ import {
 } from '@/components/providers/HealthStatusProvider';
 import { DevApiStatus } from '@/components/ui/DevApiStatus';
 import { HealthBanner } from '@/components/ui/HealthBanner';
+import { shouldRenderDashboard } from '@/lib/dashboardAuth';
 import type { HealthResponse, EndpointHealth } from '@/lib/healthClient';
 import { useFilterStore } from '@/stores/filterStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -38,8 +39,6 @@ vi.mock('@/lib/dashboardAuth', async () => {
     dashboardAuthHeaders: vi.fn(() => ({})),
   };
 });
-
-import { shouldRenderDashboard } from '@/lib/dashboardAuth';
 
 function makeEndpoint(overrides: Partial<EndpointHealth>): EndpointHealth {
   return {
