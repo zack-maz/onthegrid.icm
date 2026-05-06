@@ -28,7 +28,12 @@ import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
 // group without writing to events:llm:v3 (Pitfall 6 defense-in-depth).
 // Phase 27.4.3 Plan 02b B-3 — pipeline-flip audit log; canonical home is lib
 // (routes is consumer, not provider). Cyclic-import fix in place.
+import { appendOperatorAuditEntry, bearerFingerprint } from '../lib/operatorAudit.js';
 import { appendPipelineAudit, listPipelineAudit } from '../lib/pipelineAudit.js';
+// Phase 28.2 Plan 03 D-08 — operator-action audit log + per-Bearer replay
+// quota guardrails on the dashboardAuth-gated /llm-pipeline + /llm-replay
+// endpoints. Both helpers degrade open on Redis failure (logged, not thrown).
+import { checkReplayQuota } from '../lib/replayQuota.js';
 // Phase 27.4.6 — entity adapters live with the cron-driven extraction
 // helper. The legacy `enrichedToEntities` alias re-exported from this file
 // pulls from there so existing import sites continue to type-check.
@@ -475,6 +480,22 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
       return res.status(400).json({ error: 'invalid_group_key' });
     }
 
+    // Phase 28.2 Plan 03 D-08 / AI-SPEC §6 — per-Bearer replay quota check
+    // BEFORE any LLM token spend. 50 calls / UTC day per Bearer fingerprint.
+    // The INCR + key check is ~1ms; the LLM call below is ~27s. Beyond the
+    // cap, return 429 + Retry-After so a compromised Bearer cannot drain the
+    // daily token budget within minutes (T-28.2-03-02 mitigation).
+    const fingerprint = bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? '');
+    const quota = await checkReplayQuota(fingerprint);
+    if (!quota.allowed) {
+      res.set('Retry-After', String(quota.retryAfterSeconds));
+      return res.status(429).json({
+        error: 'replay_quota_exceeded',
+        message: `Replay quota reached: ${quota.cap} of ${quota.cap} in last 24h.`,
+        resetsAt: quota.resetsAt,
+      });
+    }
+
     // Phase 27.4.3 Plan 02b — route the replay path against the active
     // pipeline version. v3 reads from `events:llm:v3` and re-extracts via
     // processEventGroupsV3; v2 stays on the existing v2 path. v1 isn't
@@ -499,14 +520,30 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     // above. This is the Pitfall 6 "cache-read-only" invariant — preserved
     // verbatim for v3.
     try {
+      let diffPayload: { old: ConflictEventEntity; new: unknown } | null = null;
       if (replayVersion === 'v3') {
         const extraction = await processEventGroupsV3([group]);
         const first = extraction?.events?.[0] ?? null;
-        return res.json({ old: existing, new: first });
+        diffPayload = { old: existing, new: first };
+      } else {
+        const extraction = await processEventGroupsV2([group]);
+        const first = extraction?.events?.[0] ?? null;
+        diffPayload = { old: existing, new: first };
       }
-      const extraction = await processEventGroupsV2([group]);
-      const first = extraction?.events?.[0] ?? null;
-      return res.json({ old: existing, new: first });
+
+      // Phase 28.2 Plan 03 D-08 / AI-SPEC §5 — append audit entry BEFORE
+      // responding so "synchronous before HTTP response" (the AWAIT contract,
+      // not the Redis-success guarantee — appendOperatorAuditEntry degrades
+      // open on Redis failure).
+      await appendOperatorAuditEntry({
+        timestamp: Date.now(),
+        bearerFingerprint: fingerprint,
+        operation: 'replay',
+        args: { groupKey, replayVersion },
+        result: 'ok',
+      });
+
+      return res.json(diffPayload);
     } catch (err) {
       return res.status(500).json({
         error: 'extract_failed',
@@ -588,6 +625,22 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
         reason: typeof body.reason === 'string' ? body.reason.slice(0, 500) : undefined,
       });
     }
+
+    // Phase 28.2 Plan 03 D-08 / AI-SPEC §5 — operator-action audit log.
+    // Distinct from appendPipelineAudit (whose payload shape encodes
+    // pipeline-flip provenance for rollback automation): this entry powers
+    // the AI-SPEC §7 Operator Actions block in the merged dashboard tab,
+    // keyed by the SHA-256 Bearer fingerprint (NEVER the raw password —
+    // T-28.2-03-01 mitigation). Every successful POST appends, including
+    // no-op flips where fromVersion === toVersion (the operator still
+    // exercised the endpoint, which is the audit signal we surface).
+    await appendOperatorAuditEntry({
+      timestamp: Date.now(),
+      bearerFingerprint: bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? ''),
+      operation: 'pipeline-swap',
+      args: { version },
+      result: 'ok',
+    });
 
     const effective = getPipelineVersion();
     return res.json({
