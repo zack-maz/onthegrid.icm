@@ -70,7 +70,7 @@ jobs:
           DASHBOARD_PASSWORD: ${{ secrets.PROD_DASHBOARD_PASSWORD }}
           RUN_RATE_LIMIT_TEST: '1'
         run: |
-          npx vitest run src/__tests__/rate-limit.test.ts --reporter=basic
+          npx vitest run src/__tests__/rate-limit.test.ts --reporter=default
         continue-on-error: true
 
       # Step 3 — derive the W-3 contract-shape JSON and write it to the
