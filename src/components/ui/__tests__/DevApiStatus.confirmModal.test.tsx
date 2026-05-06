@@ -219,7 +219,8 @@ describe('DevApiStatus confirm modal + 429 alert (Phase 28.2 W5 Task 7)', () => 
     });
 
     it('Test 29: subsequent 200 from /llm-replay -> alert disappears', async () => {
-      const replay429 = vi.fn().mockResolvedValueOnce({
+      // First mock: always 429 — verify alert appears
+      const replay429Only = vi.fn().mockResolvedValue({
         ok: false,
         status: 429,
         json: () =>
@@ -228,18 +229,21 @@ describe('DevApiStatus confirm modal + 429 alert (Phase 28.2 W5 Task 7)', () => 
             resetsAt: '2026-05-05T00:00:00.000Z',
           }),
       });
-      replay429.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ old: {}, new: {} }),
-      });
-      vi.stubGlobal('fetch', replay429);
+      vi.stubGlobal('fetch', replay429Only);
       renderModal();
       await act(async () => {
         fireEvent.click(screen.getByTestId('replay-test-trigger'));
         await new Promise((r) => setTimeout(r, 0));
       });
       expect(screen.getByTestId('replay-quota-alert')).toBeDefined();
+
+      // Now swap fetch to always-200 — verify alert clears
+      const replay200Only = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ old: {}, new: {} }),
+      });
+      vi.stubGlobal('fetch', replay200Only);
       await act(async () => {
         fireEvent.click(screen.getByTestId('replay-test-trigger'));
         await new Promise((r) => setTimeout(r, 0));

@@ -891,6 +891,76 @@ function DevApiStatusAllApisTab({
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
+  // Phase 28.2 W5 Task 7 — confirm modal target ('v1' | 'v2' | null).
+  // Set non-null when the operator clicks Pin to v1 / Pin to v2; the modal
+  // intercepts the POST. Pin to v3 / Clear pin bypass the modal entirely
+  // per UI-SPEC §6.1 (no friction for current production / clearing).
+  const [confirmTarget, setConfirmTarget] = useState<'v1' | 'v2' | null>(null);
+  const [isPinning, setIsPinning] = useState(false);
+  // Phase 28.2 W5 Task 7 — 429 quota alert state. Populated by replay
+  // helper; cleared when a subsequent /llm-replay returns 200.
+  const [quotaAlert, setQuotaAlert] = useState<{ resetsAt: string } | null>(null);
+
+  // Phase 28.2 W5 Task 7 — pipeline-pin POST helper. Issued directly for
+  // version 'v3' / null (clear); routed through confirm modal for v1/v2.
+  const sendPipelinePin = async (version: 'v1' | 'v2' | 'v3' | null): Promise<void> => {
+    setIsPinning(true);
+    try {
+      await fetch('/api/events/llm-pipeline', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...dashboardAuthHeaders(),
+        },
+        body: JSON.stringify({ version }),
+      });
+    } catch {
+      // Swallow — the operator surfaces failure via the eval-score / DLQ blocks
+    } finally {
+      setIsPinning(false);
+      setConfirmTarget(null);
+    }
+  };
+
+  // Phase 28.2 W5 Task 7 — replay-quota probe helper. Used as the
+  // observable trigger for the 429 alert. Test 28-30 wire fetch spies
+  // around this; production callsites issue /llm-replay from elsewhere
+  // in the operator-actions block (Task 7.5 + Plan 06 expand).
+  const replayProbe = async (): Promise<void> => {
+    try {
+      const res = await fetch('/api/events/llm-replay/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...dashboardAuthHeaders(),
+        },
+      });
+      if (res.status === 429) {
+        const body = (await res.json()) as { resetsAt?: string };
+        setQuotaAlert({ resetsAt: body.resetsAt ?? '' });
+      } else if (res.ok) {
+        setQuotaAlert(null);
+      }
+    } catch {
+      // Network failure — don't update alert state
+    }
+  };
+
+  // Phase 28.2 W5 Task 7 — Escape handler for the confirm modal. Capture-
+  // phase so it wins over the outer DevApiStatus Escape (which closes the
+  // whole modal). Active only when confirmTarget is non-null.
+  useEffect(() => {
+    if (confirmTarget === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setConfirmTarget(null);
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [confirmTarget]);
+
   // Phase 28.2 W5 D-23 block 2 — per-endpoint quality metrics. Sourced
   // directly from the matching client store rather than threaded as props
   // (DevApiStatusAllApisTab is the single consumer). Renders inside the
@@ -1413,11 +1483,130 @@ function DevApiStatusAllApisTab({
         </div>
       </section>
 
-      {/* Phase 28.2 W5 Task 7.5 placeholder — Operator Actions block; live
-          content (24h count / per-Bearer breakdown / pin TTL / adversarial
-          eval row) wired in by Task 7.5. DOM order locked here so subsequent
-          tasks land additive content without restructuring. */}
-      <section data-testid="operator-actions" />
+      {/* Phase 28.2 W5 Task 7 — Operator Actions block. Plan 05 lands the
+          baseline (Pin to v1/v2/v3 + Clear pin + 429 quota alert + replay
+          test trigger); Task 7.5 expands with 24h count / per-Bearer
+          breakdown / pin TTL countdown / adversarial eval row sourced from
+          the new /api/operator-status endpoint. */}
+      <section className="mt-4 px-3 py-2 text-xs" data-testid="operator-actions">
+        <h3 className="mb-2 text-xs font-semibold text-text-primary">Operator Actions</h3>
+
+        {/* Phase 28.2 W5 Task 7 (UI-SPEC §6.2) — 429 replay-quota alert.
+            px-2 py-1 spacing — multiples of 4. Renders ABOVE the Pin
+            buttons so the operator sees it before reissuing actions. */}
+        {quotaAlert && (
+          <div
+            className="mb-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-400"
+            data-testid="replay-quota-alert"
+          >
+            Replay quota reached: 50 of 50 in last 24h. Resets at {quotaAlert.resetsAt}. Quota
+            protects daily token budget.
+          </div>
+        )}
+
+        {/* Pin to {v1,v2,v3} + Clear pin buttons. v1/v2 route through the
+            confirm modal per UI-SPEC §6.1; v3 + clear bypass it (no
+            friction for production / clearing). */}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirmTarget('v1')}
+            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+            data-testid="pin-pipeline-v1"
+          >
+            Pin to v1
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmTarget('v2')}
+            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+            data-testid="pin-pipeline-v2"
+          >
+            Pin to v2
+          </button>
+          <button
+            type="button"
+            onClick={() => void sendPipelinePin('v3')}
+            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+            data-testid="pin-pipeline-v3"
+          >
+            Pin to v3
+          </button>
+          <button
+            type="button"
+            onClick={() => void sendPipelinePin(null)}
+            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+            data-testid="pin-pipeline-clear"
+          >
+            Clear pin
+          </button>
+        </div>
+
+        {/* Phase 28.2 W5 Task 7 — replay test trigger. Issues a
+            /api/events/llm-replay/test probe so the operator can verify
+            the 50/24h quota path. The probe never writes to events:llm:v3
+            (Pitfall 6 dual-gate stays absolute — server-side enforcement). */}
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => void replayProbe()}
+            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+            data-testid="replay-test-trigger"
+          >
+            Run replay probe
+          </button>
+        </div>
+      </section>
+
+      {/* Phase 28.2 W5 Task 7 — Pin-to-v1/v2 confirm modal (UI-SPEC §6.1).
+          Reuses DashboardAuthModal shell pattern (backdrop, card, dual-button
+          footer). W-1 spacing pinning: Cancel + destructive buttons use
+          py-2 explicitly — NOT the 6px DashboardAuthModal precedent (which
+          violates UI-SPEC §7 multiples-of-4 rule). */}
+      {confirmTarget !== null && (
+        <div
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          data-testid="confirm-pin-modal"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmTarget(null);
+          }}
+        >
+          <div className="w-[360px] rounded-lg border border-border bg-surface-overlay p-5 shadow-xl">
+            <h2 className="mb-1 text-sm font-semibold text-text-primary">
+              Confirm pipeline version pin
+            </h2>
+            <p className="mb-3 text-xs text-text-muted">
+              Pin LLM pipeline to {confirmTarget} for 7 days.
+              <br />
+              <br />
+              v3 is current production. Pinning to {confirmTarget} disables ongoing v3 enrichment
+              until the pin clears or you revert.
+              <br />
+              <br />
+              Continue?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmTarget(null)}
+                className="rounded-md px-3 py-2 text-xs text-text-muted hover:bg-white/5"
+                data-testid="confirm-pin-cancel"
+              >
+                Keep v3
+              </button>
+              <button
+                type="button"
+                disabled={isPinning}
+                onClick={() => void sendPipelinePin(confirmTarget)}
+                className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                data-testid="confirm-pin-confirm"
+              >
+                {isPinning ? 'Pinning...' : `Pin to ${confirmTarget}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
