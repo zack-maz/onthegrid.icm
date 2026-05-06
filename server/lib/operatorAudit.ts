@@ -77,9 +77,7 @@ export async function appendOperatorAuditEntry(entry: OperatorAuditEntry): Promi
   // LAST_ERROR_MAX_CHARS Pitfall 7).
   const capped: OperatorAuditEntry = {
     ...entry,
-    ...(entry.errorMessage !== undefined
-      ? { errorMessage: entry.errorMessage.slice(0, 500) }
-      : {}),
+    ...(entry.errorMessage !== undefined ? { errorMessage: entry.errorMessage.slice(0, 500) } : {}),
   };
   const payload = JSON.stringify(capped);
 
