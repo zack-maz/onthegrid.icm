@@ -960,6 +960,68 @@ function DevApiStatusAllApisTab({
       });
   };
 
+  // Phase 28.2 W5 D-23 block 4 — recent-fetch sparkline. 10-dot strip
+  // sourced from the matching store's `recentFetches[]` (every store exposes
+  // this — see CLAUDE.md "Phase 4+ Polling"). Renders inline in the per-
+  // endpoint row's cell, oldest-left -> newest-right; empty slots render as
+  // bg-white/10 placeholder dots. Color sources from CSS-var tokens per
+  // UI-SPEC §9.
+  const sparklineFlights = useFlightStore((s) => s.recentFetches);
+  const sparklineShips = useShipStore((s) => s.recentFetches);
+  const sparklineEvents = useEventStore((s) => s.recentFetches);
+  const sparklineSites = useSiteStore((s) => s.recentFetches);
+  const sparklineNews = useNewsStore((s) => s.recentFetches);
+  const sparklineMarkets = useMarketStore((s) => s.recentFetches);
+  const sparklineWeather = useWeatherStore((s) => s.recentFetches);
+  const sparklineWater = useWaterStore((s) => s.recentFetches);
+  const sparklinePrecip = useWaterStore((s) => s.precipRecentFetches);
+
+  const recentFetchesFor = (epName: string): FetchEntry[] => {
+    switch (epName) {
+      case 'Flights':
+        return sparklineFlights;
+      case 'Ships':
+        return sparklineShips;
+      case 'Events':
+        return sparklineEvents;
+      case 'Sites':
+        return sparklineSites;
+      case 'News':
+        return sparklineNews;
+      case 'Markets':
+        return sparklineMarkets;
+      case 'Weather':
+        return sparklineWeather;
+      case 'Water':
+        return sparklineWater;
+      case 'Precip':
+        return sparklinePrecip;
+      default:
+        return [];
+    }
+  };
+
+  const renderSparkline = (epName: string): JSX.Element => {
+    const fetches = recentFetchesFor(epName);
+    const last10 = fetches.slice(-10);
+    const padding = Math.max(0, 10 - last10.length);
+    return (
+      <div className="flex gap-1" data-testid={`api-health-sparkline-${epName}`}>
+        {Array.from({ length: 10 }, (_, i) => {
+          if (i < padding) {
+            return <span key={i} className="h-1 w-1 rounded-full bg-white/10" />;
+          }
+          const fetch = last10[i - padding];
+          if (!fetch) {
+            return <span key={i} className="h-1 w-1 rounded-full bg-white/10" />;
+          }
+          const bg = fetch.ok ? 'var(--color-site-healthy)' : 'var(--color-event-airstrike)';
+          return <span key={i} className="h-1 w-1 rounded-full" style={{ backgroundColor: bg }} />;
+        })}
+      </div>
+    );
+  };
+
   const renderQualityBlock = (epName: string): JSX.Element | null => {
     if (epName === 'Events') {
       const total = qualityEvents.llmCount + qualityEvents.rawCount;
@@ -1134,6 +1196,7 @@ function DevApiStatusAllApisTab({
               <th className="pr-1 text-left font-normal">Status</th>
               <th className="pr-1 text-right font-normal">Freshness</th>
               <th className="pr-1 text-right font-normal">Latency</th>
+              <th className="pr-1 text-left font-normal">Recent</th>
               <th className="text-left font-normal">Last error</th>
             </tr>
           </thead>
@@ -1142,7 +1205,7 @@ function DevApiStatusAllApisTab({
               <React.Fragment key={group.tier}>
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="border-t border-white/10 py-1 text-[9px] uppercase tracking-wider text-white/40"
                   >
                     {TIER_GROUP_LABEL[group.tier]}
@@ -1185,12 +1248,17 @@ function DevApiStatusAllApisTab({
                         <td className="pr-1 text-right tabular-nums text-white/50">
                           {ep.latencyMs === null ? '--' : `${ep.latencyMs}ms`}
                         </td>
+                        {/* Phase 28.2 W5 D-23 block 4 — recent-fetch
+                            sparkline. Inline 10-dot strip from the matching
+                            store's recentFetches[]; oldest-left to newest-
+                            right. CSS-var color tokens per UI-SPEC §9. */}
+                        <td className="pr-1">{renderSparkline(ep.name)}</td>
                         <td className="truncate text-white/40">{errorTruncated}</td>
                       </tr>
                       {isExpanded && (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="rounded border border-white/5 bg-white/5 p-1.5"
                             data-testid={`expanded-row-${ep.name}`}
                           >
