@@ -915,6 +915,51 @@ function DevApiStatusAllApisTab({
     })),
   );
 
+  // Phase 28.2 W5 D-23 block 3 — per-endpoint manual retry button.
+  // Audit (Plan 05 Task 5): no store exposes a `fetchNow()` action, so all
+  // retries fall through to the cache-bust query-param path
+  // `fetch('/api/{endpoint}?_ts=...')`. The store's polling cycle picks up
+  // the fresh cache on its next tick. Per CLAUDE.md (D-23) the retry MUST
+  // NOT bust LLM cache keys — only polling-store cache keys. The ENDPOINT
+  // map below intentionally omits any URL containing `events:llm:v3` or
+  // `llm-replay`.
+  const ENDPOINT_RETRY_PATH: Record<string, string> = {
+    Flights: '/api/flights',
+    Ships: '/api/ships',
+    Events: '/api/events',
+    Sites: '/api/sites',
+    News: '/api/news',
+    Markets: '/api/markets',
+    Weather: '/api/weather',
+    Water: '/api/water',
+    Precip: '/api/water/precip',
+  };
+  const [refreshing, setRefreshing] = useState<Set<string>>(new Set());
+  const handleRefreshNow = (epName: string) => {
+    const path = ENDPOINT_RETRY_PATH[epName];
+    if (!path) return;
+    setRefreshing((prev) => {
+      const next = new Set(prev);
+      next.add(epName);
+      return next;
+    });
+    const url = `${path}?_ts=${Date.now()}`;
+    fetch(url, { headers: { ...dashboardAuthHeaders() } })
+      .catch(() => {
+        // Swallow — the polling store handles the actual error reporting
+      })
+      .finally(() => {
+        // Minimum visible delay so the operator sees `Refreshing...` state
+        setTimeout(() => {
+          setRefreshing((prev) => {
+            const next = new Set(prev);
+            next.delete(epName);
+            return next;
+          });
+        }, 200);
+      });
+  };
+
   const renderQualityBlock = (epName: string): JSX.Element | null => {
     if (epName === 'Events') {
       const total = qualityEvents.llmCount + qualityEvents.rawCount;
@@ -1154,6 +1199,27 @@ function DevApiStatusAllApisTab({
                                 per UI-SPEC §5.3.2; null for non-quality
                                 endpoints (silent — no "no metrics" copy). */}
                             {renderQualityBlock(ep.name)}
+                            {/* Phase 28.2 W5 D-23 block 3 — per-endpoint
+                                manual retry button. Class spec is verbatim
+                                per UI-SPEC §5.3.3; py-1 (4px) per W-1 — NOT
+                                the 6px DashboardAuthModal precedent (which
+                                violates UI-SPEC §7 multiples-of-4 rule). */}
+                            {ENDPOINT_RETRY_PATH[ep.name] && (
+                              <div className="mt-1">
+                                <button
+                                  type="button"
+                                  disabled={refreshing.has(ep.name)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRefreshNow(ep.name);
+                                  }}
+                                  className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+                                  data-testid={`api-health-retry-${ep.name}`}
+                                >
+                                  {refreshing.has(ep.name) ? 'Refreshing...' : 'Refresh now'}
+                                </button>
+                              </div>
+                            )}
                             <pre
                               className="whitespace-pre-wrap text-[9px] text-white/60"
                               data-testid={`all-apis-row-expanded-${ep.name}`}
