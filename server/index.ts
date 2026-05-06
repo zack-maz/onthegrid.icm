@@ -10,6 +10,7 @@ import { logger } from './lib/logger.js';
 import { cacheControl } from './middleware/cacheControl.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { rateLimiters } from './middleware/rateLimit.js';
+import { auditStatusRouter } from './routes/audit-status.js';
 import { cronHealthRouter } from './routes/cron-health.js';
 import { cronWarmRouter } from './routes/cron-warm.js';
 import { dashboardAuthRouter } from './routes/dashboardAuth.js';
@@ -131,6 +132,13 @@ export function createApp() {
   // events:llm-eval-adversarial:v3 into a single Bearer-gated read for the
   // merged DevApiStatus API Health tab Operator Actions block.
   app.use('/api', cacheControl(0, 0), operatorStatusRouter);
+
+  // Phase 28.2 W6 Plan 06 Task 5 — `/api/audit-status` exposes the sidecar
+  // Redis key `audit:connectivity:last-result` (written by the manual GH
+  // Actions prod-connectivity-audit workflow) for the merged DevApiStatus
+  // API Health tab's audit-result banner. NO Bearer gate — operator-tier
+  // metadata is non-secret; per-endpoint global 60/min rate limit applies.
+  app.use('/api', cacheControl(0, 0), auditStatusRouter);
 
   // Error handler -- must be after routes
   app.use(errorHandler);
