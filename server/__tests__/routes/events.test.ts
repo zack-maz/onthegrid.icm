@@ -292,6 +292,20 @@ vi.mock('../../cache/redis.js', () => ({
     get: (...args: unknown[]) => mockRedisGet(...(args as [string])),
     set: (...args: unknown[]) => mockRedisSet(...(args as [string, unknown, unknown?])),
     ping: vi.fn(async () => 'PONG'),
+    // Phase 28.2 Plan 03 — operatorAudit (sadd/scard/spop/srem/expire) +
+    // replayQuota (incr/expire) primitives reach the redis client when
+    // /llm-replay or /llm-pipeline fire. Provide pass-through stubs so the
+    // existing replay tests continue to land on the success path; deeper
+    // assertions on those primitives live in the dedicated audit/quota
+    // test files (server/__tests__/routes/events.audit.test.ts,
+    // server/__tests__/routes/events.replayQuota.test.ts).
+    incr: vi.fn(async () => 1),
+    expire: vi.fn(async () => 1),
+    sadd: vi.fn(async () => 1),
+    scard: vi.fn(async () => 1),
+    spop: vi.fn(async () => null),
+    srem: vi.fn(async () => 1),
+    del: vi.fn(async () => 1),
   },
   cacheGet: _mockCacheGet,
   cacheSet: _mockCacheSet,

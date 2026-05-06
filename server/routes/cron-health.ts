@@ -3,8 +3,10 @@ import { Router } from 'express';
 import { redis, cacheGetSafe } from '../cache/redis.js';
 import { env } from '../config.js';
 import { SOURCE_KEYS } from '../lib/healthSources.js';
-import { runEval } from '../lib/llmEvalHarness.js';
+import { runEval, runAdversarialEval } from '../lib/llmEvalHarness.js';
 import { logger } from '../lib/logger.js';
+
+import type { AdversarialEvalResult } from '../lib/llmEvalHarness.js';
 
 const log = logger.child({ module: 'cron-health' });
 
@@ -94,6 +96,21 @@ cronHealthRouter.get('/', async (req, res) => {
     log.warn({ err: evalError }, 'eval drift check threw — continuing health response');
   }
 
+  // Phase 28.2 Plan 03 Task 5 / B-2 — adversarial sub-eval folded in AFTER
+  // the accuracy eval. Same daily 0 0 * * * tick produces both signals; no
+  // new vercel.json cron entry needed (Hobby cap = 3 preserved). The merged
+  // dashboard tab in Plan 05 reads `events:llm-eval-adversarial:v3` Redis
+  // sidecar to render `Prompt-injection robustness: blocked/total`.
+  let adversarialResult: AdversarialEvalResult | null = null;
+  let adversarialError: string | null = null;
+  try {
+    adversarialResult = await runAdversarialEval();
+    log.info({ adversarialResult }, 'adversarial sub-eval complete');
+  } catch (err) {
+    adversarialError = err instanceof Error ? err.message : String(err);
+    log.warn({ err: adversarialError }, 'adversarial sub-eval threw — continuing health response');
+  }
+
   res.json({
     status: redisOk ? 'ok' : 'degraded',
     redis: redisOk,
@@ -102,5 +119,7 @@ cronHealthRouter.get('/', async (req, res) => {
     warnings,
     evalScore,
     evalError,
+    adversarialResult,
+    adversarialError,
   });
 });
