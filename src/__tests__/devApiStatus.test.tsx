@@ -161,10 +161,10 @@ describe('DevApiStatus', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     resetAllStores();
-    // Reset UI store modal state to default closed + overview
+    // Reset UI store modal state to default closed + apiHealth
     useUIStore.setState({
       isDevApiStatusOpen: false,
-      activeDevApiStatusTab: 'overview',
+      activeDevApiStatusTab: 'apiHealth',
     });
     // Phase 27.3.1 HUMAN-UAT Gap 1 — tab gating defaults for existing tests.
     // The Water and Sites tabs now require their owning toggles to be ON:
@@ -296,7 +296,7 @@ describe('DevApiStatus', () => {
     openModal();
     render(<DevApiStatus />);
     expect(screen.getByTestId('tab-water')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-overview')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-api-health')).toBeInTheDocument();
     expect(screen.getByTestId('tab-sites')).toBeInTheDocument();
   });
 
@@ -305,7 +305,7 @@ describe('DevApiStatus', () => {
     openModal();
     render(<DevApiStatus />);
     expect(screen.queryByTestId('tab-sites')).toBeNull();
-    expect(screen.getByTestId('tab-overview')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-api-health')).toBeInTheDocument();
     expect(screen.getByTestId('tab-water')).toBeInTheDocument();
   });
 
@@ -324,7 +324,7 @@ describe('DevApiStatus', () => {
       useFilterStore.setState({ showSites: false });
     });
     rerender(<DevApiStatus />);
-    expect(useUIStore.getState().activeDevApiStatusTab).toBe('overview');
+    expect(useUIStore.getState().activeDevApiStatusTab).toBe('apiHealth');
   });
 
   it('close button calls closeDevApiStatus', () => {

@@ -201,7 +201,7 @@ describe('EventsFiltersSection (Phase 27.4 Plan 09)', () => {
     resetAllStores();
     useUIStore.setState({
       isDevApiStatusOpen: false,
-      activeDevApiStatusTab: 'overview',
+      activeDevApiStatusTab: 'apiHealth',
     });
     useLayerStore.setState({ activeLayers: new Set(['water']) });
     useFilterStore.setState({ showSites: true });

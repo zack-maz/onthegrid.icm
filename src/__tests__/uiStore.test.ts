@@ -128,7 +128,7 @@ describe('uiStore', () => {
       // Reset modal state between tests
       useUIStore.setState({
         isDevApiStatusOpen: false,
-        activeDevApiStatusTab: 'overview',
+        activeDevApiStatusTab: 'apiHealth',
       });
     });
 
@@ -136,8 +136,8 @@ describe('uiStore', () => {
       expect(useUIStore.getState().isDevApiStatusOpen).toBe(false);
     });
 
-    it('activeDevApiStatusTab defaults to overview', () => {
-      expect(useUIStore.getState().activeDevApiStatusTab).toBe('overview');
+    it('activeDevApiStatusTab defaults to apiHealth (Phase 28.2 W5 D-22)', () => {
+      expect(useUIStore.getState().activeDevApiStatusTab).toBe('apiHealth');
     });
 
     it('openDevApiStatus sets isDevApiStatusOpen to true', () => {

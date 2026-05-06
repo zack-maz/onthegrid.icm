@@ -140,10 +140,10 @@ function openAndSelectSitesTab() {
 describe('SitesFiltersSection (Phase 27.3.1 R-05 D-19)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    // Reset UI store to closed + overview tab so tests start from a clean slate
+    // Reset UI store to closed + apiHealth tab so tests start from a clean slate
     useUIStore.setState({
       isDevApiStatusOpen: false,
-      activeDevApiStatusTab: 'overview',
+      activeDevApiStatusTab: 'apiHealth',
     });
     Object.assign(mockLLMStatus, { stage: 'idle', lastRun: null });
   });

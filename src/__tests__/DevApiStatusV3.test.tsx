@@ -143,7 +143,7 @@ describe('DevApiStatus v3 surface — Phase 27.4.3 Plan 04', () => {
     resetAllStores();
     useUIStore.setState({
       isDevApiStatusOpen: false,
-      activeDevApiStatusTab: 'overview',
+      activeDevApiStatusTab: 'apiHealth',
     });
     useLayerStore.setState({ activeLayers: new Set(['water']) });
     useFilterStore.setState({ showSites: true });

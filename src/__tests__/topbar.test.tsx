@@ -112,7 +112,7 @@ describe('Phase 27.3.1 Plan 12 — Topbar DevApiStatusTrigger (G6)', () => {
     resetAllStoresHealthy();
     useUIStore.setState({
       isDevApiStatusOpen: false,
-      activeDevApiStatusTab: 'overview',
+      activeDevApiStatusTab: 'apiHealth',
     });
   });
 

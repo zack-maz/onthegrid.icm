@@ -66,7 +66,7 @@ function renderModalWithHealth(opts: {
   // Open the modal + activate All APIs tab synchronously via the store.
   useUIStore.setState({
     isDevApiStatusOpen: true,
-    activeDevApiStatusTab: 'allApis',
+    activeDevApiStatusTab: 'apiHealth',
   });
 
   return render(
@@ -87,7 +87,7 @@ describe("DevApiStatus 'All APIs' tab", () => {
     useFilterStore.setState({ showSites: true });
     useUIStore.setState({
       isDevApiStatusOpen: false,
-      activeDevApiStatusTab: 'overview',
+      activeDevApiStatusTab: 'apiHealth',
     });
   });
 
@@ -96,7 +96,7 @@ describe("DevApiStatus 'All APIs' tab", () => {
     vi.unstubAllGlobals();
     useUIStore.setState({
       isDevApiStatusOpen: false,
-      activeDevApiStatusTab: 'overview',
+      activeDevApiStatusTab: 'apiHealth',
     });
   });
 

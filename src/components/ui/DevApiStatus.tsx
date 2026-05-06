@@ -356,120 +356,6 @@ function CopyIcon() {
   );
 }
 
-/* ---------- Overview Tab (API table + LLM Pipeline, Plan 12 G6) ---------- */
-
-function DevApiStatusOverviewTab({
-  rows,
-  llmStatus,
-  expandedRow,
-  setExpandedRow,
-}: {
-  rows: ApiRow[];
-  llmStatus: LLMStatus;
-  expandedRow: string | null;
-  setExpandedRow: (s: string | null) => void;
-}) {
-  return (
-    <>
-      {/* Table */}
-      <table className="w-full">
-        <thead>
-          <tr className="text-white/40">
-            <th className="pr-1 text-left font-normal">Source</th>
-            <th className="pr-1 text-left font-normal">St</th>
-            <th className="pr-1 text-right font-normal">Cnt</th>
-            <th className="pr-1 text-right font-normal">Avg</th>
-            <th className="pr-1 text-right font-normal">Rate</th>
-            <th className="pr-1 text-right font-normal">Next</th>
-            <th className="pr-1 text-right font-normal">Age</th>
-            <th className="text-center font-normal">Err</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const eff = effectiveStatus(r.status, r.count, r.lastFetch);
-            const color = statusColor(eff);
-            const isExpanded = expandedRow === r.name;
-            return (
-              <tr
-                key={r.name}
-                className="cursor-pointer hover:bg-white/5"
-                onClick={() => setExpandedRow(isExpanded ? null : r.name)}
-              >
-                <td className="pr-1">{r.name}</td>
-                <td className="pr-1 whitespace-nowrap">
-                  <span
-                    className="inline-block h-1.5 w-1.5 rounded-full"
-                    style={{ backgroundColor: color }}
-                  />{' '}
-                  <span style={{ color }} className="text-[9px]">
-                    {statusLabel(eff)}
-                  </span>
-                </td>
-                <td className="pr-1 text-right">{r.count}</td>
-                <td className="pr-1 text-right text-white/50">
-                  {avgResponseTime(r.recentFetches)}
-                </td>
-                <td className="pr-1 text-right text-white/50">{successRate(r.recentFetches)}</td>
-                <td className="pr-1 text-right text-white/50">
-                  {formatCountdown(r.nextPollAt, r.isOneShot, r.status)}
-                </td>
-                <td className="pr-1 text-right">{formatAge(r.lastFetch)}</td>
-                <td className="text-center">
-                  {r.lastError ? (
-                    <span
-                      className="inline-block h-1.5 w-1.5 rounded-full bg-red-500"
-                      title={r.lastError}
-                    />
-                  ) : (
-                    ''
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      {/* Expanded error / quality detail */}
-      {expandedRow &&
-        (() => {
-          const row = rows.find((r) => r.name === expandedRow);
-          if (!row) return null;
-          return (
-            <div className="mt-1 rounded border border-white/5 bg-white/5 p-1.5">
-              {row.quality && (
-                <div className="text-[9px] text-white/50">
-                  <span className="font-bold text-white/40">Quality:</span> {row.quality}
-                </div>
-              )}
-              {row.lastError && (
-                <div className="mt-0.5 text-[9px] text-red-400">
-                  <span className="font-bold">Error:</span> {row.lastError}
-                </div>
-              )}
-              {row.note && (
-                <div className="mt-0.5 text-[9px] text-white/40">
-                  <span className="font-bold">Note:</span> {row.note}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-      {/* LLM Pipeline Progress */}
-      <div className="mt-2 border-t border-white/10 pt-2">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
-          LLM Pipeline
-        </span>
-        <div className="mt-0.5 text-[9px]">
-          <LLMPipelineSection llmStatus={llmStatus} />
-        </div>
-      </div>
-    </>
-  );
-}
-
 /* ---------- Main Component ---------- */
 
 /**
@@ -747,10 +633,11 @@ export function DevApiStatus() {
   const showWaterTab = true;
   const showSitesTab = useFilterStore((s) => s.showSites);
   const showEventsTab = shouldRenderDashboard();
-  // Phase 28.1 W2 — All APIs tab is operator-observability surface and is
-  // always visible whenever the modal renders. Mirrors the Phase 27.4.6
-  // always-visible-tab contract for Events + Water.
-  const showAllApisTab = true;
+  // Phase 28.2 W5 D-26 — merged API Health tab Bearer-gated via the canonical
+  // `shouldRenderDashboard()` predicate. Replaces the prior W2 `showAllApisTab
+  // = true` always-visible flag. HealthBanner (intentionally NOT gated)
+  // continues to surface critical-tier outages to anonymous prod users.
+  const showApiHealthTab = shouldRenderDashboard();
 
   // Phase 28.1 W2 — read shared health context. Single-poll guarantee:
   // HealthBanner + this tab BOTH consume from one HealthStatusProvider
@@ -781,8 +668,9 @@ export function DevApiStatus() {
   // Sites tab can still hide under the user when they toggle off `showSites`,
   // so keep its snap-back. Water + Events are always visible under the
   // Phase 27.4.6 contract — no snap-back needed.
+  // Phase 28.2 W5 — fall back to the merged API Health tab key.
   useEffect(() => {
-    if (activeTab === 'sites' && !showSitesTab) setTab('overview');
+    if (activeTab === 'sites' && !showSitesTab) setTab('apiHealth');
   }, [activeTab, showSitesTab, setTab]);
 
   if (!isOpen) return null;
@@ -817,14 +705,20 @@ export function DevApiStatus() {
           </h2>
 
           <div className="flex items-center gap-1" role="tablist">
-            <TabButton
-              active={activeTab === 'overview'}
-              onClick={() => setTab('overview')}
-              indicator={hasIssue ? 'red' : undefined}
-              testid="tab-overview"
-            >
-              Overview
-            </TabButton>
+            {/* Phase 28.2 W5 D-22/D-27 — merged API Health tab in first
+                position. Indicator combines polling-store issue signal
+                (formerly Overview) with critical-unhealthy signal (formerly
+                All APIs) — both matter on the merged surface. */}
+            {showApiHealthTab && (
+              <TabButton
+                active={activeTab === 'apiHealth'}
+                onClick={() => setTab('apiHealth')}
+                indicator={hasIssue || hasCriticalUnhealthy ? 'red' : undefined}
+                testid="tab-api-health"
+              >
+                API Health
+              </TabButton>
+            )}
             {showWaterTab && (
               <TabButton
                 active={activeTab === 'water'}
@@ -850,16 +744,6 @@ export function DevApiStatus() {
                 testid="tab-events"
               >
                 Events
-              </TabButton>
-            )}
-            {showAllApisTab && (
-              <TabButton
-                active={activeTab === 'allApis'}
-                onClick={() => setTab('allApis')}
-                indicator={hasCriticalUnhealthy ? 'red' : undefined}
-                testid="tab-all-apis"
-              >
-                All APIs
               </TabButton>
             )}
           </div>
@@ -892,12 +776,15 @@ export function DevApiStatus() {
             populated byCountry tables + Overpass Health + per-type rejection
             buckets all fit without overflowing the viewport */}
         <div className="flex-1 overflow-y-auto px-4 py-3">
-          {activeTab === 'overview' && (
-            <DevApiStatusOverviewTab
+          {activeTab === 'apiHealth' && showApiHealthTab && (
+            <DevApiStatusAllApisTab
+              health={aggregateHealth}
+              loading={healthLoading}
+              error={healthError}
               rows={rows}
               llmStatus={llmStatus}
-              expandedRow={expandedRow}
-              setExpandedRow={setExpandedRow}
+              expandedPollingRow={expandedRow}
+              setExpandedPollingRow={setExpandedRow}
             />
           )}
           {activeTab === 'water' && showWaterTab && <WaterFiltersSection />}
@@ -916,13 +803,6 @@ export function DevApiStatus() {
             ) : (
               <EventsFiltersSectionV3 llmStatus={llmStatus} />
             ))}
-          {activeTab === 'allApis' && showAllApisTab && (
-            <DevApiStatusAllApisTab
-              health={aggregateHealth}
-              loading={healthLoading}
-              error={healthError}
-            />
-          )}
         </div>
       </div>
     </div>
@@ -996,10 +876,18 @@ function DevApiStatusAllApisTab({
   health,
   loading,
   error,
+  rows,
+  llmStatus,
+  expandedPollingRow,
+  setExpandedPollingRow,
 }: {
   health: HealthResponse | null;
   loading: boolean;
   error: Error | null;
+  rows: ApiRow[];
+  llmStatus: LLMStatus;
+  expandedPollingRow: string | null;
+  setExpandedPollingRow: (s: string | null) => void;
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
@@ -1030,36 +918,43 @@ function DevApiStatusAllApisTab({
     return groups;
   }, [health]);
 
-  // Loading state — initial fetch in flight, no prior data
-  if (loading && !health) {
-    return (
-      <div className="space-y-2" data-testid="all-apis-loading">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-6 animate-pulse rounded bg-white/5" />
-        ))}
-      </div>
-    );
-  }
-
-  // Error state — poll failed AND no prior data
-  if (error && !health) {
-    return (
-      <div className="py-6 text-center text-text-muted" data-testid="all-apis-error-no-data">
-        /api/health unreachable since page load. Check server logs.
-      </div>
-    );
-  }
-
-  if (!health) {
-    return (
-      <div className="py-6 text-center text-text-muted" data-testid="all-apis-empty">
-        No endpoints configured.
-      </div>
-    );
-  }
-
+  // Phase 28.2 W5 D-22 nothing-lost contract — header content (tier banner,
+  // /api/health table) renders only when `health` is non-null; polling-store
+  // rows + LLMPipelineSection + operator-actions ALWAYS render below so
+  // operators retain visibility into the local-store + pipeline surfaces
+  // even when /api/health is loading / errored / unreachable.
   return (
     <div data-testid="all-apis-tab">
+      {/* Phase 28.2 W5 D-23 block 1 — tier-grouped summary banner. Task 3
+          implementation lives here; Task 2 leaves the placeholder so DOM
+          order is fixed. */}
+      <div data-testid="tier-summary-banner-placeholder" />
+      {/* Phase 28.2 W6 D-25 — connectivity audit-result banner placeholder.
+          Plan 06 populates the Redis sidecar `audit:connectivity:last-result`
+          and the surface here reads it. Empty by design until W6 lands. */}
+      <div data-testid="audit-result-banner" />
+
+      {/* /api/health-driven block — renders only when the aggregate response
+          is available. The polling-store / LLM / operator sections below
+          render unconditionally so the merged tab stays useful while
+          /api/health is loading / errored. */}
+      {loading && !health && (
+        <div className="space-y-2" data-testid="all-apis-loading">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-6 animate-pulse rounded bg-white/5" />
+          ))}
+        </div>
+      )}
+      {error && !health && (
+        <div className="py-6 text-center text-text-muted" data-testid="all-apis-error-no-data">
+          /api/health unreachable since page load. Check server logs.
+        </div>
+      )}
+      {!loading && !error && !health && (
+        <div className="py-6 text-center text-text-muted" data-testid="all-apis-empty">
+          No endpoints configured.
+        </div>
+      )}
       {error && health && (
         <div
           className="mb-2 border-l-2 border-accent-yellow bg-yellow-950/40 px-3 py-1 text-[10px] text-accent-yellow"
@@ -1068,86 +963,204 @@ function DevApiStatusAllApisTab({
           Last poll failed at {new Date().toUTCString()}. Showing cached values.
         </div>
       )}
-      <table className="w-full">
-        <thead>
-          <tr className="text-white/40">
-            <th className="pr-1 text-left font-normal">Endpoint</th>
-            <th className="pr-1 text-left font-normal">Tier</th>
-            <th className="pr-1 text-left font-normal">Status</th>
-            <th className="pr-1 text-right font-normal">Freshness</th>
-            <th className="pr-1 text-right font-normal">Latency</th>
-            <th className="text-left font-normal">Last error</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groupedRows.map((group) => (
-            <React.Fragment key={group.tier}>
-              <tr>
-                <td
-                  colSpan={6}
-                  className="border-t border-white/10 py-1 text-[9px] uppercase tracking-wider text-white/40"
-                >
-                  {TIER_GROUP_LABEL[group.tier]}
-                </td>
-              </tr>
-              {group.rows.map((ep) => {
-                const isExpanded = expandedRow === ep.name;
-                const errorTruncated =
-                  ep.lastErrorReason && ep.lastErrorReason.length > 80
-                    ? `…${ep.lastErrorReason.slice(-80)}`
-                    : (ep.lastErrorReason ?? '');
-                return (
-                  <React.Fragment key={ep.name}>
-                    <tr
-                      className="cursor-pointer hover:bg-white/5"
-                      onClick={() => setExpandedRow(isExpanded ? null : ep.name)}
-                      data-testid={`all-apis-row-${ep.name}`}
-                    >
-                      <td className="pr-1">{ep.name}</td>
-                      <td className="pr-1">
-                        <span
-                          className={`rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TIER_BORDER_CLASSES[ep.tier]}`}
-                        >
-                          {TIER_LABEL[ep.tier]}
-                        </span>
-                      </td>
-                      <td className="pr-1">
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${STATUS_PILL_CLASSES[ep.status]}`}
-                        >
-                          {ep.status.toUpperCase()}
-                        </span>
-                      </td>
-                      <td
-                        className={`pr-1 text-right tabular-nums ${freshnessCellClass(ep)}`}
-                        title={ep.lastSuccessTs ? new Date(ep.lastSuccessTs).toISOString() : ''}
+      {health && (
+        <table className="w-full">
+          <thead>
+            <tr className="text-white/40">
+              <th className="pr-1 text-left font-normal">Endpoint</th>
+              <th className="pr-1 text-left font-normal">Tier</th>
+              <th className="pr-1 text-left font-normal">Status</th>
+              <th className="pr-1 text-right font-normal">Freshness</th>
+              <th className="pr-1 text-right font-normal">Latency</th>
+              <th className="text-left font-normal">Last error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groupedRows.map((group) => (
+              <React.Fragment key={group.tier}>
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="border-t border-white/10 py-1 text-[9px] uppercase tracking-wider text-white/40"
+                  >
+                    {TIER_GROUP_LABEL[group.tier]}
+                  </td>
+                </tr>
+                {group.rows.map((ep) => {
+                  const isExpanded = expandedRow === ep.name;
+                  const errorTruncated =
+                    ep.lastErrorReason && ep.lastErrorReason.length > 80
+                      ? `…${ep.lastErrorReason.slice(-80)}`
+                      : (ep.lastErrorReason ?? '');
+                  return (
+                    <React.Fragment key={ep.name}>
+                      <tr
+                        className="cursor-pointer hover:bg-white/5"
+                        onClick={() => setExpandedRow(isExpanded ? null : ep.name)}
+                        data-testid={`all-apis-row-${ep.name}`}
                       >
-                        {freshnessText(ep.freshnessMs)}
-                      </td>
-                      <td className="pr-1 text-right tabular-nums text-white/50">
-                        {ep.latencyMs === null ? '--' : `${ep.latencyMs}ms`}
-                      </td>
-                      <td className="truncate text-white/40">{errorTruncated}</td>
-                    </tr>
-                    {isExpanded && (
-                      <tr>
-                        <td colSpan={6} className="rounded border border-white/5 bg-white/5 p-1.5">
-                          <pre
-                            className="whitespace-pre-wrap text-[9px] text-white/60"
-                            data-testid={`all-apis-row-expanded-${ep.name}`}
+                        <td className="pr-1">{ep.name}</td>
+                        <td className="pr-1">
+                          <span
+                            className={`rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TIER_BORDER_CLASSES[ep.tier]}`}
                           >
-                            {JSON.stringify(ep, null, 2)}
-                          </pre>
+                            {TIER_LABEL[ep.tier]}
+                          </span>
                         </td>
+                        <td className="pr-1">
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${STATUS_PILL_CLASSES[ep.status]}`}
+                          >
+                            {ep.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td
+                          className={`pr-1 text-right tabular-nums ${freshnessCellClass(ep)}`}
+                          title={ep.lastSuccessTs ? new Date(ep.lastSuccessTs).toISOString() : ''}
+                        >
+                          {freshnessText(ep.freshnessMs)}
+                        </td>
+                        <td className="pr-1 text-right tabular-nums text-white/50">
+                          {ep.latencyMs === null ? '--' : `${ep.latencyMs}ms`}
+                        </td>
+                        <td className="truncate text-white/40">{errorTruncated}</td>
                       </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="rounded border border-white/5 bg-white/5 p-1.5"
+                          >
+                            <pre
+                              className="whitespace-pre-wrap text-[9px] text-white/60"
+                              data-testid={`all-apis-row-expanded-${ep.name}`}
+                            >
+                              {JSON.stringify(ep, null, 2)}
+                            </pre>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* Phase 28.2 W5 D-22 nothing-lost contract — polling-store rows folded
+          in from the deleted Overview tab. Per UI-SPEC §5.2, every Overview
+          signal must land somewhere in the merged tab; the polling-store
+          metrics (count / avg / success-rate / next-poll countdown / recent
+          fetches) live in their own <section> beneath the per-endpoint table
+          for clear visual hierarchy. */}
+      <section className="mt-3 border-t border-white/10 pt-2" data-testid="polling-store-rows">
+        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          Polling Stores
+        </span>
+        <table className="mt-1 w-full">
+          <thead>
+            <tr className="text-white/40">
+              <th className="pr-1 text-left font-normal">Source</th>
+              <th className="pr-1 text-left font-normal">St</th>
+              <th className="pr-1 text-right font-normal">Cnt</th>
+              <th className="pr-1 text-right font-normal">Avg</th>
+              <th className="pr-1 text-right font-normal">Rate</th>
+              <th className="pr-1 text-right font-normal">Next</th>
+              <th className="pr-1 text-right font-normal">Age</th>
+              <th className="text-center font-normal">Err</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const eff = effectiveStatus(r.status, r.count, r.lastFetch);
+              const color = statusColor(eff);
+              const isExpanded = expandedPollingRow === r.name;
+              return (
+                <tr
+                  key={r.name}
+                  className="cursor-pointer hover:bg-white/5"
+                  onClick={() => setExpandedPollingRow(isExpanded ? null : r.name)}
+                >
+                  <td className="pr-1">{r.name}</td>
+                  <td className="pr-1 whitespace-nowrap">
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: color }}
+                    />{' '}
+                    <span style={{ color }} className="text-[9px]">
+                      {statusLabel(eff)}
+                    </span>
+                  </td>
+                  <td className="pr-1 text-right">{r.count}</td>
+                  <td className="pr-1 text-right text-white/50">
+                    {avgResponseTime(r.recentFetches)}
+                  </td>
+                  <td className="pr-1 text-right text-white/50">{successRate(r.recentFetches)}</td>
+                  <td className="pr-1 text-right text-white/50">
+                    {formatCountdown(r.nextPollAt, r.isOneShot, r.status)}
+                  </td>
+                  <td className="pr-1 text-right">{formatAge(r.lastFetch)}</td>
+                  <td className="text-center">
+                    {r.lastError ? (
+                      <span
+                        className="inline-block h-1.5 w-1.5 rounded-full bg-red-500"
+                        title={r.lastError}
+                      />
+                    ) : (
+                      ''
                     )}
-                  </React.Fragment>
-                );
-              })}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Expanded polling-row error / quality detail */}
+        {expandedPollingRow &&
+          (() => {
+            const row = rows.find((r) => r.name === expandedPollingRow);
+            if (!row) return null;
+            return (
+              <div className="mt-1 rounded border border-white/5 bg-white/5 p-1.5">
+                {row.quality && (
+                  <div className="text-[9px] text-white/50">
+                    <span className="font-bold text-white/40">Quality:</span> {row.quality}
+                  </div>
+                )}
+                {row.lastError && (
+                  <div className="mt-0.5 text-[9px] text-red-400">
+                    <span className="font-bold">Error:</span> {row.lastError}
+                  </div>
+                )}
+                {row.note && (
+                  <div className="mt-0.5 text-[9px] text-white/40">
+                    <span className="font-bold">Note:</span> {row.note}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+      </section>
+
+      {/* Phase 28.2 W5 D-22 — LLMPipelineSection folded in from Overview.
+          Heading text "LLM Pipeline" preserved verbatim per UI-SPEC §5.2. */}
+      <section className="mt-2 border-t border-white/10 pt-2" data-testid="llm-pipeline-section">
+        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+          LLM Pipeline
+        </span>
+        <div className="mt-0.5 text-[9px]">
+          <LLMPipelineSection llmStatus={llmStatus} />
+        </div>
+      </section>
+
+      {/* Phase 28.2 W5 Task 7.5 placeholder — Operator Actions block; live
+          content (24h count / per-Bearer breakdown / pin TTL / adversarial
+          eval row) wired in by Task 7.5. DOM order locked here so subsequent
+          tasks land additive content without restructuring. */}
+      <section data-testid="operator-actions" />
     </div>
   );
 }
