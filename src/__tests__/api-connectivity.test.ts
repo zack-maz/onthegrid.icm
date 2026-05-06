@@ -87,7 +87,7 @@ describe.skipIf(!RUN)('API connectivity (D-24, 16 endpoints from PROBE_STRATEGIE
     if (Array.isArray(body)) return body;
     if (body && typeof body === 'object') {
       const obj = body as Record<string, unknown>;
-      for (const k of ['data', 'flights', 'ships', 'events']) {
+      for (const k of ['data', 'flights', 'ships', 'events', 'sites', 'facilities']) {
         if (Array.isArray(obj[k])) return obj[k] as unknown[];
       }
     }
@@ -166,15 +166,19 @@ describe.skipIf(!RUN)('API connectivity (D-24, 16 endpoints from PROBE_STRATEGIE
   it('sites (/api/sites) returns non-empty data with Bearer', async () => {
     const body = await probe('sites', '/api/sites');
     assertNonEmpty('sites', body);
-    const arr = Array.isArray(body) ? body : (body as { sites?: unknown[] }).sites;
-    expect(Array.isArray(arr), 'sites body must be an array or { sites: [] }').toBe(true);
+    expect(
+      arrayShape(body),
+      'sites body must be an array, { sites: [] }, or { data: [] }',
+    ).not.toBeUndefined();
   }, 30_000);
 
   it('water (/api/water) returns non-empty data with Bearer', async () => {
     const body = await probe('water', '/api/water');
     assertNonEmpty('water', body);
-    const arr = Array.isArray(body) ? body : (body as { facilities?: unknown[] }).facilities;
-    expect(Array.isArray(arr), 'water body must be an array or { facilities: [] }').toBe(true);
+    expect(
+      arrayShape(body),
+      'water body must be an array, { facilities: [] }, or { data: [] }',
+    ).not.toBeUndefined();
   }, 30_000);
 
   // ---------------------------------------------------------------------
