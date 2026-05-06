@@ -891,6 +891,64 @@ function DevApiStatusAllApisTab({
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
+  // Phase 28.2 W5 D-23 block 2 — per-endpoint quality metrics. Sourced
+  // directly from the matching client store rather than threaded as props
+  // (DevApiStatusAllApisTab is the single consumer). Renders inside the
+  // expanded row above the JSON dump for events / water / flights only;
+  // other endpoints render no quality block per UI-SPEC §5.3.2.
+  const qualityEvents = useEventStore(
+    useShallow((s) => {
+      const evts = s.events;
+      const llmCount = evts.filter((e) => e.data.llmProcessed).length;
+      const rawCount = evts.length - llmCount;
+      const exact = evts.filter((e) => e.data.precision === 'exact').length;
+      const city = evts.filter((e) => e.data.precision === 'city').length;
+      const region = evts.filter((e) => e.data.precision === 'region').length;
+      return { llmCount, rawCount, exact, city, region };
+    }),
+  );
+  const qualityWaterStats = useWaterStore((s) => s.filterStats);
+  const qualityFlights = useFlightStore(
+    useShallow((s) => ({
+      total: s.flights.length,
+      unidentified: s.flights.filter((f) => f.data.unidentified).length,
+    })),
+  );
+
+  const renderQualityBlock = (epName: string): JSX.Element | null => {
+    if (epName === 'Events') {
+      const total = qualityEvents.llmCount + qualityEvents.rawCount;
+      const pct = total > 0 ? Math.round((qualityEvents.llmCount / total) * 100) : 0;
+      return (
+        <div className="text-[9px] text-white/70">
+          <div>
+            Precision: exact {qualityEvents.exact} / city {qualityEvents.city} / region{' '}
+            {qualityEvents.region}
+          </div>
+          <div>LLM-vs-raw: {pct}%</div>
+        </div>
+      );
+    }
+    if (epName === 'Water' && qualityWaterStats) {
+      const totalRaw = Object.values(qualityWaterStats.rawCounts).reduce((a, b) => a + b, 0);
+      const totalKept = Object.values(qualityWaterStats.filteredCounts).reduce((a, b) => a + b, 0);
+      const pct = totalRaw > 0 ? Math.round((totalKept / totalRaw) * 100) : 0;
+      return (
+        <div className="text-[9px] text-white/70">
+          Admission: {totalKept} of {totalRaw} ({pct}%)
+        </div>
+      );
+    }
+    if (epName === 'Flights') {
+      return (
+        <div className="text-[9px] text-white/70">
+          Unidentified: {qualityFlights.unidentified} of {qualityFlights.total}
+        </div>
+      );
+    }
+    return null;
+  };
+
   // Sorted, tier-grouped row list. Stable across re-renders so the
   // expanded-row anchor doesn't jump as polling cycles update freshness.
   const groupedRows = useMemo(() => {
@@ -1089,7 +1147,13 @@ function DevApiStatusAllApisTab({
                           <td
                             colSpan={6}
                             className="rounded border border-white/5 bg-white/5 p-1.5"
+                            data-testid={`expanded-row-${ep.name}`}
                           >
+                            {/* Phase 28.2 W5 D-23 block 2 — per-endpoint
+                                quality metrics. Renders ABOVE the JSON dump
+                                per UI-SPEC §5.3.2; null for non-quality
+                                endpoints (silent — no "no metrics" copy). */}
+                            {renderQualityBlock(ep.name)}
                             <pre
                               className="whitespace-pre-wrap text-[9px] text-white/60"
                               data-testid={`all-apis-row-expanded-${ep.name}`}
