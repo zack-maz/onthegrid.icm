@@ -35,7 +35,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
   // localStorage persistence by design — the modal is a dev-only diagnostic
   // and should not resurrect across reloads)
   isDevApiStatusOpen: false,
-  activeDevApiStatusTab: 'overview',
+  activeDevApiStatusTab: 'apiHealth',
   openDevApiStatus: () => set({ isDevApiStatusOpen: true }),
   closeDevApiStatus: () => set({ isDevApiStatusOpen: false }),
   setDevApiStatusTab: (tab) => set({ activeDevApiStatusTab: tab }),

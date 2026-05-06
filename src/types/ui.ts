@@ -66,19 +66,22 @@ export interface PanelView {
 export type SidebarSection = 'counters' | 'layers' | 'filters';
 
 /**
- * Phase 27.3.1 Plan 12 G6 — DevApiStatus modal tab identity.
+ * Phase 28.2 W5 D-22/D-27 — DevApiStatus modal tab identity (post-merge).
  *
- * Five mutually-exclusive tabs in the centered DevApiStatus modal:
- *   - overview: API source table + LLM Pipeline section
- *   - water:    WaterFiltersSection (byCountry, byType, Overpass health, etc)
- *   - sites:    SitesFiltersSection (byType, byCountry, rejections, health)
- *   - events:   EventsFiltersSection — Phase 27.4 Plan 09 (dev-only, gated on
- *               llmStatus.schemaVersion === 'v2' AND import.meta.env.DEV)
- *   - allApis:  Phase 28.1 W2 — DevApiStatusAllApisTab; consumes
- *               useHealthStatusContext(); tier-grouped table of every
- *               /api/* endpoint with status / freshness / latency / last-error.
+ * Four mutually-exclusive tabs in the centered DevApiStatus modal. Order
+ * matches D-27 (API Health first):
+ *   - apiHealth: Phase 28.2 W5 — merged API Health tab. Absorbs the deleted
+ *                Overview tab body (polling-store metrics + LLMPipelineSection)
+ *                into the prior All APIs tab. Tier-grouped /api/* table from
+ *                useHealthStatusContext() + per-store rows + LLM pipeline
+ *                progress + new diagnostic blocks (tier summary banner,
+ *                per-endpoint quality, retry button, recent-fetch sparkline).
+ *                Bearer-gated via shouldRenderDashboard() (D-26).
+ *   - water:     WaterFiltersSection (byCountry, byType, Overpass health, etc)
+ *   - sites:     SitesFiltersSection (byType, byCountry, rejections, health)
+ *   - events:    EventsFiltersSection — Phase 27.4 Plan 09.
  */
-export type DevApiStatusTab = 'overview' | 'water' | 'sites' | 'events' | 'allApis';
+export type DevApiStatusTab = 'apiHealth' | 'water' | 'sites' | 'events';
 
 export interface UIState {
   isDetailPanelOpen: boolean;
