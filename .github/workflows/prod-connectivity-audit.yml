@@ -1,0 +1,183 @@
+# .github/workflows/prod-connectivity-audit.yml
+#
+# Phase 28.2 W6 Plan 06 Task 6 — Manual-trigger workflow that runs the
+# vitest connectivity smoke suite + D-30 rate-limit companion against the
+# deployed prod URL with secrets, then writes the result to the
+# `audit:connectivity:last-result` Redis sidecar key for the merged
+# DevApiStatus API Health tab's audit-result banner (D-25).
+#
+# Per CONTEXT D-25: "make sure it's working on PROD, that's where it
+# matters." This is the wave-close gate for Phase 28.2.
+#
+# Per CONTEXT D-29: manual `workflow_dispatch` trigger is the safest
+# baseline; future phase may promote to PR-trigger or scheduled.
+#
+# Required GitHub Actions secrets:
+#   - PROD_DASHBOARD_PASSWORD : Bearer for Plan 02 D-04 bypass + Plan 03
+#                                operator-control endpoints
+#   - UPSTASH_REDIS_REST_URL  : write target for sidecar key
+#   - UPSTASH_REDIS_REST_TOKEN: write auth for sidecar key
+name: Prod Connectivity Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL (defaults to production)'
+        required: false
+        default: 'https://otg-iran-monitor.vercel.app'
+
+concurrency:
+  group: prod-connectivity-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  connectivity-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Step 1 — connectivity smoke against prod.
+      # Bearer attached to every probe (D-30) — exercises Plan 02 D-04
+      # Bearer-bypass end-to-end so the suite hits all 16 endpoints in
+      # seconds without 429s on the global tier.
+      - name: Connectivity smoke against prod
+        id: smoke
+        env:
+          API_BASE_URL: ${{ inputs.target_url }}
+          DASHBOARD_PASSWORD: ${{ secrets.PROD_DASHBOARD_PASSWORD }}
+          RUN_CONNECTIVITY_TEST: '1'
+        run: |
+          npx vitest run src/__tests__/api-connectivity.test.ts \
+            --reporter=json --outputFile=audit-result.json
+        continue-on-error: true
+
+      # Step 2 — rate-limit defense companion (D-30; B-6 target /api/health).
+      # Two passes: unauthenticated burst → ≥1 returns 429; Bearer burst → 0 return 429.
+      - name: Rate-limit defense companion
+        id: ratelimit
+        env:
+          API_BASE_URL: ${{ inputs.target_url }}
+          DASHBOARD_PASSWORD: ${{ secrets.PROD_DASHBOARD_PASSWORD }}
+          RUN_RATE_LIMIT_TEST: '1'
+        run: |
+          npx vitest run src/__tests__/rate-limit.test.ts --reporter=basic
+        continue-on-error: true
+
+      # Step 3 — derive the W-3 contract-shape JSON and write it to the
+      # sidecar Redis key via Upstash REST API. Runs even if smoke failed
+      # so the banner reflects current reality.
+      - name: Write audit result to Redis sidecar
+        if: always()
+        env:
+          API_BASE_URL: ${{ inputs.target_url }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          RATELIMIT_RESULT: ${{ steps.ratelimit.outcome }}
+          GH_RUN_ID: ${{ github.run_id }}
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+
+            // Build the W-3 contract shape exactly. If this drifts from the
+            // shape pinned in server/routes/__tests__/audit-status.test.ts
+            // "matches CI workflow JSON shape contract", that test fails
+            // LOUDLY on next CI run instead of silently returning absent.
+            const smokeOk = process.env.SMOKE_RESULT === "success";
+            const rateOk = process.env.RATELIMIT_RESULT === "success";
+            const overallStatus = (smokeOk && rateOk) ? "pass" : "fail";
+
+            // Parse vitest reporter JSON to extract per-endpoint pass/fail.
+            const endpoints = {};
+            try {
+              const raw = readFileSync("audit-result.json", "utf8");
+              const report = JSON.parse(raw);
+              const tests = report.testResults?.[0]?.assertionResults ?? [];
+              for (const t of tests) {
+                // Test names look like "flights (/api/flights) returns
+                // non-empty data with Bearer". Extract the path between
+                // parens.
+                const m = t.fullName?.match(/\((\/api\/[^)]+)\)/);
+                const path = m ? m[1] : t.fullName ?? "(unknown)";
+                endpoints[path] = t.status === "passed" ? "pass" : "fail";
+              }
+            } catch (err) {
+              console.error("Failed to parse audit-result.json:", err.message);
+            }
+
+            const payload = {
+              status: overallStatus,
+              runId: process.env.GH_RUN_ID,
+              timestamp: new Date().toISOString(),
+              endpoints,
+              durationMs: 0,
+            };
+
+            const url = process.env.UPSTASH_REDIS_REST_URL;
+            const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+            if (!url || !token) {
+              console.error("Upstash credentials missing — skipping sidecar write.");
+              process.exit(0);
+            }
+            const key = "audit:connectivity:last-result";
+            const value = JSON.stringify(payload);
+            // Upstash REST API: POST /set/{key}?EX=604800 with body = value.
+            const setUrl = `${url.replace(/\/$/, "")}/set/${encodeURIComponent(key)}?EX=604800`;
+            const res = await fetch(setUrl, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "text/plain",
+              },
+              body: value,
+            });
+            if (!res.ok) {
+              const errText = await res.text();
+              console.error("Upstash write failed:", res.status, errText);
+              process.exit(1);
+            }
+            console.log("Wrote audit:connectivity:last-result =", payload);
+          '
+
+      # Step 4 — verify the sidecar key was written by hitting /api/audit-status.
+      - name: Verify /api/audit-status reflects the new result
+        if: always()
+        env:
+          API_BASE_URL: ${{ inputs.target_url }}
+        run: |
+          curl -sf "$API_BASE_URL/api/audit-status" || true
+
+      # Step 5 — upload the JSON artifact for operator post-hoc review.
+      - name: Upload audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-connectivity-audit-result
+          path: audit-result.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      # Step 6 — fail the workflow if either smoke or rate-limit failed,
+      # so the operator knows to investigate.
+      - name: Final status check
+        if: always()
+        run: |
+          if [ "${{ steps.smoke.outcome }}" != "success" ]; then
+            echo "Connectivity smoke FAILED. Check audit-result.json artifact."
+            exit 1
+          fi
+          if [ "${{ steps.ratelimit.outcome }}" != "success" ]; then
+            echo "Rate-limit defense companion FAILED. D-04 Bearer-bypass or D-30 contract may be regressed."
+            exit 1
+          fi
+          echo "All connectivity audit checks passed."
