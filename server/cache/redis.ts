@@ -42,6 +42,15 @@ const VARIADIC_KEY_METHODS = new Set<string>(['del', 'unlink']);
 // the prefix so callers can write portable patterns like `geocode:*` and have
 // them match the prefixed keys actually stored in dev.
 const SCAN_METHODS = new Set<string>(['scan']);
+// Phase 28.2 W6 hotfix — eval-family methods take the script (or its sha1) as
+// args[0]; the keys live in args[1] as a `string[]`. Prefixing args[0] would
+// corrupt the Lua script (Upstash returns "ERR Error running script:
+// @user_script line:2(column:7) near 'local': syntax error" — the parser
+// chokes on the prepended prefix as line 1). Instead, leave args[0] alone and
+// prefix every element of the keys array. `@upstash/ratelimit` is the
+// load-bearing caller — its sliding-window/fixed-window limit and refund
+// scripts pass through this branch on every rate-limited request.
+const EVAL_METHODS = new Set<string>(['eval', 'evalsha', 'eval_ro', 'evalsha_ro']);
 
 function wrapWithPrefix(client: Redis): Redis {
   const prefix = process.env.CACHE_KEY_PREFIX ?? '';
@@ -62,6 +71,18 @@ function wrapWithPrefix(client: Redis): Redis {
           const opts = args[1] as { match?: string; count?: number } | undefined;
           if (opts && typeof opts.match === 'string') {
             args[1] = { ...opts, match: prefix + opts.match };
+          }
+          return (value as (...a: unknown[]) => unknown).apply(target, args);
+        };
+      }
+      if (EVAL_METHODS.has(prop)) {
+        return function (...args: unknown[]) {
+          // args[0] is the script or sha — never prefixed. args[1] is the keys
+          // array; each element gets the prefix so dev/prod isolation still
+          // applies to whatever the script reads/writes. args[2] (the script
+          // ARGV) passes through untouched.
+          if (Array.isArray(args[1])) {
+            args[1] = (args[1] as unknown[]).map((k) => (typeof k === 'string' ? prefix + k : k));
           }
           return (value as (...a: unknown[]) => unknown).apply(target, args);
         };
