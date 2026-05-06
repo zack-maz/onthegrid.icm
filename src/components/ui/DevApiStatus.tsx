@@ -179,7 +179,7 @@ function StageIndicator({ current }: { current: string }) {
   const activeIdx = PIPELINE_STAGES.indexOf(current as (typeof PIPELINE_STAGES)[number]);
   const isError = current === 'error';
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-1">
       {PIPELINE_STAGES.map((s, i) => {
         const isDone = !isError && activeIdx >= 0 && i < activeIdx;
         const isActive = !isError && s === current;
@@ -191,7 +191,7 @@ function StageIndicator({ current }: { current: string }) {
               ? (STAGE_COLORS[s] ?? '#60a5fa')
               : 'rgba(255,255,255,0.15)';
         return (
-          <div key={s} className="flex items-center gap-0.5">
+          <div key={s} className="flex items-center gap-1">
             <div
               className="flex h-3 items-center justify-center rounded px-1 text-[7px] font-bold uppercase"
               style={{
@@ -925,10 +925,69 @@ function DevApiStatusAllApisTab({
   // even when /api/health is loading / errored / unreachable.
   return (
     <div data-testid="all-apis-tab">
-      {/* Phase 28.2 W5 D-23 block 1 — tier-grouped summary banner. Task 3
-          implementation lives here; Task 2 leaves the placeholder so DOM
-          order is fixed. */}
-      <div data-testid="tier-summary-banner-placeholder" />
+      {/* Phase 28.2 W5 D-23 block 1 — tier-grouped summary banner. Renders
+          a single horizontal row with three colored dots (healthy / degraded
+          / unhealthy via CSS-var tokens per UI-SPEC §9) followed by the
+          per-tier breakdown. Hidden when health is null (loading / error).
+          Spacing values are multiples of 4 per UI-SPEC §7 W-1. */}
+      {health &&
+        (() => {
+          const eps = Object.values(health.endpoints);
+          const total = eps.length;
+          const totalHealthy = eps.filter((e) => e.status === 'healthy').length;
+          const totalDegraded = eps.filter((e) => e.status === 'degraded').length;
+          const totalUnhealthy = eps.filter((e) => e.status === 'unhealthy').length;
+          const sumTier = (rec: {
+            healthy: number;
+            unhealthy?: number;
+            unknown?: number;
+            degraded?: number;
+          }): number => {
+            const h = rec.healthy ?? 0;
+            const d = rec.degraded ?? 0;
+            const u = rec.unhealthy ?? 0;
+            const k = rec.unknown ?? 0;
+            return h + d + u + k;
+          };
+          const criticalTotal = sumTier(health.summary.critical);
+          const nonCriticalTotal = sumTier(health.summary.nonCritical);
+          const cronTotal = sumTier(health.summary.cron);
+          return (
+            <div
+              className="mb-2 flex items-center gap-3 px-3 py-1 text-[10px]"
+              data-testid="tier-summary-banner"
+            >
+              <span className="flex items-center gap-1">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: 'var(--color-site-healthy)' }}
+                />
+                {totalHealthy} of {total} healthy
+              </span>
+              <span>·</span>
+              <span className="flex items-center gap-1">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: 'var(--color-site-attacked)' }}
+                />
+                {totalDegraded} degraded
+              </span>
+              <span>·</span>
+              <span className="flex items-center gap-1">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: 'var(--color-event-airstrike)' }}
+                />
+                {totalUnhealthy} unhealthy
+              </span>
+              <span className="text-white/40">
+                | critical: {health.summary.critical.healthy}/{criticalTotal} · non-critical:{' '}
+                {health.summary.nonCritical.healthy}/{nonCriticalTotal} · cron:{' '}
+                {health.summary.cron.healthy}/{cronTotal}
+              </span>
+            </div>
+          );
+        })()}
       {/* Phase 28.2 W6 D-25 — connectivity audit-result banner placeholder.
           Plan 06 populates the Redis sidecar `audit:connectivity:last-result`
           and the surface here reads it. Empty by design until W6 lands. */}
@@ -1002,14 +1061,14 @@ function DevApiStatusAllApisTab({
                         <td className="pr-1">{ep.name}</td>
                         <td className="pr-1">
                           <span
-                            className={`rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TIER_BORDER_CLASSES[ep.tier]}`}
+                            className={`rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${TIER_BORDER_CLASSES[ep.tier]}`}
                           >
                             {TIER_LABEL[ep.tier]}
                           </span>
                         </td>
                         <td className="pr-1">
                           <span
-                            className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${STATUS_PILL_CLASSES[ep.status]}`}
+                            className={`rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${STATUS_PILL_CLASSES[ep.status]}`}
                           >
                             {ep.status.toUpperCase()}
                           </span>
@@ -2373,7 +2432,7 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
           </>
         ) : null}
         {llmStatus.paused === true && (
-          <span className="ml-2 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] text-amber-400">
+          <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-1 text-[9px] text-amber-400">
             Paused — soft cap
           </span>
         )}
@@ -2509,11 +2568,9 @@ function AdaptiveBatchCell({ llmStatus }: { llmStatus: LLMStatus }) {
   const enabled = llmStatus.adaptiveBatchEnabled ?? last?.adaptiveBatchEnabled ?? false;
   const stats = llmStatus.adaptiveBatchStats ?? last?.adaptiveBatchStats;
   const enabledBadge = enabled ? (
-    <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] text-emerald-300">
-      ON
-    </span>
+    <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-[9px] text-emerald-300">ON</span>
   ) : (
-    <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/40">OFF</span>
+    <span className="rounded-full bg-white/10 px-2 py-1 text-[9px] text-white/40">OFF</span>
   );
   return (
     <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
@@ -2538,11 +2595,9 @@ function LineagePrefilterCell({ llmStatus }: { llmStatus: LLMStatus }) {
   const enabled = llmStatus.lineagePrefilterEnabled ?? last?.lineagePrefilterEnabled ?? false;
   const stats = llmStatus.lineagePrefilterStats ?? last?.lineagePrefilterStats;
   const enabledBadge = enabled ? (
-    <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] text-emerald-300">
-      ON
-    </span>
+    <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-[9px] text-emerald-300">ON</span>
   ) : (
-    <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/40">OFF</span>
+    <span className="rounded-full bg-white/10 px-2 py-1 text-[9px] text-white/40">OFF</span>
   );
   return (
     <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
