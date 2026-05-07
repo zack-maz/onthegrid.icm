@@ -82975,7 +82975,7 @@ async function runRefreshExtraction(opts) {
     LLM_EVENTS_KEY_ACTIVE,
     LLM_COOLDOWN_MS
   );
-  await (async () => {
+  void (async () => {
     resetProgress();
     updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
     try {
