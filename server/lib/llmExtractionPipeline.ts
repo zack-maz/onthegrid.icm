@@ -192,15 +192,35 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
   //    can differentiate cron-fired runs from manual-fired runs.
   updateProgress({ lastTriggerSource: opts.triggeredBy });
 
-  // 9. Spawn the fire-and-forget body — verbatim port of the prior block at
-  //    server/routes/events.ts:1063-1306, adapted to use the local KEYs and
-  //    the helper's `merged` raw GDELT input.
+  // 9. Run the extraction body. Phase 28.2.5 hot-fix: changed from
+  //    `void (async () => {})()` fire-and-forget to an awaited IIFE because
+  //    Vercel Fluid Compute kills the function instance once the response
+  //    is returned — the original Phase 27.4.6 design assumed Node's
+  //    long-lived event loop would survive the response, which Vercel's
+  //    serverless model doesn't honor. Result of the original design: the
+  //    cron route returned `dispatched: true` in ~400ms but the IIFE body
+  //    never executed, leaving `events:llm:v3` cold forever (verified by
+  //    polling /api/events/llm-status across multiple instances — every
+  //    poll returned stage=idle with empty callHistory + dlqCount=0).
+  //
+  //    Awaiting blocks the cron response until extraction completes. For
+  //    Vercel scheduled cron (4am UTC tick) this is fine — Vercel cron
+  //    waits up to the function's maxDuration (300s on Hobby; tunable in
+  //    vercel.json `functions` block). For operator force-triggers via
+  //    /api/cron/refresh-events?force=true the curl --max-time should be
+  //    bumped to ≥320s to match. If extraction exceeds maxDuration the
+  //    function aborts; the per-batch writePartialCache writes to
+  //    `events:llm:v3:partial` (observability key) survive, but the
+  //    terminal `events:llm:v3` write at line 386 is lost. Subsequent
+  //    cron ticks pick up where the last one left off via the lineageHash
+  //    pre-filter (D-18) so progress is not lost across function
+  //    boundaries.
   const llmCachedRef = await cacheGetSafe<ConflictEventEntity[]>(
     LLM_EVENTS_KEY_ACTIVE,
     LLM_COOLDOWN_MS,
   );
 
-  void (async () => {
+  await (async () => {
     resetProgress(); // sets stage='grouping', startedAt=now
     // Stamp schemaVersion + lastTriggerSource onto the freshly-reset
     // progress singleton (resetProgress() wipes optional fields).

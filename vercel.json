@@ -6,6 +6,11 @@
     { "path": "/api/cron/warm", "schedule": "0 12 * * *" },
     { "path": "/api/cron/refresh-events", "schedule": "0 4 * * *" }
   ],
+  "functions": {
+    "api/vercel-entry.js": {
+      "maxDuration": 300
+    }
+  },
   "rewrites": [
     { "source": "/api/cron/:path*", "destination": "/api/vercel-entry" },
     { "source": "/api/:path*", "destination": "/api/vercel-entry" },
