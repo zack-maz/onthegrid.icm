@@ -44,6 +44,8 @@ export const SOURCE_KEYS: Record<string, string> = {
   sites: 'sites:v3',
   // DRIFT-3: route writer bumped to water:facilities:v3 in Phase 27.3.2.
   water: 'water:facilities:v3',
+  // DRIFT-4: waterPrecip was in thresholds + tier but missing from SOURCE_KEYS — operator-reported in 28.2.5.
+  waterPrecip: 'water:precip',
 };
 
 /**
