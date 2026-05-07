@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
-status: unknown
-last_updated: "2026-05-06T05:22:18.049Z"
+status: phase_28.2_complete
+last_updated: "2026-05-06T23:30:00.000Z"
 progress:
   total_phases: 20
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 88
-  completed_plans: 80
-  percent: 91
+  completed_plans: 86
+  percent: 98
 ---
 
 # Project State
@@ -21,6 +21,9 @@ See: .planning/PROJECT.md
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
 
 ## Current Position
+
+Phase: 28.2 (dev-prod-sync-domain-rename) — ✅ COMPLETE (2026-05-06)
+Plans: 6 of 6 — all landed; W6 prod audit final run [25468172683](https://github.com/zack-maz/onthegrid.icm/actions/runs/25468172683) at 16/17 PASS (`news` blocked on GDELT-side 429 throttle, transient external condition not phase-blocking — operator can retrigger workflow_dispatch any time the throttle clears). Five hotfixes surfaced by the audit itself (CACHE_KEY_PREFIX proxy regression for eval-family methods + autoPipelining defense-in-depth + Bearer-bypass extension to per-endpoint tiers + CacheResponse envelope schema fix + reporter=default) all landed on main. Phase 28.3 (k6 load test) unblocked. Branch `feature/28.2-dev-prod-sync-domain-rename` fast-forward-merged to main at `269ff63` then 5 hotfixes 38fe0c2→db1f67b on main directly. New Vercel project `onthegrid.icm` (created by operator 2026-05-05) hosts the deployment with `otg-iran-monitor.vercel.app` alias. 7 prod env vars configured (DASHBOARD_PASSWORD=hello + UPSTASH_REDIS_REST_URL/TOKEN + CRON_SECRET + NVIDIA_NIM_API_KEY + OPENROUTER_API_KEY + CACHE_KEY_PREFIX + AISSTREAM_API_KEY). Bearer header `Authorization: Bearer hello` unlocks dashboard surfaces and skips all rate-limit tiers. 50 commits since phase-start `bcc9674`.
 
 Phase: 28.2 (dev-prod-sync-domain-rename) — EXECUTING
 Plan: 3 of 6

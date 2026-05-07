@@ -306,12 +306,14 @@ Plans:
 
 Plans:
 
-- [ ] 28.2-01-PLAN.md — W1: domain rename (D-03) — string substitutions across 5 files + Vercel-side redirect-strategy checkpoint
-- [ ] 28.2-02-PLAN.md — W2: rate-limiter Bearer-bypass (D-04, folds Phase 999.1) — `ratelimit:public` tier skips when valid Bearer present; per-endpoint tiers unaffected
-- [ ] 28.2-03-PLAN.md — W3: operator-control endpoint hardening (D-08) — replay quota 50/24h + operator-action audit log; Pitfall 6 dual-gate preserved
-- [ ] 28.2-04-PLAN.md — W4: per-field gate-swaps (D-05/D-06/D-07) — EntityTooltip + EventDetail × 2 + WaterFacilityDetail OSM ID (Path B); lockdown regression tests for 3 dev-only-forever fields
-- [ ] 28.2-05-PLAN.md — W5: dashboard merge (D-22/D-23/D-26/D-27) — delete Overview tab, fold into API Health; 4 new diagnostic blocks; confirm modal + 429 alert
-- [ ] 28.2-06-PLAN.md — W6: connectivity audit (D-24/D-25/D-28/D-29/D-30) — vitest smoke suite + GitHub Actions workflow against prod; sidecar audit-status route; HealthBanner outage trace; phase-close gate
+- [x] 28.2-01-PLAN.md — W1: domain rename (D-03) ✅ 2026-05-05 (operator chose Option A: created new Vercel project `onthegrid.icm` with alias `otg-iran-monitor.vercel.app`; old `irt-monitoring.vercel.app` retired with project; 6 commits 5548b3a→8a004f8 across load-test.js + load-test.spec.ts + CHANGELOG + runbook + auto-memory)
+- [x] 28.2-02-PLAN.md — W2: rate-limiter Bearer-bypass (D-04, folds Phase 999.1) ✅ 2026-05-05 (3 commits b7ad8db→7ea84dd; `timingSafeEqual` + Bearer-skip on `ratelimit:public`; later extended to per-endpoint tiers in W6 audit fix `e33a16b` after the audit's GH-runner IP self-throttled — original D-04 "defense in depth" carve-out loosened with operator approval); 7/7 unit tests pass
+- [x] 28.2-03-PLAN.md — W3: operator-control endpoint hardening (D-08) ✅ 2026-05-05 (6 commits 9549c3a→b67513d; operatorAudit + replayQuota (50/24h cap) + adversarial sub-eval; Pitfall 6 dual-gate preserved); 34/34 unit tests pass
+- [x] 28.2-04-PLAN.md — W4: per-field gate-swaps (D-05/D-06/D-07) ✅ 2026-05-05 (10 commits aa3e0d3→a818a3f; EntityTooltip + EventDetail × 2 + WaterFacilityDetail OSM ID Path B; 2 lockdown regression tests for severity score + MapDevExposer); 19/19 unit tests pass
+- [x] 28.2-05-PLAN.md — W5: dashboard merge (D-22/D-23/D-26/D-27) ✅ 2026-05-05 (13 commits a73fe1a→8422891; Overview→API Health tab merge with 4 diagnostic blocks; confirm modal + 429 alert; new `/api/operator-status` route; AI-SPEC §7 Operator Actions surface); 57/57 unit tests pass
+- [x] 28.2-06-PLAN.md — W6: connectivity audit (D-24/D-25/D-28/D-29/D-30) ✅ 2026-05-06 (11 plan commits 5f69482→6e01f9a + 5 hotfix commits surfaced by the audit itself: 765682a CACHE_KEY_PREFIX proxy fix for eval-family methods + 66a3be9 enableAutoPipelining=false defense-in-depth + e33a16b Bearer-bypass extension to per-endpoint tiers + db1f67b CacheResponse envelope schema fix + 38fe0c2 vitest reporter=default fix; final prod audit run [25468172683](https://github.com/zack-maz/onthegrid.icm/actions/runs/25468172683) lands at 16/17 PASS — only `news` fails with GDELT-side 429 throttle, transient external-service condition recorded as known-pending in 28.2-W6-AUDIT.md and operator-retriggerable any time; wave-gate green vitest 2145/2164 + lint 0err/16warn + tsc + prettier + npm run build all exit 0)
+
+**Phase 28.2 status:** ✅ COMPLETE (2026-05-06) — 6 of 6 plans landed, 16 of 17 connectivity audit endpoints PASS. Phase 28.3 unblocked.
 
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 
