@@ -158,7 +158,7 @@ const enrichedEventsByBatch: Record<number, unknown[]> = {};
 
 const processEventGroupsMock = vi.fn(
   async (
-    groups: unknown[],
+    _groups: unknown[],
     onBatchComplete?:
       | ((completed: number, total: number) => void)
       | ((completed: number, total: number) => Promise<void>),
@@ -168,6 +168,21 @@ const processEventGroupsMock = vi.fn(
     for (let c = 1; c <= total; c++) {
       const batchEvents = enrichedEventsByBatch[c] ?? [];
       allEvents.push(...batchEvents);
+      // Mirror v3 extractor's writePartialCache semantics — write the
+      // running EnrichedEventV3[] array to the partial-cache key after
+      // every batch so the periodic-flush callback (which reads
+      // events:llm:v3:partial via cacheGetSafe) sees the just-completed
+      // window. The partial-cache shape is LLMCachePayload (envelope).
+      await cacheSetSpy(
+        'events:llm:v3:partial',
+        {
+          events: allEvents.slice(),
+          progress: `${c}/${total}`,
+          complete: false,
+          generatedAt: new Date().toISOString(),
+        },
+        9000,
+      );
       // Drive the callback synchronously between batches.
       // Support both sync and async signatures (Task 3 widens to async).
       const ret = onBatchComplete?.(c, total);
@@ -175,6 +190,17 @@ const processEventGroupsMock = vi.fn(
         await ret;
       }
     }
+    // Final partial-cache write with complete=true.
+    await cacheSetSpy(
+      'events:llm:v3:partial',
+      {
+        events: allEvents.slice(),
+        progress: `${total}/${total}`,
+        complete: true,
+        generatedAt: new Date().toISOString(),
+      },
+      9000,
+    );
     return {
       schemaVersion: 'v3' as const,
       events: allEvents,

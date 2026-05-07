@@ -328,9 +328,133 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
       });
 
-      const extractResult = await processEventGroups(prioritizedGroups, (completed, total) => {
-        updateProgress({ completedBatches: completed, totalBatches: total });
-      });
+      // Phase 28.2.6 Plan 01 Task 4b — periodic-flush wiring inside the
+      // existing onBatchComplete callback chain.
+      //
+      // Cadence (D-03): every N=getFlushEveryNBatches() completed batches
+      // trigger a geocode-then-persist of the just-completed window. The
+      // counter MUST live inside this callback closure so concurrency=12
+      // batch-completion ordering races are serialized through finishBatch's
+      // monotonic ++completedBatchesCounter (Pitfall 2).
+      //
+      // Snapshot-the-array (Pitfall 3): we read the partial-cache envelope
+      // (writePartialCache writes after every batch in v3) and slice from
+      // lastFlushedEventCount → current to grab only events pushed since the
+      // last flush. This avoids reconstructing the slice from prioritizedGroups
+      // (which doesn't track completion order under concurrency=12).
+      //
+      // Two-key discipline (D-04 / D-11): periodic write → terminal key
+      // (`events:llm:v3` ConflictEventEntity[]); partial-key writes are
+      // owned by the v3 extractor's writePartialCache — UNCHANGED.
+      //
+      // Pitfall 8: runEval() is NOT called here. It stays at its existing
+      // post-FINAL-geocode location.
+      const flushEvery = getFlushEveryNBatches();
+      let batchesSinceLastFlush = 0;
+      let lastFlushedEventCount = 0;
+
+      const PARTIAL_KEY_ACTIVE = pipelineV3
+        ? 'events:llm:v3:partial'
+        : pipelineV2
+          ? 'events:llm:v2:partial'
+          : 'events:llm:partial';
+
+      const extractResult = await processEventGroups(
+        prioritizedGroups,
+        async (completed, total) => {
+          updateProgress({ completedBatches: completed, totalBatches: total });
+
+          batchesSinceLastFlush++;
+          if (batchesSinceLastFlush < flushEvery) return;
+          batchesSinceLastFlush = 0;
+
+          // Periodic flush — geocode the just-completed window and persist
+          // to the terminal key. Best-effort: any failure is logged and
+          // swallowed so the extraction loop continues. The final-flush at
+          // end-of-pipeline will still attempt a full-cache write.
+          try {
+            const partialCached = await cacheGetSafe<{
+              events: unknown[];
+              progress?: string;
+              complete?: boolean;
+              generatedAt?: string;
+            }>(PARTIAL_KEY_ACTIVE, 999_999_999);
+            const partialEvents = partialCached?.data?.events;
+            if (!Array.isArray(partialEvents) || partialEvents.length <= lastFlushedEventCount) {
+              return; // nothing new since the last flush
+            }
+            const window = partialEvents.slice(lastFlushedEventCount);
+
+            // Geocode the window via the schema-version-aware barrel.
+            // matchedNewsByGroup / bellingcatByGroup are not yet exposed
+            // per-batch — periodic flushes pass empty Maps so the resolver's
+            // POI-amenity-disambiguation branch falls back to gdelt-actiongeo
+            // for groups missing context. Geocode quality on periodic-flush
+            // slices remains valid; final flush picks up any richer context
+            // from the run-result Maps (D-05). Future work could plumb the
+            // accumulators per-batch if quality drift becomes measurable.
+            let adapted: ConflictEventEntity[] = [];
+            if (pipelineV3) {
+              const geo = await geocodeEnrichedEvents(
+                {
+                  schemaVersion: 'v3',
+                  events: window as never,
+                  matchedNewsByGroup: new Map(),
+                  bellingcatByGroup: new Map(),
+                },
+                prioritizedGroups,
+              );
+              if (geo.schemaVersion === 'v3') {
+                adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
+              }
+            } else if (pipelineV2) {
+              const geo = await geocodeEnrichedEvents(
+                {
+                  schemaVersion: 'v2',
+                  events: window as never,
+                  matchedNewsByGroup: new Map(),
+                  bellingcatByGroup: new Map(),
+                },
+                prioritizedGroups,
+              );
+              if (geo.schemaVersion === 'v2') {
+                adapted = enrichedV2ToEntities(geo.events, prioritizedGroups);
+              }
+            } else {
+              const geo = await geocodeEnrichedEvents(
+                { schemaVersion: 'v1', events: window as never },
+                prioritizedGroups,
+              );
+              if (geo.schemaVersion === 'v1') {
+                adapted = enrichedV1ToEntities(geo.events, prioritizedGroups);
+              }
+            }
+
+            if (adapted.length > 0) {
+              await mergeAndPersistLlmEntities(
+                adapted,
+                llmCachedRef,
+                LLM_EVENTS_KEY_ACTIVE,
+                pipelineV2,
+                pipelineV3,
+              );
+              lastFlushedEventCount = partialEvents.length;
+              log.info(
+                { completed, total, windowSize: window.length, flushed: adapted.length },
+                'Plan 01 periodic-flush: incremental terminal-key write',
+              );
+            }
+          } catch (flushErr) {
+            // Best-effort — periodic flush failure must NOT abort the
+            // extraction loop. The final flush at end-of-pipeline will
+            // still attempt a full-cache write.
+            log.warn(
+              { err: flushErr, completed, total },
+              'Plan 01 periodic-flush failed (continuing)',
+            );
+          }
+        },
+      );
 
       if (!extractResult.events || extractResult.events.length === 0) {
         log.warn('LLM processing returned null — raw GDELT serving continues');
