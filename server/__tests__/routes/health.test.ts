@@ -130,7 +130,10 @@ describe('GET /api/health (W2 extended)', () => {
     expect(body.endpoints.flights?.lastErrorReason).toBeTruthy();
   });
 
-  it('Test 4: summary.critical sums to exactly 3 (flights/ships/events)', async () => {
+  it('Test 4: summary.critical sums to the count of critical-tier endpoints', async () => {
+    // Derives the expected count from TIER_BY_ENDPOINT to stay
+    // regression-resilient as critical endpoints are added (e.g.,
+    // 28.2.5 D-06 added llmEvents: 'critical' as the 4th critical entry).
     mockPing.mockResolvedValue('PONG');
     mockCacheGetSafe.mockResolvedValue({
       data: [],
@@ -139,13 +142,17 @@ describe('GET /api/health (W2 extended)', () => {
     });
 
     const { healthRouter } = await import('../../routes/health.js');
+    const { TIER_BY_ENDPOINT } = await import('../../lib/healthSources.js');
     const handler = extractHandler(healthRouter);
     const { req, res, getBody } = createReqRes();
     await handler(req, res);
 
     const body = healthResponseSchema.parse(getBody());
     const c = body.summary.critical;
-    expect(c.healthy + c.degraded + c.unhealthy + c.unknown).toBe(3);
+    const expectedCriticalCount = Object.values(TIER_BY_ENDPOINT).filter(
+      (t) => t === 'critical',
+    ).length;
+    expect(c.healthy + c.degraded + c.unhealthy + c.unknown).toBe(expectedCriticalCount);
   });
 
   it('Test 5a: response includes every endpoint declared in TIER_BY_ENDPOINT', async () => {
@@ -225,5 +232,55 @@ describe('GET /api/health (W2 extended)', () => {
     expect(body.endpoints.waterPrecip).toBeDefined();
     expect(body.endpoints.waterPrecip?.status).toBe('healthy');
     expect(body.endpoints.waterPrecip?.tier).toBe('non-critical');
+  });
+
+  it('Test 6 (Phase 28.2.5 D-06): endpoint llmEvents exists with critical tier + 26h threshold', async () => {
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockResolvedValue(null);
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    expect(body.endpoints.llmEvents).toBeDefined();
+    expect(body.endpoints.llmEvents?.tier).toBe('critical');
+    expect(body.endpoints.llmEvents?.freshnessThresholdMs).toBe(26 * 60 * 60_000);
+  });
+
+  it('Test 7 (Phase 28.2.5 D-06): llmEvents reports healthy on fresh events:llm:v3 envelope', async () => {
+    const now = Date.now();
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') {
+        return { data: [], stale: false, lastFresh: now - 1_000 };
+      }
+      return null;
+    });
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    expect(body.endpoints.llmEvents?.status).toBe('healthy');
+  });
+
+  it('Test 8 (Phase 28.2.5 D-06): llmEvents is unknown on cold cache (cache-bridge fallback active)', async () => {
+    // Operator signal — when v3 is cold, the route falls through to v2/v1/raw-GDELT
+    // per Pitfall 1. The /api/health gate calls this out via 'unknown' status,
+    // letting the operator force-trigger /api/cron/refresh-events?force=true.
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockResolvedValue(null);
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    expect(body.endpoints.llmEvents?.status).toBe('unknown');
   });
 });
