@@ -42,67 +42,12 @@ interface ApiRow {
 
 /* ---------- Helpers ---------- */
 
-function statusColor(eff: string): string {
-  switch (eff) {
-    case 'connected':
-      return '#22c55e';
-    case 'empty':
-    case 'stale':
-    case 'stuck':
-      return '#f59e0b';
-    case 'error':
-      return '#ef4444';
-    case 'init':
-      return '#60a5fa';
-    case 'idle':
-      return '#6b7280';
-    default:
-      return '#60a5fa';
-  }
-}
-
-function statusLabel(eff: string): string {
-  switch (eff) {
-    case 'empty':
-      return 'EMPTY';
-    case 'stuck':
-      return 'STUCK';
-    case 'init':
-      return 'INIT';
-    default:
-      return eff.toUpperCase();
-  }
-}
-
 function formatAge(ts: number | null): string {
   if (!ts) return '--';
   const sec = Math.floor((Date.now() - ts) / 1000);
   if (sec < 60) return `${sec}s`;
   if (sec < 3600) return `${Math.floor(sec / 60)}m`;
   return `${Math.floor(sec / 3600)}h`;
-}
-
-function formatCountdown(nextPollAt: number | null, isOneShot: boolean, status: string): string {
-  if (isOneShot) {
-    if (status === 'loading' || status === 'idle') return 'Fetching...';
-    if (status === 'error') return 'Failed';
-    return 'Complete';
-  }
-  if (!nextPollAt) return '--';
-  const sec = Math.max(0, Math.floor((nextPollAt - Date.now()) / 1000));
-  return `${sec}s`;
-}
-
-function avgResponseTime(fetches: FetchEntry[]): string {
-  if (fetches.length === 0) return '--';
-  const avg = fetches.reduce((sum, f) => sum + f.durationMs, 0) / fetches.length;
-  return `${Math.round(avg)}ms`;
-}
-
-function successRate(fetches: FetchEntry[]): string {
-  if (fetches.length === 0) return '--';
-  const ok = fetches.filter((f) => f.ok).length;
-  return `${ok}/${fetches.length}`;
 }
 
 function formatElapsed(startedAt: number | null | undefined): string {
@@ -386,7 +331,6 @@ export function DevApiStatus() {
     return () => clearInterval(id);
   }, []);
 
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState(false);
 
   const llmStatus = useLLMStatusPolling();
@@ -781,10 +725,7 @@ export function DevApiStatus() {
               health={aggregateHealth}
               loading={healthLoading}
               error={healthError}
-              rows={rows}
               llmStatus={llmStatus}
-              expandedPollingRow={expandedRow}
-              setExpandedPollingRow={setExpandedRow}
             />
           )}
           {activeTab === 'water' && showWaterTab && <WaterFiltersSection />}
@@ -876,18 +817,12 @@ function DevApiStatusAllApisTab({
   health,
   loading,
   error,
-  rows,
   llmStatus,
-  expandedPollingRow,
-  setExpandedPollingRow,
 }: {
   health: HealthResponse | null;
   loading: boolean;
   error: Error | null;
-  rows: ApiRow[];
   llmStatus: LLMStatus;
-  expandedPollingRow: string | null;
-  setExpandedPollingRow: (s: string | null) => void;
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
@@ -1508,102 +1443,6 @@ function DevApiStatusAllApisTab({
           </tbody>
         </table>
       )}
-
-      {/* Phase 28.2 W5 D-22 nothing-lost contract — polling-store rows folded
-          in from the deleted Overview tab. Per UI-SPEC §5.2, every Overview
-          signal must land somewhere in the merged tab; the polling-store
-          metrics (count / avg / success-rate / next-poll countdown / recent
-          fetches) live in their own <section> beneath the per-endpoint table
-          for clear visual hierarchy. */}
-      <section className="mt-3 border-t border-white/10 pt-2" data-testid="polling-store-rows">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
-          Polling Stores
-        </span>
-        <table className="mt-1 w-full">
-          <thead>
-            <tr className="text-white/40">
-              <th className="pr-1 text-left font-normal">Source</th>
-              <th className="pr-1 text-left font-normal">St</th>
-              <th className="pr-1 text-right font-normal">Cnt</th>
-              <th className="pr-1 text-right font-normal">Avg</th>
-              <th className="pr-1 text-right font-normal">Rate</th>
-              <th className="pr-1 text-right font-normal">Next</th>
-              <th className="pr-1 text-right font-normal">Age</th>
-              <th className="text-center font-normal">Err</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const eff = effectiveStatus(r.status, r.count, r.lastFetch);
-              const color = statusColor(eff);
-              const isExpanded = expandedPollingRow === r.name;
-              return (
-                <tr
-                  key={r.name}
-                  className="cursor-pointer hover:bg-white/5"
-                  onClick={() => setExpandedPollingRow(isExpanded ? null : r.name)}
-                >
-                  <td className="pr-1">{r.name}</td>
-                  <td className="pr-1 whitespace-nowrap">
-                    <span
-                      className="inline-block h-1.5 w-1.5 rounded-full"
-                      style={{ backgroundColor: color }}
-                    />{' '}
-                    <span style={{ color }} className="text-[9px]">
-                      {statusLabel(eff)}
-                    </span>
-                  </td>
-                  <td className="pr-1 text-right">{r.count}</td>
-                  <td className="pr-1 text-right text-white/50">
-                    {avgResponseTime(r.recentFetches)}
-                  </td>
-                  <td className="pr-1 text-right text-white/50">{successRate(r.recentFetches)}</td>
-                  <td className="pr-1 text-right text-white/50">
-                    {formatCountdown(r.nextPollAt, r.isOneShot, r.status)}
-                  </td>
-                  <td className="pr-1 text-right">{formatAge(r.lastFetch)}</td>
-                  <td className="text-center">
-                    {r.lastError ? (
-                      <span
-                        className="inline-block h-1.5 w-1.5 rounded-full bg-red-500"
-                        title={r.lastError}
-                      />
-                    ) : (
-                      ''
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {/* Expanded polling-row error / quality detail */}
-        {expandedPollingRow &&
-          (() => {
-            const row = rows.find((r) => r.name === expandedPollingRow);
-            if (!row) return null;
-            return (
-              <div className="mt-1 rounded border border-white/5 bg-white/5 p-1.5">
-                {row.quality && (
-                  <div className="text-[9px] text-white/50">
-                    <span className="font-bold text-white/40">Quality:</span> {row.quality}
-                  </div>
-                )}
-                {row.lastError && (
-                  <div className="mt-0.5 text-[9px] text-red-400">
-                    <span className="font-bold">Error:</span> {row.lastError}
-                  </div>
-                )}
-                {row.note && (
-                  <div className="mt-0.5 text-[9px] text-white/40">
-                    <span className="font-bold">Note:</span> {row.note}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-      </section>
 
       {/* Phase 28.2 W5 D-22 — LLMPipelineSection folded in from Overview.
           Heading text "LLM Pipeline" preserved verbatim per UI-SPEC §5.2. */}

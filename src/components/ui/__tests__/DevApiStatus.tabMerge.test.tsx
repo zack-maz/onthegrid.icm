@@ -121,19 +121,11 @@ describe('DevApiStatus tab merge (Phase 28.2 W5 Plan 05 Task 2)', () => {
     expect(labels[3]).toBe('Events');
   });
 
-  it('Test 2 (D-22 nothing lost — polling store rows): rows render in merged tab', () => {
-    const health = makeResponse({
-      flights: makeEndpoint({ name: '/api/flights' }),
-    });
-    renderModalWithHealth({ health });
-    const pollingRows = screen.getByTestId('polling-store-rows');
-    expect(pollingRows).toBeDefined();
-    // Polling rows include Flights/Ships/Events/Water as known stores.
-    expect(pollingRows.textContent).toContain('Flights');
-    expect(pollingRows.textContent).toContain('Ships');
-    expect(pollingRows.textContent).toContain('Events');
-    expect(pollingRows.textContent).toContain('Water');
-  });
+  // Test 2 (D-22 polling-store rows) removed 2026-05-06 per operator
+  // request — the Polling Stores section was deleted from the merged tab
+  // because the per-endpoint health table above it covers the same
+  // endpoints with richer signal (status / freshness / latency / tier).
+  // The legacy table presented duplicate state in a less-readable shape.
 
   it('Test 3 (D-22 nothing lost — LLMPipelineSection renders)', () => {
     const health = makeResponse({
