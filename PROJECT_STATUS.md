@@ -1,6 +1,6 @@
 # Iran Conflict Monitor — Project Status
 
-**Last updated:** 2026-04-24
+**Last updated:** 2026-05-06
 
 ## Progress
 
@@ -69,7 +69,10 @@ v1.4 GDELT & Perf:       [████████████████░░
 | 27.4.2 | CI Health (flip main CI green)             | v1.4      | Planned  | —          |
 | 27.4.3 | deck.gl v9 Type Drift                      | v1.4      | Planned  | —          |
 | 27.4.5 | LLM Pipeline Full History Observability    | v1.4      | Planned  | —          |
-| 28     | Performance & Load Testing                 | v1.4      | Planned  | —          |
+| 28.1   | Cleanup Sweep                              | v1.4      | Done     | 2026-05-03 |
+| 28.2   | Dev/Prod Sync + Domain Rename              | v1.4      | Done     | 2026-05-06 |
+| 28.2.5 | API Green-Light Prereq Gate                | v1.4      | Done     | 2026-05-06 |
+| 28.3   | Performance Optimization + Load Test       | v1.4      | Planned  | —          |
 
 _Phase 26.2 (Conflict Geolocation Improvement, NLP attempt) was scrapped in Phase 26.3 and renumbered to Phase 27 under v1.4 on 2026-04-08. Original Phase 27 (Performance & Load Testing) was renumbered to Phase 28 under v1.4 on the same date. Historical artifacts from the scrapped 26.2 attempt are preserved at `.planning/phases/archive-26.2-nlp-scrapped/`._
 

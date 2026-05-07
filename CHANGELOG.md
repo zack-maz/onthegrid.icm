@@ -4,6 +4,38 @@ All notable changes to the Iran Conflict Monitor project.
 
 ## [Unreleased]
 
+### Phase 28.2.5: API Green-Light Prereq Gate (2026-05-06 → 2026-05-06)
+
+#### Added
+
+- `events:llm:v3` to `SOURCE_KEYS` registry (DRIFT-5) so the cache-bridge fallback chain in `server/routes/events.ts:701-731` (events:llm:v3 → events:llm:v2 → events:llm → raw GDELT) is observable from the API Health tab. Tier `'critical'`, freshness threshold 26h (cron triad).
+- `waterPrecip: 'water:precip'` to `SOURCE_KEYS` (DRIFT-4) — `FRESHNESS_THRESHOLDS_MS` + `TIER_BY_ENDPOINT` already had `waterPrecip` entries since Phase 28.1 W2; the missing registry row was the bug.
+- Registry-consistency invariant test in `server/__tests__/lib/healthSources.test.ts` — every cache-backed `TIER_BY_ENDPOINT` key MUST have a matching `SOURCE_KEYS` entry; future drift fails LOUDLY.
+- DevApiStatus row split: `Events` → `Events (raw)` (probes `events:gdelt`) + `Events (LLM)` (probes `events:llm:v3`). Operator gets a one-glance read on enriched-vs-fallback state.
+- DevApiStatus `Precip` row consumes `aggregateHealth.endpoints.waterPrecip` from `/api/health` (matches every other row's pattern). Replaces the prior `useWaterStore` selector path.
+- WeatherOverlay `findNearestPrecip` widened from 2° → 4° Manhattan; return shape `PrecipitationData | null` → `{ value: PrecipitationData; distanceKm: number } | null`. Tooltip surfaces "nearest sample, X km away" hint when distance > 100km.
+- Tier-green assertion in `.github/workflows/prod-connectivity-audit.yml` Step 3 inline node script. Computes `allTiersGreen` + `tierStatus` against the D-03 truth table, writes both into `audit:connectivity:last-result` Redis sidecar payload (7d TTL), then `process.exit(allTiersGreen ? 0 : 1)` AFTER the sidecar write — no replication-lag race in Step 6 (which now reads `steps.sidecar.outcome` in-memory).
+- W-3 contract test extension in `server/routes/__tests__/audit-status.test.ts` — pins the new `allTiersGreen?` + `tierStatus?` fields so either-side drift fails LOUDLY. Existing `'matches CI workflow JSON shape contract'` block byte-unchanged.
+- `AuditPayload` interface widening in `server/routes/audit-status.ts` — optional `allTiersGreen?: boolean` + `tierStatus?: { critical, nonCritical, static, probeOnly, cron }` fields. Handler logic unchanged (still shape-agnostic `res.json(parsed)` passthrough).
+
+#### Fixed
+
+- DevApiStatus `Precip` row no longer falls back to `useWaterStore` selectors when health data is loading — sources from `/api/health` aggregate like every other row.
+- Weather tooltip no longer drops precip data at most x,y mouse positions inside the Iran bbox (2° cutoff was too tight for the 1° grid spacing).
+
+#### Changed
+
+- Bumped `api/vercel-entry.js` bundle (837 insertions, 353 deletions) to bake in Plans 01/02/04 server changes for next `vercel --prod`.
+- DevApiStatus copy-diagnostics payload: `sources[]` now ships 10 names (`Events` split + `Precip` enumerated) instead of legacy 8.
+
+#### Verification
+
+- 2161/2161 vitest assertions pass (5 todo, 19 skipped) — `+18` over phase base
+- `npm run build` exits 0 (Vite + tsup)
+- `npx tsc --noEmit` exits 0
+- `npm run lint` exits 0 (18 advisory warnings unchanged)
+- 5 plans across 4 waves, ~14 atomic commits
+
 ### Phase 27.4.1: V2 Extractor Watchdog + LLM Pipeline TS Cleanup (2026-04-22 → 2026-04-24)
 
 #### Added
