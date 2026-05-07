@@ -223,21 +223,23 @@ describe('DevApiStatus', () => {
     const parsed = JSON.parse(jsonStr);
 
     expect(parsed.timestamp).toBeDefined();
-    // Pre-existing baseline: rows array has 9 entries (including Precip) —
-    // we verify presence of 8 primary sources here; Precip is included in
-    // parsed.sources but the exact length assertion is stale per
-    // deferred-items.md. Asserting the 8 we care about:
+    // Phase 28.2.5 Plan 02 split the Events row into 'Events (raw)' +
+    // 'Events (LLM)' siblings (D-07). Plan 01 added the Precip row that
+    // sources from /api/health (D-08). Asserting the 10 names that the
+    // diagnostics payload now ships:
     const names = parsed.sources.map((s: { name: string }) => s.name);
     expect(names).toEqual(
       expect.arrayContaining([
         'Flights',
         'Ships',
-        'Events',
+        'Events (raw)',
+        'Events (LLM)',
         'Sites',
         'News',
         'Markets',
         'Weather',
         'Water',
+        'Precip',
       ]),
     );
     expect(parsed.llmPipeline).toBeDefined();
