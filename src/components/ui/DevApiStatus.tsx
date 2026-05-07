@@ -489,7 +489,11 @@ export function DevApiStatus() {
       quality: `${ships.count} total`,
     },
     {
-      name: 'Events',
+      // Phase 28.2.5 D-07 — was 'Events'; renamed to 'Events (raw)' and split
+      // out sibling 'Events (LLM)' row below. The `note` field is dropped
+      // because the LLM count now has its own row; the `quality` string
+      // narrative is trimmed to drop the LLM-vs-raw split.
+      name: 'Events (raw)',
       status: eventsRaw.status,
       count: eventsRaw.count,
       lastFetch: eventsRaw.lastFetch,
@@ -497,9 +501,31 @@ export function DevApiStatus() {
       nextPollAt: eventsRaw.nextPollAt,
       recentFetches: eventsRaw.recentFetches,
       isOneShot: false,
-      note: eventQuality.llmCount > 0 ? `${eventQuality.llmCount} LLM` : 'raw',
-      quality: `${eventsRaw.count} total, ${eventQuality.llmCount} LLM, ${eventQuality.rawCount} raw | ${eventQuality.exact} exact, ${eventQuality.city} city, ${eventQuality.region} region`,
+      quality: `${eventsRaw.count} total, ${eventQuality.rawCount} raw | ${eventQuality.exact} exact, ${eventQuality.city} city, ${eventQuality.region} region`,
     },
+    // Phase 28.2.5 D-07 — sibling row sources from /api/health endpoints.llmEvents
+    // (the new SOURCE_KEYS entry per D-06). Operator signal: 'healthy' = enriched
+    // LLM events serving; 'unknown' = v3 cache cold and Pitfall 1 fallback to raw
+    // GDELT is active.
+    //
+    // Variable-name binding: the destructure at L471-475 aliases `health` to
+    // `aggregateHealth`. We reference `aggregateHealth?.endpoints?.llmEvents` here
+    // (NOT `health?.…` — that symbol is not in scope and would silently evaluate
+    // to undefined, making the row perpetually 'unknown').
+    ((): ApiRow => {
+      const ep = aggregateHealth?.endpoints?.llmEvents;
+      return {
+        name: 'Events (LLM)',
+        status: ep?.status ?? 'unknown',
+        count: eventQuality.llmCount,
+        lastFetch: ep?.lastSuccessTs ?? null,
+        lastError: ep?.lastErrorReason ?? null,
+        nextPollAt: null,
+        recentFetches: [],
+        isOneShot: false,
+        quality: `${eventQuality.llmCount} LLM | ${eventQuality.exact} exact, ${eventQuality.city} city, ${eventQuality.region} region`,
+      };
+    })(),
     {
       name: 'Sites',
       ...sites,
