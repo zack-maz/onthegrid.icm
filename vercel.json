@@ -11,5 +11,10 @@
     { "source": "/api/:path*", "destination": "/api/vercel-entry" },
     { "source": "/health", "destination": "/api/vercel-entry" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/vercel-entry.js": {
+      "maxDuration": 300
+    }
+  }
 }
