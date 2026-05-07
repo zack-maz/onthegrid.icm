@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useWeatherStore } from '@/stores/weatherStore';
 import type { WeatherGridPoint } from '@/stores/weatherStore';
 
@@ -33,7 +34,7 @@ export function useWeatherPolling(): void {
 
       try {
         setLoading();
-        const res = await fetch('/api/weather');
+        const res = await fetch('/api/weather', { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           const msg = `Weather API ${res.status}`;

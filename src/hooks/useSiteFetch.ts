@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useSiteStore, type SiteFilterStats } from '@/stores/siteStore';
 import type { SiteEntity, CacheResponse } from '@/types/entities';
 
@@ -33,7 +34,7 @@ export function useSiteFetch(): void {
       setLoading();
       const start = Date.now();
       try {
-        const res = await fetch('/api/sites');
+        const res = await fetch('/api/sites', { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           const msg = `Sites API ${res.status}`;

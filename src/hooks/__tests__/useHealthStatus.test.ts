@@ -85,7 +85,7 @@ describe('useHealthStatus', () => {
     await flush();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch).toHaveBeenCalledWith('/api/health');
+    expect(mockFetch).toHaveBeenCalledWith('/api/health', expect.any(Object));
 
     expect(result.current.loading).toBe(false);
     expect(result.current.health).toEqual(mockHealthResponse);

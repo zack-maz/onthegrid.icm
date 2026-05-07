@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useShipStore, SHIP_STALE_THRESHOLD } from '@/stores/shipStore';
 import type { ShipEntity, CacheResponse } from '@/types/entities';
 
@@ -24,7 +25,7 @@ export function useShipPolling(): void {
       if (cancelled) return;
       const start = Date.now();
       try {
-        const res = await fetch('/api/ships');
+        const res = await fetch('/api/ships', { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           const msg = `Ships API ${res.status}`;

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useEventStore } from '@/stores/eventStore';
 import type { ConflictEventEntity, CacheResponse } from '@/types/entities';
 
@@ -23,7 +24,7 @@ export function useEventPolling(): void {
       if (cancelled) return;
       const start = Date.now();
       try {
-        const res = await fetch('/api/events');
+        const res = await fetch('/api/events', { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           const msg = `Events API ${res.status}`;

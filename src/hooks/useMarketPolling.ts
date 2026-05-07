@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useMarketStore } from '@/stores/marketStore';
 import type { MarketQuote, CacheResponse } from '@/types/entities';
 
@@ -26,7 +27,7 @@ export function useMarketPolling(): void {
       if (cancelled) return;
       const start = Date.now();
       try {
-        const res = await fetch(`/api/markets?range=${range}`);
+        const res = await fetch(`/api/markets?range=${range}`, { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           const msg = `Markets API ${res.status}`;

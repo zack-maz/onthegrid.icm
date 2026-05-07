@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useWaterStore } from '@/stores/waterStore';
 import type { PrecipitationData } from '@/stores/waterStore';
 
@@ -33,7 +34,7 @@ export function useWaterPrecipPolling(): void {
       const start = Date.now();
 
       try {
-        const res = await fetch('/api/water/precip');
+        const res = await fetch('/api/water/precip', { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           // Silently swallow error — stale precipitation data is acceptable

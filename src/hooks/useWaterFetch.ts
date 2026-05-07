@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useWaterStore, type WaterFilterStats } from '@/stores/waterStore';
 
 import type { WaterFacility, CacheResponse } from '../../server/types';
@@ -32,7 +33,7 @@ export function useWaterFetch(): void {
       setLoading();
       const start = Date.now();
       try {
-        const res = await fetch('/api/water');
+        const res = await fetch('/api/water', { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           const msg = `Water API ${res.status}`;

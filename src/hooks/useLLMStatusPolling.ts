@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import type { GeocodeProvenance } from '@/types/llm';
 
 // Phase 28.1 W5 D-12 — env-tunable LLM-status polling cadence. Defaults
@@ -322,7 +323,7 @@ export function useLLMStatusPolling(): LLMStatus {
 
   const fetchStatus = useCallback(async (): Promise<LLMStatus> => {
     try {
-      const res = await fetch('/api/events/llm-status');
+      const res = await fetch('/api/events/llm-status', { headers: dashboardAuthHeaders() });
       if (!res.ok) return { stage: 'idle' };
       return (await res.json()) as LLMStatus;
     } catch {

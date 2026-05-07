@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useFlightStore } from '@/stores/flightStore';
 import type { FlightEntity, CacheResponse } from '@/types/entities';
 
@@ -28,7 +29,7 @@ export function useFlightPolling(): void {
       if (cancelled) return;
       const start = Date.now();
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           const msg = `Flights API ${res.status}`;

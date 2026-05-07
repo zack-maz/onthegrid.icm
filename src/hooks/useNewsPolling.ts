@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import { useNewsStore } from '@/stores/newsStore';
 import type { NewsCluster, CacheResponse } from '@/types/entities';
 
@@ -23,7 +24,7 @@ export function useNewsPolling(): void {
       if (cancelled) return;
       const start = Date.now();
       try {
-        const res = await fetch('/api/news');
+        const res = await fetch('/api/news', { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           const msg = `News API ${res.status}`;

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { dashboardAuthHeaders } from '@/lib/dashboardAuth';
 import type { HealthResponse } from '@/lib/healthClient';
 
 /**
@@ -43,7 +44,7 @@ export function useHealthStatus(intervalMs: number = HEALTH_POLL_INTERVAL): UseH
     const fetchHealth = async (): Promise<void> => {
       if (cancelled) return;
       try {
-        const res = await fetch('/api/health');
+        const res = await fetch('/api/health', { headers: dashboardAuthHeaders() });
         if (cancelled) return;
         if (!res.ok) {
           setError(new Error(`/api/health responded ${res.status}`));
