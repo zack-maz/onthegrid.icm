@@ -76,10 +76,20 @@ jobs:
       # Step 3 — derive the W-3 contract-shape JSON and write it to the
       # sidecar Redis key via Upstash REST API. Runs even if smoke failed
       # so the banner reflects current reality.
+      #
+      # Phase 28.2.5 D-09 — also folds the tier-green assertion INTO this
+      # step (RESEARCH §Patterns "Step-3-inline-node-script payload
+      # composition"): fetches /api/health, computes per-tier rollup from
+      # endpoints[].{status,tier}, evaluates the D-03 truth table, and exits
+      # non-zero AFTER the sidecar write when allTiersGreen=false. Putting
+      # the gate signal on Step 3's exit code (not a Step 6 round-trip read)
+      # avoids the Upstash REST replication-lag race.
       - name: Write audit result to Redis sidecar
+        id: sidecar
         if: always()
         env:
           API_BASE_URL: ${{ inputs.target_url }}
+          DASHBOARD_PASSWORD: ${{ secrets.PROD_DASHBOARD_PASSWORD }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
@@ -115,12 +125,85 @@ jobs:
               console.error("Failed to parse audit-result.json:", err.message);
             }
 
+            // ----- Phase 28.2.5 D-09 — Tier-green assertion (Band B gate) -----
+            // Fetch /api/health and assert the D-03 tier map. Workflow exits
+            // non-zero at the END of this script if any tier is red, so the
+            // GH Actions run signals the gate state cleanly without a
+            // round-trip read in Step 6 (which would race against Upstash
+            // REST replication lag). Bearer-bypassed via Phase 28.2 D-04 —
+            // /api/health has no per-endpoint limiter; the global tier
+            // accepts the Bearer.
+            let allTiersGreen = false;
+            const tierStatus = {
+              critical: "unknown",
+              nonCritical: "unknown",
+              static: "unknown",
+              probeOnly: "unknown",
+              cron: "unknown",
+            };
+            try {
+              const healthRes = await fetch(`${process.env.API_BASE_URL}/api/health`, {
+                headers: { Authorization: `Bearer ${process.env.DASHBOARD_PASSWORD}` },
+              });
+              if (!healthRes.ok) {
+                throw new Error(`/api/health returned ${healthRes.status}`);
+              }
+              const health = await healthRes.json();
+              // Map healthSources.ts TIER_BY_ENDPOINT slugs (kebab-case) to
+              // the tierStatus camelCase keys used in the AuditPayload contract.
+              const TIER_TO_KEY = {
+                "critical": "critical",
+                "non-critical": "nonCritical",
+                "static": "static",
+                "probe-only": "probeOnly",
+                "cron": "cron",
+              };
+              // Per-tier rollup: status is "healthy" iff ALL endpoints in the
+              // tier are healthy; "degraded" if any are degraded but none
+              // unhealthy; "unhealthy" if any are unhealthy.
+              const buckets = {};
+              for (const ep of Object.values(health.endpoints || {})) {
+                const tierKey = TIER_TO_KEY[ep.tier];
+                if (!tierKey) continue;
+                buckets[tierKey] = buckets[tierKey] || [];
+                buckets[tierKey].push(ep.status);
+              }
+              for (const [tierKey, statuses] of Object.entries(buckets)) {
+                if (statuses.some((s) => s === "unhealthy")) tierStatus[tierKey] = "unhealthy";
+                else if (statuses.some((s) => s === "unknown")) tierStatus[tierKey] = "unknown";
+                else if (statuses.some((s) => s === "degraded")) tierStatus[tierKey] = "degraded";
+                else tierStatus[tierKey] = "healthy";
+              }
+              // D-03 truth table:
+              //   critical    → MUST be "healthy"
+              //   non-critical → MAY be "healthy" or "degraded"
+              //   static      → MAY be "healthy" or "degraded"
+              //   probe-only  → MUST be "healthy"
+              //   cron        → MAY be "healthy" or "degraded" (≤26h covers daily skew)
+              const okNonCritical = ["healthy", "degraded"].includes(tierStatus.nonCritical);
+              const okStatic = ["healthy", "degraded"].includes(tierStatus.static);
+              const okCron = ["healthy", "degraded"].includes(tierStatus.cron);
+              allTiersGreen =
+                tierStatus.critical === "healthy" &&
+                okNonCritical &&
+                okStatic &&
+                tierStatus.probeOnly === "healthy" &&
+                okCron;
+              console.log("Tier-green assertion:", JSON.stringify({ allTiersGreen, tierStatus }, null, 2));
+            } catch (err) {
+              console.error("Tier-green assertion failed to fetch /api/health:", err.message);
+              // allTiersGreen stays false; tierStatus stays "unknown"
+            }
+
             const payload = {
               status: overallStatus,
               runId: process.env.GH_RUN_ID,
               timestamp: new Date().toISOString(),
               endpoints,
               durationMs: 0,
+              // Phase 28.2.5 D-09 additions — tier-green gate result.
+              allTiersGreen,
+              tierStatus,
             };
 
             const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -147,6 +230,19 @@ jobs:
               process.exit(1);
             }
             console.log("Wrote audit:connectivity:last-result =", payload);
+
+            // Phase 28.2.5 D-09 — exit non-zero AFTER the sidecar write so
+            // the workflow fails LOUDLY when any tier is red. Per PATTERNS
+            // L296: "Step 3 already runs an inline node script that POSTs
+            // to Upstash. Add a `process.exit(...)` line at the end." This
+            // eliminates the Upstash REST replication-lag race that would
+            // otherwise plague a Step-6 round-trip read.
+            console.log(
+              allTiersGreen
+                ? "Tier-green gate (28.2.5 D-09) PASSED."
+                : "Tier-green gate (28.2.5 D-09) FAILED. Check tierStatus above for the failing tier.",
+            );
+            process.exit(allTiersGreen ? 0 : 1);
           '
 
       # Step 4 — verify the sidecar key was written by hitting /api/audit-status.
@@ -168,7 +264,13 @@ jobs:
           if-no-files-found: warn
 
       # Step 6 — fail the workflow if either smoke or rate-limit failed,
-      # so the operator knows to investigate.
+      # so the operator knows to investigate. Phase 28.2.5 D-09 also
+      # cross-checks Step 3's outcome (which already exits non-zero on
+      # tier-red via its inline node script's final exit-code branch) —
+      # purely a belt-and-suspenders read of the in-memory step outcome,
+      # NOT a curl round-trip to /api/audit-status (that would race the
+      # Upstash REST replication window between Step 3's write and a
+      # Step 6 read).
       - name: Final status check
         if: always()
         run: |
@@ -180,4 +282,14 @@ jobs:
             echo "Rate-limit defense companion FAILED. D-04 Bearer-bypass or D-30 contract may be regressed."
             exit 1
           fi
-          echo "All connectivity audit checks passed."
+          # Phase 28.2.5 D-09 — Step 3's inline node script exits non-zero
+          # when allTiersGreen=false (see EDIT 3 above). This branch is a
+          # belt-and-suspenders check on the in-memory step outcome — NO
+          # round-trip read of /api/audit-status, which would race the
+          # Upstash REST replication window. The actual gate signal is
+          # already enforced by Step 3's exit code.
+          if [ "${{ steps.sidecar.outcome }}" != "success" ]; then
+            echo "Tier-green gate (28.2.5 D-09) FAILED. Inspect Step 3 logs for the failing tier."
+            exit 1
+          fi
+          echo "All connectivity audit checks passed (incl. tier-green gate)."
