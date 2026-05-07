@@ -113,3 +113,51 @@ describe('TIER_BY_ENDPOINT', () => {
     expect(TIER_BY_ENDPOINT.cronRefreshEvents).toBe('cron');
   });
 });
+
+describe('SOURCE_KEYS waterPrecip entry — DRIFT-4 (Phase 28.2.5 D-08)', () => {
+  it('contains waterPrecip mapped to water:precip', () => {
+    // Per D-08: registry drift — waterPrecip was in thresholds + tier but
+    // missing from SOURCE_KEYS. Operator-reported in 28.2.5.
+    expect(SOURCE_KEYS.waterPrecip).toBe('water:precip');
+  });
+
+  it('preserves the existing waterPrecip threshold + tier (regression guard)', () => {
+    // The W2 entries at L69 + L96 must NOT change as part of D-08.
+    expect(FRESHNESS_THRESHOLDS_MS.waterPrecip).toBe(12 * 60 * 60_000);
+    expect(TIER_BY_ENDPOINT.waterPrecip).toBe('non-critical');
+  });
+});
+
+describe('Registry consistency invariant (Phase 28.2.5 D-08)', () => {
+  // Non-cache probe endpoints — these are tier-classified but NOT cache-backed,
+  // per the file-header comment at lines 28-33. They legitimately lack a
+  // SOURCE_KEYS entry because their probe strategy reads module/route state
+  // directly instead of a Redis cache key.
+  const NON_CACHE_ENDPOINTS = new Set([
+    'sources',
+    'llmStatus',
+    'authCheck',
+    'geocode',
+    'cronHealth',
+    'cronWarm',
+    'cronRefreshEvents',
+  ]);
+
+  it('every cache-backed TIER_BY_ENDPOINT key has a SOURCE_KEYS entry', () => {
+    // Would have caught the original D-08 drift the moment it was introduced.
+    for (const name of Object.keys(TIER_BY_ENDPOINT)) {
+      if (NON_CACHE_ENDPOINTS.has(name)) continue;
+      expect(SOURCE_KEYS[name], `${name} missing from SOURCE_KEYS`).toBeDefined();
+    }
+  });
+
+  it('every SOURCE_KEYS entry has matching FRESHNESS_THRESHOLDS_MS + TIER_BY_ENDPOINT entries', () => {
+    for (const name of Object.keys(SOURCE_KEYS)) {
+      expect(
+        FRESHNESS_THRESHOLDS_MS[name],
+        `${name} missing from FRESHNESS_THRESHOLDS_MS`,
+      ).toBeDefined();
+      expect(TIER_BY_ENDPOINT[name], `${name} missing from TIER_BY_ENDPOINT`).toBeDefined();
+    }
+  });
+});
