@@ -328,7 +328,7 @@ Plans:
 - [x] 28.2.5-01-PLAN.md — Wave 1: D-08 waterPrecip SOURCE_KEYS fix + registry-consistency invariant + Precip row /api/health consumption
 - [x] 28.2.5-02-PLAN.md — Wave 2: D-06/D-07 LLM events monitoring (events:llm:v3 in registry + Events (raw)/(LLM) two-row split)
 - [x] 28.2.5-03-PLAN.md — Wave 1: D-05 weather tooltip widening (findNearestPrecip 2°→4° + distance hint)
-- [ ] 28.2.5-04-PLAN.md — Wave 3: D-09 tier-green assertion in prod-connectivity-audit.yml + W-3 contract test extension
+- [x] 28.2.5-04-PLAN.md — Wave 3: D-09 tier-green assertion in prod-connectivity-audit.yml + W-3 contract test extension
 - [ ] 28.2.5-05-PLAN.md — Wave 4: phase close (build refresh + PROD deploy + workflow trigger + docs + merge)
 
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
