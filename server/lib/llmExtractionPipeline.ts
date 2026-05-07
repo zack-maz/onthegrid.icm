@@ -26,7 +26,7 @@
 import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { saveDevLLMCache, saveDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
-import { getPipelineVersion } from '../config.js';
+import { env, getPipelineVersion } from '../config.js';
 
 import { groupGdeltRows } from './eventGrouping.js';
 import { runEval } from './llmEvalHarness.js';
@@ -74,6 +74,68 @@ const LLM_SUMMARY_TTL_SEC = 86_400;
 
 /** v1 BATCH_SIZE used for progress math when v1 pipeline is active. */
 const BATCH_SIZE_V1 = 8;
+
+// ---------------------------------------------------------------------------
+// Phase 28.2.6 Plan 01 — incremental terminal-key write helpers.
+// ---------------------------------------------------------------------------
+
+/**
+ * Phase 28.2.6 D-03 — cadence for incremental terminal-key writes.
+ * Default 10 batches between flushes; env-override via LLM_FLUSH_EVERY_N_BATCHES
+ * registered in server/config.ts envSchema. N=1 would clobber Redis under
+ * concurrency=12; N=10 is the rationale-locked cadence per CONTEXT D-03.
+ *
+ * Read via the shared `env` object (NOT process.env) so test-time
+ * vi.mock('../../config.js', () => ({ env: mockEnv })) propagates correctly
+ * into the pipeline closure.
+ */
+const FLUSH_EVERY_N_BATCHES_DEFAULT = 10;
+function getFlushEveryNBatches(): number {
+  const parsed = env.LLM_FLUSH_EVERY_N_BATCHES;
+  if (!Number.isFinite(parsed) || parsed < 1) return FLUSH_EVERY_N_BATCHES_DEFAULT;
+  return parsed;
+}
+
+/**
+ * Phase 28.2.6 Plan 01 — shared merge-and-persist helper.
+ *
+ * Wraps the prior L374-388 final-write pattern so it can be called BOTH
+ * from the periodic flush hook (every N batches inside the IIFE — added in
+ * Task 4b) AND from the original final-flush location after extraction
+ * completes. Two-key discipline preserved (D-04 / D-11): writes
+ * ConflictEventEntity[] to LLM_EVENTS_KEY_ACTIVE; the LLMCachePayload
+ * envelope continues to land on `events:llm:v3:partial` via writePartialCache
+ * (UNCHANGED — observability key, written by the v3 extractor only).
+ *
+ * Pitfall 4 — merge-by-id with prior cache. The first incremental flush of
+ * a fresh cron tick must merge with llmCachedRef.data so events from earlier
+ * ticks survive the write.
+ *
+ * Pitfall 8 — does NOT call runEval(). The eval harness stays at its
+ * existing post-FINAL-geocode location (lines ~321 / ~353).
+ */
+async function mergeAndPersistLlmEntities(
+  newlyEnriched: ConflictEventEntity[],
+  llmCachedRef: { data: ConflictEventEntity[] } | null,
+  key: string,
+  pipelineV2: boolean,
+  pipelineV3: boolean,
+): Promise<{ writtenCount: number; total: number }> {
+  const llmMergeMap = new Map<string, ConflictEventEntity>();
+  if (llmCachedRef?.data) {
+    for (const e of llmCachedRef.data) llmMergeMap.set(e.id, e);
+  }
+  for (const e of newlyEnriched) llmMergeMap.set(e.id, e);
+  const llmMerged = Array.from(llmMergeMap.values());
+  await cacheSetSafe(key, llmMerged, LLM_REDIS_TTL_SEC);
+  if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
+  else saveDevLLMCache(llmMerged);
+  log.info(
+    { count: newlyEnriched.length, total: llmMerged.length },
+    'LLM: persisted enriched events to terminal cache (Plan 01 helper)',
+  );
+  return { writtenCount: newlyEnriched.length, total: llmMerged.length };
+}
 
 // ---------------------------------------------------------------------------
 // Public API.
@@ -371,24 +433,15 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
       }
 
-      // Merge newly processed LLM events with existing cached LLM events.
-      const llmMergeMap = new Map<string, ConflictEventEntity>();
-      if (llmCachedRef?.data) {
-        for (const e of llmCachedRef.data) {
-          llmMergeMap.set(e.id, e);
-        }
-      }
-      for (const e of llmEntities) {
-        llmMergeMap.set(e.id, e);
-      }
-      const llmMerged = Array.from(llmMergeMap.values());
-
-      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, llmMerged, LLM_REDIS_TTL_SEC);
-      if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
-      else saveDevLLMCache(llmMerged);
-      log.info(
-        { count: llmEntities.length, total: llmMerged.length },
-        'LLM: processed and cached enriched events (background)',
+      // Phase 28.2.6 Plan 01 Task 4a — final flush via shared helper.
+      // Same merge-and-persist semantics as the periodic flush (Task 4b);
+      // pure refactor, no behavior change at this site.
+      await mergeAndPersistLlmEntities(
+        llmEntities,
+        llmCachedRef,
+        LLM_EVENTS_KEY_ACTIVE,
+        pipelineV2,
+        pipelineV3,
       );
 
       updateProgress({

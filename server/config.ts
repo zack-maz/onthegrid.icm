@@ -85,6 +85,15 @@ export const envSchema = z.object({
   // still serialized at 1 req/s for Nominatim regardless of this value.
   LLM_V3_CONCURRENCY: z.coerce.number().int().positive().default(12),
 
+  // Phase 28.2.6 D-03 — cadence for incremental terminal-key writes during
+  // LLM extraction. Default 10 batches between flushes (rationale-locked
+  // via CONTEXT D-03). N=1 would clobber Redis under concurrency=12;
+  // higher values mean fewer writes + larger loss window on Vercel
+  // function-kill. Operator-tunable per Phase 28.1 W5 D-12. Read by
+  // server/lib/llmExtractionPipeline.ts via the shared `env` object so
+  // test mocks (vi.mock('../../config.js', ...)) propagate correctly.
+  LLM_FLUSH_EVERY_N_BATCHES: z.coerce.number().int().positive().default(10),
+
   // Phase 27.4.4 D-04 / D-13 / D-18: opt-in feature flags for v3 latency remediation.
   // Default OFF for D-04 + D-18 keeps Gate B telemetry pure; activated post-cutover when
   // ops cost > telemetry purity (D-04, D-18).
