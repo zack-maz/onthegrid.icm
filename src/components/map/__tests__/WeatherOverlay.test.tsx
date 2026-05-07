@@ -27,9 +27,7 @@ import type { WeatherGridPoint } from '@/stores/weatherStore';
 // Per Phase 27.3.2 the store exposes the rawPrecipData selector consumed at
 // WeatherOverlay.tsx:99-102.
 vi.mock('@/stores/waterStore', async () => {
-  const actual = await vi.importActual<typeof import('@/stores/waterStore')>(
-    '@/stores/waterStore',
-  );
+  const actual = await vi.importActual<typeof import('@/stores/waterStore')>('@/stores/waterStore');
   return {
     ...actual,
     useWaterStore: vi.fn(),
