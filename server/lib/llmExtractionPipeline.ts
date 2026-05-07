@@ -26,7 +26,7 @@
 import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { saveDevLLMCache, saveDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
-import { getPipelineVersion } from '../config.js';
+import { env, getPipelineVersion } from '../config.js';
 
 import { groupGdeltRows } from './eventGrouping.js';
 import { runEval } from './llmEvalHarness.js';
@@ -40,6 +40,7 @@ import { BATCH_SIZE as BATCH_SIZE_V2 } from './llmEventExtractor.v2.js';
 import { llmProgress, resetProgress, updateProgress, buildSummary } from './llmProgress.js';
 import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js';
 import { logger } from './logger.js';
+import { safeWaitUntil } from './safeWaitUntil.js';
 import { getHighestTier } from './sourceTiers.js';
 
 import type { ConflictEventEntity } from '../types.js';
@@ -74,6 +75,68 @@ const LLM_SUMMARY_TTL_SEC = 86_400;
 
 /** v1 BATCH_SIZE used for progress math when v1 pipeline is active. */
 const BATCH_SIZE_V1 = 8;
+
+// ---------------------------------------------------------------------------
+// Phase 28.2.6 Plan 01 — incremental terminal-key write helpers.
+// ---------------------------------------------------------------------------
+
+/**
+ * Phase 28.2.6 D-03 — cadence for incremental terminal-key writes.
+ * Default 10 batches between flushes; env-override via LLM_FLUSH_EVERY_N_BATCHES
+ * registered in server/config.ts envSchema. N=1 would clobber Redis under
+ * concurrency=12; N=10 is the rationale-locked cadence per CONTEXT D-03.
+ *
+ * Read via the shared `env` object (NOT process.env) so test-time
+ * vi.mock('../../config.js', () => ({ env: mockEnv })) propagates correctly
+ * into the pipeline closure.
+ */
+const FLUSH_EVERY_N_BATCHES_DEFAULT = 10;
+function getFlushEveryNBatches(): number {
+  const parsed = env.LLM_FLUSH_EVERY_N_BATCHES;
+  if (!Number.isFinite(parsed) || parsed < 1) return FLUSH_EVERY_N_BATCHES_DEFAULT;
+  return parsed;
+}
+
+/**
+ * Phase 28.2.6 Plan 01 — shared merge-and-persist helper.
+ *
+ * Wraps the prior L374-388 final-write pattern so it can be called BOTH
+ * from the periodic flush hook (every N batches inside the IIFE — added in
+ * Task 4b) AND from the original final-flush location after extraction
+ * completes. Two-key discipline preserved (D-04 / D-11): writes
+ * ConflictEventEntity[] to LLM_EVENTS_KEY_ACTIVE; the LLMCachePayload
+ * envelope continues to land on `events:llm:v3:partial` via writePartialCache
+ * (UNCHANGED — observability key, written by the v3 extractor only).
+ *
+ * Pitfall 4 — merge-by-id with prior cache. The first incremental flush of
+ * a fresh cron tick must merge with llmCachedRef.data so events from earlier
+ * ticks survive the write.
+ *
+ * Pitfall 8 — does NOT call runEval(). The eval harness stays at its
+ * existing post-FINAL-geocode location (lines ~321 / ~353).
+ */
+async function mergeAndPersistLlmEntities(
+  newlyEnriched: ConflictEventEntity[],
+  llmCachedRef: { data: ConflictEventEntity[] } | null,
+  key: string,
+  pipelineV2: boolean,
+  pipelineV3: boolean,
+): Promise<{ writtenCount: number; total: number }> {
+  const llmMergeMap = new Map<string, ConflictEventEntity>();
+  if (llmCachedRef?.data) {
+    for (const e of llmCachedRef.data) llmMergeMap.set(e.id, e);
+  }
+  for (const e of newlyEnriched) llmMergeMap.set(e.id, e);
+  const llmMerged = Array.from(llmMergeMap.values());
+  await cacheSetSafe(key, llmMerged, LLM_REDIS_TTL_SEC);
+  if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
+  else saveDevLLMCache(llmMerged);
+  log.info(
+    { count: newlyEnriched.length, total: llmMerged.length },
+    'LLM: persisted enriched events to terminal cache (Plan 01 helper)',
+  );
+  return { writtenCount: newlyEnriched.length, total: llmMerged.length };
+}
 
 // ---------------------------------------------------------------------------
 // Public API.
@@ -200,30 +263,319 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
     LLM_COOLDOWN_MS,
   );
 
-  void (async () => {
-    resetProgress(); // sets stage='grouping', startedAt=now
-    // Stamp schemaVersion + lastTriggerSource onto the freshly-reset
-    // progress singleton (resetProgress() wipes optional fields).
-    updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
+  // Phase 28.2.6 Plan 02 (D-09 / D-10 / D-12) — wrap the fire-and-forget
+  // body in safeWaitUntil so the function instance survives past res.end()
+  // on Vercel Fluid Compute. NEVER await this call — D-12 hard block;
+  // safeWaitUntil's `void` return type makes `await` a TypeScript error.
+  safeWaitUntil(
+    (async () => {
+      resetProgress(); // sets stage='grouping', startedAt=now
+      // Stamp schemaVersion + lastTriggerSource onto the freshly-reset
+      // progress singleton (resetProgress() wipes optional fields).
+      updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
 
-    try {
-      const groups = groupGdeltRows(merged);
-      updateProgress({ totalGroups: groups.length, stage: 'grouping' });
+      try {
+        const groups = groupGdeltRows(merged);
+        updateProgress({ totalGroups: groups.length, stage: 'grouping' });
 
-      // Diff: only process groups whose key isn't already in the LLM cache.
-      const cachedLlmKeys = new Set<string>();
-      if (llmCachedRef?.data) {
-        for (const e of llmCachedRef.data) {
-          if (e.id) cachedLlmKeys.add(e.id);
+        // Diff: only process groups whose key isn't already in the LLM cache.
+        const cachedLlmKeys = new Set<string>();
+        if (llmCachedRef?.data) {
+          for (const e of llmCachedRef.data) {
+            if (e.id) cachedLlmKeys.add(e.id);
+          }
         }
-      }
-      const newGroups =
-        cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
+        const newGroups =
+          cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
 
-      updateProgress({ newGroups: newGroups.length });
+        updateProgress({ newGroups: newGroups.length });
 
-      if (newGroups.length === 0) {
-        log.info('LLM: no new groups to process');
+        if (newGroups.length === 0) {
+          log.info('LLM: no new groups to process');
+          updateProgress({
+            stage: 'done',
+            completedAt: Date.now(),
+            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+          });
+          try {
+            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+          } catch {
+            /* best-effort */
+          }
+          return;
+        }
+
+        // D-33 soft-cap gate. When either provider is ≥80% of daily budget,
+        // skip new extractions this cycle and keep serving cached LLM entities.
+        const paused = await shouldPauseNewEvents();
+        if (paused) {
+          log.info('LLM_PAUSED_SOFT_CAP');
+          updateProgress({
+            stage: 'done',
+            completedAt: Date.now(),
+            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+          });
+          try {
+            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+          } catch {
+            /* best-effort */
+          }
+          return;
+        }
+
+        // D-35: prioritize highest-severity groups first so the BATCH_SIZE slice
+        // consumed on each cycle contains the highest-impact events.
+        const prioritizedGroups = await prioritizeBySeverity(newGroups);
+
+        // v2 + v3 use BATCH_SIZE=2; v1 uses BATCH_SIZE=8.
+        const effectiveBatchSize = pipelineV3 || pipelineV2 ? BATCH_SIZE_V2 : BATCH_SIZE_V1;
+        updateProgress({
+          stage: 'llm-processing',
+          totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
+        });
+
+        // Phase 28.2.6 Plan 01 Task 4b — periodic-flush wiring inside the
+        // existing onBatchComplete callback chain.
+        //
+        // Cadence (D-03): every N=getFlushEveryNBatches() completed batches
+        // trigger a geocode-then-persist of the just-completed window. The
+        // counter MUST live inside this callback closure so concurrency=12
+        // batch-completion ordering races are serialized through finishBatch's
+        // monotonic ++completedBatchesCounter (Pitfall 2).
+        //
+        // Snapshot-the-array (Pitfall 3): we read the partial-cache envelope
+        // (writePartialCache writes after every batch in v3) and slice from
+        // lastFlushedEventCount → current to grab only events pushed since the
+        // last flush. This avoids reconstructing the slice from prioritizedGroups
+        // (which doesn't track completion order under concurrency=12).
+        //
+        // Two-key discipline (D-04 / D-11): periodic write → terminal key
+        // (`events:llm:v3` ConflictEventEntity[]); partial-key writes are
+        // owned by the v3 extractor's writePartialCache — UNCHANGED.
+        //
+        // Pitfall 8: runEval() is NOT called here. It stays at its existing
+        // post-FINAL-geocode location.
+        const flushEvery = getFlushEveryNBatches();
+        let batchesSinceLastFlush = 0;
+        let lastFlushedEventCount = 0;
+
+        const PARTIAL_KEY_ACTIVE = pipelineV3
+          ? 'events:llm:v3:partial'
+          : pipelineV2
+            ? 'events:llm:v2:partial'
+            : 'events:llm:partial';
+
+        const extractResult = await processEventGroups(
+          prioritizedGroups,
+          async (completed, total) => {
+            updateProgress({ completedBatches: completed, totalBatches: total });
+
+            batchesSinceLastFlush++;
+            if (batchesSinceLastFlush < flushEvery) return;
+            batchesSinceLastFlush = 0;
+
+            // Periodic flush — geocode the just-completed window and persist
+            // to the terminal key. Best-effort: any failure is logged and
+            // swallowed so the extraction loop continues. The final-flush at
+            // end-of-pipeline will still attempt a full-cache write.
+            try {
+              const partialCached = await cacheGetSafe<{
+                events: unknown[];
+                progress?: string;
+                complete?: boolean;
+                generatedAt?: string;
+              }>(PARTIAL_KEY_ACTIVE, 999_999_999);
+              const partialEvents = partialCached?.data?.events;
+              if (!Array.isArray(partialEvents) || partialEvents.length <= lastFlushedEventCount) {
+                return; // nothing new since the last flush
+              }
+              const window = partialEvents.slice(lastFlushedEventCount);
+
+              // Geocode the window via the schema-version-aware barrel.
+              // matchedNewsByGroup / bellingcatByGroup are not yet exposed
+              // per-batch — periodic flushes pass empty Maps so the resolver's
+              // POI-amenity-disambiguation branch falls back to gdelt-actiongeo
+              // for groups missing context. Geocode quality on periodic-flush
+              // slices remains valid; final flush picks up any richer context
+              // from the run-result Maps (D-05). Future work could plumb the
+              // accumulators per-batch if quality drift becomes measurable.
+              let adapted: ConflictEventEntity[] = [];
+              if (pipelineV3) {
+                const geo = await geocodeEnrichedEvents(
+                  {
+                    schemaVersion: 'v3',
+                    events: window as never,
+                    matchedNewsByGroup: new Map(),
+                    bellingcatByGroup: new Map(),
+                  },
+                  prioritizedGroups,
+                );
+                if (geo.schemaVersion === 'v3') {
+                  adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
+                }
+              } else if (pipelineV2) {
+                const geo = await geocodeEnrichedEvents(
+                  {
+                    schemaVersion: 'v2',
+                    events: window as never,
+                    matchedNewsByGroup: new Map(),
+                    bellingcatByGroup: new Map(),
+                  },
+                  prioritizedGroups,
+                );
+                if (geo.schemaVersion === 'v2') {
+                  adapted = enrichedV2ToEntities(geo.events, prioritizedGroups);
+                }
+              } else {
+                const geo = await geocodeEnrichedEvents(
+                  { schemaVersion: 'v1', events: window as never },
+                  prioritizedGroups,
+                );
+                if (geo.schemaVersion === 'v1') {
+                  adapted = enrichedV1ToEntities(geo.events, prioritizedGroups);
+                }
+              }
+
+              if (adapted.length > 0) {
+                await mergeAndPersistLlmEntities(
+                  adapted,
+                  llmCachedRef,
+                  LLM_EVENTS_KEY_ACTIVE,
+                  pipelineV2,
+                  pipelineV3,
+                );
+                lastFlushedEventCount = partialEvents.length;
+                log.info(
+                  { completed, total, windowSize: window.length, flushed: adapted.length },
+                  'Plan 01 periodic-flush: incremental terminal-key write',
+                );
+              }
+            } catch (flushErr) {
+              // Best-effort — periodic flush failure must NOT abort the
+              // extraction loop. The final flush at end-of-pipeline will
+              // still attempt a full-cache write.
+              log.warn(
+                { err: flushErr, completed, total },
+                'Plan 01 periodic-flush failed (continuing)',
+              );
+            }
+          },
+        );
+
+        if (!extractResult.events || extractResult.events.length === 0) {
+          log.warn('LLM processing returned null — raw GDELT serving continues');
+          updateProgress({
+            stage: 'error',
+            errorMessage: 'LLM returned null for all batches',
+            completedAt: Date.now(),
+            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+          });
+          try {
+            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+          } catch {
+            /* best-effort */
+          }
+          return;
+        }
+
+        updateProgress({
+          stage: 'geocoding',
+          enrichedCount: extractResult.events.length,
+          totalGeocodes: extractResult.events.length,
+        });
+
+        let llmEntities: ConflictEventEntity[];
+        if (extractResult.schemaVersion === 'v3') {
+          const geoResult = await geocodeEnrichedEvents(
+            {
+              schemaVersion: 'v3',
+              events: extractResult.events,
+              matchedNewsByGroup: extractResult.matchedNewsByGroup,
+              bellingcatByGroup: extractResult.bellingcatByGroup,
+            },
+            prioritizedGroups,
+            (completed, total) => {
+              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+            },
+          );
+          if (geoResult.schemaVersion !== 'v3') {
+            throw new Error('geocoder schemaVersion mismatch (expected v3)');
+          }
+          const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
+          let suspectCount = 0;
+          for (const e of geoResult.events) {
+            provenanceCounts[e.geocodeProvenance] =
+              (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+            if (e.suspect) suspectCount++;
+          }
+          updateProgress({ provenanceCounts, suspectCount });
+
+          try {
+            const evalScore = await runEval();
+            log.info({ evalScore, schemaVersion: 'v3' }, 'eval harness completed');
+          } catch (evalErr) {
+            log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
+          }
+
+          llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
+        } else if (extractResult.schemaVersion === 'v2') {
+          const geoResult = await geocodeEnrichedEvents(
+            {
+              schemaVersion: 'v2',
+              events: extractResult.events,
+              matchedNewsByGroup: extractResult.matchedNewsByGroup,
+              bellingcatByGroup: extractResult.bellingcatByGroup,
+            },
+            prioritizedGroups,
+            (completed, total) => {
+              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+            },
+          );
+          if (geoResult.schemaVersion !== 'v2') {
+            throw new Error('geocoder schemaVersion mismatch (expected v2)');
+          }
+          const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
+          let suspectCount = 0;
+          for (const e of geoResult.events) {
+            provenanceCounts[e.geocodeProvenance] =
+              (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+            if (e.suspect) suspectCount++;
+          }
+          updateProgress({ provenanceCounts, suspectCount });
+
+          try {
+            const evalScore = await runEval();
+            log.info({ evalScore }, 'eval harness completed');
+          } catch (evalErr) {
+            log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
+          }
+
+          llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
+        } else {
+          const geoResult = await geocodeEnrichedEvents(
+            { schemaVersion: 'v1', events: extractResult.events },
+            prioritizedGroups,
+            (completed, total) => {
+              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+            },
+          );
+          if (geoResult.schemaVersion !== 'v1') {
+            throw new Error('geocoder schemaVersion mismatch (expected v1)');
+          }
+          llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
+        }
+
+        // Phase 28.2.6 Plan 01 Task 4a — final flush via shared helper.
+        // Same merge-and-persist semantics as the periodic flush (Task 4b);
+        // pure refactor, no behavior change at this site.
+        await mergeAndPersistLlmEntities(
+          llmEntities,
+          llmCachedRef,
+          LLM_EVENTS_KEY_ACTIVE,
+          pipelineV2,
+          pipelineV3,
+        );
+
         updateProgress({
           stage: 'done',
           completedAt: Date.now(),
@@ -234,47 +586,10 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         } catch {
           /* best-effort */
         }
-        return;
-      }
-
-      // D-33 soft-cap gate. When either provider is ≥80% of daily budget,
-      // skip new extractions this cycle and keep serving cached LLM entities.
-      const paused = await shouldPauseNewEvents();
-      if (paused) {
-        log.info('LLM_PAUSED_SOFT_CAP');
-        updateProgress({
-          stage: 'done',
-          completedAt: Date.now(),
-          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
-        });
-        try {
-          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-        } catch {
-          /* best-effort */
-        }
-        return;
-      }
-
-      // D-35: prioritize highest-severity groups first so the BATCH_SIZE slice
-      // consumed on each cycle contains the highest-impact events.
-      const prioritizedGroups = await prioritizeBySeverity(newGroups);
-
-      // v2 + v3 use BATCH_SIZE=2; v1 uses BATCH_SIZE=8.
-      const effectiveBatchSize = pipelineV3 || pipelineV2 ? BATCH_SIZE_V2 : BATCH_SIZE_V1;
-      updateProgress({
-        stage: 'llm-processing',
-        totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
-      });
-
-      const extractResult = await processEventGroups(prioritizedGroups, (completed, total) => {
-        updateProgress({ completedBatches: completed, totalBatches: total });
-      });
-
-      if (!extractResult.events || extractResult.events.length === 0) {
-        log.warn('LLM processing returned null — raw GDELT serving continues');
+      } catch (llmErr) {
         updateProgress({
           stage: 'error',
-          errorMessage: 'LLM returned null for all batches',
+          errorMessage: llmErr instanceof Error ? llmErr.message : 'Unknown LLM error',
           completedAt: Date.now(),
           durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
         });
@@ -283,139 +598,10 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         } catch {
           /* best-effort */
         }
-        return;
+        log.warn({ err: llmErr }, 'LLM background processing failed');
       }
-
-      updateProgress({
-        stage: 'geocoding',
-        enrichedCount: extractResult.events.length,
-        totalGeocodes: extractResult.events.length,
-      });
-
-      let llmEntities: ConflictEventEntity[];
-      if (extractResult.schemaVersion === 'v3') {
-        const geoResult = await geocodeEnrichedEvents(
-          {
-            schemaVersion: 'v3',
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup,
-          },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          },
-        );
-        if (geoResult.schemaVersion !== 'v3') {
-          throw new Error('geocoder schemaVersion mismatch (expected v3)');
-        }
-        const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
-        let suspectCount = 0;
-        for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-          if (e.suspect) suspectCount++;
-        }
-        updateProgress({ provenanceCounts, suspectCount });
-
-        try {
-          const evalScore = await runEval();
-          log.info({ evalScore, schemaVersion: 'v3' }, 'eval harness completed');
-        } catch (evalErr) {
-          log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
-        }
-
-        llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
-      } else if (extractResult.schemaVersion === 'v2') {
-        const geoResult = await geocodeEnrichedEvents(
-          {
-            schemaVersion: 'v2',
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup,
-          },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          },
-        );
-        if (geoResult.schemaVersion !== 'v2') {
-          throw new Error('geocoder schemaVersion mismatch (expected v2)');
-        }
-        const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
-        let suspectCount = 0;
-        for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-          if (e.suspect) suspectCount++;
-        }
-        updateProgress({ provenanceCounts, suspectCount });
-
-        try {
-          const evalScore = await runEval();
-          log.info({ evalScore }, 'eval harness completed');
-        } catch (evalErr) {
-          log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
-        }
-
-        llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
-      } else {
-        const geoResult = await geocodeEnrichedEvents(
-          { schemaVersion: 'v1', events: extractResult.events },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          },
-        );
-        if (geoResult.schemaVersion !== 'v1') {
-          throw new Error('geocoder schemaVersion mismatch (expected v1)');
-        }
-        llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
-      }
-
-      // Merge newly processed LLM events with existing cached LLM events.
-      const llmMergeMap = new Map<string, ConflictEventEntity>();
-      if (llmCachedRef?.data) {
-        for (const e of llmCachedRef.data) {
-          llmMergeMap.set(e.id, e);
-        }
-      }
-      for (const e of llmEntities) {
-        llmMergeMap.set(e.id, e);
-      }
-      const llmMerged = Array.from(llmMergeMap.values());
-
-      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, llmMerged, LLM_REDIS_TTL_SEC);
-      if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
-      else saveDevLLMCache(llmMerged);
-      log.info(
-        { count: llmEntities.length, total: llmMerged.length },
-        'LLM: processed and cached enriched events (background)',
-      );
-
-      updateProgress({
-        stage: 'done',
-        completedAt: Date.now(),
-        durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
-      });
-      try {
-        await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-      } catch {
-        /* best-effort */
-      }
-    } catch (llmErr) {
-      updateProgress({
-        stage: 'error',
-        errorMessage: llmErr instanceof Error ? llmErr.message : 'Unknown LLM error',
-        completedAt: Date.now(),
-        durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
-      });
-      try {
-        await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-      } catch {
-        /* best-effort */
-      }
-      log.warn({ err: llmErr }, 'LLM background processing failed');
-    }
-  })();
+    })(),
+  );
 
   return {
     dispatched: true,

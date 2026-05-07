@@ -78,7 +78,7 @@ export type ExtractorRun =
  */
 export async function processEventGroups(
   groups: EventGroup[],
-  onBatchComplete?: (completed: number, total: number) => void,
+  onBatchComplete?: (completed: number, total: number) => void | Promise<void>,
 ): Promise<ExtractorRun> {
   const version = getPipelineVersion();
   if (version === 'v3') {

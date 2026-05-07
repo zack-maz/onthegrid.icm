@@ -339,11 +339,12 @@ Plans:
 **Depends on:** Phase 28.2.5 (PR #11; merge before this phase starts)
 **Blocks:** Phase 28.3 (k6 load test cannot start until tier-green workflow run shows allTiersGreen=true; that depends on this phase resolving the cron architecture)
 **Requirements:** TBD (will be derived from 28.2.6-CONTEXT.md after `/gsd-discuss-phase 28.2.6`; expected to lock the chosen resolution path + define the success signal — first force-trigger of `/api/cron/refresh-events?force=true` populates `events:llm:v3` within budget; subsequent prod-connectivity-audit.yml run shows `allTiersGreen=true`)
-**Plans:** 0 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 28.2.6 to break down)
+- [x] 28.2.6-01-PLAN.md — Wave 1: Change A — incremental terminal-key write every N=10 batches (mergeAndPersistLlmEntities helper + onBatchComplete cadence + 3 Wave-0 contract tests for D-03/D-04/D-07/D-11)
+- [x] 28.2.6-02-PLAN.md — Wave 2: Change B — Vercel waitUntil migration with safeWaitUntil shim (Symbol.for(@vercel/request-context) probe + local-dev fallback) + vercel.json maxDuration:300 + bundle regen
 
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 

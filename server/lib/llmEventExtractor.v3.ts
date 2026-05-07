@@ -446,7 +446,7 @@ async function writePartialCache(
 
 export async function processEventGroupsV3(
   groups: EventGroup[],
-  onBatchComplete?: (completed: number, total: number) => void,
+  onBatchComplete?: (completed: number, total: number) => void | Promise<void>,
 ): Promise<V3ExtractionRun> {
   const matchedNewsByGroup = new Map<string, NewsArticleForPrompt[]>();
   const bellingcatByGroup = new Map<string, { lat: number; lng: number }>();
@@ -568,7 +568,11 @@ export async function processEventGroupsV3(
   let completedBatchesCounter = 0;
   const finishBatch = async (): Promise<void> => {
     const c = ++completedBatchesCounter;
-    onBatchComplete?.(c, totalBatches);
+    // Phase 28.2.6 Plan 01 Task 3 — await the callback so the pipeline's
+    // periodic-flush hook can drive incremental terminal-key writes
+    // synchronously between batch completions. Required for the cadence
+    // counter race-safety contract under concurrency=12.
+    await onBatchComplete?.(c, totalBatches);
     await writePartialCache(results, c, totalBatches, false);
   };
 
