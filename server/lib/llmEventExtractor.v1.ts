@@ -204,7 +204,7 @@ function buildBatchUserPrompt(groups: EventGroup[]): string {
  */
 export async function processEventGroups(
   groups: EventGroup[],
-  onBatchComplete?: (completedBatches: number, totalBatches: number) => void,
+  onBatchComplete?: (completedBatches: number, totalBatches: number) => void | Promise<void>,
 ): Promise<EnrichedEvent[] | null> {
   if (groups.length === 0) return [];
 
@@ -277,7 +277,10 @@ export async function processEventGroups(
       // Either callLLM returned null OR watchdog fired — both already
       // logged / DLQ'd / incremented telemetry above. Continue to next batch.
       log.warn({ batchIndex }, 'LLM returned null for batch (null or watchdog timeout)');
-      onBatchComplete?.(batchIndex + 1, totalBatches);
+      // Phase 28.2.6 Plan 01 Task 3 — await the callback so the pipeline's
+      // periodic-flush hook can drive incremental terminal-key writes
+      // synchronously between batch completions.
+      await onBatchComplete?.(batchIndex + 1, totalBatches);
       continue;
     }
 
@@ -293,7 +296,7 @@ export async function processEventGroups(
           { errors: validated.error.issues, batchIndex },
           'Zod validation failed for LLM batch response',
         );
-        onBatchComplete?.(batchIndex + 1, totalBatches);
+        await onBatchComplete?.(batchIndex + 1, totalBatches);
         continue;
       }
 
@@ -302,7 +305,7 @@ export async function processEventGroups(
       log.warn({ err, batchIndex }, 'Failed to parse LLM response JSON');
     }
 
-    onBatchComplete?.(batchIndex + 1, totalBatches);
+    await onBatchComplete?.(batchIndex + 1, totalBatches);
   }
 
   if (allFailed) return null;
