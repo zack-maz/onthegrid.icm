@@ -1148,7 +1148,7 @@ function DevApiStatusAllApisTab({
     }
   };
 
-  const renderSparkline = (epName: string): JSX.Element => {
+  const renderSparkline = (epName: string) => {
     const fetches = recentFetchesFor(epName);
     const last10 = fetches.slice(-10);
     const padding = Math.max(0, 10 - last10.length);
@@ -1169,7 +1169,7 @@ function DevApiStatusAllApisTab({
     );
   };
 
-  const renderQualityBlock = (epName: string): JSX.Element | null => {
+  const renderQualityBlock = (epName: string) => {
     if (epName === 'Events') {
       const total = qualityEvents.llmCount + qualityEvents.rawCount;
       const pct = total > 0 ? Math.round((qualityEvents.llmCount / total) * 100) : 0;
