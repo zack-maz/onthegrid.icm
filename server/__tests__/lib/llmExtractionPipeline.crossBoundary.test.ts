@@ -344,9 +344,7 @@ describe('runRefreshExtraction — D-07 cross-function-boundary state preservati
   it('two consecutive partial 5-batch runs produce same final state as one continuous 10-batch run', async () => {
     // Run 1: drive 10 groups but abort the IIFE after batch 5 (simulated kill).
     await driveRun(10, { abortAt: 5 });
-    const partialAfterRun1 = cacheStore.get('events:llm:v3') as
-      | Array<{ id: string }>
-      | undefined;
+    const partialAfterRun1 = cacheStore.get('events:llm:v3') as Array<{ id: string }> | undefined;
     // After 5 batches with FLUSH_EVERY_N=5, there should be exactly 5 events
     // persisted by the periodic flush (Task 4b will land this behavior).
     expect(Array.isArray(partialAfterRun1)).toBe(true);

@@ -9,6 +9,7 @@ updated: 2026-05-07T23:55:00Z
 ## Symptoms
 
 <!-- DATA_START -->
+
 - **Surface:** DevApiStatus dashboard (API Health tab → "Events (LLM)" row)
 - **Environment:** Prod (`otg-iran-monitor.vercel.app`)
 - **State:** llmStatus shows UNKNOWN
@@ -32,7 +33,7 @@ updated: 2026-05-07T23:55:00Z
   - Threshold = 26h (matches cron triad cadence)
   - Tier = `critical`
   - "unknown" status returned when probe cannot determine freshness (key missing, Redis error, parse fail, etc.)
-- Cron schedule: `/api/cron/refresh-events` daily 0 4 * * * UTC (Vercel Hobby plan, 3-cron cap)
+- Cron schedule: `/api/cron/refresh-events` daily 0 4 \* \* \* UTC (Vercel Hobby plan, 3-cron cap)
 - Force-trigger: `GET /api/cron/refresh-events?force=true` (Bearer required) — bypasses 15-min cooldown
 - Cold-cache self-heal: probes `events:llm:v3` BEFORE cooldown check; if empty, bypasses cooldown automatically
 
@@ -113,6 +114,7 @@ reasoning_checkpoint: H1 confirmed by code-state inspection alone — no operato
 2. **Single terminal-key write at end of ~10-minute pipeline.** Even if the IIFE were rescued via `waitUntil`, the Hobby plan's 300s `maxDuration` ceiling would kill the function before the single end-of-pipeline write to `events:llm:v3` could fire. Phase 28.2.6 Plan 01 adds incremental flushes every N=10 batches.
 
 The unmerged branch `feature/28.2.6-cron-architecture-fix` (24 commits ahead of main) addresses both:
+
 - Plan 02 (commit `4a7104b` + dep `07cff78`): wires `safeWaitUntil` shim around the IIFE in `runRefreshExtraction`. Adds `@vercel/functions` dep. Sets `vercel.json functions["api/vercel-entry.js"].maxDuration: 300` (commit `ea9e19e`).
 - Plan 01 (commits `9f5441c` + `72e3da5`): extracts `mergeAndPersistLlmEntities` helper, calls it from `onBatchComplete` every `LLM_FLUSH_EVERY_N_BATCHES` (default 10) so partial extraction within the 300s ceiling still populates the gate-relevant `events:llm:v3` key.
 
@@ -121,6 +123,7 @@ The unmerged branch `feature/28.2.6-cron-architecture-fix` (24 commits ahead of 
 **The fix is already written and committed locally.** This is purely a deployment gate, not a code bug to fix. Operator runbook:
 
 1. **Open + merge PR** for `feature/28.2.6-cron-architecture-fix` → `main`:
+
    ```bash
    gh pr create --base main --head feature/28.2.6-cron-architecture-fix \
      --title "Phase 28.2.6: Cron architecture fix (waitUntil + incremental terminal-key writes)" \
@@ -131,24 +134,30 @@ The unmerged branch `feature/28.2.6-cron-architecture-fix` (24 commits ahead of 
 2. **Verify Vercel auto-deploy from main.** Default Vercel GitHub integration redeploys main on push.
 
 3. **Confirm prod has NVIDIA_NIM_API_KEY set** (pre-flight, required for any extraction to fire):
+
    ```bash
    vercel env ls --scope <project-scope> | grep -i nvidia
    # Or visually via https://vercel.com/<team>/onthegrid-icm/settings/environment-variables
    ```
+
    If missing — set it via `vercel env add NVIDIA_NIM_API_KEY production` then re-deploy.
 
 4. **Force-trigger the cron once main is deployed:**
+
    ```bash
    curl -H "Authorization: Bearer $CRON_SECRET" \
      "https://otg-iran-monitor.vercel.app/api/cron/refresh-events?force=true"
    ```
+
    Expect `{ok: true, durationMs: <small>, dispatched: true, schemaVersion: "v3", coldCacheBypass: true}`.
 
 5. **Verify within 5 minutes** (incremental flushes start firing after batch 10):
+
    ```bash
    curl -H "Authorization: Bearer $DASHBOARD_PASSWORD" \
      "https://otg-iran-monitor.vercel.app/api/health" | jq '.endpoints.llmEvents'
    ```
+
    Expect `status: "healthy"` (or at minimum non-`unknown`) once `events:llm:v3` has its first incremental write.
 
 6. **Trigger `prod-connectivity-audit.yml`** GitHub Action to re-run the tier-green gate. Expect `allTiersGreen: true` after step 5 completes.
@@ -162,7 +171,9 @@ If after step 5 `events:llm:v3` is still cold, hypotheses re-rank:
 - **Token soft-cap engaged:** `/api/events/llm-status` shows `paused` flag → daily 0.8 budget hit. Reset on day rollover.
 
 ### Specialist hint
+
 typescript
 
 ### Why no further investigation needed
+
 H1 is verified by code-state inspection alone — git diff main..HEAD shows the unmerged fix; bundled main entry contains the broken IIFE pattern; deferred-items.md from 28.2.5 closeout pre-documented the exact failure mode and named 28.2.6 as the resolution. All other hypotheses ruled out or ruled secondary at the code layer. No operator-side disambiguation needed before applying the fix.
