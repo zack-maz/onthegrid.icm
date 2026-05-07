@@ -446,6 +446,14 @@ var envSchema = z.object({
   // The setting only affects the per-batch fan-out; resolver geocoding is
   // still serialized at 1 req/s for Nominatim regardless of this value.
   LLM_V3_CONCURRENCY: z.coerce.number().int().positive().default(12),
+  // Phase 28.2.6 D-03 — cadence for incremental terminal-key writes during
+  // LLM extraction. Default 10 batches between flushes (rationale-locked
+  // via CONTEXT D-03). N=1 would clobber Redis under concurrency=12;
+  // higher values mean fewer writes + larger loss window on Vercel
+  // function-kill. Operator-tunable per Phase 28.1 W5 D-12. Read by
+  // server/lib/llmExtractionPipeline.ts via the shared `env` object so
+  // test mocks (vi.mock('../../config.js', ...)) propagate correctly.
+  LLM_FLUSH_EVERY_N_BATCHES: z.coerce.number().int().positive().default(10),
   // Phase 27.4.4 D-04 / D-13 / D-18: opt-in feature flags for v3 latency remediation.
   // Default OFF for D-04 + D-18 keeps Gate B telemetry pure; activated post-cutover when
   // ops cost > telemetry purity (D-04, D-18).
@@ -1263,7 +1271,7 @@ async function getOpenRouterDaily() {
   }
 }
 async function callLLM(messages, _schemaText, opts = {}) {
-  const log39 = logger.child({ component: "freeClaudeRouter" });
+  const log40 = logger.child({ component: "freeClaudeRouter" });
   const decisions = [];
   const includeOpenRouter = !opts.skipOpenRouter;
   const allProviders = [
@@ -1363,7 +1371,7 @@ async function callLLM(messages, _schemaText, opts = {}) {
         recordLatency(p.name, latencyMs);
         const bucket = classifyError(err);
         recordErrorBucket(p.name, bucket);
-        log39.warn(
+        log40.warn(
           {
             provider: p.name,
             attempt,
@@ -1386,7 +1394,7 @@ async function callLLM(messages, _schemaText, opts = {}) {
       record(p.name, "err");
     }
   }
-  log39.warn("all free providers unavailable \u2014 returning null content");
+  log40.warn("all free providers unavailable \u2014 returning null content");
   return { content: null, routing: decisions };
 }
 var LATENCY_RING_CAP = 100;
@@ -1470,7 +1478,7 @@ async function accrueShadowCost(tokensIn, tokensOut) {
   }
 }
 async function prewarmIfCold() {
-  const log39 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
+  const log40 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
   const client = getNvidiaNimClient();
   if (!client) {
     updateProgress({ prewarmState: "unknown" });
@@ -1496,7 +1504,7 @@ async function prewarmIfCold() {
       prewarmState: "cold-fired"
     });
   } catch (err) {
-    log39.warn(
+    log40.warn(
       { err: err instanceof Error ? err.message : String(err) },
       "prewarmIfCold synthetic call failed (non-fatal)"
     );
@@ -1630,7 +1638,7 @@ function computeLineageHash(eventId, prompt, model) {
 async function appendLineage(eventId, payload) {
   const lineageHash = computeLineageHash(eventId, payload.prompt, payload.model);
   const key = `${LINEAGE_KEY_PREFIX}${eventId}`;
-  const log39 = logger.child({ component: "llm-lineage" });
+  const log40 = logger.child({ component: "llm-lineage" });
   try {
     await redis.hset(key, {
       prompt: payload.prompt.slice(0, 32e3),
@@ -1650,7 +1658,7 @@ async function appendLineage(eventId, payload) {
     await redis.zremrangebyrank(LINEAGE_INDEX_KEY, 0, -LINEAGE_MAX_ENTRIES - 1);
     await redis.expire(LINEAGE_INDEX_KEY, LINEAGE_TTL_SEC);
   } catch (err) {
-    log39.warn({ err, eventId }, "lineage append failed (redis unreachable)");
+    log40.warn({ err, eventId }, "lineage append failed (redis unreachable)");
   }
   return { lineageHash };
 }
@@ -2759,8 +2767,8 @@ async function appendPipelineAudit(entry) {
     await redis.ltrim(PIPELINE_AUDIT_KEY, 0, PIPELINE_AUDIT_MAX - 1);
     await redis.expire(PIPELINE_AUDIT_KEY, PIPELINE_AUDIT_TTL_SEC);
   } catch (err) {
-    const log39 = logger.child({ component: "pipeline-audit" });
-    log39.warn({ err, entry }, "audit append failed (redis unreachable)");
+    const log40 = logger.child({ component: "pipeline-audit" });
+    log40.warn({ err, entry }, "audit append failed (redis unreachable)");
   }
 }
 async function listPipelineAudit(limit) {
@@ -3084,7 +3092,7 @@ async function processEventGroupsV3(groups, onBatchComplete) {
   let completedBatchesCounter = 0;
   const finishBatch = async () => {
     const c = ++completedBatchesCounter;
-    onBatchComplete?.(c, totalBatches);
+    await onBatchComplete?.(c, totalBatches);
     await writePartialCache(results, c, totalBatches, false);
   };
   const tasks = [];
@@ -82504,7 +82512,7 @@ async function processEventGroupsV2(groups, onBatchComplete) {
     );
     if (content === null) {
       log18.warn({ batchIndex }, "batch yielded no content (null or watchdog timeout)");
-      onBatchComplete?.(batchIndex + 1, totalBatches);
+      await onBatchComplete?.(batchIndex + 1, totalBatches);
       await writePartialCache2(results, batchIndex + 1, totalBatches, false);
       continue;
     }
@@ -82522,7 +82530,7 @@ async function processEventGroupsV2(groups, onBatchComplete) {
             timestamp: Date.now()
           });
         }
-        onBatchComplete?.(batchIndex + 1, totalBatches);
+        await onBatchComplete?.(batchIndex + 1, totalBatches);
         await writePartialCache2(results, batchIndex + 1, totalBatches, false);
         continue;
       }
@@ -82531,7 +82539,7 @@ async function processEventGroupsV2(groups, onBatchComplete) {
     } catch (err) {
       log18.warn({ err, batchIndex }, "JSON.parse failed");
     }
-    onBatchComplete?.(batchIndex + 1, totalBatches);
+    await onBatchComplete?.(batchIndex + 1, totalBatches);
     await writePartialCache2(results, batchIndex + 1, totalBatches, false);
   }
   await writePartialCache2(results, totalBatches, totalBatches, true);
@@ -82773,7 +82781,7 @@ async function processEventGroups(groups, onBatchComplete) {
     );
     if (content === null) {
       log19.warn({ batchIndex }, "LLM returned null for batch (null or watchdog timeout)");
-      onBatchComplete?.(batchIndex + 1, totalBatches);
+      await onBatchComplete?.(batchIndex + 1, totalBatches);
       continue;
     }
     allFailed = false;
@@ -82785,14 +82793,14 @@ async function processEventGroups(groups, onBatchComplete) {
           { errors: validated.error.issues, batchIndex },
           "Zod validation failed for LLM batch response"
         );
-        onBatchComplete?.(batchIndex + 1, totalBatches);
+        await onBatchComplete?.(batchIndex + 1, totalBatches);
         continue;
       }
       results.push(...validated.data.events);
     } catch (err) {
       log19.warn({ err, batchIndex }, "Failed to parse LLM response JSON");
     }
-    onBatchComplete?.(batchIndex + 1, totalBatches);
+    await onBatchComplete?.(batchIndex + 1, totalBatches);
   }
   if (allFailed) return null;
   return results;
@@ -82915,8 +82923,33 @@ async function geocodeEnrichedEvents2(input, groups, onComplete) {
   return { schemaVersion: "v1", events };
 }
 
+// server/lib/safeWaitUntil.ts
+import { waitUntil } from "@vercel/functions";
+var log20 = logger.child({ module: "safeWaitUntil" });
+var VERCEL_CTX = /* @__PURE__ */ Symbol.for("@vercel/request-context");
+function safeWaitUntil(promise) {
+  const hasVercelContext = typeof globalThis[VERCEL_CTX] !== "undefined";
+  if (hasVercelContext) {
+    try {
+      waitUntil(promise);
+    } catch (vercelErr) {
+      log20.warn(
+        { err: vercelErr },
+        "waitUntil threw on Vercel runtime; falling back to local catch"
+      );
+      promise.catch((err) => {
+        log20.warn({ err }, "safeWaitUntil-fallback IIFE rejected (after Vercel-path throw)");
+      });
+    }
+  } else {
+    promise.catch((err) => {
+      log20.warn({ err }, "safeWaitUntil-fallback IIFE rejected (local dev)");
+    });
+  }
+}
+
 // server/lib/llmExtractionPipeline.ts
-var log20 = logger.child({ module: "llm-extraction-pipeline" });
+var log21 = logger.child({ module: "llm-extraction-pipeline" });
 var EVENTS_KEY = "events:gdelt";
 var LLM_EVENTS_KEY = "events:llm";
 var LLM_PROCESS_KEY = "events:llm-process-ts";
@@ -82925,6 +82958,28 @@ var LLM_REDIS_TTL_SEC3 = 9e3;
 var LLM_SUMMARY_KEY = "events:llm-summary";
 var LLM_SUMMARY_TTL_SEC = 86400;
 var BATCH_SIZE_V1 = 8;
+var FLUSH_EVERY_N_BATCHES_DEFAULT = 10;
+function getFlushEveryNBatches() {
+  const parsed = env.LLM_FLUSH_EVERY_N_BATCHES;
+  if (!Number.isFinite(parsed) || parsed < 1) return FLUSH_EVERY_N_BATCHES_DEFAULT;
+  return parsed;
+}
+async function mergeAndPersistLlmEntities(newlyEnriched, llmCachedRef, key, pipelineV2, pipelineV3) {
+  const llmMergeMap = /* @__PURE__ */ new Map();
+  if (llmCachedRef?.data) {
+    for (const e of llmCachedRef.data) llmMergeMap.set(e.id, e);
+  }
+  for (const e of newlyEnriched) llmMergeMap.set(e.id, e);
+  const llmMerged = Array.from(llmMergeMap.values());
+  await cacheSetSafe(key, llmMerged, LLM_REDIS_TTL_SEC3);
+  if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
+  else saveDevLLMCache(llmMerged);
+  log21.info(
+    { count: newlyEnriched.length, total: llmMerged.length },
+    "LLM: persisted enriched events to terminal cache (Plan 01 helper)"
+  );
+  return { writtenCount: newlyEnriched.length, total: llmMerged.length };
+}
 async function runRefreshExtraction(opts) {
   const version = getPipelineVersion();
   const pipelineV2 = version === "v2";
@@ -82975,7 +83030,7 @@ async function runRefreshExtraction(opts) {
     LLM_EVENTS_KEY_ACTIVE,
     LLM_COOLDOWN_MS
   );
-  void (async () => {
+  safeWaitUntil((async () => {
     resetProgress();
     updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
     try {
@@ -82990,7 +83045,7 @@ async function runRefreshExtraction(opts) {
       const newGroups = cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
       updateProgress({ newGroups: newGroups.length });
       if (newGroups.length === 0) {
-        log20.info("LLM: no new groups to process");
+        log21.info("LLM: no new groups to process");
         updateProgress({
           stage: "done",
           completedAt: Date.now(),
@@ -83004,7 +83059,7 @@ async function runRefreshExtraction(opts) {
       }
       const paused = await shouldPauseNewEvents();
       if (paused) {
-        log20.info("LLM_PAUSED_SOFT_CAP");
+        log21.info("LLM_PAUSED_SOFT_CAP");
         updateProgress({
           stage: "done",
           completedAt: Date.now(),
@@ -83022,11 +83077,84 @@ async function runRefreshExtraction(opts) {
         stage: "llm-processing",
         totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize)
       });
-      const extractResult = await processEventGroups2(prioritizedGroups, (completed, total) => {
-        updateProgress({ completedBatches: completed, totalBatches: total });
-      });
+      const flushEvery = getFlushEveryNBatches();
+      let batchesSinceLastFlush = 0;
+      let lastFlushedEventCount = 0;
+      const PARTIAL_KEY_ACTIVE = pipelineV3 ? "events:llm:v3:partial" : pipelineV2 ? "events:llm:v2:partial" : "events:llm:partial";
+      const extractResult = await processEventGroups2(
+        prioritizedGroups,
+        async (completed, total) => {
+          updateProgress({ completedBatches: completed, totalBatches: total });
+          batchesSinceLastFlush++;
+          if (batchesSinceLastFlush < flushEvery) return;
+          batchesSinceLastFlush = 0;
+          try {
+            const partialCached = await cacheGetSafe(PARTIAL_KEY_ACTIVE, 999999999);
+            const partialEvents = partialCached?.data?.events;
+            if (!Array.isArray(partialEvents) || partialEvents.length <= lastFlushedEventCount) {
+              return;
+            }
+            const window = partialEvents.slice(lastFlushedEventCount);
+            let adapted = [];
+            if (pipelineV3) {
+              const geo = await geocodeEnrichedEvents2(
+                {
+                  schemaVersion: "v3",
+                  events: window,
+                  matchedNewsByGroup: /* @__PURE__ */ new Map(),
+                  bellingcatByGroup: /* @__PURE__ */ new Map()
+                },
+                prioritizedGroups
+              );
+              if (geo.schemaVersion === "v3") {
+                adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
+              }
+            } else if (pipelineV2) {
+              const geo = await geocodeEnrichedEvents2(
+                {
+                  schemaVersion: "v2",
+                  events: window,
+                  matchedNewsByGroup: /* @__PURE__ */ new Map(),
+                  bellingcatByGroup: /* @__PURE__ */ new Map()
+                },
+                prioritizedGroups
+              );
+              if (geo.schemaVersion === "v2") {
+                adapted = enrichedV2ToEntities(geo.events, prioritizedGroups);
+              }
+            } else {
+              const geo = await geocodeEnrichedEvents2(
+                { schemaVersion: "v1", events: window },
+                prioritizedGroups
+              );
+              if (geo.schemaVersion === "v1") {
+                adapted = enrichedV1ToEntities(geo.events, prioritizedGroups);
+              }
+            }
+            if (adapted.length > 0) {
+              await mergeAndPersistLlmEntities(
+                adapted,
+                llmCachedRef,
+                LLM_EVENTS_KEY_ACTIVE,
+                pipelineV2,
+                pipelineV3
+              );
+              lastFlushedEventCount = partialEvents.length;
+              log21.info(
+                { completed, total, windowSize: window.length, flushed: adapted.length },
+                "Plan 01 periodic-flush: incremental terminal-key write"
+              );
+            }
+          } catch (flushErr) {
+            log21.warn(
+              { err: flushErr, completed, total },
+              "Plan 01 periodic-flush failed (continuing)"
+            );
+          }
+        }
+      );
       if (!extractResult.events || extractResult.events.length === 0) {
-        log20.warn("LLM processing returned null \u2014 raw GDELT serving continues");
+        log21.warn("LLM processing returned null \u2014 raw GDELT serving continues");
         updateProgress({
           stage: "error",
           errorMessage: "LLM returned null for all batches",
@@ -83070,9 +83198,9 @@ async function runRefreshExtraction(opts) {
         updateProgress({ provenanceCounts, suspectCount });
         try {
           const evalScore = await runEval();
-          log20.info({ evalScore, schemaVersion: "v3" }, "eval harness completed");
+          log21.info({ evalScore, schemaVersion: "v3" }, "eval harness completed");
         } catch (evalErr) {
-          log20.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
+          log21.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
         }
         llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
       } else if (extractResult.schemaVersion === "v2") {
@@ -83100,9 +83228,9 @@ async function runRefreshExtraction(opts) {
         updateProgress({ provenanceCounts, suspectCount });
         try {
           const evalScore = await runEval();
-          log20.info({ evalScore }, "eval harness completed");
+          log21.info({ evalScore }, "eval harness completed");
         } catch (evalErr) {
-          log20.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
+          log21.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
         }
         llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
       } else {
@@ -83118,22 +83246,12 @@ async function runRefreshExtraction(opts) {
         }
         llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
       }
-      const llmMergeMap = /* @__PURE__ */ new Map();
-      if (llmCachedRef?.data) {
-        for (const e of llmCachedRef.data) {
-          llmMergeMap.set(e.id, e);
-        }
-      }
-      for (const e of llmEntities) {
-        llmMergeMap.set(e.id, e);
-      }
-      const llmMerged = Array.from(llmMergeMap.values());
-      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, llmMerged, LLM_REDIS_TTL_SEC3);
-      if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
-      else saveDevLLMCache(llmMerged);
-      log20.info(
-        { count: llmEntities.length, total: llmMerged.length },
-        "LLM: processed and cached enriched events (background)"
+      await mergeAndPersistLlmEntities(
+        llmEntities,
+        llmCachedRef,
+        LLM_EVENTS_KEY_ACTIVE,
+        pipelineV2,
+        pipelineV3
       );
       updateProgress({
         stage: "done",
@@ -83155,9 +83273,9 @@ async function runRefreshExtraction(opts) {
         await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
       } catch {
       }
-      log20.warn({ err: llmErr }, "LLM background processing failed");
+      log21.warn({ err: llmErr }, "LLM background processing failed");
     }
-  })();
+  })());
   return {
     dispatched: true,
     coldCacheBypass: isColdCache,
@@ -83329,7 +83447,7 @@ function normalizeEventTypes(events) {
 // server/lib/operatorAudit.ts
 init_redis();
 import { createHash } from "crypto";
-var log21 = logger.child({ module: "operatorAudit" });
+var log22 = logger.child({ module: "operatorAudit" });
 var OPERATOR_AUDIT_KEY = "operator:audit-log";
 var AUDIT_MAX_ENTRIES = 500;
 var AUDIT_TTL_SEC = 30 * 86400;
@@ -83359,7 +83477,7 @@ async function appendOperatorAuditEntry(entry) {
       }
     }
   } catch (err) {
-    log21.error({ err, operation: entry.operation }, "operator-audit-log write failed");
+    log22.error({ err, operation: entry.operation }, "operator-audit-log write failed");
   }
 }
 
@@ -83409,7 +83527,7 @@ function validateQuery(schema) {
 }
 
 // server/middleware/validateResponse.ts
-var log22 = logger.child({ module: "validateResponse" });
+var log23 = logger.child({ module: "validateResponse" });
 function sendValidated(res, schema, payload) {
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {
@@ -83422,7 +83540,7 @@ function sendValidated(res, schema, payload) {
         `Response validation failed at ${path}: ${JSON.stringify(issues)}`
       );
     }
-    log22.warn({ issues, path }, "response schema mismatch \u2014 sending unvalidated payload");
+    log23.warn({ issues, path }, "response schema mismatch \u2014 sending unvalidated payload");
     res.json(payload);
     return;
   }
@@ -83582,7 +83700,7 @@ var sitesResponseSchema = cacheResponseSchema(z5.array(siteEntitySchema)).extend
 });
 
 // server/routes/events.ts
-var log23 = logger.child({ module: "events" });
+var log24 = logger.child({ module: "events" });
 var eventsQuerySchema = z6.object({
   backfill: z6.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
@@ -83899,7 +84017,7 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
       };
       await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, summary, LLM_SUMMARY_TTL_SEC2);
       await recordLLMTimestamp();
-      log23.info({ count: devData.length }, "served LLM events from dev file cache");
+      log24.info({ count: devData.length }, "served LLM events from dev file cache");
       return sendNormalizedEvents(res, { data: devData, stale: false, lastFresh: Date.now() });
     }
   }
@@ -83920,7 +84038,7 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
         }));
       }
     } catch {
-      log23.warn("failed to fetch Bellingcat articles for corroboration");
+      log24.warn("failed to fetch Bellingcat articles for corroboration");
     }
     const fresh = await fetchEvents(bellingcatArticles);
     const eventMap = /* @__PURE__ */ new Map();
@@ -83937,9 +84055,9 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
           eventMap.set(event.id, event);
         }
         await recordBackfillTimestamp();
-        log23.info({ count: backfillData.length }, "backfill: merged historical events");
+        log24.info({ count: backfillData.length }, "backfill: merged historical events");
       } catch (backfillErr) {
-        log23.warn({ err: backfillErr }, "backfill failed (non-fatal)");
+        log24.warn({ err: backfillErr }, "backfill failed (non-fatal)");
       }
     }
     for (const event of fresh) {
@@ -83974,7 +84092,7 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
       lastFresh: Date.now()
     });
   } catch (err) {
-    log23.error({ err }, "upstream error");
+    log24.error({ err }, "upstream error");
     if (cached) {
       const pruned = cached.data.filter((e) => e.timestamp >= WAR_START);
       sendNormalizedEvents(res, {
@@ -84084,7 +84202,7 @@ function normalizeAircraft(ac) {
 }
 
 // server/adapters/adsb-lol.ts
-var log24 = logger.child({ module: "adsb-lol" });
+var log25 = logger.child({ module: "adsb-lol" });
 var BASE_URL = "https://api.adsb.lol";
 var FETCH_TIMEOUT = 1e4;
 async function fetchFlights() {
@@ -84100,12 +84218,12 @@ async function fetchFlights() {
   const data = await res.json();
   const aircraft = data.ac ?? [];
   const flights = aircraft.map(normalizeAircraft).filter((f) => f !== null);
-  log24.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
+  log25.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
   return flights;
 }
 
 // server/adapters/opensky.ts
-var log25 = logger.child({ module: "opensky" });
+var log26 = logger.child({ module: "opensky" });
 var OPENSKY_TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
 var OPENSKY_API_URL = "https://opensky-network.org/api";
 var FETCH_TIMEOUT2 = 1e4;
@@ -84182,13 +84300,13 @@ async function fetchFlights2(bbox) {
   const data = await res.json();
   const states = data.states ?? [];
   const flights = states.map(normalizeFlightState).filter((f) => f !== null);
-  log25.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
+  log26.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
   return flights;
 }
 
 // server/routes/flights.ts
 init_redis();
-var log26 = logger.child({ module: "flights" });
+var log27 = logger.child({ module: "flights" });
 var flightsQuerySchema = z7.object({
   source: z7.enum(["opensky", "adsblol"]).default("adsblol")
 });
@@ -84234,7 +84352,7 @@ flightsRouter.get("/", validateQuery(flightsQuerySchema), async (_req, res) => {
       lastFresh: Date.now()
     });
   } catch (err) {
-    log26.error({ err, source }, "upstream error");
+    log27.error({ err, source }, "upstream error");
     if (err instanceof RateLimitError) {
       if (cached) {
         return sendValidated(res, flightsResponseSchema, { ...cached, rateLimited: true });
@@ -84325,7 +84443,7 @@ var healthResponseSchema = z9.object({
 }).strict();
 
 // server/routes/health.ts
-var log27 = logger.child({ module: "health" });
+var log28 = logger.child({ module: "health" });
 var healthRouter = Router9();
 var PROBE_TIMEOUT_MS = 2e3;
 function withTimeout2(promise, ms, label) {
@@ -84525,7 +84643,7 @@ healthRouter.get("/", async (_req, res) => {
     const tier = TIER_BY_ENDPOINT[name];
     const threshold = FRESHNESS_THRESHOLDS_MS[name];
     if (tier === void 0 || threshold === void 0) {
-      log27.warn({ name }, "probe ran but tier or threshold not registered; skipping");
+      log28.warn({ name }, "probe ran but tier or threshold not registered; skipping");
       continue;
     }
     const status = deriveStatus(probe.freshnessMs, threshold, probe.hadError);
@@ -84549,7 +84667,7 @@ healthRouter.get("/", async (_req, res) => {
     try {
       healthResponseSchema.parse(response);
     } catch (err) {
-      log27.error({ err }, "/api/health response failed schema validation in dev");
+      log28.error({ err }, "/api/health response failed schema validation in dev");
     }
   }
   res.json(response);
@@ -84560,7 +84678,7 @@ import { Router as Router10 } from "express";
 import { z as z10 } from "zod";
 
 // server/adapters/yahoo-finance.ts
-var log28 = logger.child({ module: "yahoo-finance" });
+var log29 = logger.child({ module: "yahoo-finance" });
 var TICKERS = ["BZ=F", "CL=F", "XLE", "USO", "XOM"];
 var DISPLAY_NAMES = {
   "BZ=F": "Brent",
@@ -84584,19 +84702,19 @@ async function fetchTicker(symbol, range = "1d") {
       signal: AbortSignal.timeout(1e4)
     });
     if (!resp.ok) {
-      log28.warn({ symbol, status: resp.status }, "HTTP error");
+      log29.warn({ symbol, status: resp.status }, "HTTP error");
       return null;
     }
     const json = await resp.json();
     const result = json.chart?.result?.[0];
     if (!result) {
-      log28.warn({ symbol }, "no chart result");
+      log29.warn({ symbol }, "no chart result");
       return null;
     }
     const { meta, timestamp: rawTimestamps, indicators } = result;
     const quote = indicators?.quote?.[0];
     if (!meta || !rawTimestamps || !quote) {
-      log28.warn({ symbol }, "missing meta/timestamps/quote");
+      log29.warn({ symbol }, "missing meta/timestamps/quote");
       return null;
     }
     const price = meta.regularMarketPrice;
@@ -84633,7 +84751,7 @@ async function fetchTicker(symbol, range = "1d") {
       history: { timestamps, closes, highs, lows }
     };
   } catch (err) {
-    log28.warn({ err, symbol }, "fetch error");
+    log29.warn({ err, symbol }, "fetch error");
     return null;
   }
 }
@@ -84644,7 +84762,7 @@ async function fetchMarkets(range = "1d") {
 
 // server/routes/markets.ts
 init_redis();
-var log29 = logger.child({ module: "markets" });
+var log30 = logger.child({ module: "markets" });
 var marketsQuerySchema = z10.object({
   range: z10.enum(["1d", "5d", "1mo", "ytd"]).default("1d")
 });
@@ -84660,24 +84778,24 @@ marketsRouter.get("/", validateQuery(marketsQuerySchema), async (_req, res) => {
     const quotes = await fetchMarkets(range);
     if (quotes.length > 0) {
       await cacheSetSafe(cacheKey2, quotes, MARKETS_REDIS_TTL_SEC);
-      log29.info(
+      log30.info(
         { count: quotes.length, total: 5, range, tickers: quotes.map((q) => q.symbol) },
         "fetched tickers"
       );
       res.json({ data: quotes, stale: false, lastFresh: Date.now() });
     } else if (cached) {
-      log29.warn("all tickers failed, serving stale cache");
+      log30.warn("all tickers failed, serving stale cache");
       res.json({
         data: cached.data,
         stale: true,
         lastFresh: cached.lastFresh
       });
     } else {
-      log29.error("all tickers failed with no cache available");
+      log30.error("all tickers failed with no cache available");
       res.status(502).json({ error: "No market data available", code: "UPSTREAM_ERROR", statusCode: 502 });
     }
   } catch (err) {
-    log29.error({ err }, "upstream error");
+    log30.error({ err }, "upstream error");
     if (cached) {
       res.json({
         data: cached.data,
@@ -84823,7 +84941,7 @@ async function fetchGdeltArticles() {
 
 // server/adapters/rss.ts
 import { XMLParser } from "fast-xml-parser";
-var log30 = logger.child({ module: "rss" });
+var log31 = logger.child({ module: "rss" });
 function stripHtml(html) {
   return html.replace(/<[^>]*>/g, "").trim();
 }
@@ -84883,7 +85001,7 @@ async function fetchAllRssFeeds() {
     if (result.status === "fulfilled") {
       articles.push(...result.value);
     } else {
-      log30.warn({ err: result.reason }, "feed fetch failed");
+      log31.warn({ err: result.reason }, "feed fetch failed");
     }
   }
   return articles;
@@ -85261,7 +85379,7 @@ function filterAndScoreArticles(articles) {
 }
 
 // server/routes/news.ts
-var log31 = logger.child({ module: "news" });
+var log32 = logger.child({ module: "news" });
 var newsQuerySchema = z11.object({
   refresh: z11.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
@@ -85277,7 +85395,7 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
     const [gdeltArticles, rssArticles] = await Promise.all([
       fetchGdeltArticles(),
       fetchAllRssFeeds().catch((err) => {
-        log31.warn({ err }, "RSS fetch failed (non-fatal)");
+        log32.warn({ err }, "RSS fetch failed (non-fatal)");
         return [];
       })
     ]);
@@ -85301,10 +85419,10 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
     await cacheSetSafe(NEWS_FEED_KEY, clusters, NEWS_REDIS_TTL_SEC);
     const gdeltCount = gdeltArticles.length;
     const rssCount = rssArticles.length;
-    log31.info({ gdeltCount, rssCount, clusterCount: clusters.length }, "fetched and clustered news");
+    log32.info({ gdeltCount, rssCount, clusterCount: clusters.length }, "fetched and clustered news");
     res.json({ data: clusters, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log31.error({ err }, "upstream error");
+    log32.error({ err }, "upstream error");
     if (cached) {
       res.json({ data: cached.data, stale: true, lastFresh: cached.lastFresh });
     } else {
@@ -85316,7 +85434,7 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
 // server/routes/operator-status.ts
 init_redis();
 import { Router as Router12 } from "express";
-var log32 = logger.child({ module: "operator-status" });
+var log33 = logger.child({ module: "operator-status" });
 var operatorStatusRouter = Router12();
 function humanizeTtl(ttlSeconds) {
   if (ttlSeconds == null || ttlSeconds <= 0) return "no pin active";
@@ -85334,7 +85452,7 @@ operatorStatusRouter.get(
       try {
         auditMembers = await redis.smembers("operator:audit-log") ?? [];
       } catch (err) {
-        log32.warn({ err }, "failed to read operator:audit-log");
+        log33.warn({ err }, "failed to read operator:audit-log");
       }
       const entries = auditMembers.map((raw) => {
         try {
@@ -85367,7 +85485,7 @@ operatorStatusRouter.get(
       try {
         pinTtlRaw = await redis.ttl("events:llm-pipeline-override");
       } catch (err) {
-        log32.warn({ err }, "failed to read events:llm-pipeline-override TTL");
+        log33.warn({ err }, "failed to read events:llm-pipeline-override TTL");
       }
       let pinVersion = null;
       if (pinTtlRaw > 0) {
@@ -85375,7 +85493,7 @@ operatorStatusRouter.get(
           const v = await redis.get("events:llm-pipeline-override");
           pinVersion = typeof v === "string" ? v : null;
         } catch (err) {
-          log32.warn({ err }, "failed to read events:llm-pipeline-override value");
+          log33.warn({ err }, "failed to read events:llm-pipeline-override value");
         }
       }
       const pinTtl = pinTtlRaw > 0 ? {
@@ -85394,11 +85512,11 @@ operatorStatusRouter.get(
           advEval = raw;
         }
       } catch (err) {
-        log32.warn({ err }, "failed to read events:llm-eval-adversarial:v3");
+        log33.warn({ err }, "failed to read events:llm-eval-adversarial:v3");
       }
       res.json({ audit24h, byBearer, pinTtl, advEval });
     } catch (err) {
-      log32.error({ err }, "/api/operator-status failed");
+      log33.error({ err }, "/api/operator-status failed");
       res.status(500).json({ error: "operator_status_failed" });
     }
   }
@@ -85406,7 +85524,7 @@ operatorStatusRouter.get(
 
 // server/routes/refresh-events-cron.ts
 import { Router as Router13 } from "express";
-var log33 = logger.child({ module: "refresh-events-cron" });
+var log34 = logger.child({ module: "refresh-events-cron" });
 var refreshEventsCronRouter = Router13();
 refreshEventsCronRouter.get("/", async (req, res) => {
   if (env.CRON_SECRET) {
@@ -85425,12 +85543,12 @@ refreshEventsCronRouter.get("/", async (req, res) => {
       forceCooldown
     });
     const durationMs = Date.now() - t0;
-    log33.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
+    log34.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
     res.status(200).json({ ok: true, durationMs, ...result });
   } catch (err) {
     const durationMs = Date.now() - t0;
     const message = err instanceof Error ? err.message : String(err);
-    log33.error({ err: message, durationMs }, "refresh-events cron failed");
+    log34.error({ err: message, durationMs }, "refresh-events cron failed");
     res.status(500).json({
       ok: false,
       error: "refresh_failed",
@@ -85510,7 +85628,7 @@ async function collectShips() {
 
 // server/routes/ships.ts
 init_redis();
-var log34 = logger.child({ module: "ships" });
+var log35 = logger.child({ module: "ships" });
 var shipsRouter = Router14();
 var SHIPS_KEY = "ships:ais";
 var LOGICAL_TTL_MS2 = 3e4;
@@ -85543,7 +85661,7 @@ shipsRouter.get("/", async (_req, res) => {
     await cacheSetSafe(SHIPS_KEY, merged, REDIS_TTL_SEC2);
     res.json({ data: merged, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log34.error({ err }, "collectShips error");
+    log35.error({ err }, "collectShips error");
     if (cached) {
       res.json({ ...cached, stale: true });
     } else {
@@ -85556,7 +85674,7 @@ shipsRouter.get("/", async (_req, res) => {
 import { Router as Router15 } from "express";
 import { z as z12 } from "zod";
 init_redis();
-var log35 = logger.child({ module: "sites" });
+var log36 = logger.child({ module: "sites" });
 var sitesQuerySchema = z12.object({
   refresh: z12.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
@@ -85588,7 +85706,7 @@ sitesRouter.get("/", validateQuery(sitesQuerySchema), async (_req, res) => {
         { sites: snapshot.sites, filterStats: snapshot.stats },
         REDIS_TTL_SEC3
       );
-      log35.info(
+      log36.info(
         { count: snapshot.sites.length, generatedAt: snapshot.generatedAt },
         "serving sites from committed snapshot; Overpass untouched"
       );
@@ -85611,7 +85729,7 @@ sitesRouter.get("/", validateQuery(sitesQuerySchema), async (_req, res) => {
       filterStats: stats
     });
   } catch (err) {
-    log35.error({ err }, "Overpass error");
+    log36.error({ err }, "Overpass error");
     if (cached) {
       const payload = cached.data;
       sendValidated(res, sitesResponseSchema, {
@@ -85649,7 +85767,7 @@ import { Router as Router17 } from "express";
 import { z as z13 } from "zod";
 
 // server/adapters/open-meteo-precip.ts
-var log36 = logger.child({ module: "open-meteo-precip" });
+var log37 = logger.child({ module: "open-meteo-precip" });
 var REGIONAL_NORMALS_MM = {
   arid: 20,
   // Arabian Peninsula, central Iran, Sahara
@@ -85681,7 +85799,7 @@ async function fetchPrecipitation(locations) {
     }
   }
   const uniqueCells = Array.from(cellMap.values());
-  log36.info(
+  log37.info(
     {
       locations: locations.length,
       uniqueCells: uniqueCells.length,
@@ -85700,7 +85818,7 @@ async function fetchPrecipitation(locations) {
         signal: AbortSignal.timeout(TIMEOUT_MS3)
       });
       if (!res.ok) {
-        log36.warn(
+        log37.warn(
           { batch: Math.floor(i / BATCH_SIZE4), status: res.status },
           "batch returned error, skipping"
         );
@@ -85724,7 +85842,7 @@ async function fetchPrecipitation(locations) {
         });
       }
     } catch (batchErr) {
-      log36.warn({ err: batchErr, batch: Math.floor(i / BATCH_SIZE4) }, "batch failed, skipping");
+      log37.warn({ err: batchErr, batch: Math.floor(i / BATCH_SIZE4) }, "batch failed, skipping");
       continue;
     }
   }
@@ -85741,7 +85859,7 @@ async function fetchPrecipitation(locations) {
       updatedAt: now
     });
   }
-  log36.info(
+  log37.info(
     { cells: cellResults.size, mappedLocations: results.length },
     "precipitation fetch complete"
   );
@@ -85750,7 +85868,7 @@ async function fetchPrecipitation(locations) {
 
 // server/routes/water.ts
 init_redis();
-var log37 = logger.child({ module: "water" });
+var log38 = logger.child({ module: "water" });
 function buildEmptyFilterStats(source, generatedAt) {
   return {
     rawCounts: {},
@@ -85782,12 +85900,12 @@ var FACILITIES_KEY = "water:facilities:v3";
 var PRECIP_KEY = "water:precip";
 var waterRouter = Router17();
 waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
-  log37.info("GET /api/water hit");
+  log38.info("GET /api/water hit");
   const isCron = req.headers["user-agent"]?.includes("vercel-cron");
   const { refresh } = res.locals.validatedQuery;
   const forceRefresh = refresh && (isCron || process.env.NODE_ENV !== "production");
   const cached = await cacheGetSafe(FACILITIES_KEY, WATER_CACHE_TTL);
-  log37.info(
+  log38.info(
     { cacheHit: !!cached, count: cached?.data.facilities.length, stale: cached?.stale },
     "cache result"
   );
@@ -85833,7 +85951,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
         { facilities: snapshot.facilities, filterStats: snapshot.stats },
         WATER_REDIS_TTL_SEC
       );
-      log37.info(
+      log38.info(
         { count: snapshot.facilities.length, generatedAt: snapshot.generatedAt },
         "serving water facilities from committed snapshot; Overpass untouched"
       );
@@ -85857,7 +85975,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
       filterStats
     });
   } catch (err) {
-    log37.error({ err }, "Overpass error");
+    log38.error({ err }, "Overpass error");
     if (cached) {
       const payload = cached.data;
       sendValidated(res, waterResponseSchema, {
@@ -85871,7 +85989,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
         }
       });
     } else {
-      log37.warn("Overpass failed, returning empty");
+      log38.warn("Overpass failed, returning empty");
       sendValidated(res, waterResponseSchema, {
         data: [],
         stale: true,
@@ -85908,7 +86026,7 @@ waterRouter.get("/precip", validateQuery(waterQuerySchema), async (_req, res) =>
     }
     res.json({ data: precipData, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log37.error({ err }, "precipitation fetch error");
+    log38.error({ err }, "precipitation fetch error");
     if (cachedPrecip) {
       res.json({ data: cachedPrecip.data, stale: true, lastFresh: cachedPrecip.lastFresh });
     } else {
@@ -85970,7 +86088,7 @@ async function fetchWeather() {
 
 // server/routes/weather.ts
 init_redis();
-var log38 = logger.child({ module: "weather" });
+var log39 = logger.child({ module: "weather" });
 var weatherRouter = Router18();
 weatherRouter.get("/", async (_req, res) => {
   const cached = await cacheGetSafe(WEATHER_CACHE_KEY, WEATHER_CACHE_TTL);
@@ -85980,10 +86098,10 @@ weatherRouter.get("/", async (_req, res) => {
   try {
     const points = await fetchWeather();
     await cacheSetSafe(WEATHER_CACHE_KEY, points, WEATHER_REDIS_TTL_SEC);
-    log38.info({ count: points.length }, "fetched grid points");
+    log39.info({ count: points.length }, "fetched grid points");
     res.json({ data: points, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log38.error({ err }, "upstream error");
+    log39.error({ err }, "upstream error");
     if (cached) {
       res.json({
         data: cached.data,

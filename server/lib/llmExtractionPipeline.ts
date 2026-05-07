@@ -40,6 +40,7 @@ import { BATCH_SIZE as BATCH_SIZE_V2 } from './llmEventExtractor.v2.js';
 import { llmProgress, resetProgress, updateProgress, buildSummary } from './llmProgress.js';
 import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js';
 import { logger } from './logger.js';
+import { safeWaitUntil } from './safeWaitUntil.js';
 import { getHighestTier } from './sourceTiers.js';
 
 import type { ConflictEventEntity } from '../types.js';
@@ -262,7 +263,11 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
     LLM_COOLDOWN_MS,
   );
 
-  void (async () => {
+  // Phase 28.2.6 Plan 02 (D-09 / D-10 / D-12) — wrap the fire-and-forget
+  // body in safeWaitUntil so the function instance survives past res.end()
+  // on Vercel Fluid Compute. NEVER await this call — D-12 hard block;
+  // safeWaitUntil's `void` return type makes `await` a TypeScript error.
+  safeWaitUntil((async () => {
     resetProgress(); // sets stage='grouping', startedAt=now
     // Stamp schemaVersion + lastTriggerSource onto the freshly-reset
     // progress singleton (resetProgress() wipes optional fields).
@@ -592,7 +597,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
       }
       log.warn({ err: llmErr }, 'LLM background processing failed');
     }
-  })();
+  })());
 
   return {
     dispatched: true,
