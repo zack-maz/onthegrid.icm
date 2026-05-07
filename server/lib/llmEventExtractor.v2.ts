@@ -397,7 +397,7 @@ async function writePartialCache(
 
 export async function processEventGroupsV2(
   groups: EventGroup[],
-  onBatchComplete?: (completed: number, total: number) => void,
+  onBatchComplete?: (completed: number, total: number) => void | Promise<void>,
 ): Promise<V2ExtractionRun> {
   const matchedNewsByGroup = new Map<string, NewsArticleForPrompt[]>();
   const bellingcatByGroup = new Map<string, { lat: number; lng: number }>();
@@ -500,7 +500,10 @@ export async function processEventGroupsV2(
       // Either callLLM returned null OR the watchdog fired. Both paths
       // already logged / DLQ'd / updated telemetry; just continue.
       log.warn({ batchIndex }, 'batch yielded no content (null or watchdog timeout)');
-      onBatchComplete?.(batchIndex + 1, totalBatches);
+      // Phase 28.2.6 Plan 01 Task 3 — await the callback so the pipeline's
+      // periodic-flush hook can drive incremental terminal-key writes
+      // synchronously between batch completions.
+      await onBatchComplete?.(batchIndex + 1, totalBatches);
       // Phase 27.4.1 D-07 — write partial cache even on failed batches so a
       // subsequent restart resumes from the last successful batch, not zero.
       await writePartialCache(results, batchIndex + 1, totalBatches, false);
@@ -523,7 +526,7 @@ export async function processEventGroupsV2(
             timestamp: Date.now(),
           });
         }
-        onBatchComplete?.(batchIndex + 1, totalBatches);
+        await onBatchComplete?.(batchIndex + 1, totalBatches);
         await writePartialCache(results, batchIndex + 1, totalBatches, false);
         continue;
       }
@@ -532,7 +535,7 @@ export async function processEventGroupsV2(
     } catch (err) {
       log.warn({ err, batchIndex }, 'JSON.parse failed');
     }
-    onBatchComplete?.(batchIndex + 1, totalBatches);
+    await onBatchComplete?.(batchIndex + 1, totalBatches);
 
     // Phase 27.4.1 D-07 — write partial snapshot after each successful
     // batch. cacheSetSafe is try/caught internally so Redis errors here
