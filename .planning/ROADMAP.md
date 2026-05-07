@@ -321,7 +321,15 @@ Plans:
 **Depends on:** Phase 28.2 (merged to main 2026-05-06; D-03 domain rename + W6 audit workflow are prerequisites for the D-09 evidence path)
 **Blocks:** Phase 28.3 (load test cannot start until the most recent run of `prod-connectivity-audit.yml` shows allTiersGreen=true)
 **Requirements:** Derived from 28.2.5-CONTEXT.md — D-01 phase shape / D-02 hybrid scope / D-03 tiered green bar / D-04 dual-surface verification / D-05 weather tooltip widening + distance hint / D-06 LLM gate (visible + populated, force-trigger if empty) / D-07 two-row split for Events (raw)+Events (LLM) / D-08 waterPrecip SOURCE_KEYS fix / D-09 W6 workflow extension + sidecar shape bump / D-10 prod-only gate target + Claude's-discretion items (exact widened distance threshold, hint copy, possible `'critical-llm'` sub-tier introduction, audit JSON shape extension, DevApiStatus row grouping)
-**Plans:** 0 plans
+**Plans:** 5 plans
+
+Plans:
+
+- [ ] 28.2.5-01-PLAN.md — Wave 1: D-08 waterPrecip SOURCE_KEYS fix + registry-consistency invariant + Precip row /api/health consumption
+- [ ] 28.2.5-02-PLAN.md — Wave 2: D-06/D-07 LLM events monitoring (events:llm:v3 in registry + Events (raw)/(LLM) two-row split)
+- [ ] 28.2.5-03-PLAN.md — Wave 1: D-05 weather tooltip widening (findNearestPrecip 2°→4° + distance hint)
+- [ ] 28.2.5-04-PLAN.md — Wave 3: D-09 tier-green assertion in prod-connectivity-audit.yml + W-3 contract test extension
+- [ ] 28.2.5-05-PLAN.md — Wave 4: phase close (build refresh + PROD deploy + workflow trigger + docs + merge)
 
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 
