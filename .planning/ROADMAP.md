@@ -315,13 +315,13 @@ Plans:
 
 **Phase 28.2 status:** ✅ COMPLETE (2026-05-06) — 6 of 6 plans landed, 16 of 17 connectivity audit endpoints PASS. Phase 28.2.5 inserted as prereq gate before 28.3.
 
-### Phase 28.2.5: API Green-Light Prereq Gate (umbrella child of 28, inserted between 28.2 and 28.3)
+### Phase 28.2.5: API Green-Light Prereq Gate (umbrella child of 28, inserted between 28.2 and 28.3) ✅ COMPLETE (2026-05-06)
 
 **Goal:** Land an "all tiers green" snapshot before 28.3's k6 1–300 VU sweep so the load-test numbers measure prod under load — not a half-broken data path. Two-band scope (per 28.2.5-CONTEXT D-02): **Band A** = three named code/wiring fixes the operator surfaced — (1) `events:llm:v3` missing from `SOURCE_KEYS` so API Health tab can't distinguish enriched-LLM vs raw-GDELT-fallback (per D-06/D-07: add to registry with 26h freshness threshold + new `Events (LLM)` row sibling to existing `Events (raw)`; force-trigger `/api/cron/refresh-events?force=true` if cache empty at gate-check); (2) weather tooltip's `findNearestPrecip` 2°/200km cutoff drops precip at most x,y mouse positions (per D-05: widen to ~4°/~400km AND surface "nearest sample, X km away" hint when distant; planner verifies `useWaterPrecipPolling` hydrates regardless of water-layer toggle); (3) `waterPrecip` is in `FRESHNESS_THRESHOLDS_MS` + `TIER_BY_ENDPOINT` but missing from `SOURCE_KEYS` so DevApiStatus `Precip` row falls back to waterStore selectors (per D-08: add `waterPrecip: 'water:precip'`, switch row to `/api/health` aggregate consumption). **Band B** = green-light gate that 28.3 entry depends on — tiered bar per D-03 (critical-tier `flights/ships/events` MUST be `'healthy'`, non-critical/static MAY be `'degraded'`, probe-only must 200, cron must be ≤26h fresh) verified per D-04 against `/api/health` JSON AND DevApiStatus row state (catches wiring drift); evidence per D-09 lands by extending `.github/workflows/prod-connectivity-audit.yml` from 28.2 W6 with a new tier-green assertion step that writes `allTiersGreen` + `tierStatus` into the existing `audit:connectivity:last-result` sidecar Redis key (7d TTL; W-3 contract test extended to pin new shape); per D-10 the gate runs against PROD only (`otg-iran-monitor.vercel.app`) — dev-side verification of Band-A fixes is by normal vitest + manual smoke. **Out of scope:** edge cache `s-maxage` headers (28.3 D-19), k6 load test (28.3 D-15/16/20), bilinear precip interpolation, LLM eval-baseline freshness as gate, any data-adapter changes, cron schedule changes.
 **Depends on:** Phase 28.2 (merged to main 2026-05-06; D-03 domain rename + W6 audit workflow are prerequisites for the D-09 evidence path)
 **Blocks:** Phase 28.3 (load test cannot start until the most recent run of `prod-connectivity-audit.yml` shows allTiersGreen=true)
 **Requirements:** Derived from 28.2.5-CONTEXT.md — D-01 phase shape / D-02 hybrid scope / D-03 tiered green bar / D-04 dual-surface verification / D-05 weather tooltip widening + distance hint / D-06 LLM gate (visible + populated, force-trigger if empty) / D-07 two-row split for Events (raw)+Events (LLM) / D-08 waterPrecip SOURCE_KEYS fix / D-09 W6 workflow extension + sidecar shape bump / D-10 prod-only gate target + Claude's-discretion items (exact widened distance threshold, hint copy, possible `'critical-llm'` sub-tier introduction, audit JSON shape extension, DevApiStatus row grouping)
-**Plans:** 5 plans
+**Plans:** 5 plans (5/5 complete)
 
 Plans:
 
@@ -329,12 +329,14 @@ Plans:
 - [x] 28.2.5-02-PLAN.md — Wave 2: D-06/D-07 LLM events monitoring (events:llm:v3 in registry + Events (raw)/(LLM) two-row split)
 - [x] 28.2.5-03-PLAN.md — Wave 1: D-05 weather tooltip widening (findNearestPrecip 2°→4° + distance hint)
 - [x] 28.2.5-04-PLAN.md — Wave 3: D-09 tier-green assertion in prod-connectivity-audit.yml + W-3 contract test extension
-- [ ] 28.2.5-05-PLAN.md — Wave 4: phase close (build refresh + PROD deploy + workflow trigger + docs + merge)
+- [x] 28.2.5-05-PLAN.md — Wave 4: phase close (build refresh + PROD deploy + workflow trigger + docs + merge)
+
+**Phase 28.2.5 status:** ✅ COMPLETE (2026-05-06) — 5 of 5 plans landed; bundle refreshed for next `vercel --prod`; tier-green gate ready for operator workflow trigger; pending operator-driven Tasks 2/3/4/7 (PROD deploy + workflow trigger + screenshot + PR merge).
 
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 
 **Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 4 of 4 after 28.2.5 insertion): validate production handles 1–300 concurrent users with measurable PASS/FAIL signal against a clean codebase. Performance optimization layer per D-19: add `s-maxage` CDN headers to `/api/*` (flights 5s, ships 30s, markets 60s, events/news 900s, sites/water 86400s) so Vercel CDN absorbs bulk reads at 300 VU and Redis only fires on cache miss + warm-up cron. k6 sweep per D-15 (GitHub Actions runner, results land as PR artifacts) / D-16 (six discrete tiers 50/100/150/200/250/300 VU, 60s ramp + 5min steady, ~45min wall-time per sweep) / D-20 (full browser-loop per VU: t=0 fires site/water/sources/markets/flights/ships/events/news, then polls flights@5s, ships@30s, markets@60s, events@15min, news@15min — ~0.27 req/s/VU → ~81 RPS at 300 VU). PASS/FAIL bar per D-17 (measured at 300 VU steady-state): p95<500ms hot endpoints, p99<1500ms, error<1%, no 5xx spikes, cache-hit>90% (non-negotiable). Beyond PASS/FAIL per D-18: per-endpoint latency breakdown (p50/p95/p99 tagged), 429 count (validates D-04 Bearer-bypass), Vercel cold-start frequency (validates warm-up cron sufficiency), Upstash Redis cache hit ratio. Polling parity per D-21 (D-20 shape + D-19 edge cache eliminates user-A-vs-user-B divergence). Hobby cron cap = 3, load test does NOT consume a slot.
-**Depends on:** Phase 28.2 (must merge to main first per D-01; D-03 domain rename must land before scripts/load-test.js BASE_URL update); Phase 28.2.5 (entry blocked until prod-connectivity-audit.yml shows allTiersGreen=true per 28.2.5 D-09/D-10)
+**Depends on:** Phase 28.2 (merged to main 2026-05-06; D-03 domain rename + W6 audit workflow are prerequisites); Phase 28.2.5 (5/5 plans landed 2026-05-06; allTiersGreen=true verified via operator-triggered run of `prod-connectivity-audit.yml` at phase close — see 28.2.5 PR for run URL)
 **Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-15 / D-16 / D-17 / D-18 / D-19 / D-20 / D-21 + Claude's-discretion items (k6 reporter artifact format, `/api/sources` edge-cache classification)
 **Plans:** 0 plans
 
