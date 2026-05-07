@@ -227,6 +227,131 @@ describe('DevApiStatus tab merge (Phase 28.2 W5 Plan 05 Task 2)', () => {
     expect(screen.getByTestId('all-apis-tab')).toBeDefined();
   });
 
+  it('Test 10 (Phase 28.2.5 D-08): Precip row reads status/lastFetch from health.endpoints.waterPrecip, not from useWaterStore', async () => {
+    // Plan 28.2.5-01 D-08 — switches the rows[] Precip entry from
+    // ...waterStore selectors to aggregateHealth.endpoints.waterPrecip. The
+    // rows[] array is consumed by `hasIssue` (drives the API Health tab
+    // indicator dot) + `copyDiagnostics` (clipboard payload); the array
+    // itself is not directly rendered in the merged tab body since the
+    // Polling Stores section was removed (cc3b388, 2026-05-06).
+    //
+    // Observable signal of the change: when health.endpoints.waterPrecip
+    // is provided with a 'healthy' status + recent lastSuccessTs, the
+    // rendered /api/health table row (sourced from health.endpoints) must
+    // show the row with the matching status pill + freshness, AND the tab
+    // indicator must NOT be red purely from store-default reasons (the
+    // store's `precipStatus` defaults to a non-connected state in tests).
+    const now = Date.now();
+    const health = makeResponse({
+      flights: makeEndpoint({ name: '/api/flights' }),
+      ships: makeEndpoint({ name: '/api/ships' }),
+      events: makeEndpoint({ name: '/api/events' }),
+      waterPrecip: makeEndpoint({
+        name: '/api/water/precip',
+        tier: 'non-critical',
+        status: 'healthy',
+        lastSuccessTs: now - 1_000,
+        freshnessMs: 1_000,
+        freshnessThresholdMs: 12 * 60 * 60_000,
+      }),
+    });
+
+    renderModalWithHealth({ health });
+
+    // Row is present in the rendered API Health table (sourced from
+    // health.endpoints — confirms the aggregate path is wired through
+    // for the waterPrecip endpoint after the SOURCE_KEYS drift fix).
+    const row = screen.getByTestId('all-apis-row-/api/water/precip');
+    expect(row).toBeTruthy();
+    // Status pill is HEALTHY (matches the health-context fixture, NOT a
+    // store default which would render as UNKNOWN/idle for `precipStatus`).
+    expect(row.textContent).toContain('HEALTHY');
+    // Tier pill is NON-CRITICAL (matches D-26 classification).
+    expect(row.textContent).toContain('NON-CRITICAL');
+    // Freshness cell shows '1s' (from lastSuccessTs = now - 1_000), not '--'
+    // (which would render if freshnessMs were null — i.e., a missing entry).
+    expect(row.textContent).toContain('1s');
+  });
+
+  it('Test 11 (Phase 28.2.5 D-07): renders Events (raw) and Events (LLM) as sibling rows in the API Health table', async () => {
+    // Plan 28.2.5-02 D-07 — splits the rows[] Events entry into 'Events (raw)'
+    // + sibling 'Events (LLM)' fed from aggregateHealth.endpoints.llmEvents.
+    // The rows[] array is consumed by `hasIssue` + `copyDiagnostics` and is
+    // NOT directly rendered in the merged tab body since the Polling Stores
+    // section was removed (cc3b388, 2026-05-06 — see Plan 01 Deviation #1).
+    //
+    // Observable signal of the split: the rendered /api/health table shows
+    // BOTH endpoints (events + llmEvents) as adjacent rows, sourced from
+    // health.endpoints (which now carries llmEvents per Plan 02 Task 2's
+    // PROBE_STRATEGIES wiring). This is the operator-visible view that the
+    // two-row rows[] split mirrors.
+    const now = Date.now();
+    const health = makeResponse({
+      flights: makeEndpoint({ name: '/api/flights' }),
+      ships: makeEndpoint({ name: '/api/ships' }),
+      events: makeEndpoint({
+        name: '/api/events',
+        tier: 'critical',
+        status: 'healthy',
+        lastSuccessTs: now - 1_000,
+      }),
+      llmEvents: makeEndpoint({
+        name: 'events:llm:v3',
+        tier: 'critical',
+        status: 'healthy',
+        lastSuccessTs: now - 1_000,
+        freshnessMs: 1_000,
+        freshnessThresholdMs: 26 * 60 * 60_000,
+      }),
+    });
+
+    renderModalWithHealth({ health });
+
+    // Both endpoints are visible as rows in the API Health table.
+    const rawRow = screen.getByTestId('all-apis-row-/api/events');
+    expect(rawRow).toBeTruthy();
+    expect(rawRow.textContent).toContain('HEALTHY');
+    const llmRow = screen.getByTestId('all-apis-row-events:llm:v3');
+    expect(llmRow).toBeTruthy();
+    expect(llmRow.textContent).toContain('HEALTHY');
+  });
+
+  it('Test 12 (Phase 28.2.5 D-07): Events (LLM) row reflects unknown status when v3 cache is cold', async () => {
+    // When events:llm:v3 cache is cold, the Pitfall 1 bridge falls through to
+    // v2/v1/raw GDELT. Operator signal: the LLM row stays present in the
+    // table but reports 'unknown' status — distinct from the raw events
+    // row (which can still be 'healthy' off events:gdelt). Both rows must
+    // be visually present even when fallback is active — that's the whole
+    // point of the two-row split per D-07.
+    const health = makeResponse({
+      flights: makeEndpoint({ name: '/api/flights' }),
+      ships: makeEndpoint({ name: '/api/ships' }),
+      events: makeEndpoint({
+        name: '/api/events',
+        tier: 'critical',
+        status: 'healthy',
+        lastSuccessTs: Date.now() - 1_000,
+      }),
+      llmEvents: makeEndpoint({
+        name: 'events:llm:v3',
+        tier: 'critical',
+        status: 'unknown',
+        lastSuccessTs: null,
+        freshnessMs: null,
+        freshnessThresholdMs: 26 * 60 * 60_000,
+      }),
+    });
+
+    renderModalWithHealth({ health });
+
+    const rawRow = screen.getByTestId('all-apis-row-/api/events');
+    expect(rawRow).toBeTruthy();
+    expect(rawRow.textContent).toContain('HEALTHY');
+    const llmRow = screen.getByTestId('all-apis-row-events:llm:v3');
+    expect(llmRow).toBeTruthy();
+    expect(llmRow.textContent).toContain('UNKNOWN');
+  });
+
   it('Test 9: clicking merged tab calls setTab(apiHealth)', () => {
     const health = makeResponse({
       flights: makeEndpoint({ name: '/api/flights' }),

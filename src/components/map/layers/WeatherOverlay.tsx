@@ -73,23 +73,37 @@ interface WeatherTooltipProps {
  * Weather tooltip showing temperature (C/F) and wind (direction + speed).
  * Positioned at cursor coordinates, styled to match EntityTooltip.
  */
-/** Find the nearest precipitation entry within ~200km of a point */
+/**
+ * Find the nearest precipitation entry within ~4° (~400km Manhattan) of a point.
+ * Phase 28.2.5 D-05 — widened from 2° because precip samples come from a sparse
+ * facility-location grid (~305 facilities post-27.3.2). The 2° cutoff dropped
+ * Iran-bbox positions far from any facility, leaving the tooltip silently empty.
+ * Return shape carries distanceKm so the tooltip can disclose spatial
+ * precision via a "nearest sample, X km away" hint when the sample is distant.
+ */
 function findNearestPrecip(
   lat: number,
   lng: number,
   data: PrecipitationData[],
-): PrecipitationData | null {
+): { value: PrecipitationData; distanceKm: number } | null {
   let best: PrecipitationData | null = null;
-  let bestDist = Infinity;
+  let bestDistDeg = Infinity;
   for (const p of data) {
     const d = Math.abs(p.lat - lat) + Math.abs(p.lng - lng);
-    if (d < bestDist) {
-      bestDist = d;
+    if (d < bestDistDeg) {
+      bestDistDeg = d;
       best = p;
     }
   }
-  // ~2 degrees ≈ 200km — precip is a regional 30-day metric, coarse matching is fine
-  return bestDist < 2.0 ? best : null;
+  // ~4° Manhattan ≈ ~400km worst case. Precip is a regional 30-day metric,
+  // coarse matching is fine — the hint discloses the distance for honesty.
+  if (best === null || bestDistDeg >= 4.0) return null;
+  // Convert Manhattan degrees to Euclidean km (upper bound). 1° latitude ≈ 111 km;
+  // longitude scales by cos(lat). For mid-latitude Iran (~32°N), cos ≈ 0.85.
+  // Use a simple upper-bound: bestDistDeg * 111 km/° gives the worst case.
+  // For the hint, slight overestimate is fine — operator wants to know "is this far?".
+  const distanceKm = bestDistDeg * 111;
+  return { value: best, distanceKm };
 }
 
 export function WeatherTooltip({ point, x, y }: WeatherTooltipProps) {
@@ -119,8 +133,16 @@ export function WeatherTooltip({ point, x, y }: WeatherTooltipProps) {
             <div className="mt-1 border-t border-border/30 pt-1 text-[9px] uppercase tracking-wider text-text-muted">
               Precipitation
             </div>
-            <div>30-day: {precip.last30DaysMm.toFixed(1)} mm</div>
-            <div>Anomaly: {Math.round(precip.anomalyRatio * 100)}% of normal</div>
+            <div>30-day: {precip.value.last30DaysMm.toFixed(1)} mm</div>
+            <div>Anomaly: {Math.round(precip.value.anomalyRatio * 100)}% of normal</div>
+            {/* Phase 28.2.5 D-05 — disclose spatial precision when sample is distant.
+                100km threshold = the boundary where the widened 4° cutoff starts
+                returning samples that the tight 2° cutoff used to reject. */}
+            {precip.distanceKm > 100 && (
+              <div className="text-[9px] text-text-muted">
+                nearest sample {Math.round(precip.distanceKm)} km away
+              </div>
+            )}
           </>
         )}
       </div>

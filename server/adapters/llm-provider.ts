@@ -264,7 +264,23 @@ export async function callLLM(
   return null;
 }
 
-/** Check if any LLM provider is configured */
+/**
+ * Check if any LLM provider is configured. Phase 27.4.4 introduced
+ * NVIDIA NIM + OpenRouter as the v3 extractor's runtime providers via
+ * `server/lib/freeClaudeRouter.ts:174-185`; the original Cerebras/Groq
+ * check was never widened to match. Result: prod with NIM/OpenRouter
+ * set (no Cerebras/Groq) was reporting `llm_unconfigured` from
+ * `runRefreshExtraction`, which silently blocked the cron from
+ * populating `events:llm:v3` even though both schedule + force-trigger
+ * paths reached this gate. Phase 28.2.5 hot-fix: include all four
+ * provider envs so any single-provider configuration counts as
+ * configured.
+ */
 export function isLLMConfigured(): boolean {
-  return !!(env.CEREBRAS_API_KEY || env.GROQ_API_KEY);
+  return !!(
+    env.CEREBRAS_API_KEY ||
+    env.GROQ_API_KEY ||
+    env.NVIDIA_NIM_API_KEY ||
+    env.OPENROUTER_API_KEY
+  );
 }

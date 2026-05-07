@@ -27,7 +27,7 @@ import { useHealthStatusContext } from '@/components/providers/HealthStatusProvi
 
 const MAX_VISIBLE_NAMES = 3;
 
-export function HealthBanner(): JSX.Element | null {
+export function HealthBanner() {
   const { health } = useHealthStatusContext();
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
 

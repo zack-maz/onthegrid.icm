@@ -127,6 +127,82 @@ describe('/api/audit-status route (Phase 28.2 W6 Task 5)', () => {
     expect(res.body.endpoints['/api/flights']).toBe('pass');
   });
 
+  it('matches Phase 28.2.5 tier-green schema extension', async () => {
+    // Per Phase 28.2.5 D-09: the sidecar JSON gains two new optional fields
+    // written by .github/workflows/prod-connectivity-audit.yml after each run:
+    //   - allTiersGreen: boolean (single-glance gate signal)
+    //   - tierStatus: per-tier health rollup
+    // Both directions of drift fail LOUDLY here:
+    //   - workflow writer drops a field → this test fails
+    //   - route reader drops the field from AuditPayload → TS rejects assertions
+    const ciWritten = {
+      status: 'pass',
+      runId: '99999',
+      timestamp: '2026-05-07T10:00:00.000Z',
+      endpoints: {
+        '/api/health': 'pass',
+        '/api/sources': 'pass',
+        '/api/flights': 'pass',
+      },
+      durationMs: 4231,
+      // Phase 28.2.5 D-09 additions (RESEARCH Open Question 5 shape (C)):
+      allTiersGreen: true,
+      tierStatus: {
+        critical: 'healthy' as const,
+        nonCritical: 'healthy' as const,
+        static: 'healthy' as const,
+        probeOnly: 'healthy' as const,
+        cron: 'healthy' as const,
+      },
+    };
+    mockRedis.get.mockResolvedValueOnce(JSON.stringify(ciWritten));
+
+    const app = makeApp();
+    const res = await request(app).get('/api/audit-status').expect(200);
+
+    // Existing W-3 fields preserved (forward-compat with the existing
+    // 'matches CI workflow JSON shape contract' test).
+    expect(res.body).toMatchObject({
+      status: 'pass',
+      runId: '99999',
+      endpoints: expect.any(Object),
+    });
+    // 28.2.5 D-09 — new fields present and round-tripped intact.
+    expect(res.body.allTiersGreen).toBe(true);
+    expect(res.body.tierStatus).toBeDefined();
+    expect(res.body.tierStatus.critical).toBe('healthy');
+    expect(res.body.tierStatus.nonCritical).toBe('healthy');
+    expect(res.body.tierStatus.static).toBe('healthy');
+    expect(res.body.tierStatus.probeOnly).toBe('healthy');
+    expect(res.body.tierStatus.cron).toBe('healthy');
+  });
+
+  it('matches Phase 28.2.5 tier-green schema extension — non-green run', async () => {
+    // The fail case: workflow records allTiersGreen=false when critical tier is unhealthy.
+    const ciWritten = {
+      status: 'fail',
+      runId: '99998',
+      timestamp: '2026-05-07T10:00:00.000Z',
+      endpoints: { '/api/health': 'pass', '/api/events': 'fail' },
+      durationMs: 8120,
+      allTiersGreen: false,
+      tierStatus: {
+        critical: 'unhealthy' as const,
+        nonCritical: 'healthy' as const,
+        static: 'healthy' as const,
+        probeOnly: 'healthy' as const,
+        cron: 'healthy' as const,
+      },
+    };
+    mockRedis.get.mockResolvedValueOnce(JSON.stringify(ciWritten));
+
+    const app = makeApp();
+    const res = await request(app).get('/api/audit-status').expect(200);
+
+    expect(res.body.allTiersGreen).toBe(false);
+    expect(res.body.tierStatus.critical).toBe('unhealthy');
+  });
+
   it('handles Upstash already-parsed object (object passthrough, not just JSON string)', async () => {
     // Upstash REST may return either a JSON string OR an already-parsed
     // object depending on serialization. The route MUST tolerate both.

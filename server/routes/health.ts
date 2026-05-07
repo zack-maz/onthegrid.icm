@@ -228,12 +228,15 @@ const PROBE_STRATEGIES: Record<string, ProbeStrategy> = {
   flights: { kind: 'cache', cacheKey: SOURCE_KEYS.flights! },
   ships: { kind: 'cache', cacheKey: SOURCE_KEYS.ships! },
   events: { kind: 'cache', cacheKey: SOURCE_KEYS.events! },
+  // Phase 28.2.5 D-06 — top of the cache-bridge fallback chain (events.ts:701-731).
+  // Probe answers "is /api/events serving enriched LLM events or raw-GDELT fallback?"
+  llmEvents: { kind: 'cache', cacheKey: SOURCE_KEYS.llmEvents! },
   news: { kind: 'cache', cacheKey: SOURCE_KEYS.news! },
   markets: { kind: 'cache', cacheKey: SOURCE_KEYS.markets! },
   weather: { kind: 'cache', cacheKey: SOURCE_KEYS.weather! },
   sites: { kind: 'cache', cacheKey: SOURCE_KEYS.sites! },
   water: { kind: 'cache', cacheKey: SOURCE_KEYS.water! },
-  waterPrecip: { kind: 'cache', cacheKey: 'water:precip' },
+  waterPrecip: { kind: 'cache', cacheKey: SOURCE_KEYS.waterPrecip! },
   sources: { kind: 'sources' },
   llmStatus: { kind: 'llmStatus' },
   authCheck: { kind: 'probeOnly' },

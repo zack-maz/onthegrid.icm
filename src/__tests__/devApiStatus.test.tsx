@@ -194,22 +194,15 @@ describe('DevApiStatus', () => {
     expect(screen.getByTestId('dev-api-status-backdrop')).toBeInTheDocument();
   });
 
-  it('renders all 8 source rows in the Overview tab', () => {
-    openModal();
-    render(<DevApiStatus />);
-
-    // "Sites", "Water", and (post-Phase-27.4.6) "Events" also appear as tab
-    // button text, so we assert presence via getAllByText with length >= 1
-    // for those three and direct lookup for the rest.
-    expect(screen.getByText('Flights')).toBeInTheDocument();
-    expect(screen.getByText('Ships')).toBeInTheDocument();
-    expect(screen.getAllByText('Events').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Sites').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('News')).toBeInTheDocument();
-    expect(screen.getByText('Markets')).toBeInTheDocument();
-    expect(screen.getByText('Weather')).toBeInTheDocument();
-    expect(screen.getAllByText('Water').length).toBeGreaterThanOrEqual(1);
-  });
+  // Phase 28.2 W5 cc3b388 removed the "Polling Stores" section from the
+  // API Health tab — it duplicated the per-endpoint health table directly
+  // above it. The 8-source presence contract now lives in
+  // DevApiStatus.tabMerge.test.tsx (which exercises the API Health table
+  // backed by `/api/health` aggregate). This test asserted the deleted
+  // section's row labels and is obsolete; the copyDiagnostics test below
+  // continues to verify all 8 sources are wired into the diagnostics
+  // payload from `rows[]` (still kept in module scope for that purpose).
+  it.todo('renders all 8 source rows in the Overview tab — moved to tabMerge.test.tsx');
 
   it('copies valid JSON to clipboard on copy diagnostics click', async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
@@ -230,21 +223,23 @@ describe('DevApiStatus', () => {
     const parsed = JSON.parse(jsonStr);
 
     expect(parsed.timestamp).toBeDefined();
-    // Pre-existing baseline: rows array has 9 entries (including Precip) —
-    // we verify presence of 8 primary sources here; Precip is included in
-    // parsed.sources but the exact length assertion is stale per
-    // deferred-items.md. Asserting the 8 we care about:
+    // Phase 28.2.5 Plan 02 split the Events row into 'Events (raw)' +
+    // 'Events (LLM)' siblings (D-07). Plan 01 added the Precip row that
+    // sources from /api/health (D-08). Asserting the 10 names that the
+    // diagnostics payload now ships:
     const names = parsed.sources.map((s: { name: string }) => s.name);
     expect(names).toEqual(
       expect.arrayContaining([
         'Flights',
         'Ships',
-        'Events',
+        'Events (raw)',
+        'Events (LLM)',
         'Sites',
         'News',
         'Markets',
         'Weather',
         'Water',
+        'Precip',
       ]),
     );
     expect(parsed.llmPipeline).toBeDefined();
@@ -361,47 +356,14 @@ describe('DevApiStatus', () => {
     expect(useUIStore.getState().isDevApiStatusOpen).toBe(true);
   });
 
-  it('shows lastError when row is expanded (Overview tab)', () => {
-    useFlightStore.setState({ lastError: 'Flights API 503' });
-    openModal();
-    render(<DevApiStatus />);
-
-    // Click Flights row to expand error
-    const flightsRow = screen.getByText('Flights').closest('tr')!;
-    fireEvent.click(flightsRow);
-
-    expect(screen.getByText(/Flights API 503/)).toBeInTheDocument();
-  });
-
-  it('shows correct success rate X/Y format from recentFetches', () => {
-    useFlightStore.setState({
-      recentFetches: [
-        { ok: true, durationMs: 100, timestamp: now },
-        { ok: true, durationMs: 150, timestamp: now },
-        { ok: false, durationMs: 200, timestamp: now },
-      ],
-    });
-    openModal();
-    render(<DevApiStatus />);
-
-    // 2 ok out of 3 total = "2/3"
-    expect(screen.getByText('2/3')).toBeInTheDocument();
-  });
-
-  it('shows "Complete" for one-shot sources', () => {
-    useSiteStore.setState({ connectionStatus: 'connected', siteCount: 20 });
-    openModal();
-    render(<DevApiStatus />);
-
-    const completeCells = screen.getAllByText('Complete');
-    expect(completeCells.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('shows "Fetching..." for one-shot sources during loading', () => {
-    useSiteStore.setState({ connectionStatus: 'loading', siteCount: 0 });
-    openModal();
-    render(<DevApiStatus />);
-
-    expect(screen.getByText('Fetching...')).toBeInTheDocument();
-  });
+  // The next four tests (lastError row-expand, X/Y success-rate format,
+  // "Complete" / "Fetching..." one-shot labels) all exercised the deleted
+  // Polling Stores section's rendering. The new API Health table renders
+  // status as HEALTHY/DEGRADED/UNHEALTHY/UNKNOWN pills, not "X/Y" text
+  // or "Complete" / "Fetching..." copy. Equivalent coverage for the new
+  // surface lives in DevApiStatus.tabMerge.test.tsx.
+  it.todo('shows lastError when row is expanded — superseded by tabMerge.test.tsx');
+  it.todo('shows correct success rate X/Y format — Polling Stores removed (cc3b388)');
+  it.todo('shows "Complete" for one-shot sources — Polling Stores removed (cc3b388)');
+  it.todo('shows "Fetching..." during loading — Polling Stores removed (cc3b388)');
 });

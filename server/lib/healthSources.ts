@@ -44,6 +44,13 @@ export const SOURCE_KEYS: Record<string, string> = {
   sites: 'sites:v3',
   // DRIFT-3: route writer bumped to water:facilities:v3 in Phase 27.3.2.
   water: 'water:facilities:v3',
+  // DRIFT-4: waterPrecip was in thresholds + tier but missing from SOURCE_KEYS — operator-reported in 28.2.5.
+  waterPrecip: 'water:precip',
+  // DRIFT-5: events:llm:v3 promoted from observability-only to gate-relevant per 28.2.5 D-06.
+  // The cache-bridge fallback chain at events.ts:701-731 starts with v3; this entry gives
+  // the API Health tab a probe target for the top of the chain. Bridge to raw GDELT (key
+  // 'events') remains as Pitfall 1 safety net.
+  llmEvents: 'events:llm:v3',
 };
 
 /**
@@ -74,6 +81,7 @@ export const FRESHNESS_THRESHOLDS_MS: Record<string, number> = {
   cronHealth: 26 * 60 * 60_000, // 26 h — D-25
   cronWarm: 26 * 60 * 60_000, // 26 h — D-25
   cronRefreshEvents: 26 * 60 * 60_000, // 26 h — D-25
+  llmEvents: 26 * 60 * 60_000, // 26 h — D-25 (matches cron triad — 28.2.5 D-06)
 };
 
 /**
@@ -88,6 +96,7 @@ export const TIER_BY_ENDPOINT: Record<string, HealthTier> = {
   flights: 'critical', // D-26
   ships: 'critical', // D-26
   events: 'critical', // D-26
+  llmEvents: 'critical', // D-26 (28.2.5 D-06 — promotes events:llm:v3 to gate-relevant)
   markets: 'non-critical', // D-26
   news: 'non-critical', // D-26
   // DELTA-A2: /api/weather is a visualization layer, not core conflict data.

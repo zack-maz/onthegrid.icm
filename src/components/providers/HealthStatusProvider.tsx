@@ -50,7 +50,7 @@ const DEFAULT_VALUE: HealthStatusContextValue = {
  */
 export const HealthStatusContext = createContext<HealthStatusContextValue>(DEFAULT_VALUE);
 
-export function HealthStatusProvider({ children }: { children: ReactNode }): JSX.Element {
+export function HealthStatusProvider({ children }: { children: ReactNode }) {
   const value = useHealthStatus();
   return <HealthStatusContext.Provider value={value}>{children}</HealthStatusContext.Provider>;
 }
