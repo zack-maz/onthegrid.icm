@@ -333,10 +333,22 @@ Plans:
 
 **Phase 28.2.5 status:** ✅ COMPLETE (2026-05-06) — 5 of 5 plans landed; bundle refreshed for next `vercel --prod`; tier-green gate ready for operator workflow trigger; pending operator-driven Tasks 2/3/4/7 (PROD deploy + workflow trigger + screenshot + PR merge).
 
+### Phase 28.2.6: Fix Vercel cron architecture so events:llm:v3 populates within budget (INSERTED)
+
+**Goal:** Resolve the cron-route fire-and-forget architecture finding from Phase 28.2.5 closeout (`.planning/phases/28.2.5-api-green-gate/deferred-items.md`) so `events:llm:v3` populates within Vercel Hobby's 300s `maxDuration` budget. Three resolution paths surfaced — the discuss + plan steps pick one: (a) refactor `llmExtractionPipeline.ts:386` to incremental terminal-key writes (~30 LOC, alters two-key discipline); (b) Vercel plan upgrade to Pro (800s maxDuration, no code changes, $20/mo); (c) Vercel `waitUntil` migration via `@vercel/functions` (does not solve maxDuration; only fixes the response-kill race). Without one of these, the prod-connectivity-audit.yml tier-green gate from 28.2.5 D-09 will continue to return `allTiersGreen=false` because `critical[llmEvents]` stays `unknown`. The 28.2.5 isLLMConfigured hot-fix (commit 5f47648) means the BLOCKER is no longer `llm_unconfigured` — it's the architectural ceiling alone.
+**Depends on:** Phase 28.2.5 (PR #11; merge before this phase starts)
+**Blocks:** Phase 28.3 (k6 load test cannot start until tier-green workflow run shows allTiersGreen=true; that depends on this phase resolving the cron architecture)
+**Requirements:** TBD (will be derived from 28.2.6-CONTEXT.md after `/gsd-discuss-phase 28.2.6`; expected to lock the chosen resolution path + define the success signal — first force-trigger of `/api/cron/refresh-events?force=true` populates `events:llm:v3` within budget; subsequent prod-connectivity-audit.yml run shows `allTiersGreen=true`)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 28.2.6 to break down)
+
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 
 **Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 4 of 4 after 28.2.5 insertion): validate production handles 1–300 concurrent users with measurable PASS/FAIL signal against a clean codebase. Performance optimization layer per D-19: add `s-maxage` CDN headers to `/api/*` (flights 5s, ships 30s, markets 60s, events/news 900s, sites/water 86400s) so Vercel CDN absorbs bulk reads at 300 VU and Redis only fires on cache miss + warm-up cron. k6 sweep per D-15 (GitHub Actions runner, results land as PR artifacts) / D-16 (six discrete tiers 50/100/150/200/250/300 VU, 60s ramp + 5min steady, ~45min wall-time per sweep) / D-20 (full browser-loop per VU: t=0 fires site/water/sources/markets/flights/ships/events/news, then polls flights@5s, ships@30s, markets@60s, events@15min, news@15min — ~0.27 req/s/VU → ~81 RPS at 300 VU). PASS/FAIL bar per D-17 (measured at 300 VU steady-state): p95<500ms hot endpoints, p99<1500ms, error<1%, no 5xx spikes, cache-hit>90% (non-negotiable). Beyond PASS/FAIL per D-18: per-endpoint latency breakdown (p50/p95/p99 tagged), 429 count (validates D-04 Bearer-bypass), Vercel cold-start frequency (validates warm-up cron sufficiency), Upstash Redis cache hit ratio. Polling parity per D-21 (D-20 shape + D-19 edge cache eliminates user-A-vs-user-B divergence). Hobby cron cap = 3, load test does NOT consume a slot.
-**Depends on:** Phase 28.2 (merged to main 2026-05-06; D-03 domain rename + W6 audit workflow are prerequisites); Phase 28.2.5 (5/5 plans landed 2026-05-06; allTiersGreen=true verified via operator-triggered run of `prod-connectivity-audit.yml` at phase close — see 28.2.5 PR for run URL)
+**Depends on:** Phase 28.2 (merged to main 2026-05-06; D-03 domain rename + W6 audit workflow are prerequisites); Phase 28.2.5 (PR #11; tier-green workflow assertion landed); Phase 28.2.6 (cron architecture fix that makes `allTiersGreen=true` actually achievable; 28.2.5 found the gate but 28.2.6 unblocks the `critical[llmEvents]` row that the gate measures)
 **Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-15 / D-16 / D-17 / D-18 / D-19 / D-20 / D-21 + Claude's-discretion items (k6 reporter artifact format, `/api/sources` edge-cache classification)
 **Plans:** 0 plans
 
