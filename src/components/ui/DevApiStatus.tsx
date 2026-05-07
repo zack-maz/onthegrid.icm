@@ -460,6 +460,21 @@ export function DevApiStatus() {
     })),
   );
 
+  // Phase 28.1 W2 — read shared health context. Single-poll guarantee:
+  // HealthBanner + this tab BOTH consume from one HealthStatusProvider
+  // instance wrapping AppShell, so /api/health is fetched once per cycle.
+  // Phase 28.2.5 D-08 — moved above the rows[] array so the Precip-row IIFE
+  // (below) can read aggregateHealth.endpoints.waterPrecip without hitting
+  // a temporal-dead-zone ReferenceError. The original L588-593 site is
+  // collapsed into a re-binding so all downstream consumers (L675/L740-742)
+  // continue to see the same names.
+  const {
+    health: aggregateHealth,
+    loading: healthLoading,
+    error: healthError,
+  } = useHealthStatusContext();
+  const hasCriticalUnhealthy = !!aggregateHealth && aggregateHealth.summary.critical.unhealthy > 0;
+
   const rows: ApiRow[] = [
     {
       name: 'Flights',
@@ -515,12 +530,27 @@ export function DevApiStatus() {
       isOneShot: true,
       quality: `${waterRaw.count} total | ${waterByType['dam'] ?? 0} dam, ${waterByType['reservoir'] ?? 0} res, ${waterByType['desalination'] ?? 0} desal`,
     },
-    {
-      name: 'Precip',
-      ...precip,
-      isOneShot: false,
-      quality: `${precip.count}/${precip.facilityCount} matched`,
-    },
+    // Phase 28.2.5 D-08 — Precip row sources freshness from /api/health aggregate.
+    // The HealthStatusContext destructure at L588-593 aliases `health` → `aggregateHealth`,
+    // so we reference `aggregateHealth?.endpoints?.waterPrecip` here (NOT `health?.…` —
+    // that symbol is not in scope and would silently evaluate to undefined).
+    // Counts (precip.count, precip.facilityCount) stay from the store because they
+    // describe content quality, not freshness. Pattern matches Events row keeping
+    // eventQuality.llmCount alongside health-derived freshness.
+    ((): ApiRow => {
+      const ep = aggregateHealth?.endpoints?.waterPrecip;
+      return {
+        name: 'Precip',
+        status: ep?.status ?? 'unknown',
+        count: precip.count,
+        lastFetch: ep?.lastSuccessTs ?? null,
+        lastError: ep?.lastErrorReason ?? null,
+        nextPollAt: null,
+        recentFetches: [],
+        isOneShot: false,
+        quality: `${precip.count}/${precip.facilityCount} matched`,
+      };
+    })(),
   ];
 
   const hasIssue = rows.some((r) => {
@@ -583,15 +613,14 @@ export function DevApiStatus() {
   // continues to surface critical-tier outages to anonymous prod users.
   const showApiHealthTab = shouldRenderDashboard();
 
-  // Phase 28.1 W2 — read shared health context. Single-poll guarantee:
-  // HealthBanner + this tab BOTH consume from one HealthStatusProvider
-  // instance wrapping AppShell, so /api/health is fetched once per cycle.
-  const {
-    health: aggregateHealth,
-    loading: healthLoading,
-    error: healthError,
-  } = useHealthStatusContext();
-  const hasCriticalUnhealthy = !!aggregateHealth && aggregateHealth.summary.critical.unhealthy > 0;
+  // Phase 28.2.5 D-08 — `aggregateHealth` / `healthLoading` / `healthError`
+  // and `hasCriticalUnhealthy` are now declared earlier in the component
+  // body (just above the `rows[]` array) so the Precip-row IIFE inside
+  // `rows[]` can reference `aggregateHealth.endpoints.waterPrecip` without
+  // hitting a temporal-dead-zone ReferenceError. The original site at this
+  // location was the consumer of last resort; the move is name-preserving
+  // so the existing TabButton indicator (L675) and DevApiStatusAllApisTab
+  // mount (L740-742) keep their references unchanged.
 
   // Escape key — capture-phase so DevApiStatus closes BEFORE nav-stack pop /
   // detail panel close / search modal close (Plan 12 G6 priority contract).

@@ -227,6 +227,52 @@ describe('DevApiStatus tab merge (Phase 28.2 W5 Plan 05 Task 2)', () => {
     expect(screen.getByTestId('all-apis-tab')).toBeDefined();
   });
 
+  it('Test 10 (Phase 28.2.5 D-08): Precip row reads status/lastFetch from health.endpoints.waterPrecip, not from useWaterStore', async () => {
+    // Plan 28.2.5-01 D-08 — switches the rows[] Precip entry from
+    // ...waterStore selectors to aggregateHealth.endpoints.waterPrecip. The
+    // rows[] array is consumed by `hasIssue` (drives the API Health tab
+    // indicator dot) + `copyDiagnostics` (clipboard payload); the array
+    // itself is not directly rendered in the merged tab body since the
+    // Polling Stores section was removed (cc3b388, 2026-05-06).
+    //
+    // Observable signal of the change: when health.endpoints.waterPrecip
+    // is provided with a 'healthy' status + recent lastSuccessTs, the
+    // rendered /api/health table row (sourced from health.endpoints) must
+    // show the row with the matching status pill + freshness, AND the tab
+    // indicator must NOT be red purely from store-default reasons (the
+    // store's `precipStatus` defaults to a non-connected state in tests).
+    const now = Date.now();
+    const health = makeResponse({
+      flights: makeEndpoint({ name: '/api/flights' }),
+      ships: makeEndpoint({ name: '/api/ships' }),
+      events: makeEndpoint({ name: '/api/events' }),
+      waterPrecip: makeEndpoint({
+        name: '/api/water/precip',
+        tier: 'non-critical',
+        status: 'healthy',
+        lastSuccessTs: now - 1_000,
+        freshnessMs: 1_000,
+        freshnessThresholdMs: 12 * 60 * 60_000,
+      }),
+    });
+
+    renderModalWithHealth({ health });
+
+    // Row is present in the rendered API Health table (sourced from
+    // health.endpoints — confirms the aggregate path is wired through
+    // for the waterPrecip endpoint after the SOURCE_KEYS drift fix).
+    const row = screen.getByTestId('all-apis-row-/api/water/precip');
+    expect(row).toBeTruthy();
+    // Status pill is HEALTHY (matches the health-context fixture, NOT a
+    // store default which would render as UNKNOWN/idle for `precipStatus`).
+    expect(row.textContent).toContain('HEALTHY');
+    // Tier pill is NON-CRITICAL (matches D-26 classification).
+    expect(row.textContent).toContain('NON-CRITICAL');
+    // Freshness cell shows '1s' (from lastSuccessTs = now - 1_000), not '--'
+    // (which would render if freshnessMs were null — i.e., a missing entry).
+    expect(row.textContent).toContain('1s');
+  });
+
   it('Test 9: clicking merged tab calls setTab(apiHealth)', () => {
     const health = makeResponse({
       flights: makeEndpoint({ name: '/api/flights' }),

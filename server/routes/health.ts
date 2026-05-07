@@ -233,7 +233,7 @@ const PROBE_STRATEGIES: Record<string, ProbeStrategy> = {
   weather: { kind: 'cache', cacheKey: SOURCE_KEYS.weather! },
   sites: { kind: 'cache', cacheKey: SOURCE_KEYS.sites! },
   water: { kind: 'cache', cacheKey: SOURCE_KEYS.water! },
-  waterPrecip: { kind: 'cache', cacheKey: 'water:precip' },
+  waterPrecip: { kind: 'cache', cacheKey: SOURCE_KEYS.waterPrecip! },
   sources: { kind: 'sources' },
   llmStatus: { kind: 'llmStatus' },
   authCheck: { kind: 'probeOnly' },
