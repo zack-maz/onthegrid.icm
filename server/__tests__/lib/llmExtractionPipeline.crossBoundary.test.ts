@@ -61,6 +61,20 @@ vi.mock('@vercel/functions', () => ({
   },
 }));
 
+// Phase 28.2.6 Plan 02 cross-plan defense — Task 3 swapped the IIFE wrapper
+// from `void (async () => {...})()` to `safeWaitUntil((async () => {...})())`.
+// The local-dev fallback in safeWaitUntil runs `promise.catch(...)` so the IIFE
+// still executes under test, but we mock the shim itself for clarity + so a
+// future regression that changes safeWaitUntil's local-dev path can't silently
+// break these tests. The pre-existing `vi.mock('@vercel/functions', ...)` is
+// retained as defense-in-depth — if anyone later removes the safeWaitUntil
+// mock, the @vercel/functions mock still keeps the IIFE running under test.
+vi.mock('../../lib/safeWaitUntil.js', () => ({
+  safeWaitUntil: (p: Promise<unknown>) => {
+    void p.catch(() => {});
+  },
+}));
+
 vi.mock('../../lib/logger.js', () => ({
   logger: {
     child: () => ({
