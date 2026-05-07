@@ -161,3 +161,26 @@ describe('Registry consistency invariant (Phase 28.2.5 D-08)', () => {
     }
   });
 });
+
+describe('SOURCE_KEYS llmEvents entry — DRIFT-5 (Phase 28.2.5 D-06)', () => {
+  it('contains llmEvents mapped to events:llm:v3', () => {
+    // Per D-06: events:llm:v3 promoted from observability-only to gate-relevant.
+    // The cache-bridge chain at events.ts:701-731 starts with v3; this entry
+    // gives the API Health tab a probe target for the top of the chain.
+    expect(SOURCE_KEYS.llmEvents).toBe('events:llm:v3');
+  });
+
+  it('uses 26h freshness threshold (matches cron triad)', () => {
+    // Cron is daily at 4am UTC; 24h would race the cron skew, 26h gives 2h buffer.
+    // Symmetry with cronHealth/cronWarm/cronRefreshEvents per CONTEXT D-06.
+    expect(FRESHNESS_THRESHOLDS_MS.llmEvents).toBe(26 * 60 * 60_000);
+  });
+
+  it('classifies llmEvents as critical tier', () => {
+    // Per D-06 + Open Question 1 recommendation: stay at 'critical' (no
+    // 'critical-llm' sub-tier — would require Zod schema bump + buildSummary refactor).
+    // The Pitfall 1 cache-bridge to raw GDELT is the safety net; the gate's
+    // strict 'critical' read here flags fallback even when the raw events route is healthy.
+    expect(TIER_BY_ENDPOINT.llmEvents).toBe('critical');
+  });
+});
