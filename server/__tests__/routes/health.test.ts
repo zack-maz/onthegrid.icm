@@ -201,4 +201,29 @@ describe('GET /api/health (W2 extended)', () => {
     const body = healthResponseSchema.parse(getBody());
     expect(body.endpoints.flights?.status).toBe('degraded');
   });
+
+  it('Test 5c (Phase 28.2.5 D-08): waterPrecip probes via SOURCE_KEYS indirection and reports healthy on fresh cache', async () => {
+    const now = Date.now();
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'water:precip') {
+        return {
+          data: [{ lat: 32, lng: 51, last30DaysMm: 12, anomalyRatio: 0.8, updatedAt: now - 1000 }],
+          stale: false,
+          lastFresh: now - 1_000,
+        };
+      }
+      return null;
+    });
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    expect(body.endpoints.waterPrecip).toBeDefined();
+    expect(body.endpoints.waterPrecip?.status).toBe('healthy');
+    expect(body.endpoints.waterPrecip?.tier).toBe('non-critical');
+  });
 });
