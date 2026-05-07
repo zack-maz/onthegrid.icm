@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: GDELT Redo & Performance
-status: phase_28.2_complete
-last_updated: "2026-05-06T23:30:00.000Z"
+status: phase_28.2.5_context_gathered
+last_updated: "2026-05-07T00:55:00.000Z"
 progress:
-  total_phases: 20
+  total_phases: 21
   completed_phases: 10
   total_plans: 88
   completed_plans: 86
-  percent: 98
+  percent: 93
 ---
 
 # Project State
@@ -21,6 +21,9 @@ See: .planning/PROJECT.md
 **Core value:** Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map -- numbers over narratives.
 
 ## Current Position
+
+Phase: 28.2.5 (api-green-gate) — CONTEXT GATHERED (2026-05-07; commit `6b0a2c6`)
+Inserted between 28.2 (complete) and 28.3 (load test, blocked on 28.2.5). Two-band scope captured in `.planning/phases/28.2.5-api-green-gate/28.2.5-CONTEXT.md`: **Band A** = three named code/wiring fixes (events:llm:v3 → SOURCE_KEYS + new `Events (LLM)` row sibling per D-06/D-07; widen WeatherOverlay findNearestPrecip 2°→~4° + "nearest sample, X km away" hint per D-05; waterPrecip → SOURCE_KEYS + DevApiStatus row consumes /api/health aggregate per D-08), **Band B** = tiered green-light gate that 28.3 entry depends on (D-03 critical='healthy' / non-critical+static∈{healthy,degraded} / probe-only=200 / cron≤26h, D-04 JSON+DevApiStatus row, D-09 extends 28.2 W6 prod-connectivity-audit.yml + bumps audit-status sidecar shape with allTiersGreen+tierStatus, D-10 prod target only). Discussion log at `28.2.5-DISCUSSION-LOG.md` preserves the alternatives. ROADMAP.md Phase 28.3 `Depends on:` line updated to gate on 28.2.5. Next step: `/gsd-plan-phase 28.2.5` (or `/gsd-discuss-phase 28.2.5 --chain` for plan+execute autopilot).
 
 Phase: 28.2 (dev-prod-sync-domain-rename) — ✅ COMPLETE (2026-05-06)
 Plans: 6 of 6 — all landed; W6 prod audit final run [25468172683](https://github.com/zack-maz/onthegrid.icm/actions/runs/25468172683) at 16/17 PASS (`news` blocked on GDELT-side 429 throttle, transient external condition not phase-blocking — operator can retrigger workflow_dispatch any time the throttle clears). Five hotfixes surfaced by the audit itself (CACHE_KEY_PREFIX proxy regression for eval-family methods + autoPipelining defense-in-depth + Bearer-bypass extension to per-endpoint tiers + CacheResponse envelope schema fix + reporter=default) all landed on main. Phase 28.3 (k6 load test) unblocked. Branch `feature/28.2-dev-prod-sync-domain-rename` fast-forward-merged to main at `269ff63` then 5 hotfixes 38fe0c2→db1f67b on main directly. New Vercel project `onthegrid.icm` (created by operator 2026-05-05) hosts the deployment with `otg-iran-monitor.vercel.app` alias. 7 prod env vars configured (DASHBOARD_PASSWORD=hello + UPSTASH_REDIS_REST_URL/TOKEN + CRON_SECRET + NVIDIA_NIM_API_KEY + OPENROUTER_API_KEY + CACHE_KEY_PREFIX + AISSTREAM_API_KEY). Bearer header `Authorization: Bearer hello` unlocks dashboard surfaces and skips all rate-limit tiers. 50 commits since phase-start `bcc9674`.
