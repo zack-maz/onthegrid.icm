@@ -46,6 +46,18 @@ interface AuditPayload {
   lastVerifiedAt?: string;
   endpoints?: Record<string, 'pass' | 'fail'>;
   durationMs?: number;
+  // Phase 28.2.5 D-09 — tier-green assertion result written by
+  // .github/workflows/prod-connectivity-audit.yml. Both fields are optional
+  // because the existing degrade-open contract (L60-89) returns absent payloads
+  // when the sidecar key is empty/malformed.
+  allTiersGreen?: boolean;
+  tierStatus?: {
+    critical?: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    nonCritical?: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    static?: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    probeOnly?: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    cron?: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+  };
   [k: string]: unknown;
 }
 
