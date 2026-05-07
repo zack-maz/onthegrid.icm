@@ -1914,7 +1914,7 @@ async function callLLM2(messages, jsonSchema, opts = {}) {
   return null;
 }
 function isLLMConfigured() {
-  return !!(env.CEREBRAS_API_KEY || env.GROQ_API_KEY);
+  return !!(env.CEREBRAS_API_KEY || env.GROQ_API_KEY || env.NVIDIA_NIM_API_KEY || env.OPENROUTER_API_KEY);
 }
 
 // server/lib/meBounds.ts
