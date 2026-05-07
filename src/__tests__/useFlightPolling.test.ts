@@ -51,7 +51,10 @@ describe('useFlightPolling', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch).toHaveBeenCalledWith('/api/flights?source=opensky');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/flights?source=opensky',
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
   });
 
   it('polls again after 5000ms', async () => {

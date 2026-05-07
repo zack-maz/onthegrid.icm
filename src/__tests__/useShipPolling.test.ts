@@ -58,7 +58,10 @@ describe('useShipPolling', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch).toHaveBeenCalledWith('/api/ships');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/ships',
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
   });
 
   it('schedules next fetch after 30s', async () => {
