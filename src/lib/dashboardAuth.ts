@@ -1,3 +1,5 @@
+import { useUIStore } from '@/stores/uiStore';
+
 /**
  * Phase 27.4.4 Plan 02 — Client-side dashboard auth helpers.
  *
@@ -51,6 +53,29 @@ export function hasDashboardKey(): boolean {
  */
 export function shouldRenderDashboard(): boolean {
   return import.meta.env.DEV || hasDashboardKey();
+}
+
+/**
+ * Reactive variant of `shouldRenderDashboard()`. Subscribes to the auth
+ * modal's open state via uiStore so the consuming component re-renders
+ * when the modal closes — which is exactly when localStorage may have
+ * flipped from unauthenticated → authenticated (or vice versa on a key
+ * clear). Without this subscription, the parent component would observe
+ * a stale call-time read because plain `localStorage.setItem` does not
+ * trigger React re-renders. Phase 28.2 W6 hotfix — symptom was "auth
+ * accepted, dashboard never appears" because AppShell never re-rendered
+ * after `setDashboardKey` write completed.
+ *
+ * Use this in any component that mounts auth-gated children. The
+ * non-hook `shouldRenderDashboard()` is still appropriate inside
+ * components that already subscribe to a relevant uiStore slice (e.g.
+ * `DevApiStatus` reads `isDevApiStatusOpen` and re-renders on its own).
+ */
+export function useShouldRenderDashboard(): boolean {
+  // Subscribe so any open/close transition forces a re-render. The
+  // returned value is intentionally unused — we only need the dependency.
+  useUIStore((s) => s.isDashboardAuthOpen);
+  return shouldRenderDashboard();
 }
 
 /**

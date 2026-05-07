@@ -21,7 +21,7 @@ import { useSiteFetch } from '@/hooks/useSiteFetch';
 import { useWaterFetch } from '@/hooks/useWaterFetch';
 import { useWaterPrecipPolling } from '@/hooks/useWaterPrecipPolling';
 import { useWeatherPolling } from '@/hooks/useWeatherPolling';
-import { shouldRenderDashboard } from '@/lib/dashboardAuth';
+import { useShouldRenderDashboard } from '@/lib/dashboardAuth';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -46,6 +46,13 @@ export function AppShell() {
   useNotifications();
   useEscapeKeyHandler();
   useQuerySync();
+
+  // Reactive read: re-renders when the auth modal opens/closes so the
+  // DevApiStatus mount gate reflects the latest localStorage state. Plain
+  // `shouldRenderDashboard()` was returning false stale-once-mounted —
+  // setDashboardKey writes localStorage but doesn't trigger a React
+  // re-render, so the dashboard never appeared after a successful auth.
+  const showDashboard = useShouldRenderDashboard();
 
   return (
     // Phase 28.1 W2 — HealthStatusProvider wraps the entire tree so
@@ -89,9 +96,10 @@ export function AppShell() {
         {/* Phase 27.4.4 Plan 02 — DevApiStatus now renders in dev OR when an
           operator has stored a dashboard auth key in localStorage (prod). The
           previous AppShell-level `import.meta.env.DEV` outer gate is now
-          delegated to `shouldRenderDashboard()` so the component ships in
-          prod bundles for authed operators. ErrorBoundary preserved. */}
-        {shouldRenderDashboard() && (
+          delegated to `useShouldRenderDashboard()` (Phase 28.2 W6 hotfix)
+          so the gate is reactive — see the hook's docstring. ErrorBoundary
+          preserved. */}
+        {showDashboard && (
           <ErrorBoundary>
             <DevApiStatus />
           </ErrorBoundary>
