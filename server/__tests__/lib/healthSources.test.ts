@@ -73,7 +73,11 @@ describe('FRESHNESS_THRESHOLDS_MS', () => {
     expect(FRESHNESS_THRESHOLDS_MS.water).toBe(48 * 60 * 60_000);
     expect(FRESHNESS_THRESHOLDS_MS.waterPrecip).toBe(12 * 60 * 60_000);
     expect(FRESHNESS_THRESHOLDS_MS.sources).toBe(10 * 60_000);
-    expect(FRESHNESS_THRESHOLDS_MS.llmStatus).toBe(5 * 60_000);
+    // Phase 28.2.7 follow-up: widened from 5min → 26h to match daily refresh-events
+    // cron cadence (04:00 UTC). 5min was tight enough that llmStatus flipped to
+    // 'unhealthy' within minutes of every cron tick, breaking the tier-green gate
+    // ~99% of every day even though Phase 28.2.7 R2's Redis-first probe was working.
+    expect(FRESHNESS_THRESHOLDS_MS.llmStatus).toBe(26 * 60 * 60_000);
     expect(FRESHNESS_THRESHOLDS_MS.authCheck).toBe(0);
     expect(FRESHNESS_THRESHOLDS_MS.geocode).toBe(0);
     expect(FRESHNESS_THRESHOLDS_MS.cronHealth).toBe(26 * 60 * 60_000);
