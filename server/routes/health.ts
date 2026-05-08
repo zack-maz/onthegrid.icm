@@ -160,7 +160,21 @@ async function probeLlmStatus(): Promise<ProbeResult> {
     // Fall through to in-memory singleton — Phase 28.1 W2 degrade-open contract.
   }
   const memLatest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
-  const latest = redisLatest ?? memLatest;
+  // Phase 28.2.7 follow-up (WR-01) — take the freshest signal, not Redis-first.
+  // Redis can hold a stale `startedAt` from a crashed run that never wrote
+  // `completedAt` (process crash / OOM / warm-start drop). The 7-day TTL plus
+  // the lack of an "in-progress" sentinel means a single crashed run could
+  // mask up to 7 days of subsequent successful in-memory completions on
+  // cold-started instances that read Redis first. `Math.max` keeps both
+  // signals honest: Redis wins when it's actually fresher (cross-instance
+  // visibility), memory wins when it's seen a more-recent completion that
+  // hasn't been written through to Redis yet (e.g., fire-and-forget back-pressure).
+  const latest =
+    redisLatest === null
+      ? memLatest
+      : memLatest === null
+        ? redisLatest
+        : Math.max(redisLatest, memLatest);
   return {
     freshnessMs: latest === null ? null : Date.now() - latest,
     lastSuccessTs: latest,
