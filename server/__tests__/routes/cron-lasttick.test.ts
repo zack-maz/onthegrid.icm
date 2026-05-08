@@ -165,6 +165,10 @@ describe('cron handlers — Phase 28.2.7 R1 lastTick writers', () => {
       await handler(req, res);
 
       expect(cacheStore.has('cron:lastTick:warm')).toBe(true);
+      // WR-03 — pin the TTL argument so drift would fail loudly. Mirrors the
+      // cron-health + refresh-events-cron cases below (and matches the
+      // 7-day CRON_LASTTICK_TTL_SEC constant exposed by healthSources.ts).
+      expect(cacheSetSpy).toHaveBeenCalledWith('cron:lastTick:warm', expect.any(Number), 604_800);
     });
 
     it('writes cron:lastTick:warm when one fetch succeeds and one rejects (D-04)', async () => {
@@ -218,6 +222,25 @@ describe('cron handlers — Phase 28.2.7 R1 lastTick writers', () => {
       await handler(req, res);
 
       expect(getStatus()).toBe(500);
+      expect(cacheStore.has('cron:lastTick:refresh-events')).toBe(false);
+    });
+
+    it('rejects ?force=true with wrong Bearer; runRefreshExtraction NOT called (WR-03)', async () => {
+      // D-11: ?force=true bypasses the cooldown. The auth gate must run
+      // BEFORE force is honored — a regression that processed force ahead of
+      // auth would let unauthed callers force-trigger past the rate gate.
+      mockEnv.CRON_SECRET = 's3cret';
+
+      const { refreshEventsCronRouter } = await import('../../routes/refresh-events-cron.js');
+      const handler = extractHandler(refreshEventsCronRouter);
+      const { req, res, getStatus } = createReqRes(
+        { Authorization: 'Bearer wrong' },
+        { force: 'true' },
+      );
+      await handler(req, res);
+
+      expect(getStatus()).toBe(401);
+      expect(mockRunRefresh).not.toHaveBeenCalled();
       expect(cacheStore.has('cron:lastTick:refresh-events')).toBe(false);
     });
   });
