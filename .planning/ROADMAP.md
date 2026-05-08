@@ -7,7 +7,7 @@
 - **v1.1 Intelligence Layer** -- Phases 15-19.2 (shipped 2026-03-22)
 - **v1.2 Visualization & Hardening** -- Phases 20-21.3 (shipped 2026-03-29)
 - ✅ **v1.3 Data Quality & Layers** -- Phases 22-26.4 (shipped 2026-04-09) — [archive](milestones/v1.3-ROADMAP.md)
-- **v1.4 GDELT Redo & Performance** -- Phases 27-28 (planned, 27.2-27.4 inserted)
+- ✅ **v1.4 GDELT Redo & Performance** -- Phases 27-28.2.7 (shipped 2026-05-08); load-test phase deferred to backlog (999.5)
 
 ## Phase Summary
 
@@ -358,12 +358,11 @@ Plans:
 
 - [x] TBD (run /gsd-plan-phase 28.2.7 to break down) (completed 2026-05-08)
 
-### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
+### Phase 28.3: Performance Optimization + 1–300 VU Load Test — DEFERRED TO BACKLOG (Phase 999.5) on 2026-05-08
 
-**Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 4 of 4 after 28.2.5 insertion): validate production handles 1–300 concurrent users with measurable PASS/FAIL signal against a clean codebase. Performance optimization layer per D-19: add `s-maxage` CDN headers to `/api/*` (flights 5s, ships 30s, markets 60s, events/news 900s, sites/water 86400s) so Vercel CDN absorbs bulk reads at 300 VU and Redis only fires on cache miss + warm-up cron. k6 sweep per D-15 (GitHub Actions runner, results land as PR artifacts) / D-16 (six discrete tiers 50/100/150/200/250/300 VU, 60s ramp + 5min steady, ~45min wall-time per sweep) / D-20 (full browser-loop per VU: t=0 fires site/water/sources/markets/flights/ships/events/news, then polls flights@5s, ships@30s, markets@60s, events@15min, news@15min — ~0.27 req/s/VU → ~81 RPS at 300 VU). PASS/FAIL bar per D-17 (measured at 300 VU steady-state): p95<500ms hot endpoints, p99<1500ms, error<1%, no 5xx spikes, cache-hit>90% (non-negotiable). Beyond PASS/FAIL per D-18: per-endpoint latency breakdown (p50/p95/p99 tagged), 429 count (validates D-04 Bearer-bypass), Vercel cold-start frequency (validates warm-up cron sufficiency), Upstash Redis cache hit ratio. Polling parity per D-21 (D-20 shape + D-19 edge cache eliminates user-A-vs-user-B divergence). Hobby cron cap = 3, load test does NOT consume a slot.
-**Depends on:** Phase 28.2 (merged to main 2026-05-06; D-03 domain rename + W6 audit workflow are prerequisites); Phase 28.2.5 (PR #11; tier-green workflow assertion landed); Phase 28.2.6 (cron architecture fix that makes `allTiersGreen=true` actually achievable; 28.2.5 found the gate but 28.2.6 unblocks the `critical[llmEvents]` row that the gate measures)
-**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-15 / D-16 / D-17 / D-18 / D-19 / D-20 / D-21 + Claude's-discretion items (k6 reporter artifact format, `/api/sources` edge-cache classification)
-**Plans:** 0 plans
+**Status:** Originally the v1.4 closing phase. Deferred at v1.4 milestone close because the prerequisite tier-green gate had two upstream blockers (LLM v3 extraction not populating `events:llm:v3` cache; intermittent NIM throttling) that operator review classified as ops/scheduling concerns rather than code defects. Phase content (CONTEXT.md, D-01 → D-21 decision lock) preserved at `.planning/phases/999.5-performance-load-test/` for re-promotion via `/gsd-review-backlog` when the gate is consistently green.
+
+See **Phase 999.5** in the Backlog section below for the full goal/scope/dependencies.
 
 ## Deferred Work
 
@@ -409,6 +408,19 @@ Plans:
 
 **Goal:** Wire `await refreshPipelineOverride()` into `server/routes/refresh-events-cron.ts` at handler start so runtime POST `/api/events/llm-pipeline {version: 'v3'}` overrides actually propagate to cron-triggered runs. Surfaced 2026-05-07 during Phase 28.2.6 deploy: prod LLM_PIPELINE_V3 env var failed to take effect on first cron call (returned `schemaVersion: "v2"`); the runtime override worked for `/api/events` but NOT for `/api/cron/refresh-events` because the latter never hydrates `pipelineOverride` from the Redis sidecar key `events:llm-pipeline-override` — each fresh function instance starts with the env-default. Workaround used: re-set `LLM_PIPELINE_V3=true` env var + `vercel redeploy`. Code fix: 1-line `await refreshPipelineOverride()` at top of refresh-events-cron handler. Risk: low (read-only cache hydration with TTL). Test: contract test that POST override → cron run honors override without env var change.
 **Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
+### Phase 999.5: Performance Optimization + 1–300 VU Load Test (BACKLOG, deferred from v1.4)
+
+**Goal:** Per 28-CONTEXT.md D-01/D-02 (originally v1.4's closing phase as 28.3, deferred 2026-05-08): validate production handles 1–300 concurrent users with measurable PASS/FAIL signal against a clean codebase. Performance optimization layer per D-19: add `s-maxage` CDN headers to `/api/*` (flights 5s, ships 30s, markets 60s, events/news 900s, sites/water 86400s) so Vercel CDN absorbs bulk reads at 300 VU and Redis only fires on cache miss + warm-up cron. k6 sweep per D-15 (GitHub Actions runner, results land as PR artifacts) / D-16 (six discrete tiers 50/100/150/200/250/300 VU, 60s ramp + 5min steady, ~45min wall-time per sweep) / D-20 (full browser-loop per VU: t=0 fires site/water/sources/markets/flights/ships/events/news, then polls flights@5s, ships@30s, markets@60s, events@15min, news@15min — ~0.27 req/s/VU → ~81 RPS at 300 VU). PASS/FAIL bar per D-17 (measured at 300 VU steady-state): p95<500ms hot endpoints, p99<1500ms, error<1%, no 5xx spikes, cache-hit>90% (non-negotiable). Beyond PASS/FAIL per D-18: per-endpoint latency breakdown (p50/p95/p99 tagged), 429 count (validates D-04 Bearer-bypass), Vercel cold-start frequency (validates warm-up cron sufficiency), Upstash Redis cache hit ratio. Polling parity per D-21 (D-20 shape + D-19 edge cache eliminates user-A-vs-user-B divergence). Hobby cron cap = 3, load test does NOT consume a slot.
+**Why deferred:** v1.4 close audit (2026-05-08) found `prod-connectivity-audit.yml` tier-green gate still red on `critical[llmEvents]: unknown` — root cause is the v3 NIM LLM extraction not consistently populating `events:llm:v3` within Vercel function budget (intermittent throttle + cold-cache races). This is a pipeline ops/scheduling concern, not a load-test design defect; running k6 against a half-populated cache surface would produce noisy numbers that don't reflect steady-state behavior. Promote when the daily 04:00 UTC `refresh-events` cron consistently lands `events:llm:v3` healthy AND the audit workflow is exit-0 green for ≥3 consecutive runs.
+**Promotion gate:** Three consecutive `prod-connectivity-audit.yml` runs exit 0 with `audit:connectivity:last-result.allTiersGreen === true`.
+**Depends on:** Phase 28.2 (D-03 domain rename + W6 audit workflow); Phase 28.2.5 (tier-green assertion); Phase 28.2.6 (cron architecture); Phase 28.2.7 (R1+R2+R3 — cron `lastTick` writers + Redis-first `probeLlmStatus` + honest-stub `probeProbeOnly`); Phase 999.4 (cron route hydrates pipeline override) — all prerequisites already merged into main.
+**Requirements:** Derived from 28-CONTEXT.md (umbrella) — child scope: D-01 / D-02 / D-15 / D-16 / D-17 / D-18 / D-19 / D-20 / D-21 + Claude's-discretion items (k6 reporter artifact format, `/api/sources` edge-cache classification). Decision lock preserved verbatim at `.planning/phases/999.5-performance-load-test/999.5-CONTEXT.md`.
 **Plans:** 0 plans
 
 Plans:

@@ -2,6 +2,54 @@
 
 All notable changes to the Iran Conflict Monitor project.
 
+## [v1.4] — GDELT Redo & Performance — 2026-05-08
+
+**Span:** 2026-04-09 → 2026-05-08 (29 days, 18 phases shipped, 1 deferred to backlog)
+
+GDELT pipeline rebuilt around a structured LLM extraction layer (Cerebras → Groq → NIM v3 with parallel concurrency limiter), plus a full performance & operational hardening sweep against the stabilized v1.3 codebase. Daily cron triad (`/api/cron/{health,warm,refresh-events}`) replaces fire-and-forget extraction baked into request handlers. Production observability surface unified into the `API Health` tab with tier-grouped freshness, eval scores, adversarial robustness, DLQ, and operator audit log. Load test (originally Phase 28.3) deferred to backlog as `Phase 999.5` — promotes when `prod-connectivity-audit.yml` is exit-0 green for 3 consecutive runs.
+
+### Headline deliverables
+
+- **Structured LLM extraction (Phases 27 → 27.4.6):** v1 Cerebras + v2 watchdog/DLQ + v3 NIM parallel batches. Zod-validated 5-type ontology (`airstrike`, `on_ground`, `explosion`, `targeted`, `other`). 6-path geocode resolver with Nominatim throttling and 30-day Redis cache. Daily ground-truth eval (50 events / 11 countries) scored at 5/20/100km. Adversarial harness (~10 prompt-injection fixtures) folded into daily health cron.
+- **Reliability primitives (Phases 27.4 → 27.4.6):** circuit breaker (sliding 10-call window, 5min pause >30% error), DLQ (200-entry SADD bounded set, 7d TTL, raw-string srem eviction), token budget (Cerebras 1M/day, Groq 200K/day, NIM 40 req/min, soft 0.8 / hard 0.95 caps), watchdog (90s hard kill + 60s soft warn, late-resolve guard + AbortController generation counter). Two-key cache discipline (`events:llm:v3` terminal vs `events:llm:v3:partial` observability) with reader defense-in-depth coercion at 3 read sites.
+- **Cron-driven pipeline (Phase 27.4.6 + 28.2.6):** `/api/events` is now cache-only. Daily `/api/cron/refresh-events` at 04:00 UTC. Operator force-trigger via `?force=true`. Vercel `waitUntil` for fire-and-forget durability. Cold-cache self-heal bypasses 15-min cooldown when `events:llm:v3` is empty. NIM-throttle accept-and-fallback strategy (200 with DLQ recorded; raw GDELT serves users; map never goes blank).
+- **Cleanup sweep (Phase 28.1, 7 waves):** ghost code deletion via knip + ts-prune triage. 12 operator-tunable env vars (`VITE_POLL_*`, `VITE_ATTACK_RADIUS_KM`, `VITE_SEVERITY_HALF_LIFE_HOURS`). Domain constants centralized at `src/lib/domain.ts` with byte-identical server mirror enforced by parity test. CSS `@theme` color tokens + `colorBridge.ts` (24 entity / event / site / faction / ethnic colors with byte-identity sentinel). 0 TypeScript errors / 0 lint errors / 0 react-hooks warnings baseline.
+- **Dev/Prod sync (Phase 28.2):** domain rename `irt-monitoring.vercel.app` → `otg-iran-monitor.vercel.app` (new Vercel project `onthegrid.icm`). Bearer-bypass for `rateLimiters.public` global tier (folds Phase 999.1) — extended to per-endpoint tiers in W6 hotfix. Operator endpoints (`POST /api/events/llm-pipeline`, `POST /api/events/llm-replay/:groupKey`) Bearer-gated with `operator:audit-log` (500-entry SADD set, 30d TTL) and per-Bearer `replay-quota` (50/24h INCR counter). Per-field dev/prod gate-swaps for event/OSM IDs, LLM confidence + provenance, EntityTooltip dev block. `MapDevExposer`, severity score, `notabilityScore` permanently dev-only.
+- **API Health tab merge (Phase 28.2):** `Overview` folded into `All APIs` → renamed `API Health`, first tab in DevApiStatus. 4 diagnostic blocks (tier-grouped summary, per-endpoint quality metrics, manual retry, recent-fetch sparkline). Confirm modal on Pin-to-v1/v2. 429 replay-quota alert. Operator Actions block. Adversarial eval row. New `/api/operator-status` Bearer-gated aggregator. `HealthStatusProvider` single-poll guarantee.
+- **Connectivity audit workflow (Phase 28.2 W6):** `.github/workflows/prod-connectivity-audit.yml` — manual-trigger CI smoke (16 endpoints) + rate-limit defense companion (D-30, B-6 target). Sidecar Redis key `audit:connectivity:last-result` (7d TTL). W-3 contract test pins JSON shape. 5 hotfixes surfaced by the audit itself landed on main directly (CACHE_KEY_PREFIX proxy fix, autoPipelining defense, Bearer-bypass extension, CacheResponse envelope, vitest reporter).
+- **API green-light gate (Phase 28.2.5):** `events:llm:v3` registry promotion (DRIFT-5). `waterPrecip` SOURCE_KEYS fix (DRIFT-4). Registry-consistency invariant test. Weather tooltip widening (2°→4° + distance hint). Tier-green assertion in audit workflow with sidecar Redis write. Path B (cold-cache self-heal trusted; no `PROD_CRON_SECRET` GitHub Actions secret required).
+- **Audit-tier completeness (Phase 28.2.7):** R1 `cron:lastTick:<name>` writers in all 3 cron handlers (7d TTL, `CRON_LASTTICK_TTL_SEC = 604_800`). R2 `llm:lastProgress` Redis write-through + Redis-first `probeLlmStatus()` survives Vercel Fluid Compute cold starts. R3 `probeProbeOnly()` returns `freshnessMs:0` honest stub instead of `null`. All 3 verified working in prod via `/api/health`. Compounding fixes: rate-limit companion test retargeted (`/api/health` → `/api/audit-status`); `llmStatus` freshness widened from 5min → 26h; `llmEvents` probe gains v3→v2→v1 fallback chain.
+
+### Quantitative snapshot
+
+- vitest baseline: 1700 → 2193 (+493 new tests)
+- TypeScript errors: 8 → 0
+- Lint errors: 0 → 0; warnings: 22 → 18
+- Bundle: 1.2 MB → 1.72 MB (LLM pipeline + geocoder + eval harness + adversarial harness)
+- Cron jobs: 2 → 3 (within Hobby cap)
+- Critical-tier endpoints: 3 → 4 (added `llmEvents`)
+- Eval ground-truth set: 0 → 50 events / 11 countries
+
+### Migration notes (v1.3 → v1.4)
+
+- **Domain change:** `irt-monitoring.vercel.app` retired; canonical alias is `otg-iran-monitor.vercel.app` on Vercel project `onthegrid.icm`. Update any bookmarks, monitoring, or external scripts.
+- **Operator Bearer:** prod surfaces (DevApiStatus dashboard, operator endpoints) require `Authorization: Bearer ${DASHBOARD_PASSWORD}`. Same Bearer skips global rate-limit tier (Phase 28.2 D-04).
+- **Cron schedule:** `/api/events` no longer triggers extraction; `/api/cron/refresh-events` does, daily at 04:00 UTC. Operator force-trigger: `GET /api/cron/refresh-events?force=true` with `Authorization: Bearer ${CRON_SECRET}`.
+- **Pipeline version:** `LLM_PIPELINE_V3=true` is the default in production. Runtime override via `POST /api/events/llm-pipeline {"version": "v1"|"v2"|"v3"|null}`. Override clears with `null`.
+
+### Deferred to v1.5+ (carried forward)
+
+- **Phase 999.5 (was 28.3):** Performance optimization + 1–300 VU k6 sweep. Decision lock preserved at `.planning/phases/999.5-performance-load-test/999.5-CONTEXT.md`.
+- **Phase 27.3.3:** Romanization of non-Latin water-facility names (~125 facilities currently filtered by Latin-script admission gate).
+- **Phase 999.2:** `api/vercel-entry.js` build-artifact discipline (migrate to Vercel Build Output API).
+- **Phase 999.3:** Phase 27.4.6 cron first-tick passive verification.
+- **Phase 999.4:** Cron route hydrates pipeline override (`await refreshPipelineOverride()` in `refresh-events-cron.ts`).
+- Telegram OSINT integration (carried from v1.3).
+- GDELT BigQuery adapter (carried from v1.3).
+- Satellite imagery overlay (carried from v1.2).
+
+---
+
 ## [Unreleased]
 
 ### Phase 28.2.7: Audit-tier Completeness (2026-05-07 → 2026-05-08)
