@@ -380,6 +380,7 @@ auditStatusRouter.get("/audit-status", async (_req, res) => {
 
 // server/routes/cron-health.ts
 init_redis();
+import { timingSafeEqual as timingSafeEqual2 } from "crypto";
 import { Router as Router2 } from "express";
 
 // server/config.ts
@@ -1133,11 +1134,14 @@ function resetProgress() {
 function updateProgress(partial) {
   Object.assign(llmProgress, partial);
   if (partial.completedAt !== void 0) {
-    void cacheSetSafe(
-      LLM_LASTPROGRESS_KEY,
-      { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
-      LLM_LASTPROGRESS_TTL_SEC
-    );
+    const isErrorTermination = partial.stage === "error" || llmProgress.stage === "error" || llmProgress.errorMessage !== null;
+    if (!isErrorTermination) {
+      void cacheSetSafe(
+        LLM_LASTPROGRESS_KEY,
+        { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
+        LLM_LASTPROGRESS_TTL_SEC
+      );
+    }
   }
 }
 function buildSummary() {
@@ -3810,7 +3814,9 @@ cronHealthRouter.get("/", async (req, res) => {
   if (env.CRON_SECRET) {
     const auth = req.header("Authorization") ?? req.header("authorization") ?? "";
     const expected = `Bearer ${env.CRON_SECRET}`;
-    if (auth !== expected) {
+    const a = Buffer.from(auth);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual2(a, b)) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
@@ -81643,7 +81649,7 @@ cronWarmRouter.get("/", async (_req, res) => {
 import { Router as Router4 } from "express";
 
 // server/middleware/dashboardAuth.ts
-import { timingSafeEqual as timingSafeEqual2 } from "crypto";
+import { timingSafeEqual as timingSafeEqual3 } from "crypto";
 function dashboardAuth(req, res, next) {
   if (process.env.NODE_ENV !== "production") {
     next();
@@ -81667,7 +81673,7 @@ function dashboardAuth(req, res, next) {
   }
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
-  if (!timingSafeEqual2(a, b)) {
+  if (!timingSafeEqual3(a, b)) {
     res.status(401).json({ error: "unauthorized" });
     return;
   }
@@ -84537,7 +84543,7 @@ async function probeLlmStatus() {
   } catch {
   }
   const memLatest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
-  const latest = redisLatest ?? memLatest;
+  const latest = redisLatest === null ? memLatest : memLatest === null ? redisLatest : Math.max(redisLatest, memLatest);
   return {
     freshnessMs: latest === null ? null : Date.now() - latest,
     lastSuccessTs: latest,
@@ -85563,6 +85569,7 @@ operatorStatusRouter.get(
 
 // server/routes/refresh-events-cron.ts
 init_redis();
+import { timingSafeEqual as timingSafeEqual4 } from "crypto";
 import { Router as Router13 } from "express";
 var log34 = logger.child({ module: "refresh-events-cron" });
 var refreshEventsCronRouter = Router13();
@@ -85570,7 +85577,9 @@ refreshEventsCronRouter.get("/", async (req, res) => {
   if (env.CRON_SECRET) {
     const auth = req.header("Authorization") ?? req.header("authorization") ?? "";
     const expected = `Bearer ${env.CRON_SECRET}`;
-    if (auth !== expected) {
+    const a = Buffer.from(auth);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual4(a, b)) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
