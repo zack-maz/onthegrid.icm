@@ -22,7 +22,9 @@
 
 import { Router } from 'express';
 
+import { cacheSetSafe } from '../cache/redis.js';
 import { env } from '../config.js';
+import { CRON_LASTTICK_TTL_SEC } from '../lib/healthSources.js';
 import { runRefreshExtraction } from '../lib/llmExtractionPipeline.js';
 import { logger } from '../lib/logger.js';
 
@@ -53,6 +55,13 @@ refreshEventsCronRouter.get('/', async (req, res) => {
     });
     const durationMs = Date.now() - t0;
     log.info({ result, durationMs, forceCooldown }, 'refresh-events cron dispatched');
+    // Phase 28.2.7 R1 D-05 — cron:lastTick:refresh-events writer. Write at
+    // route handler (NOT inside runRefreshExtraction — helper has non-cron
+    // callers). D-03: write AFTER body succeeds; the catch block at line 57+
+    // never reaches this line, so a runRefreshExtraction throw means probe
+    // stays 'unknown' (correct: NIM throttle / extraction failed). D-11:
+    // bare Date.now() value.
+    await cacheSetSafe('cron:lastTick:refresh-events', Date.now(), CRON_LASTTICK_TTL_SEC);
     res.status(200).json({ ok: true, durationMs, ...result });
   } catch (err) {
     const durationMs = Date.now() - t0;
