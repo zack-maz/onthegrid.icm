@@ -188,19 +188,29 @@ function probeSources(): ProbeResult {
 }
 
 /**
- * Probe-only endpoints (authCheck, geocode). No freshness concept — the
- * tier already classifies them as 'probe-only'. Status is derived from
- * `hadError` alone via the `deriveStatus` contract (threshold=0 means
- * any non-null freshnessMs immediately becomes degraded/unhealthy; we
- * report freshnessMs=null and rely on healthy/unhealthy via hadError).
+ * Probe-only endpoints (authCheck, geocode). Honest-stub contract — mirrors
+ * probeSources() above: pure config introspection, no upstream call to fail,
+ * "process running iff probe healthy".
  *
- * For now we report 'healthy' optimistically — backing systems are
- * reachable from this process by definition. A future iteration could
- * exercise the middleware via a synthetic local request.
+ * Phase 28.2.7 R3 — was returning `freshnessMs: null` which triggered
+ * deriveStatus's first guard (`if (freshnessMs === null) return 'unknown'`)
+ * and mathematically pinned authCheck + geocode to 'unknown' regardless of
+ * any other signal. The middleware itself is reachable from this process
+ * by definition; treating "process up" as "probe healthy" matches the
+ * canon set by probeSources for config-introspection probes.
+ *
+ * deriveStatus chain (post-fix):
+ *   freshnessMs:0, threshold:0, hadError:false
+ *   → hadError===false (skip first guard)
+ *   → freshnessMs===null is false (skip second guard)
+ *   → 0 <= 0 evaluates true → return 'healthy'
+ *
+ * Synthetic-request middleware exercise was rejected in SPEC interview
+ * (option-b honest-stub locked over option-a synthetic exercise).
  */
 function probeProbeOnly(): ProbeResult {
   return {
-    freshnessMs: null,
+    freshnessMs: 0,
     lastSuccessTs: Date.now(),
     hadError: false,
     errorReason: null,
