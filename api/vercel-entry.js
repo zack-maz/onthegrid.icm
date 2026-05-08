@@ -653,8 +653,8 @@ var FRESHNESS_THRESHOLDS_MS = {
   // 12 h — D-25
   sources: 10 * 6e4,
   // 10 min — D-25
-  llmStatus: 5 * 6e4,
-  // 5 min — D-25
+  llmStatus: 26 * 60 * 6e4,
+  // 26 h — D-25 widened post-28.2.7 R2 to match daily cron cadence (refresh-events runs once at 04:00 UTC; 5 min was tight enough that llmStatus flipped to 'unhealthy' within minutes of every tick, breaking the tier-green gate ~99% of every day even though the probe was working)
   authCheck: 0,
   // probe-only — D-25 "200 only"
   geocode: 0,
@@ -84489,16 +84489,22 @@ function sanitizeError(err) {
   const masked = raw.replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]").replace(/api[_-]?key=[A-Za-z0-9._-]+/gi, "api_key=[REDACTED]").replace(/https:\/\/[^\s]*upstash\.io[^\s]*/g, "[upstash url redacted]");
   return masked.length > 200 ? masked.slice(0, 197) + "..." : masked;
 }
-async function probeCacheKey(name, key) {
+async function probeCacheKey(name, key, fallbackKeys = []) {
   const start = Date.now();
   try {
-    const entry = await withTimeout2(
-      cacheGetSafe(key, 999999999),
-      PROBE_TIMEOUT_MS,
-      `probe ${name}`
-    );
+    let lastFresh = null;
+    for (const candidate of [key, ...fallbackKeys]) {
+      const entry = await withTimeout2(
+        cacheGetSafe(candidate, 999999999),
+        PROBE_TIMEOUT_MS,
+        `probe ${name}`
+      );
+      if (entry !== null && (lastFresh === null || entry.lastFresh > lastFresh)) {
+        lastFresh = entry.lastFresh;
+      }
+    }
     const latencyMs = Date.now() - start;
-    if (entry === null) {
+    if (lastFresh === null) {
       return {
         freshnessMs: null,
         lastSuccessTs: null,
@@ -84507,7 +84513,6 @@ async function probeCacheKey(name, key) {
         latencyMs
       };
     }
-    const lastFresh = entry.lastFresh;
     return {
       freshnessMs: Date.now() - lastFresh,
       lastSuccessTs: lastFresh,
@@ -84612,7 +84617,15 @@ var PROBE_STRATEGIES = {
   events: { kind: "cache", cacheKey: SOURCE_KEYS.events },
   // Phase 28.2.5 D-06 — top of the cache-bridge fallback chain (events.ts:701-731).
   // Probe answers "is /api/events serving enriched LLM events or raw-GDELT fallback?"
-  llmEvents: { kind: "cache", cacheKey: SOURCE_KEYS.llmEvents },
+  // Phase 28.2.7 follow-up: fallback through v2/v1 mirrors the bridge in
+  // events.ts so the probe doesn't report 'unknown' while the route is
+  // happily serving v2-bridged data (e.g., during v3 rollout when refresh-events
+  // dispatched the v2 extractor and v3 cache hasn't been populated yet).
+  llmEvents: {
+    kind: "cache",
+    cacheKey: SOURCE_KEYS.llmEvents,
+    fallbackKeys: ["events:llm:v2", "events:llm"]
+  },
   news: { kind: "cache", cacheKey: SOURCE_KEYS.news },
   markets: { kind: "cache", cacheKey: SOURCE_KEYS.markets },
   weather: { kind: "cache", cacheKey: SOURCE_KEYS.weather },
@@ -84630,7 +84643,7 @@ var PROBE_STRATEGIES = {
 async function runProbe(name, strategy) {
   switch (strategy.kind) {
     case "cache":
-      return probeCacheKey(name, strategy.cacheKey);
+      return probeCacheKey(name, strategy.cacheKey, strategy.fallbackKeys ?? []);
     case "llmStatus":
       return probeLlmStatus();
     case "sources":

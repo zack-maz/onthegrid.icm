@@ -86,7 +86,7 @@ export const FRESHNESS_THRESHOLDS_MS: Record<string, number> = {
   water: 48 * 60 * 60_000, // 48 h — D-25
   waterPrecip: 12 * 60 * 60_000, // 12 h — D-25
   sources: 10 * 60_000, // 10 min — D-25
-  llmStatus: 5 * 60_000, // 5 min — D-25
+  llmStatus: 26 * 60 * 60_000, // 26 h — D-25 widened post-28.2.7 R2 to match daily cron cadence (refresh-events runs once at 04:00 UTC; 5 min was tight enough that llmStatus flipped to 'unhealthy' within minutes of every tick, breaking the tier-green gate ~99% of every day even though the probe was working)
   authCheck: 0, // probe-only — D-25 "200 only"
   geocode: 0, // probe-only — D-25 "200 only"
   cronHealth: 26 * 60 * 60_000, // 26 h — D-25

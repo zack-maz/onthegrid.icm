@@ -81,17 +81,35 @@ interface ProbeResult {
  * Probe a single cache-backed endpoint via cacheGetSafe. Returns null
  * lastSuccessTs when the cache is cold; sets hadError when the cache
  * read throws. Never throws.
+ *
+ * `fallbackKeys` lets a single endpoint span multiple cache keys. The
+ * probe tries each key in order and reports the freshest entry found.
+ * Used by `llmEvents` to mirror the events.ts:701-731 cache-bridge fallback
+ * chain (events:llm:v3 → events:llm:v2 → events:llm-v1) — the route serves
+ * /api/events from whichever pipeline-version cache has data, so the probe
+ * needs to follow the same chain or it would report "unknown" while the
+ * user-facing endpoint is happily serving v2-bridged data.
  */
-async function probeCacheKey(name: string, key: string): Promise<ProbeResult> {
+async function probeCacheKey(
+  name: string,
+  key: string,
+  fallbackKeys: readonly string[] = [],
+): Promise<ProbeResult> {
   const start = Date.now();
   try {
-    const entry = await withTimeout(
-      cacheGetSafe(key, 999_999_999),
-      PROBE_TIMEOUT_MS,
-      `probe ${name}`,
-    );
+    let lastFresh: number | null = null;
+    for (const candidate of [key, ...fallbackKeys]) {
+      const entry = await withTimeout(
+        cacheGetSafe(candidate, 999_999_999),
+        PROBE_TIMEOUT_MS,
+        `probe ${name}`,
+      );
+      if (entry !== null && (lastFresh === null || entry.lastFresh > lastFresh)) {
+        lastFresh = entry.lastFresh;
+      }
+    }
     const latencyMs = Date.now() - start;
-    if (entry === null) {
+    if (lastFresh === null) {
       return {
         freshnessMs: null,
         lastSuccessTs: null,
@@ -100,7 +118,6 @@ async function probeCacheKey(name: string, key: string): Promise<ProbeResult> {
         latencyMs,
       };
     }
-    const lastFresh = entry.lastFresh;
     return {
       freshnessMs: Date.now() - lastFresh,
       lastSuccessTs: lastFresh,
@@ -276,7 +293,7 @@ async function probeCronTick(name: string): Promise<ProbeResult> {
 
 /** Probe declaration for one endpoint; pairs the name with the probe strategy. */
 type ProbeStrategy =
-  | { kind: 'cache'; cacheKey: string }
+  | { kind: 'cache'; cacheKey: string; fallbackKeys?: readonly string[] }
   | { kind: 'llmStatus' }
   | { kind: 'sources' }
   | { kind: 'probeOnly' }
@@ -288,7 +305,15 @@ const PROBE_STRATEGIES: Record<string, ProbeStrategy> = {
   events: { kind: 'cache', cacheKey: SOURCE_KEYS.events! },
   // Phase 28.2.5 D-06 — top of the cache-bridge fallback chain (events.ts:701-731).
   // Probe answers "is /api/events serving enriched LLM events or raw-GDELT fallback?"
-  llmEvents: { kind: 'cache', cacheKey: SOURCE_KEYS.llmEvents! },
+  // Phase 28.2.7 follow-up: fallback through v2/v1 mirrors the bridge in
+  // events.ts so the probe doesn't report 'unknown' while the route is
+  // happily serving v2-bridged data (e.g., during v3 rollout when refresh-events
+  // dispatched the v2 extractor and v3 cache hasn't been populated yet).
+  llmEvents: {
+    kind: 'cache',
+    cacheKey: SOURCE_KEYS.llmEvents!,
+    fallbackKeys: ['events:llm:v2', 'events:llm'],
+  },
   news: { kind: 'cache', cacheKey: SOURCE_KEYS.news! },
   markets: { kind: 'cache', cacheKey: SOURCE_KEYS.markets! },
   weather: { kind: 'cache', cacheKey: SOURCE_KEYS.weather! },
@@ -307,7 +332,7 @@ const PROBE_STRATEGIES: Record<string, ProbeStrategy> = {
 async function runProbe(name: string, strategy: ProbeStrategy): Promise<ProbeResult> {
   switch (strategy.kind) {
     case 'cache':
-      return probeCacheKey(name, strategy.cacheKey);
+      return probeCacheKey(name, strategy.cacheKey, strategy.fallbackKeys ?? []);
     case 'llmStatus':
       return probeLlmStatus();
     case 'sources':
