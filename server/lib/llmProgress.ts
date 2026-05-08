@@ -6,6 +6,8 @@
 // warm starts. Cold starts reset to idle; Redis summary provides fallback.
 // ---------------------------------------------------------------------------
 
+import { cacheSetSafe } from '../cache/redis.js';
+
 import type { Provider } from './llmCircuitBreaker.js';
 import type { GeocodeProvenance } from './llmSchema.js';
 
@@ -482,6 +484,23 @@ export const INITIAL_PROGRESS: Readonly<LLMPipelineProgress> = {
 };
 
 /**
+ * Phase 28.2.7 R2 — Redis key for cross-instance probe read.
+ * Single source of truth so server/routes/health.ts probeLlmStatus and the
+ * write-through sites in resetProgress/updateProgress cannot drift.
+ */
+export const LLM_LASTPROGRESS_KEY = 'llm:lastProgress';
+
+/**
+ * Phase 28.2.7 R2 — TTL for `llm:lastProgress` key. 7 days = comfortable
+ * margin over the implicit "is the LLM pipeline alive" signal (a single
+ * cron run within 7d keeps it warm). Seconds-based per CONTEXT D-06
+ * (overrides SPEC's `_TTL_MS` literal naming — `cacheSetSafe` takes
+ * seconds; unit lives in the name; matches `CRON_LASTTICK_TTL_SEC`,
+ * `SITES_REDIS_TTL_SEC`, `WATER_REDIS_TTL_SEC`, `OPERATOR_AUDIT_TTL_SEC`).
+ */
+export const LLM_LASTPROGRESS_TTL_SEC = 7 * 24 * 60 * 60; // 604_800 — 7 days
+
+/**
  * Module-level singleton. Survives warm starts on Vercel Fluid Compute.
  * Cold starts reset to INITIAL_PROGRESS; Redis summary provides fallback.
  */
@@ -496,6 +515,15 @@ export function resetProgress(): void {
     startedAt: Date.now(),
     stage: 'grouping' as const,
   });
+  // Phase 28.2.7 R2 D-01 — write-through fires on `startedAt`-set transition.
+  // Fire-and-forget (`void`); cacheSetSafe is degrade-open (Redis failure
+  // swallowed, memCache still updated). Singleton remains authoritative for
+  // THIS instance regardless of Redis state.
+  void cacheSetSafe(
+    LLM_LASTPROGRESS_KEY,
+    { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
+    LLM_LASTPROGRESS_TTL_SEC,
+  );
 }
 
 /**
@@ -504,6 +532,20 @@ export function resetProgress(): void {
  */
 export function updateProgress(partial: Partial<LLMPipelineProgress>): void {
   Object.assign(llmProgress, partial);
+  // Phase 28.2.7 R2 D-02 — write-through ONLY on `completedAt`-set transition.
+  // Mid-run batch updates (~50-200/run from llmEventExtractor.v3.ts:545 etc.)
+  // skip this guard because their partials lack `completedAt`. probeLlmStatus
+  // reads `completedAt ?? startedAt`, so batch progress fields don't change
+  // probe output. Result: ~2 Redis writes per pipeline run (1 reset + 1 done).
+  // The `!== undefined` check fires on both `completedAt: number` (run finished)
+  // AND `completedAt: null` (defensive — currently never written but tolerable).
+  if (partial.completedAt !== undefined) {
+    void cacheSetSafe(
+      LLM_LASTPROGRESS_KEY,
+      { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
+      LLM_LASTPROGRESS_TTL_SEC,
+    );
+  }
 }
 
 /**
