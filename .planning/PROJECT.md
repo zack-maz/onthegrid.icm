@@ -8,14 +8,17 @@ A personal real-time intelligence dashboard for monitoring the Iran conflict and
 
 Surface actionable, data-backed intelligence on the Iran conflict in real-time on an interactive 2.5D map — numbers over narratives.
 
-## Current Milestone: v1.4 GDELT Redo & Performance
+## Current Milestone: ✅ v1.4 GDELT Redo & Performance — SHIPPED 2026-05-08
 
-**Goal:** Rearchitect the conflict event pipeline with NLP-based geolocation and a simplified event ontology, then validate production handles 250 concurrent users.
+**Outcome:** Conflict event pipeline rebuilt around a structured LLM extraction layer (Cerebras → Groq → NIM v3) with daily cron-driven refresh, durable-dispatch via Vercel `waitUntil`, two-key cache discipline, 6-path geocode resolver, daily eval harness against 50 ground-truth events, adversarial robustness fixtures, circuit-breaker + DLQ + token-budget primitives. Performance & operational hardening sweep complete: cleanup pass, dev/prod sync (domain rename to `otg-iran-monitor.vercel.app`), Bearer-bypass rate limiter, dashboard surface unified into `API Health` tab, manual-trigger `prod-connectivity-audit.yml` with tier-green assertion, audit-tier completeness (cron `lastTick` writers + Redis-first `probeLlmStatus` + honest-stub `probeProbeOnly`).
 
-**Target features:**
+**Delivered (18 phases):** 27 → 27.1 → 27.2 → 27.3 → 27.3.1 → 27.3.2 → 27.4 → 27.4.1 → 27.4.2 → 27.4.3 → 27.4.4 → 27.4.6 → 28 → 28.1 → 28.2 → 28.2.5 → 28.2.6 → 28.2.7.
 
-- Phase 27 — NLP-based conflict event pipeline: precise geolocation via NLP (approach TBD — requires deep discussion), simplified event type categories, updated filters/search to reflect new ontology. Replaces the scrapped Phase 26.2 approach with lessons learned (see ADR-0005).
-- Phase 28 — Performance & load testing: staggered API calls, lazy-load visualization layers, code-splitting, k6 at 250 VUs, CDN cache tuning, request coalescing
+**Deferred to backlog (Phase 999.5, was 28.3):** Performance optimization + 1–300 VU k6 sweep. Promotes when `prod-connectivity-audit.yml` is exit-0 green for 3 consecutive runs. Decision lock preserved at `.planning/phases/999.5-performance-load-test/999.5-CONTEXT.md`.
+
+**Audit:** see `.planning/v1.4-MILESTONE-AUDIT.md`. **Changelog entry:** see `CHANGELOG.md` `[v1.4]` section.
+
+**Next milestone (v1.5):** scoped at the next `/gsd-new-milestone` invocation — operator-driven theme selection from the deferred-work pool (Telegram OSINT, GDELT BigQuery, satellite imagery, water-facility romanization, performance load test promotion).
 
 ## Requirements
 

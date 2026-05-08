@@ -14,13 +14,15 @@ Hormuz right now, quantitatively?_
 
 ---
 
-**Live demo:** _TBD — Vercel URL coming soon_
+**Live demo:** [otg-iran-monitor.vercel.app](https://otg-iran-monitor.vercel.app)
 
 > Please be gentle. This is a single-user Redis budget (Upstash free tier, ~92%
 > of the monthly command ceiling already in use). The live demo is protected by
-> a 6 req/min per-IP baseline rate limit on top of per-endpoint limiters — a
-> burst of curl loops will trip it fast. `robots.txt` disallows `/api/*` to
-> keep crawlers off the upstream budget.
+> a 60 req/min per-IP global rate-limit tier on top of per-endpoint limiters —
+> a burst of curl loops will trip it fast. `robots.txt` disallows `/api/*` to
+> keep crawlers off the upstream budget. Operator surfaces (DevApiStatus
+> dashboard, operator-control endpoints) are Bearer-gated and skip the global
+> rate-limit tier when authenticated (Phase 28.2 D-04).
 
 ---
 

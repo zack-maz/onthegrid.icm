@@ -328,6 +328,21 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 None.
 
+## Deferred Items
+
+Items acknowledged and deferred at v1.4 milestone close on 2026-05-08:
+
+| Category | Count | Notes |
+|----------|-------|-------|
+| Debug sessions | 10 | Historical breadcrumbs — all `diagnosed` / `root_cause_found` / `resolved-pending-user-verification`; root causes captured in commits or merged phases |
+| Quick tasks (legacy) | 11 | Pre-`/gsd-add-todo` slugs (TBV-*, M00-*, MN4-*, etc.) — superseded by phase work that landed |
+| Pending todos | 3 | `phase-27.4.2-ci-health` / `phase-27.4.3-deckgl-v9-type-drift` / `phase-27.4.5-llm-pipeline-observability` — all phases shipped except 27.4.5 (subsumed by 27.4 family observability work) |
+| UAT gaps (resolved) | 4 | 27.3.1, 27.3.2, 27.4, 27.4.2 — human-checked at the time of phase close |
+| UAT gaps (partial, post-deploy) | 2 | 28.2.6 (2 pending), 28.2.7 (4 pending) — operator-driven verification items that surface in `/gsd-progress` until manually checked via `/gsd-verify-work` |
+| Verification gaps (`human_needed`) | 6 | 27.3.1, 27.4, 27.4.2, 28.2, 28.2.6, 28.2.7 — expected status for phases with operator-driven post-deploy items; code-level verification PASSED in each |
+
+Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the verifier's signal that some acceptance criteria require operator action against deployed prod. Marked here so they surface in `/gsd-audit-uat` and `/gsd-progress` until the operator confirms via `/gsd-verify-work`.
+
 ## Blockers/Concerns
 
 - Ethnic distribution GeoJSON data needs manual curation from published maps
