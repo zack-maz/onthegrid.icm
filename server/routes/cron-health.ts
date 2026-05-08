@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import { Router } from 'express';
 
 import { redis, cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
@@ -23,10 +25,21 @@ cronHealthRouter.get('/', async (req, res) => {
   // Phase 27.4.6 D-09 — auth gate added when CRON_SECRET is set. Empty env
   // preserves the existing un-authed dev behavior (matches cron-warm +
   // the original cron-health surface). Mirrors eval-cron.ts:33-40.
+  //
+  // Phase 28.2.7 follow-up (WR-04) — switched from string `!==` to
+  // `timingSafeEqual` for constant-time byte compare. Plain string compare
+  // is timing-leaky in principle (early-exit on the first differing byte);
+  // matches the posture set by `server/middleware/dashboardAuth.ts:55-64`
+  // and `server/middleware/rateLimit.ts:81-86`. Length check fires before
+  // `timingSafeEqual` per the Node.js contract (the helper throws on
+  // mismatched lengths). Length is not the secret — only the bytes are —
+  // so an early-exit on length is safe.
   if (env.CRON_SECRET) {
     const auth = req.header('Authorization') ?? req.header('authorization') ?? '';
     const expected = `Bearer ${env.CRON_SECRET}`;
-    if (auth !== expected) {
+    const a = Buffer.from(auth);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }

@@ -20,6 +20,8 @@
  *      bridge) so a failed cron run never blanks the dashboard.
  */
 
+import { timingSafeEqual } from 'node:crypto';
+
 import { Router } from 'express';
 
 import { cacheSetSafe } from '../cache/redis.js';
@@ -35,10 +37,18 @@ export const refreshEventsCronRouter = Router();
 refreshEventsCronRouter.get('/', async (req, res) => {
   // D-05 — auth gate. Empty CRON_SECRET keeps the route un-authed (matches
   // cron-warm / cron-health behavior); any non-empty value enforces Bearer.
+  //
+  // Phase 28.2.7 follow-up (WR-04) — switched from string `!==` to
+  // `timingSafeEqual` for constant-time byte compare. Same rationale as
+  // cron-health.ts: matches `dashboardAuth.ts` + `rateLimit.ts` posture so
+  // ALL Bearer-gated surfaces share the constant-time pattern. Length is
+  // not the secret, so length-mismatch early-exit is safe.
   if (env.CRON_SECRET) {
     const auth = req.header('Authorization') ?? req.header('authorization') ?? '';
     const expected = `Bearer ${env.CRON_SECRET}`;
-    if (auth !== expected) {
+    const a = Buffer.from(auth);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
