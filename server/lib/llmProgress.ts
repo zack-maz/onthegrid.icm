@@ -539,12 +539,30 @@ export function updateProgress(partial: Partial<LLMPipelineProgress>): void {
   // probe output. Result: ~2 Redis writes per pipeline run (1 reset + 1 done).
   // The `!== undefined` check fires on both `completedAt: number` (run finished)
   // AND `completedAt: null` (defensive — currently never written but tolerable).
+  //
+  // Phase 28.2.7 follow-up (WR-02) — failure-by-the-pipeline must NOT
+  // masquerade as success-by-the-probe. An errored terminal write
+  // (`stage: 'error'` or `errorMessage` set, with `completedAt: Date.now()`)
+  // should not advance the freshness witness — mirrors the "tick fires only
+  // on success" contract from cron-health.ts:114-118 (cf. cron-lasttick test
+  // 'does NOT write cron:lastTick:refresh-events when runRefreshExtraction
+  // throws'). probeLlmStatus would otherwise surface a failed run's
+  // completedAt as healthy freshness, hiding the failure from the API
+  // Health tab. Inspect both the partial and the merged singleton so this
+  // catches the case where the partial only carries `completedAt` but a
+  // prior batch update had already set `stage:'error'` or `errorMessage`.
   if (partial.completedAt !== undefined) {
-    void cacheSetSafe(
-      LLM_LASTPROGRESS_KEY,
-      { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
-      LLM_LASTPROGRESS_TTL_SEC,
-    );
+    const isErrorTermination =
+      partial.stage === 'error' ||
+      llmProgress.stage === 'error' ||
+      llmProgress.errorMessage !== null;
+    if (!isErrorTermination) {
+      void cacheSetSafe(
+        LLM_LASTPROGRESS_KEY,
+        { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
+        LLM_LASTPROGRESS_TTL_SEC,
+      );
+    }
   }
 }
 
