@@ -630,6 +630,7 @@ var SOURCE_KEYS = {
   // 'events') remains as Pitfall 1 safety net.
   llmEvents: "events:llm:v3"
 };
+var CRON_LASTTICK_TTL_SEC = 7 * 24 * 60 * 60;
 var FRESHNESS_THRESHOLDS_MS = {
   flights: 2 * 6e4,
   // 2 min — D-25
@@ -1077,6 +1078,7 @@ function getBreakerState() {
 }
 
 // server/lib/llmProgress.ts
+init_redis();
 var INITIAL_PROGRESS = {
   stage: "idle",
   startedAt: null,
@@ -1114,15 +1116,29 @@ var INITIAL_PROGRESS = {
   costShadow: void 0,
   recentEvents: void 0
 };
+var LLM_LASTPROGRESS_KEY = "llm:lastProgress";
+var LLM_LASTPROGRESS_TTL_SEC = 7 * 24 * 60 * 60;
 var llmProgress = { ...INITIAL_PROGRESS };
 function resetProgress() {
   Object.assign(llmProgress, INITIAL_PROGRESS, {
     startedAt: Date.now(),
     stage: "grouping"
   });
+  void cacheSetSafe(
+    LLM_LASTPROGRESS_KEY,
+    { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
+    LLM_LASTPROGRESS_TTL_SEC
+  );
 }
 function updateProgress(partial) {
   Object.assign(llmProgress, partial);
+  if (partial.completedAt !== void 0) {
+    void cacheSetSafe(
+      LLM_LASTPROGRESS_KEY,
+      { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
+      LLM_LASTPROGRESS_TTL_SEC
+    );
+  }
 }
 function buildSummary() {
   return {
@@ -3851,6 +3867,7 @@ cronHealthRouter.get("/", async (req, res) => {
     adversarialError = err instanceof Error ? err.message : String(err);
     log11.warn({ err: adversarialError }, "adversarial sub-eval threw \u2014 continuing health response");
   }
+  await cacheSetSafe("cron:lastTick:health", Date.now(), CRON_LASTTICK_TTL_SEC);
   res.json({
     status: redisOk ? "ok" : "degraded",
     redis: redisOk,
@@ -81615,6 +81632,10 @@ cronWarmRouter.get("/", async (_req, res) => {
   const allOk = results.every((r) => r.status === "fulfilled");
   const logLevel = allOk ? "info" : "warn";
   log14[logLevel](summary, "cache pre-warm complete");
+  const partialOrBetter = results.some((r) => r.status === "fulfilled");
+  if (partialOrBetter) {
+    await cacheSetSafe("cron:lastTick:warm", Date.now(), CRON_LASTTICK_TTL_SEC);
+  }
   res.json({ status: allOk ? "ok" : "partial", ...summary });
 });
 
@@ -83030,134 +83051,243 @@ async function runRefreshExtraction(opts) {
     LLM_EVENTS_KEY_ACTIVE,
     LLM_COOLDOWN_MS
   );
-  safeWaitUntil((async () => {
-    resetProgress();
-    updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
-    try {
-      const groups = groupGdeltRows(merged);
-      updateProgress({ totalGroups: groups.length, stage: "grouping" });
-      const cachedLlmKeys = /* @__PURE__ */ new Set();
-      if (llmCachedRef?.data) {
-        for (const e of llmCachedRef.data) {
-          if (e.id) cachedLlmKeys.add(e.id);
-        }
-      }
-      const newGroups = cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
-      updateProgress({ newGroups: newGroups.length });
-      if (newGroups.length === 0) {
-        log21.info("LLM: no new groups to process");
-        updateProgress({
-          stage: "done",
-          completedAt: Date.now(),
-          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-        });
-        try {
-          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-        } catch {
-        }
-        return;
-      }
-      const paused = await shouldPauseNewEvents();
-      if (paused) {
-        log21.info("LLM_PAUSED_SOFT_CAP");
-        updateProgress({
-          stage: "done",
-          completedAt: Date.now(),
-          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-        });
-        try {
-          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-        } catch {
-        }
-        return;
-      }
-      const prioritizedGroups = await prioritizeBySeverity(newGroups);
-      const effectiveBatchSize = pipelineV3 || pipelineV2 ? BATCH_SIZE2 : BATCH_SIZE_V1;
-      updateProgress({
-        stage: "llm-processing",
-        totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize)
-      });
-      const flushEvery = getFlushEveryNBatches();
-      let batchesSinceLastFlush = 0;
-      let lastFlushedEventCount = 0;
-      const PARTIAL_KEY_ACTIVE = pipelineV3 ? "events:llm:v3:partial" : pipelineV2 ? "events:llm:v2:partial" : "events:llm:partial";
-      const extractResult = await processEventGroups2(
-        prioritizedGroups,
-        async (completed, total) => {
-          updateProgress({ completedBatches: completed, totalBatches: total });
-          batchesSinceLastFlush++;
-          if (batchesSinceLastFlush < flushEvery) return;
-          batchesSinceLastFlush = 0;
-          try {
-            const partialCached = await cacheGetSafe(PARTIAL_KEY_ACTIVE, 999999999);
-            const partialEvents = partialCached?.data?.events;
-            if (!Array.isArray(partialEvents) || partialEvents.length <= lastFlushedEventCount) {
-              return;
-            }
-            const window = partialEvents.slice(lastFlushedEventCount);
-            let adapted = [];
-            if (pipelineV3) {
-              const geo = await geocodeEnrichedEvents2(
-                {
-                  schemaVersion: "v3",
-                  events: window,
-                  matchedNewsByGroup: /* @__PURE__ */ new Map(),
-                  bellingcatByGroup: /* @__PURE__ */ new Map()
-                },
-                prioritizedGroups
-              );
-              if (geo.schemaVersion === "v3") {
-                adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
-              }
-            } else if (pipelineV2) {
-              const geo = await geocodeEnrichedEvents2(
-                {
-                  schemaVersion: "v2",
-                  events: window,
-                  matchedNewsByGroup: /* @__PURE__ */ new Map(),
-                  bellingcatByGroup: /* @__PURE__ */ new Map()
-                },
-                prioritizedGroups
-              );
-              if (geo.schemaVersion === "v2") {
-                adapted = enrichedV2ToEntities(geo.events, prioritizedGroups);
-              }
-            } else {
-              const geo = await geocodeEnrichedEvents2(
-                { schemaVersion: "v1", events: window },
-                prioritizedGroups
-              );
-              if (geo.schemaVersion === "v1") {
-                adapted = enrichedV1ToEntities(geo.events, prioritizedGroups);
-              }
-            }
-            if (adapted.length > 0) {
-              await mergeAndPersistLlmEntities(
-                adapted,
-                llmCachedRef,
-                LLM_EVENTS_KEY_ACTIVE,
-                pipelineV2,
-                pipelineV3
-              );
-              lastFlushedEventCount = partialEvents.length;
-              log21.info(
-                { completed, total, windowSize: window.length, flushed: adapted.length },
-                "Plan 01 periodic-flush: incremental terminal-key write"
-              );
-            }
-          } catch (flushErr) {
-            log21.warn(
-              { err: flushErr, completed, total },
-              "Plan 01 periodic-flush failed (continuing)"
-            );
+  safeWaitUntil(
+    (async () => {
+      resetProgress();
+      updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
+      try {
+        const groups = groupGdeltRows(merged);
+        updateProgress({ totalGroups: groups.length, stage: "grouping" });
+        const cachedLlmKeys = /* @__PURE__ */ new Set();
+        if (llmCachedRef?.data) {
+          for (const e of llmCachedRef.data) {
+            if (e.id) cachedLlmKeys.add(e.id);
           }
         }
-      );
-      if (!extractResult.events || extractResult.events.length === 0) {
-        log21.warn("LLM processing returned null \u2014 raw GDELT serving continues");
+        const newGroups = cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
+        updateProgress({ newGroups: newGroups.length });
+        if (newGroups.length === 0) {
+          log21.info("LLM: no new groups to process");
+          updateProgress({
+            stage: "done",
+            completedAt: Date.now(),
+            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+          });
+          try {
+            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+          } catch {
+          }
+          return;
+        }
+        const paused = await shouldPauseNewEvents();
+        if (paused) {
+          log21.info("LLM_PAUSED_SOFT_CAP");
+          updateProgress({
+            stage: "done",
+            completedAt: Date.now(),
+            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+          });
+          try {
+            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+          } catch {
+          }
+          return;
+        }
+        const prioritizedGroups = await prioritizeBySeverity(newGroups);
+        const effectiveBatchSize = pipelineV3 || pipelineV2 ? BATCH_SIZE2 : BATCH_SIZE_V1;
+        updateProgress({
+          stage: "llm-processing",
+          totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize)
+        });
+        const flushEvery = getFlushEveryNBatches();
+        let batchesSinceLastFlush = 0;
+        let lastFlushedEventCount = 0;
+        const PARTIAL_KEY_ACTIVE = pipelineV3 ? "events:llm:v3:partial" : pipelineV2 ? "events:llm:v2:partial" : "events:llm:partial";
+        const extractResult = await processEventGroups2(
+          prioritizedGroups,
+          async (completed, total) => {
+            updateProgress({ completedBatches: completed, totalBatches: total });
+            batchesSinceLastFlush++;
+            if (batchesSinceLastFlush < flushEvery) return;
+            batchesSinceLastFlush = 0;
+            try {
+              const partialCached = await cacheGetSafe(PARTIAL_KEY_ACTIVE, 999999999);
+              const partialEvents = partialCached?.data?.events;
+              if (!Array.isArray(partialEvents) || partialEvents.length <= lastFlushedEventCount) {
+                return;
+              }
+              const window = partialEvents.slice(lastFlushedEventCount);
+              let adapted = [];
+              if (pipelineV3) {
+                const geo = await geocodeEnrichedEvents2(
+                  {
+                    schemaVersion: "v3",
+                    events: window,
+                    matchedNewsByGroup: /* @__PURE__ */ new Map(),
+                    bellingcatByGroup: /* @__PURE__ */ new Map()
+                  },
+                  prioritizedGroups
+                );
+                if (geo.schemaVersion === "v3") {
+                  adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
+                }
+              } else if (pipelineV2) {
+                const geo = await geocodeEnrichedEvents2(
+                  {
+                    schemaVersion: "v2",
+                    events: window,
+                    matchedNewsByGroup: /* @__PURE__ */ new Map(),
+                    bellingcatByGroup: /* @__PURE__ */ new Map()
+                  },
+                  prioritizedGroups
+                );
+                if (geo.schemaVersion === "v2") {
+                  adapted = enrichedV2ToEntities(geo.events, prioritizedGroups);
+                }
+              } else {
+                const geo = await geocodeEnrichedEvents2(
+                  { schemaVersion: "v1", events: window },
+                  prioritizedGroups
+                );
+                if (geo.schemaVersion === "v1") {
+                  adapted = enrichedV1ToEntities(geo.events, prioritizedGroups);
+                }
+              }
+              if (adapted.length > 0) {
+                await mergeAndPersistLlmEntities(
+                  adapted,
+                  llmCachedRef,
+                  LLM_EVENTS_KEY_ACTIVE,
+                  pipelineV2,
+                  pipelineV3
+                );
+                lastFlushedEventCount = partialEvents.length;
+                log21.info(
+                  { completed, total, windowSize: window.length, flushed: adapted.length },
+                  "Plan 01 periodic-flush: incremental terminal-key write"
+                );
+              }
+            } catch (flushErr) {
+              log21.warn(
+                { err: flushErr, completed, total },
+                "Plan 01 periodic-flush failed (continuing)"
+              );
+            }
+          }
+        );
+        if (!extractResult.events || extractResult.events.length === 0) {
+          log21.warn("LLM processing returned null \u2014 raw GDELT serving continues");
+          updateProgress({
+            stage: "error",
+            errorMessage: "LLM returned null for all batches",
+            completedAt: Date.now(),
+            durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+          });
+          try {
+            await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+          } catch {
+          }
+          return;
+        }
+        updateProgress({
+          stage: "geocoding",
+          enrichedCount: extractResult.events.length,
+          totalGeocodes: extractResult.events.length
+        });
+        let llmEntities;
+        if (extractResult.schemaVersion === "v3") {
+          const geoResult = await geocodeEnrichedEvents2(
+            {
+              schemaVersion: "v3",
+              events: extractResult.events,
+              matchedNewsByGroup: extractResult.matchedNewsByGroup,
+              bellingcatByGroup: extractResult.bellingcatByGroup
+            },
+            prioritizedGroups,
+            (completed, total) => {
+              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+            }
+          );
+          if (geoResult.schemaVersion !== "v3") {
+            throw new Error("geocoder schemaVersion mismatch (expected v3)");
+          }
+          const provenanceCounts = {};
+          let suspectCount = 0;
+          for (const e of geoResult.events) {
+            provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+            if (e.suspect) suspectCount++;
+          }
+          updateProgress({ provenanceCounts, suspectCount });
+          try {
+            const evalScore = await runEval();
+            log21.info({ evalScore, schemaVersion: "v3" }, "eval harness completed");
+          } catch (evalErr) {
+            log21.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
+          }
+          llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
+        } else if (extractResult.schemaVersion === "v2") {
+          const geoResult = await geocodeEnrichedEvents2(
+            {
+              schemaVersion: "v2",
+              events: extractResult.events,
+              matchedNewsByGroup: extractResult.matchedNewsByGroup,
+              bellingcatByGroup: extractResult.bellingcatByGroup
+            },
+            prioritizedGroups,
+            (completed, total) => {
+              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+            }
+          );
+          if (geoResult.schemaVersion !== "v2") {
+            throw new Error("geocoder schemaVersion mismatch (expected v2)");
+          }
+          const provenanceCounts = {};
+          let suspectCount = 0;
+          for (const e of geoResult.events) {
+            provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+            if (e.suspect) suspectCount++;
+          }
+          updateProgress({ provenanceCounts, suspectCount });
+          try {
+            const evalScore = await runEval();
+            log21.info({ evalScore }, "eval harness completed");
+          } catch (evalErr) {
+            log21.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
+          }
+          llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
+        } else {
+          const geoResult = await geocodeEnrichedEvents2(
+            { schemaVersion: "v1", events: extractResult.events },
+            prioritizedGroups,
+            (completed, total) => {
+              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
+            }
+          );
+          if (geoResult.schemaVersion !== "v1") {
+            throw new Error("geocoder schemaVersion mismatch (expected v1)");
+          }
+          llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
+        }
+        await mergeAndPersistLlmEntities(
+          llmEntities,
+          llmCachedRef,
+          LLM_EVENTS_KEY_ACTIVE,
+          pipelineV2,
+          pipelineV3
+        );
+        updateProgress({
+          stage: "done",
+          completedAt: Date.now(),
+          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
+        });
+        try {
+          await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
+        } catch {
+        }
+      } catch (llmErr) {
         updateProgress({
           stage: "error",
-          errorMessage: "LLM returned null for all batches",
+          errorMessage: llmErr instanceof Error ? llmErr.message : "Unknown LLM error",
           completedAt: Date.now(),
           durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
         });
@@ -83165,117 +83295,10 @@ async function runRefreshExtraction(opts) {
           await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
         } catch {
         }
-        return;
+        log21.warn({ err: llmErr }, "LLM background processing failed");
       }
-      updateProgress({
-        stage: "geocoding",
-        enrichedCount: extractResult.events.length,
-        totalGeocodes: extractResult.events.length
-      });
-      let llmEntities;
-      if (extractResult.schemaVersion === "v3") {
-        const geoResult = await geocodeEnrichedEvents2(
-          {
-            schemaVersion: "v3",
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup
-          },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          }
-        );
-        if (geoResult.schemaVersion !== "v3") {
-          throw new Error("geocoder schemaVersion mismatch (expected v3)");
-        }
-        const provenanceCounts = {};
-        let suspectCount = 0;
-        for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-          if (e.suspect) suspectCount++;
-        }
-        updateProgress({ provenanceCounts, suspectCount });
-        try {
-          const evalScore = await runEval();
-          log21.info({ evalScore, schemaVersion: "v3" }, "eval harness completed");
-        } catch (evalErr) {
-          log21.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
-        }
-        llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
-      } else if (extractResult.schemaVersion === "v2") {
-        const geoResult = await geocodeEnrichedEvents2(
-          {
-            schemaVersion: "v2",
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup
-          },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          }
-        );
-        if (geoResult.schemaVersion !== "v2") {
-          throw new Error("geocoder schemaVersion mismatch (expected v2)");
-        }
-        const provenanceCounts = {};
-        let suspectCount = 0;
-        for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-          if (e.suspect) suspectCount++;
-        }
-        updateProgress({ provenanceCounts, suspectCount });
-        try {
-          const evalScore = await runEval();
-          log21.info({ evalScore }, "eval harness completed");
-        } catch (evalErr) {
-          log21.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
-        }
-        llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
-      } else {
-        const geoResult = await geocodeEnrichedEvents2(
-          { schemaVersion: "v1", events: extractResult.events },
-          prioritizedGroups,
-          (completed, total) => {
-            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-          }
-        );
-        if (geoResult.schemaVersion !== "v1") {
-          throw new Error("geocoder schemaVersion mismatch (expected v1)");
-        }
-        llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
-      }
-      await mergeAndPersistLlmEntities(
-        llmEntities,
-        llmCachedRef,
-        LLM_EVENTS_KEY_ACTIVE,
-        pipelineV2,
-        pipelineV3
-      );
-      updateProgress({
-        stage: "done",
-        completedAt: Date.now(),
-        durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-      });
-      try {
-        await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-      } catch {
-      }
-    } catch (llmErr) {
-      updateProgress({
-        stage: "error",
-        errorMessage: llmErr instanceof Error ? llmErr.message : "Unknown LLM error",
-        completedAt: Date.now(),
-        durationMs: Date.now() - (llmProgress.startedAt ?? Date.now())
-      });
-      try {
-        await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
-      } catch {
-      }
-      log21.warn({ err: llmErr }, "LLM background processing failed");
-    }
-  })());
+    })()
+  );
   return {
     dispatched: true,
     coldCacheBypass: isColdCache,
@@ -84496,9 +84519,25 @@ async function probeCacheKey(name, key) {
     };
   }
 }
-function probeLlmStatus() {
+async function probeLlmStatus() {
   const start = Date.now();
-  const latest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
+  let redisLatest = null;
+  try {
+    const entry = await withTimeout2(
+      cacheGetSafe(
+        LLM_LASTPROGRESS_KEY,
+        999999999
+      ),
+      PROBE_TIMEOUT_MS,
+      "probe llmStatus (redis)"
+    );
+    if (entry?.data) {
+      redisLatest = entry.data.completedAt ?? entry.data.startedAt ?? null;
+    }
+  } catch {
+  }
+  const memLatest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
+  const latest = redisLatest ?? memLatest;
   return {
     freshnessMs: latest === null ? null : Date.now() - latest,
     lastSuccessTs: latest,
@@ -84518,7 +84557,7 @@ function probeSources() {
 }
 function probeProbeOnly() {
   return {
-    freshnessMs: null,
+    freshnessMs: 0,
     lastSuccessTs: Date.now(),
     hadError: false,
     errorReason: null,
@@ -85523,6 +85562,7 @@ operatorStatusRouter.get(
 );
 
 // server/routes/refresh-events-cron.ts
+init_redis();
 import { Router as Router13 } from "express";
 var log34 = logger.child({ module: "refresh-events-cron" });
 var refreshEventsCronRouter = Router13();
@@ -85544,6 +85584,7 @@ refreshEventsCronRouter.get("/", async (req, res) => {
     });
     const durationMs = Date.now() - t0;
     log34.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
+    await cacheSetSafe("cron:lastTick:refresh-events", Date.now(), CRON_LASTTICK_TTL_SEC);
     res.status(200).json({ ok: true, durationMs, ...result });
   } catch (err) {
     const durationMs = Date.now() - t0;
