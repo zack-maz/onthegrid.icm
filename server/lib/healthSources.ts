@@ -54,6 +54,17 @@ export const SOURCE_KEYS: Record<string, string> = {
 };
 
 /**
+ * Phase 28.2.7 R1 — TTL for `cron:lastTick:<name>` keys written by each
+ * cron handler on successful body completion. 7 days = comfortable margin
+ * over the 26h freshness threshold (FRESHNESS_THRESHOLDS_MS.cronHealth /
+ * cronWarm / cronRefreshEvents). Matches `audit:connectivity:last-result`
+ * (7d) and existing audit-family TTL conventions. Seconds-based per
+ * CONTEXT D-06 (overrides SPEC's `_TTL_MS` literal — `cacheSetSafe` takes
+ * seconds; unit lives in the name; no `/1000` arithmetic at call sites).
+ */
+export const CRON_LASTTICK_TTL_SEC = 7 * 24 * 60 * 60; // 604_800 — 7 days
+
+/**
  * Per-endpoint D-25 freshness budgets. The /api/health route derives status
  * by comparing observed freshness against this table:
  *   freshness <= threshold       → healthy

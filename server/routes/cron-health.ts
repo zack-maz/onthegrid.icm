@@ -1,8 +1,8 @@
 import { Router } from 'express';
 
-import { redis, cacheGetSafe } from '../cache/redis.js';
+import { redis, cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { env } from '../config.js';
-import { SOURCE_KEYS } from '../lib/healthSources.js';
+import { CRON_LASTTICK_TTL_SEC, SOURCE_KEYS } from '../lib/healthSources.js';
 import { runEval, runAdversarialEval } from '../lib/llmEvalHarness.js';
 import { logger } from '../lib/logger.js';
 
@@ -110,6 +110,12 @@ cronHealthRouter.get('/', async (req, res) => {
     adversarialError = err instanceof Error ? err.message : String(err);
     log.warn({ err: adversarialError }, 'adversarial sub-eval threw — continuing health response');
   }
+
+  // Phase 28.2.7 R1 D-03 — cron:lastTick:health writer. Write AFTER eval +
+  // source-freshness checks succeed, so probe shows 'healthy' iff cron
+  // actually completed its work. cacheSetSafe is degrade-open (Redis
+  // failure swallowed; memCache populated). D-11: bare Date.now() value.
+  await cacheSetSafe('cron:lastTick:health', Date.now(), CRON_LASTTICK_TTL_SEC);
 
   res.json({
     status: redisOk ? 'ok' : 'degraded',
