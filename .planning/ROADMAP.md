@@ -346,6 +346,18 @@ Plans:
 - [x] 28.2.6-01-PLAN.md — Wave 1: Change A — incremental terminal-key write every N=10 batches (mergeAndPersistLlmEntities helper + onBatchComplete cadence + 3 Wave-0 contract tests for D-03/D-04/D-07/D-11)
 - [x] 28.2.6-02-PLAN.md — Wave 2: Change B — Vercel waitUntil migration with safeWaitUntil shim (Symbol.for(@vercel/request-context) probe + local-dev fallback) + vercel.json maxDuration:300 + bundle regen
 
+### Phase 28.2.7: Audit-tier completeness — fix 3 latent unknowns surfaced by 28.2.6 (INSERTED)
+
+**Goal:** Make `prod-connectivity-audit.yml` exit 0 with `allTiersGreen=true` against a healthy prod by resolving the 3 pre-existing tier-unknown bugs surfaced when Phase 28.2.6 cleared the dominant `critical[llmEvents]` blocker. Three independent code-only fixes: (1) `cron:lastTick:<name>` writers in all 3 cron handlers (currently 1 reader, 0 writers — the `cron` tier is permanently `unknown` by construction); (2) `llmStatus` Redis persistence so `probeLlmStatus()` survives Vercel cold starts (currently reads in-memory `llmProgress` singleton — different function instance sees `null`); (3) `probeProbeOnly()` honest reporting for `authCheck` + `geocode` (currently returns `freshnessMs:null + hadError:false` which mathematically derives to `unknown` — should mirror `probeSources()` and report freshnessMs:0 since both are config-introspection-only). Expected outcome: tier-green workflow flips to `allTiersGreen=true` on first run after merge, unblocking Phase 28.3 (k6 load test).
+**Depends on:** Phase 28.2.6 (PR #12 merged 2026-05-07 — provides the prod state where `critical[llmEvents]` is healthy so the OTHER 3 unknown tiers become the dominant blocker; without 28.2.6 done, tier-green would still fail on critical, masking these 3 latent bugs)
+**Blocks:** Phase 28.3 (same as 28.2.6 — tier-green gate must show `allTiersGreen=true`, which requires non-critical/probe-only/cron tiers to no longer be `unknown`)
+**Requirements:** TBD (derived from 28.2.7-SPEC.md after `/gsd-spec-phase 28.2.7` — expected to lock the 3 fixes + acceptance criterion = next prod-connectivity-audit.yml run shows allTiersGreen=true)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 28.2.7 to break down)
+
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 
 **Goal:** Per 28-CONTEXT.md D-01/D-02 (sequence position 4 of 4 after 28.2.5 insertion): validate production handles 1–300 concurrent users with measurable PASS/FAIL signal against a clean codebase. Performance optimization layer per D-19: add `s-maxage` CDN headers to `/api/*` (flights 5s, ships 30s, markets 60s, events/news 900s, sites/water 86400s) so Vercel CDN absorbs bulk reads at 300 VU and Redis only fires on cache miss + warm-up cron. k6 sweep per D-15 (GitHub Actions runner, results land as PR artifacts) / D-16 (six discrete tiers 50/100/150/200/250/300 VU, 60s ramp + 5min steady, ~45min wall-time per sweep) / D-20 (full browser-loop per VU: t=0 fires site/water/sources/markets/flights/ships/events/news, then polls flights@5s, ships@30s, markets@60s, events@15min, news@15min — ~0.27 req/s/VU → ~81 RPS at 300 VU). PASS/FAIL bar per D-17 (measured at 300 VU steady-state): p95<500ms hot endpoints, p99<1500ms, error<1%, no 5xx spikes, cache-hit>90% (non-negotiable). Beyond PASS/FAIL per D-18: per-endpoint latency breakdown (p50/p95/p99 tagged), 429 count (validates D-04 Bearer-bypass), Vercel cold-start frequency (validates warm-up cron sufficiency), Upstash Redis cache hit ratio. Polling parity per D-21 (D-20 shape + D-19 edge cache eliminates user-A-vs-user-B divergence). Hobby cron cap = 3, load test does NOT consume a slot.
@@ -386,6 +398,16 @@ Plans:
 ### Phase 999.3: Phase 27.4.6 cron first-tick verification (BACKLOG)
 
 **Goal:** Confirm the `/api/cron/refresh-events` cron actually fires at 4am UTC, populates `events:llm:v3`, and `/api/events/llm-status` reports `lastTriggerSource: "cron"`. Passive verification — happens automatically, but no current alarm if it doesn't. Watch `dlqCount` after the first tick: non-zero means NIM was throttled (D-08 path) and operator must `?force=true` after NIM recovers. If 24h pass with `lastTriggerSource` never flipping to "cron", run the 8-step PLAN.md Task 6 curl checklist for diagnosis.
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
+### Phase 999.4: Cron route hydrates pipeline override (BACKLOG)
+
+**Goal:** Wire `await refreshPipelineOverride()` into `server/routes/refresh-events-cron.ts` at handler start so runtime POST `/api/events/llm-pipeline {version: 'v3'}` overrides actually propagate to cron-triggered runs. Surfaced 2026-05-07 during Phase 28.2.6 deploy: prod LLM_PIPELINE_V3 env var failed to take effect on first cron call (returned `schemaVersion: "v2"`); the runtime override worked for `/api/events` but NOT for `/api/cron/refresh-events` because the latter never hydrates `pipelineOverride` from the Redis sidecar key `events:llm-pipeline-override` — each fresh function instance starts with the env-default. Workaround used: re-set `LLM_PIPELINE_V3=true` env var + `vercel redeploy`. Code fix: 1-line `await refreshPipelineOverride()` at top of refresh-events-cron handler. Risk: low (read-only cache hydration with TTL). Test: contract test that POST override → cron run honors override without env var change.
 **Requirements:** TBD
 **Plans:** 0 plans
 
