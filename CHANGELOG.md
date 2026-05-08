@@ -4,6 +4,34 @@ All notable changes to the Iran Conflict Monitor project.
 
 ## [Unreleased]
 
+### Phase 28.2.7: Audit-tier Completeness (2026-05-07 → 2026-05-08)
+
+Three independent code-only fixes that flip the remaining tier-unknown rows in `/api/health` to `healthy` so `prod-connectivity-audit.yml` can return `allTiersGreen=true`. Surfaced after Phase 28.2.6 cleared the dominant `critical[llmEvents]` blocker — these were latent bugs masked by the upstream issue.
+
+#### Added
+
+- **R1 — `cron:lastTick:<name>` writers in all 3 Vercel cron handlers.** `CRON_LASTTICK_TTL_SEC = 7 * 24 * 60 * 60` (604_800 — 7 days) declared in `server/lib/healthSources.ts`. Writers: `server/routes/cron-health.ts:118` writes `cron:lastTick:health` after eval blocks complete; `server/routes/cron-warm.ts:85` writes `cron:lastTick:warm` inside `if (partialOrBetter)` guard; `server/routes/refresh-events-cron.ts:64` writes `cron:lastTick:refresh-events` inside `try` block AFTER `runRefreshExtraction` resolves (NOT in catch — D-03 honest-failure semantics). Pre-fix: 1 reader (`probeCronTick`) + 0 writers → `cron` tier permanently `unknown` by construction.
+- **R2 — `llm:lastProgress` Redis write-through + Redis-first `probeLlmStatus`.** `LLM_LASTPROGRESS_KEY` + `LLM_LASTPROGRESS_TTL_SEC` declared in `server/lib/llmProgress.ts`. Write-through fires in `resetProgress()` always (D-01) and in `updateProgress()` only on terminal transitions (`partial.completedAt !== undefined`, D-02). `probeLlmStatus()` refactored to async, reads Redis first via `cacheGetSafe` with try/catch fallback to in-memory singleton (D-08); returns `null` when both null (D-09); does not backfill the singleton (D-10). Pre-fix: probe read in-memory singleton directly which reset on every Vercel Fluid Compute cold-start, causing `llmStatus` to flap between `healthy` and `unknown`.
+- **R3 — `probeProbeOnly()` returns `freshnessMs: 0` instead of `null`.** `server/routes/health.ts:211-219` body changed from `{ freshnessMs: null, ... }` to `{ freshnessMs: 0, ... }` so the `deriveStatus(0, 0, false)` chain evaluates to `'healthy'` instead of `'unknown'`. Mirrors `probeSources` canon pattern at `server/routes/health.ts:177-188`. Both probes are config-introspection-only — no upstream call, nothing to be "stale" relative to. JSDoc rewritten to cite Phase 28.2.7 R3 + the deriveStatus chain step-by-step.
+- 3 new test files (18 contract tests total) — `server/__tests__/routes/cron-lasttick.test.ts` (6), `server/__tests__/lib/llmProgress.persistence.test.ts` (7), `server/__tests__/routes/health.probeOnly.test.ts` (5). Vitest baseline 2174 → 2192 (+18, zero regressions).
+
+#### Changed
+
+- Bumped `api/vercel-entry.js` bundle (267 insertions, 226 deletions; 493 lines changed) to bake R1+R2+R3 server changes for next `vercel --prod`. Verified: bundle contains `cron:lastTick:health` × 1, `cron:lastTick:warm` × 1, `cron:lastTick:refresh-events` × 1, `llm:lastProgress` × 1 literal, `freshnessMs: 0` × 2 (probeSources canon + probeProbeOnly fix). Source-leak grep on bundle commit returns 0 — bundle commit is `api/vercel-entry.js`-only.
+
+#### Code Review
+
+- 0 critical, 4 warnings, 6 info findings tracked in `.planning/phases/28.2.7-audit-tier-completeness/28.2.7-REVIEW.md`. Notable advisories: WR-01 (`redisLatest ?? memLatest` could let stale "started but never completed" Redis record mask successful in-memory completions for up to 7 days; suggested `Math.max`), WR-02 (write-through fires on `completedAt !== undefined` regardless of `errorMessage` / `stage: 'error'` — failed run advances `llm:lastProgress` and surfaces as fresh "success"). Both are advisory follow-ups, not phase blockers.
+
+#### Human-UAT (4 items, post-deploy)
+
+Persisted in `.planning/phases/28.2.7-audit-tier-completeness/28.2.7-HUMAN-UAT.md`:
+
+1. `prod-connectivity-audit.yml` exits 0 + writes `allTiersGreen: true` against deployed prod (single binary acceptance signal).
+2. `/api/health summary.cron === { healthy: 3, ... }` after force-triggering all 3 crons once each.
+3. `endpoints.llmStatus.status === "healthy"` survives 10 hits across an idle window (Vercel Fluid Compute cold-start coverage).
+4. `/api/health summary.probeOnly === { healthy: 2, ... }` on first request after new bundle goes live.
+
 ### Phase 28.2.5: API Green-Light Prereq Gate (2026-05-06 → 2026-05-06)
 
 #### Added
