@@ -13,7 +13,7 @@ import {
   TIER_BY_ENDPOINT,
   deriveStatus,
 } from '../lib/healthSources.js';
-import { llmProgress } from '../lib/llmProgress.js';
+import { llmProgress, LLM_LASTPROGRESS_KEY } from '../lib/llmProgress.js';
 import { logger } from '../lib/logger.js';
 
 const log = logger.child({ module: 'health' });
@@ -120,13 +120,61 @@ async function probeCacheKey(name: string, key: string): Promise<ProbeResult> {
 }
 
 /**
- * Probe `/api/llm-status` via the in-memory `llmProgress` singleton (no
- * upstream HTTP fetch — RESEARCH Pitfall 8). Freshness derives from the
- * pipeline's most recent activity timestamp.
+ * Probe `/api/llm-status` via Redis-backed `llm:lastProgress` key with
+ * in-memory `llmProgress` singleton fallback (Phase 28.2.7 R2 D-08).
+ *
+ * Read order: Redis first → in-memory fallback. Solves the Vercel Fluid
+ * Compute cold-start problem where a fresh function instance hasn't run
+ * the cron and sees the singleton at INITIAL_PROGRESS — Redis-backed read
+ * surfaces the most-recent run's transition timestamps written by
+ * resetProgress() / updateProgress({completedAt}) in
+ * server/lib/llmProgress.ts.
+ *
+ * D-09: when BOTH Redis returns null AND singleton is at INITIAL_PROGRESS,
+ * return freshnessMs:null → deriveStatus → 'unknown'. First cron tick
+ * within 26h flips green. No artificial "fresh deploy → healthy" bias.
+ *
+ * D-10: read-only — no backfill of singleton from Redis. Singleton becomes
+ * eventually consistent via the next pipeline's resetProgress call. Keeps
+ * probe logic minimal and avoids "probe mutates state" surprise.
  */
-function probeLlmStatus(): ProbeResult {
+async function probeLlmStatus(): Promise<ProbeResult> {
   const start = Date.now();
-  const latest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
+  // Redis read — degrade-open via cacheGetSafe (in-memory miss handled by
+  // helper; outright throws / timeouts caught here so the probe falls back
+  // to the in-memory singleton instead of bubbling 'unhealthy').
+  let redisLatest: number | null = null;
+  try {
+    const entry = await withTimeout(
+      cacheGetSafe<{ startedAt: number | null; completedAt: number | null }>(
+        LLM_LASTPROGRESS_KEY,
+        999_999_999,
+      ),
+      PROBE_TIMEOUT_MS,
+      'probe llmStatus (redis)',
+    );
+    if (entry?.data) {
+      redisLatest = entry.data.completedAt ?? entry.data.startedAt ?? null;
+    }
+  } catch {
+    // Fall through to in-memory singleton — Phase 28.1 W2 degrade-open contract.
+  }
+  const memLatest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
+  // Phase 28.2.7 follow-up (WR-01) — take the freshest signal, not Redis-first.
+  // Redis can hold a stale `startedAt` from a crashed run that never wrote
+  // `completedAt` (process crash / OOM / warm-start drop). The 7-day TTL plus
+  // the lack of an "in-progress" sentinel means a single crashed run could
+  // mask up to 7 days of subsequent successful in-memory completions on
+  // cold-started instances that read Redis first. `Math.max` keeps both
+  // signals honest: Redis wins when it's actually fresher (cross-instance
+  // visibility), memory wins when it's seen a more-recent completion that
+  // hasn't been written through to Redis yet (e.g., fire-and-forget back-pressure).
+  const latest =
+    redisLatest === null
+      ? memLatest
+      : memLatest === null
+        ? redisLatest
+        : Math.max(redisLatest, memLatest);
   return {
     freshnessMs: latest === null ? null : Date.now() - latest,
     lastSuccessTs: latest,
@@ -154,19 +202,29 @@ function probeSources(): ProbeResult {
 }
 
 /**
- * Probe-only endpoints (authCheck, geocode). No freshness concept — the
- * tier already classifies them as 'probe-only'. Status is derived from
- * `hadError` alone via the `deriveStatus` contract (threshold=0 means
- * any non-null freshnessMs immediately becomes degraded/unhealthy; we
- * report freshnessMs=null and rely on healthy/unhealthy via hadError).
+ * Probe-only endpoints (authCheck, geocode). Honest-stub contract — mirrors
+ * probeSources() above: pure config introspection, no upstream call to fail,
+ * "process running iff probe healthy".
  *
- * For now we report 'healthy' optimistically — backing systems are
- * reachable from this process by definition. A future iteration could
- * exercise the middleware via a synthetic local request.
+ * Phase 28.2.7 R3 — was returning `freshnessMs: null` which triggered
+ * deriveStatus's first guard (`if (freshnessMs === null) return 'unknown'`)
+ * and mathematically pinned authCheck + geocode to 'unknown' regardless of
+ * any other signal. The middleware itself is reachable from this process
+ * by definition; treating "process up" as "probe healthy" matches the
+ * canon set by probeSources for config-introspection probes.
+ *
+ * deriveStatus chain (post-fix):
+ *   freshnessMs:0, threshold:0, hadError:false
+ *   → hadError===false (skip first guard)
+ *   → freshnessMs===null is false (skip second guard)
+ *   → 0 <= 0 evaluates true → return 'healthy'
+ *
+ * Synthetic-request middleware exercise was rejected in SPEC interview
+ * (option-b honest-stub locked over option-a synthetic exercise).
  */
 function probeProbeOnly(): ProbeResult {
   return {
-    freshnessMs: null,
+    freshnessMs: 0,
     lastSuccessTs: Date.now(),
     hadError: false,
     errorReason: null,

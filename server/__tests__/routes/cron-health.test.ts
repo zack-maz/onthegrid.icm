@@ -17,6 +17,10 @@ vi.mock('../../config.js', () => ({ env: mockEnv }));
 vi.mock('../../cache/redis.js', () => ({
   redis: { ping: vi.fn().mockResolvedValue('PONG') },
   cacheGetSafe: vi.fn().mockResolvedValue(null),
+  // Phase 28.2.7 R1 — cron-health now writes cron:lastTick:health via
+  // cacheSetSafe before res.json. Mock must export it or the route's
+  // module-eval throws ESM resolution error in vitest.
+  cacheSetSafe: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockRunEval = vi.fn().mockResolvedValue({

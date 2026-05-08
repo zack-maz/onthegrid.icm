@@ -20,9 +20,13 @@
  *      bridge) so a failed cron run never blanks the dashboard.
  */
 
+import { timingSafeEqual } from 'node:crypto';
+
 import { Router } from 'express';
 
+import { cacheSetSafe } from '../cache/redis.js';
 import { env } from '../config.js';
+import { CRON_LASTTICK_TTL_SEC } from '../lib/healthSources.js';
 import { runRefreshExtraction } from '../lib/llmExtractionPipeline.js';
 import { logger } from '../lib/logger.js';
 
@@ -33,10 +37,18 @@ export const refreshEventsCronRouter = Router();
 refreshEventsCronRouter.get('/', async (req, res) => {
   // D-05 — auth gate. Empty CRON_SECRET keeps the route un-authed (matches
   // cron-warm / cron-health behavior); any non-empty value enforces Bearer.
+  //
+  // Phase 28.2.7 follow-up (WR-04) — switched from string `!==` to
+  // `timingSafeEqual` for constant-time byte compare. Same rationale as
+  // cron-health.ts: matches `dashboardAuth.ts` + `rateLimit.ts` posture so
+  // ALL Bearer-gated surfaces share the constant-time pattern. Length is
+  // not the secret, so length-mismatch early-exit is safe.
   if (env.CRON_SECRET) {
     const auth = req.header('Authorization') ?? req.header('authorization') ?? '';
     const expected = `Bearer ${env.CRON_SECRET}`;
-    if (auth !== expected) {
+    const a = Buffer.from(auth);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
@@ -53,6 +65,13 @@ refreshEventsCronRouter.get('/', async (req, res) => {
     });
     const durationMs = Date.now() - t0;
     log.info({ result, durationMs, forceCooldown }, 'refresh-events cron dispatched');
+    // Phase 28.2.7 R1 D-05 — cron:lastTick:refresh-events writer. Write at
+    // route handler (NOT inside runRefreshExtraction — helper has non-cron
+    // callers). D-03: write AFTER body succeeds; the catch block at line 57+
+    // never reaches this line, so a runRefreshExtraction throw means probe
+    // stays 'unknown' (correct: NIM throttle / extraction failed). D-11:
+    // bare Date.now() value.
+    await cacheSetSafe('cron:lastTick:refresh-events', Date.now(), CRON_LASTTICK_TTL_SEC);
     res.status(200).json({ ok: true, durationMs, ...result });
   } catch (err) {
     const durationMs = Date.now() - t0;

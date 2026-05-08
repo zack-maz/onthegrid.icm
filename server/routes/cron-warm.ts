@@ -4,6 +4,7 @@ import { fetchWaterFacilities } from '../adapters/overpass-water.js';
 import { fetchSites } from '../adapters/overpass.js';
 import { cacheSetSafe } from '../cache/redis.js';
 import { WATER_REDIS_TTL_SEC } from '../config.js';
+import { CRON_LASTTICK_TTL_SEC } from '../lib/healthSources.js';
 import { logger } from '../lib/logger.js';
 
 const log = logger.child({ module: 'cron-warm' });
@@ -73,6 +74,16 @@ cronWarmRouter.get('/', async (_req, res) => {
   const allOk = results.every((r) => r.status === 'fulfilled');
   const logLevel = allOk ? 'info' : 'warn';
   log[logLevel](summary, 'cache pre-warm complete');
+
+  // Phase 28.2.7 R1 D-04 — cron:lastTick:warm writer. Tick fires on
+  // partial-or-better (at least one Promise.allSettled entry fulfilled).
+  // Both rejected → no tick → probe stays 'unknown' (correct: cron didn't
+  // do its job). Per-source freshness already covered by the 8 cache-backed
+  // probes in TIER_BY_ENDPOINT. D-11: bare Date.now() value.
+  const partialOrBetter = results.some((r) => r.status === 'fulfilled');
+  if (partialOrBetter) {
+    await cacheSetSafe('cron:lastTick:warm', Date.now(), CRON_LASTTICK_TTL_SEC);
+  }
 
   res.json({ status: allOk ? 'ok' : 'partial', ...summary });
 });

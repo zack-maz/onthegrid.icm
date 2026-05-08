@@ -352,11 +352,11 @@ Plans:
 **Depends on:** Phase 28.2.6 (PR #12 merged 2026-05-07 — provides the prod state where `critical[llmEvents]` is healthy so the OTHER 3 unknown tiers become the dominant blocker; without 28.2.6 done, tier-green would still fail on critical, masking these 3 latent bugs)
 **Blocks:** Phase 28.3 (same as 28.2.6 — tier-green gate must show `allTiersGreen=true`, which requires non-critical/probe-only/cron tiers to no longer be `unknown`)
 **Requirements:** TBD (derived from 28.2.7-SPEC.md after `/gsd-spec-phase 28.2.7` — expected to lock the 3 fixes + acceptance criterion = next prod-connectivity-audit.yml run shows allTiersGreen=true)
-**Plans:** 0 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 28.2.7 to break down)
+- [x] TBD (run /gsd-plan-phase 28.2.7 to break down) (completed 2026-05-08)
 
 ### Phase 28.3: Performance Optimization + 1–300 VU Load Test (umbrella child of 28)
 
