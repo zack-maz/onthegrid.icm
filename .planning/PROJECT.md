@@ -85,7 +85,11 @@ See `.planning/REQUIREMENTS.md` for the full v1.5 requirement set with REQ-IDs a
 
 - LLM-RELI-\* — v3 stabilization, NIM + OpenRouter chain narrowing, LLM-optional architecture
 - GHOST-\* — dead-source-URL probing and event pruning
-- DOCS-\* — internal (CLAUDE.md, JSDoc), public (README, architecture, runbook, ADRs), API (OpenAPI)
+- ACTOR-\* — actor metadata audit + canonical catalog + eval expansion + dashboard surface
+- DOCS-INT-\* — internal docs (CLAUDE.md trim, JSDoc audit, Redis registry verification)
+- REDIS-OPT-\* — Redis key inventory + classification + TTL right-sizing + budget delta
+- DOCS-PUB-\* — public docs (README, architecture, runbook, ADR-0009, degradation contract)
+- DOCS-API-\* — OpenAPI additions for 7 endpoints introduced in v1.4
 
 ### Out of Scope
 
