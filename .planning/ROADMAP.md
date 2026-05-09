@@ -8,7 +8,7 @@
 - **v1.2 Visualization & Hardening** -- Phases 20-21.3 (shipped 2026-03-29)
 - ✅ **v1.3 Data Quality & Layers** -- Phases 22-26.4 (shipped 2026-04-09) — [archive](milestones/v1.3-ROADMAP.md)
 - ✅ **v1.4 GDELT Redo & Performance** -- Phases 27-28.2.7 (shipped 2026-05-08); load-test phase deferred to backlog (999.5) — [archive](milestones/v1.4-ROADMAP.md), [audit](milestones/v1.4-MILESTONE-AUDIT.md)
-- 🚧 **v1.5 LLM Reliability & Reveal Prep** -- Phases 29-36 (started 2026-05-09); 36 requirements across 8 phases; acceptance gate = 3 consecutive prod-connectivity-audit.yml exit-0 runs (unblocks 999.5 load test for v1.6)
+- 🚧 **v1.5 LLM Reliability & Reveal Prep** -- Phases 29-36 (started 2026-05-09); 43 requirements across 8 phases (Vercel Pro upgrade locked in Phase 29; SIMPLIFY-\* track retires Hobby-era workarounds); acceptance gate = 3 consecutive prod-connectivity-audit.yml exit-0 runs (unblocks 999.5 load test for v1.6)
 
 ## Phase Summary
 
