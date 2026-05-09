@@ -155,7 +155,7 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 | SIMPLIFY-03  | 30    | Pending |
 | SIMPLIFY-04  | 29    | Pending |
 | SIMPLIFY-05  | 34    | Pending |
-| SIMPLIFY-06  | 34    | Pending |
+| SIMPLIFY-06  | 29    | Pending |
 | SIMPLIFY-07  | 34    | Pending |
 | DOCS-PUB-01  | 35    | Pending |
 | DOCS-PUB-02  | 35    | Pending |
@@ -175,7 +175,7 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 - v1.5 requirements: 43 total (7 LLM-RELI + 5 GHOST + 5 ACTOR + 3 DOCS-INT + 4 REDIS-OPT + 7 SIMPLIFY + 5 DOCS-PUB + 7 DOCS-API)
 - Mapped to phases: 43 ✓
 - Unmapped: 0
-- Phase distribution: Phase 29 (4) · Phase 30 (5) · Phase 31 (1) · Phase 32 (5) · Phase 33 (5) · Phase 34 (10) · Phase 35 (11) · Phase 36 (2)
+- Phase distribution: Phase 29 (5) · Phase 30 (5) · Phase 31 (1) · Phase 32 (5) · Phase 33 (5) · Phase 34 (9) · Phase 35 (11) · Phase 36 (2)
 
 ---
 
