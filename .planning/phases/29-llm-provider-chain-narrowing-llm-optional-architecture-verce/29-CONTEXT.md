@@ -79,6 +79,41 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 
 - **D-10: Phase 34 scope reduced.** With v1+v2 deletion landing in Phase 29 (D-02), Phase 34's old success criterion #8 "v1 extractor archived (SIMPLIFY-06)" becomes inapplicable. Phase 34's Requirements list updated to remove SIMPLIFY-06; criteria renumbered 8→7 (drop the v1 archive criterion). Already committed as part of this phase's CONTEXT-prep on `feature/29-llm-cascade-narrowing-claude-md-cleanup` branch. REQUIREMENTS.md traceability table updated: SIMPLIFY-06 phase 34 → 29; phase distribution Phase 29 (5) · Phase 34 (9).
 
+### Folder + Repo Rename (added 2026-05-09 mid-planning)
+
+- **D-11: Rename local folder + GitHub repo to `otg-iran-monitor`.** Aligns the codebase root name with the prod domain (`otg-iran-monitor.vercel.app`) and brand. Two artifacts rename in this phase:
+  - **Local folder:** `/Users/zackmaz/Desktop/my_world` → `/Users/zackmaz/Desktop/otg-iran-monitor`. Operator action: `mv` after the last in-flight `cd /Users/zackmaz/Desktop/my_world` Bash invocation in this phase finishes.
+  - **GitHub repo:** `zack-maz/onthegrid.icm` → `zack-maz/otg-iran-monitor`. Operator action via GitHub Settings → Rename. GitHub auto-redirects keep old clone URLs working, but the `git remote set-url origin https://github.com/zack-maz/otg-iran-monitor.git` is the clean-slate follow-up (single `git remote set-url` after the rename).
+
+  **CI/CD impact (verified pre-rename):**
+  - `.github/workflows/*.yml` — **0** hardcoded `my_world` / `onthegrid.icm` references (workflows use `${{ inputs.target_url }}` + `secrets.*` only — confirmed `ci.yml`, `codeql.yml`, `prod-connectivity-audit.yml` clean).
+  - Vercel ↔ GitHub link — Vercel auto-tracks repo renames (per Vercel docs); operator confirms the `onthegrid.icm` Vercel project still points to the renamed repo via `https://vercel.com/zack-maz-projects/onthegrid.icm/settings/git` after the rename. NOT renaming the Vercel project itself (its name is `onthegrid.icm` and the alias `otg-iran-monitor.vercel.app` is what users hit).
+  - GitHub badges in README.md (5 hits) + clone URL update — handled in the Phase 29 docs commits.
+
+  **Documentation impact (verified pre-rename):**
+  - `README.md` — 5 hits (CI badges + clone URL) updated.
+  - `CHANGELOG.md` — 1+ hit updated.
+  - `CLAUDE.md` Phase 28.2 W1 D-03 mention — handled by D-06 trim (the Phase 28.2 narrative block is deleted, not edited).
+  - `.planning/PROJECT.md` + `.planning/ROADMAP.md` + `.planning/MILESTONES.md` — `onthegrid.icm` mentions updated where they refer to the **GitHub repo** (not the **Vercel project**).
+  - `.planning/debug/llmstatus-unknown-prod.md` — repo URL updated.
+  - `.planning/quick/*` + `.planning/milestones/*` historical plans + `.planning/phases/*` historical plans — **NOT EDITED**. These are read-only historical artifacts that have already executed; their `cd /Users/zackmaz/Desktop/my_world && ...` references are accurate for when they ran. Editing them would falsify the historical record.
+
+  **Memory + IDE side-effects (operator awareness, not code changes):**
+  - Claude Code's project-memory directory is keyed off the folder path (`~/.claude/projects/-Users-zackmaz-Desktop-my-world/`). After the folder rename, Claude Code creates a fresh memory namespace. Operator decision: leave old namespace as-is (memory survives but won't auto-load in the renamed folder) or symlink/copy (out of scope for this phase — operator handles outside the codebase).
+  - IDE workspace settings (VSCode `.vscode/`, Cursor settings) — operator re-opens at the new path; any workspace files committed to the repo travel with the rename automatically.
+
+  **Verification:**
+  - `git remote -v` shows `https://github.com/zack-maz/otg-iran-monitor.git` (or the GitHub-redirect `onthegrid.icm` URL works via auto-redirect — both pass).
+  - `grep -rn "my_world\\|onthegrid.icm" README.md CHANGELOG.md .planning/PROJECT.md .planning/ROADMAP.md .planning/MILESTONES.md .planning/debug/llmstatus-unknown-prod.md | grep -v "Vercel project" | grep -v "Phase 28" | wc -l` returns 0 (live references in non-historical docs all updated; explicitly-Vercel-project mentions and historical Phase 28 narrative-context mentions are excluded).
+  - The next `vercel deploy --prod` succeeds (Vercel ↔ GitHub link survived the GitHub rename — primary CI/CD-impact verification).
+  - `npx vitest run` + `npm run build` pass at the new path (proves no hardcoded path in active code; redundant with the 0-hits grep but cheap to run).
+
+  **Rollback path:** Rename back via GitHub Settings (auto-redirect again) + `mv` on local folder. README/CHANGELOG/PROJECT/ROADMAP/MILESTONES revert via `git revert` of the docs-rename commit. Cost: minutes.
+
+  **Atomic-commit boundary:** Single commit at the END of the phase (after all code work) — `chore(29): rename repo my_world/onthegrid.icm → otg-iran-monitor (D-11)`. Includes: README badges, README clone URL, CHANGELOG, .planning/PROJECT.md, .planning/ROADMAP.md, .planning/MILESTONES.md, .planning/debug/llmstatus-unknown-prod.md. The CLAUDE.md trim (D-06) handles the Phase 28.2 narrative block deletion separately. The operator-side `mv` + `git remote set-url` happens AFTER this commit lands and merges to main.
+
+  **Why end-of-phase, not start-of-phase:** the rename touches docs only; sequencing it last means every preceding code commit's referenced paths (in commit messages, in PR descriptions, in execute-phase Bash commands) stay valid through the phase. An operator `mv` mid-phase would invalidate any in-flight session state.
+
 ### Claude's Discretion
 
 - The exact path / file location for the integration test (`src/__tests__/` vs `server/__tests__/`) — researcher picks based on whichever harness already exists for `/api/events` end-to-end testing.
@@ -146,6 +181,18 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 - `.planning/phases/27.4-llm-enrichment-improvements/27.4-CONTEXT.md` — Phase 27.4 D-26/D-40 lock that preserved v1+v2 as deep-rollback. D-03 ADR-0009 stub MUST cite this lock + the rationale for now retiring it (~2 weeks of stable v3 production + Pitfall 1 bridge handling map-never-blank independent of which extractor is active).
 - `.planning/phases/27.4.1-v2-extractor-watchdog/` — for ADR-0009 timeline notes
 - `.planning/phases/27.4.6-cron-driven-pipeline-trigger/` — for the cron trigger lineage
+
+### Folder + Repo Rename Surface (D-11)
+
+- `README.md` — 5 hits (CI badges + clone URL). Updated.
+- `CHANGELOG.md` — `onthegrid.icm` mentions updated where they reference the repo (not the Vercel project).
+- `.planning/PROJECT.md` — `onthegrid.icm` repo references updated.
+- `.planning/ROADMAP.md` — `onthegrid.icm` repo references updated (Vercel-project mentions preserved).
+- `.planning/MILESTONES.md` — `onthegrid.icm` repo references updated.
+- `.planning/debug/llmstatus-unknown-prod.md` — repo URL updated.
+- `.github/workflows/ci.yml` + `codeql.yml` + `prod-connectivity-audit.yml` — VERIFIED 0 hardcoded folder/repo references; no edits needed.
+- `https://vercel.com/zack-maz-projects/onthegrid.icm/settings/git` — operator post-rename verification (Vercel auto-tracks the GitHub rename).
+- **Excluded from rename edits:** `.planning/phases/*`, `.planning/milestones/*`, `.planning/quick/*` historical plan files (read-only historical record; their `cd /Users/zackmaz/Desktop/my_world` references are accurate for when those plans executed).
 
 </canonical_refs>
 
