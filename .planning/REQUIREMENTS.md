@@ -114,50 +114,51 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 
 | Requirement  | Phase | Status  |
 | ------------ | ----- | ------- |
-| LLM-RELI-01  | TBD   | Pending |
-| LLM-RELI-02  | TBD   | Pending |
-| LLM-RELI-03  | TBD   | Pending |
-| LLM-RELI-04  | TBD   | Pending |
-| LLM-RELI-05  | TBD   | Pending |
-| LLM-RELI-06  | TBD   | Pending |
-| LLM-RELI-07  | TBD   | Pending |
-| GHOST-01     | TBD   | Pending |
-| GHOST-02     | TBD   | Pending |
-| GHOST-03     | TBD   | Pending |
-| GHOST-04     | TBD   | Pending |
-| GHOST-05     | TBD   | Pending |
-| ACTOR-01     | TBD   | Pending |
-| ACTOR-02     | TBD   | Pending |
-| ACTOR-03     | TBD   | Pending |
-| ACTOR-04     | TBD   | Pending |
-| ACTOR-05     | TBD   | Pending |
-| DOCS-INT-01  | TBD   | Pending |
-| DOCS-INT-02  | TBD   | Pending |
-| DOCS-INT-03  | TBD   | Pending |
-| REDIS-OPT-01 | TBD   | Pending |
-| REDIS-OPT-02 | TBD   | Pending |
-| REDIS-OPT-03 | TBD   | Pending |
-| REDIS-OPT-04 | TBD   | Pending |
-| DOCS-PUB-01  | TBD   | Pending |
-| DOCS-PUB-02  | TBD   | Pending |
-| DOCS-PUB-03  | TBD   | Pending |
-| DOCS-PUB-04  | TBD   | Pending |
-| DOCS-PUB-05  | TBD   | Pending |
-| DOCS-API-01  | TBD   | Pending |
-| DOCS-API-02  | TBD   | Pending |
-| DOCS-API-03  | TBD   | Pending |
-| DOCS-API-04  | TBD   | Pending |
-| DOCS-API-05  | TBD   | Pending |
-| DOCS-API-06  | TBD   | Pending |
-| DOCS-API-07  | TBD   | Pending |
+| LLM-RELI-01  | 29    | Pending |
+| LLM-RELI-02  | 30    | Pending |
+| LLM-RELI-03  | 30    | Pending |
+| LLM-RELI-04  | 30    | Pending |
+| LLM-RELI-05  | 29    | Pending |
+| LLM-RELI-06  | 31    | Pending |
+| LLM-RELI-07  | 36    | Pending |
+| GHOST-01     | 32    | Pending |
+| GHOST-02     | 32    | Pending |
+| GHOST-03     | 32    | Pending |
+| GHOST-04     | 32    | Pending |
+| GHOST-05     | 32    | Pending |
+| ACTOR-01     | 33    | Pending |
+| ACTOR-02     | 33    | Pending |
+| ACTOR-03     | 33    | Pending |
+| ACTOR-04     | 33    | Pending |
+| ACTOR-05     | 33    | Pending |
+| DOCS-INT-01  | 34    | Pending |
+| DOCS-INT-02  | 34    | Pending |
+| DOCS-INT-03  | 34    | Pending |
+| REDIS-OPT-01 | 34    | Pending |
+| REDIS-OPT-02 | 34    | Pending |
+| REDIS-OPT-03 | 34    | Pending |
+| REDIS-OPT-04 | 34    | Pending |
+| DOCS-PUB-01  | 35    | Pending |
+| DOCS-PUB-02  | 35    | Pending |
+| DOCS-PUB-03  | 35    | Pending |
+| DOCS-PUB-04  | 36    | Pending |
+| DOCS-PUB-05  | 35    | Pending |
+| DOCS-API-01  | 35    | Pending |
+| DOCS-API-02  | 35    | Pending |
+| DOCS-API-03  | 35    | Pending |
+| DOCS-API-04  | 35    | Pending |
+| DOCS-API-05  | 35    | Pending |
+| DOCS-API-06  | 35    | Pending |
+| DOCS-API-07  | 35    | Pending |
 
 **Coverage:**
 
 - v1.5 requirements: 36 total (7 LLM-RELI + 5 GHOST + 5 ACTOR + 3 DOCS-INT + 4 REDIS-OPT + 5 DOCS-PUB + 7 DOCS-API)
-- Mapped to phases: 0 (set during roadmap creation)
-- Unmapped: 36 ⚠️ (resolves to 0 after Step 10 of `/gsd-new-milestone`)
+- Mapped to phases: 36 ✓
+- Unmapped: 0
+- Phase distribution: Phase 29 (2) · Phase 30 (3) · Phase 31 (1) · Phase 32 (5) · Phase 33 (5) · Phase 34 (7) · Phase 35 (11) · Phase 36 (2)
 
 ---
 
 _Requirements defined: 2026-05-09_
-_Last updated: 2026-05-09 after milestone v1.5 initialization_
+_Last updated: 2026-05-09 after roadmap creation — 36/36 requirements mapped to Phases 29–36._

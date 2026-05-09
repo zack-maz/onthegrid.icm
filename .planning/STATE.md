@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: defining_requirements
-last_updated: "2026-05-08T20:00:00.000Z"
+status: ready_to_plan
+last_updated: "2026-05-09T00:00:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -22,14 +22,29 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 29 (not started, ready to plan) — LLM Provider Chain Narrowing & LLM-Optional Architecture
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-08 — Milestone v1.5 LLM Reliability & Reveal Prep started
+Status: ready_to_plan
+Last activity: 2026-05-09 — Milestone v1.5 roadmap created (8 phases, 36 requirements mapped, 100% coverage)
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
-Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivity-audit.yml exit-0 with allTiersGreen=true for 3 consecutive runs.
+Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivity-audit.yml exit-0 with allTiersGreen=true for 3 consecutive runs (LLM-RELI-07; observed in Phase 36 closeout).
+
+## v1.5 Phases (planned)
+
+| Phase | Name                                                                  | Requirements                                                  | Status      |
+| ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- | ----------- |
+| 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture              | LLM-RELI-01, LLM-RELI-05                                      | Not started |
+| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04                         | Not started |
+| 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Not started |
+| 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
+| 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
+| 34    | Internal Docs + Redis Registry Verification + Redis Optimization      | DOCS-INT-01..03, REDIS-OPT-01..04                             | Not started |
+| 35    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | Not started |
+| 36    | ADR-0009 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Not started |
+
+**Sequencing:** 29 → 30 → 31 → 36 is the LLM-RELI spine (must run in order). Phases 32, 33, 34 are independent of the spine and can run in parallel with 29/30/31. Phase 35 lands after 29/30/31 close so docs reflect shipped state. Phase 36 is the milestone-close gate by construction.
 
 Backlog still parked (not in v1.5 unless they block reliability):
 - 999.1 rate-limiter-public-global-blocks-operator
