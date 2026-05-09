@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: ready_to_plan
-last_updated: "2026-05-09T00:00:00.000Z"
+last_updated: "2026-05-09T14:30:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -22,10 +22,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 29 (not started, ready to plan) — LLM Provider Chain Narrowing & LLM-Optional Architecture
+Phase: 29 (context gathered, ready to plan) — LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + Cerebras/Groq Adapter Purge + v1/v2 Extractor Deletion + CLAUDE.md Trim
 Plan: —
 Status: ready_to_plan
-Last activity: 2026-05-09 — Milestone v1.5 roadmap created (8 phases, 36 requirements mapped, 100% coverage)
+Last activity: 2026-05-09 — Phase 29 CONTEXT.md committed (10 decisions across 4 gray areas + 1 roadmap side-effect). v1.5 milestone init merged to main via PR #18. CLAUDE.md cleanup (DOCS-INT-01) + v1/v2 extractor deletion (SIMPLIFY-06) folded forward from Phase 34 → 29 per user request.
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -35,12 +35,12 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 
 | Phase | Name                                                                  | Requirements                                                  | Status      |
 | ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- | ----------- |
-| 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture              | LLM-RELI-01, LLM-RELI-05                                      | Not started |
+| 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | Context gathered |
 | 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04                         | Not started |
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Not started |
 | 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
-| 34    | Internal Docs + Redis Registry Verification + Redis Optimization      | DOCS-INT-01..03, REDIS-OPT-01..04                             | Not started |
+| 34    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
 | 35    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | Not started |
 | 36    | ADR-0009 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Not started |
 
