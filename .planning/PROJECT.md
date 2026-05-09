@@ -88,6 +88,7 @@ See `.planning/REQUIREMENTS.md` for the full v1.5 requirement set with REQ-IDs a
 - ACTOR-\* — actor metadata audit + canonical catalog + eval expansion + dashboard surface
 - DOCS-INT-\* — internal docs (CLAUDE.md trim, JSDoc audit, Redis registry verification)
 - REDIS-OPT-\* — Redis key inventory + classification + TTL right-sizing + budget delta
+- SIMPLIFY-\* — retire Hobby-era workarounds (incremental flush, partial-key, aggressive watchdog) + dead-code purge (Cerebras/Groq adapters, freeClaudeRouter audit, v1 extractor archive) + bundle-size delta
 - DOCS-PUB-\* — public docs (README, architecture, runbook, ADR-0009, degradation contract)
 - DOCS-API-\* — OpenAPI additions for 7 endpoints introduced in v1.4
 

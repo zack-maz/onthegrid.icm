@@ -47,6 +47,18 @@ Requirements for this milestone, grouped by track. Each maps to exactly one road
 - [ ] **REDIS-OPT-03**: TTLs right-sized against actual freshness requirements. Daily-cron-fed keys (e.g. `events:llm:v3` on 26h, eval baselines on 90d) reviewed against their producer cadence; observability-only keys capped (DLQ at 200 entries / 7d, audit log at 500 / 30d already; replay history not yet capped). Tightening lands as code changes with regression tests for any contract-pinned shapes.
 - [ ] **REDIS-OPT-04**: Pre/post Redis command-budget impact measured against the Upstash dashboard or `INFO commandstats` proxy. Baseline reading captured at REDIS-OPT-01 (memory note: command budget at ~92% as of v1.3 close). Goal: a measurable absolute reduction documented in the new ADR (DOCS-PUB-04 ADR-0009 may merge with this; or separate ADR-0010 if scope warrants).
 
+### Pipeline Simplification — retire Hobby-era workarounds + general dead-code purge
+
+These requirements turn the Vercel Pro upgrade and the v3-cascade-narrowing decision into actual code deletion, not just bypassed paths. Goal: smaller bundle, fewer code paths, less Redis churn — and the simplifications themselves act as reliability improvements (less to break).
+
+- [ ] **SIMPLIFY-01**: Retire `mergeAndPersistLlmEntities` incremental flush + `LLM_FLUSH_EVERY_N_BATCHES` env var. Single terminal-key write at end of run becomes the canonical shape on Pro's 800s ceiling. The 28.2.6 Plan 01 incremental flush was a 300s-budget mitigation; with 800s headroom it's pure complexity + Redis command churn. Lands in Phase 30 alongside the cascade-tuning work because the new defaults (CONCURRENCY, BATCH_SIZE) are sized against the post-simplification flow.
+- [ ] **SIMPLIFY-02**: Retire `events:llm:v3:partial` observability key. Either delete entirely (cleanest) or downgrade to a debug-only flag behind an env var. Pre-Pro it was load-bearing for "did extraction make progress before getting killed?"; post-Pro extraction reliably finishes so partial state stops carrying signal. Phase 34 (Redis-opt) is the right home — REDIS-OPT-01..02 already classifies keys, and `events:llm:v3:partial` is a top retirement candidate.
+- [ ] **SIMPLIFY-03**: Watchdog defaults relaxed against the 800s ceiling. Current 90s hard-kill / 60s soft-warn per batch was sized to leave room for ~3 batches in 300s; on Pro the per-batch budget is much more generous. Either bump to ~180s/120s or evaluate whether the soft-warn category is still useful at all. New defaults committed against the measured throttle behavior from LLM-RELI-02 — soft-warn entries in `callHistory` should drop to near-zero under normal NIM availability.
+- [ ] **SIMPLIFY-04**: Cerebras + Groq adapter dead-code purged from `server/adapters/llm-provider.ts` runtime path. LLM-RELI-01 retires them from the runtime cascade; SIMPLIFY-04 follows up by deleting the adapter functions, the `CEREBRAS_API_KEY` / `GROQ_API_KEY` checks, and the synthetic `skipReason: 'no_client'` callHistory entries. v1 + v2 extractor code paths preserved (per Phase 27.4 D-26/D-40 they're deep-rollback safety) but the live cascade has zero references to Cerebras/Groq after this lands. Bundle-size impact tracked toward SIMPLIFY-07.
+- [ ] **SIMPLIFY-05**: `server/lib/freeClaudeRouter.ts` (Phase 27.4.3 vendored router) caller audit. If it has live callers, document them in a JSDoc block at the top of the file; if it has zero live callers (orphaned because the cutover deferred per the 27.4.3 audit), delete the file + supporting imports + tests. Phase 34 is the right home (broader cleanup phase).
+- [ ] **SIMPLIFY-06**: v1 extractor (`server/lib/llmEventExtractor.v1.ts`) archived to a clearly-marked location (e.g. `server/lib/_archive/llmEventExtractor.v1.ts`) or the `attic/` convention. The v2 path stays in the bridge but its role is documented as deep-rollback only. The goal is making the active runtime path obviously the active path — readers shouldn't have to triage "is v1 still live?" on every visit.
+- [ ] **SIMPLIFY-07**: `api/vercel-entry.js` bundle-size delta measured pre/post v1.5. Baseline: 1.72 MB at v1.4 close (up from 1.2 MB at v1.3 close). Target: net reduction documented in ADR-0009. Each SIMPLIFY-01..06 contributes; Phase 34 captures the final measurement and writes the delta into the closing artifact. Stretch goal: shrink below 1.5 MB.
+
 ### Documentation — Public (README + architecture + runbook + ADRs)
 
 - [ ] **DOCS-PUB-01**: `README.md` updated for the v1.4 surface — domain rename to `otg-iran-monitor.vercel.app`, v3 LLM pipeline, dashboard merge into the API Health tab, Bearer-bypass rate limiter, manual-trigger `prod-connectivity-audit.yml`. Hero GIF / layer screenshots regenerated if visibly stale.
@@ -138,6 +150,13 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 | REDIS-OPT-02 | 34    | Pending |
 | REDIS-OPT-03 | 34    | Pending |
 | REDIS-OPT-04 | 34    | Pending |
+| SIMPLIFY-01  | 30    | Pending |
+| SIMPLIFY-02  | 34    | Pending |
+| SIMPLIFY-03  | 30    | Pending |
+| SIMPLIFY-04  | 29    | Pending |
+| SIMPLIFY-05  | 34    | Pending |
+| SIMPLIFY-06  | 34    | Pending |
+| SIMPLIFY-07  | 34    | Pending |
 | DOCS-PUB-01  | 35    | Pending |
 | DOCS-PUB-02  | 35    | Pending |
 | DOCS-PUB-03  | 35    | Pending |
@@ -153,10 +172,10 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 
 **Coverage:**
 
-- v1.5 requirements: 36 total (7 LLM-RELI + 5 GHOST + 5 ACTOR + 3 DOCS-INT + 4 REDIS-OPT + 5 DOCS-PUB + 7 DOCS-API)
-- Mapped to phases: 36 ✓
+- v1.5 requirements: 43 total (7 LLM-RELI + 5 GHOST + 5 ACTOR + 3 DOCS-INT + 4 REDIS-OPT + 7 SIMPLIFY + 5 DOCS-PUB + 7 DOCS-API)
+- Mapped to phases: 43 ✓
 - Unmapped: 0
-- Phase distribution: Phase 29 (2) · Phase 30 (3) · Phase 31 (1) · Phase 32 (5) · Phase 33 (5) · Phase 34 (7) · Phase 35 (11) · Phase 36 (2)
+- Phase distribution: Phase 29 (3) · Phase 30 (5) · Phase 31 (1) · Phase 32 (5) · Phase 33 (5) · Phase 34 (11) · Phase 35 (11) · Phase 36 (2)
 
 ---
 
