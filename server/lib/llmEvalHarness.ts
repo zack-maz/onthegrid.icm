@@ -26,7 +26,6 @@ import { fileURLToPath } from 'node:url';
 
 import { cacheSetSafe } from '../cache/redis.js';
 
-import { checkEvalDropTrigger } from './llmEventExtractor.v3.js';
 import { updateProgress } from './llmProgress.js';
 import { resolveLocation } from './llmResolver.js';
 import { locationHierarchyV2 } from './llmSchema.js';
@@ -288,16 +287,9 @@ export async function runEval(opts: { model?: string } = {}): Promise<EvalScore>
     log.warn({ err, key }, 'failed to persist eval baseline to Redis');
   }
 
-  // Phase 27.4.3 Plan 05 D-17 Trigger 2 — eval-drop auto-rollback check.
-  // Only fires when comparing against the LOCKED baseline (no model arg) so
-  // a per-model bake-off score never trips the rollback. The trigger is a
-  // no-op unless v3 is the active pipeline.
-  if (score.total > 0 && !opts.model) {
-    const ratio = score.within20km / score.total;
-    await checkEvalDropTrigger({ newWithin20kmRatio: ratio }).catch((err) => {
-      log.warn({ err }, 'D-17 eval-drop trigger check failed (swallowed)');
-    });
-  }
+  // Phase 29 D-02 part A — eval-drop auto-rollback trigger removed.
+  // The v3 -> v2 rollback target is being deleted in Plan 05/06, and the
+  // pin-pipeline override surface is gone (Plan 04).
 
   return score;
 }

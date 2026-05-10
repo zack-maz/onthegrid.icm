@@ -25,7 +25,7 @@
 // llmProgress.routingTrace below.
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { redis } from '../cache/redis.js';
-import { env, isPipelineV3, setPipelineOverride } from '../config.js';
+import { env, isPipelineV3 } from '../config.js';
 
 import { createLimit } from './concurrencyLimit.js';
 import { extractBellingcatGeo } from './eventScoring.js';
@@ -54,7 +54,6 @@ import {
   deriveSuspect,
 } from './llmSchema.js';
 import { logger } from './logger.js';
-import { appendPipelineAudit } from './pipelineAudit.js';
 import { getSourceTier } from './sourceTiers.js';
 
 // Type imports are intentionally separated from value imports above by a
@@ -64,26 +63,15 @@ import type { EventGroup } from './eventGrouping.js';
 import type { RecentEnrichedEvent } from './llmProgress.js';
 import type { LocationHierarchyV2, EnrichedEventV3, GeocodeProvenance } from './llmSchema.js';
 
-// Phase 27.4.3 Plan 05 D-17 — auto-rollback wiring.
-//   Trigger 1 (watchdog recurrence) flips the pipeline override + records an
-//   audit entry from inside processEventGroupsV3 when watchdogTimeoutCount >= 3
-//   in a single run.
-//   Trigger 2 (eval drop) is exported as checkEvalDropTrigger so the eval
-//   harness can call it after runEval persists a new score.
-// B-3 fix: appendPipelineAudit is canonically defined in server/lib/pipelineAudit.ts
-// (Plan 02b Task 1). routes/events.ts imports the same symbol from the same lib.
-// No cyclic import (routes → lib → routes) possible.
+// Phase 29 D-02 part A — Plan 05 D-17 auto-rollback ladder (v3 -> v2)
+// removed. With the operator pin-pipeline surface deleted (Plan 04) and
+// v1+v2 extractor modules being deleted in Plan 05/06, the v3->v2 rollback
+// path is no longer reachable. The watchdog-recurrence + eval-drop triggers
+// + the appendPipelineAudit calls inside them are gone. The cross-worker
+// audit log (listPipelineAudit reader in events.ts /llm-status) still
+// surfaces any historical entries written before this phase.
 
 const log = logger.child({ module: 'llm-extractor-v3' });
-
-/**
- * Phase 27.4.3 Plan 05 — Redis key for the runtime pipeline-version override
- * (mirror of server/routes/events.ts PIPELINE_OVERRIDE_KEY). Persisted alongside
- * the in-memory setPipelineOverride() write so cross-worker readers
- * (refreshPipelineOverride) see the auto-rollback flip.
- */
-const PIPELINE_OVERRIDE_KEY = 'events:llm-pipeline-override';
-const PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
 
 // ---------------------------------------------------------------------------
 // Constants.
@@ -882,18 +870,8 @@ export async function processEventGroupsV3(
   // from a terminated-run final.
   await writePartialCache(results, totalBatches, totalBatches, true);
 
-  // ===========================================================================
-  // Phase 27.4.3 Plan 05 D-17 Trigger 1 — watchdog-recurrence auto-rollback.
-  //
-  // After the batch loop completes, if the watchdog killed >= 3 batches in
-  // this single run AND v3 is the active pipeline, flip the runtime override
-  // back to v2 + record a D-15 audit entry with trigger 'auto:watchdog_recurrence'.
-  // The 3-batch threshold (per CONTEXT D-17) requires recurrence — a single
-  // watchdog timeout is treated as a transient incident, not a rollback signal.
-  // The check is skipped when v3 is not active so a v2 / v1 run cannot
-  // accidentally flip the override.
-  // ===========================================================================
-  await checkWatchdogRecurrenceTrigger();
+  // Phase 29 D-02 part A — auto-rollback v3 -> v2 trigger removed (Plan 05
+  // D-17 Trigger 1). The rollback target (v2) is being deleted in Plan 05/06.
 
   return {
     events: allFailed ? null : results,
@@ -1028,138 +1006,12 @@ async function splitBatchOnTimeout(
   return successes;
 }
 
-// ---------------------------------------------------------------------------
-// Phase 27.4.3 Plan 05 D-17 — auto-rollback ladder.
-//
-// Two triggers, both flip override v3 -> v2 and record a D-15 audit entry:
-//   1. checkWatchdogRecurrenceTrigger — called from inside processEventGroupsV3
-//      after the batch loop completes. Reads llmProgress.watchdogTimeoutCount.
-//   2. checkEvalDropTrigger — called from llmEvalHarness.runEval after a new
-//      baseline is persisted. Compares against events:llm-eval-baseline:v3.
-//
-// Both are exported for unit-test access and idempotent: they are no-ops
-// when v3 is not the active pipeline (so a v2 / v1 run cannot flip override).
-// All Redis writes are best-effort; persistence failures are logged but do
-// not unwind the in-memory flip.
-// ---------------------------------------------------------------------------
-
-/**
- * Internal helper: persist override to Redis + append D-15 audit entry.
- * Used by both auto-rollback triggers so the audit-log shape stays consistent.
- */
-async function performAutoRollbackToV2(opts: {
-  trigger: 'auto:watchdog_recurrence' | 'auto:eval_drop';
-  reason: string;
-}): Promise<void> {
-  const fromVersion = 'v3' as const;
-  setPipelineOverride('v2');
-  try {
-    await redis.set(PIPELINE_OVERRIDE_KEY, 'v2', { ex: PIPELINE_OVERRIDE_TTL_SEC });
-  } catch (err) {
-    log.warn({ err }, 'failed to persist auto-rollback override to redis');
-  }
-  await appendPipelineAudit({
-    ts: Date.now(),
-    from: fromVersion,
-    to: 'v2',
-    trigger: opts.trigger,
-    operator: process.env.NODE_ENV === 'production' ? 'production' : 'cron',
-    reason: opts.reason,
-  });
-}
-
-/**
- * D-17 Trigger 1: watchdog-recurrence auto-rollback. Called at the end of
- * processEventGroupsV3 (one detection per run, not per batch). Flips v3 -> v2
- * + records audit when llmProgress.watchdogTimeoutCount >= 3 AND v3 is active.
- *
- * Returns whether a rollback fired (for unit tests + caller introspection).
- */
-export async function checkWatchdogRecurrenceTrigger(): Promise<{
-  rolledBack: boolean;
-  reason?: string;
-}> {
-  if (!isPipelineV3()) return { rolledBack: false };
-  const wdCount = llmProgress.watchdogTimeoutCount ?? 0;
-  // Phase 27.4.4 D-13 — threshold is env-tunable. Default 2 (Zod schema in
-  // server/config.ts) keeps Gate B's strict watchdog=0 baseline while letting
-  // single timeouts recover without spurious flip; ops can raise it without
-  // a redeploy via V3_WATCHDOG_ROLLBACK_THRESHOLD=N.
-  const threshold = env.V3_WATCHDOG_ROLLBACK_THRESHOLD;
-  if (wdCount < threshold) return { rolledBack: false };
-  log.warn(
-    { watchdogTimeoutCount: wdCount, threshold },
-    'D-17 Trigger 1: watchdog recurrence — auto-rollback v3 -> v2',
-  );
-  const reason = `watchdogTimeoutCount=${wdCount} (>= ${threshold})`;
-  await performAutoRollbackToV2({ trigger: 'auto:watchdog_recurrence', reason });
-  return { rolledBack: true, reason };
-}
-
-/**
- * D-17 Trigger 2: eval-drop auto-rollback. Called by llmEvalHarness.runEval
- * after persisting a new score; compares against the cutover-gate baseline at
- * `events:llm-eval-baseline:v3`. If the new within20km/total ratio drops
- * >= 5pp from baseline AND v3 is the active pipeline, flips override -> v2.
- *
- * Read note: the baseline is persisted by llmEvalHarness via cacheSetSafe(),
- * which wraps the score in a `CacheEntry<T>` envelope `{data: EvalScore,
- * fetchedAt: number}`. We unwrap that envelope here. The original Plan 05
- * literal text used `redis.get<{within20km, total}>(...)` which would have
- * read the envelope as the score — Rule 1 bug fix: unwrap the .data field.
- * Defense-in-depth handles all observed envelope shapes (envelope, raw object,
- * legacy JSON string, null, malformed) so a future shape drift degrades to
- * "no rollback" instead of crashing the eval harness.
- */
-export async function checkEvalDropTrigger(opts: {
-  newWithin20kmRatio: number;
-}): Promise<{ rolledBack: boolean; reason?: string }> {
-  if (!isPipelineV3()) return { rolledBack: false };
-  try {
-    const raw = await redis.get<unknown>('events:llm-eval-baseline:v3');
-    if (!raw) return { rolledBack: false };
-
-    // Unwrap CacheEntry<T> envelope when present, accept raw object as fallback,
-    // accept legacy JSON-string entries from non-cacheSetSafe writers.
-    let baselineScore: { within20km?: unknown; total?: unknown } | null = null;
-    if (typeof raw === 'string') {
-      try {
-        const parsed = JSON.parse(raw) as Record<string, unknown>;
-        const inner = (parsed as { data?: Record<string, unknown> }).data ?? parsed;
-        baselineScore = inner as { within20km?: unknown; total?: unknown };
-      } catch {
-        return { rolledBack: false };
-      }
-    } else if (raw && typeof raw === 'object') {
-      const env = raw as { data?: unknown; within20km?: unknown; total?: unknown };
-      const inner = (env.data ?? env) as { within20km?: unknown; total?: unknown };
-      baselineScore = inner;
-    }
-
-    if (
-      !baselineScore ||
-      typeof baselineScore.within20km !== 'number' ||
-      typeof baselineScore.total !== 'number' ||
-      baselineScore.total === 0
-    ) {
-      return { rolledBack: false };
-    }
-    const baselineRatio = baselineScore.within20km / baselineScore.total;
-    const drop = baselineRatio - opts.newWithin20kmRatio;
-    if (drop >= 0.05) {
-      log.warn(
-        { drop, baselineRatio, newRatio: opts.newWithin20kmRatio },
-        'D-17 Trigger 2: eval drop >= 5pp — auto-rollback v3 -> v2',
-      );
-      const reason = `eval drop ${drop.toFixed(3)} (baseline ${baselineRatio.toFixed(3)} -> ${opts.newWithin20kmRatio.toFixed(3)})`;
-      await performAutoRollbackToV2({ trigger: 'auto:eval_drop', reason });
-      return { rolledBack: true, reason };
-    }
-  } catch (err) {
-    log.warn({ err }, 'eval-drop trigger check failed (redis unreachable?)');
-  }
-  return { rolledBack: false };
-}
+// Phase 29 D-02 part A — auto-rollback ladder (Plan 05 D-17) removed.
+// performAutoRollbackToV2, checkWatchdogRecurrenceTrigger, and
+// checkEvalDropTrigger are deleted because (a) the pin-pipeline override
+// surface is gone (Plan 04), so there's no in-memory state to flip; and
+// (b) v2 (the rollback target) is being deleted in Plan 05/06. The eval
+// harness caller (llmEvalHarness.runEval) is cleaned up in the same commit.
 
 // ---------------------------------------------------------------------------
 // Geocoding via the layered resolver (server/lib/llmResolver.ts, D-22).
