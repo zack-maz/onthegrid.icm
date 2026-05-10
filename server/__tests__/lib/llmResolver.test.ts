@@ -27,11 +27,16 @@ vi.mock('../../cache/redis.js', () => ({
   cacheGetSafe: vi.fn().mockResolvedValue(null),
   cacheSetSafe: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('../../adapters/llm-provider.js', () => ({
-  callLLM: vi.fn().mockResolvedValue(null),
+// Phase 29 Plan 03: resolver imports callLLM from freeClaudeRouter (Pitfall 3
+// fix). The router returns `{content, routing, finishReason?}` rather than the
+// legacy `string | null`. We mock freeClaudeRouter directly; existing tests
+// that did `mockResolvedValueOnce(jsonStr)` are migrated to wrap the value in
+// the router envelope below.
+vi.mock('../../lib/freeClaudeRouter.js', () => ({
+  callLLM: vi.fn().mockResolvedValue({ content: null, routing: [] }),
 }));
 
-import { callLLM } from '../../adapters/llm-provider.js';
+import { callLLM } from '../../lib/freeClaudeRouter.js';
 import { forwardGeocodeConstrained } from '../../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../../cache/redis.js';
 import {
@@ -80,7 +85,7 @@ describe('llmResolver', () => {
     vi.mocked(forwardGeocodeConstrained).mockReset().mockResolvedValue([]);
     vi.mocked(cacheGetSafe).mockReset().mockResolvedValue(null);
     vi.mocked(cacheSetSafe).mockReset().mockResolvedValue(undefined);
-    vi.mocked(callLLM).mockReset().mockResolvedValue(null);
+    vi.mocked(callLLM).mockReset().mockResolvedValue({ content: null, routing: [] });
   });
 
   it('resolves via sitesSnapshot when landmark substring-matches a site label with matching country', async () => {
@@ -294,7 +299,7 @@ describe('Phase 27.4 Plan 05 - POI amenity path (D-03)', () => {
     vi.mocked(forwardGeocodeConstrained).mockReset().mockResolvedValue([]);
     vi.mocked(cacheGetSafe).mockReset().mockResolvedValue(null);
     vi.mocked(cacheSetSafe).mockReset().mockResolvedValue(undefined);
-    vi.mocked(callLLM).mockReset().mockResolvedValue(null);
+    vi.mocked(callLLM).mockReset().mockResolvedValue({ content: null, routing: [] });
   });
 
   it('resolves Natanz via POI amenity path when landmark has nuclear keyword', async () => {
@@ -498,7 +503,7 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
     vi.mocked(forwardGeocodeConstrained).mockReset().mockResolvedValue([]);
     vi.mocked(cacheGetSafe).mockReset().mockResolvedValue(null);
     vi.mocked(cacheSetSafe).mockReset().mockResolvedValue(undefined);
-    vi.mocked(callLLM).mockReset().mockResolvedValue(null);
+    vi.mocked(callLLM).mockReset().mockResolvedValue({ content: null, routing: [] });
   });
 
   it('sanity gate fires on precision=city and runs two-pass verify', async () => {
@@ -536,9 +541,10 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
         },
       ]);
 
-    vi.mocked(callLLM).mockResolvedValueOnce(
-      JSON.stringify({ pick: 2, reasoning: 'matches Jobar' }),
-    );
+    vi.mocked(callLLM).mockResolvedValueOnce({
+      content: JSON.stringify({ pick: 2, reasoning: 'matches Jobar' }),
+      routing: [],
+    });
 
     const out = await resolveLocation(
       hierarchy({ country: 'Syria', city: 'Damascus' }),
@@ -589,7 +595,10 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
           address: { country_code: 'iq' },
         },
       ]);
-    vi.mocked(callLLM).mockResolvedValueOnce(JSON.stringify({ pick: 1, reasoning: 'ok' }));
+    vi.mocked(callLLM).mockResolvedValueOnce({
+      content: JSON.stringify({ pick: 1, reasoning: 'ok' }),
+      routing: [],
+    });
 
     const out = await resolveLocation(
       hierarchy({ country: 'Iraq', landmark: 'Some place' }),
@@ -641,7 +650,10 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
           address: { country_code: 'sy' },
         },
       ]);
-    vi.mocked(callLLM).mockResolvedValueOnce(JSON.stringify({ pick: 1, reasoning: 'ok' }));
+    vi.mocked(callLLM).mockResolvedValueOnce({
+      content: JSON.stringify({ pick: 1, reasoning: 'ok' }),
+      routing: [],
+    });
 
     await resolveLocation(
       hierarchy({ country: 'Syria', city: 'Damascus' }),
@@ -650,7 +662,13 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
 
     expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(1);
     const call = vi.mocked(callLLM).mock.calls[0]!;
-    const jsonSchema = call[1] as Record<string, unknown>;
+    // Phase 29 Plan 03: callLLM is now freeClaudeRouter.callLLM whose 2nd arg
+    // is `schemaText: string` (router uses response_format: json_object). The
+    // resolver passes JSON.stringify(RERANKER_JSON_SCHEMA) — parse it back to
+    // assert the schema shape is preserved end-to-end.
+    const schemaText = call[1] as string;
+    expect(typeof schemaText).toBe('string');
+    const jsonSchema = JSON.parse(schemaText) as Record<string, unknown>;
     expect(jsonSchema).toMatchObject({
       type: 'object',
       properties: expect.objectContaining({
@@ -684,7 +702,10 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
         },
         { lat: 33.6, lng: 36.4, displayName: 'C', type: 'suburb', address: { country_code: 'sy' } },
       ]);
-    vi.mocked(callLLM).mockResolvedValueOnce(JSON.stringify({ pick: 3, reasoning: 'best match' }));
+    vi.mocked(callLLM).mockResolvedValueOnce({
+      content: JSON.stringify({ pick: 3, reasoning: 'best match' }),
+      routing: [],
+    });
 
     const out = await resolveLocation(
       hierarchy({ country: 'Syria', city: 'Damascus' }),
@@ -717,7 +738,7 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
           address: { country_code: 'sy' },
         },
       ]);
-    vi.mocked(callLLM).mockResolvedValueOnce(null);
+    vi.mocked(callLLM).mockResolvedValueOnce({ content: null, routing: [] });
 
     const out = await resolveLocation(
       hierarchy({ country: 'Syria', city: 'Damascus' }),
@@ -749,7 +770,10 @@ describe('Phase 27.4 Plan 05 - two-pass verify (D-04)', () => {
           address: { country_code: 'sy' },
         },
       ]);
-    vi.mocked(callLLM).mockResolvedValueOnce(JSON.stringify({ pick: 99, reasoning: 'bad' }));
+    vi.mocked(callLLM).mockResolvedValueOnce({
+      content: JSON.stringify({ pick: 99, reasoning: 'bad' }),
+      routing: [],
+    });
 
     const out = await resolveLocation(
       hierarchy({ country: 'Syria', city: 'Damascus' }),
@@ -818,7 +842,7 @@ describe('Phase 27.4.4 — admin-polygon filter (eval misses)', () => {
     vi.mocked(forwardGeocodeConstrained).mockReset().mockResolvedValue([]);
     vi.mocked(cacheGetSafe).mockReset().mockResolvedValue(null);
     vi.mocked(cacheSetSafe).mockReset().mockResolvedValue(undefined);
-    vi.mocked(callLLM).mockReset().mockResolvedValue(null);
+    vi.mocked(callLLM).mockReset().mockResolvedValue({ content: null, routing: [] });
   });
 
   it('city precision: rejects single "administrative" hit and falls through to GDELT centroid', async () => {
@@ -938,7 +962,7 @@ describe('Phase 27.4.4 — Branch 4 runs even when Branch 3 returns null (city/r
     vi.mocked(forwardGeocodeConstrained).mockReset().mockResolvedValue([]);
     vi.mocked(cacheGetSafe).mockReset().mockResolvedValue(null);
     vi.mocked(cacheSetSafe).mockReset().mockResolvedValue(undefined);
-    vi.mocked(callLLM).mockReset().mockResolvedValue(null);
+    vi.mocked(callLLM).mockReset().mockResolvedValue({ content: null, routing: [] });
   });
 
   it('city precision: Branch 3 miss-cached → Branch 4 runs and finds the city', async () => {
