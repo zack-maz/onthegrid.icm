@@ -5,13 +5,7 @@ import { fetchEvents, backfillEvents } from '../adapters/gdelt.js';
 import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { loadDevLLMCache, loadDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
-import {
-  WAR_START,
-  CACHE_TTL,
-  getPipelineVersion,
-  setPipelineOverride,
-  getPipelineOverride,
-} from '../config.js';
+import { WAR_START, CACHE_TTL, getPipelineVersion } from '../config.js';
 import { groupGdeltRows } from '../lib/eventGrouping.js';
 import { extractBellingcatGeo } from '../lib/eventScoring.js';
 import { listDLQ } from '../lib/llmDLQ.js';
@@ -29,7 +23,7 @@ import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
 // Phase 27.4.3 Plan 02b B-3 — pipeline-flip audit log; canonical home is lib
 // (routes is consumer, not provider). Cyclic-import fix in place.
 import { appendOperatorAuditEntry, bearerFingerprint } from '../lib/operatorAudit.js';
-import { appendPipelineAudit, listPipelineAudit } from '../lib/pipelineAudit.js';
+import { listPipelineAudit } from '../lib/pipelineAudit.js';
 // Phase 28.2 Plan 03 D-08 — operator-action audit log + per-Bearer replay
 // quota guardrails on the dashboardAuth-gated /llm-pipeline + /llm-replay
 // endpoints. Both helpers degrade open on Redis failure (logged, not thrown).
@@ -315,42 +309,10 @@ function coerceCachedEvents<C extends { data: unknown }>(
 
 export const eventsRouter = Router();
 
-// ---------------------------------------------------------------------------
-// Phase 27.4 post-debug 2026-04-21 — runtime v1/v2 override
-//
-// The in-memory override in config.ts takes precedence over the env default.
-// It's hydrated from Redis on each /api/events request so multi-worker
-// deployments share a single source of truth, and updated immediately on
-// POST /llm-pipeline so the caller sees the new version on their next poll.
-//
-// Redis key: events:llm-pipeline-override ∈ {'v1', 'v2'} | absent
-// When absent → env default wins. When set → override wins until cleared
-// (POST body: {version: null}) or Redis TTL expires (7 days).
-// ---------------------------------------------------------------------------
-
-/** Redis key for the in-memory override. 7-day TTL so orphaned flips expire. */
-const PIPELINE_OVERRIDE_KEY = 'events:llm-pipeline-override';
-const PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
-
-/**
- * Refresh the in-memory pipeline override from Redis. Called at the top of
- * every /api/events handler so downstream sync `isPipelineV2()` reads see
- * the latest toggle value. Graceful on Redis failure: keeps current cache.
- */
-async function refreshPipelineOverride(): Promise<void> {
-  try {
-    const v = await redis.get<string>(PIPELINE_OVERRIDE_KEY);
-    // Phase 27.4.3 (D-07): widened to accept 'v3' alongside the existing
-    // 'v1' / 'v2' override values from setPipelineOverride.
-    if (v === 'v1' || v === 'v2' || v === 'v3') {
-      setPipelineOverride(v);
-    } else {
-      setPipelineOverride(null);
-    }
-  } catch {
-    // Keep existing cache on Redis failure — the env fallback is still active.
-  }
-}
+// override endpoint removed Phase 29 D-02 — pipeline pin surface deleted.
+// Active version reads directly via getPipelineVersion() from env at request
+// time. Plan 06 collapses getPipelineVersion() to a constant once v1+v2
+// extractor modules are removed.
 
 /**
  * DEV-ONLY: LLM pipeline status endpoint.
@@ -363,14 +325,9 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
   // telemetry (DLQ, watchdog timeouts, eval scores, routing trace) — same
   // sensitivity as /llm-pipeline, so same Bearer gate.
 
-  // Post-debug 2026-04-21: refresh in-memory override so the status endpoint
-  // reflects the latest Topbar-pill setting across workers.
-  await refreshPipelineOverride();
-
-  // Phase 27.4 D-24/D-37 + 27.4.3 Plan 02b: request-time flag read via the
-  // 3-way getPipelineVersion helper so operators can flip LLM_PIPELINE_V2 /
-  // LLM_PIPELINE_V3 / runtime override without a rebuild. Summary key
-  // branches accordingly; v1 + v2 keys left alone for rollback (D-21).
+  // Phase 29 D-02 part A — pipeline override removed; version reads directly
+  // from env via getPipelineVersion() now. v1+v2 keys still branched here
+  // until Plan 05/06 deletes the extractor modules.
   const version = getPipelineVersion();
   const LLM_SUMMARY_KEY_ACTIVE =
     version === 'v3'
@@ -553,118 +510,21 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
   });
 }
 
-/**
- * DEV-ONLY: runtime v1/v2 pipeline toggle (post-debug 2026-04-21).
- *
- * GET returns the currently-effective version + source ('override' or 'env').
- * POST {version: 'v1' | 'v2' | null} sets the in-memory override AND writes
- * it through to Redis so multi-worker deployments stay coherent; `null`
- * clears the override and reverts to the env default.
- *
- * Dual-gate per Pitfall 6: route registered only in non-prod, AND each
- * handler re-checks NODE_ENV before acting in case env flips after boot.
- */
-// Phase 27.4.4 Plan 02 — register unconditionally. See comment above the
-// /llm-replay block for the same NODE_ENV-wrap removal rationale.
-{
-  eventsRouter.get('/llm-pipeline', dashboardAuth, async (_req, res) => {
-    // Phase 27.4.4 Plan 02 — dashboardAuth middleware replaces the prior
-    // `NODE_ENV === 'production'` 404 gate. The endpoint leaks the active
-    // pipeline override which is a low-sensitivity signal but still
-    // operator-grade telemetry; gating keeps it consistent with the POST.
-    await refreshPipelineOverride();
-    const override = getPipelineOverride();
-    const effective = getPipelineVersion();
-    return res.json({ effective, override, source: override ? 'override' : 'env' });
-  });
-
-  eventsRouter.post('/llm-pipeline', dashboardAuth, async (req, res) => {
-    // Phase 27.4.4 Plan 02 — dashboardAuth middleware replaces the prior
-    // `NODE_ENV === 'production'` 404 gate. THIS is the cutover endpoint
-    // (Plan 02 Task 5) — must be reachable from the operator's laptop in
-    // production. Bearer-token gate keeps unauthenticated callers out.
-    const body = (req.body ?? {}) as { version?: unknown; reason?: unknown };
-    const version = body.version;
-    // Phase 27.4.3 Plan 02b — accept 'v3' alongside the existing 'v1' / 'v2'
-    // / null values. The validator must stay tight (no string coercion) so
-    // an attacker can't smuggle a free-text override into setPipelineOverride.
-    if (version !== 'v1' && version !== 'v2' && version !== 'v3' && version !== null) {
-      return res.status(400).json({ error: 'version must be "v1", "v2", "v3", or null' });
-    }
-
-    // Capture pre-flip version for the audit-log entry.
-    await refreshPipelineOverride();
-    const fromVersion = getPipelineVersion();
-
-    try {
-      if (version === null) {
-        await redis.del(PIPELINE_OVERRIDE_KEY);
-        setPipelineOverride(null);
-      } else {
-        await redis.set(PIPELINE_OVERRIDE_KEY, version, { ex: PIPELINE_OVERRIDE_TTL_SEC });
-        setPipelineOverride(version);
-      }
-    } catch (err) {
-      return res.status(500).json({
-        error: 'override_write_failed',
-        detail: String(err).slice(0, 200),
-      });
-    }
-
-    // Phase 27.4.3 Plan 02b D-15 / B-3 — append audit entry on every successful
-    // version flip. appendPipelineAudit is try/caught internally so a Redis
-    // failure here doesn't unwind the override write above.
-    const toVersion = getPipelineVersion();
-    if (fromVersion !== toVersion) {
-      await appendPipelineAudit({
-        ts: Date.now(),
-        from: fromVersion,
-        to: toVersion,
-        trigger: 'manual:operator_post',
-        operator: process.env.NODE_ENV === 'production' ? 'production' : 'dev',
-        reason: typeof body.reason === 'string' ? body.reason.slice(0, 500) : undefined,
-      });
-    }
-
-    // Phase 28.2 Plan 03 D-08 / AI-SPEC §5 — operator-action audit log.
-    // Distinct from appendPipelineAudit (whose payload shape encodes
-    // pipeline-flip provenance for rollback automation): this entry powers
-    // the AI-SPEC §7 Operator Actions block in the merged dashboard tab,
-    // keyed by the SHA-256 Bearer fingerprint (NEVER the raw password —
-    // T-28.2-03-01 mitigation). Every successful POST appends, including
-    // no-op flips where fromVersion === toVersion (the operator still
-    // exercised the endpoint, which is the audit signal we surface).
-    await appendOperatorAuditEntry({
-      timestamp: Date.now(),
-      bearerFingerprint: bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? ''),
-      operation: 'pipeline-swap',
-      args: { version },
-      result: 'ok',
-    });
-
-    const effective = getPipelineVersion();
-    return res.json({
-      effective,
-      override: getPipelineOverride(),
-      source: version ? 'override' : 'env',
-    });
-  });
-}
+// override endpoint removed Phase 29 D-02 — operator pin-pipeline surface
+// (set/get/clear + audit-log entry on flip) deleted. Pipeline version is
+// now fixed by env at deploy time. UI deletion of the Pin-to-v1/v2/v3
+// buttons + PipelineVersionPill lands in Plan 08 so an intermediate
+// "buttons present, route 404" state never ships.
 
 eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   const { backfill: forceBackfill } = res.locals.validatedQuery as z.infer<
     typeof eventsQuerySchema
   >;
 
-  // Post-debug 2026-04-21 — hydrate the in-memory pipeline override from
-  // Redis at the request boundary so downstream sync `isPipelineV2()` reads
-  // see the latest toggle value across workers.
-  await refreshPipelineOverride();
-
   // Phase 27.4 D-24/D-37 + Phase 27.4.3 Plan 02b: request-time flag read via
   // the 3-way getPipelineVersion helper so operators can flip LLM_PIPELINE_V2
-  // / LLM_PIPELINE_V3 / runtime override without a rebuild. Cache keys
-  // branch accordingly; v1 + v2 keys are left alone for rollback (D-21).
+  // / LLM_PIPELINE_V3 without a rebuild. Cache keys branch accordingly;
+  // v1 + v2 keys are left alone for rollback (D-21).
   const version = getPipelineVersion();
   const pipelineV2 = version === 'v2';
   const pipelineV3 = version === 'v3';
