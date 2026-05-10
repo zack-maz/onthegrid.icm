@@ -14,7 +14,7 @@
   ],
   "functions": {
     "api/vercel-entry.js": {
-      "maxDuration": 300
+      "maxDuration": 800
     }
   }
 }
