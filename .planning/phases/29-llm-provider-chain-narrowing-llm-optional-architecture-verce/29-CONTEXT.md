@@ -18,7 +18,7 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 - Actor metadata audit + canonical catalog → Phase 33 (ACTOR-01..05)
 - JSDoc audit + Redis registry verification + key inventory + budget delta + freeClaudeRouter audit + bundle-size delta → Phase 34 (DOCS-INT-02/03, REDIS-OPT-01..04, SIMPLIFY-02/05/07)
 - Public docs sweep + OpenAPI additions → Phase 35
-- Full ADR-0009 + acceptance gate closeout → Phase 36 (DOCS-PUB-04, LLM-RELI-07)
+- Full ADR-0010 + acceptance gate closeout → Phase 36 (DOCS-PUB-04, LLM-RELI-07)
   </domain>
 
 <decisions>
@@ -45,7 +45,7 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 
 ### ADR Capture
 
-- **D-03: Fold v1+v2 retirement rationale into ADR-0009 at Phase 36, write stub now.** A short ADR-0009 stub file is committed in Phase 29 at `docs/adr/ADR-0009-llm-pipeline-v1-5-decisions.md` containing: the v1→v2→v3 evolution timeline (Phase 27.4 lock dates from `.planning/phases/27.4-*/CONTEXT.md`); what was deleted in Phase 29 (modules, endpoint, Redis key, UI buttons); what the new rollback path is (git revert); and a `<expand_at_36>` marker for the rest of the v1.5 decisions. Phase 36 expands the stub with the full milestone-close rationale.
+- **D-03: Fold v1+v2 retirement rationale into ADR-0010 at Phase 36, write stub now.** A short ADR-0010 stub file is committed in Phase 29 at `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` containing: the v1→v2→v3 evolution timeline (Phase 27.4 lock dates from `.planning/phases/27.4-*/CONTEXT.md`); what was deleted in Phase 29 (modules, endpoint, Redis key, UI buttons); what the new rollback path is (git revert); and a `<expand_at_36>` marker for the rest of the v1.5 decisions. Phase 36 expands the stub with the full milestone-close rationale. (Numbering note: `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot; Phase 29's v1.5 retirement stub is therefore ADR-0010.)
 
 ### LLM-Optional Architecture
 
@@ -119,7 +119,7 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 - The exact path / file location for the integration test (`src/__tests__/` vs `server/__tests__/`) — researcher picks based on whichever harness already exists for `/api/events` end-to-end testing.
 - Whether the Express harness for the integration test mocks env vars via `vi.stubEnv` or via a test-only `createApp({ skipLLM: true })` factory parameter — researcher decides.
 - The exact wording / structure of the `docs/runbook.md` "LLM Pipeline Disabled / Keys Absent" section — researcher follows the runbook's existing 28.2 W6 section style.
-- The exact ADR-0009 stub structure — planner picks ADR template (likely follows existing `docs/adr/ADR-000X-*.md` convention if it exists; if no prior ADR exists, planner creates `docs/adr/` + ADR-0009 with a standard "Status / Context / Decision / Consequences" header).
+- The exact ADR-0010 stub structure — planner picks ADR template (follows existing `docs/adr/0001..0009-*.md` convention; the 0009 slot is taken by `0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md`, so the v1.5 retirement stub lands at `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` with a standard "Status / Context / Decision / Consequences" header).
 - Whether the `events:llm:v2` Redis read fallback in the events route stays for graceful degradation during the deploy window or is removed in the same commit — researcher reads the bridge code at `server/routes/events.ts:701-731` and recommends.
 
 </decisions>
@@ -171,15 +171,15 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 
 ### ADR + Documentation
 
-- `docs/adr/` — directory for ADR-0009 stub (D-03). Planner creates the dir if it doesn't exist.
-- `docs/adr/ADR-0009-llm-pipeline-v1-5-decisions.md` — written as a stub in Phase 29, expanded in Phase 36
+- `docs/adr/` — directory for ADR-0010 stub (D-03). Directory already exists (ADRs 0001-0009 + README.md + template.md).
+- `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` — written as a stub in Phase 29, expanded in Phase 36 (numbering: 0009 is already taken by the Accepted two-key-split ADR)
 - `docs/runbook.md` — D-04 receives the new "LLM Pipeline Disabled / Keys Absent" section
 - `docs/degradation.md` — Pitfall 1 + cascade fallback contract; must NOT regress (Phase 29 success criterion #4)
 
 ### Phase 27.4 Lineage (the lock D-02 supersedes)
 
-- `.planning/phases/27.4-llm-enrichment-improvements/27.4-CONTEXT.md` — Phase 27.4 D-26/D-40 lock that preserved v1+v2 as deep-rollback. D-03 ADR-0009 stub MUST cite this lock + the rationale for now retiring it (~2 weeks of stable v3 production + Pitfall 1 bridge handling map-never-blank independent of which extractor is active).
-- `.planning/phases/27.4.1-v2-extractor-watchdog/` — for ADR-0009 timeline notes
+- `.planning/phases/27.4-llm-enrichment-improvements/27.4-CONTEXT.md` — Phase 27.4 D-26/D-40 lock that preserved v1+v2 as deep-rollback. D-03 ADR-0010 stub MUST cite this lock + the rationale for now retiring it (~2 weeks of stable v3 production + Pitfall 1 bridge handling map-never-blank independent of which extractor is active).
+- `.planning/phases/27.4.1-v2-extractor-watchdog/` — for ADR-0010 timeline notes
 - `.planning/phases/27.4.6-cron-driven-pipeline-trigger/` — for the cron trigger lineage
 
 ### Folder + Repo Rename Surface (D-11)
@@ -224,7 +224,7 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 - `src/components/layout/Topbar.tsx` — D-02 likely deletes `PipelineVersionPill`
 - `vercel.json` — D-08 first commit (maxDuration 300→800)
 - `CLAUDE.md` — D-06 final commit of the phase (trim happens AFTER the code work so the trim doesn't lose context the implementer needed mid-phase)
-- `docs/adr/ADR-0009-llm-pipeline-v1-5-decisions.md` — D-03 stub written here
+- `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` — D-03 stub written here
 - `docs/runbook.md` — D-04 runbook entry written here
 
 </code_context>
@@ -245,7 +245,7 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 
 - **`PipelineVersionPill` complete removal vs degraded display** — D-02 marks it for likely deletion, but if the implementer finds it still has utility (e.g., showing `v3` even when no toggle exists), researcher can recommend keeping it as a static "v3" badge. Note in PR description.
 - **Reduce `Topbar` import surface after `PipelineVersionPill` deletion** — opportunistic; not in scope unless removal trivially enables it.
-- **`docs/adr/` directory creation** — if no prior ADRs exist (likely, no ADR-0008 referenced anywhere), the planner creates the directory + a top-level `docs/adr/README.md` describing the ADR convention. Otherwise just adds ADR-0009 stub alongside existing.
+- **`docs/adr/` directory creation** — directory already exists (ADRs 0001-0009 + README.md + template.md). Phase 29 just adds the ADR-0010 stub alongside existing files.
 - **`callHistory` shape simplification** — with only 2 providers in the cascade, the `skipReason` enum could shrink. Out of scope; Phase 30 might revisit when tuning.
 - **Replace `isPipelineV2()` callers with hardcoded `true` then collapse** — researcher decides whether to do the collapse in the same commit or sequentially.
 - **Anti-pattern #19** — do not re-introduce v1 / v2 extractor modules without a new ADR superseding the v1.5 decision. The deletion is intentional; "I might need it" is not justification.
