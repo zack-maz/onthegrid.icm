@@ -307,10 +307,8 @@ describe('/llm-replay — Phase 28.2 Plan 03 quota + audit + Pitfall 6', () => {
     process.env.LLM_PIPELINE_V3 = 'true';
     delete process.env.LLM_PIPELINE_V2;
 
-    // Reset any in-memory pipeline override left over from a previous suite
-    // sharing this vitest worker (the override is a module-level singleton).
-    const { setPipelineOverride } = await import('../../config.js');
-    setPipelineOverride(null);
+    // Phase 29 D-02 part A — pipeline override module state deleted; reset
+    // block removed.
 
     const { createApp } = await import('../../index.js');
     const app = createApp();

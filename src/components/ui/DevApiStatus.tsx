@@ -892,7 +892,6 @@ function DevApiStatusAllApisTab({
       swaps: number;
       replays: number;
     }>;
-    pinTtl: { version: string | null; ttlSeconds: number; human: string } | null;
     advEval: { total: number; blocked: number; leaked: number } | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
@@ -909,10 +908,10 @@ function DevApiStatusAllApisTab({
         // operator-status fields (e.g., a test fetch spy returning a
         // /api/health body, or a mid-deploy schema regression) hide
         // the block entirely instead of crashing on missing fields.
+        // Phase 29 D-02 part A — pipeline override field removed from response.
         if (
           typeof data?.audit24h !== 'number' ||
           !Array.isArray(data?.byBearer) ||
-          !('pinTtl' in data) ||
           !('advEval' in data)
         ) {
           return;
@@ -1542,11 +1541,10 @@ function DevApiStatusAllApisTab({
                 ))}
               </div>
             )}
-            <div className="mt-2 text-text-muted" data-testid="operator-actions-pin-ttl">
-              {opStatus.pinTtl
-                ? `Pinned to ${opStatus.pinTtl.version} — ${opStatus.pinTtl.human}`
-                : 'no pin active'}
-            </div>
+            {/* Phase 29 D-02 part A — operator-actions-pin-ttl render block
+                removed. The override write surface is gone; UI deletion of
+                the Pin-to-v1/v2/v3 buttons + PipelineVersionPill lands in
+                Plan 08. */}
             {opStatus.advEval && (
               <div className="mt-1 text-text-muted" data-testid="adversarial-eval-row">
                 Prompt-injection robustness: {opStatus.advEval.blocked}/{opStatus.advEval.total}

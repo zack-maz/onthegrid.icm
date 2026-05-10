@@ -66,7 +66,6 @@ function mockOperatorStatus(payload: {
     swaps: number;
     replays: number;
   }>;
-  pinTtl: { version: string; ttlSeconds: number; human: string } | null;
   advEval: { total: number; blocked: number; leaked: number } | null;
 }) {
   const fetchSpy = vi.fn().mockImplementation((url: string) => {
@@ -125,7 +124,6 @@ describe('DevApiStatus Operator Actions + adversarial eval row (Phase 28.2 W5 Ta
     mockOperatorStatus({
       audit24h: 30,
       byBearer: [],
-      pinTtl: null,
       advEval: null,
     });
     await renderModal();
@@ -140,7 +138,6 @@ describe('DevApiStatus Operator Actions + adversarial eval row (Phase 28.2 W5 Ta
         { bearerFingerprint: 'abc12345abcdef', actions: 3, swaps: 1, replays: 2 },
         { bearerFingerprint: 'def67890fedcba', actions: 2, swaps: 0, replays: 2 },
       ],
-      pinTtl: null,
       advEval: null,
     });
     await renderModal();
@@ -156,36 +153,14 @@ describe('DevApiStatus Operator Actions + adversarial eval row (Phase 28.2 W5 Ta
     expect(r2.textContent).toContain('2 replays');
   });
 
-  it('Test 7 (TTL countdown): renders `Pinned to v2 — expires in 4h 0m`', async () => {
-    mockOperatorStatus({
-      audit24h: 1,
-      byBearer: [],
-      pinTtl: { version: 'v2', ttlSeconds: 14_400, human: 'expires in 4h 0m' },
-      advEval: null,
-    });
-    await renderModal();
-    const ttl = screen.getByTestId('operator-actions-pin-ttl');
-    expect(ttl.textContent).toContain('Pinned to v2');
-    expect(ttl.textContent).toContain('expires in 4h 0m');
-  });
-
-  it('Test 7b (TTL absent): renders `no pin active`', async () => {
-    mockOperatorStatus({
-      audit24h: 0,
-      byBearer: [],
-      pinTtl: null,
-      advEval: null,
-    });
-    await renderModal();
-    const ttl = screen.getByTestId('operator-actions-pin-ttl');
-    expect(ttl.textContent).toContain('no pin active');
-  });
+  // Phase 29 D-02 part A — Tests 7 + 7b removed. The TTL countdown +
+  // 'no pin active' fallback render block (operator-actions-pin-ttl)
+  // is deleted with the pipeline override write surface.
 
   it('Test 8 (adversarial eval row — B-2): `Prompt-injection robustness: 9/10`', async () => {
     mockOperatorStatus({
       audit24h: 0,
       byBearer: [],
-      pinTtl: null,
       advEval: { total: 10, blocked: 9, leaked: 1 },
     });
     await renderModal();
@@ -197,7 +172,6 @@ describe('DevApiStatus Operator Actions + adversarial eval row (Phase 28.2 W5 Ta
     mockOperatorStatus({
       audit24h: 0,
       byBearer: [],
-      pinTtl: null,
       advEval: null,
     });
     await renderModal();
@@ -208,7 +182,6 @@ describe('DevApiStatus Operator Actions + adversarial eval row (Phase 28.2 W5 Ta
     const fetchSpy = mockOperatorStatus({
       audit24h: 0,
       byBearer: [],
-      pinTtl: null,
       advEval: null,
     });
     await renderModal();
@@ -225,7 +198,6 @@ describe('DevApiStatus Operator Actions + adversarial eval row (Phase 28.2 W5 Ta
     mockOperatorStatus({
       audit24h: 0,
       byBearer: [],
-      pinTtl: null,
       advEval: null,
     });
     await renderModal();
