@@ -305,56 +305,26 @@ export const NEWS_JACCARD_THRESHOLD = 0.8;
 export const NEWS_MIN_TOKENS_FOR_FUZZY = 5;
 
 // ---------------------------------------------------------------------------
-// Phase 27.4 flag readers
+// Phase 27.4 flag readers — Phase 29 D-02 part A simplified.
+//
+// The in-memory pipeline-override module state + write/read helpers are
+// deleted in Plan 04. Active pipeline version is now decided purely by env
+// at request time. The remaining isPipelineV2 / isPipelineV3 /
+// getPipelineVersion helpers are KEPT for Plan 06 to collapse to constants
+// once v1+v2 extractor modules are deleted.
 // ---------------------------------------------------------------------------
 
-/**
- * Phase 27.4 (D-24) W4 fix: single-source-of-truth reader for the
- * LLM_PIPELINE_V2 flag. Read at request-time (not module-init) so a Vercel
- * dashboard flip takes effect without a rebuild. Every consumer MUST use
- * this helper rather than `process.env.LLM_PIPELINE_V2 === 'true'` —
- * centralization prevents string-literal drift and eases the 27.5 flag
- * deletion.
- *
- * Post-debug 2026-04-21: `isPipelineV2()` now ALSO honors an in-memory
- * override (`setPipelineOverride('v1' | 'v2' | null)`) that takes precedence
- * over the env var. The override is hydrated from Redis at request boundary
- * via `refreshPipelineOverride()` — called from the /api/events route
- * handler — and written through by the POST /api/events/llm-pipeline
- * toggle endpoint. This keeps the dev pipeline switchable at runtime
- * without a restart while preserving the sync call surface that ~5 call
- * sites depend on.
- *
- * Precedence:  override > env var  (env default flipped to 'true' 2026-04-21)
- */
-let pipelineOverride: 'v1' | 'v2' | 'v3' | null = null;
-
-export function setPipelineOverride(v: 'v1' | 'v2' | 'v3' | null): void {
-  pipelineOverride = v;
-}
-
-export function getPipelineOverride(): 'v1' | 'v2' | 'v3' | null {
-  return pipelineOverride;
-}
-
 export function isPipelineV2(): boolean {
-  if (pipelineOverride === 'v2') return true;
-  if (pipelineOverride === 'v1' || pipelineOverride === 'v3') return false;
   // Phase 27.4.3 (D-07): when LLM_PIPELINE_V3 is true, v3 wins; v2 is off.
   if (process.env.LLM_PIPELINE_V3 === 'true') return false;
   return process.env.LLM_PIPELINE_V2 === 'true';
 }
 
 /**
- * Phase 27.4.3 (D-07) v3 pipeline activation. Same precedence ladder as
- * isPipelineV2 — runtime override beats env. Returns true ONLY when the
- * v3 path is the active extractor; consumers must use this helper rather
- * than reading the env directly so the override stays consistent across
- * all 3-4 call sites.
+ * Phase 27.4.3 (D-07) v3 pipeline activation. Returns true ONLY when the
+ * v3 path is the active extractor.
  */
 export function isPipelineV3(): boolean {
-  if (pipelineOverride === 'v3') return true;
-  if (pipelineOverride === 'v1' || pipelineOverride === 'v2') return false;
   return process.env.LLM_PIPELINE_V3 === 'true';
 }
 

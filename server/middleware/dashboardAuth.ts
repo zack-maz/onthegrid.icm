@@ -6,14 +6,14 @@ import type { Request, Response, NextFunction } from 'express';
  * Phase 27.4.4 Plan 02 — Bearer-token middleware for the dashboard surfaces.
  *
  * Applied to:
- *   - GET  /api/events/llm-pipeline
- *   - POST /api/events/llm-pipeline   (the cutover endpoint)
  *   - POST /api/events/llm-replay/:groupKey
  *   - GET  /api/dashboard/auth-check  (client-side gate validation)
  *
+ * Phase 29 D-02 part A — the prior `/api/events/llm-pipeline` GET + POST
+ * routes are deleted; those entries removed from this list.
+ *
  * Replaces the previous `NODE_ENV === 'production'` 404 gates on those
- * routes. The 404 model made the cutover POST physically unreachable from
- * the operator's laptop in prod, blocking Phase 27.4.4 Plan 02 Task 5.
+ * routes.
  *
  * Behavior:
  *   - NODE_ENV !== 'production'           → bypass auth (dev keeps existing UX)

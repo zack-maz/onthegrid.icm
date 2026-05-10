@@ -4,18 +4,21 @@
  *
  * Asserts:
  *   1. Bearer required (401 without token; 200 with valid token)
- *   2. Aggregator shape: audit24h + byBearer + pinTtl + advEval
- *   3. pinTtl is null when key is absent (TTL = -2) or no expiry (-1)
- *   4. advEval is null when sidecar key is empty
+ *   2. Aggregator shape: audit24h + byBearer + advEval
+ *   3. advEval is null when sidecar key is empty
+ *
+ * Phase 29 D-02 part A — pin-version override block removed from route +
+ * tests. The TTL-countdown probe is gone with it.
  */
 import express from 'express';
 import request from 'supertest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock redis BEFORE importing the route module.
+// Phase 29 D-02 part A — `ttl` reader removed; pinned override TTL probe
+// is no longer read by the route.
 const mockRedis = {
   smembers: vi.fn(),
-  ttl: vi.fn(),
   get: vi.fn(),
 };
 vi.mock('../../cache/redis.js', () => ({
@@ -48,7 +51,6 @@ describe('/api/operator-status route (Phase 28.2 W5 Task 7.5)', () => {
     process.env.NODE_ENV = 'production';
     process.env.DASHBOARD_PASSWORD = 'test-secret';
     mockRedis.smembers.mockResolvedValue([]);
-    mockRedis.ttl.mockResolvedValue(-2);
     mockRedis.get.mockResolvedValue(null);
 
     const app = makeApp();
@@ -64,7 +66,7 @@ describe('/api/operator-status route (Phase 28.2 W5 Task 7.5)', () => {
     expect(auth.status).toBe(200);
   });
 
-  it('Test 2 (shape): aggregates audit24h + byBearer + pinTtl + advEval', async () => {
+  it('Test 2 (shape): aggregates audit24h + byBearer + advEval', async () => {
     // Use dev mode to bypass auth; route logic is identical.
     process.env.NODE_ENV = 'development';
 
@@ -93,9 +95,7 @@ describe('/api/operator-status route (Phase 28.2 W5 Task 7.5)', () => {
       }),
     ];
     mockRedis.smembers.mockResolvedValue(audit);
-    mockRedis.ttl.mockResolvedValue(14_400); // 4h
     mockRedis.get.mockImplementation(async (key: string) => {
-      if (key === 'events:llm-pipeline-override') return 'v2';
       if (key === 'events:llm-eval-adversarial:v3') {
         return JSON.stringify({ total: 10, blocked: 9, leaked: 1, score: 0.9 });
       }
@@ -114,7 +114,6 @@ describe('/api/operator-status route (Phase 28.2 W5 Task 7.5)', () => {
         swaps: number;
         replays: number;
       }>;
-      pinTtl: { version: string; ttlSeconds: number; human: string } | null;
       advEval: { total: number; blocked: number; leaked: number } | null;
     };
 
@@ -126,40 +125,18 @@ describe('/api/operator-status route (Phase 28.2 W5 Task 7.5)', () => {
     expect(body.byBearer[0].swaps).toBe(1);
     expect(body.byBearer[0].replays).toBe(2);
 
-    expect(body.pinTtl).not.toBeNull();
-    expect(body.pinTtl?.version).toBe('v2');
-    expect(body.pinTtl?.ttlSeconds).toBe(14_400);
-    expect(body.pinTtl?.human).toBe('expires in 4h 0m');
-
     expect(body.advEval).not.toBeNull();
     expect(body.advEval?.total).toBe(10);
     expect(body.advEval?.blocked).toBe(9);
     expect(body.advEval?.leaked).toBe(1);
   });
 
-  it('Test 3 (pinTtl absent): returns null when TTL = -2 or -1', async () => {
-    process.env.NODE_ENV = 'development';
-    mockRedis.smembers.mockResolvedValue([]);
-    mockRedis.get.mockResolvedValue(null);
-
-    // TTL = -2 (key absent)
-    mockRedis.ttl.mockResolvedValueOnce(-2);
-    const app = makeApp();
-    let res = await request(app).get('/api/operator-status');
-    expect(res.status).toBe(200);
-    expect(res.body.pinTtl).toBeNull();
-
-    // TTL = -1 (key exists, no expiry — degenerate)
-    mockRedis.ttl.mockResolvedValueOnce(-1);
-    res = await request(app).get('/api/operator-status');
-    expect(res.status).toBe(200);
-    expect(res.body.pinTtl).toBeNull();
-  });
+  // Phase 29 D-02 part A — Test 3 removed (probed pin-version null branches;
+  // the render block + Redis TTL read are deleted from the route).
 
   it('Test 4 (advEval absent): returns null when sidecar key is empty', async () => {
     process.env.NODE_ENV = 'development';
     mockRedis.smembers.mockResolvedValue([]);
-    mockRedis.ttl.mockResolvedValue(-2);
     mockRedis.get.mockResolvedValue(null);
 
     const app = makeApp();
