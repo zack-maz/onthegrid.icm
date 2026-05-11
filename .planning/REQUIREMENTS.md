@@ -10,11 +10,11 @@ Requirements for this milestone, grouped by track. Each maps to exactly one road
 
 ### LLM Reliability — provider chain narrowing + v3 stabilization + LLM-optional architecture
 
-- [ ] **LLM-RELI-01**: Active runtime provider cascade narrowed to NIM (primary) + OpenRouter (fallback). Cerebras + Groq removed from `callLLM` cascade and from `isLLMConfigured` gating in normal operation. v1/v2 extractor code paths preserved as deep-rollback safety only (per Phase 27.4 D-26/D-40).
+- [x] **LLM-RELI-01**: Active runtime provider cascade narrowed to NIM (primary) + OpenRouter (fallback). Cerebras + Groq removed from `callLLM` cascade and from `isLLMConfigured` gating in normal operation. v1/v2 extractor code paths preserved as deep-rollback safety only (per Phase 27.4 D-26/D-40).
 - [ ] **LLM-RELI-02**: NIM throttle behavior characterized — capture observed throttle window length, request-per-minute ceiling, and recovery signal pattern. Findings written to a Pitfall section in CLAUDE.md or a dedicated `docs/architecture/llm-pipeline-reliability.md`.
 - [ ] **LLM-RELI-03**: `LLM_BATCH_SIZE` (currently `BATCH_SIZE=2` v1, env-tunable in v3) and `LLM_V3_CONCURRENCY` (default 12) tuned against the characterized throttle. Tuned values committed as defaults; old values documented in the new ADR.
 - [ ] **LLM-RELI-04**: Retry / backoff parameters in `callLLM` cascade (`server/adapters/llm-provider.ts`) tuned against the characterized throttle. Per-event retry budget, exponential-backoff base, jitter window all set from measured data, not guessed.
-- [ ] **LLM-RELI-05**: LLM-optional architecture proven. With `NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` both unset (or `LLM_PIPELINE_ENABLED=false` if a kill-switch is added), `/api/events` continues to serve raw GDELT through the Pitfall 1 cache bridge. Map renders cleanly with no LLM enrichment. Existing degradation contract honoured.
+- [x] **LLM-RELI-05**: LLM-optional architecture proven. With `NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` both unset (or `LLM_PIPELINE_ENABLED=false` if a kill-switch is added), `/api/events` continues to serve raw GDELT through the Pitfall 1 cache bridge. Map renders cleanly with no LLM enrichment. Existing degradation contract honoured.
 - [ ] **LLM-RELI-06**: Daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:llm:v3` healthy. `/api/health` returns `endpoints.llmEvents.status === 'healthy'` after the daily tick. Confirmed across at least 7 consecutive days under normal NIM availability.
 - [ ] **LLM-RELI-07**: `prod-connectivity-audit.yml` exit-0 with `audit:connectivity:last-result.allTiersGreen === true` for **3 consecutive runs** (the v1.5 → v1.6 promotion gate; unblocks 999.5 load test).
 
@@ -36,7 +36,7 @@ Requirements for this milestone, grouped by track. Each maps to exactly one road
 
 ### Documentation — Internal (CLAUDE.md + JSDoc + comments)
 
-- [ ] **DOCS-INT-01**: `CLAUDE.md` trimmed. Phase-history bloat (verbose 27.x / 28.x narrative blocks) condensed to current-state invariants only. Targets a meaningful token-count reduction (e.g. ~30k → <20k) without losing live-decision context.
+- [x] **DOCS-INT-01**: `CLAUDE.md` trimmed. Phase-history bloat (verbose 27.x / 28.x narrative blocks) condensed to current-state invariants only. Targets a meaningful token-count reduction (e.g. ~30k → <20k) without losing live-decision context.
 - [ ] **DOCS-INT-02**: Inline JSDoc + comments around the LLM pipeline modules (`server/lib/llmExtractionPipeline.ts`, `server/lib/llmEventExtractor.v3.ts`, `server/lib/llmResolver.ts`, `server/lib/llmCircuitBreaker.ts`, `server/lib/llmDLQ.ts`, `server/lib/llmTokenBudget.ts`, `server/lib/llmExtractorWatchdog.ts`) audited and brought current. Each module's public API has a one-line JSDoc that matches the v1.5 implementation.
 - [ ] **DOCS-INT-03**: Redis key registry (CLAUDE.md "Serverless Cache" section) verified against actual writers and readers in the codebase. Every key listed has at least one writer and at least one reader; orphaned entries removed; missing keys added. Forms the input for the REDIS-OPT-\* track.
 
@@ -54,9 +54,9 @@ These requirements turn the Vercel Pro upgrade and the v3-cascade-narrowing deci
 - [ ] **SIMPLIFY-01**: Retire `mergeAndPersistLlmEntities` incremental flush + `LLM_FLUSH_EVERY_N_BATCHES` env var. Single terminal-key write at end of run becomes the canonical shape on Pro's 800s ceiling. The 28.2.6 Plan 01 incremental flush was a 300s-budget mitigation; with 800s headroom it's pure complexity + Redis command churn. Lands in Phase 30 alongside the cascade-tuning work because the new defaults (CONCURRENCY, BATCH_SIZE) are sized against the post-simplification flow.
 - [ ] **SIMPLIFY-02**: Retire `events:llm:v3:partial` observability key. Either delete entirely (cleanest) or downgrade to a debug-only flag behind an env var. Pre-Pro it was load-bearing for "did extraction make progress before getting killed?"; post-Pro extraction reliably finishes so partial state stops carrying signal. Phase 34 (Redis-opt) is the right home — REDIS-OPT-01..02 already classifies keys, and `events:llm:v3:partial` is a top retirement candidate.
 - [ ] **SIMPLIFY-03**: Watchdog defaults relaxed against the 800s ceiling. Current 90s hard-kill / 60s soft-warn per batch was sized to leave room for ~3 batches in 300s; on Pro the per-batch budget is much more generous. Either bump to ~180s/120s or evaluate whether the soft-warn category is still useful at all. New defaults committed against the measured throttle behavior from LLM-RELI-02 — soft-warn entries in `callHistory` should drop to near-zero under normal NIM availability.
-- [ ] **SIMPLIFY-04**: Cerebras + Groq adapter dead-code purged from `server/adapters/llm-provider.ts` runtime path. LLM-RELI-01 retires them from the runtime cascade; SIMPLIFY-04 follows up by deleting the adapter functions, the `CEREBRAS_API_KEY` / `GROQ_API_KEY` checks, and the synthetic `skipReason: 'no_client'` callHistory entries. v1 + v2 extractor code paths preserved (per Phase 27.4 D-26/D-40 they're deep-rollback safety) but the live cascade has zero references to Cerebras/Groq after this lands. Bundle-size impact tracked toward SIMPLIFY-07.
+- [x] **SIMPLIFY-04**: Cerebras + Groq adapter dead-code purged from `server/adapters/llm-provider.ts` runtime path. LLM-RELI-01 retires them from the runtime cascade; SIMPLIFY-04 follows up by deleting the adapter functions, the `CEREBRAS_API_KEY` / `GROQ_API_KEY` checks, and the synthetic `skipReason: 'no_client'` callHistory entries. v1 + v2 extractor code paths preserved (per Phase 27.4 D-26/D-40 they're deep-rollback safety) but the live cascade has zero references to Cerebras/Groq after this lands. Bundle-size impact tracked toward SIMPLIFY-07.
 - [ ] **SIMPLIFY-05**: `server/lib/freeClaudeRouter.ts` (Phase 27.4.3 vendored router) caller audit. If it has live callers, document them in a JSDoc block at the top of the file; if it has zero live callers (orphaned because the cutover deferred per the 27.4.3 audit), delete the file + supporting imports + tests. Phase 34 is the right home (broader cleanup phase).
-- [ ] **SIMPLIFY-06**: v1 extractor (`server/lib/llmEventExtractor.v1.ts`) archived to a clearly-marked location (e.g. `server/lib/_archive/llmEventExtractor.v1.ts`) or the `attic/` convention. The v2 path stays in the bridge but its role is documented as deep-rollback only. The goal is making the active runtime path obviously the active path — readers shouldn't have to triage "is v1 still live?" on every visit.
+- [x] **SIMPLIFY-06**: v1 extractor (`server/lib/llmEventExtractor.v1.ts`) archived to a clearly-marked location (e.g. `server/lib/_archive/llmEventExtractor.v1.ts`) or the `attic/` convention. The v2 path stays in the bridge but its role is documented as deep-rollback only. The goal is making the active runtime path obviously the active path — readers shouldn't have to triage "is v1 still live?" on every visit.
 - [ ] **SIMPLIFY-07**: `api/vercel-entry.js` bundle-size delta measured pre/post v1.5. Baseline: 1.72 MB at v1.4 close (up from 1.2 MB at v1.3 close). Target: net reduction documented in ADR-0010. Each SIMPLIFY-01..06 contributes; Phase 34 captures the final measurement and writes the delta into the closing artifact. Stretch goal: shrink below 1.5 MB.
 
 ### Documentation — Public (README + architecture + runbook + ADRs)
@@ -124,51 +124,51 @@ Explicitly excluded from v1.5. Documented to prevent scope creep.
 
 Empty initially; populated by the roadmap agent during Step 10. Each requirement maps to exactly one phase.
 
-| Requirement  | Phase | Status  |
-| ------------ | ----- | ------- |
-| LLM-RELI-01  | 29    | Pending |
-| LLM-RELI-02  | 30    | Pending |
-| LLM-RELI-03  | 30    | Pending |
-| LLM-RELI-04  | 30    | Pending |
-| LLM-RELI-05  | 29    | Pending |
-| LLM-RELI-06  | 31    | Pending |
-| LLM-RELI-07  | 36    | Pending |
-| GHOST-01     | 32    | Pending |
-| GHOST-02     | 32    | Pending |
-| GHOST-03     | 32    | Pending |
-| GHOST-04     | 32    | Pending |
-| GHOST-05     | 32    | Pending |
-| ACTOR-01     | 33    | Pending |
-| ACTOR-02     | 33    | Pending |
-| ACTOR-03     | 33    | Pending |
-| ACTOR-04     | 33    | Pending |
-| ACTOR-05     | 33    | Pending |
-| DOCS-INT-01  | 29    | Pending |
-| DOCS-INT-02  | 34    | Pending |
-| DOCS-INT-03  | 34    | Pending |
-| REDIS-OPT-01 | 34    | Pending |
-| REDIS-OPT-02 | 34    | Pending |
-| REDIS-OPT-03 | 34    | Pending |
-| REDIS-OPT-04 | 34    | Pending |
-| SIMPLIFY-01  | 30    | Pending |
-| SIMPLIFY-02  | 34    | Pending |
-| SIMPLIFY-03  | 30    | Pending |
-| SIMPLIFY-04  | 29    | Pending |
-| SIMPLIFY-05  | 34    | Pending |
-| SIMPLIFY-06  | 29    | Pending |
-| SIMPLIFY-07  | 34    | Pending |
-| DOCS-PUB-01  | 35    | Pending |
-| DOCS-PUB-02  | 35    | Pending |
-| DOCS-PUB-03  | 35    | Pending |
-| DOCS-PUB-04  | 36    | Pending |
-| DOCS-PUB-05  | 35    | Pending |
-| DOCS-API-01  | 35    | Pending |
-| DOCS-API-02  | 35    | Pending |
-| DOCS-API-03  | 35    | Pending |
-| DOCS-API-04  | 35    | Pending |
-| DOCS-API-05  | 35    | Pending |
-| DOCS-API-06  | 35    | Pending |
-| DOCS-API-07  | 35    | Pending |
+| Requirement  | Phase | Status   |
+| ------------ | ----- | -------- |
+| LLM-RELI-01  | 29    | Complete |
+| LLM-RELI-02  | 30    | Pending  |
+| LLM-RELI-03  | 30    | Pending  |
+| LLM-RELI-04  | 30    | Pending  |
+| LLM-RELI-05  | 29    | Complete |
+| LLM-RELI-06  | 31    | Pending  |
+| LLM-RELI-07  | 36    | Pending  |
+| GHOST-01     | 32    | Pending  |
+| GHOST-02     | 32    | Pending  |
+| GHOST-03     | 32    | Pending  |
+| GHOST-04     | 32    | Pending  |
+| GHOST-05     | 32    | Pending  |
+| ACTOR-01     | 33    | Pending  |
+| ACTOR-02     | 33    | Pending  |
+| ACTOR-03     | 33    | Pending  |
+| ACTOR-04     | 33    | Pending  |
+| ACTOR-05     | 33    | Pending  |
+| DOCS-INT-01  | 29    | Complete |
+| DOCS-INT-02  | 34    | Pending  |
+| DOCS-INT-03  | 34    | Pending  |
+| REDIS-OPT-01 | 34    | Pending  |
+| REDIS-OPT-02 | 34    | Pending  |
+| REDIS-OPT-03 | 34    | Pending  |
+| REDIS-OPT-04 | 34    | Pending  |
+| SIMPLIFY-01  | 30    | Pending  |
+| SIMPLIFY-02  | 34    | Pending  |
+| SIMPLIFY-03  | 30    | Pending  |
+| SIMPLIFY-04  | 29    | Complete |
+| SIMPLIFY-05  | 34    | Pending  |
+| SIMPLIFY-06  | 29    | Complete |
+| SIMPLIFY-07  | 34    | Pending  |
+| DOCS-PUB-01  | 35    | Pending  |
+| DOCS-PUB-02  | 35    | Pending  |
+| DOCS-PUB-03  | 35    | Pending  |
+| DOCS-PUB-04  | 36    | Pending  |
+| DOCS-PUB-05  | 35    | Pending  |
+| DOCS-API-01  | 35    | Pending  |
+| DOCS-API-02  | 35    | Pending  |
+| DOCS-API-03  | 35    | Pending  |
+| DOCS-API-04  | 35    | Pending  |
+| DOCS-API-05  | 35    | Pending  |
+| DOCS-API-06  | 35    | Pending  |
+| DOCS-API-07  | 35    | Pending  |
 
 **Coverage:**
 
