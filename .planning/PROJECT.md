@@ -163,4 +163,6 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
+_Last updated: 2026-05-11 — Phase 29 (LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + CLAUDE.md Trim) complete: 13/13 plans, verification 8/8. Cascade narrowed to NIM + OpenRouter; v1+v2 extractors + operator override surface deleted; Vercel Pro `maxDuration: 800` locked; CLAUDE.md trimmed 73.3% to 5018 tokens; ADR-0010 stub captured. Operator out-of-band action queued: GitHub repo rename `zack-maz/onthegrid.icm` → `zack-maz/otg-iran-monitor`._
+
 _Last updated: 2026-05-08 — milestone v1.5 LLM Reliability & Reveal Prep started (predecessor v1.4 GDELT Redo & Performance shipped same day; 18 phases; 999.5 load test deferred to v1.6 pending v1.5 acceptance gate of 3 consecutive `prod-connectivity-audit.yml` exit-0 runs)._
