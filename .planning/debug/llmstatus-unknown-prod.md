@@ -66,7 +66,7 @@ reasoning_checkpoint: H1 confirmed by code-state inspection alone — no operato
 
 - timestamp: 2026-05-07T23:32:00Z
   what: `gh pr list --state all` returns no PR for `feature/28.2.6-cron-architecture-fix`
-  where: GitHub repo zack-maz/onthegrid.icm
+  where: GitHub repo zack-maz/otg-iran-monitor
   meaning: Branch exists locally + on remote but no PR opened yet. Even if a PR were opened, it would still need merge + deploy to land on prod.
 
 - timestamp: 2026-05-07T23:35:00Z
@@ -137,7 +137,7 @@ The unmerged branch `feature/28.2.6-cron-architecture-fix` (24 commits ahead of 
 
    ```bash
    vercel env ls --scope <project-scope> | grep -i nvidia
-   # Or visually via https://vercel.com/<team>/onthegrid-icm/settings/environment-variables
+   # Or visually via the Vercel dashboard: https://vercel.com/<team>/onthegrid-icm/settings/environment-variables
    ```
 
    If missing — set it via `vercel env add NVIDIA_NIM_API_KEY production` then re-deploy.
