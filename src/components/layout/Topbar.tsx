@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { NotificationBell } from '@/components/layout/NotificationBell';
@@ -6,7 +6,7 @@ import { StatusDropdown } from '@/components/layout/StatusDropdown';
 import { INITIAL_VIEW_STATE } from '@/components/map/constants';
 import { SearchModal } from '@/components/search/SearchModal';
 import { effectiveStatus } from '@/lib/apiStatus';
-import { hasDashboardKey, shouldRenderDashboard, dashboardAuthHeaders } from '@/lib/dashboardAuth';
+import { hasDashboardKey } from '@/lib/dashboardAuth';
 import { useEventStore } from '@/stores/eventStore';
 import { useFilterStore } from '@/stores/filterStore';
 import { useFlightStore } from '@/stores/flightStore';
@@ -191,76 +191,14 @@ function DevApiStatusTrigger() {
 }
 
 /**
- * Dev-only pipeline version pill. Shows the currently-effective v1/v2/v3 LLM
- * pipeline version as a READ-ONLY indicator. Phase 27.4.1 D-20: the
- * click-to-swap behavior has been stripped; operators who need to flip
- * versions should POST /api/events/llm-pipeline directly (the endpoint
- * remains available for scripted use). This passive pill answers
- * "which version's data am I seeing right now?" without the footgun
- * of accidentally swapping from dev clicks.
- *
- * The endpoint is dual-gated (NODE_ENV + 404 fallback); the UI is
- * DEV-only via the parent wrapper so production builds tree-shake it.
- *
- * Phase 27.4.3 Plan 04 — version union widened to admit 'v3', rendered
- * in blue rgb(96,165,250) per UI-SPEC §"Pipeline-version pill". PILL_COLORS
- * lookup record replaces the inline ternary so adding future versions is
- * a one-line change.
+ * Phase 29 Plan 08 D-02 part D — Topbar pipeline-version pill removed.
+ * The pill's only function was querying the now-deleted
+ * POST /api/events/llm-pipeline endpoint (Plan 04). Per RESEARCH Question 5
+ * + A4 decision, the pill was deleted (not preserved as a static "v3"
+ * indicator) — a UI element with no signal behind it would be deceptive.
+ * Operators can confirm the active pipeline version via the DevApiStatus
+ * Events tab callHistory display.
  */
-const PILL_COLORS: Record<'v1' | 'v2' | 'v3', string> = {
-  v1: 'rgb(234,179,8)', // yellow (existing)
-  v2: 'rgb(74,222,128)', // green (existing)
-  v3: 'rgb(96,165,250)', // blue accent-blue family (UI-SPEC new)
-};
-
-function PipelineVersionPillInner() {
-  const [version, setVersion] = useState<'v1' | 'v2' | 'v3' | 'unknown'>('unknown');
-
-  const fetchVersion = useCallback(async () => {
-    try {
-      // Phase 27.4.4 Plan 02 — /api/events/llm-pipeline is now Bearer-auth
-      // gated in prod (dev bypasses). dashboardAuthHeaders() returns the
-      // stored key as Authorization; in dev it's an empty object and the
-      // server ignores absence.
-      const res = await fetch('/api/events/llm-pipeline', {
-        headers: dashboardAuthHeaders(),
-      });
-      if (!res.ok) return;
-      const json = (await res.json()) as { effective?: 'v1' | 'v2' | 'v3' };
-      if (json.effective === 'v1' || json.effective === 'v2' || json.effective === 'v3') {
-        setVersion(json.effective);
-      }
-    } catch {
-      // leave as unknown
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchVersion();
-  }, [fetchVersion]);
-
-  if (version === 'unknown') return null;
-
-  return (
-    <span
-      data-testid="pipeline-version-pill"
-      className="rounded-md px-2 py-1 font-mono text-[10px]"
-      style={{ color: PILL_COLORS[version] }}
-      title={`LLM pipeline: ${version} (read-only — use POST /api/events/llm-pipeline to swap)`}
-    >
-      {version}
-    </span>
-  );
-}
-
-function PipelineVersionPill() {
-  // Phase 27.4.4 Plan 02 — pill renders in dev OR when an operator has
-  // stored a dashboard key. The fetch inside PipelineVersionPillInner
-  // sends the Bearer header; in prod-not-authed it 401s and the pill
-  // stays hidden via its own `version === 'unknown'` short-circuit.
-  if (!shouldRenderDashboard()) return null;
-  return <PipelineVersionPillInner />;
-}
 
 export function Topbar() {
   return (
@@ -295,11 +233,10 @@ export function Topbar() {
         </kbd>
       </button>
 
-      {/* Right: Reset + DevApiStatus trigger (dev-only) + pipeline-version pill (dev-only) + Notification bell */}
+      {/* Right: Reset + DevApiStatus trigger (dev-only) + Notification bell */}
       <div className="flex items-center gap-1">
         <ResetButton />
         <DevApiStatusTrigger />
-        <PipelineVersionPill />
         <NotificationBell />
       </div>
 

@@ -43,7 +43,7 @@ export function hasDashboardKey(): boolean {
 }
 
 /**
- * True when the dashboard surfaces (DevApiStatus modal, PipelineVersionPill,
+ * True when the dashboard surfaces (DevApiStatus modal,
  * DevApiStatusTrigger) should render. Dev short-circuit preserves the
  * pre-Plan-02 UX; prod requires a stored Bearer token.
  *
