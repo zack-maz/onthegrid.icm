@@ -503,6 +503,23 @@ describe('Events Route (Redis accumulator)', () => {
     expect(body.code).toBe('UPSTREAM_FAIL');
   });
 
+  it('POST /api/events/llm-pipeline returns 404 (route deleted Phase 29 D-02)', async () => {
+    // Phase 29 Plan 04 deleted the operator pipeline-version pin endpoint
+    // (set/get/clear + audit-log entry on flip). Pipeline version is now
+    // fixed by env at deploy time. This regression guard ensures the route
+    // stays deleted -- a future commit that re-registers it under the same
+    // path will fail this assertion.
+    //
+    // No Bearer needed: the route is gone, so dashboardAuth never runs;
+    // Express returns 404 for unmatched POSTs.
+    const res = await fetch(`${baseUrl}/api/events/llm-pipeline`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version: 'v1' }),
+    });
+    expect(res.status).toBe(404);
+  });
+
   it('has no module-level backfill code (no fs access, no GDELT fetch at import time)', async () => {
     // The fact we can import the module without any fs errors or GDELT calls
     // proves there are no module-level side effects.
