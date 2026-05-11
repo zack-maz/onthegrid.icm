@@ -3,15 +3,14 @@ import { z } from 'zod';
 
 import { fetchEvents, backfillEvents } from '../adapters/gdelt.js';
 import { isLLMConfigured } from '../adapters/llm-provider.js';
-import { loadDevLLMCache, loadDevLLMCacheV2 } from '../cache/devFileCache.js';
+import { loadDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
-import { WAR_START, CACHE_TTL, getPipelineVersion } from '../config.js';
+import { WAR_START, CACHE_TTL } from '../config.js';
 import { groupGdeltRows } from '../lib/eventGrouping.js';
 import { extractBellingcatGeo } from '../lib/eventScoring.js';
 import { listDLQ } from '../lib/llmDLQ.js';
-import { processEventGroupsV2 } from '../lib/llmEventExtractor.v2.js';
 import { processEventGroupsV3 } from '../lib/llmEventExtractor.v3.js';
-import { enrichedV1ToEntities } from '../lib/llmExtractionPipeline.js';
+import { enrichedV3ToEntities } from '../lib/llmExtractionPipeline.js';
 import { llmProgress } from '../lib/llmProgress.js';
 import { shouldPauseNewEvents } from '../lib/llmTokenBudget.js';
 import { logger } from '../lib/logger.js';
@@ -68,8 +67,12 @@ const BACKFILL_KEY = 'events:backfill-ts';
 /** 1 hour cooldown to prevent hammering GDELT master list */
 const BACKFILL_COOLDOWN_MS = 3_600_000;
 
-/** Redis key for LLM-enriched events (separate from raw GDELT) */
-const LLM_EVENTS_KEY = 'events:llm';
+/** Redis key for LLM-enriched events (separate from raw GDELT).
+ *  Phase 29 D-02 part C — collapsed to v3-only; v1 + v2 keys retired. */
+const LLM_EVENTS_KEY_ACTIVE = 'events:llm:v3';
+
+/** Redis key for the active LLM run summary. v3-only post-Phase-29. */
+const LLM_SUMMARY_KEY_ACTIVE_NAME = 'events:llm-summary:v3';
 
 /** Redis key storing last LLM processing Unix ms timestamp */
 const LLM_PROCESS_KEY = 'events:llm-process-ts';
@@ -79,9 +82,6 @@ const LLM_LOGICAL_TTL_MS = 900_000;
 
 /** Hard Redis TTL for LLM cache — 2.5 hours (same as raw GDELT) */
 const LLM_REDIS_TTL_SEC = 9000;
-
-/** Redis key for LLM pipeline run summary (persisted on completion) */
-const LLM_SUMMARY_KEY = 'events:llm-summary';
 
 /** 24-hour TTL for LLM summary — retained across multiple pipeline runs */
 const LLM_SUMMARY_TTL_SEC = 86_400;
@@ -128,14 +128,11 @@ export interface RecentEnrichedEvent {
  * /llm-status endpoint never crashes because the cache is unreachable.
  */
 async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEvent[]> {
-  // Phase 27.4.3 Plan 02b — read v3 cache when v3 is active. Falls back to v2
-  // / v1 keys via the cache-fallback chain in the main GET handler; here we
-  // only project the active version's terminal cache for the dev drill-down.
-  const version = getPipelineVersion();
-  const key =
-    version === 'v3' ? 'events:llm:v3' : version === 'v2' ? 'events:llm:v2' : LLM_EVENTS_KEY;
+  // Phase 29 D-02 part C — v3-only terminal cache. The Pitfall 1 bridge in
+  // the main GET handler can promote stale v2/v1 cache data when the v3
+  // cache is empty, but the dev drill-down projects only the active key.
   try {
-    const cached = await cacheGetSafe<ConflictEventEntity[]>(key, 0);
+    const cached = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY_ACTIVE, 0);
     const events = toEntityArray(cached?.data);
     if (events.length === 0) return [];
     // Most recent first — entity.timestamp is the event timestamp.
@@ -161,9 +158,9 @@ async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEv
           geocodeProvenance: GeocodeProvenance;
           sourceUrls: string[];
         }>;
-        // The stable groupKey is embedded in the v2 id as `llm-v2-${key}`;
+        // The stable groupKey is embedded in the v3 id as `llm-v3-${key}`;
         // strip the prefix and any trailing index suffix we may add later.
-        const groupKey = e.id.replace(/^llm-v2-/, '').replace(/-\d+$/, '');
+        const groupKey = e.id.replace(/^llm-v3-/, '').replace(/-\d+$/, '');
         return {
           groupKey,
           location: d.location ?? {
@@ -248,15 +245,14 @@ async function recordLLMTimestamp(): Promise<void> {
   }
 }
 
-// Phase 27.4.6 — entity adapters (enrichedV1ToEntities / enrichedV2ToEntities
-// / enrichedV3ToEntities) live with the cron-driven extraction helper at
-// `server/lib/llmExtractionPipeline.ts`. They were imported above; the
-// deprecated alias is preserved here for any external consumer that still
-// imports `enrichedToEntities` directly.
+// Phase 27.4.6 — entity adapters live with the cron-driven extraction
+// helper at `server/lib/llmExtractionPipeline.ts`. Phase 29 D-02 part C
+// removed the v1 + v2 adapters alongside their extractor modules; only
+// the v3 adapter remains as the active path.
 
-/** Deprecated alias — re-exports the v1 adapter from the helper module so
+/** Deprecated alias — re-exports the v3 adapter from the helper module so
  *  any legacy importer continues to type-check. Remove in 27.5 cleanup. */
-export const enrichedToEntities = enrichedV1ToEntities;
+export const enrichedToEntities = enrichedV3ToEntities;
 
 /**
  * Wrap sendValidated to normalize event types before Zod validation.
@@ -310,9 +306,7 @@ function coerceCachedEvents<C extends { data: unknown }>(
 export const eventsRouter = Router();
 
 // override endpoint removed Phase 29 D-02 — pipeline pin surface deleted.
-// Active version reads directly via getPipelineVersion() from env at request
-// time. Plan 06 collapses getPipelineVersion() to a constant once v1+v2
-// extractor modules are removed.
+// Phase 29 D-02 part C — pipeline-version branching collapsed to v3-only.
 
 /**
  * DEV-ONLY: LLM pipeline status endpoint.
@@ -325,16 +319,8 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
   // telemetry (DLQ, watchdog timeouts, eval scores, routing trace) — same
   // sensitivity as /llm-pipeline, so same Bearer gate.
 
-  // Phase 29 D-02 part A — pipeline override removed; version reads directly
-  // from env via getPipelineVersion() now. v1+v2 keys still branched here
-  // until Plan 05/06 deletes the extractor modules.
-  const version = getPipelineVersion();
-  const LLM_SUMMARY_KEY_ACTIVE =
-    version === 'v3'
-      ? 'events:llm-summary:v3'
-      : version === 'v2'
-        ? 'events:llm-summary:v2'
-        : LLM_SUMMARY_KEY;
+  // Phase 29 D-02 part C — single active key for v3 summary cache.
+  const LLM_SUMMARY_KEY_ACTIVE = LLM_SUMMARY_KEY_ACTIVE_NAME;
 
   // Phase 27.4 Plan 09 — assemble the full v2/v3 observability payload:
   //   * DLQ recent entries (D-30) — bounded at 50
@@ -453,14 +439,9 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
       });
     }
 
-    // Phase 27.4.3 Plan 02b — route the replay path against the active
-    // pipeline version. v3 reads from `events:llm:v3` and re-extracts via
-    // processEventGroupsV3; v2 stays on the existing v2 path. v1 isn't
-    // covered by /llm-replay (the v1 cache shape doesn't carry per-group
-    // ids replay can target).
-    const replayVersion = getPipelineVersion();
-    const cacheKey = replayVersion === 'v3' ? 'events:llm:v3' : 'events:llm:v2';
-    const cached = await cacheGetSafe<ConflictEventEntity[]>(cacheKey, 0);
+    // Phase 29 D-02 part C — v3-only replay path. v1 + v2 extractor modules
+    // are gone; the cache is exclusively the `events:llm:v3` terminal key.
+    const cached = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY_ACTIVE, 0);
     const existing = toEntityArray(cached?.data).find((e) => e.id.includes(groupKey));
     if (!existing) return res.status(404).json({ error: 'not_found' });
 
@@ -472,21 +453,16 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     const group = groups.find((g) => g.key === groupKey);
     if (!group) return res.status(404).json({ error: 'group_gone' });
 
-    // Re-extract a SINGLE group — processEventGroupsV2/V3 itself does not
-    // write to cache; the only caller that does is the fire-and-forget block
-    // above. This is the Pitfall 6 "cache-read-only" invariant — preserved
-    // verbatim for v3.
+    // Re-extract a SINGLE group — processEventGroupsV3 itself does not write
+    // to cache; the only caller that does is the cron-driven extraction
+    // helper. This is the Pitfall 6 "cache-read-only" invariant.
     try {
-      let diffPayload: { old: ConflictEventEntity; new: unknown } | null = null;
-      if (replayVersion === 'v3') {
-        const extraction = await processEventGroupsV3([group]);
-        const first = extraction?.events?.[0] ?? null;
-        diffPayload = { old: existing, new: first };
-      } else {
-        const extraction = await processEventGroupsV2([group]);
-        const first = extraction?.events?.[0] ?? null;
-        diffPayload = { old: existing, new: first };
-      }
+      const extraction = await processEventGroupsV3([group]);
+      const first = extraction?.events?.[0] ?? null;
+      const diffPayload: { old: ConflictEventEntity; new: unknown } = {
+        old: existing,
+        new: first,
+      };
 
       // Phase 28.2 Plan 03 D-08 / AI-SPEC §5 — append audit entry BEFORE
       // responding so "synchronous before HTTP response" (the AWAIT contract,
@@ -496,7 +472,7 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
         timestamp: Date.now(),
         bearerFingerprint: fingerprint,
         operation: 'replay',
-        args: { groupKey, replayVersion },
+        args: { groupKey, replayVersion: 'v3' },
         result: 'ok',
       });
 
@@ -521,23 +497,11 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     typeof eventsQuerySchema
   >;
 
-  // Phase 27.4 D-24/D-37 + Phase 27.4.3 Plan 02b: request-time flag read via
-  // the 3-way getPipelineVersion helper so operators can flip LLM_PIPELINE_V2
-  // / LLM_PIPELINE_V3 without a rebuild. Cache keys branch accordingly;
-  // v1 + v2 keys are left alone for rollback (D-21).
-  const version = getPipelineVersion();
-  const pipelineV2 = version === 'v2';
-  const pipelineV3 = version === 'v3';
-  const LLM_EVENTS_KEY_ACTIVE = pipelineV3
-    ? 'events:llm:v3'
-    : pipelineV2
-      ? 'events:llm:v2'
-      : LLM_EVENTS_KEY;
-  const LLM_SUMMARY_KEY_ACTIVE = pipelineV3
-    ? 'events:llm-summary:v3'
-    : pipelineV2
-      ? 'events:llm-summary:v2'
-      : LLM_SUMMARY_KEY;
+  // Phase 29 D-02 part C — v3-only active keys. The Pitfall 1 cache bridge
+  // (events:llm:v2 → events:llm:v1) below preserves the safety net: if v3
+  // cache is empty but the legacy keys still hold data from a prior deploy,
+  // we serve them so the map never goes blank.
+  const LLM_SUMMARY_KEY_ACTIVE = LLM_SUMMARY_KEY_ACTIVE_NAME;
 
   // --- LLM cache check (highest priority: serve enriched events if fresh) ---
   // Post-ship defense-in-depth 2026-04-24: coerce to array-shape immediately
@@ -554,23 +518,32 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     return sendNormalizedEvents(res, llmCached);
   }
 
-  // Phase 27.4 Pitfall 1 + Phase 27.4.3 Plan 02b D-05 — extended cache
-  // fallback chain v3 → v2 → v1 → raw GDELT. During v3 rollout the v3 cache
-  // may be empty while v2 / v1 are populated; we bridge to whichever earlier
-  // version has fresh data so the map never goes blank during cutover.
-  if (pipelineV3 && !llmCached?.data) {
+  // Phase 27.4 Pitfall 1 — v3 → v2 → v1 cache bridge. After Phase 29 D-02
+  // part C collapsed the pipeline to v3-only the legacy v2 / v1 keys are no
+  // longer written; the bridge here is a transitional safety net that fires
+  // ONLY when the v3 primary returned a stale-but-present envelope (the
+  // cutover-race window the bridges were designed to cover). Plan 29-07
+  // simplifies the bridge to a single tier (v3 → raw GDELT) once any
+  // residual data on the legacy keys has TTL-expired.
+  //
+  // Skipping bridges on null / degraded primary protects the chaos-
+  // resilience test budget: each cacheGetSafe burns REDIS_OP_TIMEOUT_MS
+  // (~2s) under Redis death, so probing two known-empty keys we already
+  // know we cannot serve from would push /api/events past the 10s default
+  // vitest timeout.
+  if (llmCached?.data && llmCached.stale && !llmCached.degraded) {
     let bridgeV2 = await cacheGetSafe<ConflictEventEntity[]>('events:llm:v2', LLM_LOGICAL_TTL_MS);
     if (bridgeV2) bridgeV2 = coerceCachedEvents(bridgeV2);
     if (bridgeV2 && !bridgeV2.stale) {
       return sendNormalizedEvents(res, bridgeV2);
     }
-    let bridgeV1 = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY, LLM_LOGICAL_TTL_MS);
+    let bridgeV1 = await cacheGetSafe<ConflictEventEntity[]>('events:llm', LLM_LOGICAL_TTL_MS);
     if (bridgeV1) bridgeV1 = coerceCachedEvents(bridgeV1);
     if (bridgeV1 && !bridgeV1.stale) {
       return sendNormalizedEvents(res, bridgeV1);
     }
-    // Promote whichever stale bridge has data so the stale-serve path at the
-    // bottom of the handler still works (priority v2 > v1).
+    // Promote whichever stale bridge has data so the stale-serve path at
+    // the bottom of the handler still works (priority v2 > v1).
     if (bridgeV2?.data) {
       llmCached = bridgeV2;
     } else if (bridgeV1?.data) {
@@ -578,28 +551,11 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     }
   }
 
-  // Phase 27.4 Pitfall 1 (preserved): v2 → v1 bridge when v2 cache is empty.
-  if (pipelineV2 && !llmCached?.data) {
-    let llmCachedV1 = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY, LLM_LOGICAL_TTL_MS);
-    if (llmCachedV1) llmCachedV1 = coerceCachedEvents(llmCachedV1);
-    if (llmCachedV1 && !llmCachedV1.stale) {
-      return sendNormalizedEvents(res, llmCachedV1);
-    }
-    if (llmCachedV1?.data && !llmCached?.data) {
-      llmCached = llmCachedV1;
-    }
-  }
-
   // Dev fallback: if Redis LLM cache is empty, try local file cache to avoid
-  // re-processing. v3 has no dedicated dev file cache yet (the v3 pipeline is
-  // expected to land its own cache fixtures in Plan 03+); we fall back to the
-  // v2 dev cache when v3 is the active pipeline so dev environments without
-  // Redis still hydrate something useful.
+  // re-processing. v3 reuses the v2 dev file cache shape post-Phase-29 so
+  // dev environments without Redis still hydrate something useful.
   if (!llmCached?.data) {
-    const devData =
-      pipelineV3 || pipelineV2
-        ? loadDevLLMCacheV2<ConflictEventEntity[]>()
-        : loadDevLLMCache<ConflictEventEntity[]>();
+    const devData = loadDevLLMCacheV2<ConflictEventEntity[]>();
     if (devData) {
       // Seed Redis from file so subsequent requests are fast
       await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, devData, LLM_REDIS_TTL_SEC);
@@ -616,7 +572,7 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
         durationMs: 0,
         error: null,
         source: 'dev-file-cache',
-        schemaVersion: version,
+        schemaVersion: 'v3',
       };
       await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, summary, LLM_SUMMARY_TTL_SEC);
       // Set cooldown so the pipeline doesn't re-trigger on the next request

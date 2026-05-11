@@ -168,14 +168,6 @@ vi.mock('../../lib/llmEventExtractor.js', () => ({
   processEventGroups: vi.fn(async () => null),
   geocodeEnrichedEvents: vi.fn(async () => []),
 }));
-vi.mock('../../lib/llmEventExtractor.v2.js', () => ({
-  processEventGroupsV2: vi.fn(async () => ({
-    events: [],
-    matchedNewsByGroup: new Map(),
-    bellingcatByGroup: new Map(),
-  })),
-  BATCH_SIZE: 2,
-}));
 vi.mock('../../lib/llmEventExtractor.v3.js', () => ({
   processEventGroupsV3: (...args: unknown[]) => mockProcessV3(...(args as [])),
 }));
@@ -288,8 +280,6 @@ const seedReplayCaches = (groupKey: string) => {
 describe('/llm-replay — Phase 28.2 Plan 03 quota + audit + Pitfall 6', () => {
   let server: Server;
   let baseUrl: string;
-  const originalPipelineV3 = process.env.LLM_PIPELINE_V3;
-  const originalPipelineV2 = process.env.LLM_PIPELINE_V2;
 
   beforeEach(async () => {
     cacheStore.clear();
@@ -304,11 +294,8 @@ describe('/llm-replay — Phase 28.2 Plan 03 quota + audit + Pitfall 6', () => {
     mockRedisDel.mockReset().mockResolvedValue(1);
     mockProcessV3.mockClear();
 
-    process.env.LLM_PIPELINE_V3 = 'true';
-    delete process.env.LLM_PIPELINE_V2;
-
-    // Phase 29 D-02 part A — pipeline override module state deleted; reset
-    // block removed.
+    // Phase 29 D-02 part C — pipeline-version env flag setup deleted; the
+    // active extractor is v3-only and no longer reads LLM_PIPELINE_V2/V3.
 
     const { createApp } = await import('../../index.js');
     const app = createApp();
@@ -325,10 +312,6 @@ describe('/llm-replay — Phase 28.2 Plan 03 quota + audit + Pitfall 6', () => {
 
   afterEach(() => {
     server?.close();
-    if (originalPipelineV3 === undefined) delete process.env.LLM_PIPELINE_V3;
-    else process.env.LLM_PIPELINE_V3 = originalPipelineV3;
-    if (originalPipelineV2 === undefined) delete process.env.LLM_PIPELINE_V2;
-    else process.env.LLM_PIPELINE_V2 = originalPipelineV2;
   });
 
   // Test 1 — at-cap path returns 429 + Retry-After (header semantics)

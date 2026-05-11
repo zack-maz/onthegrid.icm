@@ -101,8 +101,6 @@ vi.mock('../../lib/pipelineAudit.js', () => ({
 
 vi.mock('../../config.js', () => ({
   env: mockEnv,
-  isPipelineV3: vi.fn().mockReturnValue(true),
-  getPipelineVersion: vi.fn().mockReturnValue('v3'),
 }));
 
 import { callLLM as freeClaudeCallLLM } from '../../lib/freeClaudeRouter.js';

@@ -25,7 +25,7 @@
 // llmProgress.routingTrace below.
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { redis } from '../cache/redis.js';
-import { env, isPipelineV3 } from '../config.js';
+import { env } from '../config.js';
 
 import { createLimit } from './concurrencyLimit.js';
 import { extractBellingcatGeo } from './eventScoring.js';

@@ -26,11 +26,6 @@ const { mockEnv } = vi.hoisted(() => ({
 
 vi.mock('../../config.js', () => ({
   env: mockEnv,
-  isPipelineV3: vi.fn().mockReturnValue(true),
-  isPipelineV2: vi.fn().mockReturnValue(false),
-  getPipelineVersion: vi.fn().mockReturnValue('v3'),
-  getPipelineOverride: vi.fn().mockReturnValue('v3'),
-  setPipelineOverride: vi.fn(),
 }));
 
 // Mock the eval harness so the route can be imported without spinning up

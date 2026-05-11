@@ -60,11 +60,6 @@ vi.mock('../../cache/redis.js', () => ({
 
 vi.mock('../../config.js', () => ({
   env: mockEnv,
-  isPipelineV3: vi.fn().mockReturnValue(true),
-  isPipelineV2: vi.fn().mockReturnValue(false),
-  getPipelineVersion: vi.fn().mockReturnValue('v3'),
-  getPipelineOverride: vi.fn().mockReturnValue('v3'),
-  setPipelineOverride: vi.fn(),
 }));
 
 // Mock @vercel/functions so any waitUntil call (Plan 02 will introduce one)
@@ -245,10 +240,6 @@ const geocodeEnrichedEventsMock = vi.fn(async (input: any, _groups: any, onProgr
 vi.mock('../../lib/llmEventExtractor.js', () => ({
   processEventGroups: processEventGroupsMock,
   geocodeEnrichedEvents: geocodeEnrichedEventsMock,
-}));
-
-vi.mock('../../lib/llmEventExtractor.v2.js', () => ({
-  BATCH_SIZE: 2,
 }));
 
 // ---------------------------------------------------------------------------
