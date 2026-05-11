@@ -278,17 +278,18 @@ function sendNormalizedEvents(
 /**
  * Phase 27.4.1 post-ship defense-in-depth (2026-04-24).
  *
- * `events:llm:v2` is owned by the terminal route write below (~line 1016)
- * which stores a ConflictEventEntity[] array. Plan 03 briefly wrote an
- * LLMCachePayload envelope to the same key which crashed every consumer
- * (events.map is not a function; llmCachedRef.data is not iterable); the
- * writer is fixed in a5c8846 to target events:llm:v2:partial instead.
+ * The active LLM cache key is owned by the cron-driven extraction helper
+ * (server/lib/llmExtractionPipeline.ts) which stores a ConflictEventEntity[]
+ * array. Earlier work briefly wrote an LLMCachePayload envelope to the
+ * terminal key which crashed every consumer (events.map is not a function;
+ * llmCachedRef.data is not iterable); the writer is fixed in a5c8846 to
+ * target the :partial sibling key instead.
  *
  * This guard is belt-and-suspenders — if any future regression reintroduces
- * an envelope write to the terminal key, the synchronous HTTP path and
- * the fire-and-forget background task both degrade to "serve empty /
- * recompute from scratch" instead of throwing 500. The Pitfall 1 bridge
- * then kicks in and maps users to v1 cache where possible.
+ * an envelope write to the terminal key, the synchronous HTTP path
+ * degrades to "serve empty / recompute from scratch" instead of throwing
+ * 500. Control falls through to the raw GDELT path below so the map
+ * never goes blank.
  *
  * Callers should apply at the read site so downstream consumers (iteration
  * loops, .find, .map, sendNormalizedEvents payload) can trust the shape.
@@ -389,13 +390,13 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
 /**
  * Phase 27.4 Plan 08 D-21 — dev-only prompt replay endpoint.
  *
- * Re-extracts a single cached v2 event group with the CURRENT prompt and
+ * Re-extracts a single cached event group with the CURRENT prompt and
  * returns `{ old, new }` so the operator can iterate on prompt wording
  * side-by-side without waiting for the full pipeline cycle.
  *
  * CRITICAL (threat T-27.4-08-05 / Pitfall 6): the handler MUST NOT write
- * back to `events:llm:v2`. It is strictly read-only vs. the cache. Any
- * `cacheSetSafe('events:llm:v2', ...)` call here is a bug.
+ * back to the terminal LLM cache key. It is strictly read-only vs. the
+ * cache. Any `cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, ...)` call here is a bug.
  *
  * CRITICAL (threat T-27.4-08-01 / Pitfall 6): dual-layer dev gate —
  *   1. Route registered ONLY when NODE_ENV !== 'production' so the endpoint
@@ -497,18 +498,20 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
     typeof eventsQuerySchema
   >;
 
-  // Phase 29 D-02 part C — v3-only active keys. The Pitfall 1 cache bridge
-  // (events:llm:v2 → events:llm:v1) below preserves the safety net: if v3
-  // cache is empty but the legacy keys still hold data from a prior deploy,
-  // we serve them so the map never goes blank.
+  // Pitfall 1 bridge simplified Phase 29 D-02 — v3 cache → raw GDELT only.
+  // v1 + v2 read legs deleted alongside the v1+v2 extractor modules. If the
+  // v3 primary is empty or stale, control falls through to the raw GDELT
+  // fetch path below; the "map never goes blank" contract is preserved by
+  // that terminal fallback (docs/degradation.md cache-layer + data-source
+  // layer sections — the LLM bridge specifics were never part of the
+  // documented contract).
   const LLM_SUMMARY_KEY_ACTIVE = LLM_SUMMARY_KEY_ACTIVE_NAME;
 
   // --- LLM cache check (highest priority: serve enriched events if fresh) ---
   // Post-ship defense-in-depth 2026-04-24: coerce to array-shape immediately
   // so the sync HTTP path (sendNormalizedEvents → normalizeEventTypes.map),
-  // the Pitfall 1 bridge assignment below, and the fire-and-forget background
-  // task's llmCachedRef iterations all see a guaranteed
-  // ConflictEventEntity[] regardless of what shape the cache holds.
+  // and any downstream iteration see a guaranteed ConflictEventEntity[]
+  // regardless of what shape the cache holds.
   let llmCached = await cacheGetSafe<ConflictEventEntity[]>(
     LLM_EVENTS_KEY_ACTIVE,
     LLM_LOGICAL_TTL_MS,
@@ -516,39 +519,6 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   if (llmCached) llmCached = coerceCachedEvents(llmCached);
   if (llmCached && !llmCached.stale) {
     return sendNormalizedEvents(res, llmCached);
-  }
-
-  // Phase 27.4 Pitfall 1 — v3 → v2 → v1 cache bridge. After Phase 29 D-02
-  // part C collapsed the pipeline to v3-only the legacy v2 / v1 keys are no
-  // longer written; the bridge here is a transitional safety net that fires
-  // ONLY when the v3 primary returned a stale-but-present envelope (the
-  // cutover-race window the bridges were designed to cover). Plan 29-07
-  // simplifies the bridge to a single tier (v3 → raw GDELT) once any
-  // residual data on the legacy keys has TTL-expired.
-  //
-  // Skipping bridges on null / degraded primary protects the chaos-
-  // resilience test budget: each cacheGetSafe burns REDIS_OP_TIMEOUT_MS
-  // (~2s) under Redis death, so probing two known-empty keys we already
-  // know we cannot serve from would push /api/events past the 10s default
-  // vitest timeout.
-  if (llmCached?.data && llmCached.stale && !llmCached.degraded) {
-    let bridgeV2 = await cacheGetSafe<ConflictEventEntity[]>('events:llm:v2', LLM_LOGICAL_TTL_MS);
-    if (bridgeV2) bridgeV2 = coerceCachedEvents(bridgeV2);
-    if (bridgeV2 && !bridgeV2.stale) {
-      return sendNormalizedEvents(res, bridgeV2);
-    }
-    let bridgeV1 = await cacheGetSafe<ConflictEventEntity[]>('events:llm', LLM_LOGICAL_TTL_MS);
-    if (bridgeV1) bridgeV1 = coerceCachedEvents(bridgeV1);
-    if (bridgeV1 && !bridgeV1.stale) {
-      return sendNormalizedEvents(res, bridgeV1);
-    }
-    // Promote whichever stale bridge has data so the stale-serve path at
-    // the bottom of the handler still works (priority v2 > v1).
-    if (bridgeV2?.data) {
-      llmCached = bridgeV2;
-    } else if (bridgeV1?.data) {
-      llmCached = bridgeV1;
-    }
   }
 
   // Dev fallback: if Redis LLM cache is empty, try local file cache to avoid
