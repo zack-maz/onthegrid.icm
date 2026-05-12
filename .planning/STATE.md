@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: ready_to_plan
-last_updated: "2026-05-10T22:41:38.054Z"
-last_activity: 2026-05-10 -- Phase 29 execution started
+status: "Phase 29 shipped — PR #19"
+last_updated: "2026-05-12T21:17:43.696Z"
+last_activity: 2026-05-12
 progress:
   total_phases: 13
   completed_phases: 1
   total_plans: 13
-  completed_plans: 0
-  percent: 8
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md
 
 Phase: 999.1
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-11
+Status: Phase 29 shipped — PR #19
+Last activity: 2026-05-12
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
