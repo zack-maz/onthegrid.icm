@@ -59,14 +59,15 @@ const mockGroupGdeltRows = vi.fn(() => []);
 const mockProcessEventGroups = vi.fn(async () => null);
 const mockGeocodeEnrichedEvents = vi.fn(async () => []);
 
-// Phase 27.4 Plan 08 — runEval (eval harness) + processEventGroupsV2 (replay).
+// Phase 27.4 Plan 08 — runEval (eval harness) + processEventGroupsV3 (replay).
+// Phase 29 D-02 part C — v3 extractor replaces the v2 mock (v2 module deleted).
 const mockRunEval = vi.fn(async () => ({
   within5km: 0,
   within20km: 0,
   within100km: 0,
   total: 0,
 }));
-const mockProcessEventGroupsV2 = vi.fn(async () => ({
+const mockProcessEventGroupsV3 = vi.fn(async () => ({
   events: [],
   matchedNewsByGroup: new Map(),
   bellingcatByGroup: new Map(),
@@ -201,15 +202,11 @@ vi.mock('../../lib/llmEventExtractor.js', () => ({
   processEventGroups: (...args: unknown[]) => mockProcessEventGroups(...(args as [])),
   geocodeEnrichedEvents: (...args: unknown[]) => mockGeocodeEnrichedEvents(...(args as [])),
 }));
-// Phase 27.4 Plan 08 — the v2 extractor is called directly by the /llm-replay
-// endpoint; mock it so the replay tests assert routing + response shape
-// without dragging in the real LLM path.
-vi.mock('../../lib/llmEventExtractor.v2.js', () => ({
-  processEventGroupsV2: (...args: unknown[]) => mockProcessEventGroupsV2(...(args as [])),
-  // Phase 27.4 WR-03 — events.ts imports BATCH_SIZE for totalBatches math.
-  // Mirror the real value (2) so the progress-math branch behaves the same
-  // under the mock.
-  BATCH_SIZE: 2,
+// Phase 29 D-02 part C — the v3 extractor is called directly by the /llm-replay
+// endpoint (v2 module + helper deleted); mock it so the replay tests assert
+// routing + response shape without dragging in the real LLM path.
+vi.mock('../../lib/llmEventExtractor.v3.js', () => ({
+  processEventGroupsV3: (...args: unknown[]) => mockProcessEventGroupsV3(...(args as [])),
 }));
 // Phase 27.4 Plan 08 — runEval is called inside the v2 fire-and-forget
 // block. Mock it so tests can assert invocation without needing a real
@@ -366,8 +363,8 @@ describe('Events Route (Redis accumulator)', () => {
       within100km: 0,
       total: 0,
     });
-    mockProcessEventGroupsV2.mockClear();
-    mockProcessEventGroupsV2.mockResolvedValue({
+    mockProcessEventGroupsV3.mockClear();
+    mockProcessEventGroupsV3.mockResolvedValue({
       events: [],
       matchedNewsByGroup: new Map(),
       bellingcatByGroup: new Map(),
@@ -504,6 +501,23 @@ describe('Events Route (Redis accumulator)', () => {
     expect(res.status).toBe(502);
     const body = await res.json();
     expect(body.code).toBe('UPSTREAM_FAIL');
+  });
+
+  it('POST /api/events/llm-pipeline returns 404 (route deleted Phase 29 D-02)', async () => {
+    // Phase 29 Plan 04 deleted the operator pipeline-version pin endpoint
+    // (set/get/clear + audit-log entry on flip). Pipeline version is now
+    // fixed by env at deploy time. This regression guard ensures the route
+    // stays deleted -- a future commit that re-registers it under the same
+    // path will fail this assertion.
+    //
+    // No Bearer needed: the route is gone, so dashboardAuth never runs;
+    // Express returns 404 for unmatched POSTs.
+    const res = await fetch(`${baseUrl}/api/events/llm-pipeline`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version: 'v1' }),
+    });
+    expect(res.status).toBe(404);
   });
 
   it('has no module-level backfill code (no fs access, no GDELT fetch at import time)', async () => {
@@ -721,8 +735,8 @@ describe('Events Route (Redis accumulator)', () => {
     });
 
     it('serves fresh LLM cache directly without triggering LLM processing', async () => {
-      // Pre-populate LLM cache with fresh data
-      redisStore.set('events:llm', {
+      // Pre-populate v3 LLM cache with fresh data
+      redisStore.set('events:llm:v3', {
         data: [llmEvent],
         fetchedAt: Date.now(), // fresh
       });
@@ -782,8 +796,8 @@ describe('Events Route (Redis accumulator)', () => {
 
       // Set LLM cooldown timestamp (recently processed)
       rawRedisStore.set('events:llm-process-ts', Date.now());
-      // Stale LLM cache
-      redisStore.set('events:llm', {
+      // Stale v3 LLM cache
+      redisStore.set('events:llm:v3', {
         data: [llmEvent],
         fetchedAt: Date.now() - 901_000, // stale
       });
@@ -945,7 +959,7 @@ describe('Events Route (Redis accumulator)', () => {
         durationMs: 8000,
         error: null,
       };
-      redisStore.set('events:llm-summary', {
+      redisStore.set('events:llm-summary:v3', {
         data: summary,
         fetchedAt: Date.now(),
       });
@@ -1082,135 +1096,20 @@ describe('Events Route (Redis accumulator)', () => {
     });
   });
 
-  describe('Phase 27.4 LLM_PIPELINE_V2 flag (D-24/D-37/D-40)', () => {
-    const llmEventV1 = makeEvent({
-      id: 'llm-v1-1',
-      label: 'Baghdad V1 cached',
-      data: {
-        eventType: 'Aerial weapons',
-        subEventType: 'CAMEO 195',
-        fatalities: 0,
-        actor1: 'USA',
-        actor2: 'IRN',
-        notes: '',
-        source: 'https://example.com/v1',
-        goldsteinScale: -10,
-        locationName: 'Baghdad, Iraq',
-        cameoCode: '195',
-        llmProcessed: true,
-      },
-    });
-    const llmEventV2 = makeEvent({
-      id: 'llm-v2-1',
-      label: 'Baghdad V2 cached',
-      data: {
-        eventType: 'Aerial weapons',
-        subEventType: 'CAMEO 195',
-        fatalities: 0,
-        actor1: 'USA',
-        actor2: 'IRN',
-        notes: '',
-        source: 'https://example.com/v2',
-        goldsteinScale: -10,
-        locationName: 'Baghdad, Iraq',
-        cameoCode: '195',
-        llmProcessed: true,
-      },
-    });
+  // Phase 29 D-02 part C — `LLM_PIPELINE_V2 flag` + `cache-only regardless of
+  // pipeline version` describe blocks deleted. The env-flag routing surface
+  // they exercised is gone alongside the v1 + v2 extractor modules; the
+  // remaining v3-only behavior is covered by the cache-only assertions
+  // already locked in by the `Phase 27.4 Plan 08 — eval harness + /llm-replay`
+  // describe block (below) and `events-fallback.test.ts`.
 
-    beforeEach(() => {
-      delete process.env.LLM_PIPELINE_V2;
-    });
-
-    it('reads events:llm (v1) when LLM_PIPELINE_V2 unset', async () => {
-      // Pre-populate v1 LLM cache with fresh data; v2 key left untouched
-      redisStore.set('events:llm', {
-        data: [llmEventV1],
-        fetchedAt: Date.now(),
-      });
-
-      const res = await fetch(`${baseUrl}/api/events`);
-      const body = await res.json();
-
-      expect(res.ok).toBe(true);
-      expect(body.data).toHaveLength(1);
-      expect(body.data[0].id).toBe('llm-v1-1');
-      // Did not read or write to v2 keys
-      expect(redisStore.has('events:llm:v2')).toBe(false);
-    });
-
-    it('reads events:llm:v2 when LLM_PIPELINE_V2=true', async () => {
-      process.env.LLM_PIPELINE_V2 = 'true';
-      // Pre-populate v2 cache with fresh data
-      redisStore.set('events:llm:v2', {
-        data: [llmEventV2],
-        fetchedAt: Date.now(),
-      });
-
-      const res = await fetch(`${baseUrl}/api/events`);
-      const body = await res.json();
-
-      expect(res.ok).toBe(true);
-      expect(body.data).toHaveLength(1);
-      expect(body.data[0].id).toBe('llm-v2-1');
-    });
-
-    it('falls through to events:llm (v1) when v2 is empty during rollout', async () => {
-      process.env.LLM_PIPELINE_V2 = 'true';
-      // v2 key has no entry; v1 has fresh data
-      redisStore.set('events:llm', {
-        data: [llmEventV1],
-        fetchedAt: Date.now(),
-      });
-
-      const res = await fetch(`${baseUrl}/api/events`);
-      const body = await res.json();
-
-      expect(res.ok).toBe(true);
-      expect(body.data).toHaveLength(1);
-      expect(body.data[0].id).toBe('llm-v1-1');
-    });
-  });
-
-  describe('Phase 27.4.6 — /api/events is cache-only regardless of pipeline version', () => {
-    // Pre-Phase-27.4.6 this block asserted that the read path branched into
-    // v1 / v2 / v3 extractors based on env flag. After 27.4.6 the route is a
-    // pure cache reader; the extractor branch lives in the cron-driven
-    // helper. The two cases here lock that contract in for both flag states.
-
-    beforeEach(() => {
-      delete process.env.LLM_PIPELINE_V2;
-    });
-
-    it('LLM_PIPELINE_V2 unset → /api/events does NOT call processEventGroups', async () => {
+  describe('Phase 29 — /api/events is cache-only (v3-only)', () => {
+    it('GET /api/events does NOT call processEventGroups (cron owns extraction)', async () => {
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
       mockGroupGdeltRows.mockReturnValue([
         {
-          key: 'grp-v1',
-          entities: [eventA],
-          centroidLat: 33.3,
-          centroidLng: 44.4,
-          primaryCameo: '195',
-          timestamp: Date.now(),
-          totalMentions: 10,
-          totalSources: 3,
-          sourceUrls: [],
-        },
-      ]);
-
-      const res = await fetch(`${baseUrl}/api/events`);
-      expect(res.ok).toBe(true);
-      expect(mockProcessEventGroups).not.toHaveBeenCalled();
-    });
-
-    it('LLM_PIPELINE_V2=true → /api/events does NOT call the v2 extractor either', async () => {
-      process.env.LLM_PIPELINE_V2 = 'true';
-      mockIsLLMConfigured.mockReturnValue(true);
-      mockFetchEvents.mockResolvedValue([eventA]);
-      mockGroupGdeltRows.mockReturnValue([
-        {
-          key: 'grp-v2',
+          key: 'grp-v3',
           entities: [eventA],
           centroidLat: 33.3,
           centroidLng: 44.4,
@@ -1234,19 +1133,15 @@ describe('Events Route (Redis accumulator)', () => {
   // -------------------------------------------------------------------------
 
   describe('Phase 27.4 Plan 08 — eval harness + /llm-replay', () => {
-    beforeEach(() => {
-      // All replay tests execute the v2 path.
-      delete process.env.LLM_PIPELINE_V2;
-    });
+    // Phase 29 D-02 part C — replay path is v3-only; no env flag to clear.
 
     it('Phase 27.4.6: /api/events does NOT call runEval (eval now runs inside the cron path / cron-health fold)', async () => {
-      // Pre-Phase-27.4.6 the v2 fire-and-forget block in /api/events called
+      // Pre-Phase-27.4.6 the fire-and-forget block in /api/events called
       // runEval after geocoding. After 27.4.6 the read path is cache-only —
       // runEval fires inside server/lib/llmExtractionPipeline.ts (via the
       // cron-driven extraction) and inside server/routes/cron-health.ts (the
       // D-09 daily drift check). Asserting the inverse here documents the
       // contract change.
-      process.env.LLM_PIPELINE_V2 = 'true';
       mockIsLLMConfigured.mockReturnValue(true);
       mockFetchEvents.mockResolvedValue([eventA]);
       mockGroupGdeltRows.mockReturnValue([
@@ -1342,13 +1237,13 @@ describe('Events Route (Redis accumulator)', () => {
 
     it('POST /llm-replay/:groupKey returns {old, new} in dev when group exists', async () => {
       // The route is registered when NODE_ENV !== 'production'; default test
-      // env satisfies that. Seed both v2 + GDELT caches.
-      const cachedV2Event = makeEvent({
-        id: 'llm-v2-grp-replay',
+      // env satisfies that. Seed v3 LLM + GDELT caches.
+      const cachedV3Event = makeEvent({
+        id: 'llm-v3-grp-replay',
         label: 'Baghdad old',
       });
-      redisStore.set('events:llm:v2', {
-        data: [cachedV2Event],
+      redisStore.set('events:llm:v3', {
+        data: [cachedV3Event],
         fetchedAt: Date.now(),
       });
       redisStore.set('events:gdelt', {
@@ -1371,11 +1266,11 @@ describe('Events Route (Redis accumulator)', () => {
         },
       ]);
 
-      // processEventGroupsV2 returns a fresh extraction for the replay.
-      mockProcessEventGroupsV2.mockResolvedValue({
+      // processEventGroupsV3 returns a fresh extraction for the replay.
+      mockProcessEventGroupsV3.mockResolvedValue({
         events: [
           {
-            schemaVersion: 'v2',
+            schemaVersion: 'v3',
             groupKey: 'grp-replay',
             location: {
               country: 'Iraq',
@@ -1412,18 +1307,18 @@ describe('Events Route (Redis accumulator)', () => {
         new: { summary: string } | null;
       };
       expect(body.old).toBeTruthy();
-      expect(body.old.id).toBe('llm-v2-grp-replay');
+      expect(body.old.id).toBe('llm-v3-grp-replay');
       expect(body.new).toBeTruthy();
       expect(body.new!.summary).toBe('Baghdad new');
-      // Replay must have invoked the v2 extractor.
-      expect(mockProcessEventGroupsV2).toHaveBeenCalledTimes(1);
+      // Replay must have invoked the v3 extractor.
+      expect(mockProcessEventGroupsV3).toHaveBeenCalledTimes(1);
     });
 
-    it('POST /llm-replay does NOT write to events:llm:v2 cache (T-27.4-08-05)', async () => {
+    it('POST /llm-replay does NOT write to events:llm:v3 cache (T-27.4-08-05)', async () => {
       // Seed caches so the replay succeeds.
-      const cachedV2Event = makeEvent({ id: 'llm-v2-grp-readonly', label: 'old' });
-      redisStore.set('events:llm:v2', {
-        data: [cachedV2Event],
+      const cachedV3Event = makeEvent({ id: 'llm-v3-grp-readonly', label: 'old' });
+      redisStore.set('events:llm:v3', {
+        data: [cachedV3Event],
         fetchedAt: Date.now(),
       });
       redisStore.set('events:gdelt', {
@@ -1443,10 +1338,10 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      mockProcessEventGroupsV2.mockResolvedValue({
+      mockProcessEventGroupsV3.mockResolvedValue({
         events: [
           {
-            schemaVersion: 'v2',
+            schemaVersion: 'v3',
             groupKey: 'grp-readonly',
             location: {
               country: 'Iraq',
@@ -1482,13 +1377,13 @@ describe('Events Route (Redis accumulator)', () => {
       });
       expect(res.ok).toBe(true);
 
-      // Pitfall 6 invariant — replay handler must NOT write to events:llm:v2.
+      // Pitfall 6 invariant — replay handler must NOT write to events:llm:v3.
       // Inspect every cacheSet call made during the replay and assert none
-      // targeted the v2 LLM cache key.
+      // targeted the v3 LLM cache key.
       const cacheWriteKeys = _mockCacheSet.mock.calls.map((c) => c[0] as string);
+      expect(cacheWriteKeys).not.toContain('events:llm:v3');
+      // Defense-in-depth: legacy v2 + v1 LLM cache keys must also stay clean.
       expect(cacheWriteKeys).not.toContain('events:llm:v2');
-      // Also — the v1 LLM cache key must not be written to by the replay
-      // handler (replay is v2-only, but defense-in-depth).
       expect(cacheWriteKeys).not.toContain('events:llm');
     });
   });

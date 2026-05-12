@@ -412,20 +412,13 @@ var envSchema = z.object({
   // letting the extractor degrade to raw GDELT per D-29).
   NVIDIA_NIM_API_KEY: z.string().default(""),
   OPENROUTER_API_KEY: z.string().default(""),
-  // Phase 27.4.3 (D-07): toggles between v2 extractor (current default)
-  // and v3 extractor (free-claude-code routing). Default 'false' until
-  // the D-16 cutover gate is met. Read at request-time (not module-init)
-  // so flag flips take effect without a rebuild. Runtime override via
-  // POST /api/events/llm-pipeline {version: 'v3'} takes precedence.
-  LLM_PIPELINE_V3: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
-  // Phase 27.4 (D-24): toggles between v1 extractor (legacy rollback path)
-  // and v2 extractor (structured hierarchy + richer prompts, current default).
-  // Read at request-time (not module-init) so flag flips take effect without
-  // a rebuild. Default flipped to 'true' on 2026-04-21 after live verification
-  // — v1 remains reachable via the runtime Topbar toggle or
-  // `LLM_PIPELINE_V2=false` env override. An in-memory override set via
-  // POST /api/events/llm-pipeline takes precedence over this env default.
-  LLM_PIPELINE_V2: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  // Phase 29 D-02 part C — LLM_PIPELINE_V2 / LLM_PIPELINE_V3 env entries
+  // removed alongside the v1 + v2 extractor modules and the
+  // pipeline-version helper functions. The active pipeline is now v3-only;
+  // no env flag controls the dispatch. The Vercel env vars themselves
+  // (LLM_PIPELINE_V2, LLM_PIPELINE_V3) are left set during the deploy
+  // window so a git-revert finds them; operator prunes them when v1.5
+  // closes (per RESEARCH.md Open Question 4).
   // Phase 27.4.1 (D-01/D-02/D-03): per-batch timeout for the LLM extractor
   // watchdog. Default 90_000 ms hard-kills a batch that Cerebras never
   // returns from; the DLQ absorbs the group and the loop continues.
@@ -585,29 +578,6 @@ var NEWS_SLIDING_WINDOW_MS = 7 * 864e5;
 var NEWS_CLUSTER_WINDOW_MS = 864e5;
 var NEWS_JACCARD_THRESHOLD = 0.8;
 var NEWS_MIN_TOKENS_FOR_FUZZY = 5;
-var pipelineOverride = null;
-function setPipelineOverride(v) {
-  pipelineOverride = v;
-}
-function getPipelineOverride() {
-  return pipelineOverride;
-}
-function isPipelineV2() {
-  if (pipelineOverride === "v2") return true;
-  if (pipelineOverride === "v1" || pipelineOverride === "v3") return false;
-  if (process.env.LLM_PIPELINE_V3 === "true") return false;
-  return process.env.LLM_PIPELINE_V2 === "true";
-}
-function isPipelineV3() {
-  if (pipelineOverride === "v3") return true;
-  if (pipelineOverride === "v1" || pipelineOverride === "v2") return false;
-  return process.env.LLM_PIPELINE_V3 === "true";
-}
-function getPipelineVersion() {
-  if (isPipelineV3()) return "v3";
-  if (isPipelineV2()) return "v2";
-  return "v1";
-}
 
 // server/lib/healthSources.ts
 var SOURCE_KEYS = {
@@ -719,365 +689,6 @@ import { readFileSync as readFileSync3, existsSync as existsSync3 } from "fs";
 import { resolve as resolve3, dirname as dirname3 } from "path";
 import { fileURLToPath as fileURLToPath3 } from "url";
 
-// server/lib/llmEventExtractor.v3.ts
-init_redis();
-init_redis();
-
-// server/lib/concurrencyLimit.ts
-function createLimit(maxConcurrent) {
-  if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) {
-    throw new Error(`createLimit: maxConcurrent must be a positive integer, got ${maxConcurrent}`);
-  }
-  let inFlight = 0;
-  const queue = [];
-  const next = () => {
-    if (inFlight >= maxConcurrent) return;
-    const runner = queue.shift();
-    if (!runner) return;
-    inFlight++;
-    runner();
-  };
-  return (fn) => {
-    return new Promise((resolve4, reject) => {
-      const runner = () => {
-        Promise.resolve().then(fn).then(
-          (value) => {
-            inFlight--;
-            resolve4(value);
-            next();
-          },
-          (err) => {
-            inFlight--;
-            reject(err);
-            next();
-          }
-        );
-      };
-      queue.push(runner);
-      next();
-    });
-  };
-}
-
-// src/lib/geo.ts
-var R_KM = 6371;
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const toRad = (deg) => deg * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// server/lib/geoValidation.ts
-var NON_ME_FULLNAME_COUNTRIES = /* @__PURE__ */ new Set([
-  "United States",
-  "United Kingdom",
-  "Russia",
-  "China",
-  "France",
-  "Germany",
-  "India",
-  "Japan",
-  "South Korea",
-  "North Korea",
-  "Australia",
-  "Canada",
-  "Brazil",
-  "Italy",
-  "Spain",
-  "Ukraine",
-  "Poland",
-  "Netherlands",
-  "Belgium",
-  "Sweden",
-  "Norway",
-  "South Africa",
-  "Nigeria",
-  "Kenya",
-  "Ethiopia",
-  "Indonesia",
-  "Thailand",
-  "Vietnam",
-  "Philippines",
-  "Mexico"
-]);
-var FIPS_TO_EXPECTED_COUNTRY = {
-  IR: ["Iran"],
-  IZ: ["Iraq"],
-  SY: ["Syria"],
-  TU: ["Turkey", "Turkiye"],
-  SA: ["Saudi Arabia"],
-  YM: ["Yemen"],
-  MU: ["Oman"],
-  AE: ["United Arab Emirates", "UAE"],
-  QA: ["Qatar"],
-  BA: ["Bahrain"],
-  KU: ["Kuwait"],
-  JO: ["Jordan"],
-  IS: ["Israel", "West Bank", "Gaza Strip", "Palestinian Territory"],
-  LE: ["Lebanon"],
-  AF: ["Afghanistan"],
-  PK: ["Pakistan"]
-};
-var CITY_CENTROIDS = [
-  { name: "Tehran", lat: 35.6892, lng: 51.389 },
-  { name: "Baghdad", lat: 33.3152, lng: 44.3661 },
-  { name: "Damascus", lat: 33.5138, lng: 36.2765 },
-  { name: "Tel Aviv", lat: 32.0853, lng: 34.7818 },
-  { name: "Jerusalem", lat: 31.7683, lng: 35.2137 },
-  { name: "Riyadh", lat: 24.7136, lng: 46.6753 },
-  { name: "Beirut", lat: 33.8938, lng: 35.5018 },
-  { name: "Amman", lat: 31.9454, lng: 35.9284 },
-  { name: "Kabul", lat: 34.5553, lng: 69.2075 },
-  { name: "Islamabad", lat: 33.6844, lng: 73.0479 },
-  { name: "Ankara", lat: 39.9334, lng: 32.8597 },
-  { name: "Sana'a", lat: 15.3694, lng: 44.191 },
-  { name: "Doha", lat: 25.2854, lng: 51.531 },
-  { name: "Kuwait City", lat: 29.3759, lng: 47.9774 },
-  { name: "Muscat", lat: 23.588, lng: 58.3829 },
-  { name: "Manama", lat: 26.2285, lng: 50.586 },
-  { name: "Abu Dhabi", lat: 24.4539, lng: 54.3773 },
-  { name: "Dubai", lat: 25.2048, lng: 55.2708 },
-  { name: "Aden", lat: 12.7855, lng: 45.0187 },
-  { name: "Basra", lat: 30.5085, lng: 47.7804 },
-  { name: "Mosul", lat: 36.335, lng: 43.1189 },
-  { name: "Aleppo", lat: 36.2021, lng: 37.1343 },
-  { name: "Homs", lat: 34.7324, lng: 36.7137 },
-  { name: "Isfahan", lat: 32.6546, lng: 51.668 },
-  { name: "Tabriz", lat: 38.0962, lng: 46.2738 },
-  { name: "Jeddah", lat: 21.4858, lng: 39.1925 },
-  { name: "Medina", lat: 24.4672, lng: 39.6024 },
-  { name: "Haifa", lat: 32.794, lng: 34.9896 },
-  { name: "Gaza City", lat: 31.5017, lng: 34.4668 },
-  { name: "Karachi", lat: 24.8607, lng: 67.0011 },
-  // Additional conflict hotspot cities
-  { name: "Tikrit", lat: 34.6115, lng: 43.677 },
-  { name: "Fallujah", lat: 33.3484, lng: 43.7753 },
-  { name: "Ramadi", lat: 33.4271, lng: 43.3068 },
-  { name: "Kirkuk", lat: 35.4681, lng: 44.3953 },
-  { name: "Idlib", lat: 35.9306, lng: 36.6339 },
-  { name: "Deir ez-Zor", lat: 35.3359, lng: 40.1408 },
-  { name: "Palmyra", lat: 34.5571, lng: 38.2688 },
-  { name: "Hodeidah", lat: 14.798, lng: 42.954 },
-  { name: "Kandahar", lat: 31.628, lng: 65.7372 },
-  { name: "Mazar-i-Sharif", lat: 36.7069, lng: 67.11 },
-  { name: "Lahore", lat: 31.5497, lng: 74.3436 },
-  { name: "Peshawar", lat: 34.0151, lng: 71.5249 }
-];
-function extractLastSegment(fullName) {
-  const idx = fullName.lastIndexOf(",");
-  if (idx === -1) return null;
-  const segment = fullName.slice(idx + 1).trim();
-  return segment || null;
-}
-function isGeoValid(fullName, fipsCode) {
-  if (!fullName) return true;
-  const lastSegment = extractLastSegment(fullName);
-  if (!lastSegment) return true;
-  if (NON_ME_FULLNAME_COUNTRIES.has(lastSegment)) {
-    return false;
-  }
-  if (/^[A-Z]/.test(lastSegment) && !/\d/.test(lastSegment)) {
-    const expectedCountries = FIPS_TO_EXPECTED_COUNTRY[fipsCode];
-    if (expectedCountries) {
-      const allKnownCountries = /* @__PURE__ */ new Set();
-      for (const countries of Object.values(FIPS_TO_EXPECTED_COUNTRY)) {
-        for (const c of countries) {
-          allKnownCountries.add(c);
-        }
-      }
-      if (allKnownCountries.has(lastSegment) && !expectedCountries.includes(lastSegment)) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-var CENTROID_TOLERANCE = 0.01;
-function detectCentroid(lat, lng) {
-  for (const city of CITY_CENTROIDS) {
-    if (Math.abs(lat - city.lat) <= CENTROID_TOLERANCE && Math.abs(lng - city.lng) <= CENTROID_TOLERANCE) {
-      return "centroid";
-    }
-  }
-  return "precise";
-}
-
-// server/lib/eventScoring.ts
-var BELLINGCAT_TEMPORAL_WINDOW_MS = 24 * 60 * 60 * 1e3;
-var BELLINGCAT_GEO_RADIUS_KM = 200;
-var BELLINGCAT_MIN_KEYWORD_MATCHES = 2;
-var CAMEO_SPECIFICITY = {
-  // Low — catch-all codes prone to false positives
-  "180": 0.1,
-  // Unconventional violence, not specified below
-  "182": 0.1,
-  // Physical assault (very broad)
-  "190": 0.1,
-  // Conventional military force, not specified below
-  // Medium — conflict-related but broader
-  "184": 0.5,
-  // Use as human shield
-  "185": 0.5,
-  // Assassination attempt
-  "193": 0.5,
-  // Small arms / light weapons
-  "200": 0.5,
-  // Unconventional mass violence
-  "201": 0.5,
-  // Mass expulsion
-  // High — unambiguous military/violent events
-  "181": 1,
-  // Abduction / hostage-taking
-  "183": 1,
-  // Bombing
-  "186": 1,
-  // Assassination
-  "191": 1,
-  // Blockade
-  "194": 1,
-  // Artillery / tank support
-  "195": 1,
-  // Aerial weapons
-  "196": 1,
-  // Ceasefire violation
-  "202": 1,
-  // Mass killings
-  "203": 1,
-  // Ethnic cleansing
-  "204": 1
-  // Weapons of mass destruction
-};
-function getCameoSpecificity(cameoCode) {
-  const baseCode = cameoCode.slice(0, 3);
-  return CAMEO_SPECIFICITY[baseCode] ?? 0.5;
-}
-var GOLDSTEIN_CEILINGS = {
-  airstrike: { ceiling: -5, downgrade: "on_ground" },
-  explosion: { ceiling: -5, downgrade: "on_ground" },
-  on_ground: { ceiling: -3, downgrade: "other" },
-  targeted: { ceiling: -3, downgrade: "other" },
-  other: { ceiling: -1, downgrade: null }
-};
-function applyGoldsteinSanity(entity) {
-  const { goldsteinScale } = entity.data;
-  if (goldsteinScale === 0 || goldsteinScale > 0) {
-    return entity;
-  }
-  const entry = GOLDSTEIN_CEILINGS[entity.type];
-  if (!entry || entry.downgrade === null) {
-    return entity;
-  }
-  const diff = goldsteinScale - entry.ceiling;
-  if (diff > 3) {
-    return {
-      ...entity,
-      type: entry.downgrade
-    };
-  }
-  return entity;
-}
-function computeEventConfidence(entity, geoPrecision) {
-  const { numMentions, numSources, actor1, actor2, goldsteinScale, cameoCode } = entity.data;
-  const mentions = numMentions ?? 1;
-  const mediaCoverage = Math.min(1, Math.log2(mentions + 1) / Math.log2(50));
-  const sources = numSources ?? 1;
-  const sourceDiversity = Math.min(1, Math.log2(sources + 1) / Math.log2(15));
-  const hasActor1 = actor1.trim().length > 0;
-  const hasActor2 = actor2.trim().length > 0;
-  const actorSpecificity = hasActor1 && hasActor2 ? 1 : hasActor1 || hasActor2 ? 0.5 : 0;
-  const geoPrecisionSignal = geoPrecision === "precise" ? 1 : 0.3;
-  let goldsteinConsistency;
-  if (goldsteinScale === 0 || goldsteinScale > 0) {
-    goldsteinConsistency = 0.5;
-  } else {
-    const entry = GOLDSTEIN_CEILINGS[entity.type];
-    if (!entry) {
-      goldsteinConsistency = 0.5;
-    } else {
-      const diff = goldsteinScale - entry.ceiling;
-      if (diff <= 0) {
-        goldsteinConsistency = 1;
-      } else {
-        goldsteinConsistency = Math.max(0, 1 - diff / 6);
-      }
-    }
-  }
-  const cameoSpecificity = getCameoSpecificity(cameoCode);
-  return 0.25 * mediaCoverage + 0.15 * sourceDiversity + 0.15 * actorSpecificity + 0.1 * geoPrecisionSignal + 0.1 * goldsteinConsistency + 0.25 * cameoSpecificity;
-}
-function extractBellingcatGeo(title) {
-  const titleLower = title.toLowerCase();
-  for (const city of CITY_CENTROIDS) {
-    if (titleLower.includes(city.name.toLowerCase())) {
-      return { lat: city.lat, lng: city.lng };
-    }
-  }
-  return void 0;
-}
-function checkBellingcatCorroboration(event, articles) {
-  const locationWords = (event.data.locationName || "").split(/[\s,]+/).filter((w) => w.length >= 3).map((w) => w.toLowerCase());
-  for (const article of articles) {
-    const timeDiff = Math.abs(article.publishedAt - event.timestamp);
-    if (timeDiff > BELLINGCAT_TEMPORAL_WINDOW_MS) continue;
-    if (article.lat == null || article.lng == null) continue;
-    const distKm = haversineKm(event.lat, event.lng, article.lat, article.lng);
-    if (distKm > BELLINGCAT_GEO_RADIUS_KM) continue;
-    const titleLower = article.title.toLowerCase();
-    let keywordMatches = 0;
-    for (const word of locationWords) {
-      if (titleLower.includes(word)) {
-        keywordMatches++;
-      }
-    }
-    if (keywordMatches < BELLINGCAT_MIN_KEYWORD_MATCHES) continue;
-    return { matched: true, article };
-  }
-  return { matched: false };
-}
-
-// server/lib/freeClaudeRouter.ts
-init_redis();
-import OpenAI from "openai";
-
-// server/lib/llmCircuitBreaker.ts
-var WINDOW_SIZE = 10;
-var ERROR_RATE_THRESHOLD = 0.3;
-var PAUSE_DURATION_MS = 5 * 6e4;
-var state = {
-  cerebras: { outcomes: [], pausedUntil: null },
-  groq: { outcomes: [], pausedUntil: null },
-  nvidia_nim: { outcomes: [], pausedUntil: null },
-  openrouter: { outcomes: [], pausedUntil: null }
-};
-function record(provider, outcome) {
-  const s = state[provider];
-  s.outcomes.push(outcome);
-  if (s.outcomes.length > WINDOW_SIZE) s.outcomes.shift();
-  if (s.outcomes.length === WINDOW_SIZE) {
-    const errs = s.outcomes.filter((o) => o === "err").length;
-    if (errs / WINDOW_SIZE > ERROR_RATE_THRESHOLD) {
-      s.pausedUntil = Date.now() + PAUSE_DURATION_MS;
-      s.outcomes = [];
-    }
-  }
-}
-function isAvailable(provider) {
-  const s = state[provider];
-  if (s.pausedUntil && Date.now() < s.pausedUntil) return false;
-  if (s.pausedUntil && Date.now() >= s.pausedUntil) s.pausedUntil = null;
-  return true;
-}
-function getBreakerState() {
-  return {
-    cerebras: isAvailable("cerebras") ? "ok" : "paused",
-    groq: isAvailable("groq") ? "ok" : "paused",
-    nvidia_nim: isAvailable("nvidia_nim") ? "ok" : "paused",
-    openrouter: isAvailable("openrouter") ? "ok" : "paused"
-  };
-}
-
 // server/lib/llmProgress.ts
 init_redis();
 var INITIAL_PROGRESS = {
@@ -1176,6 +787,42 @@ function buildSummary() {
     costShadow: llmProgress.costShadow,
     recentEvents: llmProgress.recentEvents
   };
+}
+
+// server/lib/llmResolver.ts
+import { z as z3 } from "zod";
+
+// server/lib/freeClaudeRouter.ts
+init_redis();
+import OpenAI from "openai";
+
+// server/lib/llmCircuitBreaker.ts
+var WINDOW_SIZE = 10;
+var ERROR_RATE_THRESHOLD = 0.3;
+var PAUSE_DURATION_MS = 5 * 6e4;
+var state = {
+  cerebras: { outcomes: [], pausedUntil: null },
+  groq: { outcomes: [], pausedUntil: null },
+  nvidia_nim: { outcomes: [], pausedUntil: null },
+  openrouter: { outcomes: [], pausedUntil: null }
+};
+function record(provider, outcome) {
+  const s = state[provider];
+  s.outcomes.push(outcome);
+  if (s.outcomes.length > WINDOW_SIZE) s.outcomes.shift();
+  if (s.outcomes.length === WINDOW_SIZE) {
+    const errs = s.outcomes.filter((o) => o === "err").length;
+    if (errs / WINDOW_SIZE > ERROR_RATE_THRESHOLD) {
+      s.pausedUntil = Date.now() + PAUSE_DURATION_MS;
+      s.outcomes = [];
+    }
+  }
+}
+function isAvailable(provider) {
+  const s = state[provider];
+  if (s.pausedUntil && Date.now() < s.pausedUntil) return false;
+  if (s.pausedUntil && Date.now() >= s.pausedUntil) s.pausedUntil = null;
+  return true;
 }
 
 // server/lib/freeClaudeRouter.ts
@@ -1291,7 +938,7 @@ async function getOpenRouterDaily() {
   }
 }
 async function callLLM(messages, _schemaText, opts = {}) {
-  const log40 = logger.child({ component: "freeClaudeRouter" });
+  const log37 = logger.child({ component: "freeClaudeRouter" });
   const decisions = [];
   const includeOpenRouter = !opts.skipOpenRouter;
   const allProviders = [
@@ -1391,7 +1038,7 @@ async function callLLM(messages, _schemaText, opts = {}) {
         recordLatency(p.name, latencyMs);
         const bucket = classifyError(err);
         recordErrorBucket(p.name, bucket);
-        log40.warn(
+        log37.warn(
           {
             provider: p.name,
             attempt,
@@ -1414,7 +1061,7 @@ async function callLLM(messages, _schemaText, opts = {}) {
       record(p.name, "err");
     }
   }
-  log40.warn("all free providers unavailable \u2014 returning null content");
+  log37.warn("all free providers unavailable \u2014 returning null content");
   return { content: null, routing: decisions };
 }
 var LATENCY_RING_CAP = 100;
@@ -1498,7 +1145,7 @@ async function accrueShadowCost(tokensIn, tokensOut) {
   }
 }
 async function prewarmIfCold() {
-  const log40 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
+  const log37 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
   const client = getNvidiaNimClient();
   if (!client) {
     updateProgress({ prewarmState: "unknown" });
@@ -1524,7 +1171,7 @@ async function prewarmIfCold() {
       prewarmState: "cold-fired"
     });
   } catch (err) {
-    log40.warn(
+    log37.warn(
       { err: err instanceof Error ? err.message : String(err) },
       "prewarmIfCold synthetic call failed (non-fatal)"
     );
@@ -1534,415 +1181,6 @@ async function prewarmIfCold() {
       prewarmState: "cold-fired"
     });
   }
-}
-
-// server/lib/llmDLQ.ts
-init_redis();
-var log2 = logger.child({ module: "llm-dlq" });
-var DLQ_KEY = "events:llm-dlq";
-var DLQ_TTL_SEC = 7 * 24 * 3600;
-var DLQ_MAX = 200;
-var LAST_ERROR_MAX_CHARS = 500;
-function parseEntry(raw) {
-  try {
-    if (typeof raw === "string") return JSON.parse(raw);
-    if (raw && typeof raw === "object") return raw;
-    return null;
-  } catch {
-    return null;
-  }
-}
-async function enqueueDLQ(entry) {
-  const capped = {
-    ...entry,
-    lastError: entry.lastError.slice(0, LAST_ERROR_MAX_CHARS)
-  };
-  const payload = JSON.stringify(capped);
-  try {
-    await redis.sadd(DLQ_KEY, payload);
-    await redis.expire(DLQ_KEY, DLQ_TTL_SEC);
-    const size = await redis.scard(DLQ_KEY);
-    if (size > DLQ_MAX) {
-      const all = await redis.smembers(DLQ_KEY);
-      const withParsed = all.map((raw) => {
-        const rawStr = typeof raw === "string" ? raw : JSON.stringify(raw);
-        return { raw: rawStr, parsed: parseEntry(raw) };
-      }).filter((x) => x.parsed !== null);
-      withParsed.sort((a, b) => a.parsed.timestamp - b.parsed.timestamp);
-      const toRemove = withParsed.slice(0, size - DLQ_MAX).map((x) => x.raw);
-      if (toRemove.length > 0) await redis.srem(DLQ_KEY, ...toRemove);
-    }
-  } catch (err) {
-    log2.warn({ err, id: entry.id }, "DLQ enqueue failed (redis unreachable)");
-  }
-}
-async function listDLQ(limit = 50) {
-  try {
-    const all = await redis.smembers(DLQ_KEY);
-    const parsed = [];
-    for (const s of all) {
-      const p = parseEntry(s);
-      if (p) parsed.push(p);
-    }
-    return parsed.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
-  } catch {
-    return [];
-  }
-}
-
-// server/lib/llmExtractorWatchdog.ts
-var log3 = logger.child({ module: "llm-watchdog" });
-async function withBatchWatchdog(batchFn, opts) {
-  let timedOut = false;
-  let hardTimer;
-  const workPromise = batchFn();
-  workPromise.catch(() => {
-  });
-  const timeoutPromise = new Promise((_, reject) => {
-    hardTimer = setTimeout(() => {
-      timedOut = true;
-      reject(
-        new Error(`batch ${opts.batchIndex} (${opts.label}) timed out after ${opts.timeoutMs}ms`)
-      );
-    }, opts.timeoutMs);
-  });
-  const softWarnTimer = setTimeout(() => {
-    if (!timedOut) {
-      try {
-        opts.onSoftWarn?.(opts.softWarnMs);
-        log3.info(
-          { batchIndex: opts.batchIndex, label: opts.label, softWarnMs: opts.softWarnMs },
-          "batch crossed soft-warn threshold (still running)"
-        );
-      } catch (err) {
-        log3.warn({ err }, "onSoftWarn handler threw \u2014 suppressed");
-      }
-    }
-  }, opts.softWarnMs);
-  try {
-    const result = await Promise.race([workPromise, timeoutPromise]);
-    return result;
-  } catch (err) {
-    if (timedOut) {
-      log3.warn(
-        { batchIndex: opts.batchIndex, label: opts.label, timeoutMs: opts.timeoutMs },
-        "batch hard-timeout triggered"
-      );
-      try {
-        await opts.onTimeout();
-      } catch (hookErr) {
-        log3.error(
-          { err: hookErr, batchIndex: opts.batchIndex, label: opts.label },
-          "onTimeout hook threw \u2014 suppressed, returning null"
-        );
-      }
-      return null;
-    }
-    throw err;
-  } finally {
-    if (softWarnTimer) clearTimeout(softWarnTimer);
-    if (hardTimer) clearTimeout(hardTimer);
-  }
-}
-
-// server/lib/llmLineage.ts
-init_redis();
-import crypto from "crypto";
-var LINEAGE_KEY_PREFIX = "events:llm:v3:lineage:";
-var LINEAGE_INDEX_KEY = "events:llm:v3:lineage-keys";
-var LINEAGE_TTL_SEC = 7 * 24 * 3600;
-var LINEAGE_MAX_ENTRIES = 500;
-function computeLineageHash(eventId, prompt, model) {
-  return crypto.createHash("sha256").update(prompt).update("|").update(model).update("|").update(eventId).digest("hex");
-}
-async function appendLineage(eventId, payload) {
-  const lineageHash = computeLineageHash(eventId, payload.prompt, payload.model);
-  const key = `${LINEAGE_KEY_PREFIX}${eventId}`;
-  const log40 = logger.child({ component: "llm-lineage" });
-  try {
-    await redis.hset(key, {
-      prompt: payload.prompt.slice(0, 32e3),
-      // safety bound; prompts ~10-15k typical
-      response: payload.response.slice(0, 32e3),
-      parsed: JSON.stringify(payload.parsed).slice(0, 32e3),
-      coord: JSON.stringify(payload.coord),
-      provenance: payload.provenance,
-      resolverPath: payload.resolverPath,
-      reasoningTrace: payload.reasoningTrace.slice(0, 8e3),
-      model: payload.model,
-      lineageHash,
-      ts: String(Date.now())
-    });
-    await redis.expire(key, LINEAGE_TTL_SEC);
-    await redis.zadd(LINEAGE_INDEX_KEY, { score: Date.now(), member: eventId });
-    await redis.zremrangebyrank(LINEAGE_INDEX_KEY, 0, -LINEAGE_MAX_ENTRIES - 1);
-    await redis.expire(LINEAGE_INDEX_KEY, LINEAGE_TTL_SEC);
-  } catch (err) {
-    log40.warn({ err, eventId }, "lineage append failed (redis unreachable)");
-  }
-  return { lineageHash };
-}
-var GROUP_LINEAGE_KEY_PREFIX = "events:llm:v3:group-lineage:";
-var GROUP_LINEAGE_TTL_SEC = 7 * 24 * 3600;
-function computeGroupLineageHash(input) {
-  const sortedUrls = [...input.sourceUrls].sort().join("|");
-  return crypto.createHash("sha256").update(input.key).update("|").update(sortedUrls).update("|").update(String(input.totalMentions)).digest("hex");
-}
-
-// server/lib/llmResolver.ts
-import { z as z3 } from "zod";
-
-// server/adapters/llm-provider.ts
-import OpenAI2 from "openai";
-
-// server/lib/llmTokenBudget.ts
-init_redis();
-var log4 = logger.child({ module: "llm-token-budget" });
-var DAILY_LIMITS = {
-  cerebras: 1e6,
-  groq: 2e5,
-  // Phase 27.4.3: v3 path uses freeClaudeRouter, not this module. These zero
-  // limits are present purely for Record<Provider, number> exhaustiveness
-  // and would force a 'hard' budgetState if ever invoked — safe fail-closed.
-  nvidia_nim: 0,
-  openrouter: 0
-};
-var TTL_48H_SEC = 172800;
-var SOFT_CAP_RATIO = 0.8;
-var HARD_CAP_RATIO = 0.95;
-function todayKey2(provider) {
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  return `llm:tokens:${provider}:${today}`;
-}
-async function incrDailyTokens(provider, n) {
-  if (n <= 0) return await getDailyTokens(provider);
-  try {
-    const key = todayKey2(provider);
-    const res = await redis.multi().incrby(key, n).expire(key, TTL_48H_SEC).exec();
-    const newVal = Array.isArray(res) ? res[0] : void 0;
-    return typeof newVal === "number" ? newVal : 0;
-  } catch (err) {
-    log4.warn({ err, provider, n }, "incrDailyTokens failed (redis unreachable)");
-    return 0;
-  }
-}
-async function getDailyTokens(provider) {
-  try {
-    const v = await redis.get(todayKey2(provider));
-    return typeof v === "number" ? v : 0;
-  } catch {
-    return 0;
-  }
-}
-function budgetState(provider, used) {
-  const limit = DAILY_LIMITS[provider];
-  if (used >= limit * HARD_CAP_RATIO) return "hard";
-  if (used >= limit * SOFT_CAP_RATIO) return "soft";
-  return "ok";
-}
-var TYPE_WEIGHTS = {
-  airstrike: 10,
-  explosion: 8,
-  targeted: 8,
-  on_ground: 6,
-  other: 3
-};
-function scoreEntity(e) {
-  const typeWeight = TYPE_WEIGHTS[e.type] ?? 3;
-  const mentions = e.data.numMentions ?? 1;
-  const sources = e.data.numSources ?? 1;
-  const ageHours = Math.max(0, (Date.now() - e.timestamp) / 36e5);
-  const recency = 1 / (1 + ageHours / 24);
-  return typeWeight * Math.log2(1 + mentions) * Math.log2(1 + sources) * recency;
-}
-function computeSeverityScore(group) {
-  if (group.entities.length === 0) return 0;
-  let best = 0;
-  for (const e of group.entities) {
-    const s = scoreEntity(e);
-    if (s > best) best = s;
-  }
-  return best;
-}
-async function shouldPauseNewEvents() {
-  const [cerebrasUsed, groqUsed] = await Promise.all([
-    getDailyTokens("cerebras"),
-    getDailyTokens("groq")
-  ]);
-  return budgetState("cerebras", cerebrasUsed) === "soft" || budgetState("groq", groqUsed) === "soft";
-}
-async function prioritizeBySeverity(groups) {
-  const paused = await shouldPauseNewEvents();
-  if (!paused) return groups;
-  return groups.slice().sort((a, b) => computeSeverityScore(b) - computeSeverityScore(a) || b.timestamp - a.timestamp);
-}
-
-// server/adapters/llm-provider.ts
-var log5 = logger.child({ module: "llm" });
-var CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
-var GROQ_MODEL = "openai/gpt-oss-120b";
-var LLM_TIMEOUT_MS2 = 3e4;
-var RETRY_ATTEMPTS2 = 2;
-var BACKOFF_MS2 = [1e3, 4e3];
-var JITTER_MS2 = 250;
-var CALL_HISTORY_MAX = 20;
-function getCerebrasClient() {
-  if (!env.CEREBRAS_API_KEY) return null;
-  return new OpenAI2({
-    apiKey: env.CEREBRAS_API_KEY,
-    baseURL: "https://api.cerebras.ai/v1",
-    timeout: LLM_TIMEOUT_MS2
-  });
-}
-function getGroqClient() {
-  if (!env.GROQ_API_KEY) return null;
-  return new OpenAI2({
-    apiKey: env.GROQ_API_KEY,
-    baseURL: "https://api.groq.com/openai/v1",
-    timeout: LLM_TIMEOUT_MS2
-  });
-}
-async function sleepWithJitter2(base) {
-  const jitter = (Math.random() * 2 - 1) * JITTER_MS2;
-  await new Promise((r) => setTimeout(r, Math.max(0, base + jitter)));
-}
-function appendCallHistory(entry) {
-  const history = llmProgress.callHistory ?? [];
-  const next = [entry, ...history].slice(0, CALL_HISTORY_MAX);
-  updateProgress({ callHistory: next });
-}
-function recordSkippedAttempt(provider, batchSize, skipReason) {
-  const model = provider === "cerebras" ? CEREBRAS_MODEL : GROQ_MODEL;
-  appendCallHistory({
-    provider,
-    model,
-    tokensIn: 0,
-    tokensOut: 0,
-    durationMs: 0,
-    ok: false,
-    batchSize,
-    timestamp: Date.now(),
-    skipReason
-  });
-}
-async function tryProviderOnce(provider, messages, jsonSchema, batchSize) {
-  const client = provider === "cerebras" ? getCerebrasClient() : getGroqClient();
-  if (!client) {
-    recordSkippedAttempt(provider, batchSize, "no_client");
-    return { content: null, tokens: 0 };
-  }
-  const model = provider === "cerebras" ? CEREBRAS_MODEL : GROQ_MODEL;
-  const t0 = Date.now();
-  try {
-    const res = await client.chat.completions.create({
-      model,
-      messages,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          // Pattern 1 (RESEARCH.md): bump schema name on v2 rollout so the
-          // provider's structured-output validator can be introspected.
-          name: isPipelineV2() ? "event_extraction_v2" : "event_extraction",
-          strict: true,
-          schema: jsonSchema
-        }
-      }
-    });
-    const content = res.choices[0]?.message?.content ?? null;
-    const tokens = res.usage?.total_tokens ?? 0;
-    const durationMs = Date.now() - t0;
-    if (content) {
-      record(provider, "ok");
-      await incrDailyTokens(provider, tokens);
-      appendCallHistory({
-        provider,
-        model,
-        tokensIn: res.usage?.prompt_tokens ?? 0,
-        tokensOut: res.usage?.completion_tokens ?? 0,
-        durationMs,
-        ok: true,
-        batchSize,
-        timestamp: Date.now()
-      });
-      updateProgress({
-        tokenCounters: {
-          cerebras: await getDailyTokens("cerebras"),
-          groq: await getDailyTokens("groq")
-        },
-        breakerState: getBreakerState()
-      });
-      return { content, tokens };
-    }
-    record(provider, "err");
-    appendCallHistory({
-      provider,
-      model,
-      tokensIn: 0,
-      tokensOut: 0,
-      durationMs,
-      ok: false,
-      batchSize,
-      timestamp: Date.now()
-    });
-    return { content: null, tokens: 0 };
-  } catch (err) {
-    record(provider, "err");
-    appendCallHistory({
-      provider,
-      model,
-      tokensIn: 0,
-      tokensOut: 0,
-      durationMs: Date.now() - t0,
-      ok: false,
-      batchSize,
-      timestamp: Date.now()
-    });
-    log5.warn({ err, provider }, "LLM call threw");
-    throw err;
-  }
-}
-var _providerOrderOverride = null;
-function getProviderOrder() {
-  if (_providerOrderOverride) return _providerOrderOverride;
-  return ["cerebras", "groq"];
-}
-async function callLLM2(messages, jsonSchema, opts = {}) {
-  const batchSize = opts.batchSize ?? 1;
-  const providers = getProviderOrder();
-  for (const provider of providers) {
-    if (!isAvailable(provider)) {
-      log5.info({ provider }, "circuit breaker paused, skipping provider");
-      recordSkippedAttempt(provider, batchSize, "breaker");
-      continue;
-    }
-    const used = await getDailyTokens(provider);
-    if (budgetState(provider, used) === "hard") {
-      log5.warn({ provider, used }, "hard cap reached, skipping provider");
-      recordSkippedAttempt(provider, batchSize, "hard_cap");
-      continue;
-    }
-    for (let attempt = 0; attempt < RETRY_ATTEMPTS2; attempt++) {
-      try {
-        const result = await tryProviderOnce(provider, messages, jsonSchema, batchSize);
-        if (result.content) {
-          log5.info({ provider, tokens: result.tokens, attempt }, "LLM call succeeded");
-          return result.content;
-        }
-        break;
-      } catch {
-        if (attempt < RETRY_ATTEMPTS2 - 1) {
-          const base = BACKOFF_MS2[attempt] ?? BACKOFF_MS2[0] ?? 1e3;
-          await sleepWithJitter2(base);
-        }
-      }
-    }
-    updateProgress({ breakerState: getBreakerState() });
-  }
-  log5.warn("both LLM providers unavailable \u2014 falling back to raw GDELT");
-  return null;
-}
-function isLLMConfigured() {
-  return !!(env.CEREBRAS_API_KEY || env.GROQ_API_KEY || env.NVIDIA_NIM_API_KEY || env.OPENROUTER_API_KEY);
 }
 
 // server/lib/meBounds.ts
@@ -2236,7 +1474,7 @@ var batchResponseV3 = z2.object({
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-var log6 = logger.child({ module: "sites-snapshot" });
+var log2 = logger.child({ module: "sites-snapshot" });
 var __dirname = dirname(fileURLToPath(import.meta.url));
 var SNAPSHOT_PATH = resolve(__dirname, "../../src/data/sites.json");
 var cachedSnapshot = void 0;
@@ -2244,7 +1482,7 @@ function loadSitesSnapshot() {
   if (cachedSnapshot !== void 0) return cachedSnapshot;
   try {
     if (!existsSync(SNAPSHOT_PATH)) {
-      log6.info(
+      log2.info(
         { path: SNAPSHOT_PATH },
         "sites snapshot file absent; cold-start will hit Overpass on refresh"
       );
@@ -2256,12 +1494,12 @@ function loadSitesSnapshot() {
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      log6.warn({ err: parseErr, path: SNAPSHOT_PATH }, "sites snapshot JSON parse failed");
+      log2.warn({ err: parseErr, path: SNAPSHOT_PATH }, "sites snapshot JSON parse failed");
       cachedSnapshot = null;
       return null;
     }
     if (!isValidSnapshot(parsed)) {
-      log6.warn({ path: SNAPSHOT_PATH }, "sites snapshot failed structural validation; ignoring");
+      log2.warn({ path: SNAPSHOT_PATH }, "sites snapshot failed structural validation; ignoring");
       cachedSnapshot = null;
       return null;
     }
@@ -2274,14 +1512,14 @@ function loadSitesSnapshot() {
         generatedAt: parsed.generatedAt
       }
     };
-    log6.info(
+    log2.info(
       { count: snapshot.sites.length, generatedAt: snapshot.generatedAt },
       "loaded sites snapshot"
     );
     cachedSnapshot = snapshot;
     return snapshot;
   } catch (err) {
-    log6.warn({ err, path: SNAPSHOT_PATH }, "failed to load sites snapshot");
+    log2.warn({ err, path: SNAPSHOT_PATH }, "failed to load sites snapshot");
     cachedSnapshot = null;
     return null;
   }
@@ -2299,7 +1537,7 @@ function isValidSnapshot(v) {
 import { readFileSync as readFileSync2, existsSync as existsSync2 } from "fs";
 import { resolve as resolve2, dirname as dirname2 } from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
-var log7 = logger.child({ module: "water-snapshot" });
+var log3 = logger.child({ module: "water-snapshot" });
 var __dirname2 = dirname2(fileURLToPath2(import.meta.url));
 var SNAPSHOT_PATH2 = resolve2(__dirname2, "../../src/data/water-facilities.json");
 var cachedSnapshot2 = void 0;
@@ -2307,7 +1545,7 @@ function loadWaterSnapshot() {
   if (cachedSnapshot2 !== void 0) return cachedSnapshot2;
   try {
     if (!existsSync2(SNAPSHOT_PATH2)) {
-      log7.info(
+      log3.info(
         { path: SNAPSHOT_PATH2 },
         "water snapshot file absent; cold-start will fall through to Overpass"
       );
@@ -2319,12 +1557,12 @@ function loadWaterSnapshot() {
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      log7.warn({ err: parseErr, path: SNAPSHOT_PATH2 }, "water snapshot JSON parse failed");
+      log3.warn({ err: parseErr, path: SNAPSHOT_PATH2 }, "water snapshot JSON parse failed");
       cachedSnapshot2 = null;
       return null;
     }
     if (!isValidSnapshot2(parsed)) {
-      log7.warn({ path: SNAPSHOT_PATH2 }, "water snapshot failed structural validation; ignoring");
+      log3.warn({ path: SNAPSHOT_PATH2 }, "water snapshot failed structural validation; ignoring");
       cachedSnapshot2 = null;
       return null;
     }
@@ -2337,14 +1575,14 @@ function loadWaterSnapshot() {
         generatedAt: parsed.generatedAt
       }
     };
-    log7.info(
+    log3.info(
       { count: snapshot.facilities.length, generatedAt: snapshot.generatedAt },
       "loaded water snapshot"
     );
     cachedSnapshot2 = snapshot;
     return snapshot;
   } catch (err) {
-    log7.warn({ err, path: SNAPSHOT_PATH2 }, "failed to load water snapshot");
+    log3.warn({ err, path: SNAPSHOT_PATH2 }, "failed to load water snapshot");
     cachedSnapshot2 = null;
     return null;
   }
@@ -2359,7 +1597,7 @@ function isValidSnapshot2(v) {
 }
 
 // server/lib/llmResolver.ts
-var log8 = logger.child({ module: "llm-resolver" });
+var log4 = logger.child({ module: "llm-resolver" });
 var GEOCODE_CACHE_PREFIX = "geocode:fwd:constrained:v2:";
 var GEOCODE_CACHE_LOGICAL_TTL_MS = 30 * 24 * 3600 * 1e3;
 var GEOCODE_CACHE_REDIS_TTL_SEC = 30 * 24 * 3600;
@@ -2376,7 +1614,7 @@ function cacheKey(kind, parts) {
   const ordered = Object.keys(parts).sort().filter((k) => parts[k] !== void 0).map((k) => `${k}=${parts[k]}`).join("|");
   return `${GEOCODE_CACHE_PREFIX}${kind}:${ordered}`;
 }
-function haversineKm2(lat1, lng1, lat2, lng2) {
+function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -2513,7 +1751,7 @@ async function resolveViaPoiAmenity(hierarchy) {
     await cacheSetSafe(key, hit, GEOCODE_CACHE_REDIS_TTL_SEC);
     return hit;
   } catch (err) {
-    log8.warn({ err, landmark: hierarchy.landmark }, "resolveViaPoiAmenity failed");
+    log4.warn({ err, landmark: hierarchy.landmark }, "resolveViaPoiAmenity failed");
     return null;
   }
 }
@@ -2561,7 +1799,7 @@ async function resolveViaNominatimDirect(hierarchy) {
     await cacheSetSafe(key, hit, GEOCODE_CACHE_REDIS_TTL_SEC);
     return hit;
   } catch (err) {
-    log8.warn({ err, query }, "nominatim-direct failed");
+    log4.warn({ err, query }, "nominatim-direct failed");
     return null;
   }
 }
@@ -2646,13 +1884,14 @@ async function resolveViaVerifiedTwoPass(hierarchy, ctx) {
       return hit2;
     }
     const userPrompt = buildRerankerUserPrompt(hierarchy, candidates, ctx);
-    const raw = await callLLM2(
+    const routerResult = await callLLM(
       [
         { role: "system", content: RERANKER_SYSTEM_PROMPT },
         { role: "user", content: userPrompt }
       ],
-      RERANKER_JSON_SCHEMA
+      JSON.stringify(RERANKER_JSON_SCHEMA)
     );
+    const raw = routerResult.content;
     if (!raw) {
       await cacheSetSafe(key, { miss: true }, GEOCODE_CACHE_REDIS_TTL_SEC);
       return null;
@@ -2665,7 +1904,7 @@ async function resolveViaVerifiedTwoPass(hierarchy, ctx) {
     }
     const validated = rerankerResponseSchema.safeParse(parsed);
     if (!validated.success) {
-      log8.warn({ issues: validated.error.issues }, "reranker response failed Zod parse");
+      log4.warn({ issues: validated.error.issues }, "reranker response failed Zod parse");
       return null;
     }
     const idx = validated.data.pick - 1;
@@ -2675,7 +1914,7 @@ async function resolveViaVerifiedTwoPass(hierarchy, ctx) {
     await cacheSetSafe(key, hit, GEOCODE_CACHE_REDIS_TTL_SEC);
     return hit;
   } catch (err) {
-    log8.warn({ err, query }, "two-pass verify failed");
+    log4.warn({ err, query }, "two-pass verify failed");
     return null;
   }
 }
@@ -2701,11 +1940,11 @@ async function resolveLocation(hierarchy, ctx) {
       return {
         ...hit2,
         provenance: "own-site-snapshot",
-        actionGeoDistanceKm: haversineKm2(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
+        actionGeoDistanceKm: haversineKm(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
       };
     }
   } catch (err) {
-    log8.warn({ err }, "own-site-snapshot path threw");
+    log4.warn({ err }, "own-site-snapshot path threw");
   }
   if (isPoiLandmark(hierarchy.landmark)) {
     try {
@@ -2714,21 +1953,21 @@ async function resolveLocation(hierarchy, ctx) {
         return {
           ...hit2,
           provenance: "poi-amenity-nominatim",
-          actionGeoDistanceKm: haversineKm2(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
+          actionGeoDistanceKm: haversineKm(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
         };
       }
     } catch (err) {
-      log8.warn({ err }, "poi-amenity-nominatim path threw");
+      log4.warn({ err }, "poi-amenity-nominatim path threw");
     }
   }
   let directHit = null;
   try {
     directHit = await resolveViaNominatimDirect(hierarchy);
   } catch (err) {
-    log8.warn({ err }, "nominatim-direct path threw");
+    log4.warn({ err }, "nominatim-direct path threw");
   }
   const precision = derivePrecision(hierarchy);
-  const shouldVerify = precision === "city" || precision === "region" || precision === "neighborhood" || directHit !== null && haversineKm2(directHit.lat, directHit.lng, ctx.centroidLat, ctx.centroidLng) > 250;
+  const shouldVerify = precision === "city" || precision === "region" || precision === "neighborhood" || directHit !== null && haversineKm(directHit.lat, directHit.lng, ctx.centroidLat, ctx.centroidLng) > 250;
   if (shouldVerify) {
     try {
       const verified = await resolveViaVerifiedTwoPass(hierarchy, ctx);
@@ -2736,7 +1975,7 @@ async function resolveLocation(hierarchy, ctx) {
         return {
           ...verified,
           provenance: "nominatim-verified-2pass",
-          actionGeoDistanceKm: haversineKm2(
+          actionGeoDistanceKm: haversineKm(
             verified.lat,
             verified.lng,
             ctx.centroidLat,
@@ -2745,14 +1984,14 @@ async function resolveLocation(hierarchy, ctx) {
         };
       }
     } catch (err) {
-      log8.warn({ err }, "two-pass verify path threw; accepting direct hit");
+      log4.warn({ err }, "two-pass verify path threw; accepting direct hit");
     }
   }
   if (directHit) {
     return {
       ...directHit,
       provenance: "nominatim-direct",
-      actionGeoDistanceKm: haversineKm2(
+      actionGeoDistanceKm: haversineKm(
         directHit.lat,
         directHit.lng,
         ctx.centroidLat,
@@ -2766,821 +2005,94 @@ async function resolveLocation(hierarchy, ctx) {
       return {
         ...hit2,
         provenance: "bellingcat-coord-passthrough",
-        actionGeoDistanceKm: haversineKm2(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
+        actionGeoDistanceKm: haversineKm(hit2.lat, hit2.lng, ctx.centroidLat, ctx.centroidLng)
       };
     }
   } catch (err) {
-    log8.warn({ err }, "bellingcat path threw");
+    log4.warn({ err }, "bellingcat path threw");
   }
   const hit = resolveViaActionGeoFallback(ctx);
   return { ...hit, provenance: "gdelt-actiongeo-fallback", actionGeoDistanceKm: 0 };
 }
 
-// server/lib/pipelineAudit.ts
+// server/lib/llmTokenBudget.ts
 init_redis();
-var PIPELINE_AUDIT_KEY = "events:llm-pipeline-audit";
-var PIPELINE_AUDIT_TTL_SEC = 90 * 24 * 3600;
-var PIPELINE_AUDIT_MAX = 200;
-async function appendPipelineAudit(entry) {
-  try {
-    await redis.lpush(PIPELINE_AUDIT_KEY, JSON.stringify(entry));
-    await redis.ltrim(PIPELINE_AUDIT_KEY, 0, PIPELINE_AUDIT_MAX - 1);
-    await redis.expire(PIPELINE_AUDIT_KEY, PIPELINE_AUDIT_TTL_SEC);
-  } catch (err) {
-    const log40 = logger.child({ component: "pipeline-audit" });
-    log40.warn({ err, entry }, "audit append failed (redis unreachable)");
-  }
+var log5 = logger.child({ module: "llm-token-budget" });
+var DAILY_LIMITS = {
+  // Phase 29 D-01: cerebras/groq retired from the runtime path (ADR-0010).
+  // The slots are retained here for one deploy window so the test suite's
+  // `cerebras`/`groq` fixtures and `shouldPauseNewEvents` legacy probe
+  // continue to compile. Phase 30 prunes them per RESEARCH.md Open Q4.
+  cerebras: 1e6,
+  groq: 2e5,
+  // Phase 29 WR-01: real ceilings for the NIM/OpenRouter cascade so the
+  // adversarial-eval `budgetState` probe (formerly pointed at `cerebras`)
+  // semantically gates on the active providers. Per-event token counters
+  // for v3 are not yet plumbed into incrDailyTokens, so the gate currently
+  // resolves to 'ok' at runtime — the fix makes the soft-cap defense
+  // activate-able rather than permanently no-op.
+  nvidia_nim: 1e6,
+  openrouter: 2e5
+};
+var SOFT_CAP_RATIO = 0.8;
+var HARD_CAP_RATIO = 0.95;
+function todayKey2(provider) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  return `llm:tokens:${provider}:${today}`;
 }
-async function listPipelineAudit(limit) {
+async function getDailyTokens(provider) {
   try {
-    const raw = await redis.lrange(PIPELINE_AUDIT_KEY, 0, limit - 1);
-    return raw.map((s) => {
-      try {
-        return JSON.parse(typeof s === "string" ? s : JSON.stringify(s));
-      } catch {
-        return null;
-      }
-    }).filter((e) => e !== null);
+    const v = await redis.get(todayKey2(provider));
+    return typeof v === "number" ? v : 0;
   } catch {
-    return [];
+    return 0;
   }
 }
-
-// server/lib/sourceTiers.ts
-var TIER_1_DOMAINS = /* @__PURE__ */ new Set([
-  "reuters.com",
-  "apnews.com",
-  "afp.com",
-  "bellingcat.com",
-  "liveuamap.com"
-]);
-var TIER_2_DOMAINS = /* @__PURE__ */ new Set([
-  "bbc.co.uk",
-  "bbc.com",
-  "aljazeera.com",
-  "cnn.com",
-  "timesofisrael.com",
-  "middleeasteye.net",
-  "theguardian.com",
-  "nytimes.com",
-  "washingtonpost.com"
-]);
-var TIER_3_DOMAINS = /* @__PURE__ */ new Set(["tehrantimes.com", "irna.ir", "sana.sy", "presstv.ir"]);
-var TIER_1_NAMES = /* @__PURE__ */ new Set(["Reuters", "Associated Press", "AFP", "Bellingcat", "Liveuamap"]);
-var TIER_2_NAMES = /* @__PURE__ */ new Set([
-  "BBC",
-  "Al Jazeera",
-  "CNN",
-  "Times of Israel",
-  "Middle East Eye",
-  "Guardian",
-  "NYT",
-  "Washington Post"
-]);
-var TIER_3_NAMES = /* @__PURE__ */ new Set(["Tehran Times", "IRNA", "SANA", "Press TV"]);
-function extractDomain(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
+function budgetState(provider, used) {
+  const limit = DAILY_LIMITS[provider];
+  if (used >= limit * HARD_CAP_RATIO) return "hard";
+  if (used >= limit * SOFT_CAP_RATIO) return "soft";
+  return "ok";
 }
-function getSourceTier(source, domain) {
-  if (TIER_1_NAMES.has(source)) return 1;
-  if (TIER_2_NAMES.has(source)) return 2;
-  if (TIER_3_NAMES.has(source)) return 3;
-  if (domain) {
-    if (TIER_1_DOMAINS.has(domain)) return 1;
-    if (TIER_2_DOMAINS.has(domain)) return 2;
-    if (TIER_3_DOMAINS.has(domain)) return 3;
-  }
-  return null;
+var TYPE_WEIGHTS = {
+  airstrike: 10,
+  explosion: 8,
+  targeted: 8,
+  on_ground: 6,
+  other: 3
+};
+function scoreEntity(e) {
+  const typeWeight = TYPE_WEIGHTS[e.type] ?? 3;
+  const mentions = e.data.numMentions ?? 1;
+  const sources = e.data.numSources ?? 1;
+  const ageHours = Math.max(0, (Date.now() - e.timestamp) / 36e5);
+  const recency = 1 / (1 + ageHours / 24);
+  return typeWeight * Math.log2(1 + mentions) * Math.log2(1 + sources) * recency;
 }
-function getHighestTier(sourceUrls) {
-  let best = null;
-  for (const url of sourceUrls) {
-    const domain = extractDomain(url);
-    if (!domain) continue;
-    const tier = getSourceTier("", domain);
-    if (tier !== null) {
-      if (best === null || tier < best) {
-        best = tier;
-      }
-      if (best === 1) return 1;
-    }
+function computeSeverityScore(group) {
+  if (group.entities.length === 0) return 0;
+  let best = 0;
+  for (const e of group.entities) {
+    const s = scoreEntity(e);
+    if (s > best) best = s;
   }
   return best;
 }
-
-// server/lib/llmEventExtractor.v3.ts
-var log9 = logger.child({ module: "llm-extractor-v3" });
-var PIPELINE_OVERRIDE_KEY = "events:llm-pipeline-override";
-var PIPELINE_OVERRIDE_TTL_SEC = 7 * 24 * 3600;
-var BATCH_SIZE = 2;
-var V3_BAKEOFF_MODEL = process.env.V3_BAKEOFF_MODEL;
-var TEMPORAL_CONTEXT_COUNT = 3;
-var TEMPORAL_CONTEXT_BBOX_DEG = 1;
-var TEMPORAL_CONTEXT_WINDOW_MS = 72 * 36e5;
-var NEWS_MATCH_WINDOW_MS = 24 * 36e5;
-var NEWS_KEY = "news:gdelt";
-var EVENTS_LLM_V3_KEY = "events:llm:v3";
-var EVENTS_LLM_V3_PARTIAL_KEY = "events:llm:v3:partial";
-var SYSTEM_PROMPT_V3 = [
-  "You are a conflict event analyst extracting structured data from GDELT event records.",
-  "",
-  "For each event group, extract (all fields REQUIRED unless stated nullable):",
-  "1. location: A structured place hierarchy \u2014 each field NULLABLE when the source text does not support it:",
-  '   - country: full English name (e.g., "Iran", "Iraq") or null',
-  "   - admin1: province / state / governorate name or null",
-  "   - city: city or town name or null",
-  "   - neighborhood: neighborhood / district / suburb name or null",
-  '   - landmark: specific facility / site name (e.g., "Natanz nuclear facility") or null',
-  "   - confidence: number between 0 and 1 indicating how confident you are in this location",
-  '2. type: one of "airstrike", "on_ground", "explosion", "targeted", "other"',
-  "3. confidence: number between 0 and 1 for overall extraction confidence",
-  "4. reasoning: <=200 characters \u2014 cite which signals led to the location pick (news source, Bellingcat, GDELT metadata, etc.)",
-  '5. weaponType: one of "airstrike","drone","missile","artillery","small_arms","IED", or null if not stated',
-  '6. targetType: one of "military","infrastructure","civilian","leadership", or null if not stated',
-  '7. timeOfDay: UTC HH:MM (e.g., "03:15") if the source mentions a specific strike time, else null',
-  "8. durationMinutes: non-negative integer if the source mentions duration, else null",
-  "9. actors: array of actor names involved",
-  '10. severity: "critical" | "high" | "medium" | "low"',
-  "11. summary: 2-3 sentence description of what happened",
-  "12. casualties: { killed: integer | null, injured: integer | null, unknown: boolean }",
-  "13. sourceCount: integer \u2014 count of independent sources",
-  "",
-  "Hard rules:",
-  "- NEVER emit coordinates (lat/lng). Only output place names.",
-  '- NEVER emit a "precision" field \u2014 the server derives it from which hierarchy fields you populated.',
-  "- Use null when a field is not supported by the source text \u2014 do NOT guess.",
-  "- Prefer the NEWS BLOCK and BELLINGCAT BLOCK when present; they are higher-tier signals than GDELT metadata alone.",
-  '- The TEMPORAL BLOCK lists prior events in the same region \u2014 use it to normalize names (e.g., "the Jobar substation").',
-  "",
-  "JSON Schema (this is the contract \u2014 your output MUST validate):",
-  JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3, null, 2),
-  "",
-  '- Output ONLY the JSON object. Any reasoning must go in the "reasoning" field, not in <think> blocks (those are stripped).'
-].join("\n");
-var LLM_REDIS_TTL_SEC = 9e3;
-function buildBatchUserPromptV3(contexts) {
-  const lines = ["Analyze these GDELT event groups and extract structured data:\n"];
-  for (let i = 0; i < contexts.length; i++) {
-    const ctx = contexts[i];
-    if (!ctx) continue;
-    const { group, matchedNews, bellingcatHits, temporalEvents } = ctx;
-    const e = group.entities[0];
-    lines.push(`--- Event Group ${i + 1} (key: ${group.key}) ---`);
-    lines.push(`Date: ${new Date(group.timestamp).toISOString().slice(0, 10)}`);
-    lines.push(`CAMEO Code: ${group.primaryCameo}`);
-    lines.push(`Location (GDELT ActionGeo): ${e?.data.locationName ?? "unknown"}`);
-    lines.push(`Actors: ${e?.data.actor1 ?? "?"} vs ${e?.data.actor2 ?? "?"}`);
-    lines.push(`Goldstein Scale: ${e?.data.goldsteinScale ?? "n/a"}`);
-    lines.push(`Total Mentions: ${group.totalMentions}, Total Sources: ${group.totalSources}`);
-    lines.push(`Rows in group: ${group.entities.length}`);
-    if (group.sourceUrls.length > 0) {
-      lines.push(`Source URLs: ${group.sourceUrls.slice(0, 3).join(", ")}`);
-    } else {
-      lines.push("Source URLs: (none)");
-    }
-    if (matchedNews.length > 0) {
-      lines.push("");
-      lines.push("--- NEWS BLOCK (tier-tagged) ---");
-      for (const art of matchedNews.slice(0, 5)) {
-        const tier = getSourceTier("", hostnameOf(art.url));
-        const tag = tier === 1 ? "T1" : tier === 2 ? "T2" : "T3";
-        lines.push(`[${tag}] ${art.title.slice(0, 160)}`);
-      }
-    }
-    if (bellingcatHits.length > 0) {
-      lines.push("");
-      lines.push("--- BELLINGCAT OSINT (high-trust) ---");
-      for (const b of bellingcatHits.slice(0, 3)) {
-        lines.push(
-          `${b.title.slice(0, 160)} [Bellingcat coord hint: ${b.lat.toFixed(2)}, ${b.lng.toFixed(2)}]`
-        );
-      }
-    }
-    if (temporalEvents.length > 0) {
-      lines.push("");
-      lines.push(`--- TEMPORAL CONTEXT (${temporalEvents.length} recent events in region) ---`);
-      for (const t of temporalEvents) {
-        const locStr = [t.location.landmark, t.location.neighborhood, t.location.city].filter(Boolean).join(", ") || t.location.country || "unknown";
-        const ago = `${Math.round((group.timestamp - t.timestamp) / 36e5)}h ago`;
-        lines.push(`- ${locStr} (${ago}): ${t.summary.slice(0, 120)}`);
-      }
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
+async function shouldPauseNewEvents() {
+  const [cerebrasUsed, groqUsed] = await Promise.all([
+    getDailyTokens("cerebras"),
+    getDailyTokens("groq")
+  ]);
+  return budgetState("cerebras", cerebrasUsed) === "soft" || budgetState("groq", groqUsed) === "soft";
 }
-function hostnameOf(url) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
-}
-async function buildPromptContext(group) {
-  const matchedNews = [];
-  const bellingcatHits = [];
-  try {
-    const news = await cacheGetSafe(NEWS_KEY, 0);
-    if (news?.data) {
-      for (const cluster of news.data) {
-        for (const art of cluster.articles ?? []) {
-          const pubMs = typeof art.publishedAt === "number" ? art.publishedAt : NaN;
-          if (!Number.isFinite(pubMs)) continue;
-          if (Math.abs(pubMs - group.timestamp) > NEWS_MATCH_WINDOW_MS) continue;
-          matchedNews.push({
-            title: art.title,
-            url: art.url,
-            sourceCountry: art.sourceCountry,
-            publishedAt: pubMs
-          });
-          const geo = extractBellingcatGeo(art.title);
-          if (geo) bellingcatHits.push({ title: art.title, lat: geo.lat, lng: geo.lng });
-        }
-      }
-    }
-  } catch (err) {
-    log9.warn({ err }, "news cross-match failed, omitting NEWS+BELLINGCAT blocks");
-  }
-  const temporalEvents = await loadTemporalContext(group);
-  return { group, matchedNews, bellingcatHits, temporalEvents };
-}
-async function loadTemporalContext(group) {
-  try {
-    const cached = await cacheGetSafe(EVENTS_LLM_V3_KEY, 0);
-    if (!cached?.data) return [];
-    const out = [];
-    for (const e of cached.data) {
-      if (!e.data?.location || !e.data?.summary || !e.timestamp) continue;
-      if (Math.abs(group.timestamp - e.timestamp) > TEMPORAL_CONTEXT_WINDOW_MS) continue;
-      if (typeof e.lat === "number" && typeof e.lng === "number") {
-        if (Math.abs(e.lat - group.centroidLat) > TEMPORAL_CONTEXT_BBOX_DEG) continue;
-        if (Math.abs(e.lng - group.centroidLng) > TEMPORAL_CONTEXT_BBOX_DEG) continue;
-      }
-      out.push({
-        summary: e.data.summary,
-        location: e.data.location,
-        timestamp: e.timestamp
-      });
-      if (out.length >= TEMPORAL_CONTEXT_COUNT) break;
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
-async function writePartialCache(events, completed, total, complete) {
-  const payload = {
-    events,
-    progress: `${completed}/${total}`,
-    complete,
-    generatedAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  try {
-    await cacheSetSafe(EVENTS_LLM_V3_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC);
-  } catch (err) {
-    log9.warn({ err, completed, total, complete }, "partial cache write failed");
-  }
-}
-async function processEventGroupsV3(groups, onBatchComplete) {
-  const matchedNewsByGroup = /* @__PURE__ */ new Map();
-  const bellingcatByGroup = /* @__PURE__ */ new Map();
-  if (groups.length === 0) {
-    return { events: [], matchedNewsByGroup, bellingcatByGroup };
-  }
-  updateProgress({ adaptiveBatchEnabled: env.V3_ADAPTIVE_BATCH });
-  updateProgress({ lineagePrefilterEnabled: env.V3_LINEAGE_PREFILTER });
-  await prewarmIfCold();
-  const results = [];
-  let allFailed = true;
-  let groupsToProcess = groups;
-  if (env.V3_LINEAGE_PREFILTER) {
-    const stats = llmProgress.lineagePrefilterStats ?? { hitCount: 0, missCount: 0 };
-    const queue = [];
-    const nowMs = Date.now();
-    const ttlMs = GROUP_LINEAGE_TTL_SEC * 1e3;
-    for (const group of groups) {
-      const hash = computeGroupLineageHash({
-        key: group.key,
-        sourceUrls: group.sourceUrls,
-        totalMentions: group.totalMentions
-      });
-      const cacheKey2 = `${GROUP_LINEAGE_KEY_PREFIX}${hash}`;
-      let cached = null;
-      try {
-        const raw = await redis.get(cacheKey2);
-        if (raw != null) {
-          const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-          if (parsed && typeof parsed === "object" && "event" in parsed && "ts" in parsed) {
-            cached = parsed;
-          }
-        }
-      } catch (readErr) {
-        log9.warn(
-          {
-            cacheKey: cacheKey2,
-            err: readErr instanceof Error ? readErr.message : String(readErr)
-          },
-          "lineage pre-filter read failed; falling through"
-        );
-      }
-      const fresh = cached && typeof cached.ts === "number" && nowMs - cached.ts < ttlMs;
-      if (fresh && cached) {
-        const reparse = batchResponseV3.safeParse({ events: [cached.event] });
-        if (reparse.success && reparse.data.events[0]) {
-          results.push(reparse.data.events[0]);
-          allFailed = false;
-          stats.hitCount += 1;
-          continue;
-        }
-        log9.warn(
-          { cacheKey: cacheKey2 },
-          "lineage pre-filter cache payload failed v3 reparse; treating as miss"
-        );
-      }
-      stats.missCount += 1;
-      queue.push(group);
-    }
-    updateProgress({ lineagePrefilterStats: stats });
-    groupsToProcess = queue;
-  }
-  const totalBatches = Math.ceil(groupsToProcess.length / BATCH_SIZE);
-  const limit = createLimit(env.LLM_V3_CONCURRENCY);
-  let completedBatchesCounter = 0;
-  const finishBatch = async () => {
-    const c = ++completedBatchesCounter;
-    await onBatchComplete?.(c, totalBatches);
-    await writePartialCache(results, c, totalBatches, false);
-  };
-  const tasks = [];
-  for (let i = 0; i < groupsToProcess.length; i += BATCH_SIZE) {
-    const batch = groupsToProcess.slice(i, i + BATCH_SIZE);
-    const batchIndex = Math.floor(i / BATCH_SIZE);
-    tasks.push(
-      limit(async () => {
-        const contexts = await Promise.all(batch.map(buildPromptContext));
-        for (const ctx of contexts) {
-          matchedNewsByGroup.set(ctx.group.key, ctx.matchedNews);
-          const firstBellingcat = ctx.bellingcatHits[0];
-          if (firstBellingcat) {
-            bellingcatByGroup.set(ctx.group.key, {
-              lat: firstBellingcat.lat,
-              lng: firstBellingcat.lng
-            });
-          }
-        }
-        const userPrompt = buildBatchUserPromptV3(contexts);
-        let routing = [];
-        let didTimeout = false;
-        let finishReason = null;
-        const t0 = Date.now();
-        const content = await withBatchWatchdog(
-          async () => {
-            const result = await callLLM(
-              [
-                { role: "system", content: SYSTEM_PROMPT_V3 },
-                { role: "user", content: userPrompt }
-              ],
-              JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
-              {
-                batchSize: batch.length,
-                modelOverride: V3_BAKEOFF_MODEL,
-                // Phase 27.4.4 Plan 02 — drop OpenRouter from the v3 cascade.
-                // Free-tier OR rate-limits ~every call (16 attempts × 16
-                // rate_limit observed in dev); a 100%-failing fallback
-                // amplifies breaker errors and burns the retry budget. v2
-                // keeps OR for legacy rollback parity.
-                skipOpenRouter: true
-              }
-            );
-            routing = result.routing;
-            finishReason = result.finishReason ?? null;
-            return result.content;
-          },
-          {
-            timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-            softWarnMs: 6e4,
-            // D-02 hard-coded — only hard cap is env-tunable
-            batchIndex,
-            label: "v3",
-            onTimeout: async () => {
-              didTimeout = true;
-              if (env.V3_ADAPTIVE_BATCH && batch.length > 1) return;
-              for (const g of batch) {
-                await enqueueDLQ({
-                  id: g.key,
-                  reason: "v3:timeout_watchdog",
-                  lastError: `v3 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
-                  timestamp: Date.now()
-                });
-              }
-              updateProgress({
-                watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
-              });
-            },
-            onSoftWarn: (elapsedMs) => {
-              const history = llmProgress.callHistory ?? [];
-              updateProgress({
-                callHistory: [
-                  {
-                    provider: "nvidia_nim",
-                    model: "watchdog-soft-warn",
-                    tokensIn: 0,
-                    tokensOut: 0,
-                    durationMs: elapsedMs,
-                    ok: true,
-                    batchSize: batch.length,
-                    timestamp: Date.now(),
-                    skipReason: "watchdog-soft-warn"
-                  },
-                  ...history
-                ].slice(0, 20)
-              });
-            }
-          }
-        );
-        if (routing.length) {
-          const prevTrace = llmProgress.routingTrace ?? [];
-          const newEntries = routing.map((r) => ({
-            ts: r.timestamp,
-            batch: batchIndex,
-            provider: r.provider,
-            model: r.model,
-            reason: r.reason
-          }));
-          updateProgress({ routingTrace: [...newEntries, ...prevTrace].slice(0, 50) });
-        }
-        if (content === null) {
-          if (didTimeout && env.V3_ADAPTIVE_BATCH && batch.length > 1) {
-            const stats = llmProgress.adaptiveBatchStats ?? {
-              splitCount: 0,
-              retrySuccess: 0,
-              retryFail: 0,
-              dlqEnqueueCount: 0
-            };
-            stats.splitCount += 1;
-            updateProgress({ adaptiveBatchStats: stats });
-            const splitEvents = await splitBatchOnTimeout(contexts, batchIndex);
-            results.push(...splitEvents);
-            if (splitEvents.length > 0) allFailed = false;
-            await finishBatch();
-            return;
-          }
-          log9.warn({ batchIndex }, "v3 batch yielded no content (null or watchdog timeout)");
-          await finishBatch();
-          return;
-        }
-        let parsed;
-        try {
-          parsed = JSON.parse(content);
-        } catch (jsonErr) {
-          const errMsg = jsonErr instanceof Error ? jsonErr.message : String(jsonErr);
-          const isTruncation = finishReason === "length" || /unterminated string/i.test(errMsg);
-          const dlqReason = isTruncation ? "v3:max_tokens_truncation" : "v3:malformed";
-          log9.warn(
-            {
-              batchIndex,
-              jsonErr: errMsg,
-              finishReason,
-              dlqReason
-            },
-            "v3 JSON.parse failed"
-          );
-          for (const g of batch) {
-            await enqueueDLQ({
-              id: g.key,
-              reason: dlqReason,
-              lastError: `JSON.parse failed (finishReason=${finishReason ?? "unknown"}): ${errMsg.slice(0, 200)}`,
-              timestamp: Date.now()
-            });
-          }
-          const sf = llmProgress.schemaFailures ?? {
-            nvidia_nim: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
-            openrouter: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 }
-          };
-          const primary = routing[0]?.provider ?? "nvidia_nim";
-          sf[primary].total += 1;
-          sf[primary].malformedJson += 1;
-          updateProgress({ schemaFailures: sf });
-          await finishBatch();
-          return;
-        }
-        const validated = batchResponseV3.safeParse(parsed);
-        if (!validated.success) {
-          log9.warn(
-            { issues: validated.error.issues.slice(0, 3), batchIndex },
-            "v3 Zod parse failed"
-          );
-          const errPayload = JSON.stringify(validated.error.issues.slice(0, 3));
-          for (const g of batch) {
-            await enqueueDLQ({
-              id: g.key,
-              reason: "v3:schema_fail",
-              lastError: errPayload,
-              timestamp: Date.now()
-            });
-          }
-          const sf = llmProgress.schemaFailures ?? {
-            nvidia_nim: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
-            openrouter: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 }
-          };
-          const primary = routing[0]?.provider ?? "nvidia_nim";
-          sf[primary].total += 1;
-          sf[primary].missingField += 1;
-          updateProgress({ schemaFailures: sf });
-          await finishBatch();
-          return;
-        }
-        results.push(...validated.data.events);
-        allFailed = false;
-        const promptText = `${SYSTEM_PROMPT_V3}
-
-${userPrompt}`;
-        const reasoningTrace = "";
-        const model = routing[0]?.model ?? "unknown";
-        const batchDurationMs = Date.now() - t0;
-        for (const enrichedEvt of validated.data.events) {
-          const eventId = `llm-v3-${enrichedEvt.groupKey}`;
-          const { lineageHash } = await appendLineage(eventId, {
-            prompt: promptText,
-            response: content,
-            parsed: enrichedEvt,
-            coord: { lat: 0, lng: 0 },
-            // resolver fills in coord on the entity; lineage records pre-resolve LLM output
-            provenance: "gdelt-actiongeo-fallback",
-            resolverPath: "pre-resolve",
-            reasoningTrace,
-            model
-          });
-          const recentEvent = {
-            groupKey: enrichedEvt.groupKey,
-            location: {
-              country: enrichedEvt.location.country,
-              admin1: enrichedEvt.location.admin1,
-              city: enrichedEvt.location.city,
-              neighborhood: enrichedEvt.location.neighborhood,
-              landmark: enrichedEvt.location.landmark
-            },
-            precision: derivePrecision(enrichedEvt.location),
-            confidence: enrichedEvt.confidence,
-            reasoning: enrichedEvt.reasoning,
-            weaponType: enrichedEvt.weaponType,
-            targetType: enrichedEvt.targetType,
-            tokensIn: null,
-            tokensOut: null,
-            provenance: "gdelt-actiongeo-fallback",
-            sources: [],
-            fetchedAt: Date.now(),
-            reasoningTrace,
-            lineageHash
-          };
-          const recents = (llmProgress.recentEvents ?? []).slice(0, 49);
-          updateProgress({ recentEvents: [recentEvent, ...recents] });
-        }
-        log9.debug(
-          { batchIndex, durationMs: batchDurationMs, events: validated.data.events.length },
-          "v3 batch processed"
-        );
-        await finishBatch();
-      })
-    );
-  }
-  await Promise.all(tasks);
-  await writePartialCache(results, totalBatches, totalBatches, true);
-  await checkWatchdogRecurrenceTrigger();
-  return {
-    events: allFailed ? null : results,
-    matchedNewsByGroup,
-    bellingcatByGroup
-  };
-}
-async function splitBatchOnTimeout(contexts, batchIndex) {
-  const mid = Math.ceil(contexts.length / 2);
-  const halves = [contexts.slice(0, mid), contexts.slice(mid)];
-  const successes = [];
-  const enqueueAdaptiveFails = async (half, lastError) => {
-    for (const ctx of half) {
-      await enqueueDLQ({
-        id: ctx.group.key,
-        reason: "v3:adaptive-retry-fail",
-        lastError,
-        timestamp: Date.now()
-      });
-    }
-    const stats = llmProgress.adaptiveBatchStats ?? {
-      splitCount: 0,
-      retrySuccess: 0,
-      retryFail: 0,
-      dlqEnqueueCount: 0
-    };
-    stats.retryFail += half.length;
-    stats.dlqEnqueueCount += half.length;
-    updateProgress({ adaptiveBatchStats: stats });
-  };
-  for (const half of halves) {
-    if (half.length === 0) continue;
-    const halfPrompt = buildBatchUserPromptV3(half);
-    let halfTimedOut = false;
-    const halfContent = await withBatchWatchdog(
-      async () => {
-        const r = await callLLM(
-          [
-            { role: "system", content: SYSTEM_PROMPT_V3 },
-            { role: "user", content: halfPrompt }
-          ],
-          JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
-          {
-            batchSize: half.length,
-            modelOverride: V3_BAKEOFF_MODEL,
-            skipOpenRouter: true
-          }
-        );
-        return r.content;
-      },
-      {
-        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 6e4,
-        batchIndex,
-        label: "v3-split",
-        onTimeout: async () => {
-          halfTimedOut = true;
-        }
-      }
-    );
-    if (halfContent === null) {
-      await enqueueAdaptiveFails(
-        half,
-        halfTimedOut ? `v3 split-retry timed out (batch ${batchIndex})` : "v3 split-retry returned null content"
-      );
-      continue;
-    }
-    let halfParsed;
-    try {
-      halfParsed = JSON.parse(halfContent);
-    } catch (parseErr) {
-      await enqueueAdaptiveFails(
-        half,
-        `v3 split-retry JSON.parse: ${parseErr instanceof Error ? parseErr.message.slice(0, 200) : "unknown"}`
-      );
-      continue;
-    }
-    const halfValidated = batchResponseV3.safeParse(halfParsed);
-    if (!halfValidated.success) {
-      await enqueueAdaptiveFails(
-        half,
-        `v3 split-retry Zod fail: ${JSON.stringify(halfValidated.error.issues.slice(0, 2))}`
-      );
-      continue;
-    }
-    successes.push(...halfValidated.data.events);
-    const stats = llmProgress.adaptiveBatchStats ?? {
-      splitCount: 0,
-      retrySuccess: 0,
-      retryFail: 0,
-      dlqEnqueueCount: 0
-    };
-    stats.retrySuccess += half.length;
-    updateProgress({ adaptiveBatchStats: stats });
-  }
-  return successes;
-}
-async function performAutoRollbackToV2(opts) {
-  const fromVersion = "v3";
-  setPipelineOverride("v2");
-  try {
-    await redis.set(PIPELINE_OVERRIDE_KEY, "v2", { ex: PIPELINE_OVERRIDE_TTL_SEC });
-  } catch (err) {
-    log9.warn({ err }, "failed to persist auto-rollback override to redis");
-  }
-  await appendPipelineAudit({
-    ts: Date.now(),
-    from: fromVersion,
-    to: "v2",
-    trigger: opts.trigger,
-    operator: process.env.NODE_ENV === "production" ? "production" : "cron",
-    reason: opts.reason
-  });
-}
-async function checkWatchdogRecurrenceTrigger() {
-  if (!isPipelineV3()) return { rolledBack: false };
-  const wdCount = llmProgress.watchdogTimeoutCount ?? 0;
-  const threshold = env.V3_WATCHDOG_ROLLBACK_THRESHOLD;
-  if (wdCount < threshold) return { rolledBack: false };
-  log9.warn(
-    { watchdogTimeoutCount: wdCount, threshold },
-    "D-17 Trigger 1: watchdog recurrence \u2014 auto-rollback v3 -> v2"
-  );
-  const reason = `watchdogTimeoutCount=${wdCount} (>= ${threshold})`;
-  await performAutoRollbackToV2({ trigger: "auto:watchdog_recurrence", reason });
-  return { rolledBack: true, reason };
-}
-async function checkEvalDropTrigger(opts) {
-  if (!isPipelineV3()) return { rolledBack: false };
-  try {
-    const raw = await redis.get("events:llm-eval-baseline:v3");
-    if (!raw) return { rolledBack: false };
-    let baselineScore = null;
-    if (typeof raw === "string") {
-      try {
-        const parsed = JSON.parse(raw);
-        const inner = parsed.data ?? parsed;
-        baselineScore = inner;
-      } catch {
-        return { rolledBack: false };
-      }
-    } else if (raw && typeof raw === "object") {
-      const env2 = raw;
-      const inner = env2.data ?? env2;
-      baselineScore = inner;
-    }
-    if (!baselineScore || typeof baselineScore.within20km !== "number" || typeof baselineScore.total !== "number" || baselineScore.total === 0) {
-      return { rolledBack: false };
-    }
-    const baselineRatio = baselineScore.within20km / baselineScore.total;
-    const drop = baselineRatio - opts.newWithin20kmRatio;
-    if (drop >= 0.05) {
-      log9.warn(
-        { drop, baselineRatio, newRatio: opts.newWithin20kmRatio },
-        "D-17 Trigger 2: eval drop >= 5pp \u2014 auto-rollback v3 -> v2"
-      );
-      const reason = `eval drop ${drop.toFixed(3)} (baseline ${baselineRatio.toFixed(3)} -> ${opts.newWithin20kmRatio.toFixed(3)})`;
-      await performAutoRollbackToV2({ trigger: "auto:eval_drop", reason });
-      return { rolledBack: true, reason };
-    }
-  } catch (err) {
-    log9.warn({ err }, "eval-drop trigger check failed (redis unreachable?)");
-  }
-  return { rolledBack: false };
-}
-async function geocodeEnrichedEventsV3(events, groupsByKey, matchedNewsByGroup, bellingcatByGroup, onComplete) {
-  const out = [];
-  for (let i = 0; i < events.length; i++) {
-    const ev = events[i];
-    if (!ev) continue;
-    const group = groupsByKey.get(ev.groupKey);
-    const matchedNews = matchedNewsByGroup.get(ev.groupKey) ?? [];
-    const ctx = {
-      centroidLat: group?.centroidLat ?? 0,
-      centroidLng: group?.centroidLng ?? 0,
-      // W3 fix — article TITLES, not URLs.
-      articleTitles: matchedNews.slice(0, 3).map((a) => a.title),
-      summary: ev.summary,
-      // W2 fix — bellingcat coord flows through when parse hit in the news
-      // read; null when nothing matched (the resolver's branch 5 falls through
-      // naturally on null).
-      bellingcatCoord: bellingcatByGroup.get(ev.groupKey) ?? null
-    };
-    let resolved;
-    try {
-      resolved = await resolveLocation(ev.location, ctx);
-    } catch (err) {
-      log9.warn(
-        { err: err instanceof Error ? err.message : String(err), groupKey: ev.groupKey },
-        "resolveLocation threw \u2014 using GDELT centroid fallback for this event"
-      );
-      resolved = {
-        lat: ctx.centroidLat,
-        lng: ctx.centroidLng,
-        provenance: "gdelt-actiongeo-fallback",
-        actionGeoDistanceKm: 0,
-        displayName: "GDELT ActionGeo centroid (resolver error fallback)"
-      };
-    }
-    const precision = derivePrecision(ev.location);
-    const sourceHostnames = (group?.sourceUrls ?? []).map((u) => hostnameOf(u));
-    const tiers = [];
-    for (const h of sourceHostnames) {
-      const t = getSourceTier("", h);
-      if (t === 1) tiers.push("gold");
-      else if (t === 2) tiers.push("silver");
-      else if (t === 3) tiers.push("bronze");
-    }
-    const suspect = deriveSuspect({
-      confidence: ev.confidence,
-      precision,
-      actionGeoDistanceKm: resolved.actionGeoDistanceKm,
-      tiers
-    });
-    out.push({
-      ...ev,
-      resolvedLat: resolved.lat,
-      resolvedLng: resolved.lng,
-      geocodeProvenance: resolved.provenance,
-      precision,
-      suspect,
-      actionGeoDistanceKm: resolved.actionGeoDistanceKm,
-      displayName: resolved.displayName
-    });
-    onComplete?.(i + 1, events.length);
-  }
-  return out;
+async function prioritizeBySeverity(groups) {
+  const paused = await shouldPauseNewEvents();
+  if (!paused) return groups;
+  return groups.slice().sort((a, b) => computeSeverityScore(b) - computeSeverityScore(a) || b.timestamp - a.timestamp);
 }
 
 // server/lib/llmEvalHarness.ts
-var log10 = logger.child({ module: "llm-eval-harness" });
+var log6 = logger.child({ module: "llm-eval-harness" });
 var __dirname3 = dirname3(fileURLToPath3(import.meta.url));
 var GROUND_TRUTH_PATH = resolve3(__dirname3, "../../.planning/eval/ground-truth-events.json");
 var BASELINE_KEY = "events:llm-eval-baseline:v3";
@@ -3590,7 +2102,7 @@ function loadGroundTruth() {
   if (cachedGroundTruth !== void 0) return cachedGroundTruth;
   try {
     if (!existsSync3(GROUND_TRUTH_PATH)) {
-      log10.info(
+      log6.info(
         { path: GROUND_TRUTH_PATH },
         "ground-truth file absent; eval harness will report zeros"
       );
@@ -3602,23 +2114,23 @@ function loadGroundTruth() {
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      log10.warn({ err: parseErr, path: GROUND_TRUTH_PATH }, "ground-truth JSON parse failed");
+      log6.warn({ err: parseErr, path: GROUND_TRUTH_PATH }, "ground-truth JSON parse failed");
       cachedGroundTruth = null;
       return null;
     }
     if (!isValidGroundTruth(parsed)) {
-      log10.warn({ path: GROUND_TRUTH_PATH }, "ground-truth failed structural validation");
+      log6.warn({ path: GROUND_TRUTH_PATH }, "ground-truth failed structural validation");
       cachedGroundTruth = null;
       return null;
     }
     cachedGroundTruth = parsed;
-    log10.info(
+    log6.info(
       { count: parsed.events.length, curatedAt: parsed.curatedAt },
       "loaded ground-truth event set"
     );
     return parsed;
   } catch (err) {
-    log10.warn({ err, path: GROUND_TRUTH_PATH }, "failed to load ground-truth file");
+    log6.warn({ err, path: GROUND_TRUTH_PATH }, "failed to load ground-truth file");
     cachedGroundTruth = null;
     return null;
   }
@@ -3629,7 +2141,7 @@ function isValidGroundTruth(v) {
   if (!Array.isArray(o.events)) return false;
   return true;
 }
-function haversineKm3(lat1, lng1, lat2, lng2) {
+function haversineKm2(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -3652,12 +2164,12 @@ async function runEval(opts = {}) {
         centroidLat: ev.truth.lat,
         centroidLng: ev.truth.lng
       });
-      const dKm = haversineKm3(resolved.lat, resolved.lng, ev.truth.lat, ev.truth.lng);
+      const dKm = haversineKm2(resolved.lat, resolved.lng, ev.truth.lat, ev.truth.lng);
       if (dKm <= 5) w5++;
       if (dKm <= 20) w20++;
       if (dKm <= 100) w100++;
     } catch (err) {
-      log10.warn({ err, id: ev.id }, "eval harness resolve failed for event");
+      log6.warn({ err, id: ev.id }, "eval harness resolve failed for event");
     }
   }
   const score = {
@@ -3671,13 +2183,7 @@ async function runEval(opts = {}) {
   try {
     await cacheSetSafe(key, score, BASELINE_TTL_SEC);
   } catch (err) {
-    log10.warn({ err, key }, "failed to persist eval baseline to Redis");
-  }
-  if (score.total > 0 && !opts.model) {
-    const ratio = score.within20km / score.total;
-    await checkEvalDropTrigger({ newWithin20kmRatio: ratio }).catch((err) => {
-      log10.warn({ err }, "D-17 eval-drop trigger check failed (swallowed)");
-    });
+    log6.warn({ err, key }, "failed to persist eval baseline to Redis");
   }
   return score;
 }
@@ -3693,7 +2199,7 @@ function loadAdversarialFixture() {
   if (cachedAdversarialFixture !== void 0) return cachedAdversarialFixture;
   try {
     if (!existsSync3(ADVERSARIAL_FIXTURE_PATH)) {
-      log10.info(
+      log6.info(
         { path: ADVERSARIAL_FIXTURE_PATH },
         "adversarial fixture absent; sub-eval will report skipped"
       );
@@ -3703,7 +2209,7 @@ function loadAdversarialFixture() {
     const raw = readFileSync3(ADVERSARIAL_FIXTURE_PATH, "utf-8");
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.entries)) {
-      log10.warn(
+      log6.warn(
         { path: ADVERSARIAL_FIXTURE_PATH },
         "adversarial fixture failed structural validation"
       );
@@ -3713,7 +2219,7 @@ function loadAdversarialFixture() {
     cachedAdversarialFixture = parsed;
     return cachedAdversarialFixture;
   } catch (err) {
-    log10.warn({ err, path: ADVERSARIAL_FIXTURE_PATH }, "failed to load adversarial fixture");
+    log6.warn({ err, path: ADVERSARIAL_FIXTURE_PATH }, "failed to load adversarial fixture");
     cachedAdversarialFixture = null;
     return null;
   }
@@ -3721,9 +2227,9 @@ function loadAdversarialFixture() {
 async function runAdversarialEval() {
   const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
   try {
-    const used = await getDailyTokens("cerebras");
-    if (budgetState("cerebras", used) === "hard") {
-      log10.warn("adversarial sub-eval skipped \u2014 Cerebras token budget at hard cap");
+    const used = await getDailyTokens("nvidia_nim");
+    if (budgetState("nvidia_nim", used) === "hard") {
+      log6.warn("adversarial sub-eval skipped \u2014 NVIDIA NIM token budget at hard cap");
       return {
         total: 0,
         blocked: 0,
@@ -3735,7 +2241,7 @@ async function runAdversarialEval() {
       };
     }
   } catch (err) {
-    log10.warn({ err }, "adversarial sub-eval token-budget probe failed (continuing)");
+    log6.warn({ err }, "adversarial sub-eval token-budget probe failed (continuing)");
   }
   const fixture = loadAdversarialFixture();
   if (!fixture) {
@@ -3770,7 +2276,7 @@ async function runAdversarialEval() {
         byCategory[cat].blocked += 1;
       } else {
         leaked += 1;
-        log10.warn(
+        log6.warn(
           {
             entryId: entry.id,
             category: cat,
@@ -3783,7 +2289,7 @@ async function runAdversarialEval() {
     } catch (err) {
       blocked += 1;
       byCategory[cat].blocked += 1;
-      log10.info(
+      log6.info(
         { entryId: entry.id, category: cat, err: err instanceof Error ? err.message : err },
         "adversarial entry blocked by resolver throw"
       );
@@ -3801,13 +2307,13 @@ async function runAdversarialEval() {
   try {
     await cacheSetSafe(ADVERSARIAL_KEY, result, ADVERSARIAL_TTL_SEC);
   } catch (err) {
-    log10.warn({ err, key: ADVERSARIAL_KEY }, "failed to persist adversarial eval to Redis");
+    log6.warn({ err, key: ADVERSARIAL_KEY }, "failed to persist adversarial eval to Redis");
   }
   return result;
 }
 
 // server/routes/cron-health.ts
-var log11 = logger.child({ module: "cron-health" });
+var log7 = logger.child({ module: "cron-health" });
 var cronHealthRouter = Router2();
 var STALE_THRESHOLD_MS = 60 * 60 * 1e3;
 cronHealthRouter.get("/", async (req, res) => {
@@ -3827,7 +2333,7 @@ cronHealthRouter.get("/", async (req, res) => {
     await redis.ping();
     redisOk = true;
   } catch {
-    log11.error("Redis ping failed");
+    log7.error("Redis ping failed");
   }
   const sources = {};
   const warnings = [];
@@ -3851,27 +2357,27 @@ cronHealthRouter.get("/", async (req, res) => {
     })
   );
   if (warnings.length > 0) {
-    log11.warn({ warningCount: warnings.length, warnings }, "source health warnings");
+    log7.warn({ warningCount: warnings.length, warnings }, "source health warnings");
   } else {
-    log11.info("all sources healthy");
+    log7.info("all sources healthy");
   }
   let evalScore = null;
   let evalError = null;
   try {
     evalScore = await runEval();
-    log11.info({ evalScore }, "eval drift check complete");
+    log7.info({ evalScore }, "eval drift check complete");
   } catch (err) {
     evalError = err instanceof Error ? err.message : String(err);
-    log11.warn({ err: evalError }, "eval drift check threw \u2014 continuing health response");
+    log7.warn({ err: evalError }, "eval drift check threw \u2014 continuing health response");
   }
   let adversarialResult = null;
   let adversarialError = null;
   try {
     adversarialResult = await runAdversarialEval();
-    log11.info({ adversarialResult }, "adversarial sub-eval complete");
+    log7.info({ adversarialResult }, "adversarial sub-eval complete");
   } catch (err) {
     adversarialError = err instanceof Error ? err.message : String(err);
-    log11.warn({ err: adversarialError }, "adversarial sub-eval threw \u2014 continuing health response");
+    log7.warn({ err: adversarialError }, "adversarial sub-eval threw \u2014 continuing health response");
   }
   await cacheSetSafe("cron:lastTick:health", Date.now(), CRON_LASTTICK_TTL_SEC);
   res.json({
@@ -80784,7 +79290,7 @@ var COUNTRY_CENTROIDS = {
   Yemen: [15.6, 48.5]
 };
 var EARTH_RADIUS_KM = 6371;
-function haversineKm4(lat1, lng1, lat2, lng2) {
+function haversineKm3(lat1, lng1, lat2, lng2) {
   const toRad = (deg) => deg * (Math.PI / 180);
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
@@ -80805,7 +79311,7 @@ function assignBasinStress(lat, lng) {
   let minDist = Infinity;
   let nearestCountry = null;
   for (const [country, [clat, clng]] of Object.entries(COUNTRY_CENTROIDS)) {
-    const dist = haversineKm4(lat, lng, clat, clng);
+    const dist = haversineKm3(lat, lng, clat, clng);
     if (dist < minDist) {
       minDist = dist;
       nearestCountry = country;
@@ -80863,7 +79369,7 @@ var RateLimitError = class extends Error {
 };
 
 // server/adapters/overpass-water.ts
-var log12 = logger.child({ module: "overpass-water" });
+var log8 = logger.child({ module: "overpass-water" });
 var OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 var OVERPASS_FALLBACK = "https://overpass.private.coffee/api/interpreter";
 var TIMEOUT_MS = 9e4;
@@ -81251,7 +79757,7 @@ async function fetchFacilityType(entry, stats) {
       });
       statusCode = res.status;
       if (!res.ok) {
-        log12.warn(
+        log8.warn(
           { facilityType: entry.label, url, status: res.status },
           "Overpass returned error status"
         );
@@ -81281,13 +79787,13 @@ async function fetchFacilityType(entry, stats) {
         attempts,
         ok: true
       });
-      log12.info(
+      log8.info(
         { facilityType: entry.label, raw: json.elements.length, kept: facilities.length },
         "fetched facilities"
       );
       return facilities;
     } catch (err) {
-      log12.warn({ err, facilityType: entry.label, url }, "Overpass request failed");
+      log8.warn({ err, facilityType: entry.label, url }, "Overpass request failed");
       stats.overpass.push({
         facilityType: entry.label,
         mirror: mirrorLabel,
@@ -81298,7 +79804,7 @@ async function fetchFacilityType(entry, stats) {
       });
     }
   }
-  log12.warn({ facilityType: entry.label }, "all URLs failed, skipping");
+  log8.warn({ facilityType: entry.label }, "all URLs failed, skipping");
   return [];
 }
 async function fetchWaterFacilities() {
@@ -81342,7 +79848,7 @@ async function fetchWaterFacilities() {
         all.push(...facilities);
       }
     } catch (err) {
-      log12.warn({ facilityType: entry.label, err }, "query failed, continuing");
+      log8.warn({ facilityType: entry.label, err }, "query failed, continuing");
     }
   }
   if (succeeded === 0) {
@@ -81379,7 +79885,7 @@ async function fetchWaterFacilities() {
     count: deduped.filter((f) => (f.notabilityScore ?? 0) >= lo && (f.notabilityScore ?? 0) < hi).length
   }));
   stats.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  log12.info(
+  log8.info(
     { total: deduped.length, succeeded, totalQueries: FACILITY_QUERIES.length, stats },
     "water facilities fetch complete"
   );
@@ -81387,7 +79893,7 @@ async function fetchWaterFacilities() {
 }
 
 // server/adapters/overpass.ts
-var log13 = logger.child({ module: "overpass" });
+var log9 = logger.child({ module: "overpass" });
 var OVERPASS_URL2 = "https://overpass-api.de/api/interpreter";
 var OVERPASS_FALLBACK2 = "https://overpass.private.coffee/api/interpreter";
 var TIMEOUT_MS2 = 6e4;
@@ -81525,7 +80031,7 @@ async function fetchSites() {
       });
       statusCode = res.status;
       if (!res.ok) {
-        log13.warn({ url, status: res.status }, "Overpass returned error status");
+        log9.warn({ url, status: res.status }, "Overpass returned error status");
         stats.overpass.push({
           facilityType: "sites",
           mirror: mirrorLabel,
@@ -81594,7 +80100,7 @@ async function fetchSites() {
       stats.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
       return { sites: kept, stats };
     } catch (err) {
-      log13.warn({ err, url }, "Overpass request failed");
+      log9.warn({ err, url }, "Overpass request failed");
       stats.overpass.push({
         facilityType: "sites",
         mirror: mirrorLabel,
@@ -81610,14 +80116,14 @@ async function fetchSites() {
 
 // server/routes/cron-warm.ts
 init_redis();
-var log14 = logger.child({ module: "cron-warm" });
+var log10 = logger.child({ module: "cron-warm" });
 var SITES_REDIS_TTL_SEC = 259200;
 var SITES_KEY = "sites:v3";
 var WATER_KEY = "water:facilities:v3";
 var cronWarmRouter = Router3();
 cronWarmRouter.get("/", async (_req, res) => {
   const start = Date.now();
-  log14.info("starting cache pre-warm");
+  log10.info("starting cache pre-warm");
   const results = await Promise.allSettled([
     (async () => {
       const { sites, stats } = await fetchSites();
@@ -81637,7 +80143,7 @@ cronWarmRouter.get("/", async (_req, res) => {
   };
   const allOk = results.every((r) => r.status === "fulfilled");
   const logLevel = allOk ? "info" : "warn";
-  log14[logLevel](summary, "cache pre-warm complete");
+  log10[logLevel](summary, "cache pre-warm complete");
   const partialOrBetter = results.some((r) => r.status === "fulfilled");
   if (partialOrBetter) {
     await cacheSetSafe("cron:lastTick:warm", Date.now(), CRON_LASTTICK_TTL_SEC);
@@ -81689,7 +80195,7 @@ dashboardAuthRouter.get("/auth-check", dashboardAuth, (_req, res) => {
 
 // server/routes/eval-cron.ts
 import { Router as Router5 } from "express";
-var log15 = logger.child({ module: "eval-cron" });
+var log11 = logger.child({ module: "eval-cron" });
 var evalCronRouter = Router5();
 evalCronRouter.post("/", async (req, res) => {
   if (env.CRON_SECRET) {
@@ -81705,7 +80211,7 @@ evalCronRouter.post("/", async (req, res) => {
     const score = await runEval();
     const durationMs = Date.now() - t0;
     const ratioWithin20km = score.total > 0 ? score.within20km / score.total : 0;
-    log15.info({ score, durationMs, ratioWithin20km }, "eval cron run complete");
+    log11.info({ score, durationMs, ratioWithin20km }, "eval cron run complete");
     res.status(200).json({
       status: "ok",
       score,
@@ -81715,18 +80221,298 @@ evalCronRouter.post("/", async (req, res) => {
   } catch (err) {
     const durationMs = Date.now() - t0;
     const message = err instanceof Error ? err.message : String(err);
-    log15.error({ err: message, durationMs }, "eval cron run failed");
+    log11.error({ err: message, durationMs }, "eval cron run failed");
     res.status(500).json({ status: "error", error: message, durationMs });
   }
 });
 
 // server/routes/events.ts
 import { Router as Router6 } from "express";
-import { z as z6 } from "zod";
+import { z as z5 } from "zod";
 
 // server/adapters/gdelt.ts
 import AdmZip from "adm-zip";
-var log16 = logger.child({ module: "gdelt" });
+
+// src/lib/geo.ts
+var R_KM = 6371;
+function haversineKm4(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => deg * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// server/lib/geoValidation.ts
+var NON_ME_FULLNAME_COUNTRIES = /* @__PURE__ */ new Set([
+  "United States",
+  "United Kingdom",
+  "Russia",
+  "China",
+  "France",
+  "Germany",
+  "India",
+  "Japan",
+  "South Korea",
+  "North Korea",
+  "Australia",
+  "Canada",
+  "Brazil",
+  "Italy",
+  "Spain",
+  "Ukraine",
+  "Poland",
+  "Netherlands",
+  "Belgium",
+  "Sweden",
+  "Norway",
+  "South Africa",
+  "Nigeria",
+  "Kenya",
+  "Ethiopia",
+  "Indonesia",
+  "Thailand",
+  "Vietnam",
+  "Philippines",
+  "Mexico"
+]);
+var FIPS_TO_EXPECTED_COUNTRY = {
+  IR: ["Iran"],
+  IZ: ["Iraq"],
+  SY: ["Syria"],
+  TU: ["Turkey", "Turkiye"],
+  SA: ["Saudi Arabia"],
+  YM: ["Yemen"],
+  MU: ["Oman"],
+  AE: ["United Arab Emirates", "UAE"],
+  QA: ["Qatar"],
+  BA: ["Bahrain"],
+  KU: ["Kuwait"],
+  JO: ["Jordan"],
+  IS: ["Israel", "West Bank", "Gaza Strip", "Palestinian Territory"],
+  LE: ["Lebanon"],
+  AF: ["Afghanistan"],
+  PK: ["Pakistan"]
+};
+var CITY_CENTROIDS = [
+  { name: "Tehran", lat: 35.6892, lng: 51.389 },
+  { name: "Baghdad", lat: 33.3152, lng: 44.3661 },
+  { name: "Damascus", lat: 33.5138, lng: 36.2765 },
+  { name: "Tel Aviv", lat: 32.0853, lng: 34.7818 },
+  { name: "Jerusalem", lat: 31.7683, lng: 35.2137 },
+  { name: "Riyadh", lat: 24.7136, lng: 46.6753 },
+  { name: "Beirut", lat: 33.8938, lng: 35.5018 },
+  { name: "Amman", lat: 31.9454, lng: 35.9284 },
+  { name: "Kabul", lat: 34.5553, lng: 69.2075 },
+  { name: "Islamabad", lat: 33.6844, lng: 73.0479 },
+  { name: "Ankara", lat: 39.9334, lng: 32.8597 },
+  { name: "Sana'a", lat: 15.3694, lng: 44.191 },
+  { name: "Doha", lat: 25.2854, lng: 51.531 },
+  { name: "Kuwait City", lat: 29.3759, lng: 47.9774 },
+  { name: "Muscat", lat: 23.588, lng: 58.3829 },
+  { name: "Manama", lat: 26.2285, lng: 50.586 },
+  { name: "Abu Dhabi", lat: 24.4539, lng: 54.3773 },
+  { name: "Dubai", lat: 25.2048, lng: 55.2708 },
+  { name: "Aden", lat: 12.7855, lng: 45.0187 },
+  { name: "Basra", lat: 30.5085, lng: 47.7804 },
+  { name: "Mosul", lat: 36.335, lng: 43.1189 },
+  { name: "Aleppo", lat: 36.2021, lng: 37.1343 },
+  { name: "Homs", lat: 34.7324, lng: 36.7137 },
+  { name: "Isfahan", lat: 32.6546, lng: 51.668 },
+  { name: "Tabriz", lat: 38.0962, lng: 46.2738 },
+  { name: "Jeddah", lat: 21.4858, lng: 39.1925 },
+  { name: "Medina", lat: 24.4672, lng: 39.6024 },
+  { name: "Haifa", lat: 32.794, lng: 34.9896 },
+  { name: "Gaza City", lat: 31.5017, lng: 34.4668 },
+  { name: "Karachi", lat: 24.8607, lng: 67.0011 },
+  // Additional conflict hotspot cities
+  { name: "Tikrit", lat: 34.6115, lng: 43.677 },
+  { name: "Fallujah", lat: 33.3484, lng: 43.7753 },
+  { name: "Ramadi", lat: 33.4271, lng: 43.3068 },
+  { name: "Kirkuk", lat: 35.4681, lng: 44.3953 },
+  { name: "Idlib", lat: 35.9306, lng: 36.6339 },
+  { name: "Deir ez-Zor", lat: 35.3359, lng: 40.1408 },
+  { name: "Palmyra", lat: 34.5571, lng: 38.2688 },
+  { name: "Hodeidah", lat: 14.798, lng: 42.954 },
+  { name: "Kandahar", lat: 31.628, lng: 65.7372 },
+  { name: "Mazar-i-Sharif", lat: 36.7069, lng: 67.11 },
+  { name: "Lahore", lat: 31.5497, lng: 74.3436 },
+  { name: "Peshawar", lat: 34.0151, lng: 71.5249 }
+];
+function extractLastSegment(fullName) {
+  const idx = fullName.lastIndexOf(",");
+  if (idx === -1) return null;
+  const segment = fullName.slice(idx + 1).trim();
+  return segment || null;
+}
+function isGeoValid(fullName, fipsCode) {
+  if (!fullName) return true;
+  const lastSegment = extractLastSegment(fullName);
+  if (!lastSegment) return true;
+  if (NON_ME_FULLNAME_COUNTRIES.has(lastSegment)) {
+    return false;
+  }
+  if (/^[A-Z]/.test(lastSegment) && !/\d/.test(lastSegment)) {
+    const expectedCountries = FIPS_TO_EXPECTED_COUNTRY[fipsCode];
+    if (expectedCountries) {
+      const allKnownCountries = /* @__PURE__ */ new Set();
+      for (const countries of Object.values(FIPS_TO_EXPECTED_COUNTRY)) {
+        for (const c of countries) {
+          allKnownCountries.add(c);
+        }
+      }
+      if (allKnownCountries.has(lastSegment) && !expectedCountries.includes(lastSegment)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+var CENTROID_TOLERANCE = 0.01;
+function detectCentroid(lat, lng) {
+  for (const city of CITY_CENTROIDS) {
+    if (Math.abs(lat - city.lat) <= CENTROID_TOLERANCE && Math.abs(lng - city.lng) <= CENTROID_TOLERANCE) {
+      return "centroid";
+    }
+  }
+  return "precise";
+}
+
+// server/lib/eventScoring.ts
+var BELLINGCAT_TEMPORAL_WINDOW_MS = 24 * 60 * 60 * 1e3;
+var BELLINGCAT_GEO_RADIUS_KM = 200;
+var BELLINGCAT_MIN_KEYWORD_MATCHES = 2;
+var CAMEO_SPECIFICITY = {
+  // Low — catch-all codes prone to false positives
+  "180": 0.1,
+  // Unconventional violence, not specified below
+  "182": 0.1,
+  // Physical assault (very broad)
+  "190": 0.1,
+  // Conventional military force, not specified below
+  // Medium — conflict-related but broader
+  "184": 0.5,
+  // Use as human shield
+  "185": 0.5,
+  // Assassination attempt
+  "193": 0.5,
+  // Small arms / light weapons
+  "200": 0.5,
+  // Unconventional mass violence
+  "201": 0.5,
+  // Mass expulsion
+  // High — unambiguous military/violent events
+  "181": 1,
+  // Abduction / hostage-taking
+  "183": 1,
+  // Bombing
+  "186": 1,
+  // Assassination
+  "191": 1,
+  // Blockade
+  "194": 1,
+  // Artillery / tank support
+  "195": 1,
+  // Aerial weapons
+  "196": 1,
+  // Ceasefire violation
+  "202": 1,
+  // Mass killings
+  "203": 1,
+  // Ethnic cleansing
+  "204": 1
+  // Weapons of mass destruction
+};
+function getCameoSpecificity(cameoCode) {
+  const baseCode = cameoCode.slice(0, 3);
+  return CAMEO_SPECIFICITY[baseCode] ?? 0.5;
+}
+var GOLDSTEIN_CEILINGS = {
+  airstrike: { ceiling: -5, downgrade: "on_ground" },
+  explosion: { ceiling: -5, downgrade: "on_ground" },
+  on_ground: { ceiling: -3, downgrade: "other" },
+  targeted: { ceiling: -3, downgrade: "other" },
+  other: { ceiling: -1, downgrade: null }
+};
+function applyGoldsteinSanity(entity) {
+  const { goldsteinScale } = entity.data;
+  if (goldsteinScale === 0 || goldsteinScale > 0) {
+    return entity;
+  }
+  const entry = GOLDSTEIN_CEILINGS[entity.type];
+  if (!entry || entry.downgrade === null) {
+    return entity;
+  }
+  const diff = goldsteinScale - entry.ceiling;
+  if (diff > 3) {
+    return {
+      ...entity,
+      type: entry.downgrade
+    };
+  }
+  return entity;
+}
+function computeEventConfidence(entity, geoPrecision) {
+  const { numMentions, numSources, actor1, actor2, goldsteinScale, cameoCode } = entity.data;
+  const mentions = numMentions ?? 1;
+  const mediaCoverage = Math.min(1, Math.log2(mentions + 1) / Math.log2(50));
+  const sources = numSources ?? 1;
+  const sourceDiversity = Math.min(1, Math.log2(sources + 1) / Math.log2(15));
+  const hasActor1 = actor1.trim().length > 0;
+  const hasActor2 = actor2.trim().length > 0;
+  const actorSpecificity = hasActor1 && hasActor2 ? 1 : hasActor1 || hasActor2 ? 0.5 : 0;
+  const geoPrecisionSignal = geoPrecision === "precise" ? 1 : 0.3;
+  let goldsteinConsistency;
+  if (goldsteinScale === 0 || goldsteinScale > 0) {
+    goldsteinConsistency = 0.5;
+  } else {
+    const entry = GOLDSTEIN_CEILINGS[entity.type];
+    if (!entry) {
+      goldsteinConsistency = 0.5;
+    } else {
+      const diff = goldsteinScale - entry.ceiling;
+      if (diff <= 0) {
+        goldsteinConsistency = 1;
+      } else {
+        goldsteinConsistency = Math.max(0, 1 - diff / 6);
+      }
+    }
+  }
+  const cameoSpecificity = getCameoSpecificity(cameoCode);
+  return 0.25 * mediaCoverage + 0.15 * sourceDiversity + 0.15 * actorSpecificity + 0.1 * geoPrecisionSignal + 0.1 * goldsteinConsistency + 0.25 * cameoSpecificity;
+}
+function extractBellingcatGeo(title) {
+  const titleLower = title.toLowerCase();
+  for (const city of CITY_CENTROIDS) {
+    if (titleLower.includes(city.name.toLowerCase())) {
+      return { lat: city.lat, lng: city.lng };
+    }
+  }
+  return void 0;
+}
+function checkBellingcatCorroboration(event, articles) {
+  const locationWords = (event.data.locationName || "").split(/[\s,]+/).filter((w) => w.length >= 3).map((w) => w.toLowerCase());
+  for (const article of articles) {
+    const timeDiff = Math.abs(article.publishedAt - event.timestamp);
+    if (timeDiff > BELLINGCAT_TEMPORAL_WINDOW_MS) continue;
+    if (article.lat == null || article.lng == null) continue;
+    const distKm = haversineKm4(event.lat, event.lng, article.lat, article.lng);
+    if (distKm > BELLINGCAT_GEO_RADIUS_KM) continue;
+    const titleLower = article.title.toLowerCase();
+    let keywordMatches = 0;
+    for (const word of locationWords) {
+      if (titleLower.includes(word)) {
+        keywordMatches++;
+      }
+    }
+    if (keywordMatches < BELLINGCAT_MIN_KEYWORD_MATCHES) continue;
+    return { matched: true, article };
+  }
+  return { matched: false };
+}
+
+// server/adapters/gdelt.ts
+var log12 = logger.child({ module: "gdelt" });
 var GDELT_LASTUPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt";
 var MIDDLE_EAST_FIPS = /* @__PURE__ */ new Set([
   "IR",
@@ -81964,7 +80750,7 @@ function parseAndFilter(csv, bellingcatArticles) {
     const fullName = getCol(cols, COL.ActionGeo_FullName);
     if (!isGeoValid(fullName, countryCode)) {
       geoDiscardCount++;
-      log16.warn(
+      log12.warn(
         { eventId: getCol(cols, COL.GLOBALEVENTID), fullName, countryCode },
         "discarded: FullName contradicts FIPS"
       );
@@ -81997,7 +80783,7 @@ function parseAndFilter(csv, bellingcatArticles) {
     if (entity.type !== origType) {
       reclassifyCount++;
       const ceiling = GOLDSTEIN_CEILINGS[origType]?.ceiling;
-      log16.info(
+      log12.info(
         {
           id: entity.id,
           from: origType,
@@ -82018,7 +80804,7 @@ function parseAndFilter(csv, bellingcatArticles) {
     entity = { ...entity, data: { ...entity.data, confidence } };
     if (confidence < eventConfidenceThreshold) {
       thresholdDiscardCount++;
-      log16.warn(
+      log12.warn(
         { id: entity.id, confidence: +confidence.toFixed(3), threshold: eventConfidenceThreshold },
         "discarded: below confidence threshold"
       );
@@ -82029,7 +80815,7 @@ function parseAndFilter(csv, bellingcatArticles) {
       if (corroboration.matched) {
         confidence = Math.min(1, confidence + config2.bellingcatCorroborationBoost);
         entity = { ...entity, data: { ...entity.data, confidence } };
-        log16.info(
+        log12.info(
           {
             id: entity.id,
             boost: config2.bellingcatCorroborationBoost,
@@ -82042,7 +80828,7 @@ function parseAndFilter(csv, bellingcatArticles) {
     }
     results.push(entity);
   }
-  log16.info(
+  log12.info(
     {
       rawCount,
       geoValidCount,
@@ -82060,7 +80846,7 @@ async function fetchEvents(bellingcatArticles) {
   const exportUrl = await getExportUrl();
   const csv = await downloadAndUnzip(exportUrl);
   const events = parseAndFilter(csv, bellingcatArticles);
-  log16.info({ count: events.length, durationMs: Date.now() - start }, "fetched events");
+  log12.info({ count: events.length, durationMs: Date.now() - start }, "fetched events");
   return events;
 }
 function generateBackfillUrls(fromTs, toTs, intervalMs) {
@@ -82085,11 +80871,11 @@ async function backfillEvents(days) {
   const fromTs = toTs - days * 24 * 60 * 60 * 1e3;
   const start = Date.now();
   const urls = generateBackfillUrls(fromTs, toTs);
-  log16.info({ fileCount: urls.length, days, sampling: "4/day" }, "backfill started");
+  log12.info({ fileCount: urls.length, days, sampling: "4/day" }, "backfill started");
   const merged = /* @__PURE__ */ new Map();
-  const BATCH_SIZE5 = 5;
-  for (let i = 0; i < urls.length; i += BATCH_SIZE5) {
-    const batch = urls.slice(i, i + BATCH_SIZE5);
+  const BATCH_SIZE3 = 5;
+  for (let i = 0; i < urls.length; i += BATCH_SIZE3) {
+    const batch = urls.slice(i, i + BATCH_SIZE3);
     const results = await Promise.allSettled(
       batch.map(async (url) => {
         const csv = await downloadAndUnzip(url);
@@ -82107,56 +80893,27 @@ async function backfillEvents(days) {
     }
   }
   const events = Array.from(merged.values());
-  log16.info(
+  log12.info(
     { count: events.length, fileCount: urls.length, durationMs: Date.now() - start },
     "backfill complete"
   );
   return events;
 }
 
+// server/adapters/llm-provider.ts
+function isLLMConfigured() {
+  return Boolean(env.NVIDIA_NIM_API_KEY || env.OPENROUTER_API_KEY);
+}
+
 // server/cache/devFileCache.ts
 import { readFileSync as readFileSync4, writeFileSync, mkdirSync, existsSync as existsSync4 } from "fs";
 import { join } from "path";
-var log17 = logger.child({ module: "dev-file-cache" });
+var log13 = logger.child({ module: "dev-file-cache" });
 var DEV_CACHE_DIR = join(process.cwd(), ".dev-cache");
 var LLM_EVENTS_FILE = join(DEV_CACHE_DIR, "llm-events.json");
 var LLM_EVENTS_FILE_V2 = join(DEV_CACHE_DIR, "llm-events-v2.json");
 var MAX_AGE_MS = 48 * 60 * 60 * 1e3;
 var isDev = process.env.NODE_ENV === "development";
-function saveDevLLMCache(data) {
-  if (!isDev) return;
-  try {
-    if (!existsSync4(DEV_CACHE_DIR)) {
-      mkdirSync(DEV_CACHE_DIR, { recursive: true });
-    }
-    const entry = { data, savedAt: Date.now() };
-    writeFileSync(LLM_EVENTS_FILE, JSON.stringify(entry));
-    log17.info("saved LLM events to dev file cache");
-  } catch (err) {
-    log17.warn({ err }, "failed to write dev file cache");
-  }
-}
-function loadDevLLMCache() {
-  if (!isDev) return null;
-  try {
-    if (!existsSync4(LLM_EVENTS_FILE)) return null;
-    const raw = readFileSync4(LLM_EVENTS_FILE, "utf-8");
-    const entry = JSON.parse(raw);
-    const age = Date.now() - entry.savedAt;
-    if (age > MAX_AGE_MS) {
-      log17.info({ ageMs: age }, "dev file cache too old, ignoring");
-      return null;
-    }
-    log17.info(
-      { ageMs: age, ageMin: Math.round(age / 6e4) },
-      "loaded LLM events from dev file cache"
-    );
-    return entry.data;
-  } catch (err) {
-    log17.warn({ err }, "failed to read dev file cache");
-    return null;
-  }
-}
 function saveDevLLMCacheV2(data) {
   if (!isDev) return;
   try {
@@ -82165,9 +80922,9 @@ function saveDevLLMCacheV2(data) {
     }
     const entry = { data, savedAt: Date.now() };
     writeFileSync(LLM_EVENTS_FILE_V2, JSON.stringify(entry));
-    log17.info("saved LLM events to dev file cache (v2)");
+    log13.info("saved LLM events to dev file cache (v2)");
   } catch (err) {
-    log17.warn({ err }, "failed to write dev file cache (v2)");
+    log13.warn({ err }, "failed to write dev file cache (v2)");
   }
 }
 function loadDevLLMCacheV2() {
@@ -82178,16 +80935,16 @@ function loadDevLLMCacheV2() {
     const entry = JSON.parse(raw);
     const age = Date.now() - entry.savedAt;
     if (age > MAX_AGE_MS) {
-      log17.info({ ageMs: age }, "dev file cache (v2) too old, ignoring");
+      log13.info({ ageMs: age }, "dev file cache (v2) too old, ignoring");
       return null;
     }
-    log17.info(
+    log13.info(
       { ageMs: age, ageMin: Math.round(age / 6e4) },
       "loaded LLM events from dev file cache (v2)"
     );
     return entry.data;
   } catch (err) {
-    log17.warn({ err }, "failed to read dev file cache (v2)");
+    log13.warn({ err }, "failed to read dev file cache (v2)");
     return null;
   }
 }
@@ -82199,9 +80956,9 @@ function saveDevWaterCache(data) {
     if (!existsSync4(DEV_CACHE_DIR)) mkdirSync(DEV_CACHE_DIR, { recursive: true });
     const entry = { data, savedAt: Date.now() };
     writeFileSync(WATER_FACILITIES_FILE, JSON.stringify(entry));
-    log17.info("saved water facilities to dev file cache");
+    log13.info("saved water facilities to dev file cache");
   } catch (err) {
-    log17.warn({ err }, "failed to write water facilities dev cache");
+    log13.warn({ err }, "failed to write water facilities dev cache");
   }
 }
 function loadDevWaterCache() {
@@ -82212,16 +80969,16 @@ function loadDevWaterCache() {
     const entry = JSON.parse(raw);
     const age = Date.now() - entry.savedAt;
     if (age > WATER_MAX_AGE_MS) {
-      log17.info({ ageMs: age }, "water facility dev cache too old, ignoring");
+      log13.info({ ageMs: age }, "water facility dev cache too old, ignoring");
       return null;
     }
-    log17.info(
+    log13.info(
       { ageMs: age, ageHr: Math.round(age / 36e5) },
       "loaded water facilities from dev file cache"
     );
     return entry.data;
   } catch (err) {
-    log17.warn({ err }, "failed to read water facility dev cache");
+    log13.warn({ err }, "failed to read water facility dev cache");
     return null;
   }
 }
@@ -82299,18 +81056,277 @@ function groupGdeltRows(entities) {
   return groups;
 }
 
-// server/lib/llmEventExtractor.v2.ts
+// server/lib/llmDLQ.ts
 init_redis();
-var log18 = logger.child({ module: "llm-extractor-v2" });
-var BATCH_SIZE2 = 2;
-var TEMPORAL_CONTEXT_COUNT2 = 3;
-var TEMPORAL_CONTEXT_BBOX_DEG2 = 1;
-var TEMPORAL_CONTEXT_WINDOW_MS2 = 72 * 36e5;
-var NEWS_MATCH_WINDOW_MS2 = 24 * 36e5;
-var NEWS_KEY2 = "news:gdelt";
-var EVENTS_LLM_V2_KEY = "events:llm:v2";
-var EVENTS_LLM_V2_PARTIAL_KEY = "events:llm:v2:partial";
-var SYSTEM_PROMPT_V2 = [
+var log14 = logger.child({ module: "llm-dlq" });
+var DLQ_KEY = "events:llm-dlq";
+var DLQ_TTL_SEC = 7 * 24 * 3600;
+var DLQ_MAX = 200;
+var LAST_ERROR_MAX_CHARS = 500;
+function parseEntry(raw) {
+  try {
+    if (typeof raw === "string") return JSON.parse(raw);
+    if (raw && typeof raw === "object") return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+async function enqueueDLQ(entry) {
+  const capped = {
+    ...entry,
+    lastError: entry.lastError.slice(0, LAST_ERROR_MAX_CHARS)
+  };
+  const payload = JSON.stringify(capped);
+  try {
+    await redis.sadd(DLQ_KEY, payload);
+    await redis.expire(DLQ_KEY, DLQ_TTL_SEC);
+    const size = await redis.scard(DLQ_KEY);
+    if (size > DLQ_MAX) {
+      const all = await redis.smembers(DLQ_KEY);
+      const withParsed = all.map((raw) => {
+        const rawStr = typeof raw === "string" ? raw : JSON.stringify(raw);
+        return { raw: rawStr, parsed: parseEntry(raw) };
+      }).filter((x) => x.parsed !== null);
+      withParsed.sort((a, b) => a.parsed.timestamp - b.parsed.timestamp);
+      const toRemove = withParsed.slice(0, size - DLQ_MAX).map((x) => x.raw);
+      if (toRemove.length > 0) await redis.srem(DLQ_KEY, ...toRemove);
+    }
+  } catch (err) {
+    log14.warn({ err, id: entry.id }, "DLQ enqueue failed (redis unreachable)");
+  }
+}
+async function listDLQ(limit = 50) {
+  try {
+    const all = await redis.smembers(DLQ_KEY);
+    const parsed = [];
+    for (const s of all) {
+      const p = parseEntry(s);
+      if (p) parsed.push(p);
+    }
+    return parsed.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+// server/lib/llmEventExtractor.v3.ts
+init_redis();
+init_redis();
+
+// server/lib/concurrencyLimit.ts
+function createLimit(maxConcurrent) {
+  if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) {
+    throw new Error(`createLimit: maxConcurrent must be a positive integer, got ${maxConcurrent}`);
+  }
+  let inFlight = 0;
+  const queue = [];
+  const next = () => {
+    if (inFlight >= maxConcurrent) return;
+    const runner = queue.shift();
+    if (!runner) return;
+    inFlight++;
+    runner();
+  };
+  return (fn) => {
+    return new Promise((resolve4, reject) => {
+      const runner = () => {
+        Promise.resolve().then(fn).then(
+          (value) => {
+            inFlight--;
+            resolve4(value);
+            next();
+          },
+          (err) => {
+            inFlight--;
+            reject(err);
+            next();
+          }
+        );
+      };
+      queue.push(runner);
+      next();
+    });
+  };
+}
+
+// server/lib/llmExtractorWatchdog.ts
+var log15 = logger.child({ module: "llm-watchdog" });
+async function withBatchWatchdog(batchFn, opts) {
+  let timedOut = false;
+  let hardTimer;
+  const workPromise = batchFn();
+  workPromise.catch(() => {
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    hardTimer = setTimeout(() => {
+      timedOut = true;
+      reject(
+        new Error(`batch ${opts.batchIndex} (${opts.label}) timed out after ${opts.timeoutMs}ms`)
+      );
+    }, opts.timeoutMs);
+  });
+  const softWarnTimer = setTimeout(() => {
+    if (!timedOut) {
+      try {
+        opts.onSoftWarn?.(opts.softWarnMs);
+        log15.info(
+          { batchIndex: opts.batchIndex, label: opts.label, softWarnMs: opts.softWarnMs },
+          "batch crossed soft-warn threshold (still running)"
+        );
+      } catch (err) {
+        log15.warn({ err }, "onSoftWarn handler threw \u2014 suppressed");
+      }
+    }
+  }, opts.softWarnMs);
+  try {
+    const result = await Promise.race([workPromise, timeoutPromise]);
+    return result;
+  } catch (err) {
+    if (timedOut) {
+      log15.warn(
+        { batchIndex: opts.batchIndex, label: opts.label, timeoutMs: opts.timeoutMs },
+        "batch hard-timeout triggered"
+      );
+      try {
+        await opts.onTimeout();
+      } catch (hookErr) {
+        log15.error(
+          { err: hookErr, batchIndex: opts.batchIndex, label: opts.label },
+          "onTimeout hook threw \u2014 suppressed, returning null"
+        );
+      }
+      return null;
+    }
+    throw err;
+  } finally {
+    if (softWarnTimer) clearTimeout(softWarnTimer);
+    if (hardTimer) clearTimeout(hardTimer);
+  }
+}
+
+// server/lib/llmLineage.ts
+init_redis();
+import crypto from "crypto";
+var LINEAGE_KEY_PREFIX = "events:llm:v3:lineage:";
+var LINEAGE_INDEX_KEY = "events:llm:v3:lineage-keys";
+var LINEAGE_TTL_SEC = 7 * 24 * 3600;
+var LINEAGE_MAX_ENTRIES = 500;
+function computeLineageHash(eventId, prompt, model) {
+  return crypto.createHash("sha256").update(prompt).update("|").update(model).update("|").update(eventId).digest("hex");
+}
+async function appendLineage(eventId, payload) {
+  const lineageHash = computeLineageHash(eventId, payload.prompt, payload.model);
+  const key = `${LINEAGE_KEY_PREFIX}${eventId}`;
+  const log37 = logger.child({ component: "llm-lineage" });
+  try {
+    await redis.hset(key, {
+      prompt: payload.prompt.slice(0, 32e3),
+      // safety bound; prompts ~10-15k typical
+      response: payload.response.slice(0, 32e3),
+      parsed: JSON.stringify(payload.parsed).slice(0, 32e3),
+      coord: JSON.stringify(payload.coord),
+      provenance: payload.provenance,
+      resolverPath: payload.resolverPath,
+      reasoningTrace: payload.reasoningTrace.slice(0, 8e3),
+      model: payload.model,
+      lineageHash,
+      ts: String(Date.now())
+    });
+    await redis.expire(key, LINEAGE_TTL_SEC);
+    await redis.zadd(LINEAGE_INDEX_KEY, { score: Date.now(), member: eventId });
+    await redis.zremrangebyrank(LINEAGE_INDEX_KEY, 0, -LINEAGE_MAX_ENTRIES - 1);
+    await redis.expire(LINEAGE_INDEX_KEY, LINEAGE_TTL_SEC);
+  } catch (err) {
+    log37.warn({ err, eventId }, "lineage append failed (redis unreachable)");
+  }
+  return { lineageHash };
+}
+var GROUP_LINEAGE_KEY_PREFIX = "events:llm:v3:group-lineage:";
+var GROUP_LINEAGE_TTL_SEC = 7 * 24 * 3600;
+function computeGroupLineageHash(input) {
+  const sortedUrls = [...input.sourceUrls].sort().join("|");
+  return crypto.createHash("sha256").update(input.key).update("|").update(sortedUrls).update("|").update(String(input.totalMentions)).digest("hex");
+}
+
+// server/lib/sourceTiers.ts
+var TIER_1_DOMAINS = /* @__PURE__ */ new Set([
+  "reuters.com",
+  "apnews.com",
+  "afp.com",
+  "bellingcat.com",
+  "liveuamap.com"
+]);
+var TIER_2_DOMAINS = /* @__PURE__ */ new Set([
+  "bbc.co.uk",
+  "bbc.com",
+  "aljazeera.com",
+  "cnn.com",
+  "timesofisrael.com",
+  "middleeasteye.net",
+  "theguardian.com",
+  "nytimes.com",
+  "washingtonpost.com"
+]);
+var TIER_3_DOMAINS = /* @__PURE__ */ new Set(["tehrantimes.com", "irna.ir", "sana.sy", "presstv.ir"]);
+var TIER_1_NAMES = /* @__PURE__ */ new Set(["Reuters", "Associated Press", "AFP", "Bellingcat", "Liveuamap"]);
+var TIER_2_NAMES = /* @__PURE__ */ new Set([
+  "BBC",
+  "Al Jazeera",
+  "CNN",
+  "Times of Israel",
+  "Middle East Eye",
+  "Guardian",
+  "NYT",
+  "Washington Post"
+]);
+var TIER_3_NAMES = /* @__PURE__ */ new Set(["Tehran Times", "IRNA", "SANA", "Press TV"]);
+function extractDomain(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+function getSourceTier(source, domain) {
+  if (TIER_1_NAMES.has(source)) return 1;
+  if (TIER_2_NAMES.has(source)) return 2;
+  if (TIER_3_NAMES.has(source)) return 3;
+  if (domain) {
+    if (TIER_1_DOMAINS.has(domain)) return 1;
+    if (TIER_2_DOMAINS.has(domain)) return 2;
+    if (TIER_3_DOMAINS.has(domain)) return 3;
+  }
+  return null;
+}
+function getHighestTier(sourceUrls) {
+  let best = null;
+  for (const url of sourceUrls) {
+    const domain = extractDomain(url);
+    if (!domain) continue;
+    const tier = getSourceTier("", domain);
+    if (tier !== null) {
+      if (best === null || tier < best) {
+        best = tier;
+      }
+      if (best === 1) return 1;
+    }
+  }
+  return best;
+}
+
+// server/lib/llmEventExtractor.v3.ts
+var log16 = logger.child({ module: "llm-extractor-v3" });
+var BATCH_SIZE = 2;
+var V3_BAKEOFF_MODEL = process.env.V3_BAKEOFF_MODEL;
+var TEMPORAL_CONTEXT_COUNT = 3;
+var TEMPORAL_CONTEXT_BBOX_DEG = 1;
+var TEMPORAL_CONTEXT_WINDOW_MS = 72 * 36e5;
+var NEWS_MATCH_WINDOW_MS = 24 * 36e5;
+var NEWS_KEY = "news:gdelt";
+var EVENTS_LLM_V3_KEY = "events:llm:v3";
+var EVENTS_LLM_V3_PARTIAL_KEY = "events:llm:v3:partial";
+var SYSTEM_PROMPT_V3 = [
   "You are a conflict event analyst extracting structured data from GDELT event records.",
   "",
   "For each event group, extract (all fields REQUIRED unless stated nullable):",
@@ -82339,10 +81355,15 @@ var SYSTEM_PROMPT_V2 = [
   '- NEVER emit a "precision" field \u2014 the server derives it from which hierarchy fields you populated.',
   "- Use null when a field is not supported by the source text \u2014 do NOT guess.",
   "- Prefer the NEWS BLOCK and BELLINGCAT BLOCK when present; they are higher-tier signals than GDELT metadata alone.",
-  '- The TEMPORAL BLOCK lists prior events in the same region \u2014 use it to normalize names (e.g., "the Jobar substation").'
+  '- The TEMPORAL BLOCK lists prior events in the same region \u2014 use it to normalize names (e.g., "the Jobar substation").',
+  "",
+  "JSON Schema (this is the contract \u2014 your output MUST validate):",
+  JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3, null, 2),
+  "",
+  '- Output ONLY the JSON object. Any reasoning must go in the "reasoning" field, not in <think> blocks (those are stripped).'
 ].join("\n");
-var LLM_REDIS_TTL_SEC2 = 9e3;
-function buildBatchUserPromptV2(contexts) {
+var LLM_REDIS_TTL_SEC = 9e3;
+function buildBatchUserPromptV3(contexts) {
   const lines = ["Analyze these GDELT event groups and extract structured data:\n"];
   for (let i = 0; i < contexts.length; i++) {
     const ctx = contexts[i];
@@ -82366,7 +81387,7 @@ function buildBatchUserPromptV2(contexts) {
       lines.push("");
       lines.push("--- NEWS BLOCK (tier-tagged) ---");
       for (const art of matchedNews.slice(0, 5)) {
-        const tier = getSourceTier("", hostnameOf2(art.url));
+        const tier = getSourceTier("", hostnameOf(art.url));
         const tag = tier === 1 ? "T1" : tier === 2 ? "T2" : "T3";
         lines.push(`[${tag}] ${art.title.slice(0, 160)}`);
       }
@@ -82393,24 +81414,24 @@ function buildBatchUserPromptV2(contexts) {
   }
   return lines.join("\n");
 }
-function hostnameOf2(url) {
+function hostnameOf(url) {
   try {
     return new URL(url).hostname;
   } catch {
     return "";
   }
 }
-async function buildPromptContext2(group) {
+async function buildPromptContext(group) {
   const matchedNews = [];
   const bellingcatHits = [];
   try {
-    const news = await cacheGetSafe(NEWS_KEY2, 0);
+    const news = await cacheGetSafe(NEWS_KEY, 0);
     if (news?.data) {
       for (const cluster of news.data) {
         for (const art of cluster.articles ?? []) {
           const pubMs = typeof art.publishedAt === "number" ? art.publishedAt : NaN;
           if (!Number.isFinite(pubMs)) continue;
-          if (Math.abs(pubMs - group.timestamp) > NEWS_MATCH_WINDOW_MS2) continue;
+          if (Math.abs(pubMs - group.timestamp) > NEWS_MATCH_WINDOW_MS) continue;
           matchedNews.push({
             title: art.title,
             url: art.url,
@@ -82423,36 +81444,36 @@ async function buildPromptContext2(group) {
       }
     }
   } catch (err) {
-    log18.warn({ err }, "news cross-match failed, omitting NEWS+BELLINGCAT blocks");
+    log16.warn({ err }, "news cross-match failed, omitting NEWS+BELLINGCAT blocks");
   }
-  const temporalEvents = await loadTemporalContext2(group);
+  const temporalEvents = await loadTemporalContext(group);
   return { group, matchedNews, bellingcatHits, temporalEvents };
 }
-async function loadTemporalContext2(group) {
+async function loadTemporalContext(group) {
   try {
-    const cached = await cacheGetSafe(EVENTS_LLM_V2_KEY, 0);
+    const cached = await cacheGetSafe(EVENTS_LLM_V3_KEY, 0);
     if (!cached?.data) return [];
     const out = [];
     for (const e of cached.data) {
       if (!e.data?.location || !e.data?.summary || !e.timestamp) continue;
-      if (Math.abs(group.timestamp - e.timestamp) > TEMPORAL_CONTEXT_WINDOW_MS2) continue;
+      if (Math.abs(group.timestamp - e.timestamp) > TEMPORAL_CONTEXT_WINDOW_MS) continue;
       if (typeof e.lat === "number" && typeof e.lng === "number") {
-        if (Math.abs(e.lat - group.centroidLat) > TEMPORAL_CONTEXT_BBOX_DEG2) continue;
-        if (Math.abs(e.lng - group.centroidLng) > TEMPORAL_CONTEXT_BBOX_DEG2) continue;
+        if (Math.abs(e.lat - group.centroidLat) > TEMPORAL_CONTEXT_BBOX_DEG) continue;
+        if (Math.abs(e.lng - group.centroidLng) > TEMPORAL_CONTEXT_BBOX_DEG) continue;
       }
       out.push({
         summary: e.data.summary,
         location: e.data.location,
         timestamp: e.timestamp
       });
-      if (out.length >= TEMPORAL_CONTEXT_COUNT2) break;
+      if (out.length >= TEMPORAL_CONTEXT_COUNT) break;
     }
     return out;
   } catch {
     return [];
   }
 }
-async function writePartialCache2(events, completed, total, complete) {
+async function writePartialCache(events, completed, total, complete) {
   const payload = {
     events,
     progress: `${completed}/${total}`,
@@ -82460,123 +81481,413 @@ async function writePartialCache2(events, completed, total, complete) {
     generatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
   try {
-    await cacheSetSafe(EVENTS_LLM_V2_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC2);
+    await cacheSetSafe(EVENTS_LLM_V3_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC);
   } catch (err) {
-    log18.warn({ err, completed, total, complete }, "partial cache write failed");
+    log16.warn({ err, completed, total, complete }, "partial cache write failed");
   }
 }
-async function processEventGroupsV2(groups, onBatchComplete) {
+async function processEventGroupsV3(groups, onBatchComplete) {
   const matchedNewsByGroup = /* @__PURE__ */ new Map();
   const bellingcatByGroup = /* @__PURE__ */ new Map();
   if (groups.length === 0) {
     return { events: [], matchedNewsByGroup, bellingcatByGroup };
   }
+  updateProgress({ adaptiveBatchEnabled: env.V3_ADAPTIVE_BATCH });
+  updateProgress({ lineagePrefilterEnabled: env.V3_LINEAGE_PREFILTER });
+  await prewarmIfCold();
   const results = [];
   let allFailed = true;
-  const totalBatches = Math.ceil(groups.length / BATCH_SIZE2);
-  for (let i = 0; i < groups.length; i += BATCH_SIZE2) {
-    const batch = groups.slice(i, i + BATCH_SIZE2);
-    const batchIndex = Math.floor(i / BATCH_SIZE2);
-    const contexts = await Promise.all(batch.map(buildPromptContext2));
-    for (const ctx of contexts) {
-      matchedNewsByGroup.set(ctx.group.key, ctx.matchedNews);
-      const firstBellingcat = ctx.bellingcatHits[0];
-      if (firstBellingcat) {
-        bellingcatByGroup.set(ctx.group.key, {
-          lat: firstBellingcat.lat,
-          lng: firstBellingcat.lng
-        });
+  let groupsToProcess = groups;
+  if (env.V3_LINEAGE_PREFILTER) {
+    const stats = llmProgress.lineagePrefilterStats ?? { hitCount: 0, missCount: 0 };
+    const queue = [];
+    const nowMs = Date.now();
+    const ttlMs = GROUP_LINEAGE_TTL_SEC * 1e3;
+    for (const group of groups) {
+      const hash = computeGroupLineageHash({
+        key: group.key,
+        sourceUrls: group.sourceUrls,
+        totalMentions: group.totalMentions
+      });
+      const cacheKey2 = `${GROUP_LINEAGE_KEY_PREFIX}${hash}`;
+      let cached = null;
+      try {
+        const raw = await redis.get(cacheKey2);
+        if (raw != null) {
+          const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+          if (parsed && typeof parsed === "object" && "event" in parsed && "ts" in parsed) {
+            cached = parsed;
+          }
+        }
+      } catch (readErr) {
+        log16.warn(
+          {
+            cacheKey: cacheKey2,
+            err: readErr instanceof Error ? readErr.message : String(readErr)
+          },
+          "lineage pre-filter read failed; falling through"
+        );
       }
+      const fresh = cached && typeof cached.ts === "number" && nowMs - cached.ts < ttlMs;
+      if (fresh && cached) {
+        const reparse = batchResponseV3.safeParse({ events: [cached.event] });
+        if (reparse.success && reparse.data.events[0]) {
+          results.push(reparse.data.events[0]);
+          allFailed = false;
+          stats.hitCount += 1;
+          continue;
+        }
+        log16.warn(
+          { cacheKey: cacheKey2 },
+          "lineage pre-filter cache payload failed v3 reparse; treating as miss"
+        );
+      }
+      stats.missCount += 1;
+      queue.push(group);
     }
-    const userPrompt = buildBatchUserPromptV2(contexts);
-    const content = await withBatchWatchdog(
-      () => callLLM2(
-        [
-          { role: "system", content: SYSTEM_PROMPT_V2 },
-          { role: "user", content: userPrompt }
-        ],
-        EVENT_EXTRACTION_SCHEMA_V2,
-        { batchSize: batch.length }
-      ),
-      {
-        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 6e4,
-        // D-02 hard-coded — only hard cap is env-tunable
-        batchIndex,
-        label: "v2",
-        onTimeout: async () => {
+    updateProgress({ lineagePrefilterStats: stats });
+    groupsToProcess = queue;
+  }
+  const totalBatches = Math.ceil(groupsToProcess.length / BATCH_SIZE);
+  const limit = createLimit(env.LLM_V3_CONCURRENCY);
+  let completedBatchesCounter = 0;
+  const finishBatch = async () => {
+    const c = ++completedBatchesCounter;
+    await onBatchComplete?.(c, totalBatches);
+    await writePartialCache(results, c, totalBatches, false);
+  };
+  const tasks = [];
+  for (let i = 0; i < groupsToProcess.length; i += BATCH_SIZE) {
+    const batch = groupsToProcess.slice(i, i + BATCH_SIZE);
+    const batchIndex = Math.floor(i / BATCH_SIZE);
+    tasks.push(
+      limit(async () => {
+        const contexts = await Promise.all(batch.map(buildPromptContext));
+        for (const ctx of contexts) {
+          matchedNewsByGroup.set(ctx.group.key, ctx.matchedNews);
+          const firstBellingcat = ctx.bellingcatHits[0];
+          if (firstBellingcat) {
+            bellingcatByGroup.set(ctx.group.key, {
+              lat: firstBellingcat.lat,
+              lng: firstBellingcat.lng
+            });
+          }
+        }
+        const userPrompt = buildBatchUserPromptV3(contexts);
+        let routing = [];
+        let didTimeout = false;
+        let finishReason = null;
+        const t0 = Date.now();
+        const content = await withBatchWatchdog(
+          async () => {
+            const result = await callLLM(
+              [
+                { role: "system", content: SYSTEM_PROMPT_V3 },
+                { role: "user", content: userPrompt }
+              ],
+              JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
+              {
+                batchSize: batch.length,
+                modelOverride: V3_BAKEOFF_MODEL,
+                // Phase 27.4.4 Plan 02 — drop OpenRouter from the v3 cascade.
+                // Free-tier OR rate-limits ~every call (16 attempts × 16
+                // rate_limit observed in dev); a 100%-failing fallback
+                // amplifies breaker errors and burns the retry budget. v2
+                // keeps OR for legacy rollback parity.
+                skipOpenRouter: true
+              }
+            );
+            routing = result.routing;
+            finishReason = result.finishReason ?? null;
+            return result.content;
+          },
+          {
+            timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+            softWarnMs: 6e4,
+            // D-02 hard-coded — only hard cap is env-tunable
+            batchIndex,
+            label: "v3",
+            onTimeout: async () => {
+              didTimeout = true;
+              if (env.V3_ADAPTIVE_BATCH && batch.length > 1) return;
+              for (const g of batch) {
+                await enqueueDLQ({
+                  id: g.key,
+                  reason: "v3:timeout_watchdog",
+                  lastError: `v3 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+                  timestamp: Date.now()
+                });
+              }
+              updateProgress({
+                watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
+              });
+            },
+            onSoftWarn: (elapsedMs) => {
+              const history = llmProgress.callHistory ?? [];
+              updateProgress({
+                callHistory: [
+                  {
+                    provider: "nvidia_nim",
+                    model: "watchdog-soft-warn",
+                    tokensIn: 0,
+                    tokensOut: 0,
+                    durationMs: elapsedMs,
+                    ok: true,
+                    batchSize: batch.length,
+                    timestamp: Date.now(),
+                    skipReason: "watchdog-soft-warn"
+                  },
+                  ...history
+                ].slice(0, 20)
+              });
+            }
+          }
+        );
+        if (routing.length) {
+          const prevTrace = llmProgress.routingTrace ?? [];
+          const newEntries = routing.map((r) => ({
+            ts: r.timestamp,
+            batch: batchIndex,
+            provider: r.provider,
+            model: r.model,
+            reason: r.reason
+          }));
+          updateProgress({ routingTrace: [...newEntries, ...prevTrace].slice(0, 50) });
+        }
+        if (content === null) {
+          if (didTimeout && env.V3_ADAPTIVE_BATCH && batch.length > 1) {
+            const stats = llmProgress.adaptiveBatchStats ?? {
+              splitCount: 0,
+              retrySuccess: 0,
+              retryFail: 0,
+              dlqEnqueueCount: 0
+            };
+            stats.splitCount += 1;
+            updateProgress({ adaptiveBatchStats: stats });
+            const splitEvents = await splitBatchOnTimeout(contexts, batchIndex);
+            results.push(...splitEvents);
+            if (splitEvents.length > 0) allFailed = false;
+            await finishBatch();
+            return;
+          }
+          log16.warn({ batchIndex }, "v3 batch yielded no content (null or watchdog timeout)");
+          await finishBatch();
+          return;
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch (jsonErr) {
+          const errMsg = jsonErr instanceof Error ? jsonErr.message : String(jsonErr);
+          const isTruncation = finishReason === "length" || /unterminated string/i.test(errMsg);
+          const dlqReason = isTruncation ? "v3:max_tokens_truncation" : "v3:malformed";
+          log16.warn(
+            {
+              batchIndex,
+              jsonErr: errMsg,
+              finishReason,
+              dlqReason
+            },
+            "v3 JSON.parse failed"
+          );
           for (const g of batch) {
             await enqueueDLQ({
               id: g.key,
-              reason: "timeout_watchdog",
-              lastError: `v2 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
+              reason: dlqReason,
+              lastError: `JSON.parse failed (finishReason=${finishReason ?? "unknown"}): ${errMsg.slice(0, 200)}`,
               timestamp: Date.now()
             });
           }
-          updateProgress({
-            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
-          });
-        },
-        onSoftWarn: (elapsedMs) => {
-          const history = llmProgress.callHistory ?? [];
-          updateProgress({
-            callHistory: [
-              {
-                provider: "cerebras",
-                model: "watchdog-soft-warn",
-                tokensIn: 0,
-                tokensOut: 0,
-                durationMs: elapsedMs,
-                ok: true,
-                batchSize: batch.length,
-                timestamp: Date.now()
-              },
-              ...history
-            ].slice(0, 20)
-          });
+          const sf = llmProgress.schemaFailures ?? {
+            nvidia_nim: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
+            openrouter: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 }
+          };
+          const primary = routing[0]?.provider ?? "nvidia_nim";
+          sf[primary].total += 1;
+          sf[primary].malformedJson += 1;
+          updateProgress({ schemaFailures: sf });
+          await finishBatch();
+          return;
         }
-      }
+        const validated = batchResponseV3.safeParse(parsed);
+        if (!validated.success) {
+          log16.warn(
+            { issues: validated.error.issues.slice(0, 3), batchIndex },
+            "v3 Zod parse failed"
+          );
+          const errPayload = JSON.stringify(validated.error.issues.slice(0, 3));
+          for (const g of batch) {
+            await enqueueDLQ({
+              id: g.key,
+              reason: "v3:schema_fail",
+              lastError: errPayload,
+              timestamp: Date.now()
+            });
+          }
+          const sf = llmProgress.schemaFailures ?? {
+            nvidia_nim: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 },
+            openrouter: { total: 0, malformedJson: 0, missingField: 0, typeMismatch: 0 }
+          };
+          const primary = routing[0]?.provider ?? "nvidia_nim";
+          sf[primary].total += 1;
+          sf[primary].missingField += 1;
+          updateProgress({ schemaFailures: sf });
+          await finishBatch();
+          return;
+        }
+        results.push(...validated.data.events);
+        allFailed = false;
+        const promptText = `${SYSTEM_PROMPT_V3}
+
+${userPrompt}`;
+        const reasoningTrace = "";
+        const model = routing[0]?.model ?? "unknown";
+        const batchDurationMs = Date.now() - t0;
+        for (const enrichedEvt of validated.data.events) {
+          const eventId = `llm-v3-${enrichedEvt.groupKey}`;
+          const { lineageHash } = await appendLineage(eventId, {
+            prompt: promptText,
+            response: content,
+            parsed: enrichedEvt,
+            coord: { lat: 0, lng: 0 },
+            // resolver fills in coord on the entity; lineage records pre-resolve LLM output
+            provenance: "gdelt-actiongeo-fallback",
+            resolverPath: "pre-resolve",
+            reasoningTrace,
+            model
+          });
+          const recentEvent = {
+            groupKey: enrichedEvt.groupKey,
+            location: {
+              country: enrichedEvt.location.country,
+              admin1: enrichedEvt.location.admin1,
+              city: enrichedEvt.location.city,
+              neighborhood: enrichedEvt.location.neighborhood,
+              landmark: enrichedEvt.location.landmark
+            },
+            precision: derivePrecision(enrichedEvt.location),
+            confidence: enrichedEvt.confidence,
+            reasoning: enrichedEvt.reasoning,
+            weaponType: enrichedEvt.weaponType,
+            targetType: enrichedEvt.targetType,
+            tokensIn: null,
+            tokensOut: null,
+            provenance: "gdelt-actiongeo-fallback",
+            sources: [],
+            fetchedAt: Date.now(),
+            reasoningTrace,
+            lineageHash
+          };
+          const recents = (llmProgress.recentEvents ?? []).slice(0, 49);
+          updateProgress({ recentEvents: [recentEvent, ...recents] });
+        }
+        log16.debug(
+          { batchIndex, durationMs: batchDurationMs, events: validated.data.events.length },
+          "v3 batch processed"
+        );
+        await finishBatch();
+      })
     );
-    if (content === null) {
-      log18.warn({ batchIndex }, "batch yielded no content (null or watchdog timeout)");
-      await onBatchComplete?.(batchIndex + 1, totalBatches);
-      await writePartialCache2(results, batchIndex + 1, totalBatches, false);
-      continue;
-    }
-    try {
-      const parsed = JSON.parse(content);
-      const validated = batchResponseV2.safeParse(parsed);
-      if (!validated.success) {
-        log18.warn({ issues: validated.error.issues.slice(0, 3), batchIndex }, "v2 Zod parse failed");
-        const errPayload = JSON.stringify(validated.error.issues.slice(0, 3));
-        for (const g of batch) {
-          await enqueueDLQ({
-            id: g.key,
-            reason: "zod_fail",
-            lastError: errPayload,
-            timestamp: Date.now()
-          });
-        }
-        await onBatchComplete?.(batchIndex + 1, totalBatches);
-        await writePartialCache2(results, batchIndex + 1, totalBatches, false);
-        continue;
-      }
-      results.push(...validated.data.events);
-      allFailed = false;
-    } catch (err) {
-      log18.warn({ err, batchIndex }, "JSON.parse failed");
-    }
-    await onBatchComplete?.(batchIndex + 1, totalBatches);
-    await writePartialCache2(results, batchIndex + 1, totalBatches, false);
   }
-  await writePartialCache2(results, totalBatches, totalBatches, true);
+  await Promise.all(tasks);
+  await writePartialCache(results, totalBatches, totalBatches, true);
   return {
     events: allFailed ? null : results,
     matchedNewsByGroup,
     bellingcatByGroup
   };
 }
-async function geocodeEnrichedEventsV2(events, groupsByKey, matchedNewsByGroup, bellingcatByGroup, onComplete) {
+async function splitBatchOnTimeout(contexts, batchIndex) {
+  const mid = Math.ceil(contexts.length / 2);
+  const halves = [contexts.slice(0, mid), contexts.slice(mid)];
+  const successes = [];
+  const enqueueAdaptiveFails = async (half, lastError) => {
+    for (const ctx of half) {
+      await enqueueDLQ({
+        id: ctx.group.key,
+        reason: "v3:adaptive-retry-fail",
+        lastError,
+        timestamp: Date.now()
+      });
+    }
+    const stats = llmProgress.adaptiveBatchStats ?? {
+      splitCount: 0,
+      retrySuccess: 0,
+      retryFail: 0,
+      dlqEnqueueCount: 0
+    };
+    stats.retryFail += half.length;
+    stats.dlqEnqueueCount += half.length;
+    updateProgress({ adaptiveBatchStats: stats });
+  };
+  for (const half of halves) {
+    if (half.length === 0) continue;
+    const halfPrompt = buildBatchUserPromptV3(half);
+    let halfTimedOut = false;
+    const halfContent = await withBatchWatchdog(
+      async () => {
+        const r = await callLLM(
+          [
+            { role: "system", content: SYSTEM_PROMPT_V3 },
+            { role: "user", content: halfPrompt }
+          ],
+          JSON.stringify(EVENT_EXTRACTION_SCHEMA_V3),
+          {
+            batchSize: half.length,
+            modelOverride: V3_BAKEOFF_MODEL,
+            skipOpenRouter: true
+          }
+        );
+        return r.content;
+      },
+      {
+        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
+        softWarnMs: 6e4,
+        batchIndex,
+        label: "v3-split",
+        onTimeout: async () => {
+          halfTimedOut = true;
+        }
+      }
+    );
+    if (halfContent === null) {
+      await enqueueAdaptiveFails(
+        half,
+        halfTimedOut ? `v3 split-retry timed out (batch ${batchIndex})` : "v3 split-retry returned null content"
+      );
+      continue;
+    }
+    let halfParsed;
+    try {
+      halfParsed = JSON.parse(halfContent);
+    } catch (parseErr) {
+      await enqueueAdaptiveFails(
+        half,
+        `v3 split-retry JSON.parse: ${parseErr instanceof Error ? parseErr.message.slice(0, 200) : "unknown"}`
+      );
+      continue;
+    }
+    const halfValidated = batchResponseV3.safeParse(halfParsed);
+    if (!halfValidated.success) {
+      await enqueueAdaptiveFails(
+        half,
+        `v3 split-retry Zod fail: ${JSON.stringify(halfValidated.error.issues.slice(0, 2))}`
+      );
+      continue;
+    }
+    successes.push(...halfValidated.data.events);
+    const stats = llmProgress.adaptiveBatchStats ?? {
+      splitCount: 0,
+      retrySuccess: 0,
+      retryFail: 0,
+      dlqEnqueueCount: 0
+    };
+    stats.retrySuccess += half.length;
+    updateProgress({ adaptiveBatchStats: stats });
+  }
+  return successes;
+}
+async function geocodeEnrichedEventsV3(events, groupsByKey, matchedNewsByGroup, bellingcatByGroup, onComplete) {
   const out = [];
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
@@ -82594,9 +81905,24 @@ async function geocodeEnrichedEventsV2(events, groupsByKey, matchedNewsByGroup, 
       // naturally on null).
       bellingcatCoord: bellingcatByGroup.get(ev.groupKey) ?? null
     };
-    const resolved = await resolveLocation(ev.location, ctx);
+    let resolved;
+    try {
+      resolved = await resolveLocation(ev.location, ctx);
+    } catch (err) {
+      log16.warn(
+        { err: err instanceof Error ? err.message : String(err), groupKey: ev.groupKey },
+        "resolveLocation threw \u2014 using GDELT centroid fallback for this event"
+      );
+      resolved = {
+        lat: ctx.centroidLat,
+        lng: ctx.centroidLng,
+        provenance: "gdelt-actiongeo-fallback",
+        actionGeoDistanceKm: 0,
+        displayName: "GDELT ActionGeo centroid (resolver error fallback)"
+      };
+    }
     const precision = derivePrecision(ev.location);
-    const sourceHostnames = (group?.sourceUrls ?? []).map((u) => hostnameOf2(u));
+    const sourceHostnames = (group?.sourceUrls ?? []).map((u) => hostnameOf(u));
     const tiers = [];
     for (const h of sourceHostnames) {
       const t = getSourceTier("", h);
@@ -82628,331 +81954,31 @@ async function geocodeEnrichedEventsV2(events, groupsByKey, matchedNewsByGroup, 
 // server/lib/llmExtractionPipeline.ts
 init_redis();
 
-// server/lib/llmEventExtractor.v1.ts
-import { z as z4 } from "zod";
-init_redis();
-var log19 = logger.child({ module: "llm-extractor" });
-var casualtiesSchema2 = z4.object({
-  killed: z4.number().int().nullable(),
-  injured: z4.number().int().nullable(),
-  unknown: z4.boolean()
-});
-var enrichedEventSchema = z4.object({
-  groupKey: z4.string(),
-  location: z4.object({
-    name: z4.string(),
-    precision: z4.enum(["exact", "neighborhood", "city", "region"])
-  }),
-  type: z4.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
-  actors: z4.array(z4.string()),
-  severity: z4.enum(["critical", "high", "medium", "low"]),
-  summary: z4.string(),
-  casualties: casualtiesSchema2,
-  sourceCount: z4.number().int()
-});
-var batchResponseSchema = z4.object({
-  events: z4.array(enrichedEventSchema)
-});
-var SYSTEM_PROMPT = `You are a conflict event analyst extracting structured data from GDELT event records.
-
-For each event group, extract:
-1. location: The most specific place name mentioned. Output the name as a string, NOT coordinates.
-2. type: One of: "airstrike", "on_ground", "explosion", "targeted", "other"
-3. actors: Array of actor names involved (military forces, organizations, individuals)
-4. severity: "critical" | "high" | "medium" | "low" based on event impact
-5. summary: 2-3 sentence description of what happened
-6. casualties: { killed, injured, unknown } - only if mentioned in source data
-7. sources: Count of independent sources reporting this event
-
-Rules:
-- Location must be a real place name (city, neighborhood, facility, checkpoint), NOT a country name alone
-- If only a country is identifiable, set precision to "region"
-- If a specific city is identifiable, set precision to "city"
-- If a neighborhood or specific location is identifiable, set precision to "neighborhood" or "exact"
-- Never invent coordinates. Only output place names.
-- If multiple events in the batch, return them as an array.`;
-var EVENT_EXTRACTION_SCHEMA = {
-  type: "object",
-  properties: {
-    events: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          groupKey: { type: "string" },
-          location: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              precision: { type: "string", enum: ["exact", "neighborhood", "city", "region"] }
-            },
-            required: ["name", "precision"],
-            additionalProperties: false
-          },
-          type: {
-            type: "string",
-            enum: ["airstrike", "on_ground", "explosion", "targeted", "other"]
-          },
-          actors: { type: "array", items: { type: "string" } },
-          severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
-          summary: { type: "string" },
-          casualties: {
-            type: "object",
-            properties: {
-              killed: { type: ["integer", "null"] },
-              injured: { type: ["integer", "null"] },
-              unknown: { type: "boolean" }
-            },
-            required: ["killed", "injured", "unknown"],
-            additionalProperties: false
-          },
-          sourceCount: { type: "integer" }
-        },
-        required: [
-          "groupKey",
-          "location",
-          "type",
-          "actors",
-          "severity",
-          "summary",
-          "casualties",
-          "sourceCount"
-        ],
-        additionalProperties: false
-      }
-    }
-  },
-  required: ["events"],
-  additionalProperties: false
-};
-var BATCH_SIZE3 = 8;
-var GEOCODE_CACHE_PREFIX2 = "geocode:fwd:";
-var GEOCODE_CACHE_TTL_SEC = 2592e3;
-var GEOCODE_DELAY_MS2 = 1e3;
-function buildBatchUserPrompt(groups) {
-  const lines = ["Analyze these GDELT event groups and extract structured data:\n"];
-  for (let i = 0; i < groups.length; i++) {
-    const g = groups[i];
-    if (!g) continue;
-    const entity = g.entities[0];
-    if (!entity) continue;
-    lines.push(`--- Event Group ${i + 1} (key: ${g.key}) ---`);
-    lines.push(`Date: ${new Date(g.timestamp).toISOString().slice(0, 10)}`);
-    lines.push(`CAMEO Code: ${g.primaryCameo}`);
-    lines.push(`Location: ${entity.data.locationName}`);
-    lines.push(`Actors: ${entity.data.actor1} vs ${entity.data.actor2}`);
-    lines.push(`Goldstein Scale: ${entity.data.goldsteinScale}`);
-    lines.push(`Total Mentions: ${g.totalMentions}, Total Sources: ${g.totalSources}`);
-    lines.push(`Rows in group: ${g.entities.length}`);
-    if (g.sourceUrls.length > 0) {
-      lines.push(`Source URLs: ${g.sourceUrls.slice(0, 3).join(", ")}`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
-}
-async function processEventGroups(groups, onBatchComplete) {
-  if (groups.length === 0) return [];
-  const results = [];
-  let allFailed = true;
-  const totalBatches = Math.ceil(groups.length / BATCH_SIZE3);
-  for (let i = 0; i < groups.length; i += BATCH_SIZE3) {
-    const batch = groups.slice(i, i + BATCH_SIZE3);
-    const batchIndex = Math.floor(i / BATCH_SIZE3);
-    const userPrompt = buildBatchUserPrompt(batch);
-    const content = await withBatchWatchdog(
-      () => callLLM2(
-        [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt }
-        ],
-        EVENT_EXTRACTION_SCHEMA,
-        { batchSize: batch.length }
-      ),
-      {
-        timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 6e4,
-        // D-02 — hard-coded soft-warn threshold
-        batchIndex,
-        label: "v1",
-        onTimeout: async () => {
-          for (const g of batch) {
-            await enqueueDLQ({
-              id: g.key,
-              reason: "timeout_watchdog",
-              lastError: `v1 batch ${batchIndex} exceeded ${env.LLM_BATCH_TIMEOUT_MS}ms`,
-              timestamp: Date.now()
-            });
-          }
-          updateProgress({
-            watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
-          });
-        },
-        onSoftWarn: (elapsedMs) => {
-          const history = llmProgress.callHistory ?? [];
-          const softWarnEntry = {
-            provider: "cerebras",
-            model: "watchdog-soft-warn",
-            tokensIn: 0,
-            tokensOut: 0,
-            durationMs: elapsedMs,
-            ok: true,
-            batchSize: batch.length,
-            timestamp: Date.now()
-          };
-          updateProgress({
-            callHistory: [softWarnEntry, ...history].slice(0, 20)
-          });
-        }
-      }
-    );
-    if (content === null) {
-      log19.warn({ batchIndex }, "LLM returned null for batch (null or watchdog timeout)");
-      await onBatchComplete?.(batchIndex + 1, totalBatches);
-      continue;
-    }
-    allFailed = false;
-    try {
-      const parsed = JSON.parse(content);
-      const validated = batchResponseSchema.safeParse(parsed);
-      if (!validated.success) {
-        log19.warn(
-          { errors: validated.error.issues, batchIndex },
-          "Zod validation failed for LLM batch response"
-        );
-        await onBatchComplete?.(batchIndex + 1, totalBatches);
-        continue;
-      }
-      results.push(...validated.data.events);
-    } catch (err) {
-      log19.warn({ err, batchIndex }, "Failed to parse LLM response JSON");
-    }
-    await onBatchComplete?.(batchIndex + 1, totalBatches);
-  }
-  if (allFailed) return null;
-  return results;
-}
-async function geocodeEnrichedEvents(events, groups, onGeocodeComplete) {
-  const groupMap = /* @__PURE__ */ new Map();
-  for (const g of groups) {
-    groupMap.set(g.key, g);
-  }
-  const results = [];
-  for (let i = 0; i < events.length; i++) {
-    const event = events[i];
-    if (!event) continue;
-    const placeName = event.location.name;
-    const cacheKey2 = `${GEOCODE_CACHE_PREFIX2}${placeName.toLowerCase().trim()}`;
-    const cached = await cacheGetSafe(
-      cacheKey2,
-      GEOCODE_CACHE_TTL_SEC * 1e3
-    );
-    if (cached?.data) {
-      results.push({
-        ...event,
-        resolvedLat: cached.data.lat,
-        resolvedLng: cached.data.lng
-      });
-      onGeocodeComplete?.(i + 1, events.length);
-      continue;
-    }
-    if (i > 0) {
-      await new Promise((resolve4) => setTimeout(resolve4, GEOCODE_DELAY_MS2));
-    }
-    const [geocoded] = await forwardGeocodeConstrained(placeName, {
-      countrycodes: ME_COUNTRY_CODES,
-      viewbox: ME_VIEWBOX,
-      limit: 1
-    });
-    if (geocoded) {
-      await cacheSetSafe(
-        cacheKey2,
-        { lat: geocoded.lat, lng: geocoded.lng, displayName: geocoded.displayName },
-        GEOCODE_CACHE_TTL_SEC
-      );
-      results.push({
-        ...event,
-        resolvedLat: geocoded.lat,
-        resolvedLng: geocoded.lng
-      });
-    } else {
-      const group = groupMap.get(event.groupKey);
-      if (group) {
-        log19.warn(
-          { placeName, groupKey: event.groupKey },
-          "Nominatim failed, falling back to GDELT ActionGeo coordinates"
-        );
-        results.push({
-          ...event,
-          resolvedLat: group.centroidLat,
-          resolvedLng: group.centroidLng
-        });
-      } else {
-        log19.warn(
-          { placeName, groupKey: event.groupKey },
-          "No geocoding fallback available, skipping event"
-        );
-      }
-    }
-    onGeocodeComplete?.(i + 1, events.length);
-  }
-  return results;
-}
-
 // server/lib/llmEventExtractor.ts
-async function processEventGroups2(groups, onBatchComplete) {
-  const version = getPipelineVersion();
-  if (version === "v3") {
-    const run = await processEventGroupsV3(groups, onBatchComplete);
-    return {
-      schemaVersion: "v3",
-      events: run.events,
-      matchedNewsByGroup: run.matchedNewsByGroup,
-      bellingcatByGroup: run.bellingcatByGroup
-    };
-  }
-  if (version === "v2") {
-    const run = await processEventGroupsV2(groups, onBatchComplete);
-    return {
-      schemaVersion: "v2",
-      events: run.events,
-      matchedNewsByGroup: run.matchedNewsByGroup,
-      bellingcatByGroup: run.bellingcatByGroup
-    };
-  }
-  const events = await processEventGroups(groups, onBatchComplete);
-  return { schemaVersion: "v1", events };
+async function processEventGroups(groups, onBatchComplete) {
+  const run = await processEventGroupsV3(groups, onBatchComplete);
+  return {
+    schemaVersion: "v3",
+    events: run.events,
+    matchedNewsByGroup: run.matchedNewsByGroup,
+    bellingcatByGroup: run.bellingcatByGroup
+  };
 }
-async function geocodeEnrichedEvents2(input, groups, onComplete) {
-  if (input.schemaVersion === "v3") {
-    const groupsByKey = new Map(groups.map((g) => [g.key, g]));
-    const events2 = await geocodeEnrichedEventsV3(
-      input.events,
-      groupsByKey,
-      input.matchedNewsByGroup,
-      input.bellingcatByGroup,
-      onComplete
-    );
-    return { schemaVersion: "v3", events: events2 };
-  }
-  if (input.schemaVersion === "v2") {
-    const groupsByKey = new Map(groups.map((g) => [g.key, g]));
-    const events2 = await geocodeEnrichedEventsV2(
-      input.events,
-      groupsByKey,
-      input.matchedNewsByGroup,
-      input.bellingcatByGroup,
-      onComplete
-    );
-    return { schemaVersion: "v2", events: events2 };
-  }
-  const events = await geocodeEnrichedEvents(input.events, groups, onComplete);
-  return { schemaVersion: "v1", events };
+async function geocodeEnrichedEvents(input, groups, onComplete) {
+  const groupsByKey = new Map(groups.map((g) => [g.key, g]));
+  const events = await geocodeEnrichedEventsV3(
+    input.events,
+    groupsByKey,
+    input.matchedNewsByGroup,
+    input.bellingcatByGroup,
+    onComplete
+  );
+  return { schemaVersion: "v3", events };
 }
 
 // server/lib/safeWaitUntil.ts
 import { waitUntil } from "@vercel/functions";
-var log20 = logger.child({ module: "safeWaitUntil" });
+var log17 = logger.child({ module: "safeWaitUntil" });
 var VERCEL_CTX = /* @__PURE__ */ Symbol.for("@vercel/request-context");
 function safeWaitUntil(promise) {
   const hasVercelContext = typeof globalThis[VERCEL_CTX] !== "undefined";
@@ -82960,59 +81986,54 @@ function safeWaitUntil(promise) {
     try {
       waitUntil(promise);
     } catch (vercelErr) {
-      log20.warn(
+      log17.warn(
         { err: vercelErr },
         "waitUntil threw on Vercel runtime; falling back to local catch"
       );
       promise.catch((err) => {
-        log20.warn({ err }, "safeWaitUntil-fallback IIFE rejected (after Vercel-path throw)");
+        log17.warn({ err }, "safeWaitUntil-fallback IIFE rejected (after Vercel-path throw)");
       });
     }
   } else {
     promise.catch((err) => {
-      log20.warn({ err }, "safeWaitUntil-fallback IIFE rejected (local dev)");
+      log17.warn({ err }, "safeWaitUntil-fallback IIFE rejected (local dev)");
     });
   }
 }
 
 // server/lib/llmExtractionPipeline.ts
-var log21 = logger.child({ module: "llm-extraction-pipeline" });
+var log18 = logger.child({ module: "llm-extraction-pipeline" });
 var EVENTS_KEY = "events:gdelt";
-var LLM_EVENTS_KEY = "events:llm";
+var LLM_EVENTS_KEY_ACTIVE = "events:llm:v3";
+var LLM_SUMMARY_KEY_ACTIVE = "events:llm-summary:v3";
+var PARTIAL_KEY_ACTIVE = "events:llm:v3:partial";
 var LLM_PROCESS_KEY = "events:llm-process-ts";
 var LLM_COOLDOWN_MS = 9e5;
-var LLM_REDIS_TTL_SEC3 = 9e3;
-var LLM_SUMMARY_KEY = "events:llm-summary";
+var LLM_REDIS_TTL_SEC2 = 9e3;
 var LLM_SUMMARY_TTL_SEC = 86400;
-var BATCH_SIZE_V1 = 8;
+var BATCH_SIZE_ACTIVE = 2;
 var FLUSH_EVERY_N_BATCHES_DEFAULT = 10;
 function getFlushEveryNBatches() {
   const parsed = env.LLM_FLUSH_EVERY_N_BATCHES;
   if (!Number.isFinite(parsed) || parsed < 1) return FLUSH_EVERY_N_BATCHES_DEFAULT;
   return parsed;
 }
-async function mergeAndPersistLlmEntities(newlyEnriched, llmCachedRef, key, pipelineV2, pipelineV3) {
+async function mergeAndPersistLlmEntities(newlyEnriched, llmCachedRef, key) {
   const llmMergeMap = /* @__PURE__ */ new Map();
   if (llmCachedRef?.data) {
     for (const e of llmCachedRef.data) llmMergeMap.set(e.id, e);
   }
   for (const e of newlyEnriched) llmMergeMap.set(e.id, e);
   const llmMerged = Array.from(llmMergeMap.values());
-  await cacheSetSafe(key, llmMerged, LLM_REDIS_TTL_SEC3);
-  if (pipelineV3 || pipelineV2) saveDevLLMCacheV2(llmMerged);
-  else saveDevLLMCache(llmMerged);
-  log21.info(
+  await cacheSetSafe(key, llmMerged, LLM_REDIS_TTL_SEC2);
+  saveDevLLMCacheV2(llmMerged);
+  log18.info(
     { count: newlyEnriched.length, total: llmMerged.length },
     "LLM: persisted enriched events to terminal cache (Plan 01 helper)"
   );
   return { writtenCount: newlyEnriched.length, total: llmMerged.length };
 }
 async function runRefreshExtraction(opts) {
-  const version = getPipelineVersion();
-  const pipelineV2 = version === "v2";
-  const pipelineV3 = version === "v3";
-  const LLM_EVENTS_KEY_ACTIVE = pipelineV3 ? "events:llm:v3" : pipelineV2 ? "events:llm:v2" : LLM_EVENTS_KEY;
-  const LLM_SUMMARY_KEY_ACTIVE = pipelineV3 ? "events:llm-summary:v3" : pipelineV2 ? "events:llm-summary:v2" : LLM_SUMMARY_KEY;
   let isColdCache = false;
   try {
     const cachedLLM = await cacheGetSafe(LLM_EVENTS_KEY_ACTIVE, 999999999);
@@ -83026,14 +82047,14 @@ async function runRefreshExtraction(opts) {
       const lastTs = await redis.get(LLM_PROCESS_KEY);
       if (lastTs !== null && lastTs !== void 0) {
         if (Date.now() - lastTs <= LLM_COOLDOWN_MS) {
-          return { dispatched: false, reason: "cooldown", schemaVersion: version };
+          return { dispatched: false, reason: "cooldown", schemaVersion: "v3" };
         }
       }
     } catch {
     }
   }
   if (!isLLMConfigured()) {
-    return { dispatched: false, reason: "llm_unconfigured", schemaVersion: version };
+    return { dispatched: false, reason: "llm_unconfigured", schemaVersion: "v3" };
   }
   let rawCached = null;
   try {
@@ -83042,14 +82063,14 @@ async function runRefreshExtraction(opts) {
     rawCached = null;
   }
   if (!rawCached?.data || rawCached.data.length === 0) {
-    return { dispatched: false, reason: "no_raw_events", schemaVersion: version };
+    return { dispatched: false, reason: "no_raw_events", schemaVersion: "v3" };
   }
   const merged = rawCached.data;
   if (llmProgress.stage !== "idle" && llmProgress.stage !== "done" && llmProgress.stage !== "error") {
-    return { dispatched: false, reason: "pipeline_busy", schemaVersion: version };
+    return { dispatched: false, reason: "pipeline_busy", schemaVersion: "v3" };
   }
   try {
-    await redis.set(LLM_PROCESS_KEY, Date.now(), { ex: LLM_REDIS_TTL_SEC3 });
+    await redis.set(LLM_PROCESS_KEY, Date.now(), { ex: LLM_REDIS_TTL_SEC2 });
   } catch {
   }
   updateProgress({ lastTriggerSource: opts.triggeredBy });
@@ -83060,7 +82081,7 @@ async function runRefreshExtraction(opts) {
   safeWaitUntil(
     (async () => {
       resetProgress();
-      updateProgress({ schemaVersion: version, lastTriggerSource: opts.triggeredBy });
+      updateProgress({ schemaVersion: "v3", lastTriggerSource: opts.triggeredBy });
       try {
         const groups = groupGdeltRows(merged);
         updateProgress({ totalGroups: groups.length, stage: "grouping" });
@@ -83073,7 +82094,7 @@ async function runRefreshExtraction(opts) {
         const newGroups = cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
         updateProgress({ newGroups: newGroups.length });
         if (newGroups.length === 0) {
-          log21.info("LLM: no new groups to process");
+          log18.info("LLM: no new groups to process");
           updateProgress({
             stage: "done",
             completedAt: Date.now(),
@@ -83087,7 +82108,7 @@ async function runRefreshExtraction(opts) {
         }
         const paused = await shouldPauseNewEvents();
         if (paused) {
-          log21.info("LLM_PAUSED_SOFT_CAP");
+          log18.info("LLM_PAUSED_SOFT_CAP");
           updateProgress({
             stage: "done",
             completedAt: Date.now(),
@@ -83100,7 +82121,7 @@ async function runRefreshExtraction(opts) {
           return;
         }
         const prioritizedGroups = await prioritizeBySeverity(newGroups);
-        const effectiveBatchSize = pipelineV3 || pipelineV2 ? BATCH_SIZE2 : BATCH_SIZE_V1;
+        const effectiveBatchSize = BATCH_SIZE_ACTIVE;
         updateProgress({
           stage: "llm-processing",
           totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize)
@@ -83108,8 +82129,7 @@ async function runRefreshExtraction(opts) {
         const flushEvery = getFlushEveryNBatches();
         let batchesSinceLastFlush = 0;
         let lastFlushedEventCount = 0;
-        const PARTIAL_KEY_ACTIVE = pipelineV3 ? "events:llm:v3:partial" : pipelineV2 ? "events:llm:v2:partial" : "events:llm:partial";
-        const extractResult = await processEventGroups2(
+        const extractResult = await processEventGroups(
           prioritizedGroups,
           async (completed, total) => {
             updateProgress({ completedBatches: completed, totalBatches: total });
@@ -83123,58 +82143,26 @@ async function runRefreshExtraction(opts) {
                 return;
               }
               const window = partialEvents.slice(lastFlushedEventCount);
-              let adapted = [];
-              if (pipelineV3) {
-                const geo = await geocodeEnrichedEvents2(
-                  {
-                    schemaVersion: "v3",
-                    events: window,
-                    matchedNewsByGroup: /* @__PURE__ */ new Map(),
-                    bellingcatByGroup: /* @__PURE__ */ new Map()
-                  },
-                  prioritizedGroups
-                );
-                if (geo.schemaVersion === "v3") {
-                  adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
-                }
-              } else if (pipelineV2) {
-                const geo = await geocodeEnrichedEvents2(
-                  {
-                    schemaVersion: "v2",
-                    events: window,
-                    matchedNewsByGroup: /* @__PURE__ */ new Map(),
-                    bellingcatByGroup: /* @__PURE__ */ new Map()
-                  },
-                  prioritizedGroups
-                );
-                if (geo.schemaVersion === "v2") {
-                  adapted = enrichedV2ToEntities(geo.events, prioritizedGroups);
-                }
-              } else {
-                const geo = await geocodeEnrichedEvents2(
-                  { schemaVersion: "v1", events: window },
-                  prioritizedGroups
-                );
-                if (geo.schemaVersion === "v1") {
-                  adapted = enrichedV1ToEntities(geo.events, prioritizedGroups);
-                }
-              }
+              const geo = await geocodeEnrichedEvents(
+                {
+                  schemaVersion: "v3",
+                  events: window,
+                  matchedNewsByGroup: /* @__PURE__ */ new Map(),
+                  bellingcatByGroup: /* @__PURE__ */ new Map()
+                },
+                prioritizedGroups
+              );
+              const adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
               if (adapted.length > 0) {
-                await mergeAndPersistLlmEntities(
-                  adapted,
-                  llmCachedRef,
-                  LLM_EVENTS_KEY_ACTIVE,
-                  pipelineV2,
-                  pipelineV3
-                );
+                await mergeAndPersistLlmEntities(adapted, llmCachedRef, LLM_EVENTS_KEY_ACTIVE);
                 lastFlushedEventCount = partialEvents.length;
-                log21.info(
+                log18.info(
                   { completed, total, windowSize: window.length, flushed: adapted.length },
                   "Plan 01 periodic-flush: incremental terminal-key write"
                 );
               }
             } catch (flushErr) {
-              log21.warn(
+              log18.warn(
                 { err: flushErr, completed, total },
                 "Plan 01 periodic-flush failed (continuing)"
               );
@@ -83182,7 +82170,7 @@ async function runRefreshExtraction(opts) {
           }
         );
         if (!extractResult.events || extractResult.events.length === 0) {
-          log21.warn("LLM processing returned null \u2014 raw GDELT serving continues");
+          log18.warn("LLM processing returned null \u2014 raw GDELT serving continues");
           updateProgress({
             stage: "error",
             errorMessage: "LLM returned null for all batches",
@@ -83200,87 +82188,33 @@ async function runRefreshExtraction(opts) {
           enrichedCount: extractResult.events.length,
           totalGeocodes: extractResult.events.length
         });
-        let llmEntities;
-        if (extractResult.schemaVersion === "v3") {
-          const geoResult = await geocodeEnrichedEvents2(
-            {
-              schemaVersion: "v3",
-              events: extractResult.events,
-              matchedNewsByGroup: extractResult.matchedNewsByGroup,
-              bellingcatByGroup: extractResult.bellingcatByGroup
-            },
-            prioritizedGroups,
-            (completed, total) => {
-              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-            }
-          );
-          if (geoResult.schemaVersion !== "v3") {
-            throw new Error("geocoder schemaVersion mismatch (expected v3)");
+        const geoResult = await geocodeEnrichedEvents(
+          {
+            schemaVersion: "v3",
+            events: extractResult.events,
+            matchedNewsByGroup: extractResult.matchedNewsByGroup,
+            bellingcatByGroup: extractResult.bellingcatByGroup
+          },
+          prioritizedGroups,
+          (completed, total) => {
+            updateProgress({ completedGeocodes: completed, totalGeocodes: total });
           }
-          const provenanceCounts = {};
-          let suspectCount = 0;
-          for (const e of geoResult.events) {
-            provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-            if (e.suspect) suspectCount++;
-          }
-          updateProgress({ provenanceCounts, suspectCount });
-          try {
-            const evalScore = await runEval();
-            log21.info({ evalScore, schemaVersion: "v3" }, "eval harness completed");
-          } catch (evalErr) {
-            log21.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
-          }
-          llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
-        } else if (extractResult.schemaVersion === "v2") {
-          const geoResult = await geocodeEnrichedEvents2(
-            {
-              schemaVersion: "v2",
-              events: extractResult.events,
-              matchedNewsByGroup: extractResult.matchedNewsByGroup,
-              bellingcatByGroup: extractResult.bellingcatByGroup
-            },
-            prioritizedGroups,
-            (completed, total) => {
-              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-            }
-          );
-          if (geoResult.schemaVersion !== "v2") {
-            throw new Error("geocoder schemaVersion mismatch (expected v2)");
-          }
-          const provenanceCounts = {};
-          let suspectCount = 0;
-          for (const e of geoResult.events) {
-            provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
-            if (e.suspect) suspectCount++;
-          }
-          updateProgress({ provenanceCounts, suspectCount });
-          try {
-            const evalScore = await runEval();
-            log21.info({ evalScore }, "eval harness completed");
-          } catch (evalErr) {
-            log21.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
-          }
-          llmEntities = enrichedV2ToEntities(geoResult.events, prioritizedGroups);
-        } else {
-          const geoResult = await geocodeEnrichedEvents2(
-            { schemaVersion: "v1", events: extractResult.events },
-            prioritizedGroups,
-            (completed, total) => {
-              updateProgress({ completedGeocodes: completed, totalGeocodes: total });
-            }
-          );
-          if (geoResult.schemaVersion !== "v1") {
-            throw new Error("geocoder schemaVersion mismatch (expected v1)");
-          }
-          llmEntities = enrichedV1ToEntities(geoResult.events, prioritizedGroups);
-        }
-        await mergeAndPersistLlmEntities(
-          llmEntities,
-          llmCachedRef,
-          LLM_EVENTS_KEY_ACTIVE,
-          pipelineV2,
-          pipelineV3
         );
+        const provenanceCounts = {};
+        let suspectCount = 0;
+        for (const e of geoResult.events) {
+          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+          if (e.suspect) suspectCount++;
+        }
+        updateProgress({ provenanceCounts, suspectCount });
+        try {
+          const evalScore = await runEval();
+          log18.info({ evalScore, schemaVersion: "v3" }, "eval harness completed");
+        } catch (evalErr) {
+          log18.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
+        }
+        const llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
+        await mergeAndPersistLlmEntities(llmEntities, llmCachedRef, LLM_EVENTS_KEY_ACTIVE);
         updateProgress({
           stage: "done",
           completedAt: Date.now(),
@@ -83301,97 +82235,15 @@ async function runRefreshExtraction(opts) {
           await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, buildSummary(), LLM_SUMMARY_TTL_SEC);
         } catch {
         }
-        log21.warn({ err: llmErr }, "LLM background processing failed");
+        log18.warn({ err: llmErr }, "LLM background processing failed");
       }
     })()
   );
   return {
     dispatched: true,
     coldCacheBypass: isColdCache,
-    schemaVersion: version
+    schemaVersion: "v3"
   };
-}
-function enrichedV1ToEntities(geocoded, groups) {
-  const groupMap = /* @__PURE__ */ new Map();
-  const groupSourceUrls = /* @__PURE__ */ new Map();
-  for (const g of groups) {
-    groupMap.set(g.key, g.entities);
-    groupSourceUrls.set(g.key, g.sourceUrls);
-  }
-  const results = [];
-  for (const enriched of geocoded) {
-    const entities = groupMap.get(enriched.groupKey);
-    if (!entities || entities.length === 0) continue;
-    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
-    const sourceTier = getHighestTier(sourceUrls) ?? void 0;
-    const template = entities[0];
-    if (!template) continue;
-    results.push({
-      ...template,
-      lat: enriched.resolvedLat,
-      lng: enriched.resolvedLng,
-      type: enriched.type,
-      label: `${enriched.location.name}: ${enriched.summary.slice(0, 60)}`,
-      data: {
-        ...template.data,
-        locationName: enriched.location.name,
-        summary: enriched.summary,
-        precision: enriched.location.precision,
-        llmProcessed: true,
-        actors: enriched.actors,
-        sourceCount: enriched.sourceCount,
-        sourceTier,
-        casualties: {
-          killed: enriched.casualties.killed ?? void 0,
-          injured: enriched.casualties.injured ?? void 0,
-          unknown: enriched.casualties.unknown
-        }
-      }
-    });
-  }
-  return results;
-}
-function enrichedV2ToEntities(geocoded, groups) {
-  const groupMap = /* @__PURE__ */ new Map();
-  const groupSourceUrls = /* @__PURE__ */ new Map();
-  for (const g of groups) {
-    groupMap.set(g.key, g.entities);
-    groupSourceUrls.set(g.key, g.sourceUrls);
-  }
-  const results = [];
-  for (const enriched of geocoded) {
-    const entities = groupMap.get(enriched.groupKey);
-    if (!entities || entities.length === 0) continue;
-    const sourceUrls = groupSourceUrls.get(enriched.groupKey) ?? [];
-    const sourceTier = getHighestTier(sourceUrls) ?? void 0;
-    const template = entities[0];
-    if (!template) continue;
-    const placeLabel = enriched.location.landmark || enriched.location.city || enriched.location.admin1 || enriched.location.country || enriched.displayName || "unknown";
-    results.push({
-      ...template,
-      id: `llm-v2-${enriched.groupKey}`,
-      lat: enriched.resolvedLat,
-      lng: enriched.resolvedLng,
-      type: enriched.type,
-      label: `${placeLabel}: ${enriched.summary.slice(0, 60)}`,
-      data: {
-        ...template.data,
-        locationName: placeLabel,
-        summary: enriched.summary,
-        precision: enriched.precision,
-        llmProcessed: true,
-        actors: enriched.actors,
-        sourceCount: enriched.sourceCount,
-        sourceTier,
-        casualties: {
-          killed: enriched.casualties.killed ?? void 0,
-          injured: enriched.casualties.injured ?? void 0,
-          unknown: enriched.casualties.unknown
-        }
-      }
-    });
-  }
-  return results;
 }
 function enrichedV3ToEntities(geocoded, groups) {
   const groupMap = /* @__PURE__ */ new Map();
@@ -83476,7 +82328,7 @@ function normalizeEventTypes(events) {
 // server/lib/operatorAudit.ts
 init_redis();
 import { createHash } from "crypto";
-var log22 = logger.child({ module: "operatorAudit" });
+var log19 = logger.child({ module: "operatorAudit" });
 var OPERATOR_AUDIT_KEY = "operator:audit-log";
 var AUDIT_MAX_ENTRIES = 500;
 var AUDIT_TTL_SEC = 30 * 86400;
@@ -83506,7 +82358,26 @@ async function appendOperatorAuditEntry(entry) {
       }
     }
   } catch (err) {
-    log22.error({ err, operation: entry.operation }, "operator-audit-log write failed");
+    log19.error({ err, operation: entry.operation }, "operator-audit-log write failed");
+  }
+}
+
+// server/lib/pipelineAudit.ts
+init_redis();
+var PIPELINE_AUDIT_KEY = "events:llm-pipeline-audit";
+var PIPELINE_AUDIT_TTL_SEC = 90 * 24 * 3600;
+async function listPipelineAudit(limit) {
+  try {
+    const raw = await redis.lrange(PIPELINE_AUDIT_KEY, 0, limit - 1);
+    return raw.map((s) => {
+      try {
+        return JSON.parse(typeof s === "string" ? s : JSON.stringify(s));
+      } catch {
+        return null;
+      }
+    }).filter((e) => e !== null);
+  } catch {
+    return [];
   }
 }
 
@@ -83556,7 +82427,7 @@ function validateQuery(schema) {
 }
 
 // server/middleware/validateResponse.ts
-var log23 = logger.child({ module: "validateResponse" });
+var log20 = logger.child({ module: "validateResponse" });
 function sendValidated(res, schema, payload) {
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {
@@ -83569,7 +82440,7 @@ function sendValidated(res, schema, payload) {
         `Response validation failed at ${path}: ${JSON.stringify(issues)}`
       );
     }
-    log23.warn({ issues, path }, "response schema mismatch \u2014 sending unvalidated payload");
+    log20.warn({ issues, path }, "response schema mismatch \u2014 sending unvalidated payload");
     res.json(payload);
     return;
   }
@@ -83577,183 +82448,188 @@ function sendValidated(res, schema, payload) {
 }
 
 // server/schemas/cacheResponse.ts
-import { z as z5 } from "zod";
+import { z as z4 } from "zod";
 function cacheResponseSchema(dataSchema) {
-  return z5.object({
+  return z4.object({
     data: dataSchema,
-    stale: z5.boolean(),
-    lastFresh: z5.number(),
-    rateLimited: z5.boolean().optional(),
-    degraded: z5.boolean().optional()
+    stale: z4.boolean(),
+    lastFresh: z4.number(),
+    rateLimited: z4.boolean().optional(),
+    degraded: z4.boolean().optional()
   });
 }
-var flightEntitySchema = z5.object({
-  id: z5.string(),
-  type: z5.literal("flight"),
-  lat: z5.number(),
-  lng: z5.number(),
-  timestamp: z5.number(),
-  label: z5.string(),
-  data: z5.object({
-    icao24: z5.string(),
-    callsign: z5.string(),
-    originCountry: z5.string(),
-    onGround: z5.boolean(),
-    unidentified: z5.boolean()
+var flightEntitySchema = z4.object({
+  id: z4.string(),
+  type: z4.literal("flight"),
+  lat: z4.number(),
+  lng: z4.number(),
+  timestamp: z4.number(),
+  label: z4.string(),
+  data: z4.object({
+    icao24: z4.string(),
+    callsign: z4.string(),
+    originCountry: z4.string(),
+    onGround: z4.boolean(),
+    unidentified: z4.boolean()
   }).passthrough()
 }).passthrough();
-var conflictEventEntitySchema = z5.object({
-  id: z5.string(),
-  type: z5.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
-  lat: z5.number(),
-  lng: z5.number(),
-  timestamp: z5.number(),
-  label: z5.string(),
-  data: z5.object({
-    eventType: z5.string(),
-    subEventType: z5.string(),
-    fatalities: z5.number(),
-    cameoCode: z5.string(),
+var conflictEventEntitySchema = z4.object({
+  id: z4.string(),
+  type: z4.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
+  lat: z4.number(),
+  lng: z4.number(),
+  timestamp: z4.number(),
+  label: z4.string(),
+  data: z4.object({
+    eventType: z4.string(),
+    subEventType: z4.string(),
+    fatalities: z4.number(),
+    cameoCode: z4.string(),
     // LLM-enriched fields (all optional, present when LLM processed)
-    summary: z5.string().optional(),
-    casualties: z5.object({
-      killed: z5.number().optional(),
-      injured: z5.number().optional(),
-      unknown: z5.boolean().optional()
+    summary: z4.string().optional(),
+    casualties: z4.object({
+      killed: z4.number().optional(),
+      injured: z4.number().optional(),
+      unknown: z4.boolean().optional()
     }).optional(),
-    precision: z5.enum(["exact", "neighborhood", "city", "region"]).optional(),
-    actors: z5.array(z5.string()).optional(),
-    sourceCount: z5.number().optional(),
-    llmProcessed: z5.boolean().optional()
+    precision: z4.enum(["exact", "neighborhood", "city", "region"]).optional(),
+    actors: z4.array(z4.string()).optional(),
+    sourceCount: z4.number().optional(),
+    llmProcessed: z4.boolean().optional()
   }).passthrough()
 }).passthrough();
-var waterFacilityEntitySchema = z5.object({
-  id: z5.string(),
-  type: z5.literal("water"),
-  facilityType: z5.enum(["dam", "reservoir", "desalination"]),
-  lat: z5.number(),
-  lng: z5.number(),
-  label: z5.string(),
-  osmId: z5.number(),
-  stress: z5.object({
-    compositeHealth: z5.number()
+var waterFacilityEntitySchema = z4.object({
+  id: z4.string(),
+  type: z4.literal("water"),
+  facilityType: z4.enum(["dam", "reservoir", "desalination"]),
+  lat: z4.number(),
+  lng: z4.number(),
+  label: z4.string(),
+  osmId: z4.number(),
+  stress: z4.object({
+    compositeHealth: z4.number()
   }).passthrough(),
-  capacity: z5.object({
-    height: z5.number().optional(),
-    volume: z5.number().optional(),
-    area: z5.number().optional()
+  capacity: z4.object({
+    height: z4.number().optional(),
+    volume: z4.number().optional(),
+    area: z4.number().optional()
   }).optional(),
-  nearestCity: z5.object({
-    name: z5.string(),
-    distanceKm: z5.number(),
-    population: z5.number()
+  nearestCity: z4.object({
+    name: z4.string(),
+    distanceKm: z4.number(),
+    population: z4.number()
   }).optional(),
-  linkedRiver: z5.object({
-    name: z5.string(),
-    distanceKm: z5.number()
+  linkedRiver: z4.object({
+    name: z4.string(),
+    distanceKm: z4.number()
   }).optional(),
-  notabilityScore: z5.number().optional()
+  notabilityScore: z4.number().optional()
 }).passthrough();
-var rejectionsSchema = z5.object({
-  excluded_location: z5.number(),
-  excluded_turkey: z5.number(),
-  not_notable: z5.number(),
-  no_name: z5.number(),
-  no_resolved_name: z5.number().int().nonnegative(),
-  duplicate: z5.number(),
-  low_score: z5.number(),
-  no_city: z5.number()
+var rejectionsSchema = z4.object({
+  excluded_location: z4.number(),
+  excluded_turkey: z4.number(),
+  not_notable: z4.number(),
+  no_name: z4.number(),
+  no_resolved_name: z4.number().int().nonnegative(),
+  duplicate: z4.number(),
+  low_score: z4.number(),
+  no_city: z4.number()
 }).strict();
-var overpassFetchRecordSchema = z5.object({
-  facilityType: z5.string(),
-  mirror: z5.string(),
-  status: z5.number(),
-  durationMs: z5.number(),
-  attempts: z5.number(),
-  ok: z5.boolean()
+var overpassFetchRecordSchema = z4.object({
+  facilityType: z4.string(),
+  mirror: z4.string(),
+  status: z4.number(),
+  durationMs: z4.number(),
+  attempts: z4.number(),
+  ok: z4.boolean()
 });
-var waterFilterStatsSchema = z5.object({
-  rawCounts: z5.record(z5.string(), z5.number()),
-  filteredCounts: z5.record(z5.string(), z5.number()),
+var waterFilterStatsSchema = z4.object({
+  rawCounts: z4.record(z4.string(), z4.number()),
+  filteredCounts: z4.record(z4.string(), z4.number()),
   rejections: rejectionsSchema,
   // Phase 27.3.1 R-08 D-31
-  byTypeRejections: z5.record(z5.string(), rejectionsSchema),
+  byTypeRejections: z4.record(z4.string(), rejectionsSchema),
   // Phase 27.3.1 R-08 D-28
-  byCountry: z5.record(z5.string(), z5.record(z5.string(), z5.number())),
+  byCountry: z4.record(z4.string(), z4.record(z4.string(), z4.number())),
   // Phase 27.3.1 R-08 D-29
-  overpass: z5.array(overpassFetchRecordSchema),
+  overpass: z4.array(overpassFetchRecordSchema),
   // Phase 27.3.1 R-08 D-30
-  source: z5.enum(["snapshot", "redis", "overpass"]),
-  generatedAt: z5.string(),
-  enrichment: z5.object({
-    withCapacity: z5.number(),
-    withCity: z5.number(),
-    withRiver: z5.number()
+  source: z4.enum(["snapshot", "redis", "overpass"]),
+  generatedAt: z4.string(),
+  enrichment: z4.object({
+    withCapacity: z4.number(),
+    withCity: z4.number(),
+    withRiver: z4.number()
   }),
-  scoreHistogram: z5.array(z5.object({ bucket: z5.string(), count: z5.number() }))
+  scoreHistogram: z4.array(z4.object({ bucket: z4.string(), count: z4.number() }))
 }).strict().optional();
-var siteEntitySchema = z5.object({
-  id: z5.string(),
-  type: z5.literal("site"),
-  siteType: z5.enum(["nuclear", "naval", "oil", "airbase", "port"]),
-  lat: z5.number(),
-  lng: z5.number(),
-  label: z5.string(),
-  operator: z5.string().optional(),
-  wikidata: z5.string().optional(),
-  osmId: z5.number()
+var siteEntitySchema = z4.object({
+  id: z4.string(),
+  type: z4.literal("site"),
+  siteType: z4.enum(["nuclear", "naval", "oil", "airbase", "port"]),
+  lat: z4.number(),
+  lng: z4.number(),
+  label: z4.string(),
+  operator: z4.string().optional(),
+  wikidata: z4.string().optional(),
+  osmId: z4.number()
 }).passthrough();
-var siteRejectionsSchema = z5.object({
-  excluded_turkey: z5.number(),
-  no_coords: z5.number(),
-  no_type: z5.number(),
-  duplicate: z5.number()
+var siteRejectionsSchema = z4.object({
+  excluded_turkey: z4.number(),
+  no_coords: z4.number(),
+  no_type: z4.number(),
+  duplicate: z4.number()
 });
-var siteFilterStatsSchema = z5.object({
-  rawCount: z5.number(),
-  filteredCount: z5.number(),
+var siteFilterStatsSchema = z4.object({
+  rawCount: z4.number(),
+  filteredCount: z4.number(),
   rejections: siteRejectionsSchema,
-  byCountry: z5.record(z5.string(), z5.record(z5.string(), z5.number())),
-  byType: z5.record(z5.string(), z5.number()),
-  overpass: z5.array(overpassFetchRecordSchema),
-  source: z5.enum(["snapshot", "redis", "overpass"]),
-  generatedAt: z5.string()
+  byCountry: z4.record(z4.string(), z4.record(z4.string(), z4.number())),
+  byType: z4.record(z4.string(), z4.number()),
+  overpass: z4.array(overpassFetchRecordSchema),
+  source: z4.enum(["snapshot", "redis", "overpass"]),
+  generatedAt: z4.string()
 }).strict().optional();
-var flightsResponseSchema = cacheResponseSchema(z5.array(flightEntitySchema));
-var eventsResponseSchema = cacheResponseSchema(z5.array(conflictEventEntitySchema));
-var waterResponseSchema = cacheResponseSchema(z5.array(waterFacilityEntitySchema)).extend({
+var flightsResponseSchema = cacheResponseSchema(z4.array(flightEntitySchema));
+var eventsResponseSchema = cacheResponseSchema(z4.array(conflictEventEntitySchema));
+var waterResponseSchema = cacheResponseSchema(z4.array(waterFacilityEntitySchema)).extend({
   filterStats: waterFilterStatsSchema
 });
-var sitesResponseSchema = cacheResponseSchema(z5.array(siteEntitySchema)).extend({
+var sitesResponseSchema = cacheResponseSchema(z4.array(siteEntitySchema)).extend({
   filterStats: siteFilterStatsSchema
 });
 
 // server/routes/events.ts
-var log24 = logger.child({ module: "events" });
-var eventsQuerySchema = z6.object({
-  backfill: z6.enum(["true", "false"]).optional().transform((v) => v === "true")
+var log21 = logger.child({ module: "events" });
+var eventsQuerySchema = z5.object({
+  backfill: z5.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
 var EVENTS_KEY2 = "events:gdelt";
 var LOGICAL_TTL_MS = CACHE_TTL.events;
 var REDIS_TTL_SEC = 9e3;
 var BACKFILL_KEY = "events:backfill-ts";
 var BACKFILL_COOLDOWN_MS = 36e5;
-var LLM_EVENTS_KEY2 = "events:llm";
+var LLM_EVENTS_KEY_ACTIVE2 = "events:llm:v3";
+var LLM_SUMMARY_KEY_ACTIVE_NAME = "events:llm-summary:v3";
 var LLM_PROCESS_KEY2 = "events:llm-process-ts";
 var LLM_LOGICAL_TTL_MS = 9e5;
-var LLM_REDIS_TTL_SEC4 = 9e3;
-var LLM_SUMMARY_KEY2 = "events:llm-summary";
+var LLM_REDIS_TTL_SEC3 = 9e3;
 var LLM_SUMMARY_TTL_SEC2 = 86400;
 async function loadRecentEnrichedEvents(limit) {
-  const version = getPipelineVersion();
-  const key = version === "v3" ? "events:llm:v3" : version === "v2" ? "events:llm:v2" : LLM_EVENTS_KEY2;
   try {
-    const cached = await cacheGetSafe(key, 0);
+    const cached = await cacheGetSafe(LLM_EVENTS_KEY_ACTIVE2, 0);
     const events = toEntityArray(cached?.data);
     if (events.length === 0) return [];
+    const confidenceByGroupKey = /* @__PURE__ */ new Map();
+    const recentEvents = llmProgress.recentEvents ?? [];
+    for (const r of recentEvents) {
+      if (r.groupKey && typeof r.confidence === "number") {
+        confidenceByGroupKey.set(r.groupKey, r.confidence);
+      }
+    }
     return events.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit).map((e) => {
       const d = e.data ?? {};
-      const groupKey = e.id.replace(/^llm-v2-/, "").replace(/-\d+$/, "");
+      const groupKey = e.id.replace(/^llm-v3-/, "").replace(/-\d+$/, "");
       return {
         groupKey,
         location: d.location ?? {
@@ -83766,7 +82642,10 @@ async function loadRecentEnrichedEvents(limit) {
           landmark: null
         },
         precision: d.precision ?? "region",
-        confidence: d.confidence ?? 0,
+        // WR-05: fallback to 0 ONLY when no recent-events entry exists
+        // for this groupKey (e.g., cold start / progress singleton was
+        // cleared between runs while v3 cache survived).
+        confidence: confidenceByGroupKey.get(groupKey) ?? 0,
         reasoning: d.reasoning ?? "",
         weaponType: d.weaponType ?? null,
         targetType: d.targetType ?? null,
@@ -83798,7 +82677,7 @@ async function recordBackfillTimestamp() {
 }
 async function recordLLMTimestamp() {
   try {
-    await redis.set(LLM_PROCESS_KEY2, Date.now(), { ex: LLM_REDIS_TTL_SEC4 });
+    await redis.set(LLM_PROCESS_KEY2, Date.now(), { ex: LLM_REDIS_TTL_SEC3 });
   } catch {
   }
 }
@@ -83815,23 +82694,8 @@ function coerceCachedEvents(cached) {
   return { ...cached, data: toEntityArray(cached.data) };
 }
 var eventsRouter = Router6();
-var PIPELINE_OVERRIDE_KEY2 = "events:llm-pipeline-override";
-var PIPELINE_OVERRIDE_TTL_SEC2 = 7 * 24 * 3600;
-async function refreshPipelineOverride() {
-  try {
-    const v = await redis.get(PIPELINE_OVERRIDE_KEY2);
-    if (v === "v1" || v === "v2" || v === "v3") {
-      setPipelineOverride(v);
-    } else {
-      setPipelineOverride(null);
-    }
-  } catch {
-  }
-}
 eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
-  await refreshPipelineOverride();
-  const version = getPipelineVersion();
-  const LLM_SUMMARY_KEY_ACTIVE = version === "v3" ? "events:llm-summary:v3" : version === "v2" ? "events:llm-summary:v2" : LLM_SUMMARY_KEY2;
+  const LLM_SUMMARY_KEY_ACTIVE2 = LLM_SUMMARY_KEY_ACTIVE_NAME;
   const [dlqRecent, recentEvents, paused, pipelineFlips] = await Promise.all([
     listDLQ(50).catch(() => []),
     loadRecentEnrichedEvents(50).catch(() => []),
@@ -83867,7 +82731,7 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
     return res.json({ ...llmProgress, ...common });
   }
   try {
-    const summary = await cacheGetSafe(LLM_SUMMARY_KEY_ACTIVE, 0);
+    const summary = await cacheGetSafe(LLM_SUMMARY_KEY_ACTIVE2, 0);
     if (summary?.data) {
       return res.json({ stage: "idle", lastRun: summary.data, ...common });
     }
@@ -83891,9 +82755,7 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
         resetsAt: quota.resetsAt
       });
     }
-    const replayVersion = getPipelineVersion();
-    const cacheKey2 = replayVersion === "v3" ? "events:llm:v3" : "events:llm:v2";
-    const cached = await cacheGetSafe(cacheKey2, 0);
+    const cached = await cacheGetSafe(LLM_EVENTS_KEY_ACTIVE2, 0);
     const existing = toEntityArray(cached?.data).find((e) => e.id.includes(groupKey));
     if (!existing) return res.status(404).json({ error: "not_found" });
     const rawCache = await cacheGetSafe(EVENTS_KEY2, 0);
@@ -83902,21 +82764,17 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
     const group = groups.find((g) => g.key === groupKey);
     if (!group) return res.status(404).json({ error: "group_gone" });
     try {
-      let diffPayload = null;
-      if (replayVersion === "v3") {
-        const extraction = await processEventGroupsV3([group]);
-        const first = extraction?.events?.[0] ?? null;
-        diffPayload = { old: existing, new: first };
-      } else {
-        const extraction = await processEventGroupsV2([group]);
-        const first = extraction?.events?.[0] ?? null;
-        diffPayload = { old: existing, new: first };
-      }
+      const extraction = await processEventGroupsV3([group]);
+      const first = extraction?.events?.[0] ?? null;
+      const diffPayload = {
+        old: existing,
+        new: first
+      };
       await appendOperatorAuditEntry({
         timestamp: Date.now(),
         bearerFingerprint: fingerprint,
         operation: "replay",
-        args: { groupKey, replayVersion },
+        args: { groupKey, replayVersion: "v3" },
         result: "ok"
       });
       return res.json(diffPayload);
@@ -83928,108 +82786,21 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
     }
   });
 }
-{
-  eventsRouter.get("/llm-pipeline", dashboardAuth, async (_req, res) => {
-    await refreshPipelineOverride();
-    const override = getPipelineOverride();
-    const effective = getPipelineVersion();
-    return res.json({ effective, override, source: override ? "override" : "env" });
-  });
-  eventsRouter.post("/llm-pipeline", dashboardAuth, async (req, res) => {
-    const body = req.body ?? {};
-    const version = body.version;
-    if (version !== "v1" && version !== "v2" && version !== "v3" && version !== null) {
-      return res.status(400).json({ error: 'version must be "v1", "v2", "v3", or null' });
-    }
-    await refreshPipelineOverride();
-    const fromVersion = getPipelineVersion();
-    try {
-      if (version === null) {
-        await redis.del(PIPELINE_OVERRIDE_KEY2);
-        setPipelineOverride(null);
-      } else {
-        await redis.set(PIPELINE_OVERRIDE_KEY2, version, { ex: PIPELINE_OVERRIDE_TTL_SEC2 });
-        setPipelineOverride(version);
-      }
-    } catch (err) {
-      return res.status(500).json({
-        error: "override_write_failed",
-        detail: String(err).slice(0, 200)
-      });
-    }
-    const toVersion = getPipelineVersion();
-    if (fromVersion !== toVersion) {
-      await appendPipelineAudit({
-        ts: Date.now(),
-        from: fromVersion,
-        to: toVersion,
-        trigger: "manual:operator_post",
-        operator: process.env.NODE_ENV === "production" ? "production" : "dev",
-        reason: typeof body.reason === "string" ? body.reason.slice(0, 500) : void 0
-      });
-    }
-    await appendOperatorAuditEntry({
-      timestamp: Date.now(),
-      bearerFingerprint: bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? ""),
-      operation: "pipeline-swap",
-      args: { version },
-      result: "ok"
-    });
-    const effective = getPipelineVersion();
-    return res.json({
-      effective,
-      override: getPipelineOverride(),
-      source: version ? "override" : "env"
-    });
-  });
-}
 eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
   const { backfill: forceBackfill } = res.locals.validatedQuery;
-  await refreshPipelineOverride();
-  const version = getPipelineVersion();
-  const pipelineV2 = version === "v2";
-  const pipelineV3 = version === "v3";
-  const LLM_EVENTS_KEY_ACTIVE = pipelineV3 ? "events:llm:v3" : pipelineV2 ? "events:llm:v2" : LLM_EVENTS_KEY2;
-  const LLM_SUMMARY_KEY_ACTIVE = pipelineV3 ? "events:llm-summary:v3" : pipelineV2 ? "events:llm-summary:v2" : LLM_SUMMARY_KEY2;
+  const LLM_SUMMARY_KEY_ACTIVE2 = LLM_SUMMARY_KEY_ACTIVE_NAME;
   let llmCached = await cacheGetSafe(
-    LLM_EVENTS_KEY_ACTIVE,
+    LLM_EVENTS_KEY_ACTIVE2,
     LLM_LOGICAL_TTL_MS
   );
   if (llmCached) llmCached = coerceCachedEvents(llmCached);
   if (llmCached && !llmCached.stale) {
     return sendNormalizedEvents(res, llmCached);
   }
-  if (pipelineV3 && !llmCached?.data) {
-    let bridgeV2 = await cacheGetSafe("events:llm:v2", LLM_LOGICAL_TTL_MS);
-    if (bridgeV2) bridgeV2 = coerceCachedEvents(bridgeV2);
-    if (bridgeV2 && !bridgeV2.stale) {
-      return sendNormalizedEvents(res, bridgeV2);
-    }
-    let bridgeV1 = await cacheGetSafe(LLM_EVENTS_KEY2, LLM_LOGICAL_TTL_MS);
-    if (bridgeV1) bridgeV1 = coerceCachedEvents(bridgeV1);
-    if (bridgeV1 && !bridgeV1.stale) {
-      return sendNormalizedEvents(res, bridgeV1);
-    }
-    if (bridgeV2?.data) {
-      llmCached = bridgeV2;
-    } else if (bridgeV1?.data) {
-      llmCached = bridgeV1;
-    }
-  }
-  if (pipelineV2 && !llmCached?.data) {
-    let llmCachedV1 = await cacheGetSafe(LLM_EVENTS_KEY2, LLM_LOGICAL_TTL_MS);
-    if (llmCachedV1) llmCachedV1 = coerceCachedEvents(llmCachedV1);
-    if (llmCachedV1 && !llmCachedV1.stale) {
-      return sendNormalizedEvents(res, llmCachedV1);
-    }
-    if (llmCachedV1?.data && !llmCached?.data) {
-      llmCached = llmCachedV1;
-    }
-  }
   if (!llmCached?.data) {
-    const devData = pipelineV3 || pipelineV2 ? loadDevLLMCacheV2() : loadDevLLMCache();
+    const devData = loadDevLLMCacheV2();
     if (devData) {
-      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, devData, LLM_REDIS_TTL_SEC4);
+      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE2, devData, LLM_REDIS_TTL_SEC3);
       const geocoded = devData.filter(
         (e) => e.data.precision && e.data.precision !== "region"
       ).length;
@@ -84042,11 +82813,11 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
         durationMs: 0,
         error: null,
         source: "dev-file-cache",
-        schemaVersion: version
+        schemaVersion: "v3"
       };
-      await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE, summary, LLM_SUMMARY_TTL_SEC2);
+      await cacheSetSafe(LLM_SUMMARY_KEY_ACTIVE2, summary, LLM_SUMMARY_TTL_SEC2);
       await recordLLMTimestamp();
-      log24.info({ count: devData.length }, "served LLM events from dev file cache");
+      log21.info({ count: devData.length }, "served LLM events from dev file cache");
       return sendNormalizedEvents(res, { data: devData, stale: false, lastFresh: Date.now() });
     }
   }
@@ -84067,7 +82838,7 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
         }));
       }
     } catch {
-      log24.warn("failed to fetch Bellingcat articles for corroboration");
+      log21.warn("failed to fetch Bellingcat articles for corroboration");
     }
     const fresh = await fetchEvents(bellingcatArticles);
     const eventMap = /* @__PURE__ */ new Map();
@@ -84084,9 +82855,9 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
           eventMap.set(event.id, event);
         }
         await recordBackfillTimestamp();
-        log24.info({ count: backfillData.length }, "backfill: merged historical events");
+        log21.info({ count: backfillData.length }, "backfill: merged historical events");
       } catch (backfillErr) {
-        log24.warn({ err: backfillErr }, "backfill failed (non-fatal)");
+        log21.warn({ err: backfillErr }, "backfill failed (non-fatal)");
       }
     }
     for (const event of fresh) {
@@ -84121,7 +82892,7 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
       lastFresh: Date.now()
     });
   } catch (err) {
-    log24.error({ err }, "upstream error");
+    log21.error({ err }, "upstream error");
     if (cached) {
       const pruned = cached.data.filter((e) => e.timestamp >= WAR_START);
       sendNormalizedEvents(res, {
@@ -84137,7 +82908,7 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
 
 // server/routes/flights.ts
 import { Router as Router7 } from "express";
-import { z as z7 } from "zod";
+import { z as z6 } from "zod";
 
 // server/lib/icaoCountry.ts
 var ICAO_RANGES = [
@@ -84231,7 +83002,7 @@ function normalizeAircraft(ac) {
 }
 
 // server/adapters/adsb-lol.ts
-var log25 = logger.child({ module: "adsb-lol" });
+var log22 = logger.child({ module: "adsb-lol" });
 var BASE_URL = "https://api.adsb.lol";
 var FETCH_TIMEOUT = 1e4;
 async function fetchFlights() {
@@ -84247,12 +83018,12 @@ async function fetchFlights() {
   const data = await res.json();
   const aircraft = data.ac ?? [];
   const flights = aircraft.map(normalizeAircraft).filter((f) => f !== null);
-  log25.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
+  log22.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
   return flights;
 }
 
 // server/adapters/opensky.ts
-var log26 = logger.child({ module: "opensky" });
+var log23 = logger.child({ module: "opensky" });
 var OPENSKY_TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
 var OPENSKY_API_URL = "https://opensky-network.org/api";
 var FETCH_TIMEOUT2 = 1e4;
@@ -84329,15 +83100,15 @@ async function fetchFlights2(bbox) {
   const data = await res.json();
   const states = data.states ?? [];
   const flights = states.map(normalizeFlightState).filter((f) => f !== null);
-  log26.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
+  log23.info({ count: flights.length, durationMs: Date.now() - start }, "fetched flights");
   return flights;
 }
 
 // server/routes/flights.ts
 init_redis();
-var log27 = logger.child({ module: "flights" });
-var flightsQuerySchema = z7.object({
-  source: z7.enum(["opensky", "adsblol"]).default("adsblol")
+var log24 = logger.child({ module: "flights" });
+var flightsQuerySchema = z6.object({
+  source: z6.enum(["opensky", "adsblol"]).default("adsblol")
 });
 var CACHE_KEYS = {
   opensky: "flights:opensky",
@@ -84381,7 +83152,7 @@ flightsRouter.get("/", validateQuery(flightsQuerySchema), async (_req, res) => {
       lastFresh: Date.now()
     });
   } catch (err) {
-    log27.error({ err, source }, "upstream error");
+    log24.error({ err, source }, "upstream error");
     if (err instanceof RateLimitError) {
       if (cached) {
         return sendValidated(res, flightsResponseSchema, { ...cached, rateLimited: true });
@@ -84398,13 +83169,13 @@ flightsRouter.get("/", validateQuery(flightsQuerySchema), async (_req, res) => {
 
 // server/routes/geocode.ts
 import { Router as Router8 } from "express";
-import { z as z8 } from "zod";
+import { z as z7 } from "zod";
 init_redis();
-var geocodeQuerySchema = z8.object({
-  lat: z8.coerce.number().min(-90).max(90),
-  lon: z8.coerce.number().min(-180).max(180)
+var geocodeQuerySchema = z7.object({
+  lat: z7.coerce.number().min(-90).max(90),
+  lon: z7.coerce.number().min(-180).max(180)
 });
-var GEOCODE_CACHE_PREFIX3 = "geocode:";
+var GEOCODE_CACHE_PREFIX2 = "geocode:";
 var GEOCODE_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
 var GEOCODE_REDIS_TTL_SEC = 90 * 24 * 60 * 60;
 var geocodeRouter = Router8();
@@ -84412,7 +83183,7 @@ geocodeRouter.get("/", validateQuery(geocodeQuerySchema), async (_req, res) => {
   const { lat, lon } = res.locals.validatedQuery;
   const qLat = Math.round(lat * 100) / 100;
   const qLon = Math.round(lon * 100) / 100;
-  const cacheKey2 = `${GEOCODE_CACHE_PREFIX3}${qLat},${qLon}`;
+  const cacheKey2 = `${GEOCODE_CACHE_PREFIX2}${qLat},${qLon}`;
   const cached = await cacheGetSafe(cacheKey2, GEOCODE_TTL_MS);
   if (cached) {
     res.json(cached);
@@ -84428,39 +83199,39 @@ init_redis();
 import { Router as Router9 } from "express";
 
 // server/lib/healthSchema.ts
-import { z as z9 } from "zod";
-var healthStatusEnum = z9.enum(["healthy", "degraded", "unhealthy", "unknown"]);
-var healthTierEnum = z9.enum(["critical", "non-critical", "static", "probe-only", "cron"]);
-var endpointHealthSchema = z9.object({
-  name: z9.string(),
+import { z as z8 } from "zod";
+var healthStatusEnum = z8.enum(["healthy", "degraded", "unhealthy", "unknown"]);
+var healthTierEnum = z8.enum(["critical", "non-critical", "static", "probe-only", "cron"]);
+var endpointHealthSchema = z8.object({
+  name: z8.string(),
   status: healthStatusEnum,
   tier: healthTierEnum,
   /** Unix ms of the last successful probe; null when never seen. */
-  lastSuccessTs: z9.number().nullable(),
+  lastSuccessTs: z8.number().nullable(),
   /** Sanitized error message from the last failed probe; null when last probe succeeded. */
-  lastErrorReason: z9.string().nullable(),
+  lastErrorReason: z8.string().nullable(),
   /** Age of the cache entry / live state, in ms. null = no data observed yet. */
-  freshnessMs: z9.number().nullable(),
+  freshnessMs: z8.number().nullable(),
   /** D-25 freshness budget per endpoint. 0 for probe-only endpoints. */
-  freshnessThresholdMs: z9.number().int().nonnegative(),
+  freshnessThresholdMs: z8.number().int().nonnegative(),
   /** Probe round-trip duration; null when the probe failed before measurement. */
-  latencyMs: z9.number().nullable()
+  latencyMs: z8.number().nullable()
 }).strict();
-var tierRollupSchema = z9.object({
-  healthy: z9.number().int().nonnegative(),
-  degraded: z9.number().int().nonnegative(),
-  unhealthy: z9.number().int().nonnegative(),
-  unknown: z9.number().int().nonnegative()
+var tierRollupSchema = z8.object({
+  healthy: z8.number().int().nonnegative(),
+  degraded: z8.number().int().nonnegative(),
+  unhealthy: z8.number().int().nonnegative(),
+  unknown: z8.number().int().nonnegative()
 }).strict();
-var probeOnlyRollupSchema = z9.object({
-  healthy: z9.number().int().nonnegative(),
-  unhealthy: z9.number().int().nonnegative(),
-  unknown: z9.number().int().nonnegative()
+var probeOnlyRollupSchema = z8.object({
+  healthy: z8.number().int().nonnegative(),
+  unhealthy: z8.number().int().nonnegative(),
+  unknown: z8.number().int().nonnegative()
 }).strict();
-var healthResponseSchema = z9.object({
+var healthResponseSchema = z8.object({
   /** Map keyed by endpoint name (matches SOURCE_KEYS keys + non-cache endpoints). */
-  endpoints: z9.record(z9.string(), endpointHealthSchema),
-  summary: z9.object({
+  endpoints: z8.record(z8.string(), endpointHealthSchema),
+  summary: z8.object({
     critical: tierRollupSchema,
     nonCritical: tierRollupSchema,
     static: tierRollupSchema,
@@ -84468,11 +83239,11 @@ var healthResponseSchema = z9.object({
     cron: tierRollupSchema
   }).strict(),
   /** Unix ms when the route handler assembled this response. */
-  generatedAt: z9.number()
+  generatedAt: z8.number()
 }).strict();
 
 // server/routes/health.ts
-var log28 = logger.child({ module: "health" });
+var log25 = logger.child({ module: "health" });
 var healthRouter = Router9();
 var PROBE_TIMEOUT_MS = 2e3;
 function withTimeout2(promise, ms, label) {
@@ -84701,7 +83472,7 @@ healthRouter.get("/", async (_req, res) => {
     const tier = TIER_BY_ENDPOINT[name];
     const threshold = FRESHNESS_THRESHOLDS_MS[name];
     if (tier === void 0 || threshold === void 0) {
-      log28.warn({ name }, "probe ran but tier or threshold not registered; skipping");
+      log25.warn({ name }, "probe ran but tier or threshold not registered; skipping");
       continue;
     }
     const status = deriveStatus(probe.freshnessMs, threshold, probe.hadError);
@@ -84725,7 +83496,7 @@ healthRouter.get("/", async (_req, res) => {
     try {
       healthResponseSchema.parse(response);
     } catch (err) {
-      log28.error({ err }, "/api/health response failed schema validation in dev");
+      log25.error({ err }, "/api/health response failed schema validation in dev");
     }
   }
   res.json(response);
@@ -84733,10 +83504,10 @@ healthRouter.get("/", async (_req, res) => {
 
 // server/routes/markets.ts
 import { Router as Router10 } from "express";
-import { z as z10 } from "zod";
+import { z as z9 } from "zod";
 
 // server/adapters/yahoo-finance.ts
-var log29 = logger.child({ module: "yahoo-finance" });
+var log26 = logger.child({ module: "yahoo-finance" });
 var TICKERS = ["BZ=F", "CL=F", "XLE", "USO", "XOM"];
 var DISPLAY_NAMES = {
   "BZ=F": "Brent",
@@ -84760,19 +83531,19 @@ async function fetchTicker(symbol, range = "1d") {
       signal: AbortSignal.timeout(1e4)
     });
     if (!resp.ok) {
-      log29.warn({ symbol, status: resp.status }, "HTTP error");
+      log26.warn({ symbol, status: resp.status }, "HTTP error");
       return null;
     }
     const json = await resp.json();
     const result = json.chart?.result?.[0];
     if (!result) {
-      log29.warn({ symbol }, "no chart result");
+      log26.warn({ symbol }, "no chart result");
       return null;
     }
     const { meta, timestamp: rawTimestamps, indicators } = result;
     const quote = indicators?.quote?.[0];
     if (!meta || !rawTimestamps || !quote) {
-      log29.warn({ symbol }, "missing meta/timestamps/quote");
+      log26.warn({ symbol }, "missing meta/timestamps/quote");
       return null;
     }
     const price = meta.regularMarketPrice;
@@ -84809,7 +83580,7 @@ async function fetchTicker(symbol, range = "1d") {
       history: { timestamps, closes, highs, lows }
     };
   } catch (err) {
-    log29.warn({ err, symbol }, "fetch error");
+    log26.warn({ err, symbol }, "fetch error");
     return null;
   }
 }
@@ -84820,9 +83591,9 @@ async function fetchMarkets(range = "1d") {
 
 // server/routes/markets.ts
 init_redis();
-var log30 = logger.child({ module: "markets" });
-var marketsQuerySchema = z10.object({
-  range: z10.enum(["1d", "5d", "1mo", "ytd"]).default("1d")
+var log27 = logger.child({ module: "markets" });
+var marketsQuerySchema = z9.object({
+  range: z9.enum(["1d", "5d", "1mo", "ytd"]).default("1d")
 });
 var marketsRouter = Router10();
 marketsRouter.get("/", validateQuery(marketsQuerySchema), async (_req, res) => {
@@ -84836,24 +83607,24 @@ marketsRouter.get("/", validateQuery(marketsQuerySchema), async (_req, res) => {
     const quotes = await fetchMarkets(range);
     if (quotes.length > 0) {
       await cacheSetSafe(cacheKey2, quotes, MARKETS_REDIS_TTL_SEC);
-      log30.info(
+      log27.info(
         { count: quotes.length, total: 5, range, tickers: quotes.map((q) => q.symbol) },
         "fetched tickers"
       );
       res.json({ data: quotes, stale: false, lastFresh: Date.now() });
     } else if (cached) {
-      log30.warn("all tickers failed, serving stale cache");
+      log27.warn("all tickers failed, serving stale cache");
       res.json({
         data: cached.data,
         stale: true,
         lastFresh: cached.lastFresh
       });
     } else {
-      log30.error("all tickers failed with no cache available");
+      log27.error("all tickers failed with no cache available");
       res.status(502).json({ error: "No market data available", code: "UPSTREAM_ERROR", statusCode: 502 });
     }
   } catch (err) {
-    log30.error({ err }, "upstream error");
+    log27.error({ err }, "upstream error");
     if (cached) {
       res.json({
         data: cached.data,
@@ -84872,7 +83643,7 @@ marketsRouter.get("/", validateQuery(marketsQuerySchema), async (_req, res) => {
 
 // server/routes/news.ts
 import { Router as Router11 } from "express";
-import { z as z11 } from "zod";
+import { z as z10 } from "zod";
 
 // server/lib/newsClustering.ts
 import { createHash as createHash2 } from "crypto";
@@ -84999,7 +83770,7 @@ async function fetchGdeltArticles() {
 
 // server/adapters/rss.ts
 import { XMLParser } from "fast-xml-parser";
-var log31 = logger.child({ module: "rss" });
+var log28 = logger.child({ module: "rss" });
 function stripHtml(html) {
   return html.replace(/<[^>]*>/g, "").trim();
 }
@@ -85059,7 +83830,7 @@ async function fetchAllRssFeeds() {
     if (result.status === "fulfilled") {
       articles.push(...result.value);
     } else {
-      log31.warn({ err: result.reason }, "feed fetch failed");
+      log28.warn({ err: result.reason }, "feed fetch failed");
     }
   }
   return articles;
@@ -85437,9 +84208,9 @@ function filterAndScoreArticles(articles) {
 }
 
 // server/routes/news.ts
-var log32 = logger.child({ module: "news" });
-var newsQuerySchema = z11.object({
-  refresh: z11.enum(["true", "false"]).optional().transform((v) => v === "true")
+var log29 = logger.child({ module: "news" });
+var newsQuerySchema = z10.object({
+  refresh: z10.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
 var NEWS_FEED_KEY = "news:feed";
 var newsRouter = Router11();
@@ -85453,7 +84224,7 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
     const [gdeltArticles, rssArticles] = await Promise.all([
       fetchGdeltArticles(),
       fetchAllRssFeeds().catch((err) => {
-        log32.warn({ err }, "RSS fetch failed (non-fatal)");
+        log29.warn({ err }, "RSS fetch failed (non-fatal)");
         return [];
       })
     ]);
@@ -85477,10 +84248,10 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
     await cacheSetSafe(NEWS_FEED_KEY, clusters, NEWS_REDIS_TTL_SEC);
     const gdeltCount = gdeltArticles.length;
     const rssCount = rssArticles.length;
-    log32.info({ gdeltCount, rssCount, clusterCount: clusters.length }, "fetched and clustered news");
+    log29.info({ gdeltCount, rssCount, clusterCount: clusters.length }, "fetched and clustered news");
     res.json({ data: clusters, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log32.error({ err }, "upstream error");
+    log29.error({ err }, "upstream error");
     if (cached) {
       res.json({ data: cached.data, stale: true, lastFresh: cached.lastFresh });
     } else {
@@ -85492,14 +84263,8 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
 // server/routes/operator-status.ts
 init_redis();
 import { Router as Router12 } from "express";
-var log33 = logger.child({ module: "operator-status" });
+var log30 = logger.child({ module: "operator-status" });
 var operatorStatusRouter = Router12();
-function humanizeTtl(ttlSeconds) {
-  if (ttlSeconds == null || ttlSeconds <= 0) return "no pin active";
-  const hours = Math.floor(ttlSeconds / 3600);
-  const minutes = Math.floor(ttlSeconds % 3600 / 60);
-  return `expires in ${hours}h ${minutes}m`;
-}
 operatorStatusRouter.get(
   "/operator-status",
   dashboardAuth,
@@ -85510,7 +84275,7 @@ operatorStatusRouter.get(
       try {
         auditMembers = await redis.smembers("operator:audit-log") ?? [];
       } catch (err) {
-        log33.warn({ err }, "failed to read operator:audit-log");
+        log30.warn({ err }, "failed to read operator:audit-log");
       }
       const entries = auditMembers.map((raw) => {
         try {
@@ -85539,26 +84304,6 @@ operatorStatusRouter.get(
         bearerFingerprint: bearerFingerprint2,
         ...counts
       }));
-      let pinTtlRaw = -2;
-      try {
-        pinTtlRaw = await redis.ttl("events:llm-pipeline-override");
-      } catch (err) {
-        log33.warn({ err }, "failed to read events:llm-pipeline-override TTL");
-      }
-      let pinVersion = null;
-      if (pinTtlRaw > 0) {
-        try {
-          const v = await redis.get("events:llm-pipeline-override");
-          pinVersion = typeof v === "string" ? v : null;
-        } catch (err) {
-          log33.warn({ err }, "failed to read events:llm-pipeline-override value");
-        }
-      }
-      const pinTtl = pinTtlRaw > 0 ? {
-        version: pinVersion,
-        ttlSeconds: pinTtlRaw,
-        human: humanizeTtl(pinTtlRaw)
-      } : null;
       let advEval = null;
       try {
         const raw = await redis.get(
@@ -85570,11 +84315,11 @@ operatorStatusRouter.get(
           advEval = raw;
         }
       } catch (err) {
-        log33.warn({ err }, "failed to read events:llm-eval-adversarial:v3");
+        log30.warn({ err }, "failed to read events:llm-eval-adversarial:v3");
       }
-      res.json({ audit24h, byBearer, pinTtl, advEval });
+      res.json({ audit24h, byBearer, advEval });
     } catch (err) {
-      log33.error({ err }, "/api/operator-status failed");
+      log30.error({ err }, "/api/operator-status failed");
       res.status(500).json({ error: "operator_status_failed" });
     }
   }
@@ -85584,7 +84329,7 @@ operatorStatusRouter.get(
 init_redis();
 import { timingSafeEqual as timingSafeEqual4 } from "crypto";
 import { Router as Router13 } from "express";
-var log34 = logger.child({ module: "refresh-events-cron" });
+var log31 = logger.child({ module: "refresh-events-cron" });
 var refreshEventsCronRouter = Router13();
 refreshEventsCronRouter.get("/", async (req, res) => {
   if (env.CRON_SECRET) {
@@ -85605,13 +84350,13 @@ refreshEventsCronRouter.get("/", async (req, res) => {
       forceCooldown
     });
     const durationMs = Date.now() - t0;
-    log34.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
+    log31.info({ result, durationMs, forceCooldown }, "refresh-events cron dispatched");
     await cacheSetSafe("cron:lastTick:refresh-events", Date.now(), CRON_LASTTICK_TTL_SEC);
     res.status(200).json({ ok: true, durationMs, ...result });
   } catch (err) {
     const durationMs = Date.now() - t0;
     const message = err instanceof Error ? err.message : String(err);
-    log34.error({ err: message, durationMs }, "refresh-events cron failed");
+    log31.error({ err: message, durationMs }, "refresh-events cron failed");
     res.status(500).json({
       ok: false,
       error: "refresh_failed",
@@ -85691,7 +84436,7 @@ async function collectShips() {
 
 // server/routes/ships.ts
 init_redis();
-var log35 = logger.child({ module: "ships" });
+var log32 = logger.child({ module: "ships" });
 var shipsRouter = Router14();
 var SHIPS_KEY = "ships:ais";
 var LOGICAL_TTL_MS2 = 3e4;
@@ -85724,7 +84469,7 @@ shipsRouter.get("/", async (_req, res) => {
     await cacheSetSafe(SHIPS_KEY, merged, REDIS_TTL_SEC2);
     res.json({ data: merged, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log35.error({ err }, "collectShips error");
+    log32.error({ err }, "collectShips error");
     if (cached) {
       res.json({ ...cached, stale: true });
     } else {
@@ -85735,11 +84480,11 @@ shipsRouter.get("/", async (_req, res) => {
 
 // server/routes/sites.ts
 import { Router as Router15 } from "express";
-import { z as z12 } from "zod";
+import { z as z11 } from "zod";
 init_redis();
-var log36 = logger.child({ module: "sites" });
-var sitesQuerySchema = z12.object({
-  refresh: z12.enum(["true", "false"]).optional().transform((v) => v === "true")
+var log33 = logger.child({ module: "sites" });
+var sitesQuerySchema = z11.object({
+  refresh: z11.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
 var SITES_KEY2 = "sites:v3";
 var LOGICAL_TTL_MS3 = SITES_CACHE_TTL;
@@ -85769,7 +84514,7 @@ sitesRouter.get("/", validateQuery(sitesQuerySchema), async (_req, res) => {
         { sites: snapshot.sites, filterStats: snapshot.stats },
         REDIS_TTL_SEC3
       );
-      log36.info(
+      log33.info(
         { count: snapshot.sites.length, generatedAt: snapshot.generatedAt },
         "serving sites from committed snapshot; Overpass untouched"
       );
@@ -85792,7 +84537,7 @@ sitesRouter.get("/", validateQuery(sitesQuerySchema), async (_req, res) => {
       filterStats: stats
     });
   } catch (err) {
-    log36.error({ err }, "Overpass error");
+    log33.error({ err }, "Overpass error");
     if (cached) {
       const payload = cached.data;
       sendValidated(res, sitesResponseSchema, {
@@ -85827,10 +84572,10 @@ sourcesRouter.get("/", (_req, res) => {
 
 // server/routes/water.ts
 import { Router as Router17 } from "express";
-import { z as z13 } from "zod";
+import { z as z12 } from "zod";
 
 // server/adapters/open-meteo-precip.ts
-var log37 = logger.child({ module: "open-meteo-precip" });
+var log34 = logger.child({ module: "open-meteo-precip" });
 var REGIONAL_NORMALS_MM = {
   arid: 20,
   // Arabian Peninsula, central Iran, Sahara
@@ -85843,7 +84588,7 @@ function estimateNormalMm(lat, lng) {
   }
   return REGIONAL_NORMALS_MM.arid;
 }
-var BATCH_SIZE4 = 100;
+var BATCH_SIZE2 = 100;
 var TIMEOUT_MS3 = 3e4;
 var GRID_STEP = 0.5;
 function quantize(v) {
@@ -85862,17 +84607,17 @@ async function fetchPrecipitation(locations) {
     }
   }
   const uniqueCells = Array.from(cellMap.values());
-  log37.info(
+  log34.info(
     {
       locations: locations.length,
       uniqueCells: uniqueCells.length,
-      batches: Math.ceil(uniqueCells.length / BATCH_SIZE4)
+      batches: Math.ceil(uniqueCells.length / BATCH_SIZE2)
     },
     "starting precipitation fetch"
   );
   const cellResults = /* @__PURE__ */ new Map();
-  for (let i = 0; i < uniqueCells.length; i += BATCH_SIZE4) {
-    const batch = uniqueCells.slice(i, i + BATCH_SIZE4);
+  for (let i = 0; i < uniqueCells.length; i += BATCH_SIZE2) {
+    const batch = uniqueCells.slice(i, i + BATCH_SIZE2);
     const lats = batch.map((c) => c.lat.toFixed(2)).join(",");
     const lngs = batch.map((c) => c.lng.toFixed(2)).join(",");
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}&daily=precipitation_sum&past_days=30&forecast_days=0&timezone=UTC`;
@@ -85881,8 +84626,8 @@ async function fetchPrecipitation(locations) {
         signal: AbortSignal.timeout(TIMEOUT_MS3)
       });
       if (!res.ok) {
-        log37.warn(
-          { batch: Math.floor(i / BATCH_SIZE4), status: res.status },
+        log34.warn(
+          { batch: Math.floor(i / BATCH_SIZE2), status: res.status },
           "batch returned error, skipping"
         );
         continue;
@@ -85905,7 +84650,7 @@ async function fetchPrecipitation(locations) {
         });
       }
     } catch (batchErr) {
-      log37.warn({ err: batchErr, batch: Math.floor(i / BATCH_SIZE4) }, "batch failed, skipping");
+      log34.warn({ err: batchErr, batch: Math.floor(i / BATCH_SIZE2) }, "batch failed, skipping");
       continue;
     }
   }
@@ -85922,7 +84667,7 @@ async function fetchPrecipitation(locations) {
       updatedAt: now
     });
   }
-  log37.info(
+  log34.info(
     { cells: cellResults.size, mappedLocations: results.length },
     "precipitation fetch complete"
   );
@@ -85931,7 +84676,7 @@ async function fetchPrecipitation(locations) {
 
 // server/routes/water.ts
 init_redis();
-var log38 = logger.child({ module: "water" });
+var log35 = logger.child({ module: "water" });
 function buildEmptyFilterStats(source, generatedAt) {
   return {
     rawCounts: {},
@@ -85956,19 +84701,19 @@ function buildEmptyFilterStats(source, generatedAt) {
     scoreHistogram: []
   };
 }
-var waterQuerySchema = z13.object({
-  refresh: z13.enum(["true", "false"]).optional().transform((v) => v === "true")
+var waterQuerySchema = z12.object({
+  refresh: z12.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
 var FACILITIES_KEY = "water:facilities:v3";
 var PRECIP_KEY = "water:precip";
 var waterRouter = Router17();
 waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
-  log38.info("GET /api/water hit");
+  log35.info("GET /api/water hit");
   const isCron = req.headers["user-agent"]?.includes("vercel-cron");
   const { refresh } = res.locals.validatedQuery;
   const forceRefresh = refresh && (isCron || process.env.NODE_ENV !== "production");
   const cached = await cacheGetSafe(FACILITIES_KEY, WATER_CACHE_TTL);
-  log38.info(
+  log35.info(
     { cacheHit: !!cached, count: cached?.data.facilities.length, stale: cached?.stale },
     "cache result"
   );
@@ -86014,7 +84759,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
         { facilities: snapshot.facilities, filterStats: snapshot.stats },
         WATER_REDIS_TTL_SEC
       );
-      log38.info(
+      log35.info(
         { count: snapshot.facilities.length, generatedAt: snapshot.generatedAt },
         "serving water facilities from committed snapshot; Overpass untouched"
       );
@@ -86038,7 +84783,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
       filterStats
     });
   } catch (err) {
-    log38.error({ err }, "Overpass error");
+    log35.error({ err }, "Overpass error");
     if (cached) {
       const payload = cached.data;
       sendValidated(res, waterResponseSchema, {
@@ -86052,7 +84797,7 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
         }
       });
     } else {
-      log38.warn("Overpass failed, returning empty");
+      log35.warn("Overpass failed, returning empty");
       sendValidated(res, waterResponseSchema, {
         data: [],
         stale: true,
@@ -86089,7 +84834,7 @@ waterRouter.get("/precip", validateQuery(waterQuerySchema), async (_req, res) =>
     }
     res.json({ data: precipData, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log38.error({ err }, "precipitation fetch error");
+    log35.error({ err }, "precipitation fetch error");
     if (cachedPrecip) {
       res.json({ data: cachedPrecip.data, stale: true, lastFresh: cachedPrecip.lastFresh });
     } else {
@@ -86151,7 +84896,7 @@ async function fetchWeather() {
 
 // server/routes/weather.ts
 init_redis();
-var log39 = logger.child({ module: "weather" });
+var log36 = logger.child({ module: "weather" });
 var weatherRouter = Router18();
 weatherRouter.get("/", async (_req, res) => {
   const cached = await cacheGetSafe(WEATHER_CACHE_KEY, WEATHER_CACHE_TTL);
@@ -86161,10 +84906,10 @@ weatherRouter.get("/", async (_req, res) => {
   try {
     const points = await fetchWeather();
     await cacheSetSafe(WEATHER_CACHE_KEY, points, WEATHER_REDIS_TTL_SEC);
-    log39.info({ count: points.length }, "fetched grid points");
+    log36.info({ count: points.length }, "fetched grid points");
     res.json({ data: points, stale: false, lastFresh: Date.now() });
   } catch (err) {
-    log39.error({ err }, "upstream error");
+    log36.error({ err }, "upstream error");
     if (cached) {
       res.json({
         data: cached.data,

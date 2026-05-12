@@ -26,6 +26,8 @@ context, decision, consequences, alternatives, references. See
 | [0007](./0007-water-stress-as-point-facilities.md)                         | Water stress as point facilities, not polygon fills         | Accepted                            |
 | [0008](./0008-ethnic-distribution-via-geoepr-with-hatched-overlays.md)     | Ethnic distribution via GeoEPR 2021 with hatched overlays   | Accepted                            |
 | [0009](./0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md) | Two-key split for LLM partial progress vs terminal reads    | Accepted                            |
+| [0010](./0010-v1-5-llm-pipeline-narrowing-and-deletion.md)                 | v1.5 LLM pipeline narrowing and deletion                    | Accepted                            |
+| [0011](./0011-v3-llm-pipeline-architecture.md)                             | v3 LLM pipeline architecture                                | Accepted                            |
 
 ## One-line summaries
 
@@ -63,6 +65,25 @@ a function`. Split observability (`events:llm:v2:partial`) from
   `coerceCachedEvents` reader guards. The lesson — accepted-rollout-
   window framing is never acceptable when it violates a writer/reader
   shape contract.
+- **ADR-0010 — v1.5 LLM pipeline narrowing and deletion.** Phase 29
+  retires the v1 + v2 extractors and narrows the provider cascade to
+  the 2 actually-used providers (NIM + OpenRouter). Phase 27.4
+  D-26/D-40 deep-rollback lock superseded; new rollback path is
+  `git revert <Phase 29 range>`. LLM-optional architecture proved by
+  integration test + runbook procedure. Vercel Pro upgrade landed in
+  the same phase so subsequent v1.5 phases tune against the 800s
+  maxDuration ceiling. Stub — Phase 36 will expand the milestone-close
+  rationale at the `<expand_at_36>` marker.
+- **ADR-0011 — v3 LLM pipeline architecture.** The positive description
+  of the pipeline that remains after ADR-0010's deletions. Six load-
+  bearing design properties: (1) cron-only writer, (2) cold-cache
+  self-heal, (3) terminal-key writes with observability-key envelope,
+  (4) parallel batches with circuit-breaker watchdog, (5) NIM-primary
+  cascade via `freeClaudeRouter` with OpenRouter fallback, (6) six-path
+  Nominatim location resolver. Each property maps to a specific v1 or
+  v2 production incident it was designed to prevent. Companion to
+  ADR-0009 (writer/reader-shape discipline) and ADR-0010 (deletion
+  context).
 
 ## Conventions
 

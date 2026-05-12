@@ -122,15 +122,17 @@ export function createApp() {
 
   // Phase 27.4.4 Plan 02 — dashboard auth probe (Bearer-token gated in prod;
   // bypassed in dev). Client calls GET /api/dashboard/auth-check before
-  // unhiding the DevApiStatus dashboard. Same middleware also gates
-  // /api/events/llm-pipeline + /api/events/llm-replay so the cutover POST
-  // and per-group replay reach the operator's laptop in production.
+  // unhiding the DevApiStatus dashboard. Phase 29 D-02 part A — the
+  // /api/events/llm-pipeline route is deleted; same middleware still gates
+  // /api/events/llm-replay so per-group replay reaches the operator's
+  // laptop in production.
   app.use('/api/dashboard', cacheControl(0, 0), dashboardAuthRouter);
 
   // Phase 28.2 W5 Plan 05 Task 7.5 — `/api/operator-status` aggregates
-  // operator:audit-log + events:llm-pipeline-override TTL +
-  // events:llm-eval-adversarial:v3 into a single Bearer-gated read for the
-  // merged DevApiStatus API Health tab Operator Actions block.
+  // operator:audit-log + events:llm-eval-adversarial:v3 into a single
+  // Bearer-gated read for the merged DevApiStatus API Health tab Operator
+  // Actions block. Phase 29 D-02 part A removed the pipeline-override TTL
+  // probe.
   app.use('/api', cacheControl(0, 0), operatorStatusRouter);
 
   // Phase 28.2 W6 Plan 06 Task 5 — `/api/audit-status` exposes the sidecar

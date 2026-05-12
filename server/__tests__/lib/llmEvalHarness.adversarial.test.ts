@@ -42,10 +42,8 @@ vi.mock('../../lib/llmTokenBudget.js', () => ({
   DAILY_LIMITS: { cerebras: 1_000_000, groq: 200_000 } as const,
   todayKey: vi.fn((p: string) => `llm:tokens:${p}:d`),
 }));
-// Phase 27.4.3 D-17 trigger — short-circuit so we don't reach into v3 on tests.
-vi.mock('../../lib/llmEventExtractor.v3.js', () => ({
-  checkEvalDropTrigger: vi.fn(async () => {}),
-}));
+// Phase 29 D-02 part A — checkEvalDropTrigger removed. The mock that
+// short-circuited the D-17 v3 -> v2 rollback path is gone with it.
 // llmProgress is a side-effect target of runEval; runAdversarialEval doesn't
 // touch it but the module is imported transitively.
 vi.mock('../../lib/llmProgress.js', () => ({

@@ -98,36 +98,38 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 **Started:** 2026-05-09
 **Predecessor:** v1.4 GDELT Redo & Performance (shipped 2026-05-08)
 **Acceptance gate:** `prod-connectivity-audit.yml` exit-0 with `audit:connectivity:last-result.allTiersGreen === true` for **3 consecutive runs** (LLM-RELI-07). Hitting this gate unblocks 999.5 (k6 load test) for promotion into v1.6.
-**Scope:** 8 phases (29–36) covering **43 requirements** across **8 tracks**: LLM-RELI (provider chain narrowing + NIM tuning + LLM-optional architecture), GHOST (dead-source-URL probing + pruning), ACTOR (actor metadata audit + canonical catalog + eval expansion), DOCS-INT (CLAUDE.md trim + JSDoc audit + Redis registry verification), REDIS-OPT (key inventory + classification + TTL right-sizing + budget delta), **SIMPLIFY (retire Hobby-era workarounds + dead-code purge — 7 reqs, the Pro upgrade and chain narrowing turn into actual code deletion)**, DOCS-PUB (README + architecture + runbook + ADR-0009 + degradation contract), DOCS-API (OpenAPI additions for 7 v1.4-introduced endpoints).
+**Scope:** 8 phases (29–36) covering **43 requirements** across **8 tracks**: LLM-RELI (provider chain narrowing + NIM tuning + LLM-optional architecture), GHOST (dead-source-URL probing + pruning), ACTOR (actor metadata audit + canonical catalog + eval expansion), DOCS-INT (CLAUDE.md trim + JSDoc audit + Redis registry verification), REDIS-OPT (key inventory + classification + TTL right-sizing + budget delta), **SIMPLIFY (retire Hobby-era workarounds + dead-code purge — 7 reqs, the Pro upgrade and chain narrowing turn into actual code deletion)**, DOCS-PUB (README + architecture + runbook + ADR-0010 + degradation contract), DOCS-API (OpenAPI additions for 7 v1.4-introduced endpoints).
 
 ### Phases
 
-- [ ] **Phase 29: LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + Cerebras/Groq Adapter Purge** — Retire Cerebras + Groq from the active v3 cascade (preserve as deep-rollback only); prove the map renders cleanly on raw GDELT when both NIM + OpenRouter keys are absent; upgrade Vercel project to Pro plan and bump `vercel.json` `maxDuration` from 300 → 800; purge the now-unused Cerebras + Groq adapter code paths from `server/adapters/llm-provider.ts` (SIMPLIFY-04).
+- [x] **Phase 29: LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + Cerebras/Groq Adapter Purge + v1/v2 Extractor Deletion + CLAUDE.md Trim** — Retire Cerebras + Groq from the active v3 cascade; **delete v1 + v2 extractor modules entirely** (modules + `POST /api/events/llm-pipeline` override endpoint + `events:llm-pipeline-override` Redis key + DevApiStatus Pin-to-v1/v2 buttons all removed; rationale folded into ADR-0010 at Phase 36 with stub written here — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` already occupies the 0009 slot); prove the map renders cleanly on raw GDELT when both NIM + OpenRouter keys are absent (CI integration test + runbook entry); upgrade Vercel project to Pro plan and bump `vercel.json` `maxDuration` from 300 → 800 as the **first** phase commit; purge the now-unused Cerebras + Groq adapter code paths from `server/adapters/llm-provider.ts` (SIMPLIFY-04); trim CLAUDE.md phase-history bloat down to current-state invariants targeting <10k tokens (DOCS-INT-01, pulled from Phase 34 on 2026-05-09). _(SIMPLIFY-06 v1 archive folded forward into deletion here — Phase 34's old criterion #8 becomes inapplicable.)_ (completed 2026-05-11)
 - [ ] **Phase 30: NIM Throttle Characterization + Cascade Tuning + Pro-Enabled Simplifications** — Empirically characterize NIM throttle window + RPM ceiling + recovery signal; tune `LLM_BATCH_SIZE`, `LLM_V3_CONCURRENCY`, retry/backoff parameters against measured data; retire the 28.2.6 incremental-flush mechanism (SIMPLIFY-01) and relax watchdog defaults (SIMPLIFY-03) — both are Hobby-era 300s-budget workarounds that the Pro 800s ceiling makes deletable.
 - [ ] **Phase 31: Cron Stability Validation (7-day Watch)** — Observe daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:llm:v3` healthy across ≥7 consecutive days under normal NIM availability.
 - [ ] **Phase 32: Ghost Event URL Liveness, Dashboard & Prune** — Probe `sourceURL` liveness out-of-band, persist results to Redis with TTL, surface dead-URL counts in API Health dashboard, and let the operator prune dead-URL events behind the existing Bearer gate.
 - [ ] **Phase 33: Actor Metadata Audit, Canonical Catalog & Eval Expansion** — Audit live `events:llm:v3` actor quality; commit canonical actor catalog; extend v3 prompt + schema with `actorConfidence`; extend ground-truth + adversarial fixtures; surface actor-quality counts in dashboard.
-- [ ] **Phase 34: Internal Docs + Redis Registry + Redis Optimization + Cleanup Sweep** — Trim CLAUDE.md phase-history bloat; bring LLM-pipeline JSDoc current; verify Redis key registry against actual writers/readers; produce key inventory artifact; classify load-bearing vs observability vs retire; right-size TTLs; measure pre/post command-budget delta. **Plus** retire `events:llm:v3:partial` (SIMPLIFY-02), audit + delete `freeClaudeRouter.ts` if orphaned (SIMPLIFY-05), archive v1 extractor to `_archive/` (SIMPLIFY-06), and measure final `api/vercel-entry.js` bundle-size delta vs v1.4's 1.72 MB baseline (SIMPLIFY-07).
+- [ ] **Phase 34: Internal Docs (JSDoc) + Redis Registry + Redis Optimization + Cleanup Sweep** — Bring LLM-pipeline JSDoc current; verify Redis key registry against actual writers/readers; produce key inventory artifact; classify load-bearing vs observability vs retire; right-size TTLs; measure pre/post command-budget delta. **Plus** retire `events:llm:v3:partial` (SIMPLIFY-02), audit + delete `freeClaudeRouter.ts` if orphaned (SIMPLIFY-05), and measure final `api/vercel-entry.js` bundle-size delta vs v1.4's 1.72 MB baseline (SIMPLIFY-07). _(DOCS-INT-01 CLAUDE.md trim moved to Phase 29 on 2026-05-09. SIMPLIFY-06 v1 archive folded into Phase 29's full deletion.)_
 - [ ] **Phase 35: Public Docs Sweep + OpenAPI Additions** — Update README, 10 architecture markdown files, 676-line SRE runbook, degradation contract for v1.4 + v1.5 surface; add 7 v1.4-introduced endpoints to the 1164-line OpenAPI 3.0.3 spec.
-- [ ] **Phase 36: ADR-0009 + Acceptance Gate Closeout** — Capture v1.5 LLM-pipeline decisions in a new ADR; observe `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs; lock the milestone close.
+- [ ] **Phase 36: ADR-0010 + Acceptance Gate Closeout** — Capture v1.5 LLM-pipeline decisions in a new ADR (ADR-0010 — the 0009 slot is taken by the existing Accepted two-key-split ADR); observe `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs; lock the milestone close.
 
 ### Phase Details
 
-### Phase 29: LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade
+### Phase 29: LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + CLAUDE.md Trim
 
-**Goal**: Active runtime LLM cascade narrowed to NIM + OpenRouter only, the map proven to render cleanly on raw GDELT when both keys are absent, **AND** the Vercel project upgraded to Pro so the daily LLM cron has 800s wall-clock (vs Hobby's 300s) — Phase 30's tuning happens against the Pro ceiling, not the Hobby ceiling.
+**Goal**: Active runtime LLM cascade narrowed to NIM + OpenRouter only, the map proven to render cleanly on raw GDELT when both keys are absent, the Vercel project upgraded to Pro so the daily LLM cron has 800s wall-clock (vs Hobby's 300s) — Phase 30's tuning happens against the Pro ceiling, not the Hobby ceiling — **AND** CLAUDE.md trimmed to current-state invariants. The CLAUDE.md trim ships in the same phase as the cascade narrowing because (a) the Cerebras + Groq narrative blocks become obsolete the moment SIMPLIFY-04 lands, so doing the trim later means re-reading stale prose; and (b) Phase 30/31's tuning + 7-day watch read CLAUDE.md as the working spec — a leaner doc improves their signal.
 **Depends on**: Nothing (first v1.5 phase; v1.4 base is stable).
-**Requirements**: LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04
+**Requirements**: LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06 (folded forward from Phase 34 on 2026-05-09 — full deletion not archive), DOCS-INT-01 (pulled from Phase 34 on 2026-05-09)
 **Success Criteria** (what must be TRUE):
 
 1. Operator inspecting the running pipeline (via `/api/events/llm-status` or DevApiStatus events tab) sees only `nim` and `openrouter` provider names appearing in `callHistory`; Cerebras + Groq are absent from the active cascade and from `isLLMConfigured` gating.
 2. With `NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` both unset locally (or `LLM_PIPELINE_ENABLED=false` if a kill-switch lands), `GET /api/events` still returns events sourced from raw GDELT through the Pitfall 1 cache bridge — the map continues to populate.
-3. v1 + v2 extractor code paths are still importable as deep-rollback safety per Phase 27.4 D-26/D-40 (operator can flip back via `POST /api/events/llm-pipeline {version: 'v1'}` or `'v2'`); a quick smoke test from the dev DevApiStatus pill exercises both paths.
+3. v1 + v2 extractor modules + the `POST /api/events/llm-pipeline` override route + the DevApiStatus Pin-to-v1/v2 buttons are DELETED (D-02 supersedes Phase 27.4 D-26/D-40 deep-rollback lock). Rollback path is `git revert <Phase 29 commit range>` — wall-clock minutes, not a Bearer-POST flip. Rationale captured in ADR-0010 stub written this phase.
 4. The existing degradation contract (`docs/degradation.md`) is honored — no regression in the "map never goes blank" guarantee under any provider-key permutation.
 5. **Vercel project `onthegrid.icm` is on the Pro plan** (operator action: upgrade in Vercel dashboard, $20/mo); `vercel.json` `functions["api/vercel-entry.js"].maxDuration` is bumped from 300 → 800; redeploy lands cleanly. Verifiable by running a longer-than-300s synthetic invocation against `/api/cron/refresh-events?force=true` without the function being killed at the 300s cliff.
-6. **Cerebras + Groq adapter dead code purged** (SIMPLIFY-04). `server/adapters/llm-provider.ts` runtime path no longer imports or branches on Cerebras / Groq. The synthetic `skipReason: 'no_client'` callHistory entries for those providers are gone. `CEREBRAS_API_KEY` / `GROQ_API_KEY` env-var checks removed from `isLLMConfigured` (`NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` are the only keys gating). v1 + v2 extractor _modules_ still importable for deep rollback per Criterion 3 — the purge is at the cascade-orchestration layer.
+6. **Cerebras + Groq adapter dead code purged** (SIMPLIFY-04). `server/adapters/llm-provider.ts` runtime path no longer imports or branches on Cerebras / Groq. The synthetic `skipReason: 'no_client'` callHistory entries for those providers are gone. `CEREBRAS_API_KEY` / `GROQ_API_KEY` env-var checks removed from `isLLMConfigured` (`NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` are the only keys gating). Cerebras + Groq adapter _source files_ themselves stay in `server/adapters/` (importable for emergency rollback) but no production code path imports them. v1 + v2 extractor modules are DELETED per Criterion 3 — the rollback path for the entire Phase 29 surface is `git revert <Phase 29 commit range>`.
+7. **CLAUDE.md trimmed** (DOCS-INT-01, pulled from Phase 34). Phase-history bloat condensed to current-state invariants only. Aggressive trim target: current ~17.5k tokens → <10k tokens (verified 2026-05-09 from `wc -c CLAUDE.md = 70461`). Restructure to current-state-invariants only — keep Project Context, Conventions, Env Vars, Color Tokens, Map Patterns, Testing, Key Files, Data Model, Vercel Deployment, Serverless Cache (registry only). Delete ALL phase-narrative blocks (Phase 4+ through Phase 28.2.5) — replace each with a 1-line link to its archived ROADMAP entry. Cerebras + Groq narrative blocks deleted (SIMPLIFY-04 obsoletes them). v1 + v2 extractor narrative blocks deleted (this phase obsoletes them). Verification: token count before/after committed in SUMMARY + 5-item operator spot-check (Redis key contracts, env vars, color tokens, domain constants, cron schedule all findable in <30s of skim).
+8. **v1 + v2 extractor modules deleted** (folded from SIMPLIFY-06; supersedes Phase 27.4 D-26/D-40 deep-rollback lock). `server/lib/llmEventExtractor.v1.ts` + `server/lib/llmEventExtractor.v2.ts` removed from the codebase. Override endpoint `POST /api/events/llm-pipeline` route + `events:llm-pipeline-override` Redis key + `refreshPipelineOverride()` helper + `setPipelineOverride()` removed. DevApiStatus Pin-to-v1/v2 buttons + confirm-modal removed (Phase 28.2 W5 D-22 surface). Rationale captured in ADR-0010 stub written this phase (full ADR completed at Phase 36; `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` already occupies the 0009 slot): v1→v2→v3 evolution, v3 cascade has been live since Phase 27.4 (~2026-04-21), Pitfall 1 cache bridge handles "map never goes blank" independently of which extractor is active, rollback path is now `git revert` of the Phase 29 commit range.
    **Plans**: TBD
-   **Operator out-of-band action**: upgrade Vercel project to Pro plan before Phase 30 begins.
+   **Operator out-of-band action**: upgrade Vercel project to Pro plan BEFORE the first Phase 29 plan runs (the maxDuration 300→800 bump is the first commit on the phase branch and depends on Pro being active).
 
 ### Phase 30: NIM Throttle Characterization + Cascade Tuning + Pro-Enabled Simplifications
 
@@ -185,24 +187,22 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
    **Plans**: TBD
    **UI hint**: yes
 
-### Phase 34: Internal Docs + Redis Registry + Redis Optimization + Cleanup Sweep
+### Phase 34: Internal Docs (JSDoc) + Redis Registry + Redis Optimization + Cleanup Sweep
 
-**Goal**: CLAUDE.md is back to a navigable size, every Redis key in the registry has a real writer + reader, retired keys are deleted, the Upstash command budget moves measurably down, and the v1.4-era complexity that the Pro upgrade obviates is purged from code (`events:llm:v3:partial`, orphan modules, archived-only paths). Closes with a measured `api/vercel-entry.js` bundle-size delta against v1.4's 1.72 MB baseline.
-**Depends on**: Nothing strictly required from earlier v1.5 phases (independent — runnable in parallel with Phases 29/30/31/32/33). Internal sequencing: DOCS-INT-03 verification pass produces the input for REDIS-OPT-01..04 and SIMPLIFY-02. SIMPLIFY-07 (bundle-size delta) is the closing measurement after all other cleanup lands.
-**Requirements**: DOCS-INT-01, DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01, REDIS-OPT-02, REDIS-OPT-03, REDIS-OPT-04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-06, SIMPLIFY-07
+**Goal**: Every Redis key in the registry has a real writer + reader, retired keys are deleted, the Upstash command budget moves measurably down, LLM-pipeline JSDoc matches the v1.5 implementation, and the v1.4-era complexity that the Pro upgrade obviates is purged from code (`events:llm:v3:partial`, orphan modules, archived-only paths). Closes with a measured `api/vercel-entry.js` bundle-size delta against v1.4's 1.72 MB baseline. _(CLAUDE.md trim landed in Phase 29 — see DOCS-INT-01 there. This phase only verifies the Redis registry section is still accurate after the trim.)_
+**Depends on**: Nothing strictly required from earlier v1.5 phases (independent — runnable in parallel with Phases 30/31/32/33; **must run after Phase 29** because the Redis registry verification reads CLAUDE.md as input and the trim happens in Phase 29). Internal sequencing: DOCS-INT-03 verification pass produces the input for REDIS-OPT-01..04 and SIMPLIFY-02. SIMPLIFY-07 (bundle-size delta) is the closing measurement after all other cleanup lands.
+**Requirements**: DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01, REDIS-OPT-02, REDIS-OPT-03, REDIS-OPT-04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07
 **Success Criteria** (what must be TRUE):
 
-1. `CLAUDE.md` is meaningfully shorter (target: ~30k tokens → <20k) with phase-history bloat condensed to current-state invariants only — operator can find a live decision faster than before.
-2. Every Redis key listed in the CLAUDE.md "Serverless Cache" registry has at least one writer and at least one reader pointing at real `file:line` locations; orphan keys are removed; missing keys are added.
-3. A single auditable artifact (e.g. `docs/architecture/redis-keys.md`) lists every key with writers, readers, TTL, value shape, business purpose, current cardinality, and load-bearing / observability / retire classification.
-4. Retired keys are deleted from code in this phase; production deletion path is documented (one-shot script vs. natural TTL expiry).
-5. Pre/post Upstash command-budget impact is captured (baseline at start, measurement at end) and a measurable absolute reduction is documented in the new ADR (or a dedicated ADR-0010 if scope warrants).
-6. JSDoc on the LLM-pipeline modules (`server/lib/llmExtractionPipeline.ts`, `server/lib/llmEventExtractor.v3.ts`, `server/lib/llmResolver.ts`, `server/lib/llmCircuitBreaker.ts`, `server/lib/llmDLQ.ts`, `server/lib/llmTokenBudget.ts`, `server/lib/llmExtractorWatchdog.ts`) matches the v1.5 implementation — each module's public API has a one-line JSDoc that's true today.
-7. **`events:llm:v3:partial` retired** (SIMPLIFY-02). Either deleted entirely (preferred) or downgraded to a debug-only flag behind an env var with a documented use-case. All writers + readers in code path also removed; CLAUDE.md "Serverless Cache" section reflects the change.
-8. **`server/lib/freeClaudeRouter.ts` audited** (SIMPLIFY-05). Either deleted (if zero live callers) along with its imports and tests, or kept with a top-of-file JSDoc block documenting the live callers and why it stays. No "is this still used?" ambiguity for future readers.
-9. **v1 extractor archived** (SIMPLIFY-06). `server/lib/llmEventExtractor.v1.ts` moves to a clearly-marked archive location (e.g. `server/lib/_archive/`) with a README explaining "deep-rollback only, last live in v1.4". v2 path stays in the bridge but its role is documented in CLAUDE.md as "deep-rollback safety, not active".
-10. **Bundle-size delta measured** (SIMPLIFY-07). `api/vercel-entry.js` size at Phase 34 close vs v1.4's 1.72 MB baseline is captured in the SUMMARY.md and folded into ADR-0009. Net reduction expected; stretch goal: drop below 1.5 MB.
-    **Plans**: TBD
+1. Every Redis key listed in the CLAUDE.md "Serverless Cache" registry (post-Phase-29 trim) has at least one writer and at least one reader pointing at real `file:line` locations; orphan keys are removed; missing keys are added.
+2. A single auditable artifact (e.g. `docs/architecture/redis-keys.md`) lists every key with writers, readers, TTL, value shape, business purpose, current cardinality, and load-bearing / observability / retire classification.
+3. Retired keys are deleted from code in this phase; production deletion path is documented (one-shot script vs. natural TTL expiry).
+4. Pre/post Upstash command-budget impact is captured (baseline at start, measurement at end) and a measurable absolute reduction is documented in the new ADR (or a dedicated ADR-0010 if scope warrants).
+5. JSDoc on the LLM-pipeline modules (`server/lib/llmExtractionPipeline.ts`, `server/lib/llmEventExtractor.v3.ts`, `server/lib/llmResolver.ts`, `server/lib/llmCircuitBreaker.ts`, `server/lib/llmDLQ.ts`, `server/lib/llmTokenBudget.ts`, `server/lib/llmExtractorWatchdog.ts`) matches the v1.5 implementation — each module's public API has a one-line JSDoc that's true today.
+6. **`events:llm:v3:partial` retired** (SIMPLIFY-02). Either deleted entirely (preferred) or downgraded to a debug-only flag behind an env var with a documented use-case. All writers + readers in code path also removed; CLAUDE.md "Serverless Cache" section reflects the change.
+7. **`server/lib/freeClaudeRouter.ts` audited** (SIMPLIFY-05). Either deleted (if zero live callers) along with its imports and tests, or kept with a top-of-file JSDoc block documenting the live callers and why it stays. No "is this still used?" ambiguity for future readers.
+8. **Bundle-size delta measured** (SIMPLIFY-07). `api/vercel-entry.js` size at Phase 34 close vs v1.4's 1.72 MB baseline is captured in the SUMMARY.md and folded into ADR-0010. Net reduction expected; stretch goal: drop below 1.5 MB. _(SIMPLIFY-06 v1 extractor archive folded into Phase 29's full deletion — this phase does not handle v1 anymore.)_
+   **Plans**: TBD
 
 ### Phase 35: Public Docs Sweep + OpenAPI Additions
 
@@ -218,14 +218,14 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 5. The OpenAPI 3.0.3 spec at `docs/api/openapi.yaml` (or equivalent path) gains complete entries for `/api/audit-status`, `/api/operator-status`, `/api/events/llm-pipeline`, `/api/events/llm-replay/:groupKey`, `/api/cron/refresh-events`, `/api/cron/health`, `/api/cron/warm` — request shape, response schema, auth posture, and (where applicable) `?force=true` query params all documented.
    **Plans**: TBD
 
-### Phase 36: ADR-0009 + Acceptance Gate Closeout
+### Phase 36: ADR-0010 + Acceptance Gate Closeout
 
 **Goal**: The v1.5 LLM-pipeline decisions are captured in a new ADR (rationale, trade-offs, rollback plan) AND `prod-connectivity-audit.yml` exits 0 with `allTiersGreen=true` for 3 consecutive runs — locking the milestone close and unblocking 999.5 promotion into v1.6.
-**Depends on**: Phase 29 + 30 + 31 (LLM-RELI track must have shipped — ADRs document already-made decisions, not aspirational ones; and the gate observes the narrowed cascade running stably). Can be informed by Phase 35's public-docs work but ADR-0009 stands alone as the gate-close artifact.
+**Depends on**: Phase 29 + 30 + 31 (LLM-RELI track must have shipped — ADRs document already-made decisions, not aspirational ones; and the gate observes the narrowed cascade running stably). Can be informed by Phase 35's public-docs work but ADR-0010 stands alone as the gate-close artifact.
 **Requirements**: DOCS-PUB-04, LLM-RELI-07
 **Success Criteria** (what must be TRUE):
 
-1. A new ADR (next sequential number, expected ADR-0009) is committed under `docs/adr/` documenting the v1.5 LLM-pipeline decisions: stay on v3, narrow active providers to NIM + OpenRouter, retire Cerebras + Groq from runtime cascade, prove LLM-optional architecture, **and the Vercel Pro upgrade ($20/mo for 800s `maxDuration`) accepted as the v1.5 acceptance-gate enabler**. The ADR captures rationale, trade-offs (cost, alternative paths considered: Hobby + tighter throttle tuning, NIM-only without OpenRouter fallback, etc.), and the rollback plan (downgrade-to-Hobby + revert `maxDuration: 300`).
+1. A new ADR (ADR-0010 — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot) is committed under `docs/adr/` documenting the v1.5 LLM-pipeline decisions: stay on v3, narrow active providers to NIM + OpenRouter, retire Cerebras + Groq from runtime cascade, prove LLM-optional architecture, **and the Vercel Pro upgrade ($20/mo for 800s `maxDuration`) accepted as the v1.5 acceptance-gate enabler**. The ADR captures rationale, trade-offs (cost, alternative paths considered: Hobby + tighter throttle tuning, NIM-only without OpenRouter fallback, etc.), and the rollback plan (downgrade-to-Hobby + revert `maxDuration: 300`).
 2. The operator runs `prod-connectivity-audit.yml` three separate times (workflow_dispatch, manual trigger) and each run exits 0 with `audit:connectivity:last-result.allTiersGreen === true` written to the Redis sidecar — no tier-red blips between runs.
 3. The 3-consecutive-green observation is captured in the milestone close artifact (e.g. workflow run URLs + sidecar payloads pasted into SUMMARY.md) so the gate is auditable.
 4. v1.6 promotion is unblocked — 999.5 (k6 1–300 VU sweep) can be pulled from backlog into v1.6 because the prerequisite tier-green stability has been mechanically proven.
@@ -233,23 +233,23 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 
 ### Progress
 
-| Phase                                                                | Plans Complete | Status      | Completed |
-| -------------------------------------------------------------------- | -------------- | ----------- | --------- |
-| 29. LLM Provider Chain Narrowing & LLM-Optional Architecture         | 0/0            | Not started | -         |
-| 30. NIM Throttle Characterization & Cascade Tuning                   | 0/0            | Not started | -         |
-| 31. Cron Stability Validation (7-day Watch)                          | 0/0            | Not started | -         |
-| 32. Ghost Event URL Liveness, Dashboard & Prune                      | 0/0            | Not started | -         |
-| 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion         | 0/0            | Not started | -         |
-| 34. Internal Docs + Redis Registry Verification + Redis Optimization | 0/0            | Not started | -         |
-| 35. Public Docs Sweep + OpenAPI Additions                            | 0/0            | Not started | -         |
-| 36. ADR-0009 + Acceptance Gate Closeout                              | 0/0            | Not started | -         |
+| Phase                                                                         | Plans Complete | Status      | Completed  |
+| ----------------------------------------------------------------------------- | -------------- | ----------- | ---------- |
+| 29. LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | 13/13          | Complete    | 2026-05-11 |
+| 30. NIM Throttle Characterization & Cascade Tuning                            | 0/0            | Not started | -          |
+| 31. Cron Stability Validation (7-day Watch)                                   | 0/0            | Not started | -          |
+| 32. Ghost Event URL Liveness, Dashboard & Prune                               | 0/0            | Not started | -          |
+| 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/0            | Not started | -          |
+| 34. Internal Docs + Redis Registry Verification + Redis Optimization          | 0/0            | Not started | -          |
+| 35. Public Docs Sweep + OpenAPI Additions                                     | 0/0            | Not started | -          |
+| 36. ADR-0010 + Acceptance Gate Closeout                                       | 0/0            | Not started | -          |
 
 ### Parallelization Notes
 
 Per `.planning/config.json` `parallelization: true`:
 
 - **Sequential spine (LLM-RELI track):** 29 → 30 → 31 → 36. The LLM provider narrowing must land before throttle characterization can be clean; the tuned values must land before the 7-day cron-stability watch is meaningful; the watch must land before the 3-consecutive-green close gate is observed.
-- **Parallel-safe with the LLM-RELI spine:** Phase 32 (GHOST track) and Phase 33 (ACTOR track) and Phase 34 (DOCS-INT + REDIS-OPT) are independent of the LLM-RELI work and can execute concurrently with 29/30/31 if operator capacity allows.
+- **Parallel-safe with the LLM-RELI spine:** Phase 32 (GHOST track) and Phase 33 (ACTOR track) are independent of the LLM-RELI work and can execute concurrently with 29/30/31 if operator capacity allows. Phase 34 (DOCS-INT-02/03 + REDIS-OPT + SIMPLIFY tail) must run **after** Phase 29 because its Redis registry verification reads CLAUDE.md as input and the trim happens in 29 — runs concurrently with 30/31/32/33 once 29 closes.
 - **Late-binding:** Phase 35 (public docs sweep) should land _after_ 29/30/31 close so the docs reflect the shipped narrowed cascade and tuned defaults rather than aspirational state.
 - **Closeout:** Phase 36 is the milestone-close gate by construction (LLM-RELI-07 observation + DOCS-PUB-04 ADR). Run last.
 
@@ -271,7 +271,7 @@ Deferred from v1.3:
 **Goal:** Resolve operator-blocking rate limit. The 6 req/min global tier in `server/middleware/rateLimit.ts` (applied at `server/index.ts:99` to all `/api/*`) blocks the operator's own browser — flights polling alone is 12 req/min. Three options scoped earlier: (a) remove global tier (per-endpoint limits already tuned for browser), (b) bump to 300/min to keep loose anti-scraper net, (c) bypass when `DASHBOARD_PASSWORD` Bearer present.
 **Resolution:** Folded into Phase 28.2 on 2026-04-30 per 28-CONTEXT.md D-04 — option (c) Bearer-bypass selected. This entry remains for historical traceability.
 **Requirements:** Subsumed by 28-CONTEXT.md D-04
-**Plans:** 0 plans (delivered via Phase 28.2 plan train)
+**Plans:** 13/13 plans complete
 
 ### Phase 999.2: `api/vercel-entry.js` build-artifact discipline (BACKLOG)
 

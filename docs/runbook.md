@@ -28,7 +28,8 @@ not aspirational operations advice.
 8. [CORS misconfiguration after deploy](#8-cors-misconfiguration-after-deploy)
 9. [Vercel cron job failure](#9-vercel-cron-job-failure)
 10. [LLM pipeline hung / /api/events returning 500](#10-llm-pipeline-hung--apievents-returning-500)
-11. [Common log query patterns](#common-log-query-patterns)
+11. [LLM Pipeline Disabled / Keys Absent](#11-llm-pipeline-disabled--keys-absent)
+12. [Common log query patterns](#common-log-query-patterns)
 
 ---
 
@@ -666,6 +667,132 @@ timeouts false-positive DLQ legitimate slow batches.
 - **Related commits:** `a5c8846` (partial key split), `e26ceca` (reader
   defense-in-depth). See CHANGELOG.md Phase 27.4.1 entry for the full
   incident narrative.
+
+---
+
+## 11. LLM Pipeline Disabled / Keys Absent
+
+**Symptom:** Operator wants to disable LLM enrichment entirely, OR the
+NIM + OpenRouter keys are temporarily revoked, OR a billing-test
+scenario. The map must continue to render events from raw GDELT
+through the Pitfall 1 cache bridge.
+
+**Expected behavior:**
+
+- `/api/events` returns events sourced from `events:gdelt` (raw GDELT,
+  not LLM-enriched).
+- `events:llm:v3` Redis cache stays empty (or expires naturally).
+- `/api/cron/refresh-events` early-returns with
+  `reason: 'llm_unconfigured'`.
+- DevApiStatus API Health tab shows "Events (LLM)" row in
+  unknown/degraded state; "Events (raw)" row in healthy state.
+
+### Operator smoke test
+
+1. Unset both LLM provider keys in the Vercel project's environment
+   variables for the Production scope:
+   - `NVIDIA_NIM_API_KEY`
+   - `OPENROUTER_API_KEY`
+
+   Dashboard: https://vercel.com/zack-mazs-projects/onthegrid.icm/settings/environment-variables
+
+2. Redeploy production so the new env state takes effect:
+
+   ```bash
+   vercel --prod
+   ```
+
+3. Confirm `/api/events` still returns events (sourced from raw GDELT
+   through the Pitfall 1 cache bridge):
+
+   ```bash
+   curl -s https://otg-iran-monitor.vercel.app/api/events | jq '.data | length'
+   ```
+
+   Expected: a number greater than 0. If 0 or null, the GDELT raw
+   cache is also empty — fall back to failure mode 2 (GDELT
+   lastupdate.txt returns 404 or stale) for that diagnosis.
+
+4. Confirm the response shape is raw GDELT (not LLM-enriched):
+
+   ```bash
+   curl -s https://otg-iran-monitor.vercel.app/api/events | jq '.data[0].data | keys'
+   ```
+
+   Expected keys: the raw-GDELT shape (CAMEO code, actors, Goldstein,
+   mentions, source URL). LLM-enriched fields like `enrichedSummary`,
+   `geocodeProvenance`, `precision`, and `confidence` should be
+   absent.
+
+5. Open the dashboard and load the DevApiStatus API Health tab
+   (Bearer-gated in production — auth in via the dashboard password).
+   Confirm:
+   - "Events (raw)" row is **healthy** (probes `events:gdelt`).
+   - "Events (LLM)" row is **unknown** or **degraded** (probes
+     `events:llm:v3`, which stays empty).
+   - The map UI renders events as expected — no blank canvas.
+
+### Recovery (re-enable LLM)
+
+1. Restore both env vars in the Vercel dashboard (same path as smoke
+   step 1) with their previous values.
+
+2. Redeploy:
+
+   ```bash
+   vercel --prod
+   ```
+
+3. Force-trigger the `/api/cron/refresh-events` cron so the cache
+   fills immediately instead of waiting for the next 4am UTC tick:
+
+   ```bash
+   curl -s -H "Authorization: Bearer $CRON_SECRET" \
+     'https://otg-iran-monitor.vercel.app/api/cron/refresh-events?force=true'
+   ```
+
+   `force=true` bypasses the 15-minute cooldown (`events:llm-process-ts`
+   Redis key). The cron's cold-cache self-heal path also fires
+   automatically on the next natural tick if you skip this step.
+
+4. Watch the function logs for the >300s extraction run:
+
+   ```bash
+   vercel logs --since 10m | grep cron/refresh-events
+   ```
+
+   On success, the cron logs `runRefreshExtraction` completing with a
+   batch count and a non-zero enrichedCount; on NIM-throttle days the
+   watchdog kills batches and the DLQ fills (see failure mode 10 for
+   the hung-pipeline pattern).
+
+5. Re-run the smoke test's step 4 against `/api/events` — the response
+   shape should now include the LLM-enriched fields, and the
+   DevApiStatus "Events (LLM)" row should flip back to healthy once
+   the cache has data.
+
+### Why this matters
+
+- **Severity:** NONE — by design. LLM-RELI-05 makes this a documented
+  and tested mode, not a degraded state. The Pitfall 1 cache bridge
+  in `server/routes/events.ts` is the load-bearing fallback that
+  guarantees the map renders raw GDELT events when no LLM cache is
+  available; the cron's `runRefreshExtraction` helper early-returns
+  with `reason: 'llm_unconfigured'` when both keys are absent, so no
+  budget is consumed and no errors propagate.
+- **CI guard:** `server/__tests__/routes/llm-optional.test.ts`
+  mechanically locks the contract on every PR — it mocks both
+  `NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` as undefined, hits
+  `/api/events` through the Express harness, and asserts the
+  response is sourced from raw GDELT, not from `events:llm:v3`. If a
+  future refactor reintroduces a hard LLM dependency, that test
+  fails before the change ships.
+- **Related:** see "Pitfall 1 Cache Bridge" in the CLAUDE.md
+  Serverless Cache registry for the bridge contract, and
+  [ADR-0010](./adr/ADR-0010-llm-pipeline-v1-5-decisions.md) for the
+  architectural rationale behind the v1.5 cascade narrowing
+  (Cerebras + Groq removed; NIM + OpenRouter only) plus the
+  optional-LLM design.
 
 ---
 

@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 
-import { callLLM } from '../adapters/llm-provider.js';
+import { callLLM } from './freeClaudeRouter.js';
 import { forwardGeocodeConstrained } from '../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 
@@ -455,13 +455,22 @@ async function resolveViaVerifiedTwoPass(
       return hit;
     }
     const userPrompt = buildRerankerUserPrompt(hierarchy, candidates, ctx);
-    const raw = await callLLM(
+    // Phase 29 Plan 03 (Pitfall 3 fix): callLLM imported from
+    // ./freeClaudeRouter.js. Its signature is
+    //   (messages, schemaText: string, opts?) => Promise<{content, routing, ...}>
+    // — not the legacy `(messages, jsonSchema) => string | null` shape. The
+    // schema text is unused by the router (response_format=json_object) so we
+    // pass an empty string; Zod still enforces the {pick, reasoning} contract
+    // below. We unwrap `.content` so the rest of this function keeps treating
+    // `raw` as `string | null`.
+    const routerResult = await callLLM(
       [
         { role: 'system', content: RERANKER_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      RERANKER_JSON_SCHEMA,
+      JSON.stringify(RERANKER_JSON_SCHEMA),
     );
+    const raw = routerResult.content;
     if (!raw) {
       await cacheSetSafe(key, { miss: true }, GEOCODE_CACHE_REDIS_TTL_SEC);
       return null;

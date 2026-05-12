@@ -892,7 +892,6 @@ function DevApiStatusAllApisTab({
       swaps: number;
       replays: number;
     }>;
-    pinTtl: { version: string | null; ttlSeconds: number; human: string } | null;
     advEval: { total: number; blocked: number; leaked: number } | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
@@ -909,10 +908,10 @@ function DevApiStatusAllApisTab({
         // operator-status fields (e.g., a test fetch spy returning a
         // /api/health body, or a mid-deploy schema regression) hide
         // the block entirely instead of crashing on missing fields.
+        // Phase 29 D-02 part A — pipeline override field removed from response.
         if (
           typeof data?.audit24h !== 'number' ||
           !Array.isArray(data?.byBearer) ||
-          !('pinTtl' in data) ||
           !('advEval' in data)
         ) {
           return;
@@ -968,36 +967,14 @@ function DevApiStatusAllApisTab({
     };
   }, []);
 
-  // Phase 28.2 W5 Task 7 — confirm modal target ('v1' | 'v2' | null).
-  // Set non-null when the operator clicks Pin to v1 / Pin to v2; the modal
-  // intercepts the POST. Pin to v3 / Clear pin bypass the modal entirely
-  // per UI-SPEC §6.1 (no friction for current production / clearing).
-  const [confirmTarget, setConfirmTarget] = useState<'v1' | 'v2' | null>(null);
-  const [isPinning, setIsPinning] = useState(false);
+  // Phase 29 Plan 08 D-02 part D — operator pipeline-pin surface removed.
+  // The Pin-to-v1/v2/v3 button row, confirm modal, escape-key listener, and
+  // their associated state + POST helper are all gone now that Plan 04
+  // deleted the underlying override route in events.ts.
+
   // Phase 28.2 W5 Task 7 — 429 quota alert state. Populated by replay
   // helper; cleared when a subsequent /llm-replay returns 200.
   const [quotaAlert, setQuotaAlert] = useState<{ resetsAt: string } | null>(null);
-
-  // Phase 28.2 W5 Task 7 — pipeline-pin POST helper. Issued directly for
-  // version 'v3' / null (clear); routed through confirm modal for v1/v2.
-  const sendPipelinePin = async (version: 'v1' | 'v2' | 'v3' | null): Promise<void> => {
-    setIsPinning(true);
-    try {
-      await fetch('/api/events/llm-pipeline', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...dashboardAuthHeaders(),
-        },
-        body: JSON.stringify({ version }),
-      });
-    } catch {
-      // Swallow — the operator surfaces failure via the eval-score / DLQ blocks
-    } finally {
-      setIsPinning(false);
-      setConfirmTarget(null);
-    }
-  };
 
   // Phase 28.2 W5 Task 7 — replay-quota probe helper. Used as the
   // observable trigger for the 429 alert. Test 28-30 wire fetch spies
@@ -1022,21 +999,6 @@ function DevApiStatusAllApisTab({
       // Network failure — don't update alert state
     }
   };
-
-  // Phase 28.2 W5 Task 7 — Escape handler for the confirm modal. Capture-
-  // phase so it wins over the outer DevApiStatus Escape (which closes the
-  // whole modal). Active only when confirmTarget is non-null.
-  useEffect(() => {
-    if (confirmTarget === null) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        setConfirmTarget(null);
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [confirmTarget]);
 
   // Phase 28.2 W5 D-23 block 2 — per-endpoint quality metrics. Sourced
   // directly from the matching client store rather than threaded as props
@@ -1542,11 +1504,10 @@ function DevApiStatusAllApisTab({
                 ))}
               </div>
             )}
-            <div className="mt-2 text-text-muted" data-testid="operator-actions-pin-ttl">
-              {opStatus.pinTtl
-                ? `Pinned to ${opStatus.pinTtl.version} — ${opStatus.pinTtl.human}`
-                : 'no pin active'}
-            </div>
+            {/* Phase 29 D-02 part A + D — operator-actions-pin-ttl render
+                block, Pin-to-v1/v2/v3 buttons, confirm modal, and Topbar
+                pipeline-version pill all removed. The operator pipeline
+                override surface and its underlying POST endpoint are gone. */}
             {opStatus.advEval && (
               <div className="mt-1 text-text-muted" data-testid="adversarial-eval-row">
                 Prompt-injection robustness: {opStatus.advEval.blocked}/{opStatus.advEval.total}
@@ -1568,43 +1529,9 @@ function DevApiStatusAllApisTab({
           </div>
         )}
 
-        {/* Pin to {v1,v2,v3} + Clear pin buttons. v1/v2 route through the
-            confirm modal per UI-SPEC §6.1; v3 + clear bypass it (no
-            friction for production / clearing). */}
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setConfirmTarget('v1')}
-            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-            data-testid="pin-pipeline-v1"
-          >
-            Pin to v1
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmTarget('v2')}
-            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-            data-testid="pin-pipeline-v2"
-          >
-            Pin to v2
-          </button>
-          <button
-            type="button"
-            onClick={() => void sendPipelinePin('v3')}
-            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-            data-testid="pin-pipeline-v3"
-          >
-            Pin to v3
-          </button>
-          <button
-            type="button"
-            onClick={() => void sendPipelinePin(null)}
-            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-            data-testid="pin-pipeline-clear"
-          >
-            Clear pin
-          </button>
-        </div>
+        {/* Phase 29 Plan 08 D-02 part D — Pin-to-v1/v2/v3 + Clear pin
+            button row removed. The underlying POST /api/events/llm-pipeline
+            endpoint was deleted in Plan 04; the UI buttons would only 404. */}
 
         {/* Phase 28.2 W5 Task 7 — replay test trigger. Issues a
             /api/events/llm-replay/test probe so the operator can verify
@@ -1622,55 +1549,9 @@ function DevApiStatusAllApisTab({
         </div>
       </section>
 
-      {/* Phase 28.2 W5 Task 7 — Pin-to-v1/v2 confirm modal (UI-SPEC §6.1).
-          Reuses DashboardAuthModal shell pattern (backdrop, card, dual-button
-          footer). W-1 spacing pinning: Cancel + destructive buttons use
-          py-2 explicitly — NOT the 6px DashboardAuthModal precedent (which
-          violates UI-SPEC §7 multiples-of-4 rule). */}
-      {confirmTarget !== null && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          data-testid="confirm-pin-modal"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setConfirmTarget(null);
-          }}
-        >
-          <div className="w-[360px] rounded-lg border border-border bg-surface-overlay p-5 shadow-xl">
-            <h2 className="mb-1 text-sm font-semibold text-text-primary">
-              Confirm pipeline version pin
-            </h2>
-            <p className="mb-3 text-xs text-text-muted">
-              Pin LLM pipeline to {confirmTarget} for 7 days.
-              <br />
-              <br />
-              v3 is current production. Pinning to {confirmTarget} disables ongoing v3 enrichment
-              until the pin clears or you revert.
-              <br />
-              <br />
-              Continue?
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmTarget(null)}
-                className="rounded-md px-3 py-2 text-xs text-text-muted hover:bg-white/5"
-                data-testid="confirm-pin-cancel"
-              >
-                Keep v3
-              </button>
-              <button
-                type="button"
-                disabled={isPinning}
-                onClick={() => void sendPipelinePin(confirmTarget)}
-                className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50"
-                data-testid="confirm-pin-confirm"
-              >
-                {isPinning ? 'Pinning...' : `Pin to ${confirmTarget}`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Phase 29 Plan 08 D-02 part D — confirm modal removed. The
+          pipeline-version pin UI surface is gone now that the underlying
+          POST /api/events/llm-pipeline route was deleted in Plan 04. */}
     </div>
   );
 }

@@ -139,7 +139,7 @@ Portfolio (v1.3 baseline, not yet refreshed for v1.4 — v1.5 docs sweep target)
 | LLM pipeline v3 NIM + OpenRouter      | v1.4 cutover; bake-off locked qwen/qwen3.5-397b-a17b                                                                                                                                                                           | ⚠️ Revisit — reliability gate unmet, v1.5 target |
 | Cron-driven extraction (not on-read)  | `/api/events` is cache-only; daily refresh @ 04:00 UTC                                                                                                                                                                         | ✓ Good — Pitfall 1 bridge keeps map populated    |
 | Bearer-bypass on global rate limiter  | Operator dashboard surfaces require Bearer; bypass tier                                                                                                                                                                        | ✓ Good — per-endpoint tiers still enforced       |
-| Domain `otg-iran-monitor.vercel.app`  | Old `irt-monitoring` retired; project `onthegrid.icm`                                                                                                                                                                          | ✓ Good — no traffic redirected, hard cutover     |
+| Domain `otg-iran-monitor.vercel.app`  | Old `irt-monitoring` retired; Vercel project `onthegrid.icm`                                                                                                                                                                   | ✓ Good — no traffic redirected, hard cutover     |
 | Vercel Pro upgrade for v1.5           | 800s `maxDuration` (vs Hobby 300s) gives the daily LLM cron 2.7× wall-clock headroom; tunes against measured NIM throttle instead of around it. $20/mo accepted as v1.5 acceptance-gate enabler. Locks before Phase 30 starts. | — Pending (commit early in Phase 29)             |
 
 ## Evolution
@@ -162,5 +162,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
+
+_Last updated: 2026-05-11 — Phase 29 (LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + CLAUDE.md Trim) complete: 13/13 plans, verification 8/8. Cascade narrowed to NIM + OpenRouter; v1+v2 extractors + operator override surface deleted; Vercel Pro `maxDuration: 800` locked; CLAUDE.md trimmed 73.3% to 5018 tokens; ADR-0010 stub captured. Operator out-of-band action queued: GitHub repo rename `zack-maz/onthegrid.icm` → `zack-maz/otg-iran-monitor`._
 
 _Last updated: 2026-05-08 — milestone v1.5 LLM Reliability & Reveal Prep started (predecessor v1.4 GDELT Redo & Performance shipped same day; 18 phases; 999.5 load test deferred to v1.6 pending v1.5 acceptance gate of 3 consecutive `prod-connectivity-audit.yml` exit-0 runs)._

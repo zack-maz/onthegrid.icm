@@ -28,9 +28,9 @@ Hormuz right now, quantitatively?_
 
 ## Engineering
 
-[![CI](https://github.com/zack-maz/onthegrid.icm/actions/workflows/ci.yml/badge.svg)](https://github.com/zack-maz/onthegrid.icm/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/zack-maz/onthegrid.icm/actions/workflows/codeql.yml/badge.svg)](https://github.com/zack-maz/onthegrid.icm/actions/workflows/codeql.yml)
-[![Coverage](https://codecov.io/gh/zack-maz/onthegrid.icm/branch/main/graph/badge.svg)](https://codecov.io/gh/zack-maz/onthegrid.icm)
+[![CI](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/codeql.yml/badge.svg)](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/codeql.yml)
+[![Coverage](https://codecov.io/gh/zack-maz/otg-iran-monitor/branch/main/graph/badge.svg)](https://codecov.io/gh/zack-maz/otg-iran-monitor)
 ![Tests](https://img.shields.io/badge/tests-1277%20passing-success)
 ![Type Coverage](https://img.shields.io/badge/type--coverage-97%25-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
@@ -117,8 +117,8 @@ matrices, coverage details, and the honest tech-debt accounting.
 **Clone and install:**
 
 ```bash
-git clone https://github.com/zack-maz/onthegrid.icm.git
-cd onthegrid.icm
+git clone https://github.com/zack-maz/otg-iran-monitor.git
+cd otg-iran-monitor
 npm install
 ```
 

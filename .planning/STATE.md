@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: ready_to_plan
-last_updated: "2026-05-09T00:00:00.000Z"
+status: "Phase 29 shipped — PR #19"
+last_updated: "2026-05-12T21:17:43.696Z"
+last_activity: 2026-05-12
 progress:
-  total_phases: 8
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 13
+  completed_phases: 1
+  total_plans: 13
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -22,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 29 (not started, ready to plan) — LLM Provider Chain Narrowing & LLM-Optional Architecture
-Plan: —
-Status: ready_to_plan
-Last activity: 2026-05-09 — Milestone v1.5 roadmap created (8 phases, 36 requirements mapped, 100% coverage)
+Phase: 999.1
+Plan: Not started
+Status: Phase 29 shipped — PR #19
+Last activity: 2026-05-12
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -35,18 +36,19 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 
 | Phase | Name                                                                  | Requirements                                                  | Status      |
 | ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- | ----------- |
-| 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture              | LLM-RELI-01, LLM-RELI-05                                      | Not started |
+| 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | Context gathered |
 | 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04                         | Not started |
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Not started |
 | 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
-| 34    | Internal Docs + Redis Registry Verification + Redis Optimization      | DOCS-INT-01..03, REDIS-OPT-01..04                             | Not started |
+| 34    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
 | 35    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | Not started |
 | 36    | ADR-0009 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Not started |
 
 **Sequencing:** 29 → 30 → 31 → 36 is the LLM-RELI spine (must run in order). Phases 32, 33, 34 are independent of the spine and can run in parallel with 29/30/31. Phase 35 lands after 29/30/31 close so docs reflect shipped state. Phase 36 is the milestone-close gate by construction.
 
 Backlog still parked (not in v1.5 unless they block reliability):
+
 - 999.1 rate-limiter-public-global-blocks-operator
 - 999.2 api-vercel-entry-rebuild-discipline
 - 999.3 phase-27-4-6-cron-first-tick-verification
@@ -317,4 +319,4 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - Phase 27.4.3 inserted after Phase 27.4.2 (2026-04-25): free-claude-code Routing Evaluation (URGENT) — pivoted from the originally-deferred "Cerebras hang root-cause investigation" to evaluate https://github.com/Alishahryar1/free-claude-code as a replacement for the manual Cerebras/Groq routing in `server/adapters/llm-provider.ts`. Five evaluation criteria (feasibility, reliability, cost/quota, integration shape, eval quality parity ±5pp of Plan 07's 0.940 baseline). Phase 27.4.2 HUMAN-UAT.md tests 1+2 are blocked on this phase landing. Reassigned 27.4.3 number from the prior deck.gl v9 depthTest TS-drift placeholder to this evaluation; deck.gl v9 work renumbers to 27.4.4.
 - Phase 28.2.6 inserted after Phase 28.2.5 (2026-05-07): Fix Vercel cron architecture so events:llm:v3 populates within budget (URGENT) — surfaced during 28.2.5 Plan 05 closeout when force-trigger of /api/cron/refresh-events?force=true returned `dispatched: true` in 400ms but the fire-and-forget IIFE body never executed (Vercel Fluid Compute kills the function once response is sent). Three resolution paths captured in 28.2.5-deferred-items.md for /gsd-discuss-phase 28.2.6 to pick from: (a) incremental terminal-key write refactor (~30 LOC), (b) Vercel Pro plan upgrade ($20/mo for 800s maxDuration), (c) waitUntil migration via @vercel/functions. Phase 28.3 entry now gated on 28.2.6 because the tier-green workflow run that 28.2.5 D-09 set up will keep returning allTiersGreen=false until critical[llmEvents] can flip from `unknown` to `healthy`.
 
-**Planned Phase:** 28.2.7 (audit-tier-completeness) — 4 plans — 2026-05-08T04:14:52.211Z
+**Planned Phase:** 29 (LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + CLAUDE.md Trim) — 13 plans — 2026-05-10T22:29:12.324Z
