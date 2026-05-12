@@ -44,13 +44,20 @@ interface AuditEntry {
 /**
  * Adversarial eval payload shape — matches Plan 03's `runAdversarialEval`
  * Redis writer. Optional fields tolerate older / partial payloads.
+ *
+ * Phase 29 WR-02: dropped the spurious `leaked` field from byCategory
+ * entries. The writer in llmEvalHarness.ts (`runAdversarialEval`) only
+ * tracks `{ total, blocked }` per category — the top-level result carries
+ * the aggregate `leaked` count but it is NOT broken out per category. The
+ * prior shape was likely copy-pasted from the top-level AdversarialEvalResult
+ * and would always render `NaN` after arithmetic on any UI consumer.
  */
 interface AdversarialEvalPayload {
   total: number;
   blocked: number;
   leaked: number;
   score?: number;
-  byCategory?: Record<string, { total: number; blocked: number; leaked: number }>;
+  byCategory?: Record<string, { total: number; blocked: number }>;
   generatedAt?: string;
 }
 
