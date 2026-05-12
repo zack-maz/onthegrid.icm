@@ -139,6 +139,22 @@ async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEv
     const cached = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY_ACTIVE, 0);
     const events = toEntityArray(cached?.data);
     if (events.length === 0) return [];
+
+    // Phase 29 WR-05: source `confidence` from llmProgress.recentEvents
+    // (populated by llmEventExtractor.v3.ts:839 with confidence:
+    // enrichedEvt.confidence) instead of from the cached entity.
+    // enrichedV3ToEntities never writes confidence onto template.data,
+    // so the prior `d.confidence ?? 0` always rendered 0 in the dev
+    // drill-down even when the LLM emitted a valid 0-1 score. Indexing
+    // by groupKey avoids a cache-shape bump.
+    const confidenceByGroupKey = new Map<string, number>();
+    const recentEvents = llmProgress.recentEvents ?? [];
+    for (const r of recentEvents) {
+      if (r.groupKey && typeof r.confidence === 'number') {
+        confidenceByGroupKey.set(r.groupKey, r.confidence);
+      }
+    }
+
     // Most recent first — entity.timestamp is the event timestamp.
     return events
       .slice()
@@ -153,7 +169,6 @@ async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEv
           source?: string;
         } & Partial<{
           location: RecentEnrichedEvent['location'];
-          confidence: number;
           reasoning: string;
           weaponType: string | null;
           targetType: string | null;
@@ -177,7 +192,10 @@ async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEv
             landmark: null,
           },
           precision: d.precision ?? 'region',
-          confidence: d.confidence ?? 0,
+          // WR-05: fallback to 0 ONLY when no recent-events entry exists
+          // for this groupKey (e.g., cold start / progress singleton was
+          // cleared between runs while v3 cache survived).
+          confidence: confidenceByGroupKey.get(groupKey) ?? 0,
           reasoning: d.reasoning ?? '',
           weaponType: d.weaponType ?? null,
           targetType: d.targetType ?? null,
