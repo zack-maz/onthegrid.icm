@@ -135,113 +135,181 @@ sequenceDiagram
 
 ---
 
-## 3. Conflict Events (GDELT v2 + LLM enrichment)
+## 3. Conflict Events (GDELT v2 + v3 LLM enrichment)
 
 **Adapters:** [`server/adapters/gdelt.ts`](../../server/adapters/gdelt.ts),
-[`server/adapters/llm-provider.ts`](../../server/adapters/llm-provider.ts),
+[`server/adapters/llm-provider.ts`](../../server/adapters/llm-provider.ts) (thin shim),
+[`server/lib/freeClaudeRouter.ts`](../../server/lib/freeClaudeRouter.ts) (NIM + OpenRouter cascade),
 [`server/adapters/nominatim.ts`](../../server/adapters/nominatim.ts)
-**Route:** [`server/routes/events.ts`](../../server/routes/events.ts)
-**Cache keys:** `events:llm` (LLM-enriched, preferred), `events:gdelt` (raw fallback) — both 15min logical TTL, 2.5h hard TTL
-**LLM cooldown key:** `events:llm-process-ts` (15 min cooldown)
-**Backfill key:** `events:backfill-ts` (1 hour cooldown)
-**Polling cadence:** 15 min, via
+**Pipeline:** [`server/lib/llmEventExtractor.v3.ts`](../../server/lib/llmEventExtractor.v3.ts),
+[`server/lib/llmExtractionPipeline.ts`](../../server/lib/llmExtractionPipeline.ts),
+[`server/lib/llmResolver.ts`](../../server/lib/llmResolver.ts) (6-path geocoding)
+**Read route:** [`server/routes/events.ts`](../../server/routes/events.ts) (cache-only — Phase 27.4.6 anti-pattern #17 forbids fire-and-forget LLM from this path)
+**Writer:** [`server/routes/cron-refresh-events.ts`](../../server/routes/cron-refresh-events.ts) (daily 4am UTC, Bearer-gated by Vercel — sole writer of `events:llm:v3`)
+**Cache keys:** `events:llm:v3` (terminal, LLM-enriched, sole reader), `events:gdelt` (raw GDELT fallback), `events:llm:v3:partial` (observability-only per-batch incremental writes)
+**Cron cooldown key:** `events:llm-process-ts` (15 min cooldown on the cron writer — cold-cache self-heal bypasses when `events:llm:v3` is empty)
+**Backfill key:** `events:backfill-ts` (1 hour cooldown on GDELT raw backfill)
+**Polling cadence:** 15 min from the browser via
 [`useEventPolling`](../../src/hooks/useEventPolling.ts)
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Browser
-    participant API as Express API
+    participant API as /api/events (cache-only)
+    participant Cron as /api/cron/refresh-events
     participant Cache as Upstash Redis
     participant GDELT as GDELT v2 master list
-    participant LLM as Cerebras / Groq
+    participant NIM as NVIDIA NIM (qwen-235b instruct)
+    participant OR as OpenRouter (fallback)
     participant Nominatim as OSM Nominatim
 
+    note over Browser,API: Read path — never writes events:llm:v3
     Browser->>API: GET /api/events
-    API->>Cache: cacheGetSafe("events:llm", 900_000)
-    alt LLM cache hit fresh
+    API->>Cache: cacheGetSafe("events:llm:v3", 26h)
+    alt v3 cache hit fresh
         Cache-->>API: {data, stale:false}
         API-->>Browser: 200 (sendValidated via zod output schema)
-    else LLM cache miss — try raw fallback
+    else v3 miss or stale — Pitfall 1 cache bridge
         API->>Cache: cacheGetSafe("events:gdelt", 900_000)
-        alt Raw cache hit fresh
-            Cache-->>API: {data, stale:false}
-        else Raw cache miss OR empty
+        alt Raw GDELT cache hit
+            Cache-->>API: {data, stale}
+            API-->>Browser: 200 {data: raw GDELT, degraded:true}
+        else Raw GDELT cache empty
+            note over API,GDELT: Lazy backfill (cooldown-gated)
             API->>Cache: shouldBackfill() reads events:backfill-ts
             alt Backfill cooldown expired
-                note over API,GDELT: Lazy backfill path
-                API->>GDELT: GET /gdeltv2/lastupdate.txt (HTTP, not HTTPS)
+                API->>GDELT: GET /gdeltv2/lastupdate.txt (HTTP)
                 GDELT-->>API: latest zipped export URL
-                API->>GDELT: GET {zip} (concurrent batch, ~4 files/day)
+                API->>GDELT: GET {zip} (concurrent, ~4 files/day)
                 GDELT-->>API: zip bytes
-                API->>API: adm-zip unzip -> CSV parse -> filter FIPS -> classify CAMEO
-                API->>API: disperseEvents() for city-centroid rows
+                API->>API: adm-zip unzip → CSV parse → FIPS filter → classifyByBaseCode (CAMEO)
+                API->>API: disperseEvents() — city-centroid jitter
                 API->>Cache: cacheSetSafe("events:gdelt", merged, 9000s)
                 API->>Cache: recordBackfillTimestamp()
             end
-            API->>GDELT: fetchEvents() [last window]
-            GDELT-->>API: rows
-            API->>API: merge by GlobalEventID, drop pre-WAR_START, apply confidence
-            API->>Cache: cacheSetSafe("events:gdelt", merged, 9000s)
-        end
-
-        note over API,LLM: LLM enrichment path (when configured + cooldown expired)
-        alt LLM keys configured AND cooldown expired
-            API->>API: groupGdeltRows() — cluster by date + CAMEO root + 50km proximity
-            API->>LLM: batch groups (8/call) via OpenAI SDK
-            LLM-->>API: JSON (type, summary, casualties, precision, actors)
-            API->>API: Zod safeParse — drop invalid entries
-            loop For each extracted location name
-                API->>Nominatim: forwardGeocode(locationName) — 1 req/s
-                Nominatim-->>API: {lat, lng}
-            end
-            API->>API: merge enriched events with llmProcessed:true
-            API->>Cache: cacheSetSafe("events:llm", enriched, 9000s)
-            API->>Cache: record LLM cooldown timestamp
-            API-->>Browser: 200 {data: enriched, stale:false}
-        else LLM unavailable or cooldown active
-            API-->>Browser: 200 {data: raw GDELT, stale:false}
+            API-->>Browser: 200 {data: raw GDELT, degraded:true}
         end
     end
+
+    note over Cron,OR: Write path — daily 4am UTC, sole writer of events:llm:v3
+    Cron->>Cron: Vercel scheduler fires (Authorization: Bearer ${CRON_SECRET})
+    Cron->>Cache: cacheGetSafe("events:llm:v3")
+    alt v3 empty → cold-cache self-heal (bypass cooldown)
+        Cron->>Cron: runRefreshExtraction({triggeredBy:"cron", forceCooldown:true})
+    else v3 populated → check cooldown
+        Cron->>Cache: read events:llm-process-ts
+        alt Cooldown expired
+            Cron->>Cron: runRefreshExtraction({triggeredBy:"cron"})
+        else Cooldown active
+            Cron-->>Cron: 200 {skipped:"cooldown"} (no extraction)
+        end
+    end
+    Cron->>GDELT: fetchEvents() [recent window]
+    GDELT-->>Cron: rows
+    Cron->>Cron: groupGdeltRows() — cluster by date + CAMEO root + 50km proximity
+    Cron->>Cron: concurrencyLimit(LLM_V3_CONCURRENCY, default 12) FIFO queue
+    loop Per batch (BATCH_SIZE=2) — parallel up to limit
+        Cron->>Cron: withBatchWatchdog(90s hard / 60s soft)
+        Cron->>NIM: callLLM (qwen-235b instruct, JSON schema)
+        alt NIM available + within token budget
+            NIM-->>Cron: structured location hierarchy + 5-type classification
+        else NIM throttled / circuit breaker open
+            Cron->>OR: callLLM (OpenRouter fallback)
+            OR-->>Cron: structured response
+        end
+        Cron->>Cron: Zod safeParse — DLQ invalid entries
+        loop Per extracted event
+            Cron->>Cron: resolveLocation() — 6-path resolver
+            note right of Cron: own-site-snapshot → poi-amenity-nominatim<br/>→ nominatim-direct → nominatim-verified-2pass<br/>→ gdelt-actiongeo-fallback → bellingcat-coord-passthrough
+            Cron->>Nominatim: forwardGeocodeConstrained() — ME viewbox, 1 req/s
+            Nominatim-->>Cron: {lat, lng, provenance}
+        end
+        Cron->>Cache: cacheSetSafe("events:llm:v3:partial", envelope) [observability]
+        Cron->>Cache: cacheSetSafe("events:llm:v3", entities[]) [terminal-key write]
+    end
+    Cron->>Cache: record events:llm-process-ts + cron:lastTick:refresh-events
 ```
 
 **Notes**
 
-- **HTTP endpoint.** GDELT's master list is served over HTTP because their
-  TLS certificate was problematic — the `GDELT_LASTUPDATE_URL` constant is
-  explicitly `http://`. This is a known quirk, not a bug.
-- **ZIP decompression.** GDELT ships its event exports as zipped CSVs.
-  Node's `zlib` only handles gzip/deflate, so we depend on `adm-zip`.
-- **Lazy backfill.** On an empty cache miss the route reads
-  `events:backfill-ts` and, if the 1-hour cooldown is expired, pulls a
-  sampled 4-files-per-day history back to `WAR_START` (Feb 28 2026). This
-  hydrates the map after a cold start without hammering GDELT on every
-  request.
-- **`?backfill=true`.** A query param forces a fresh backfill regardless of
-  cooldown — used by the warm cron.
-- **Dual cache (Phase 27).** The route checks `events:llm` first (LLM-enriched
-  events with summaries, precise geocoding, and 5-type classification). On miss,
-  it falls back to `events:gdelt` (raw GDELT with CAMEO-based classification and
-  centroid dispersion). If both miss, it fetches fresh from GDELT upstream.
-- **LLM enrichment (Phase 27).** When Cerebras/Groq API keys are configured and
-  the 15-minute cooldown has expired, raw GDELT rows are grouped by
-  [`eventGrouping.ts`](../../server/lib/eventGrouping.ts), sent through the LLM
-  via [`llmEventExtractor.ts`](../../server/lib/llmEventExtractor.ts), validated
-  by Zod, geocoded via Nominatim, and cached to `events:llm`.
-- **Graceful degradation.** If LLM keys are not configured, the LLM is down, or
-  the response fails Zod validation, the route serves raw GDELT events — the same
-  behavior as pre-Phase-27. The map never goes blank.
-- **CAMEO classification retained.** The `classifyByBaseCode` map in `gdelt.ts`
-  still maps raw CAMEO codes into the 5-type taxonomy as a fallback for when
-  LLM enrichment is unavailable. The FIPS-10-4 country code table is also retained.
-- **City-centroid dispersion retained.** The dispersion step in
-  [`server/lib/dispersion.ts`](../../server/lib/dispersion.ts) still runs on raw
-  GDELT events. LLM-processed events get per-event `precision` indicators and
-  Nominatim coordinates instead, making dispersion unnecessary for enriched events.
-- **Validated response.** The events route runs its payload through
+- **Cache-only read path (Phase 27.4.6).** `/api/events` never triggers LLM
+  extraction — that was Phase 27.4.6's anti-pattern #17 fix. Vercel Fluid
+  Compute kills function bodies once the response is sent, so the old
+  fire-and-forget IIFE silently never executed in production. The cron is
+  now the sole writer.
+- **Pitfall 1 cache bridge (Phase 29-07).** Collapsed from a v3→v2→v1
+  fallback chain to single-tier `events:llm:v3` → raw `events:gdelt`. Post
+  Phase 29, no writer exists for `events:llm:v2` or the v1 alias; reading
+  dead keys was pure latency.
+- **Cold-cache self-heal (Phase 27.4.6 D-10).** The cron probes
+  `events:llm:v3` BEFORE the cooldown check. Empty cache → bypass cooldown
+  automatically. First cron invocation after a fresh deploy always
+  populates the cache, regardless of timing relative to the next 4am tick.
+- **Operator force-trigger.** `GET /api/cron/refresh-events?force=true`
+  with valid Bearer skips the 15-min cooldown. Use cases:
+  post-bug-fix re-extraction, post-cache-flush warm-up, testing during
+  deploys.
+- **Provider cascade (Phase 29 D-01).** `server/lib/freeClaudeRouter.ts`
+  tries NVIDIA NIM (`qwen-3-235b-a22b-instruct-2507`) first, then
+  OpenRouter as fallback. Cerebras and Groq factories were deleted in
+  Phase 29 Plan 03; their adapter source files are gone from the runtime
+  path. `isLLMConfigured()` returns true iff `NVIDIA_NIM_API_KEY` OR
+  `OPENROUTER_API_KEY` is set.
+- **Parallel batches (Phase 27.4.4).** `server/lib/concurrencyLimit.ts`
+  FIFO queue. `LLM_V3_CONCURRENCY` env (default 12) drives ~26 req/min
+  under NIM's 40/min ceiling. Set to `1` for fully sequential rollback.
+  `BATCH_SIZE=2` means each LLM call handles 2 event groups.
+- **Watchdog (Phase 27.4.1).** `withBatchWatchdog(batchFn, opts)` wraps
+  each per-batch promise with `Promise.race([batchCall, timeoutPromise])`
+  - AbortController + generation-counter late-resolve guard. Default 90s
+    hard-kill + 60s soft-warn. Timed-out batches DLQ each group with
+    `reason: 'timeout_watchdog'`; the loop continues to the next batch —
+    timeout on batch N does NOT abort the run.
+- **6-path resolver (Phase 27.4 Plan 05).** `server/lib/llmResolver.ts`
+  `resolveLocation(hierarchy, ctx)` dispatches in order:
+  `own-site-snapshot` → `poi-amenity-nominatim` → `nominatim-direct` →
+  `nominatim-verified-2pass` → `gdelt-actiongeo-fallback` →
+  `bellingcat-coord-passthrough`. Never returns a coord without
+  provenance. 1-req/s Nominatim throttle. Redis cache at
+  `geocode:fwd:constrained:<hash>` (30d logical TTL).
+- **Terminal-key writes (Phase 28.2.6 + ADR-0009).** Each batch writes
+  the full ConflictEventEntity[] to `events:llm:v3` as a terminal-shape
+  array. The observability envelope (`{events, progress, complete}`)
+  writes to `events:llm:v3:partial` only — readers never see envelope
+  shape on the terminal key. This split was hardened after the v2 incident
+  where a per-batch durability flush violated the `events.map is not a
+function` consumer contract (see ADR-0009).
+- **Token budget (Phase 27.4).** Per-provider daily caps tracked in
+  `llm:tokens:{provider}:YYYY-MM-DD` (48h TTL): NIM 1M/day, OpenRouter
+  per-key. Soft 0.8 + hard 0.95 caps short-circuit the provider when
+  exceeded.
+- **HTTP GDELT endpoint.** GDELT's master list is served over HTTP because
+  their TLS certificate was problematic — the `GDELT_LASTUPDATE_URL`
+  constant is explicitly `http://`. Known quirk, not a bug.
+- **ZIP decompression.** GDELT ships zipped CSVs. Node's `zlib` only
+  handles gzip/deflate; the adapter depends on `adm-zip`.
+- **CAMEO classification retained.** `classifyByBaseCode` in `gdelt.ts`
+  maps raw CAMEO EventBaseCodes into the 5-type taxonomy as a fallback
+  for when LLM enrichment is unavailable.
+- **City-centroid dispersion retained.** `server/lib/dispersion.ts` runs
+  on raw GDELT events when serving from the Pitfall 1 bridge. LLM-enriched
+  events get per-event `precision` (`exact` | `neighborhood` | `city` |
+  `region`) and Nominatim coordinates instead, so dispersion is unnecessary
+  for the enriched terminal cache.
+- **LLM-optional architecture (Phase 29 D-04).** When `isLLMConfigured()`
+  returns false (both NIM + OpenRouter keys absent), `/api/events` serves
+  raw GDELT through the simplified bridge — the "map never goes blank"
+  invariant. Asserted by
+  [`server/__tests__/routes/llm-optional.test.ts`](../../server/__tests__/routes/llm-optional.test.ts).
+- **Validated response.** The route runs its payload through
   `sendValidated(res, eventsResponseSchema, payload)` before sending so
   any drift between implementation and `server/openapi.yaml` is caught
   immediately in dev and logged as a warning in production.
+
+See [ADR-0011](../adr/0011-v3-llm-pipeline-architecture.md) for the v3
+design rationale; [ADR-0010](../adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md)
+for what was deleted in Phase 29.
 
 ---
 
