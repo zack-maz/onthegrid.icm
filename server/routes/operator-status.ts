@@ -34,6 +34,17 @@ export const operatorStatusRouter = Router();
  * Audit entry shape — matches Plan 03's SADD writer. Kept minimal so the
  * route is forward-compatible with future Plan 03 / Plan 06 audit
  * extensions (extra fields are ignored by the aggregator).
+ *
+ * Phase 29 WR-03 (legacy retention): the `'pipeline-swap'` operation tag
+ * is retained for backward compatibility with the 30-day audit-log TTL.
+ * Phase 29 D-02 part A deleted the POST /api/events/llm-pipeline route
+ * (the only writer of `pipeline-swap` entries), so no NEW entries with
+ * this tag will be written. Existing entries in Redis (under the 30d
+ * SADD TTL) still parse correctly, and the per-fingerprint `swaps`
+ * counter below will naturally decay to 0 once the last legacy entry
+ * expires. The dashboard "swaps" column becomes visual noise after that
+ * window — a follow-up may drop the field and tag, but it is harmless
+ * in the interim and avoids dropping historical observability mid-TTL.
  */
 interface AuditEntry {
   timestamp: number;
