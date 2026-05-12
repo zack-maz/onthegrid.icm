@@ -29,13 +29,20 @@ export type Provider = BreakerProvider;
 
 /** Daily token ceilings per provider (free tier). */
 export const DAILY_LIMITS: Record<Provider, number> = {
+  // Phase 29 D-01: cerebras/groq retired from the runtime path (ADR-0010).
+  // The slots are retained here for one deploy window so the test suite's
+  // `cerebras`/`groq` fixtures and `shouldPauseNewEvents` legacy probe
+  // continue to compile. Phase 30 prunes them per RESEARCH.md Open Q4.
   cerebras: 1_000_000,
   groq: 200_000,
-  // Phase 27.4.3: v3 path uses freeClaudeRouter, not this module. These zero
-  // limits are present purely for Record<Provider, number> exhaustiveness
-  // and would force a 'hard' budgetState if ever invoked — safe fail-closed.
-  nvidia_nim: 0,
-  openrouter: 0,
+  // Phase 29 WR-01: real ceilings for the NIM/OpenRouter cascade so the
+  // adversarial-eval `budgetState` probe (formerly pointed at `cerebras`)
+  // semantically gates on the active providers. Per-event token counters
+  // for v3 are not yet plumbed into incrDailyTokens, so the gate currently
+  // resolves to 'ok' at runtime — the fix makes the soft-cap defense
+  // activate-able rather than permanently no-op.
+  nvidia_nim: 1_000_000,
+  openrouter: 200_000,
 };
 
 const TTL_48H_SEC = 172_800;

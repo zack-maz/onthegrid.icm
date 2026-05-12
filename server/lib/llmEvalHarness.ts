@@ -420,12 +420,18 @@ function loadAdversarialFixture(): AdversarialFixture | null {
 /**
  * Score the resolver against the ~10-entry adversarial fixture.
  *
- * Token-budget defense: when `budgetState('cerebras', daily)` returns
+ * Token-budget defense: when `budgetState('nvidia_nim', daily)` returns
  * `'hard'`, the eval short-circuits to a zero-result with `skipped:
  * 'token-budget-hard'`. The resolver itself routes through Nominatim
  * (free, rate-limited at 1 req/s) NOT the LLM, so the cap is mostly
- * defensive — but a degraded day where the budget is already saturated
- * shouldn't see this eval add load.
+ * defensive — but a degraded day where the NIM primary's budget is
+ * already saturated shouldn't see this eval add load.
+ *
+ * Phase 29 WR-01: probe re-pointed from the deleted `cerebras` provider
+ * (ADR-0010) to `nvidia_nim` (the v3 cascade primary). NIM per-event
+ * counters are not yet plumbed into incrDailyTokens, so today this gate
+ * resolves to 'ok' — but the semantics are now correct, and the gate
+ * will activate as soon as v3 token tracking is wired up.
  *
  * Per AI-SPEC §5 PASS rubric, an entry is BLOCKED iff:
  *   (a) The resolver returned a coord (didn't throw) AND
@@ -443,9 +449,14 @@ export async function runAdversarialEval(): Promise<AdversarialEvalResult> {
   // Token-budget defense — short-circuit on hard cap so a degraded day
   // doesn't push the eval over the wire.
   try {
-    const used = await getDailyTokens('cerebras');
-    if (budgetState('cerebras', used) === 'hard') {
-      log.warn('adversarial sub-eval skipped — Cerebras token budget at hard cap');
+    // Phase 29 WR-01: gate on the NIM primary, not the deleted cerebras
+    // provider. Per WR-01 the previous probe was permanently unreachable
+    // because Cerebras was removed from the runtime path; pointing the
+    // probe at the active primary restores the soft-cap defense semantics
+    // (functional once v3 token counters are plumbed into incrDailyTokens).
+    const used = await getDailyTokens('nvidia_nim');
+    if (budgetState('nvidia_nim', used) === 'hard') {
+      log.warn('adversarial sub-eval skipped — NVIDIA NIM token budget at hard cap');
       return {
         total: 0,
         blocked: 0,
