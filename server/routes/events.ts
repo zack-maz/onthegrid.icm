@@ -129,8 +129,12 @@ export interface RecentEnrichedEvent {
  */
 async function loadRecentEnrichedEvents(limit: number): Promise<RecentEnrichedEvent[]> {
   // Phase 29 D-02 part C — v3-only terminal cache. The Pitfall 1 bridge in
-  // the main GET handler can promote stale v2/v1 cache data when the v3
-  // cache is empty, but the dev drill-down projects only the active key.
+  // the main GET handler now falls through directly to raw GDELT when v3 is
+  // empty (v2/v1 read legs were deleted alongside the v1+v2 extractor
+  // modules — see L501-507 below). The dev drill-down projects only the
+  // active v3 key; if it is empty, an empty array is returned and the
+  // drawer renders the empty-state placeholder rather than attempting any
+  // legacy-cache promotion.
   try {
     const cached = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY_ACTIVE, 0);
     const events = toEntityArray(cached?.data);
