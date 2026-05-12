@@ -5,17 +5,17 @@ subsystem: docs
 tags: [runbook, llm-optional, operator-docs, LLM-RELI-05, D-04]
 dependency-graph:
   requires:
-    - "Plan 09 (CI integration test at server/__tests__/routes/llm-optional.test.ts) — paired with this runbook entry per CONTEXT D-04 belt + suspenders pattern"
-    - "Plans 04-08 (cascade narrowing + override-surface deletion + v1/v2 extractor deletion) — already merged; create the LLM-optional surface this runbook documents"
+    - 'Plan 09 (CI integration test at server/__tests__/routes/llm-optional.test.ts) — paired with this runbook entry per CONTEXT D-04 belt + suspenders pattern'
+    - 'Plans 04-08 (cascade narrowing + override-surface deletion + v1/v2 extractor deletion) — already merged; create the LLM-optional surface this runbook documents'
   provides:
-    - "Operator-facing smoke test + recovery procedure for LLM-disabled mode"
-    - "Cross-reference target for ADR-0010 and CLAUDE.md Pitfall 1 bridge"
+    - 'Operator-facing smoke test + recovery procedure for LLM-disabled mode'
+    - 'Cross-reference target for ADR-0010 and CLAUDE.md Pitfall 1 bridge'
   affects:
-    - "docs/runbook.md (TOC + new section 11)"
+    - 'docs/runbook.md (TOC + new section 11)'
 tech-stack:
   added: []
   patterns:
-    - "Runbook section follows existing Symptom / Expected behavior / Smoke / Recovery / Why-it-matters style of sections 1-10"
+    - 'Runbook section follows existing Symptom / Expected behavior / Smoke / Recovery / Why-it-matters style of sections 1-10'
 key-files:
   created: []
   modified:
@@ -23,11 +23,11 @@ key-files:
 decisions:
   - "Placed section 11 between section 10 (LLM pipeline hung) and the unnumbered 'Common log query patterns' to keep numbered failure modes contiguous"
   - "Updated TOC to insert section 11 and renumber the 'Common log query patterns' slot to 12 (its heading stays unnumbered, matching the file's existing convention)"
-  - "Used 5-step smoke + 5-step recovery format (per RESEARCH.md Code Examples spec); included exact curl commands with jq pipes for assertion clarity"
-  - "Cross-referenced ADR-0010 stub (Plan 11) and the Plan 09 CI guard explicitly so operators can locate the related artifacts"
+  - 'Used 5-step smoke + 5-step recovery format (per RESEARCH.md Code Examples spec); included exact curl commands with jq pipes for assertion clarity'
+  - 'Cross-referenced ADR-0010 stub (Plan 11) and the Plan 09 CI guard explicitly so operators can locate the related artifacts'
 metrics:
-  duration: "5 minutes"
-  completed: "2026-05-11"
+  duration: '5 minutes'
+  completed: '2026-05-11'
 ---
 
 # Phase 29 Plan 10: LLM Pipeline Disabled / Keys Absent Runbook Entry Summary
@@ -60,9 +60,9 @@ None at runtime. This is documentation-only — the LLM-optional contract is cre
 
 ## Commits
 
-| Hash    | Message                                                                                       |
-| ------- | --------------------------------------------------------------------------------------------- |
-| 44d2924 | `docs(29): add 'LLM Pipeline Disabled / Keys Absent' runbook entry (LLM-RELI-05)`             |
+| Hash    | Message                                                                           |
+| ------- | --------------------------------------------------------------------------------- |
+| 44d2924 | `docs(29): add 'LLM Pipeline Disabled / Keys Absent' runbook entry (LLM-RELI-05)` |
 
 ## Verification
 

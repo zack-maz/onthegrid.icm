@@ -23,7 +23,7 @@ affects:
 tech-stack:
   added: []
   patterns:
-    - "Per-file contextual classification (REPO vs VERCEL vs HISTORICAL) before mechanical find-replace — prevents clobbering Vercel-project references in the same files that need GitHub-repo references updated"
+    - 'Per-file contextual classification (REPO vs VERCEL vs HISTORICAL) before mechanical find-replace — prevents clobbering Vercel-project references in the same files that need GitHub-repo references updated'
     - "Disambiguation-by-clarification (add 'Vercel project' qualifier) over deletion — satisfies acceptance grep while preserving the truth that the Vercel project name is unchanged"
 
 key-files:
@@ -41,8 +41,8 @@ key-decisions:
   - "CHANGELOG.md, ROADMAP.md, MILESTONES.md required ZERO edits — all 5 hits were already explicit 'Vercel project onthegrid.icm' wording from Phase 28.2 narrative. Only PROJECT.md needed disambiguation; only README.md + the debug doc needed actual repo-name renames."
 
 patterns-established:
-  - "Per-file pre-flight grep + manual classification before any edit on rename-style phases — single-batch find-replace would have clobbered 2 PROJECT.md, 2 CHANGELOG.md, 1 ROADMAP.md, 2 MILESTONES.md, and 1 debug-doc-L140 Vercel-project references"
-  - "Atomic single-commit pattern for cross-doc rename — 1 commit at end of phase (chore type) groups README + 2 governance docs + 1 debug doc; phase-internal coherence preserved"
+  - 'Per-file pre-flight grep + manual classification before any edit on rename-style phases — single-batch find-replace would have clobbered 2 PROJECT.md, 2 CHANGELOG.md, 1 ROADMAP.md, 2 MILESTONES.md, and 1 debug-doc-L140 Vercel-project references'
+  - 'Atomic single-commit pattern for cross-doc rename — 1 commit at end of phase (chore type) groups README + 2 governance docs + 1 debug doc; phase-internal coherence preserved'
   - "Acceptance-grep-driven disambiguation: when the mechanical verification gate uses a fixed exclusion list ('Vercel project|billing|dashboard|alias|Phase 28'), surface the appropriate qualifier into the doc body rather than weakening the gate — keeps both the test and the docs honest"
 
 requirements-completed: [D-11]
@@ -134,12 +134,14 @@ None.
    - (GitHub auto-redirects keep old clone URLs working; the rename is reversible if needed.)
 
 2. **Local folder rename** (after all in-flight Bash sessions in `/Users/zackmaz/Desktop/my_world` close):
+
    ```bash
    cd ~/Desktop && mv my_world otg-iran-monitor
    cd otg-iran-monitor
    ```
 
 3. **Git remote update:**
+
    ```bash
    git remote set-url origin https://github.com/zack-maz/otg-iran-monitor.git
    git remote -v  # confirm both fetch + push show otg-iran-monitor
@@ -182,6 +184,6 @@ Verifying all claims:
 
 ---
 
-*Phase: 29-llm-provider-chain-narrowing-llm-optional-architecture-verce*
-*Plan: 13 (final plan)*
-*Completed: 2026-05-11*
+_Phase: 29-llm-provider-chain-narrowing-llm-optional-architecture-verce_
+_Plan: 13 (final plan)_
+_Completed: 2026-05-11_

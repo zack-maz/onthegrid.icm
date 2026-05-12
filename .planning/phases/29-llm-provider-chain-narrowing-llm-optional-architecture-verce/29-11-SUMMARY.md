@@ -14,7 +14,7 @@ affects:
 tech-stack:
   added: []
   patterns:
-    - 'ADR stub with `<expand_at_36>` marker — preserves the Michael Nygard short-template skeleton (Status / Date / Deciders / Context / Decision / Consequences / Alternatives / References) while explicitly flagging that the milestone-close rationale is deferred to Phase 36 (the v1.5 milestone-close phase). Phase 36 fills the marker site once the deletion outcomes (bundle size, incident rate, rollback usage) are observable in production. Mirrors the pattern from ADR-0005''s Superseded-status amendment workflow — capture-the-decision-now, fill-the-retrospective-later.'
+    - "ADR stub with `<expand_at_36>` marker — preserves the Michael Nygard short-template skeleton (Status / Date / Deciders / Context / Decision / Consequences / Alternatives / References) while explicitly flagging that the milestone-close rationale is deferred to Phase 36 (the v1.5 milestone-close phase). Phase 36 fills the marker site once the deletion outcomes (bundle size, incident rate, rollback usage) are observable in production. Mirrors the pattern from ADR-0005's Superseded-status amendment workflow — capture-the-decision-now, fill-the-retrospective-later."
     - 'ADR-numbering pitfall-fix audit trail — RESEARCH.md Pitfall 1 found that the CONTEXT-specified slot 0009 was already taken by the Accepted two-key-split ADR from Phase 27.4.1 (Accepted 2026-04-24). Plan 02 had already renamed all upstream references (CONTEXT / REQUIREMENTS / ROADMAP) to ADR-0010 before Plan 11 ran, so the ADR file landed at 0010 with no rework. The lesson: ADR numbers are global and must be checked against existing files before reservation, not against milestone-internal counters.'
     - 'Index-table column-shape preservation — the plan task hypothesized 4 columns (ADR / Title / Status / Date) but the actual README index has 3 (no Date column). Wrote against the actual file structure, not the hypothesis. Same discipline as the W5 "preserve runtime over documented spec" pattern from Phase 28.1.'
 key-files:
@@ -27,7 +27,7 @@ key-files:
 decisions:
   - 'ADR-0010 number locked over ADR-0009 — the originally-named slot was already in use by the Accepted two-key-split ADR (commit `e26ceca`, Phase 27.4.1). Plan 02 had already renumbered upstream references; Plan 11 wrote the file at the corrected number.'
   - '4-decision Decision section enumerated, not collapsed — the plan listed 4 distinct v1.5 narrowing decisions (cascade narrow, v1+v2 delete, LLM-optional proof, Vercel Pro upgrade) and the ADR enumerates all 4 as numbered list items. Collapsing them into a single "v1.5 simplification" paragraph would have been smaller but would lose the per-decision rollback granularity that the References section''s `git revert <Phase 29 range>` line depends on.'
-  - 'Status: Accepted at stub time — Phase 29 has shipped the decisions the ADR documents, so the ADR is not Proposed. The `<expand_at_36>` marker signals that the BODY is still under expansion, but the DECISION itself is live. This is consistent with ADR-0005''s pattern (Status: Superseded — reverted in Phase 26.3) where the Status field reflects the decision-state, not the document-completeness-state.'
+  - "Status: Accepted at stub time — Phase 29 has shipped the decisions the ADR documents, so the ADR is not Proposed. The `<expand_at_36>` marker signals that the BODY is still under expansion, but the DECISION itself is live. This is consistent with ADR-0005's pattern (Status: Superseded — reverted in Phase 26.3) where the Status field reflects the decision-state, not the document-completeness-state."
   - 'Date set to 2026-05-11 (the phase-execution date), not the date Phase 29 originally opened (2026-05-10). The Date field reflects the date the ADR was committed, matching the convention every prior ADR in this repo used (e.g. ADR-0009 dated 2026-04-24, the day the two-key-split landed).'
   - 'Matching one-line summary added to README.md alongside the index-table row, consistent with every prior ADR addition (0001 through 0009 all have one-line summary entries in the same section). Without it, ADR-0010 would be the only ADR missing from the at-a-glance summary list.'
   - 'ADR-0009 (the two-key-split) explicitly flagged as "partially superseded" in both the new ADR References and the README one-line summary — the v2 keys it documents are deletion targets in Phase 29, but its writer/reader-shape-isolation principle is preserved in the v3 partial-key pattern. Stronger framing than a generic "see also" reference; weaker framing than wholesale supersession (which would have required setting ADR-0009 Status to Superseded by ADR-0010 — out of scope for this stub).'
@@ -87,9 +87,11 @@ Acceptance: `grep -c "ADR-0010"` → 1; `grep -c "<expand_at_36>"` → 1; `grep 
 Two edits to the worktree's `docs/adr/README.md`:
 
 1. **Index table row appended** at the end of the index (immediately after the 0009 row, numerical order):
+
    ```
    | [0010](./0010-v1-5-llm-pipeline-narrowing-and-deletion.md)                 | v1.5 LLM pipeline narrowing and deletion                    | Accepted                            |
    ```
+
    Column alignment matches the existing rows (Markdown pads to nominal width).
 
 2. **One-line summary entry appended** after the ADR-0009 summary, before the Conventions section. Captures the 4 v1.5 narrowing decisions in one paragraph + flags that Phase 36 will expand the `<expand_at_36>` marker.

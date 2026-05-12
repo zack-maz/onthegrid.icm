@@ -87,7 +87,7 @@ Acceptance grep `grep -nP 'createApp|isLLMConfigured.*false' server/__tests__/ro
 
 PASS.
 
-### Task 29-09-02 -- Create server/__tests__/routes/llm-optional.test.ts
+### Task 29-09-02 -- Create server/**tests**/routes/llm-optional.test.ts
 
 Created the new test file with two test cases:
 
@@ -96,6 +96,7 @@ Created the new test file with two test cases:
 2. **`does NOT call freeClaudeRouter.callLLM when isLLMConfigured returns false`** -- asserts both `mockCallLLM` (legacy shim) AND `mockRouterCallLLM` (actual upstream) are never invoked. Defense in depth against either layer being re-wired into the events route hot path. The cron-only `runRefreshExtraction` helper (Phase 27.4.6) remains the sole writer of `events:llm:v3`; this assertion confirms a user-facing GET stays cache-read-only.
 
 Mock surface (mirrors events-fallback.test.ts):
+
 - `../../middleware/rateLimit.js` -- pass-through (11 routes)
 - `../../config.js` -- partial spread keeping real constants
 - 13 adapter mocks (opensky, adsb-lol, aisstream, gdelt, overpass, gdelt-doc, rss, yahoo-finance, open-meteo, overpass-water, open-meteo-precip, nominatim)
@@ -105,6 +106,7 @@ Mock surface (mirrors events-fallback.test.ts):
 - `../../cache/redis.js` -- in-memory `redisStore` (CacheEntry shape) + `rawRedisStore` (raw shape) backing all 11 redis methods
 
 Acceptance:
+
 - `test -f server/__tests__/routes/llm-optional.test.ts` -> **PASS**
 - `grep -c "isLLMConfigured: mockIsLLMConfigured" server/__tests__/routes/llm-optional.test.ts` -> reformatted by prettier across two lines; functional equivalent at line 187: `isLLMConfigured: (...args: unknown[]) => mockIsLLMConfigured(...(args as []))`. Underlying intent (route consumes `mockIsLLMConfigured` via the vi.mock) is preserved and proven by the passing tests below.
 - `grep -c "createApp" server/__tests__/routes/llm-optional.test.ts` -> **2** ✅
@@ -131,17 +133,18 @@ No Bearer needed: the route is gone, so dashboardAuth never runs; Express return
 Note on edit ergonomics: the first Edit-tool invocation appeared to land but on subsequent inspection the change wasn't in the working tree (possibly absorbed by a linter pass mid-session). The second Edit-tool invocation persisted cleanly -- verified by `git diff --stat` showing `+17 insertions(+)` and grep finding the unique marker string at L506.
 
 Acceptance:
+
 - `grep -c "route deleted Phase 29 D-02" server/__tests__/routes/events.test.ts` -> **1** ✅
 - `npx vitest run server/__tests__/routes/events.test.ts` -> **Tests 37 passed (37)** ✅ (was 36, +1 new)
 
 ### Task 29-09-04 -- Run full server suite + commit
 
-| Check                                                                | Target           | Result                          |
-| -------------------------------------------------------------------- | ---------------- | ------------------------------- |
-| `npx tsc --noEmit`                                                   | 0 errors         | **0 errors**                    |
-| `npx vitest run server/__tests__/routes/llm-optional.test.ts`        | 2/2 pass         | **2/2 pass** (912ms)            |
-| `npx vitest run server/__tests__/routes/events.test.ts`              | 37/37 pass       | **37/37 pass** (944ms)          |
-| `npx vitest run server/`                                             | full suite green | **91 files / 1112 tests pass**  |
+| Check                                                         | Target           | Result                         |
+| ------------------------------------------------------------- | ---------------- | ------------------------------ |
+| `npx tsc --noEmit`                                            | 0 errors         | **0 errors**                   |
+| `npx vitest run server/__tests__/routes/llm-optional.test.ts` | 2/2 pass         | **2/2 pass** (912ms)           |
+| `npx vitest run server/__tests__/routes/events.test.ts`       | 37/37 pass       | **37/37 pass** (944ms)         |
+| `npx vitest run server/`                                      | full suite green | **91 files / 1112 tests pass** |
 
 Wall-clock for `npx vitest run server/`: 49.04s.
 
@@ -175,18 +178,18 @@ The RESEARCH.md verbatim scaffold included `groupKey: expect.any(String)` inside
 
 ## Verification
 
-| Check                                                                                | Target           | Result                  |
-| ------------------------------------------------------------------------------------ | ---------------- | ----------------------- |
-| `test -f server/__tests__/routes/llm-optional.test.ts`                               | exists           | **exists** ✅           |
-| `grep -c "createApp" server/__tests__/routes/llm-optional.test.ts`                   | ≥1               | **2** ✅                |
-| `grep -c "freeClaudeRouter" server/__tests__/routes/llm-optional.test.ts`            | ≥1               | **5** ✅                |
-| `grep -c "isLLMConfigured" server/__tests__/routes/llm-optional.test.ts`             | ≥1               | **7** ✅                |
-| `grep -c "route deleted Phase 29 D-02" server/__tests__/routes/events.test.ts`       | ≥1               | **1** ✅                |
-| `npx vitest run server/__tests__/routes/llm-optional.test.ts`                        | 2/2 pass         | **2/2 pass** ✅         |
-| `npx vitest run server/__tests__/routes/events.test.ts`                              | 37/37 pass       | **37/37 pass** ✅       |
-| `npx vitest run server/`                                                             | green            | **91 files / 1112 pass** ✅ |
-| `npx tsc --noEmit`                                                                   | 0 errors         | **0 errors** ✅         |
-| `git log -1 --format='%s'`                                                           | starts with `test(29-09):` | **test(29-09): add LLM-optional integration guard + 404 regression (LLM-RELI-05)** ✅ |
+| Check                                                                          | Target                     | Result                                                                                |
+| ------------------------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------- |
+| `test -f server/__tests__/routes/llm-optional.test.ts`                         | exists                     | **exists** ✅                                                                         |
+| `grep -c "createApp" server/__tests__/routes/llm-optional.test.ts`             | ≥1                         | **2** ✅                                                                              |
+| `grep -c "freeClaudeRouter" server/__tests__/routes/llm-optional.test.ts`      | ≥1                         | **5** ✅                                                                              |
+| `grep -c "isLLMConfigured" server/__tests__/routes/llm-optional.test.ts`       | ≥1                         | **7** ✅                                                                              |
+| `grep -c "route deleted Phase 29 D-02" server/__tests__/routes/events.test.ts` | ≥1                         | **1** ✅                                                                              |
+| `npx vitest run server/__tests__/routes/llm-optional.test.ts`                  | 2/2 pass                   | **2/2 pass** ✅                                                                       |
+| `npx vitest run server/__tests__/routes/events.test.ts`                        | 37/37 pass                 | **37/37 pass** ✅                                                                     |
+| `npx vitest run server/`                                                       | green                      | **91 files / 1112 pass** ✅                                                           |
+| `npx tsc --noEmit`                                                             | 0 errors                   | **0 errors** ✅                                                                       |
+| `git log -1 --format='%s'`                                                     | starts with `test(29-09):` | **test(29-09): add LLM-optional integration guard + 404 regression (LLM-RELI-05)** ✅ |
 
 ## Self-Check: PASSED
 

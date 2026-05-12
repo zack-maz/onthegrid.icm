@@ -192,8 +192,7 @@ vi.mock('../../adapters/llm-provider.js', () => ({
 // the router directly (Pitfall 3 fix), bypassing the llm-provider shim. We
 // assert .not.toHaveBeenCalled() on this in the second test case.
 vi.mock('../../lib/freeClaudeRouter.js', () => ({
-  callLLM: (...args: unknown[]) =>
-    mockRouterCallLLM(...(args as [unknown, unknown, unknown?])),
+  callLLM: (...args: unknown[]) => mockRouterCallLLM(...(args as [unknown, unknown, unknown?])),
   prewarmIfCold: (...args: unknown[]) => mockPrewarmIfCold(...(args as [])),
 }));
 

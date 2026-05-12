@@ -36,13 +36,13 @@ decisions:
   - 'Two atomic commits instead of one: commit 4e166e8 captured the adaptive-test mock cleanup but missed the deletions (a git stash/pop cycle during pre-deletion baseline measurement dropped them from the index). Commit 7c08a66 re-added the deletions explicitly. Per agent guidelines (never amend, always new commit) this was the correct outcome — the 2-commit pair forms one logical unit and is documented in 7c08a66 as a "companion" commit.'
 metrics:
   tasks_completed: 6
-  tasks_treated_as_already_done: 2  # task 02 (ladder deletion) + task 04 part B (autoRollback test)
+  tasks_treated_as_already_done: 2 # task 02 (ladder deletion) + task 04 part B (autoRollback test)
   files_modified: 1
   files_deleted: 2
-  lines_removed: 1322  # 627 (v2.ts) + 692 (v2.test.ts) + 3 (adaptive mock lines)
+  lines_removed: 1322 # 627 (v2.ts) + 692 (v2.test.ts) + 3 (adaptive mock lines)
   lines_added: 0
   net_loc: -1322
-  expected_ts_errors_after_deletion: 6  # 4 v2-import + 2 cascade (any in extractionPipeline:540-541), all documented carry-overs for Plan 06
+  expected_ts_errors_after_deletion: 6 # 4 v2-import + 2 cascade (any in extractionPipeline:540-541), all documented carry-overs for Plan 06
   duration: '~4 min wall-clock'
   completed: 2026-05-10
 ---
@@ -79,6 +79,7 @@ removal (Rule 3 — blocking issue)"). v3.ts now retains only a 6-line
 forward-looking comment block at lines 1010-1015 explaining the absence.
 
 **Verification:**
+
 ```
 grep -cE 'function performAutoRollbackToV2|function checkWatchdogRecurrenceTrigger|function checkEvalDropTrigger' server/lib/llmEventExtractor.v3.ts
 0
@@ -102,6 +103,7 @@ predecessor 29-04, so the second `git rm` was skipped as already-done.
 
 `server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` L102-109 config
 mock trimmed from:
+
 ```typescript
 vi.mock('../../config.js', () => ({
   env: mockEnv,
@@ -112,7 +114,9 @@ vi.mock('../../config.js', () => ({
   setPipelineOverride: vi.fn(),
 }));
 ```
+
 to:
+
 ```typescript
 vi.mock('../../config.js', () => ({
   env: mockEnv,
@@ -130,6 +134,7 @@ file contents show those tests live in the deleted `llmAutoRollback.test.ts`
 (already gone from 29-04), not in this adaptive test file.
 
 **Verification:**
+
 ```
 npx vitest run server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts
 Test Files  1 passed (1)
@@ -140,15 +145,16 @@ Tests  9 passed (9)
 
 Two commits:
 
-| Hash | Message |
-| ---- | ------- |
+| Hash      | Message                                                                                                                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `4e166e8` | `feat(29-05): delete v2 extractor module + v2 tests (D-02 part B)` (carried only the v3-adaptive.test.ts mock cleanup due to a stash/pop cycle that dropped the deletions from the index) |
-| `7c08a66` | `feat(29-05): physically remove v2.ts + v2.test.ts files (D-02 part B)` (companion commit that re-added the deletions) |
+| `7c08a66` | `feat(29-05): physically remove v2.ts + v2.test.ts files (D-02 part B)` (companion commit that re-added the deletions)                                                                    |
 
 The 2-commit pair is one logical unit; the second commit's message explicitly
 flags it as a companion to the first.
 
 **Acceptance grep:**
+
 ```
 grep -cP 'performAutoRollbackToV2|checkWatchdogRecurrenceTrigger|checkEvalDropTrigger' server/lib/llmEventExtractor.v3.ts
 0  # only comment-block references count, which are 0 active code refs
@@ -165,17 +171,17 @@ grep -nE 'isPipelineV2|setPipelineOverride|getPipelineOverride' server/__tests__
 
 ## Verification
 
-| Check | Target | Result |
-| ----- | ------ | ------ |
-| `test ! -f server/lib/llmEventExtractor.v2.ts` | passes | **passes (DELETED)** |
-| `test ! -f server/__tests__/lib/llmEventExtractor.v2.test.ts` | passes | **passes (DELETED)** |
-| `test ! -f server/__tests__/lib/llmAutoRollback.test.ts` (already-done by 29-04) | passes | **passes (DELETED by 29-04)** |
-| `grep -cE 'function performAutoRollbackToV2' server/lib/llmEventExtractor.v3.ts` | 0 | **0** |
-| `grep -nE 'isPipelineV2\|setPipelineOverride\|getPipelineOverride' server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` | empty | **empty** |
-| `npx vitest run server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` | passes | **9/9 pass** |
-| `npx tsc --noEmit` (root composite — informational) | exits 0 | **exits 0** |
-| `npx tsc -b` (full build via npm run typecheck — strict gate) | 6 errors | **6 errors — all documented carry-overs for Plan 06** |
-| `npx vitest run server/` (full server suite — strict gate) | 19 files / 147 tests fail | **19 files / 147 tests fail — all documented carry-overs for Plan 06** |
+| Check                                                                                                                          | Target                    | Result                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------- | ---------------------------------------------------------------------- |
+| `test ! -f server/lib/llmEventExtractor.v2.ts`                                                                                 | passes                    | **passes (DELETED)**                                                   |
+| `test ! -f server/__tests__/lib/llmEventExtractor.v2.test.ts`                                                                  | passes                    | **passes (DELETED)**                                                   |
+| `test ! -f server/__tests__/lib/llmAutoRollback.test.ts` (already-done by 29-04)                                               | passes                    | **passes (DELETED by 29-04)**                                          |
+| `grep -cE 'function performAutoRollbackToV2' server/lib/llmEventExtractor.v3.ts`                                               | 0                         | **0**                                                                  |
+| `grep -nE 'isPipelineV2\|setPipelineOverride\|getPipelineOverride' server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` | empty                     | **empty**                                                              |
+| `npx vitest run server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts`                                                    | passes                    | **9/9 pass**                                                           |
+| `npx tsc --noEmit` (root composite — informational)                                                                            | exits 0                   | **exits 0**                                                            |
+| `npx tsc -b` (full build via npm run typecheck — strict gate)                                                                  | 6 errors                  | **6 errors — all documented carry-overs for Plan 06**                  |
+| `npx vitest run server/` (full server suite — strict gate)                                                                     | 19 files / 147 tests fail | **19 files / 147 tests fail — all documented carry-overs for Plan 06** |
 
 ## Deviations from Plan
 
@@ -224,41 +230,48 @@ of predecessor work captured in 29-04-SUMMARY.md, not new fixes.
 
 ## Documented carry-forward (Plan 06 scope)
 
-| Surface | File | Issue | Plan 06 action |
-| ------- | ---- | ----- | -------------- |
-| Barrel router | `server/lib/llmEventExtractor.ts` | 5 broken imports at L23-28 + L42-45 from deleted v2 module | Delete the v2 branch in `processEventGroups` + `geocodeEnrichedEvents` + the `'v2'` arm of the `ExtractorRun` / `GeocoderInput` / `GeocoderResult` discriminated unions |
-| Extraction pipeline | `server/lib/llmExtractionPipeline.ts` | L36 `GeocodedEnrichedEventV2` type + L39 `BATCH_SIZE_V2` import + L331 `pipelineV3 \|\| pipelineV2 ? BATCH_SIZE_V2 : BATCH_SIZE_V1` branch + L685 `geocoded: GeocodedEnrichedEventV2[]` param | Collapse to v3-only: delete the V2 type alias, delete the BATCH_SIZE_V2 import (or rename BATCH_SIZE_V3 in the v3 module), simplify the batch-size selector to a constant |
-| Events route | `server/routes/events.ts` | L12 `processEventGroupsV2` import + L486 call site inside `if (replayVersion === 'v2') { ... }` else branch | Delete the v2 branch from `/llm-replay` handler; the route now only supports `replayVersion === 'v3'` |
-| Test mocks | 5 test files (terminalShape, incrementalWrite, crossBoundary, events.test, events.replayQuota.test) | `vi.mock('../../lib/llmEventExtractor.v2.js', ...)` blocks pointing at the deleted module | Plan 06 mock cleanup pass — either delete the vi.mock blocks (if the test doesn't exercise v2-routed code) or migrate the mock target to the v3 module |
-| v3 extractor unused warning | `server/lib/llmEventExtractor.v3.ts:28` | `'isPipelineV3' is declared but its value is never read` — pre-existing in 29-04 baseline | Plan 06 collapse to constants (when v1+v2 extractor modules are gone, the helper has no remaining branch surface; deletion or single-line refactor) |
+| Surface                     | File                                                                                                | Issue                                                                                                                                                                                         | Plan 06 action                                                                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Barrel router               | `server/lib/llmEventExtractor.ts`                                                                   | 5 broken imports at L23-28 + L42-45 from deleted v2 module                                                                                                                                    | Delete the v2 branch in `processEventGroups` + `geocodeEnrichedEvents` + the `'v2'` arm of the `ExtractorRun` / `GeocoderInput` / `GeocoderResult` discriminated unions   |
+| Extraction pipeline         | `server/lib/llmExtractionPipeline.ts`                                                               | L36 `GeocodedEnrichedEventV2` type + L39 `BATCH_SIZE_V2` import + L331 `pipelineV3 \|\| pipelineV2 ? BATCH_SIZE_V2 : BATCH_SIZE_V1` branch + L685 `geocoded: GeocodedEnrichedEventV2[]` param | Collapse to v3-only: delete the V2 type alias, delete the BATCH_SIZE_V2 import (or rename BATCH_SIZE_V3 in the v3 module), simplify the batch-size selector to a constant |
+| Events route                | `server/routes/events.ts`                                                                           | L12 `processEventGroupsV2` import + L486 call site inside `if (replayVersion === 'v2') { ... }` else branch                                                                                   | Delete the v2 branch from `/llm-replay` handler; the route now only supports `replayVersion === 'v3'`                                                                     |
+| Test mocks                  | 5 test files (terminalShape, incrementalWrite, crossBoundary, events.test, events.replayQuota.test) | `vi.mock('../../lib/llmEventExtractor.v2.js', ...)` blocks pointing at the deleted module                                                                                                     | Plan 06 mock cleanup pass — either delete the vi.mock blocks (if the test doesn't exercise v2-routed code) or migrate the mock target to the v3 module                    |
+| v3 extractor unused warning | `server/lib/llmEventExtractor.v3.ts:28`                                                             | `'isPipelineV3' is declared but its value is never read` — pre-existing in 29-04 baseline                                                                                                     | Plan 06 collapse to constants (when v1+v2 extractor modules are gone, the helper has no remaining branch surface; deletion or single-line refactor)                       |
 
 ## Self-Check: PASSED
 
 **Deleted files:**
+
 - CONFIRMED MISSING: `server/lib/llmEventExtractor.v2.ts` (627 LOC removed)
 - CONFIRMED MISSING: `server/__tests__/lib/llmEventExtractor.v2.test.ts` (692 LOC removed)
 - CONFIRMED MISSING (by 29-04): `server/__tests__/lib/llmAutoRollback.test.ts` (325 LOC, captured in 29-04 commit `9ad8ed0`)
 
 **Modified files:**
+
 - FOUND: `server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` (3-line mock-entry cleanup)
 
 **Created files:**
+
 - FOUND: `.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-05-SUMMARY.md`
 
 **Commits:**
+
 - FOUND: `4e166e8 feat(29-05): delete v2 extractor module + v2 tests (D-02 part B)` (mock cleanup, 1 file changed)
 - FOUND: `7c08a66 feat(29-05): physically remove v2.ts + v2.test.ts files (D-02 part B)` (deletions, 2 files changed, -1319 LOC)
 
 **Verification grep:**
+
 - `grep -cE 'function performAutoRollbackToV2|function checkWatchdogRecurrenceTrigger|function checkEvalDropTrigger' server/lib/llmEventExtractor.v3.ts` → **0**
 - `grep -nE 'isPipelineV2|setPipelineOverride|getPipelineOverride' server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` → **empty**
 - `npx vitest run server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` → **9/9 pass**
 
 **Predecessor work confirmation:**
+
 - 29-04-SUMMARY.md decision #1 (Auto-rollback ladder removal) — verified by file-system + grep absence
 - 29-04 commit `9ad8ed0` (config helpers + auto-rollback ladder) — referenced in commit message of this plan's 4e166e8
 
 **Carry-over documentation:**
+
 - 6 TS errors documented (4 v2-import + 2 cascade) — all in Plan 06 scope
 - 19 vitest files / 147 tests broken at module-resolution level — all in Plan 06 scope
 - 5 production/test files needing barrel-or-consumer fixes — all enumerated above with line-level references

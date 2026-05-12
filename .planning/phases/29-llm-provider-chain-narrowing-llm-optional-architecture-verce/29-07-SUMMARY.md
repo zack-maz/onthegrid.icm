@@ -44,7 +44,7 @@ metrics:
   vitest_redis_death_full: '10/10 pass (re-run after one transient flake on /api/weather under contention)'
   vitest_redis_death_events_isolated: '/api/events returns under 9s (well within 10s default budget)'
   rule_1_fixes: 0
-  rule_3_fixes: 1  # in-scope comment cleanup needed to pass acceptance grep — see decisions
+  rule_3_fixes: 1 # in-scope comment cleanup needed to pass acceptance grep — see decisions
   duration: '~15 min wall-clock'
   completed: 2026-05-10
 ---
@@ -90,11 +90,11 @@ Read confirmed:
 Deleted from events.ts L521-552:
 
 - The `let bridgeV2 = await cacheGetSafe<...>('events:llm:v2', ...)` read
-  + early-return + envelope-coerce
+  - early-return + envelope-coerce
 - The `let bridgeV1 = await cacheGetSafe<...>('events:llm', ...)` read +
   early-return + envelope-coerce
 - The stale-bridge-promotion fallback block (`if (bridgeV2?.data)
-  llmCached = bridgeV2; else if (bridgeV1?.data) llmCached = bridgeV1;`)
+llmCached = bridgeV2; else if (bridgeV1?.data) llmCached = bridgeV1;`)
 - The 29-06 `data && stale && !degraded` outer guard (now dead code with
   no body to gate)
 
@@ -126,7 +126,7 @@ Acceptance:
 
 - `grep -cP 'pipelineVersion|getPipelineVersion' server/routes/events.ts` → **0** ✅
 - `grep -c "llm-replay" server/routes/events.ts` → **2** (route registration
-  + url comment) ✅
+  - url comment) ✅
 
 ### Task 29-07-04 — Collapse dev file cache branching
 
@@ -173,14 +173,14 @@ plan text.)
 
 ### Task 29-07-06 — Run tsc + events-fallback test + commit
 
-| Check                                                           | Target  | Result                                  |
-| --------------------------------------------------------------- | ------- | --------------------------------------- |
-| `npx tsc --noEmit`                                              | 0 errors | **0 errors**                            |
-| `npx vitest run server/__tests__/routes/events-fallback.test.ts` | 5/5 pass | **5/5 pass** (971ms)                    |
-| `npx vitest run server/__tests__/routes/events.test.ts`         | 36/36 pass | **36/36 pass** (855ms)                |
-| `npx vitest run server/__tests__/routes/`                       | passes  | **17 files / 157 tests pass** (10.30s)  |
-| `npx vitest run server/__tests__/resilience/redis-death.test.ts` (full)         | 10/10 pass | **10/10 pass** (50.75s on rerun; one transient flake on /api/weather under contention on the first attempt — confirmed environmental by isolated rerun + isolated rerun on the pre-edit baseline; not caused by this commit) |
-| `npx vitest run server/__tests__/resilience/redis-death.test.ts -t "/api/events"` | /api/events under 10s | **8.76s** (well within budget — the bridge-simplification recovered ~4s of cacheGetSafe latency budget vs Plan-29-06 baseline) |
+| Check                                                                             | Target                | Result                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npx tsc --noEmit`                                                                | 0 errors              | **0 errors**                                                                                                                                                                                                                 |
+| `npx vitest run server/__tests__/routes/events-fallback.test.ts`                  | 5/5 pass              | **5/5 pass** (971ms)                                                                                                                                                                                                         |
+| `npx vitest run server/__tests__/routes/events.test.ts`                           | 36/36 pass            | **36/36 pass** (855ms)                                                                                                                                                                                                       |
+| `npx vitest run server/__tests__/routes/`                                         | passes                | **17 files / 157 tests pass** (10.30s)                                                                                                                                                                                       |
+| `npx vitest run server/__tests__/resilience/redis-death.test.ts` (full)           | 10/10 pass            | **10/10 pass** (50.75s on rerun; one transient flake on /api/weather under contention on the first attempt — confirmed environmental by isolated rerun + isolated rerun on the pre-edit baseline; not caused by this commit) |
+| `npx vitest run server/__tests__/resilience/redis-death.test.ts -t "/api/events"` | /api/events under 10s | **8.76s** (well within budget — the bridge-simplification recovered ~4s of cacheGetSafe latency budget vs Plan-29-06 baseline)                                                                                               |
 
 Single atomic commit landed as **`6878e80`**:
 
@@ -213,18 +213,18 @@ feat(29-07): simplify Pitfall 1 cache bridge to v3 → raw GDELT only
 
 ## Verification
 
-| Check                                                           | Target           | Result                  |
-| --------------------------------------------------------------- | ---------------- | ----------------------- |
-| `grep -c "events:llm:v2" server/routes/events.ts`               | 0                | **0** ✅                |
-| `grep -c "events:llm:v3" server/routes/events.ts`               | ≥1               | **3** ✅                |
-| `grep -cE 'LLM_EVENTS_KEY[^_]' server/routes/events.ts`         | 0                | **0** ✅                |
-| `grep -cP 'pipelineVersion\|getPipelineVersion' server/routes/events.ts` | 0       | **0** ✅                |
-| `grep -cP 'pipelineV2\|pipelineV3' server/routes/events.ts`     | 0                | **0** ✅                |
-| `grep -c "llm-replay" server/routes/events.ts`                  | ≥1               | **2** ✅                |
-| `grep -rnP 'events:llm:v2\|LLM_EVENTS_KEY[^_]\|pipelineV2\|pipelineV3\|getPipelineVersion' server/routes/events.ts` | 0 lines | **0** ✅ |
-| `wc -l server/routes/events.ts`                                 | -30 net          | **680** (was 710; -30 ✓) |
-| `npx tsc --noEmit`                                              | 0 errors         | **0 errors** ✅          |
-| `git log -1 --format='%s'`                                       | starts with `feat(29-07):` | **feat(29-07): simplify Pitfall 1 cache bridge to v3 → raw GDELT only** ✅ |
+| Check                                                                                                               | Target                     | Result                                                                     |
+| ------------------------------------------------------------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------- |
+| `grep -c "events:llm:v2" server/routes/events.ts`                                                                   | 0                          | **0** ✅                                                                   |
+| `grep -c "events:llm:v3" server/routes/events.ts`                                                                   | ≥1                         | **3** ✅                                                                   |
+| `grep -cE 'LLM_EVENTS_KEY[^_]' server/routes/events.ts`                                                             | 0                          | **0** ✅                                                                   |
+| `grep -cP 'pipelineVersion\|getPipelineVersion' server/routes/events.ts`                                            | 0                          | **0** ✅                                                                   |
+| `grep -cP 'pipelineV2\|pipelineV3' server/routes/events.ts`                                                         | 0                          | **0** ✅                                                                   |
+| `grep -c "llm-replay" server/routes/events.ts`                                                                      | ≥1                         | **2** ✅                                                                   |
+| `grep -rnP 'events:llm:v2\|LLM_EVENTS_KEY[^_]\|pipelineV2\|pipelineV3\|getPipelineVersion' server/routes/events.ts` | 0 lines                    | **0** ✅                                                                   |
+| `wc -l server/routes/events.ts`                                                                                     | -30 net                    | **680** (was 710; -30 ✓)                                                   |
+| `npx tsc --noEmit`                                                                                                  | 0 errors                   | **0 errors** ✅                                                            |
+| `git log -1 --format='%s'`                                                                                          | starts with `feat(29-07):` | **feat(29-07): simplify Pitfall 1 cache bridge to v3 → raw GDELT only** ✅ |
 
 ## Self-Check: PASSED
 

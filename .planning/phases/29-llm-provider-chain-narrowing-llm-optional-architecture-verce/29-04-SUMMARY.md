@@ -123,23 +123,23 @@ Read `server/routes/events.ts`, `server/routes/operator-status.ts`, `server/conf
 
 ## Verification
 
-| Check | Target | Result |
-| ----- | ------ | ------ |
-| `grep -cP 'refreshPipelineOverride\|setPipelineOverride\|PIPELINE_OVERRIDE_KEY\|events:llm-pipeline-override' server/routes/events.ts` | 0 | **0** |
-| `grep -c "eventsRouter.post.*llm-pipeline" server/routes/events.ts` | 0 | **0** |
-| `grep -cP 'setPipelineOverride\|refreshPipelineOverride\|getPipelineOverride\|pipelineOverride[^V]' server/config.ts` | 0 | **0** |
-| `grep -cP 'isPipelineV2\|isPipelineV3\|getPipelineVersion' server/config.ts` | ≥1 | **7** |
-| `grep -cP 'pinTtl\|events:llm-pipeline-override' server/routes/operator-status.ts` | 0 | **0** |
-| `grep -c "audit24h" server/routes/operator-status.ts` | ≥1 | **2** |
-| `grep -c "POST /api/events/llm-pipeline" server/middleware/dashboardAuth.ts` | 0 | **0** |
-| `grep -c "/api/events/llm-replay" server/middleware/dashboardAuth.ts` | ≥1 | **1** |
-| `grep -rc "pinTtl" src/` (files with matches) | 0 | **0** |
-| `grep -c "setPipelineOverride" server/__tests__/routes/events.replayQuota.test.ts` | 0 | **0** |
-| `grep -c "pinTtl" server/routes/__tests__/operator-status.test.ts` | 0 | **0** |
-| `npx vitest run server/routes/__tests__/operator-status.test.ts` | passed | **3/3 pass** |
-| Plan verification: non-test references to deleted symbols | 0 | **0** |
-| `npx tsc --noEmit` | 0 errors | **0 errors** |
-| `npx vitest run server/` (full server suite) | passes | **92 files / 1135 tests pass** |
+| Check                                                                                                                                  | Target   | Result                         |
+| -------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------ |
+| `grep -cP 'refreshPipelineOverride\|setPipelineOverride\|PIPELINE_OVERRIDE_KEY\|events:llm-pipeline-override' server/routes/events.ts` | 0        | **0**                          |
+| `grep -c "eventsRouter.post.*llm-pipeline" server/routes/events.ts`                                                                    | 0        | **0**                          |
+| `grep -cP 'setPipelineOverride\|refreshPipelineOverride\|getPipelineOverride\|pipelineOverride[^V]' server/config.ts`                  | 0        | **0**                          |
+| `grep -cP 'isPipelineV2\|isPipelineV3\|getPipelineVersion' server/config.ts`                                                           | ≥1       | **7**                          |
+| `grep -cP 'pinTtl\|events:llm-pipeline-override' server/routes/operator-status.ts`                                                     | 0        | **0**                          |
+| `grep -c "audit24h" server/routes/operator-status.ts`                                                                                  | ≥1       | **2**                          |
+| `grep -c "POST /api/events/llm-pipeline" server/middleware/dashboardAuth.ts`                                                           | 0        | **0**                          |
+| `grep -c "/api/events/llm-replay" server/middleware/dashboardAuth.ts`                                                                  | ≥1       | **1**                          |
+| `grep -rc "pinTtl" src/` (files with matches)                                                                                          | 0        | **0**                          |
+| `grep -c "setPipelineOverride" server/__tests__/routes/events.replayQuota.test.ts`                                                     | 0        | **0**                          |
+| `grep -c "pinTtl" server/routes/__tests__/operator-status.test.ts`                                                                     | 0        | **0**                          |
+| `npx vitest run server/routes/__tests__/operator-status.test.ts`                                                                       | passed   | **3/3 pass**                   |
+| Plan verification: non-test references to deleted symbols                                                                              | 0        | **0**                          |
+| `npx tsc --noEmit`                                                                                                                     | 0 errors | **0 errors**                   |
+| `npx vitest run server/` (full server suite)                                                                                           | passes   | **92 files / 1135 tests pass** |
 
 ## Deviations from Plan
 
@@ -206,9 +206,11 @@ Read `server/routes/events.ts`, `server/routes/operator-status.ts`, `server/conf
 ## Self-Check: PASSED
 
 **Created files:**
+
 - FOUND: `.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-04-SUMMARY.md`
 
 **Modified files:**
+
 - FOUND: `server/routes/events.ts` (172 LOC removed)
 - FOUND: `server/config.ts` (48 LOC removed; getPipelineVersion / isPipelineV2 / isPipelineV3 retained for Plan 06)
 - FOUND: `server/routes/operator-status.ts` (64 LOC removed; humanizeTtl + pinTtl block gone)
@@ -223,10 +225,12 @@ Read `server/routes/events.ts`, `server/routes/operator-status.ts`, `server/conf
 - FOUND: `src/components/ui/__tests__/DevApiStatus.operatorActions.test.tsx` (Tests 7 + 7b gone; pinTtl mocks trimmed)
 
 **Deleted files:**
+
 - CONFIRMED MISSING: `server/__tests__/routes/events.audit.test.ts` (378 LOC — targets deleted route)
 - CONFIRMED MISSING: `server/__tests__/lib/llmAutoRollback.test.ts` (325 LOC — targets deleted functions)
 
 **Commits:**
+
 - FOUND: `edc1440 feat(29-04): delete POST /llm-pipeline route + override helpers in events.ts`
 - FOUND: `9ad8ed0 feat(29-04): delete pipeline-override helpers + auto-rollback ladder`
 - FOUND: `b159d8a feat(29-04): remove pinTtl surface + dashboardAuth comment + test sweep`

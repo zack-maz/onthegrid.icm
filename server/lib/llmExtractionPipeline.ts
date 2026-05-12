@@ -457,8 +457,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
         let suspectCount = 0;
         for (const e of geoResult.events) {
-          provenanceCounts[e.geocodeProvenance] =
-            (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
+          provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
           if (e.suspect) suspectCount++;
         }
         updateProgress({ provenanceCounts, suspectCount });

@@ -36,7 +36,7 @@ key-files:
 decisions:
   - 'Topbar pipeline-version pill DELETED, not preserved as a static "v3" badge (per RESEARCH Question 5 + A4). The pill''s only function was querying the deleted POST /api/events/llm-pipeline endpoint to discover the effective version. Reusing it as a constant-v3 badge would invent a UI element with no signal behind it — a maintainability footgun. Operators can confirm the active pipeline version via the DevApiStatus Events tab callHistory display.'
   - 'Unused import cleanup folded into Task 2 (Rule 2 — auto-add missing critical functionality): deleting PipelineVersionPillInner orphaned `useState`, `useEffect` (React) + `shouldRenderDashboard`, `dashboardAuthHeaders` (@/lib/dashboardAuth). `useCallback` + `hasDashboardKey` retained because both still see use in DevApiStatusTriggerInner (handleReset/onTriggerClick + L104 `import.meta.env.DEV || hasDashboardKey()` guard).'
-  - 'confirmModal.test.tsx wholesale deletion (Rule 3 — blocking issue, same logic as Plan 04''s events.audit.test.tsx wholesale): all 13 tests in the file exclusively exercise the deleted Pin-to-v1/v2 confirm modal + 429 replay-quota alert path. Leaving them behind would have produced 13 failing tests against the deleted UI. Replay-quota alert coverage at the server level is preserved by server/__tests__/routes/events.replayQuota.test.ts (7 tests).'
+  - "confirmModal.test.tsx wholesale deletion (Rule 3 — blocking issue, same logic as Plan 04's events.audit.test.tsx wholesale): all 13 tests in the file exclusively exercise the deleted Pin-to-v1/v2 confirm modal + 429 replay-quota alert path. Leaving them behind would have produced 13 failing tests against the deleted UI. Replay-quota alert coverage at the server level is preserved by server/__tests__/routes/events.replayQuota.test.ts (7 tests)."
   - 'Plan 04 already paraphrased one DevApiStatus comment ("operator-actions-pin-ttl render block removed — UI deletion of the Pin-to-v1/v2/v3 buttons + PipelineVersionPill lands in Plan 08") that mentioned the tokens being deleted in Plan 08. Plan 08 inherited and re-paraphrased that comment to drop "pin-pipeline" / "PipelineVersionPill" tokens, replacing them with "pipeline-version pin" / "pipeline-version pill". The architectural narrative survives; the grep tokens don''t.'
   - 'replayProbe + quotaAlert state retained in DevApiStatus.tsx. Plan 04 left POST /api/events/llm-replay/:groupKey live (per CONTEXT D-08 — replay-quota observability preserved). The Run replay probe button + 429 alert exercise that endpoint and must stay. Only the pin-pipeline surface was removed.'
 metrics:
@@ -71,6 +71,7 @@ D-02 part D executed: the last user-facing pieces of the operator pipeline-versi
 - Paraphrased three narrative comments still mentioning `pin-pipeline` / `PipelineVersionPill` so the acceptance grep `grep -cP 'pin-pipeline|confirm-pin-modal|sendPipelinePin|PipelinePinTarget' src/components/ui/DevApiStatus.tsx` returns **0**.
 
 Preserved everything else:
+
 - The Operator Actions section heading + 24h count row + per-Bearer breakdown rows + adversarial-eval row.
 - The 429 quota alert state (`quotaAlert`) + `replayProbe` async helper + Run replay probe button (target endpoint `/api/events/llm-replay/test` is still live per CONTEXT D-08).
 - Every other DevApiStatus tab (API Health, Events, Sites, Water, Filters).
@@ -89,6 +90,7 @@ Acceptance: `grep -cP 'pin-pipeline|confirm-pin-modal|sendPipelinePin|PipelinePi
 - Removed orphaned imports: `useState`, `useEffect` from react; `shouldRenderDashboard`, `dashboardAuthHeaders` from `@/lib/dashboardAuth`.
 
 Preserved everything else:
+
 - `DevApiStatusTrigger` + its inner component (`useUIStore` + `hasDashboardKey` guard).
 - `useCallback` (retained for `handleReset` + `onTriggerClick`).
 - `hasDashboardKey` (retained for L104 `import.meta.env.DEV || hasDashboardKey()` trigger-click branch).
@@ -124,20 +126,20 @@ Plan Task 6 prescribed a single big commit covering all surfaces. Per executor p
 
 ## Verification
 
-| Check | Target | Result |
-| ----- | ------ | ------ |
-| `grep -cP 'pin-pipeline\|confirm-pin-modal\|sendPipelinePin\|PipelinePinTarget' src/components/ui/DevApiStatus.tsx` | 0 | **0** |
-| `grep -c "Operator Actions" src/components/ui/DevApiStatus.tsx` | ≥1 | **4** |
-| `grep -cP 'PipelineVersionPill\|PIPELINE_COLORS\|PILL_COLORS' src/components/layout/Topbar.tsx` | 0 | **0** |
-| `grep -c "DevApiStatusTrigger" src/components/layout/Topbar.tsx` | ≥1 | **4** |
-| `grep -c "PipelineVersionPill" src/lib/dashboardAuth.ts` | 0 | **0** |
-| `test ! -f src/components/ui/__tests__/DevApiStatus.confirmModal.test.tsx` | true | **true** |
-| `grep -c "PipelineVersionPill" src/__tests__/DevApiStatusV3.test.tsx` | 0 | **0** |
-| `grep -rcP 'pin-pipeline\|PipelineVersionPill\|confirm-pin-modal\|PipelinePinTarget' src/ | awk -F: '$2 != "0"' | wc -l` | 0 | **0** |
-| `npx tsc --noEmit` | 0 errors | **0 errors** |
-| `npm run build` | success | **vite ✓ built in 3.99s; tsup ESM ⚡️ Build success in 103ms** |
-| `npx vitest run src/` | passes | **75 files / 1015 tests pass (19 skipped, 5 todo)** |
-| Task 6 spirit-check: commit msg contains "delete pin-pipeline buttons" | match | **PASS (0d0a50d)** |
+| Check                                                                                                               | Target              | Result                                                        |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------- | --- | ----- |
+| `grep -cP 'pin-pipeline\|confirm-pin-modal\|sendPipelinePin\|PipelinePinTarget' src/components/ui/DevApiStatus.tsx` | 0                   | **0**                                                         |
+| `grep -c "Operator Actions" src/components/ui/DevApiStatus.tsx`                                                     | ≥1                  | **4**                                                         |
+| `grep -cP 'PipelineVersionPill\|PIPELINE_COLORS\|PILL_COLORS' src/components/layout/Topbar.tsx`                     | 0                   | **0**                                                         |
+| `grep -c "DevApiStatusTrigger" src/components/layout/Topbar.tsx`                                                    | ≥1                  | **4**                                                         |
+| `grep -c "PipelineVersionPill" src/lib/dashboardAuth.ts`                                                            | 0                   | **0**                                                         |
+| `test ! -f src/components/ui/__tests__/DevApiStatus.confirmModal.test.tsx`                                          | true                | **true**                                                      |
+| `grep -c "PipelineVersionPill" src/__tests__/DevApiStatusV3.test.tsx`                                               | 0                   | **0**                                                         |
+| `grep -rcP 'pin-pipeline\|PipelineVersionPill\|confirm-pin-modal\|PipelinePinTarget' src/                           | awk -F: '$2 != "0"' | wc -l`                                                        | 0   | **0** |
+| `npx tsc --noEmit`                                                                                                  | 0 errors            | **0 errors**                                                  |
+| `npm run build`                                                                                                     | success             | **vite ✓ built in 3.99s; tsup ESM ⚡️ Build success in 103ms** |
+| `npx vitest run src/`                                                                                               | passes              | **75 files / 1015 tests pass (19 skipped, 5 todo)**           |
+| Task 6 spirit-check: commit msg contains "delete pin-pipeline buttons"                                              | match               | **PASS (0d0a50d)**                                            |
 
 ## Deviations from Plan
 
@@ -185,18 +187,22 @@ Plan Task 6 prescribed a single big commit covering all surfaces. Per executor p
 ## Self-Check: PASSED
 
 **Created files:**
+
 - FOUND: `.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-08-SUMMARY.md`
 
 **Modified files:**
+
 - FOUND: `src/components/ui/DevApiStatus.tsx` (~117 LOC removed)
 - FOUND: `src/components/layout/Topbar.tsx` (~63 LOC removed; useState/useEffect/shouldRenderDashboard/dashboardAuthHeaders imports gone)
 - FOUND: `src/lib/dashboardAuth.ts` (1 LOC trimmed)
 - FOUND: `src/__tests__/DevApiStatusV3.test.tsx` (~100 LOC removed; PipelineVersionPill describe block gone)
 
 **Deleted files:**
+
 - CONFIRMED MISSING: `src/components/ui/__tests__/DevApiStatus.confirmModal.test.tsx` (277 LOC — targeted deleted UI)
 
 **Commits:**
+
 - FOUND: `0d0a50d feat(29-08): delete DevApiStatus pin-pipeline buttons + confirm modal (D-02 part D)`
 - FOUND: `f03946f feat(29-08): delete Topbar PipelineVersionPill (D-02 part D)`
 - FOUND: `c516e46 docs(29-08): drop PipelineVersionPill from dashboardAuth shouldRenderDashboard JSDoc`

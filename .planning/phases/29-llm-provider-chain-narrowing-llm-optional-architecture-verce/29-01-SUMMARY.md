@@ -7,23 +7,23 @@ tags: [vercel, vercel-pro, maxDuration, cron, llm-pipeline, infra-config]
 # Dependency graph
 requires:
   - phase: 28.2.6
-    provides: "Vercel cron architecture fixes (waitUntil migration option enumerated in deferred-items.md); identified Hobby 300s ceiling as the blocking constraint that 29-01 raises."
+    provides: 'Vercel cron architecture fixes (waitUntil migration option enumerated in deferred-items.md); identified Hobby 300s ceiling as the blocking constraint that 29-01 raises.'
 provides:
-  - "vercel.json maxDuration ceiling raised 300 → 800 — Phase 29 (and all subsequent phases) now run against the Pro envelope, not the Hobby cliff."
-  - "First Phase 29 commit (per D-08) that locks the Pro upgrade into the deployed contract — future commits inherit the 800s headroom automatically."
-  - "Operator pre-flight pattern: pre-confirmed-via-AskUserQuestion before executor spawn, captured in plan as autonomous: false."
+  - 'vercel.json maxDuration ceiling raised 300 → 800 — Phase 29 (and all subsequent phases) now run against the Pro envelope, not the Hobby cliff.'
+  - 'First Phase 29 commit (per D-08) that locks the Pro upgrade into the deployed contract — future commits inherit the 800s headroom automatically.'
+  - 'Operator pre-flight pattern: pre-confirmed-via-AskUserQuestion before executor spawn, captured in plan as autonomous: false.'
 affects:
-  - "Phase 29-02..29-13 (every subsequent plan in this phase runs deploys against 800s, not 300s)"
-  - "Phase 30 (NIM throttle characterization — tunes against measured throttle inside the new envelope, not around the Hobby cliff)"
-  - "Phase 31 (7-day cron stability watch — measures completion against 800s ceiling)"
-  - "Future LLM-cron tuning across the v1.5 milestone"
+  - 'Phase 29-02..29-13 (every subsequent plan in this phase runs deploys against 800s, not 300s)'
+  - 'Phase 30 (NIM throttle characterization — tunes against measured throttle inside the new envelope, not around the Hobby cliff)'
+  - 'Phase 31 (7-day cron stability watch — measures completion against 800s ceiling)'
+  - 'Future LLM-cron tuning across the v1.5 milestone'
 
 # Tech tracking
 tech-stack:
   added: []
   patterns:
-    - "Operator-pre-flight gate captured as autonomous: false task — executor accepts the upgrade as already-confirmed via orchestrator AskUserQuestion."
-    - "Single-line infra-config commit shipping as the FIRST commit of a phase so all subsequent commits inherit the new ceiling automatically."
+    - 'Operator-pre-flight gate captured as autonomous: false task — executor accepts the upgrade as already-confirmed via orchestrator AskUserQuestion.'
+    - 'Single-line infra-config commit shipping as the FIRST commit of a phase so all subsequent commits inherit the new ceiling automatically.'
 
 key-files:
   created:
@@ -32,13 +32,13 @@ key-files:
     - vercel.json
 
 key-decisions:
-  - "Land the Pro-plan maxDuration ceiling as the first commit of Phase 29 (D-08) — every subsequent phase commit then runs against the 800s envelope without needing per-plan coordination."
-  - "Keep the cron schedule unchanged (3 entries: /api/cron/health 00:00 UTC, /api/cron/warm 12:00 UTC, /api/cron/refresh-events 04:00 UTC) — only the function ceiling shifts, not the trigger cadence."
-  - "Accept operator pre-flight (Vercel Pro upgrade) as a verified prerequisite via orchestrator AskUserQuestion before executor spawn — executor does not re-prompt, treats task 29-01-01 as ACCEPTED."
+  - 'Land the Pro-plan maxDuration ceiling as the first commit of Phase 29 (D-08) — every subsequent phase commit then runs against the 800s envelope without needing per-plan coordination.'
+  - 'Keep the cron schedule unchanged (3 entries: /api/cron/health 00:00 UTC, /api/cron/warm 12:00 UTC, /api/cron/refresh-events 04:00 UTC) — only the function ceiling shifts, not the trigger cadence.'
+  - 'Accept operator pre-flight (Vercel Pro upgrade) as a verified prerequisite via orchestrator AskUserQuestion before executor spawn — executor does not re-prompt, treats task 29-01-01 as ACCEPTED.'
 
 patterns-established:
-  - "Phase-opening infra-ceiling bump: a phase that depends on raised platform ceilings ships the ceiling change as plan 01 commit 01 so the rest of the phase inherits it deterministically."
-  - "Pre-flight gate documentation: autonomous: false tasks that depend on operator-side actions (billing dashboards, API key issuance, plan upgrades) are noted in the plan with the exact dashboard URL + checklist line for the operator."
+  - 'Phase-opening infra-ceiling bump: a phase that depends on raised platform ceilings ships the ceiling change as plan 01 commit 01 so the rest of the phase inherits it deterministically.'
+  - 'Pre-flight gate documentation: autonomous: false tasks that depend on operator-side actions (billing dashboards, API key issuance, plan upgrades) are noted in the plan with the exact dashboard URL + checklist line for the operator.'
 
 requirements-completed:
   - LLM-RELI-01
@@ -136,6 +136,7 @@ Verified via on-disk + git state:
 - `npm run build` exits 0 with Vite + tsup both reporting success — FOUND.
 
 ---
-*Phase: 29-llm-provider-chain-narrowing-llm-optional-architecture-verce*
-*Plan: 01*
-*Completed: 2026-05-10*
+
+_Phase: 29-llm-provider-chain-narrowing-llm-optional-architecture-verce_
+_Plan: 01_
+_Completed: 2026-05-10_

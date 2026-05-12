@@ -79,17 +79,17 @@ D-06 + D-07 executed: CLAUDE.md is now a 5,018-token current-state-invariants do
 
 **Token-count (D-07 primary gate):**
 
-| Metric | Before | After | Delta |
-| ------ | ------ | ----- | ----- |
-| gpt-4o tokens (via `npx tiktoken-cli`) | 18,846 | 5,018 | -73.3% |
-| Lines | 509 | 151 | -70.3% |
-| Bytes | 70,461 | ~18,000 | -74.5% |
-| Target | <10,000 tokens | PASS | 4,982 tokens of headroom |
+| Metric                                 | Before         | After   | Delta                    |
+| -------------------------------------- | -------------- | ------- | ------------------------ |
+| gpt-4o tokens (via `npx tiktoken-cli`) | 18,846         | 5,018   | -73.3%                   |
+| Lines                                  | 509            | 151     | -70.3%                   |
+| Bytes                                  | 70,461         | ~18,000 | -74.5%                   |
+| Target                                 | <10,000 tokens | PASS    | 4,982 tokens of headroom |
 
 **5-item operator spot-check (D-07 secondary gate):**
 
 1. **Redis key contracts** — Serverless Cache section at L106 with 24 backtick-prefixed entries. PASS.
-2. **Env vars + defaults** — Environment Variables section at L19; VITE_POLL_* + threshold + scoring vars enumerated. PASS.
+2. **Env vars + defaults** — Environment Variables section at L19; VITE*POLL*\* + threshold + scoring vars enumerated. PASS.
 3. **Color tokens** — Color Tokens section at L29 with `@theme` block reference + `src/lib/colorBridge.ts` (3 mentions). PASS.
 4. **Domain constants** — IRAN_BBOX, IRAN_CENTER, WAR_START, ADSB_RADIUS_NM all present in Data Model section. PASS.
 5. **Cron schedule** — 3 cron paths (`/api/cron/health 0 0 * * *`, `/api/cron/warm 0 12 * * *`, `/api/cron/refresh-events 0 4 * * *`) on a single line under LLM Event Pipeline. PASS.

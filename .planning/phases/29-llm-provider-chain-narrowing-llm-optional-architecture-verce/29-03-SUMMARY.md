@@ -65,21 +65,21 @@ Narrowed the active LLM cascade to NIM + OpenRouter only and repointed the geoco
 
 ## Verification
 
-| Check | Result |
-| --- | --- |
-| `grep -cP 'cerebras\|groq\|Cerebras\|Groq' server/adapters/llm-provider.ts` | **0** (target 0) |
-| `grep -c "isLLMConfigured" server/adapters/llm-provider.ts` | **2** (target ≥1) |
-| `grep -c "NVIDIA_NIM_API_KEY" server/adapters/llm-provider.ts` | **1** (target ≥1) |
-| `grep -c "from '../lib/freeClaudeRouter" server/adapters/llm-provider.ts` | **1** (target ≥1) |
-| `wc -l server/adapters/llm-provider.ts` | **50** (target ≤99) |
-| `grep -c "from './freeClaudeRouter" server/lib/llmResolver.ts` | **1** (target ≥1) |
-| `grep -c "from '../adapters/llm-provider'" server/lib/llmResolver.ts` | **0** (target 0) |
-| `grep -c "NVIDIA_NIM_API_KEY" server/__tests__/adapters/llm-provider.test.ts` | **2** (target ≥1) |
-| `grep -c "CEREBRAS_API_KEY" server/__tests__/adapters/llm-provider.test.ts` | **0** (target 0) |
-| `npx tsc --noEmit` | **0 errors** |
-| `npx vitest run server/__tests__/adapters/llm-provider.test.ts` | **4/4 pass** |
-| `npx vitest run server/__tests__/lib/llmResolver.test.ts` | **37/37 pass** |
-| `npx vitest run server/` (full server suite) | **94 files / 1155 tests pass** |
+| Check                                                                         | Result                         |
+| ----------------------------------------------------------------------------- | ------------------------------ |
+| `grep -cP 'cerebras\|groq\|Cerebras\|Groq' server/adapters/llm-provider.ts`   | **0** (target 0)               |
+| `grep -c "isLLMConfigured" server/adapters/llm-provider.ts`                   | **2** (target ≥1)              |
+| `grep -c "NVIDIA_NIM_API_KEY" server/adapters/llm-provider.ts`                | **1** (target ≥1)              |
+| `grep -c "from '../lib/freeClaudeRouter" server/adapters/llm-provider.ts`     | **1** (target ≥1)              |
+| `wc -l server/adapters/llm-provider.ts`                                       | **50** (target ≤99)            |
+| `grep -c "from './freeClaudeRouter" server/lib/llmResolver.ts`                | **1** (target ≥1)              |
+| `grep -c "from '../adapters/llm-provider'" server/lib/llmResolver.ts`         | **0** (target 0)               |
+| `grep -c "NVIDIA_NIM_API_KEY" server/__tests__/adapters/llm-provider.test.ts` | **2** (target ≥1)              |
+| `grep -c "CEREBRAS_API_KEY" server/__tests__/adapters/llm-provider.test.ts`   | **0** (target 0)               |
+| `npx tsc --noEmit`                                                            | **0 errors**                   |
+| `npx vitest run server/__tests__/adapters/llm-provider.test.ts`               | **4/4 pass**                   |
+| `npx vitest run server/__tests__/lib/llmResolver.test.ts`                     | **37/37 pass**                 |
+| `npx vitest run server/` (full server suite)                                  | **94 files / 1155 tests pass** |
 
 ## Deviations from Plan
 
@@ -125,13 +125,16 @@ Narrowed the active LLM cascade to NIM + OpenRouter only and repointed the geoco
 ## Self-Check: PASSED
 
 **Created files:**
+
 - FOUND: `.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-03-SUMMARY.md`
 
 **Modified files:**
+
 - FOUND: `server/adapters/llm-provider.ts` (50 lines, post-narrowing)
 - FOUND: `server/lib/llmResolver.ts` (import + line 458 call-site adapted)
 - FOUND: `server/__tests__/adapters/llm-provider.test.ts` (rewritten)
 - FOUND: `server/__tests__/lib/llmResolver.test.ts` (migrated)
 
 **Commit:**
+
 - FOUND: `c716690 feat(29): narrow LLM cascade to NIM + OpenRouter (SIMPLIFY-04)`

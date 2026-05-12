@@ -691,7 +691,6 @@ through the Pitfall 1 cache bridge.
 
 1. Unset both LLM provider keys in the Vercel project's environment
    variables for the Production scope:
-
    - `NVIDIA_NIM_API_KEY`
    - `OPENROUTER_API_KEY`
 
@@ -728,7 +727,6 @@ through the Pitfall 1 cache bridge.
 5. Open the dashboard and load the DevApiStatus API Health tab
    (Bearer-gated in production — auth in via the dashboard password).
    Confirm:
-
    - "Events (raw)" row is **healthy** (probes `events:gdelt`).
    - "Events (LLM)" row is **unknown** or **degraded** (probes
      `events:llm:v3`, which stays empty).

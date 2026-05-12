@@ -35,18 +35,19 @@ Resolved Phase 29 RESEARCH.md Pitfall 1 (ADR numbering collision) and its cousin
 
 ## Tasks Executed
 
-| Task     | Name                                                                                                | Status   | Commit  |
-| -------- | --------------------------------------------------------------------------------------------------- | -------- | ------- |
-| 29-02-01 | Update CONTEXT.md ADR-0009 references → ADR-0010                                                    | complete | 53a365d |
-| 29-02-02 | Update REQUIREMENTS.md ADR-0009 → ADR-0010 where context is v1.5 retirement                         | complete | 53a365d |
-| 29-02-03 | Update ROADMAP.md Phase 29 ADR-0009 → ADR-0010 + reconcile success criterion #3 with D-02           | complete | 53a365d |
-| 29-02-04 | Commit chore(29): ADR numbering + roadmap reconciliation                                            | complete | 53a365d |
+| Task     | Name                                                                                      | Status   | Commit  |
+| -------- | ----------------------------------------------------------------------------------------- | -------- | ------- |
+| 29-02-01 | Update CONTEXT.md ADR-0009 references → ADR-0010                                          | complete | 53a365d |
+| 29-02-02 | Update REQUIREMENTS.md ADR-0009 → ADR-0010 where context is v1.5 retirement               | complete | 53a365d |
+| 29-02-03 | Update ROADMAP.md Phase 29 ADR-0009 → ADR-0010 + reconcile success criterion #3 with D-02 | complete | 53a365d |
+| 29-02-04 | Commit chore(29): ADR numbering + roadmap reconciliation                                  | complete | 53a365d |
 
 All four tasks landed atomically as a single `chore(29)` commit per the plan's explicit instruction ("Bundled as a single commit so revert is trivial").
 
 ## Changes by File
 
 ### `.planning/phases/29-.../29-CONTEXT.md`
+
 - L21 (`<domain>` block): "Full ADR-0009 + acceptance gate closeout → Phase 36" → "Full ADR-0010 + acceptance gate closeout → Phase 36"
 - L48 (D-03): Header + body + filename path renamed to ADR-0010; added numbering-collision note citing the existing Accepted `0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` (committed 2026-04-24).
 - L122 (Claude's Discretion): "ADR-0009 stub structure" → "ADR-0010 stub structure" with citation of the existing 0009 slot.
@@ -58,6 +59,7 @@ All four tasks landed atomically as a single `chore(29)` commit per the plan's e
 **Net effect:** `grep ADR-0009 CONTEXT.md` → 0 hits. `grep ADR-0010 CONTEXT.md` → 7 hits. The remaining references to the numeric string `0009` are intentional citations of the existing Accepted two-key-split ADR filename, not v1.5 retirement references.
 
 ### `.planning/REQUIREMENTS.md`
+
 - L48 (REDIS-OPT-04): "DOCS-PUB-04 ADR-0009 may merge with this; or separate ADR-0010 if scope warrants" → "DOCS-PUB-04 ADR-0010 may merge with this; or a separate sequentially-numbered ADR if scope warrants" (preserves the "scope warrants" alternative without naming a specific ADR-0010 the v1.5 ADR already claims).
 - L60 (SIMPLIFY-07): "documented in ADR-0009" → "documented in ADR-0010".
 - L67 (DOCS-PUB-04): "expected ADR-0009" → "expected ADR-0010 — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot" (in-line citation captures the rationale).
@@ -65,6 +67,7 @@ All four tasks landed atomically as a single `chore(29)` commit per the plan's e
 **Net effect:** `grep -P 'ADR-0009.*v1\.5|v1\.5.*ADR-0009' REQUIREMENTS.md` → 0 hits.
 
 ### `.planning/ROADMAP.md`
+
 - L101 (v1.5 scope summary): "ADR-0009" → "ADR-0010" in the DOCS-PUB track description.
 - L105 (Phase 29 entry): "rationale folded into ADR-0009 at Phase 36 with stub written here" → "rationale folded into ADR-0010 at Phase 36 with stub written here — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` already occupies the 0009 slot".
 - L112 (Phase 36 short entry): "Phase 36: ADR-0009 + Acceptance Gate Closeout" → "Phase 36: ADR-0010 + Acceptance Gate Closeout" with citation of the existing 0009 slot.
@@ -78,6 +81,7 @@ All four tasks landed atomically as a single `chore(29)` commit per the plan's e
 - L245 (Progress table row): "36. ADR-0009 + Acceptance Gate Closeout" → "36. ADR-0010 + Acceptance Gate Closeout".
 
 **Net effect:**
+
 - `grep ADR-0009 ROADMAP.md` → 0 hits.
 - `grep "ADR-0010" ROADMAP.md` → 11 hits.
 - `grep "still importable as deep-rollback" ROADMAP.md` → 0 hits.
@@ -87,20 +91,21 @@ All four tasks landed atomically as a single `chore(29)` commit per the plan's e
 
 All per-task automated acceptance criteria pass:
 
-| Task     | Criterion                                                                                     | Expected   | Actual | Status |
-| -------- | --------------------------------------------------------------------------------------------- | ---------- | ------ | ------ |
-| 29-02-01 | `grep -c ADR-0010-llm-pipeline-v1-5-decisions CONTEXT.md` matches `^[1-9]`                    | ≥1         | 4      | PASS   |
-| 29-02-01 | (manual) Only v1.5-retirement refs renamed; two-key-split refs preserved                      | confirmed  | yes    | PASS   |
-| 29-02-02 | `grep -P 'ADR-0009.*v1\.5\|v1\.5.*ADR-0009' REQUIREMENTS.md` matches `^0$`                    | 0          | 0      | PASS   |
-| 29-02-02 | `grep ADR-0010 REQUIREMENTS.md` matches `^[1-9]`                                              | ≥1         | 3      | PASS   |
-| 29-02-03 | `grep -P 'ADR-0009.*v1\.5\|v1\.5.*ADR-0009' ROADMAP.md` matches `^0$`                          | 0          | 0      | PASS   |
-| 29-02-03 | `grep "still importable as deep-rollback" ROADMAP.md` matches `^0$`                            | 0          | 0      | PASS   |
-| 29-02-03 | `grep ADR-0010 ROADMAP.md` matches `^[1-9]`                                                    | ≥1         | 11     | PASS   |
-| 29-02-03 | `grep "git revert <Phase 29 commit range>" ROADMAP.md` matches `^[1-9]`                        | ≥1         | 2      | PASS   |
-| 29-02-04 | Commit subject contains `align ADR numbering 0009 → 0010`                                      | match      | match  | PASS   |
-| 29-02-04 | Commit touches CONTEXT/REQUIREMENTS/ROADMAP (≥3 files)                                         | ≥3         | 3      | PASS   |
+| Task     | Criterion                                                                  | Expected  | Actual | Status |
+| -------- | -------------------------------------------------------------------------- | --------- | ------ | ------ |
+| 29-02-01 | `grep -c ADR-0010-llm-pipeline-v1-5-decisions CONTEXT.md` matches `^[1-9]` | ≥1        | 4      | PASS   |
+| 29-02-01 | (manual) Only v1.5-retirement refs renamed; two-key-split refs preserved   | confirmed | yes    | PASS   |
+| 29-02-02 | `grep -P 'ADR-0009.*v1\.5\|v1\.5.*ADR-0009' REQUIREMENTS.md` matches `^0$` | 0         | 0      | PASS   |
+| 29-02-02 | `grep ADR-0010 REQUIREMENTS.md` matches `^[1-9]`                           | ≥1        | 3      | PASS   |
+| 29-02-03 | `grep -P 'ADR-0009.*v1\.5\|v1\.5.*ADR-0009' ROADMAP.md` matches `^0$`      | 0         | 0      | PASS   |
+| 29-02-03 | `grep "still importable as deep-rollback" ROADMAP.md` matches `^0$`        | 0         | 0      | PASS   |
+| 29-02-03 | `grep ADR-0010 ROADMAP.md` matches `^[1-9]`                                | ≥1        | 11     | PASS   |
+| 29-02-03 | `grep "git revert <Phase 29 commit range>" ROADMAP.md` matches `^[1-9]`    | ≥1        | 2      | PASS   |
+| 29-02-04 | Commit subject contains `align ADR numbering 0009 → 0010`                  | match     | match  | PASS   |
+| 29-02-04 | Commit touches CONTEXT/REQUIREMENTS/ROADMAP (≥3 files)                     | ≥3        | 3      | PASS   |
 
 Plan-level overall verification:
+
 - `grep "still importable as deep-rollback" ROADMAP.md` → 0 hits. PASS.
 - `grep ADR-0010 across the 3 target files` → 23 hits. PASS.
 
@@ -111,6 +116,7 @@ Note on the third plan-level grep (`grep -rnP 'ADR-0009.*(v1\.5|narrowing|retire
 ### Auto-fixed Issues
 
 **1. [Rule 2 - Missing Critical Functionality] ROADMAP Phase 29 SC#6 cross-reference to deleted SC#3 language**
+
 - **Found during:** Task 29-02-03 final verification scan
 - **Issue:** Plan task 03 only specified replacing SC#3 verbatim. After that replacement, Phase 29 SC#6 still read "v1 + v2 extractor _modules_ still importable for deep rollback per Criterion 3 — the purge is at the cascade-orchestration layer." That cross-reference now points at criterion-3 language that says the modules are DELETED, producing a self-contradicting roadmap.
 - **Fix:** Rewrote SC#6's trailing clause to: "Cerebras + Groq adapter _source files_ themselves stay in `server/adapters/` (importable for emergency rollback) but no production code path imports them. v1 + v2 extractor modules are DELETED per Criterion 3 — the rollback path for the entire Phase 29 surface is `git revert <Phase 29 commit range>`."
@@ -134,11 +140,13 @@ None. This plan is doc-only; no code stubs or placeholder data introduced.
 ## Self-Check: PASSED
 
 Files modified — verified present:
+
 - `.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-CONTEXT.md` → FOUND
 - `.planning/REQUIREMENTS.md` → FOUND
 - `.planning/ROADMAP.md` → FOUND
 
 Commit verified:
+
 - `53a365d` → FOUND in `git log --oneline`
 
 All grep-based acceptance criteria pass (10/10 individual checks across the four tasks).

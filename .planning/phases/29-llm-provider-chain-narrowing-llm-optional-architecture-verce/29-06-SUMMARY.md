@@ -79,8 +79,8 @@ metrics:
   vitest_files_after: '90 passed / 90 total (1 test file deleted)'
   vitest_tests_before: '147 failed / 1135 total'
   vitest_tests_after: '1110 passed / 1110 total'
-  rule_1_fixes: 1  # Pitfall 1 bridge tightening for chaos-mode latency
-  rule_3_consolidations: 1  # events.test.ts describe-block consolidation
+  rule_1_fixes: 1 # Pitfall 1 bridge tightening for chaos-mode latency
+  rule_3_consolidations: 1 # events.test.ts describe-block consolidation
   duration: '~50 min wall-clock (most spent on cleanup of cross-cutting test mocks + verifying chaos-resilience perf)'
   completed: 2026-05-10
 ---
@@ -116,6 +116,7 @@ signatures so call sites compile unchanged — the body is just the v3
 forwarder with the legacy v1/v2 branches stripped.
 
 Acceptance:
+
 - `grep -c "llmEventExtractor.v3" server/lib/llmEventExtractor.ts` → 2
 - `grep -cP 'llmEventExtractor\.v1|llmEventExtractor\.v2' server/lib/llmEventExtractor.ts` → 0
 - `wc -l server/lib/llmEventExtractor.ts` → 96 (under the 2-digit cap)
@@ -144,6 +145,7 @@ LOC):
   `'v3'`.
 
 Acceptance:
+
 - `grep -cP 'getPipelineVersion|isPipelineV2|isPipelineV3' server/lib/llmExtractionPipeline.ts` → 0
 - `grep -c "events:llm:v3" server/lib/llmExtractionPipeline.ts` → 6
 - `grep -c "events:llm-summary:v3" server/lib/llmExtractionPipeline.ts` → 2
@@ -162,6 +164,7 @@ the Phase 29 deploy window so a `git revert` finds them. Operator
 prunes them via Phase 30 closeout.
 
 Acceptance:
+
 - `grep -cP 'isPipelineV2|isPipelineV3|getPipelineVersion' server/config.ts` → 0
 - `grep -c "isLLMConfigured" server/config.ts` → 0 (it lives in
   `server/adapters/llm-provider.ts`; the plan acceptance was a guard
@@ -179,36 +182,38 @@ pipeline-override TTL probe`) from Plan 04's narrative cleanup
 
 ### Task 29-06-06 — Sweep test files
 
-| File | Change |
-| ---- | ------ |
-| `server/__tests__/lib/llmEventExtractor.test.ts` | **DELETED** (230 LOC, all 5 tests imported `processEventGroups` from the now-deleted `llmEventExtractor.v1.js`) |
-| `server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` | 2-line config.js mock cleanup (`isPipelineV3` + `getPipelineVersion` mock entries removed; preserves `env: mockEnv`) |
-| `server/__tests__/lib/llmExtractionPipeline.terminalShape.test.ts` | 5-line config.js mock cleanup + `vi.mock('../../lib/llmEventExtractor.v2.js', ...)` block deletion (BATCH_SIZE export gone) |
-| `server/__tests__/lib/llmExtractionPipeline.crossBoundary.test.ts` | Same shape as terminalShape |
-| `server/__tests__/lib/llmExtractionPipeline.incrementalWrite.test.ts` | Same shape as terminalShape |
-| `server/__tests__/lib/llmLineage-prefilter.test.ts` | 5-line config.js mock cleanup |
-| `server/__tests__/routes/eval-cron.test.ts` | 5-line config.js mock cleanup |
-| `server/__tests__/routes/events.test.ts` | `mockProcessEventGroupsV2` → `mockProcessEventGroupsV3` rename + `vi.mock('../../lib/llmEventExtractor.v2.js', ...)` → `vi.mock('../../lib/llmEventExtractor.v3.js', ...)` swap + 2 replay test bodies updated (`events:llm:v3` cache key + `llm-v3-*` ids + `schemaVersion: 'v3'` payload) + `LLM_PIPELINE_V2 flag` describe block + `cache-only regardless of pipeline version` describe block consolidated into one Phase-29 assertion + `events:llm-summary` swapped to `events:llm-summary:v3` for the idle-fallback test |
-| `server/__tests__/routes/events.replayQuota.test.ts` | `vi.mock('../../lib/llmEventExtractor.v2.js', ...)` block deleted + `process.env.LLM_PIPELINE_V2/V3` setup + teardown deleted from `beforeEach` / `afterEach` |
+| File                                                                  | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `server/__tests__/lib/llmEventExtractor.test.ts`                      | **DELETED** (230 LOC, all 5 tests imported `processEventGroups` from the now-deleted `llmEventExtractor.v1.js`)                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts`          | 2-line config.js mock cleanup (`isPipelineV3` + `getPipelineVersion` mock entries removed; preserves `env: mockEnv`)                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `server/__tests__/lib/llmExtractionPipeline.terminalShape.test.ts`    | 5-line config.js mock cleanup + `vi.mock('../../lib/llmEventExtractor.v2.js', ...)` block deletion (BATCH_SIZE export gone)                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `server/__tests__/lib/llmExtractionPipeline.crossBoundary.test.ts`    | Same shape as terminalShape                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `server/__tests__/lib/llmExtractionPipeline.incrementalWrite.test.ts` | Same shape as terminalShape                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `server/__tests__/lib/llmLineage-prefilter.test.ts`                   | 5-line config.js mock cleanup                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `server/__tests__/routes/eval-cron.test.ts`                           | 5-line config.js mock cleanup                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `server/__tests__/routes/events.test.ts`                              | `mockProcessEventGroupsV2` → `mockProcessEventGroupsV3` rename + `vi.mock('../../lib/llmEventExtractor.v2.js', ...)` → `vi.mock('../../lib/llmEventExtractor.v3.js', ...)` swap + 2 replay test bodies updated (`events:llm:v3` cache key + `llm-v3-*` ids + `schemaVersion: 'v3'` payload) + `LLM_PIPELINE_V2 flag` describe block + `cache-only regardless of pipeline version` describe block consolidated into one Phase-29 assertion + `events:llm-summary` swapped to `events:llm-summary:v3` for the idle-fallback test |
+| `server/__tests__/routes/events.replayQuota.test.ts`                  | `vi.mock('../../lib/llmEventExtractor.v2.js', ...)` block deleted + `process.env.LLM_PIPELINE_V2/V3` setup + teardown deleted from `beforeEach` / `afterEach`                                                                                                                                                                                                                                                                                                                                                                  |
 
 Acceptance:
+
 - `grep -rcP 'isPipelineV2|setPipelineOverride|refreshPipelineOverride|getPipelineVersion' server/__tests__/` → 0 (across the whole tree)
 - `grep -rc "processEventGroupsV2" server/__tests__/` → 0
 - `grep -rc "llmEventExtractor.v2" server/__tests__/` → 0
 
 ### Task 29-06-07 — Full-suite verification + commit
 
-| Check | Target | Result |
-| ----- | ------ | ------ |
-| `npx tsc --noEmit` | 0 errors | **0 errors** |
-| `npx tsc -b` (full build, strict gate) | 0 errors | **0 errors** |
-| `npx vitest run server/` | passes | **90 files / 1110 tests pass** |
-| `npx vitest run` (frontend included) | passes | **168 files / 2136 tests pass** |
-| `test ! -f server/lib/llmEventExtractor.v1.ts` | passes | **DELETED** |
-| `test ! -f server/__tests__/lib/llmEventExtractor.test.ts` | passes | **DELETED** |
-| `grep -rnP 'isPipelineV2\|isPipelineV3\|getPipelineVersion' server/ src/` (non-test) | 0 | **0** |
+| Check                                                                                | Target   | Result                          |
+| ------------------------------------------------------------------------------------ | -------- | ------------------------------- |
+| `npx tsc --noEmit`                                                                   | 0 errors | **0 errors**                    |
+| `npx tsc -b` (full build, strict gate)                                               | 0 errors | **0 errors**                    |
+| `npx vitest run server/`                                                             | passes   | **90 files / 1110 tests pass**  |
+| `npx vitest run` (frontend included)                                                 | passes   | **168 files / 2136 tests pass** |
+| `test ! -f server/lib/llmEventExtractor.v1.ts`                                       | passes   | **DELETED**                     |
+| `test ! -f server/__tests__/lib/llmEventExtractor.test.ts`                           | passes   | **DELETED**                     |
+| `grep -rnP 'isPipelineV2\|isPipelineV3\|getPipelineVersion' server/ src/` (non-test) | 0        | **0**                           |
 
 Single atomic commit landed as `56a411b`:
+
 ```
 feat(29): delete v1 extractor + collapse barrel + simplify pipeline (D-02 part C)
 ```
@@ -235,10 +240,10 @@ feat(29): delete v1 extractor + collapse barrel + simplify pipeline (D-02 part C
 - **Files modified:** `server/__tests__/routes/events.test.ts`
 - **Verified:** `npx vitest run server/__tests__/routes/events.test.ts` → **36/36 pass**.
 
-**3. [Rule 1 — Stale ID prefix] llm-v2-* groupKey stripping in loadRecentEnrichedEvents**
+**3. [Rule 1 — Stale ID prefix] llm-v2-\* groupKey stripping in loadRecentEnrichedEvents**
 
 - **Found during:** Task 4 read-through of `server/routes/events.ts` `loadRecentEnrichedEvents()`.
-- **Issue:** The dev drill-down's groupKey-recovery regex stripped `^llm-v2-` from the entity id (set by `enrichedV2ToEntities` as `id: \`llm-v2-${groupKey}\``). With the v2 adapter deleted and the v3 adapter setting `id: \`llm-v3-${groupKey}\`` (per `enrichedV3ToEntities` in `llmExtractionPipeline.ts:735`), the regex would never match.
+- **Issue:** The dev drill-down's groupKey-recovery regex stripped `^llm-v2-` from the entity id (set by `enrichedV2ToEntities` as `id: \`llm-v2-${groupKey}\``). With the v2 adapter deleted and the v3 adapter setting `id: \`llm-v3-${groupKey}\``(per`enrichedV3ToEntities`in`llmExtractionPipeline.ts:735`), the regex would never match.
 - **Fix:** Updated regex to `e.id.replace(/^llm-v3-/, '').replace(/-\d+$/, '')`. The comment above was also updated to reflect v3 ids.
 - **Files modified:** `server/routes/events.ts`
 
@@ -263,36 +268,39 @@ feat(29): delete v1 extractor + collapse barrel + simplify pipeline (D-02 part C
 
 ## Verification
 
-| Check | Target | Result |
-| ----- | ------ | ------ |
-| `test ! -f server/lib/llmEventExtractor.v1.ts` | passes | **passes (DELETED)** |
-| `test ! -f server/__tests__/lib/llmEventExtractor.test.ts` | passes | **passes (DELETED)** |
-| `grep -c "llmEventExtractor.v3" server/lib/llmEventExtractor.ts` | ≥1 | **2** |
-| `grep -cP 'llmEventExtractor\.v1\|llmEventExtractor\.v2' server/lib/llmEventExtractor.ts` | 0 | **0** |
-| `wc -l server/lib/llmEventExtractor.ts` | 1-2 digits | **96** |
-| `grep -cP 'getPipelineVersion\|isPipelineV2\|isPipelineV3' server/lib/llmExtractionPipeline.ts` | 0 | **0** |
-| `grep -c "events:llm:v3" server/lib/llmExtractionPipeline.ts` | ≥1 | **6** |
-| `grep -c "events:llm-summary:v3" server/lib/llmExtractionPipeline.ts` | ≥1 | **2** |
-| `grep -cP 'isPipelineV2\|isPipelineV3\|getPipelineVersion' server/config.ts` | 0 | **0** |
-| `grep -rnP 'isPipelineV2\|isPipelineV3\|getPipelineVersion\|setPipelineOverride\|refreshPipelineOverride' server/ src/` (non-test) | 0 | **0** |
-| `grep -rcP 'isPipelineV2\|setPipelineOverride\|refreshPipelineOverride\|getPipelineVersion' server/__tests__/` | 0 | **0** |
-| `grep -rc "processEventGroupsV2" server/__tests__/` | 0 | **0** |
-| `npx tsc --noEmit` | 0 errors | **0 errors** |
-| `npx tsc -b` (strict gate) | 0 errors | **0 errors** |
-| `npx vitest run server/` | passes | **90 files / 1110 tests pass** |
-| `npx vitest run` (frontend included) | passes | **168 files / 2136 tests pass** |
-| `git log -1 --format='%s'` | starts with `feat(29):` | **feat(29): delete v1 extractor + collapse barrel + simplify pipeline (D-02 part C)** |
+| Check                                                                                                                              | Target                  | Result                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------- |
+| `test ! -f server/lib/llmEventExtractor.v1.ts`                                                                                     | passes                  | **passes (DELETED)**                                                                  |
+| `test ! -f server/__tests__/lib/llmEventExtractor.test.ts`                                                                         | passes                  | **passes (DELETED)**                                                                  |
+| `grep -c "llmEventExtractor.v3" server/lib/llmEventExtractor.ts`                                                                   | ≥1                      | **2**                                                                                 |
+| `grep -cP 'llmEventExtractor\.v1\|llmEventExtractor\.v2' server/lib/llmEventExtractor.ts`                                          | 0                       | **0**                                                                                 |
+| `wc -l server/lib/llmEventExtractor.ts`                                                                                            | 1-2 digits              | **96**                                                                                |
+| `grep -cP 'getPipelineVersion\|isPipelineV2\|isPipelineV3' server/lib/llmExtractionPipeline.ts`                                    | 0                       | **0**                                                                                 |
+| `grep -c "events:llm:v3" server/lib/llmExtractionPipeline.ts`                                                                      | ≥1                      | **6**                                                                                 |
+| `grep -c "events:llm-summary:v3" server/lib/llmExtractionPipeline.ts`                                                              | ≥1                      | **2**                                                                                 |
+| `grep -cP 'isPipelineV2\|isPipelineV3\|getPipelineVersion' server/config.ts`                                                       | 0                       | **0**                                                                                 |
+| `grep -rnP 'isPipelineV2\|isPipelineV3\|getPipelineVersion\|setPipelineOverride\|refreshPipelineOverride' server/ src/` (non-test) | 0                       | **0**                                                                                 |
+| `grep -rcP 'isPipelineV2\|setPipelineOverride\|refreshPipelineOverride\|getPipelineVersion' server/__tests__/`                     | 0                       | **0**                                                                                 |
+| `grep -rc "processEventGroupsV2" server/__tests__/`                                                                                | 0                       | **0**                                                                                 |
+| `npx tsc --noEmit`                                                                                                                 | 0 errors                | **0 errors**                                                                          |
+| `npx tsc -b` (strict gate)                                                                                                         | 0 errors                | **0 errors**                                                                          |
+| `npx vitest run server/`                                                                                                           | passes                  | **90 files / 1110 tests pass**                                                        |
+| `npx vitest run` (frontend included)                                                                                               | passes                  | **168 files / 2136 tests pass**                                                       |
+| `git log -1 --format='%s'`                                                                                                         | starts with `feat(29):` | **feat(29): delete v1 extractor + collapse barrel + simplify pipeline (D-02 part C)** |
 
 ## Self-Check: PASSED
 
 **Created files:**
+
 - FOUND: `.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-06-SUMMARY.md`
 
 **Deleted files:**
+
 - CONFIRMED MISSING: `server/lib/llmEventExtractor.v1.ts` (414 LOC)
 - CONFIRMED MISSING: `server/__tests__/lib/llmEventExtractor.test.ts` (230 LOC)
 
 **Modified files (all present, all in commit `56a411b`):**
+
 - FOUND: `server/lib/llmEventExtractor.ts` (-126 LOC; 169 → 96)
 - FOUND: `server/lib/llmEventExtractor.v3.ts` (-1 LOC; unused import removed)
 - FOUND: `server/lib/llmExtractionPipeline.ts` (~-260 LOC; v1+v2 adapters + branching removed)
@@ -308,14 +316,17 @@ feat(29): delete v1 extractor + collapse barrel + simplify pipeline (D-02 part C
 - FOUND: `server/__tests__/routes/events.replayQuota.test.ts` (v2 vi.mock block + env-flag setup/teardown removed)
 
 **Commits:**
+
 - FOUND: `56a411b feat(29): delete v1 extractor + collapse barrel + simplify pipeline (D-02 part C)` — 15 files changed, 267 insertions(+), 1458 deletions(-)
 
 **Predecessor work confirmation:**
+
 - 29-04 commit `9ad8ed0` (auto-rollback ladder + pipeline-override helpers deleted) — verified preserved
 - 29-04 commit `b159d8a` (operator-status pinTtl + dashboardAuth comment) — verified preserved
 - 29-05 commit `7c08a66` (v2 extractor + v2 test deleted) — verified preserved
 
 **Carry-over closure:**
+
 - All 6 TS errors documented in 29-05-SUMMARY.md carry-forward table → **resolved**
 - All 19 vitest files / 147 tests documented as broken at module-resolution → **resolved (90 files / 1110 tests pass)**
 - 5 production/test files needing barrel-or-consumer fixes → **all resolved**
