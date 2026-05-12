@@ -2019,13 +2019,20 @@ async function resolveLocation(hierarchy, ctx) {
 init_redis();
 var log5 = logger.child({ module: "llm-token-budget" });
 var DAILY_LIMITS = {
+  // Phase 29 D-01: cerebras/groq retired from the runtime path (ADR-0010).
+  // The slots are retained here for one deploy window so the test suite's
+  // `cerebras`/`groq` fixtures and `shouldPauseNewEvents` legacy probe
+  // continue to compile. Phase 30 prunes them per RESEARCH.md Open Q4.
   cerebras: 1e6,
   groq: 2e5,
-  // Phase 27.4.3: v3 path uses freeClaudeRouter, not this module. These zero
-  // limits are present purely for Record<Provider, number> exhaustiveness
-  // and would force a 'hard' budgetState if ever invoked — safe fail-closed.
-  nvidia_nim: 0,
-  openrouter: 0
+  // Phase 29 WR-01: real ceilings for the NIM/OpenRouter cascade so the
+  // adversarial-eval `budgetState` probe (formerly pointed at `cerebras`)
+  // semantically gates on the active providers. Per-event token counters
+  // for v3 are not yet plumbed into incrDailyTokens, so the gate currently
+  // resolves to 'ok' at runtime — the fix makes the soft-cap defense
+  // activate-able rather than permanently no-op.
+  nvidia_nim: 1e6,
+  openrouter: 2e5
 };
 var SOFT_CAP_RATIO = 0.8;
 var HARD_CAP_RATIO = 0.95;
@@ -2220,9 +2227,9 @@ function loadAdversarialFixture() {
 async function runAdversarialEval() {
   const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
   try {
-    const used = await getDailyTokens("cerebras");
-    if (budgetState("cerebras", used) === "hard") {
-      log6.warn("adversarial sub-eval skipped \u2014 Cerebras token budget at hard cap");
+    const used = await getDailyTokens("nvidia_nim");
+    if (budgetState("nvidia_nim", used) === "hard") {
+      log6.warn("adversarial sub-eval skipped \u2014 NVIDIA NIM token budget at hard cap");
       return {
         total: 0,
         blocked: 0,
@@ -82613,6 +82620,13 @@ async function loadRecentEnrichedEvents(limit) {
     const cached = await cacheGetSafe(LLM_EVENTS_KEY_ACTIVE2, 0);
     const events = toEntityArray(cached?.data);
     if (events.length === 0) return [];
+    const confidenceByGroupKey = /* @__PURE__ */ new Map();
+    const recentEvents = llmProgress.recentEvents ?? [];
+    for (const r of recentEvents) {
+      if (r.groupKey && typeof r.confidence === "number") {
+        confidenceByGroupKey.set(r.groupKey, r.confidence);
+      }
+    }
     return events.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit).map((e) => {
       const d = e.data ?? {};
       const groupKey = e.id.replace(/^llm-v3-/, "").replace(/-\d+$/, "");
@@ -82628,7 +82642,10 @@ async function loadRecentEnrichedEvents(limit) {
           landmark: null
         },
         precision: d.precision ?? "region",
-        confidence: d.confidence ?? 0,
+        // WR-05: fallback to 0 ONLY when no recent-events entry exists
+        // for this groupKey (e.g., cold start / progress singleton was
+        // cleared between runs while v3 cache survived).
+        confidence: confidenceByGroupKey.get(groupKey) ?? 0,
         reasoning: d.reasoning ?? "",
         weaponType: d.weaponType ?? null,
         targetType: d.targetType ?? null,
