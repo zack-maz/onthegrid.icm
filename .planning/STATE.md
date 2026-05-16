@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: "Phase 29 shipped — PR #19"
-last_updated: "2026-05-12T21:17:43.696Z"
-last_activity: 2026-05-12
+status: "Phase 30 context gathered"
+last_updated: "2026-05-16T22:17:12.596Z"
+last_activity: 2026-05-16
 progress:
   total_phases: 13
   completed_phases: 1
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 999.1
+Phase: 30
 Plan: Not started
-Status: Phase 29 shipped — PR #19
-Last activity: 2026-05-12
+Status: Phase 30 context gathered (feature/30-nim-throttle-characterization)
+Last activity: 2026-05-16
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -37,7 +37,7 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | Phase | Name                                                                  | Requirements                                                  | Status      |
 | ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- | ----------- |
 | 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | Context gathered |
-| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04                         | Not started |
+| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Context gathered |
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Not started |
 | 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
