@@ -82,6 +82,44 @@ describe('server/config.ts', () => {
     expect(env.EVENT_CONFIDENCE_THRESHOLD).toBe(0.5);
   });
 
+  // Phase 30 D-07 (LLM-RELI-03) — LLM_BATCH_SIZE promoted from the
+  // hard-coded `const BATCH_SIZE = 2` at llmEventExtractor.v3.ts to an
+  // env-tunable Zod schema entry. Mirrors the EVENT_CONFIDENCE_THRESHOLD
+  // numeric-parse test above.
+  it('honors LLM_BATCH_SIZE env var override', async () => {
+    process.env.UPSTASH_REDIS_REST_URL = 'https://fake-redis.upstash.io';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token-123';
+    process.env.LLM_BATCH_SIZE = '4';
+
+    const { env } = await import('../config.js');
+    expect(env.LLM_BATCH_SIZE).toBe(4);
+  });
+
+  it('falls back to default LLM_BATCH_SIZE=2 when env var unset', async () => {
+    process.env.UPSTASH_REDIS_REST_URL = 'https://fake-redis.upstash.io';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token-123';
+    delete process.env.LLM_BATCH_SIZE;
+
+    const { env } = await import('../config.js');
+    expect(env.LLM_BATCH_SIZE).toBe(2);
+  });
+
+  it('rejects non-positive / non-integer LLM_BATCH_SIZE values', async () => {
+    const { z } = await import('zod');
+    const shape = z.object({
+      LLM_BATCH_SIZE: z.coerce.number().int().positive().default(2),
+    });
+
+    // Non-numeric: coerce returns NaN, fails .number()
+    expect(shape.safeParse({ LLM_BATCH_SIZE: 'abc' }).success).toBe(false);
+    // Zero: fails .positive()
+    expect(shape.safeParse({ LLM_BATCH_SIZE: '0' }).success).toBe(false);
+    // Negative: fails .positive()
+    expect(shape.safeParse({ LLM_BATCH_SIZE: '-3' }).success).toBe(false);
+    // Float: fails .int()
+    expect(shape.safeParse({ LLM_BATCH_SIZE: '2.5' }).success).toBe(false);
+  });
+
   it('optional API keys default to empty string without crashing', async () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://fake-redis.upstash.io';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token-123';

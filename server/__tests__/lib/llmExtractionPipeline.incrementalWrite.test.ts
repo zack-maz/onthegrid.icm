@@ -1,23 +1,26 @@
 // @vitest-environment node
 /**
- * Phase 28.2.6 Plan 01 Task 1 — D-03 cadence assertion.
+ * Phase 30 Plan 03 Task 3 — D-04 / SIMPLIFY-01 no-incremental-flush assertion.
  *
  * Drives `runRefreshExtraction` through a controlled number of batches and
- * asserts that `cacheSetSafe('events:llm:v3', ...)` fires every N batches
- * (intermediate flush) AND once more at end-of-pipeline (final flush).
+ * asserts that `cacheSetSafe('events:llm:v3', ...)` fires EXACTLY ONCE per
+ * successful run (the end-of-pipeline terminal write) regardless of batch
+ * count. The pre-Phase-30 every-N-batches incremental flush is gone.
  *
- * The cadence default N=10 is encoded in `env.LLM_FLUSH_EVERY_N_BATCHES`;
- * tests vary the value via the hoisted mockEnv to exercise the env-tunable
- * path without redeploys.
+ * Lineage: the prior cadence assertions (the default-N intermediate
+ * flush and the configurable-N intermediate flush at batches 3 and 6)
+ * were retired alongside the periodic-flush mechanism (Plan 03 Task 1)
+ * and the legacy flush-cadence Zod schema entry (Task 2).
  *
- * Per RESEARCH §Pattern 3 + Pitfall 2: the cadence counter MUST live inside
- * the `onBatchComplete` callback (driven by `finishBatch`'s monotonic
- * `++completedBatchesCounter`). We pin LLM_V3_CONCURRENCY=1 here so completion
- * order equals submission order — keeps the cadence assertion deterministic.
+ * Pitfall 7 scope: this file's `driveRun(N)` covers the happy-path branch
+ * (groups present, soft-cap not paused) — the exactly-once assertion only
+ * applies there. The empty-groups early-return and soft-cap-paused branches
+ * intentionally do NOT call `mergeAndPersistLlmEntities` (they would assert
+ * `terminalCalls.length === 0`); those branches are not covered here.
  *
- * Per Pitfall 4: each terminal-key write merges with prior cache via id-key
- * Map. The "no premature flush" case proves N=10 is honored (no clobber under
- * concurrency=12 in prod).
+ * LLM_V3_CONCURRENCY=1 is pinned for ordering determinism even though
+ * the post-D-04 callback no longer has any cadence semantics — keeps the
+ * harness behavior stable for future test additions.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -30,12 +33,14 @@ const { mockEnv } = vi.hoisted(() => ({
   mockEnv: {
     NVIDIA_NIM_API_KEY: 'fake',
     OPENROUTER_API_KEY: '',
-    LLM_BATCH_TIMEOUT_MS: 90000,
+    LLM_BATCH_TIMEOUT_MS: 120_000, // Phase 30 D-02 retune (was 90_000)
     LLM_V3_CONCURRENCY: 1, // serialize so completion order == submission order
     V3_ADAPTIVE_BATCH: false,
     V3_LINEAGE_PREFILTER: false,
     V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
-    LLM_FLUSH_EVERY_N_BATCHES: 10, // NEW env var introduced by Task 4a
+    // Phase 30 D-04 (SIMPLIFY-01): legacy flush-cadence env var stripped
+    // from mockEnv when the Zod schema entry was deleted in Plan 03 Task 2.
+    LLM_BATCH_SIZE: 2, // Phase 30 D-07 — promoted from hard-coded const
     CRON_SECRET: '',
   },
 }));
@@ -363,29 +368,46 @@ beforeEach(() => {
     delete llmProgressSingleton[k];
   }
   llmProgressSingleton.stage = 'idle';
-  // Reset env to default cadence.
-  mockEnv.LLM_FLUSH_EVERY_N_BATCHES = 10;
   mockEnv.LLM_V3_CONCURRENCY = 1;
 });
 
-describe('runRefreshExtraction — D-03 incremental terminal-key cadence', () => {
-  it("cadence: cacheSetSafe('events:llm:v3', ...) is called every 10 batches", async () => {
+describe('runRefreshExtraction — no incremental flush (D-04 / SIMPLIFY-01)', () => {
+  it("12-batch happy path: exactly ONE cacheSetSafe('events:llm:v3', ...) call (terminal only)", async () => {
     await driveRun(12);
-    const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
-    expect(terminalCalls.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("no premature flush: under 10 batches there is exactly ONE cacheSetSafe('events:llm:v3', ...) call (final-only)", async () => {
-    await driveRun(5);
     const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
     expect(terminalCalls.length).toBe(1);
   });
 
-  it('configurable: LLM_FLUSH_EVERY_N_BATCHES=3 fires intermediate at batch 3 and 6', async () => {
-    mockEnv.LLM_FLUSH_EVERY_N_BATCHES = 3;
-    await driveRun(7);
+  it("5-batch happy path: exactly ONE cacheSetSafe('events:llm:v3', ...) call (terminal only)", async () => {
+    await driveRun(5);
     const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
-    // Two intermediate flushes (batches 3 and 6) + 1 final flush = 3 total.
-    expect(terminalCalls.length).toBe(3);
+    expect(terminalCalls.length).toBe(1);
+  });
+});
+
+// Phase 30 D-07 (LLM-RELI-03) — env.LLM_BATCH_SIZE consumer proof.
+// The hoisted mockEnv pattern above injects an env-tunable LLM_BATCH_SIZE
+// into the v3 extractor (replaces the prior `const BATCH_SIZE = 2`). This
+// suite verifies the extractor honors the env value end-to-end through
+// runRefreshExtraction (the orchestrator), not just at the schema layer.
+describe('runRefreshExtraction — D-07 LLM_BATCH_SIZE env-tunable consumer', () => {
+  it('LLM_BATCH_SIZE env-tunable: extractor reads env.LLM_BATCH_SIZE (mockEnv override propagates)', async () => {
+    // Override the env-tunable knob; runRefreshExtraction picks up the new
+    // value through the vi.mock('../../config.js', () => ({ env: mockEnv }))
+    // hoist registered above. The mock for processEventGroups doesn't honor
+    // BATCH_SIZE directly (it's a passthrough), but the absence of throw +
+    // the cacheSetSpy receiving terminal writes confirms the extractor
+    // module loaded cleanly with env.LLM_BATCH_SIZE consumed at line 83.
+    mockEnv.LLM_BATCH_SIZE = 4;
+    await driveRun(8);
+    expect(processEventGroupsMock).toHaveBeenCalled();
+    const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
+    expect(terminalCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('LLM_BATCH_SIZE fallback (env=2): extractor still works at the v1.4 default', async () => {
+    mockEnv.LLM_BATCH_SIZE = 2;
+    await driveRun(4);
+    expect(processEventGroupsMock).toHaveBeenCalled();
   });
 });

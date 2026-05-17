@@ -15,7 +15,7 @@ vi.mock('../../lib/logger.js', () => ({
 
 import { withBatchWatchdog } from '../../lib/llmExtractorWatchdog.js';
 
-describe('withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)', () => {
+describe('withBatchWatchdog (Phase 27.4.1 D-01/D-05; Phase 30 D-05 soft-warn retired)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -26,7 +26,6 @@ describe('withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)', () => {
 
   it('success path: returns T and never invokes onTimeout', async () => {
     const onTimeout = vi.fn().mockResolvedValue(undefined);
-    const onSoftWarn = vi.fn();
 
     const batchFn = vi.fn<() => Promise<string>>(
       () =>
@@ -37,11 +36,9 @@ describe('withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)', () => {
 
     const pending = withBatchWatchdog(batchFn, {
       timeoutMs: 100,
-      softWarnMs: 1000,
       batchIndex: 0,
-      label: 'v2',
+      label: 'v3',
       onTimeout,
-      onSoftWarn,
     });
 
     // Advance just enough for the work promise to resolve.
@@ -50,12 +47,10 @@ describe('withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)', () => {
 
     expect(result).toBe('ok');
     expect(onTimeout).not.toHaveBeenCalled();
-    expect(onSoftWarn).not.toHaveBeenCalled();
   });
 
   it('hard-timeout path: returns null, invokes onTimeout exactly once, and late resolution does NOT invoke onTimeout again (D-05)', async () => {
     const onTimeout = vi.fn().mockResolvedValue(undefined);
-    const onSoftWarn = vi.fn();
 
     // This batch never resolves on its own — only the timeout will fire.
     // We capture the resolver so we can fire it AFTER the timeout and
@@ -70,11 +65,9 @@ describe('withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)', () => {
 
     const pending = withBatchWatchdog(batchFn, {
       timeoutMs: 50,
-      softWarnMs: 1000, // soft-warn won't fire before hard timeout
       batchIndex: 7,
-      label: 'v2',
+      label: 'v3',
       onTimeout,
-      onSoftWarn,
     });
 
     // Advance past the hard-timeout.
@@ -83,7 +76,6 @@ describe('withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)', () => {
 
     expect(result).toBeNull();
     expect(onTimeout).toHaveBeenCalledTimes(1);
-    expect(onSoftWarn).not.toHaveBeenCalled();
 
     // Now resolve the batch promise late — onTimeout must NOT fire again.
     lateResolver?.('late-ignored');
@@ -91,42 +83,6 @@ describe('withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)', () => {
     await Promise.resolve();
 
     expect(onTimeout).toHaveBeenCalledTimes(1);
-  });
-
-  it('soft-warn path: invokes onSoftWarn when threshold crossed, then succeeds without calling onTimeout', async () => {
-    const onTimeout = vi.fn().mockResolvedValue(undefined);
-    const onSoftWarn = vi.fn();
-
-    const batchFn = vi.fn<() => Promise<number>>(
-      () =>
-        new Promise<number>((resolve) => {
-          setTimeout(() => resolve(42), 80);
-        }),
-    );
-
-    const pending = withBatchWatchdog(batchFn, {
-      timeoutMs: 200,
-      softWarnMs: 50,
-      batchIndex: 3,
-      label: 'v1',
-      onTimeout,
-      onSoftWarn,
-    });
-
-    // Advance past the soft-warn threshold but not the work completion.
-    await vi.advanceTimersByTimeAsync(50);
-    expect(onSoftWarn).toHaveBeenCalledTimes(1);
-    expect(onSoftWarn).toHaveBeenCalledWith(50);
-
-    // Advance to completion (30 more ms → total 80ms).
-    await vi.advanceTimersByTimeAsync(30);
-    const result = await pending;
-
-    expect(result).toBe(42);
-    expect(onTimeout).not.toHaveBeenCalled();
-    // soft-warn fires exactly once even if more time passes post-completion
-    await vi.advanceTimersByTimeAsync(500);
-    expect(onSoftWarn).toHaveBeenCalledTimes(1);
   });
 
   it('late-resolve clobber-prevention: after hard-timeout, batch resolving later does not flip onTimeout invocation count', async () => {
@@ -142,9 +98,8 @@ describe('withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)', () => {
 
     const pending = withBatchWatchdog(batchFn, {
       timeoutMs: 30,
-      softWarnMs: 20,
       batchIndex: 1,
-      label: 'v2',
+      label: 'v3',
       onTimeout,
     });
 

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: "Phase 29 shipped — PR #19"
-last_updated: "2026-05-12T21:17:43.696Z"
-last_activity: 2026-05-12
+status: ready_to_plan
+last_updated: "2026-05-17T02:24:00.000Z"
+last_activity: 2026-05-17 -- Wave 3 tuned defaults committed; awaiting prod redeploy + Run 2 validation cron
 progress:
   total_phases: 13
-  completed_phases: 1
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  completed_phases: 2
+  total_plans: 20
+  completed_plans: 17
+  percent: 15
 ---
 
 # Project State
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md
 
 Phase: 999.1
 Plan: Not started
-Status: Phase 29 shipped — PR #19
-Last activity: 2026-05-12
+Status: Ready to plan
+Last activity: 2026-05-17
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -37,7 +37,7 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | Phase | Name                                                                  | Requirements                                                  | Status      |
 | ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- | ----------- |
 | 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | Context gathered |
-| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04                         | Not started |
+| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Waves 1-3 complete (4/7 plans) |
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Not started |
 | 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
@@ -318,5 +318,6 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - Phase 27.4.2 inserted after Phase 27.4.1 (2026-04-24): CI Health + LLM v2 Quality Tuning — bundled phase greens main CI (32 filter-test failures, 4 npm-audit vulns, prettier format drift, lint warnings) so regression-watch is trustworthy during Track B — then runs one clean 184-batch v2 extraction to capture eval baseline and iterates prompts/resolver until eval ≥v1+5pp AND gdelt-actiongeo-fallback provenance <25%. Scope levers + hang-recurrence policy open for /gsd-discuss-phase. Out-of-scope: 27.4.3 (deck.gl v9 TS drift), 27.4.5 (LLM flight-recorder), 27.3.3 (romanization).
 - Phase 27.4.3 inserted after Phase 27.4.2 (2026-04-25): free-claude-code Routing Evaluation (URGENT) — pivoted from the originally-deferred "Cerebras hang root-cause investigation" to evaluate https://github.com/Alishahryar1/free-claude-code as a replacement for the manual Cerebras/Groq routing in `server/adapters/llm-provider.ts`. Five evaluation criteria (feasibility, reliability, cost/quota, integration shape, eval quality parity ±5pp of Plan 07's 0.940 baseline). Phase 27.4.2 HUMAN-UAT.md tests 1+2 are blocked on this phase landing. Reassigned 27.4.3 number from the prior deck.gl v9 depthTest TS-drift placeholder to this evaluation; deck.gl v9 work renumbers to 27.4.4.
 - Phase 28.2.6 inserted after Phase 28.2.5 (2026-05-07): Fix Vercel cron architecture so events:llm:v3 populates within budget (URGENT) — surfaced during 28.2.5 Plan 05 closeout when force-trigger of /api/cron/refresh-events?force=true returned `dispatched: true` in 400ms but the fire-and-forget IIFE body never executed (Vercel Fluid Compute kills the function once response is sent). Three resolution paths captured in 28.2.5-deferred-items.md for /gsd-discuss-phase 28.2.6 to pick from: (a) incremental terminal-key write refactor (~30 LOC), (b) Vercel Pro plan upgrade ($20/mo for 800s maxDuration), (c) waitUntil migration via @vercel/functions. Phase 28.3 entry now gated on 28.2.6 because the tier-green workflow run that 28.2.5 D-09 set up will keep returning allTiersGreen=false until critical[llmEvents] can flip from `unknown` to `healthy`.
+- Phase 30.1 inserted after Phase 30 (2026-05-17): Cascade fallback fix — re-enable OpenRouter or document single-provider reality (URGENT) — surfaced immediately post-Phase-30 by operator review noticing OpenRouter never fired in Run 1 / Run 2 / 04:00 UTC daily cron. Phase 27.4.4's `skipOpenRouter: true` flag is still hardcoded in `server/lib/llmEventExtractor.v3.ts:622, 929`, removing OpenRouter from the cascade entirely. 04:00 UTC cron evidence: NIM 39 rate-limit errors → breaker tripped → 50+ batches `skipped:breaker` → 0 OpenRouter attempts. Phase 30's tuning therefore tunes a single-provider pipeline, not a cascade. Seed context at .planning/phases/30.1-cascade-fallback-fix-.../30.1-CONTEXT-SEED.md. Three scope options (minimum/right/full) for /gsd-discuss-phase 30.1 to pick from.
 
-**Planned Phase:** 29 (LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + CLAUDE.md Trim) — 13 plans — 2026-05-10T22:29:12.324Z
+**Planned Phase:** 30 (NIM Throttle Characterization + Cascade Tuning + Pro-Enabled Simplifications) — 7 plans — 2026-05-17T00:38:43.545Z

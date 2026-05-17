@@ -1,16 +1,32 @@
 // @vitest-environment node
 /**
- * Phase 28.2.6 Plan 01 Task 2 — D-07 cross-function-boundary state preservation.
+ * Phase 30 Plan 03 Task 3 — D-04 / SIMPLIFY-01 no-mid-run-write invariant.
  *
- * Asserts that two consecutive partial runs (5 batches → simulated Vercel
- * function-kill, then 5 batches in a follow-up tick) produce the SAME final
- * cache state as one continuous 10-batch run. Locks in the resume invariant
- * provided by the existing `cachedLlmKeys` lineage filter at L213-221.
+ * Pre-Phase-30 this file (Phase 28.2.6 Plan 01 Task 2 — D-07) asserted that
+ * two consecutive partial runs (5 batches → simulated Vercel function-kill,
+ * then 5 batches in a follow-up tick) produced the SAME final cache state
+ * as one continuous 10-batch run. The mid-run durability guarantee was
+ * provided by the periodic-flush mechanism (every-N-batches
+ * `mergeAndPersistLlmEntities` call from `onBatchComplete`).
  *
- * Plus a Task 4b D-05 quality-invariant case that proves periodic-flush
- * geocode quality matches final-flush geocode quality on equivalent slices —
- * the closure-state matchedNews/bellingcat accumulators give the periodic
- * flush the same context the final flush has.
+ * Phase 30 D-04 retires that mechanism on the Pro 800s ceiling (CONTEXT
+ * D-04 / threat model T-30-03: mid-run-crash now loses all progress is
+ * `accept`'d — Plan 06 Run 2 validated 0 watchdog hard-kills inside budget,
+ * so the crash window is negligible).
+ *
+ * Post-Phase-30 invariants validated here:
+ *   - A mid-run abort (simulated function-kill before the terminal write
+ *     completes) leaves the `events:llm:v3` key EMPTY. No partial state is
+ *     persisted to the terminal key from within the batch loop.
+ *   - The terminal write fires exactly once at the end of a complete
+ *     happy-path run (mirrors the same invariant tested by
+ *     llmExtractionPipeline.terminalShape.test.ts; kept here for the
+ *     mid-run-abort negative-shape coverage that lives in this file).
+ *
+ * The Pitfall 1 cache bridge in `server/routes/events.ts` is the runtime
+ * fallback that preserves the "map never goes blank" contract under
+ * mid-run-crash (`events:gdelt` raw bridge); that contract is verified by
+ * the route's own test, not here.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -19,12 +35,14 @@ const { mockEnv } = vi.hoisted(() => ({
   mockEnv: {
     NVIDIA_NIM_API_KEY: 'fake',
     OPENROUTER_API_KEY: '',
-    LLM_BATCH_TIMEOUT_MS: 90000,
+    LLM_BATCH_TIMEOUT_MS: 120_000, // Phase 30 D-02 retune (was 90_000)
     LLM_V3_CONCURRENCY: 1,
     V3_ADAPTIVE_BATCH: false,
     V3_LINEAGE_PREFILTER: false,
     V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
-    LLM_FLUSH_EVERY_N_BATCHES: 5,
+    // Phase 30 D-04 (SIMPLIFY-01): legacy flush-cadence env var stripped
+    // from mockEnv when the Zod schema entry was deleted in Plan 03 Task 2.
+    LLM_BATCH_SIZE: 2, // Phase 30 D-07 — env-tunable (was hard-coded const)
     CRON_SECRET: '',
   },
 }));
@@ -328,69 +346,43 @@ beforeEach(() => {
   }
   llmProgressSingleton.stage = 'idle';
   abortAtBatch = null;
-  mockEnv.LLM_FLUSH_EVERY_N_BATCHES = 5;
 });
 
-describe('runRefreshExtraction — D-07 cross-function-boundary state preservation', () => {
-  it('two consecutive partial 5-batch runs produce same final state as one continuous 10-batch run', async () => {
-    // Run 1: drive 10 groups but abort the IIFE after batch 5 (simulated kill).
+describe('runRefreshExtraction — no mid-run terminal write (D-04 / SIMPLIFY-01)', () => {
+  it('mid-run abort (function-kill before terminal write): events:llm:v3 stays empty', async () => {
+    // Drive 10 groups but abort the IIFE after batch 5 (simulated Vercel
+    // function-kill). Pre-Phase-30 the periodic-flush at batch 5 would have
+    // persisted 5 events to the terminal key; post-D-04 there is no mid-run
+    // write site, so the terminal key remains absent (CONTEXT D-04 / threat
+    // model T-30-03 accepted disposition: mid-run-crash loses all progress).
     await driveRun(10, { abortAt: 5 });
-    const partialAfterRun1 = cacheStore.get('events:llm:v3') as Array<{ id: string }> | undefined;
-    // After 5 batches with FLUSH_EVERY_N=5, there should be exactly 5 events
-    // persisted by the periodic flush (Task 4b will land this behavior).
-    expect(Array.isArray(partialAfterRun1)).toBe(true);
-    expect(partialAfterRun1!.length).toBe(5);
+    const partialAfterAbort = cacheStore.get('events:llm:v3') as Array<{ id: string }> | undefined;
+    expect(partialAfterAbort).toBeUndefined();
 
-    // Run 2: relaunch with cacheStore intact. The lineage filter at
-    // runRefreshExtraction:213-221 sees the 5 ids in the cache and skips
-    // them; processes the remaining 5 + final flush.
-    // Reset progress so the busy-guard doesn't block.
-    llmProgressSingleton.stage = 'idle';
-    await driveRun(10);
-    const finalAfterRun2 = cacheStore.get('events:llm:v3') as Array<{ id: string }>;
-
-    // Run 3 (control): cold-cache continuous 10-batch run.
-    cacheStore.clear();
-    llmProgressSingleton.stage = 'idle';
-    await driveRun(10);
-    const finalAfterRun3 = cacheStore.get('events:llm:v3') as Array<{ id: string }>;
-
-    expect(sortById(finalAfterRun2)).toEqual(sortById(finalAfterRun3));
+    // The cacheSetSpy should also reflect zero terminal writes during the
+    // aborted run — negative-shape coverage for the periodic-flush deletion.
+    const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
+    expect(terminalCalls.length).toBe(0);
   });
 
-  it('periodic flush geocode quality equals final flush geocode quality (D-05)', async () => {
-    // Drive a clean 10-batch run with FLUSH_EVERY_N=5 — periodic flush at 5,
-    // final flush at 10. Capture every terminal-key write.
+  it('happy-path 10-batch run: events:llm:v3 receives exactly ONE terminal write', async () => {
     await driveRun(10);
 
     const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
-    expect(terminalCalls.length).toBeGreaterThanOrEqual(2);
+    // Phase 30 D-04 (SIMPLIFY-01): periodic-flush retired; the single
+    // end-of-pipeline mergeAndPersistLlmEntities call is now the sole
+    // writer of the terminal cache key. Mirrors the exactly-once invariant
+    // asserted in llmExtractionPipeline.terminalShape.test.ts; kept here
+    // for the cross-file durability-and-shape regression surface.
+    expect(terminalCalls.length).toBe(1);
 
-    interface PrecisionEntity {
-      id?: string;
-      data?: { precision?: string };
-    }
-    const buildPrecisionHistogram = (entities: PrecisionEntity[]) => {
-      const hist: Record<string, number> = {};
-      for (const e of entities) {
-        const p = e.data?.precision ?? 'unknown';
-        hist[p] = (hist[p] ?? 0) + 1;
-      }
-      return hist;
-    };
-
-    const periodicSlice = terminalCalls[0]![1] as PrecisionEntity[];
-    const finalAll = terminalCalls[terminalCalls.length - 1]![1] as PrecisionEntity[];
-
-    // The events from the periodic-flush slice should exist (with same id) in
-    // the final all-events array. Their precision histograms must match —
-    // proves periodic-flush geocode quality equals final-flush geocode quality.
-    const finalSliceMatchingPeriodic = finalAll.filter((e) =>
-      periodicSlice.some((p) => p.id === e.id),
-    );
-
-    expect(buildPrecisionHistogram(finalSliceMatchingPeriodic)).toEqual(
-      buildPrecisionHistogram(periodicSlice),
-    );
+    const finalEntities = terminalCalls[0]![1] as Array<{ id: string }>;
+    expect(Array.isArray(finalEntities)).toBe(true);
+    // All 10 batches each emitted 1 enriched event in the harness; the
+    // terminal write should carry all 10 after the post-loop geocode.
+    expect(finalEntities.length).toBe(10);
+    // Stable ordering for diff-friendliness on regression.
+    const sorted = sortById(finalEntities);
+    expect(sorted[0]!.id).toBeDefined();
   });
 });

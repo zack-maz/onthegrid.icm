@@ -79,8 +79,12 @@ const log = logger.child({ module: 'llm-extractor-v3' });
 
 /** D-10 — BATCH_SIZE reduced from v1's 8 to 2 because each group now carries
  *  far more context (news + Bellingcat + temporal) and fits more comfortably
- *  into the provider's attention budget when batched narrowly. */
-const BATCH_SIZE = 2;
+ *  into the provider's attention budget when batched narrowly.
+ *  Phase 30 D-07 (LLM-RELI-03): now env-tunable via LLM_BATCH_SIZE
+ *  (defaults to 2 — same value as the prior hard-coded const). Raise to
+ *  4-8 only after Plan 06 ±3pp eval regression budget validates the
+ *  wider group context for qwen-235b. */
+const BATCH_SIZE = env.LLM_BATCH_SIZE;
 
 /** Phase 27.4.3 D-08 bake-off — empty/undefined uses freeClaudeRouter's
  *  NVIDIA_NIM_DEFAULT_MODEL. Set V3_BAKEOFF_MODEL=<id> in env to swap the
@@ -630,7 +634,6 @@ export async function processEventGroupsV3(
           },
           {
             timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-            softWarnMs: 60_000, // D-02 hard-coded — only hard cap is env-tunable
             batchIndex,
             label: 'v3',
             onTimeout: async () => {
@@ -656,29 +659,6 @@ export async function processEventGroupsV3(
               }
               updateProgress({
                 watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1,
-              });
-            },
-            onSoftWarn: (elapsedMs) => {
-              // Append a synthetic soft-warn entry to callHistory so DevApiStatus
-              // shows an amber marker. Field-set must match the LLMPipelineProgress
-              // callHistory element type exactly (durationMs, ok, batchSize,
-              // timestamp). Provider 'nvidia_nim' = the v3 primary.
-              const history = llmProgress.callHistory ?? [];
-              updateProgress({
-                callHistory: [
-                  {
-                    provider: 'nvidia_nim' as const,
-                    model: 'watchdog-soft-warn',
-                    tokensIn: 0,
-                    tokensOut: 0,
-                    durationMs: elapsedMs,
-                    ok: true,
-                    batchSize: batch.length,
-                    timestamp: Date.now(),
-                    skipReason: 'watchdog-soft-warn' as const,
-                  },
-                  ...history,
-                ].slice(0, 20),
               });
             },
           },
@@ -953,7 +933,6 @@ async function splitBatchOnTimeout(
       },
       {
         timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 60_000,
         batchIndex,
         label: 'v3-split',
         onTimeout: async () => {

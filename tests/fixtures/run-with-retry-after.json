@@ -1,0 +1,122 @@
+{
+  "lastRun": 1715812800000,
+  "groupCount": 196,
+  "batchCount": 98,
+  "geocodeCount": 196,
+  "enrichedCount": 196,
+  "durationMs": 600000,
+  "error": null,
+  "schemaVersion": "v3",
+  "watchdogTimeoutCount": 0,
+  "evalScore": { "within5km": 28, "within20km": 35, "within100km": 42, "total": 50 },
+  "callHistory": [
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "tokensIn": 1200,
+      "tokensOut": 380,
+      "durationMs": 27000,
+      "ok": false,
+      "batchSize": 2,
+      "timestamp": 1715812830000,
+      "retryAfterMs": 1500
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "tokensIn": 1200,
+      "tokensOut": 380,
+      "durationMs": 27500,
+      "ok": true,
+      "batchSize": 2,
+      "timestamp": 1715812832000
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "tokensIn": 1180,
+      "tokensOut": 370,
+      "durationMs": 28000,
+      "ok": false,
+      "batchSize": 2,
+      "timestamp": 1715812860000,
+      "retryAfterMs": 1800
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "tokensIn": 1180,
+      "tokensOut": 370,
+      "durationMs": 26000,
+      "ok": true,
+      "batchSize": 2,
+      "timestamp": 1715812862000
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "tokensIn": 1200,
+      "tokensOut": 360,
+      "durationMs": 29000,
+      "ok": false,
+      "batchSize": 2,
+      "timestamp": 1715812890000,
+      "retryAfterMs": 2000
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "tokensIn": 1200,
+      "tokensOut": 360,
+      "durationMs": 27000,
+      "ok": true,
+      "batchSize": 2,
+      "timestamp": 1715812892000
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "tokensIn": 1300,
+      "tokensOut": 400,
+      "durationMs": 30000,
+      "ok": false,
+      "batchSize": 2,
+      "timestamp": 1715812920000,
+      "retryAfterMs": 3000
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "tokensIn": 1300,
+      "tokensOut": 400,
+      "durationMs": 28500,
+      "ok": true,
+      "batchSize": 2,
+      "timestamp": 1715812924000
+    }
+  ],
+  "latencyHistogram": {
+    "nvidia_nim": { "p50": 27000, "p95": 30000, "p99": 45000, "sparkline": [], "samples": [] },
+    "openrouter": { "p50": 0, "p95": 0, "p99": 0, "sparkline": [], "samples": [] }
+  },
+  "errorTaxonomy": {
+    "nvidia_nim": {
+      "rate_limit": 4,
+      "timeout": 0,
+      "malformed_json": 0,
+      "schema_fail": 0,
+      "network": 0,
+      "upstream_500": 0,
+      "other": 0
+    },
+    "openrouter": {
+      "rate_limit": 0,
+      "timeout": 0,
+      "malformed_json": 0,
+      "schema_fail": 0,
+      "network": 0,
+      "upstream_500": 0,
+      "other": 0
+    }
+  }
+}

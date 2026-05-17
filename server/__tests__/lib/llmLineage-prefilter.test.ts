@@ -30,13 +30,14 @@ const { mockEnv } = vi.hoisted(() => ({
   mockEnv: {
     NVIDIA_NIM_API_KEY: '',
     OPENROUTER_API_KEY: '',
-    LLM_BATCH_TIMEOUT_MS: 90000,
+    LLM_BATCH_TIMEOUT_MS: 120_000, // Phase 30 D-02 retune (was 90_000)
     V3_ADAPTIVE_BATCH: false,
     V3_LINEAGE_PREFILTER: false,
     V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
     // Phase 27.4.4 Plan 02 — parallel batch concurrency. Tests run a small
     // number of batches; the limit value just needs to be a positive int.
     LLM_V3_CONCURRENCY: 12,
+    LLM_BATCH_SIZE: 2, // Phase 30 D-07 — env-tunable (was hard-coded const)
   },
 }));
 

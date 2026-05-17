@@ -103,7 +103,7 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 ### Phases
 
 - [x] **Phase 29: LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + Cerebras/Groq Adapter Purge + v1/v2 Extractor Deletion + CLAUDE.md Trim** — Retire Cerebras + Groq from the active v3 cascade; **delete v1 + v2 extractor modules entirely** (modules + `POST /api/events/llm-pipeline` override endpoint + `events:llm-pipeline-override` Redis key + DevApiStatus Pin-to-v1/v2 buttons all removed; rationale folded into ADR-0010 at Phase 36 with stub written here — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` already occupies the 0009 slot); prove the map renders cleanly on raw GDELT when both NIM + OpenRouter keys are absent (CI integration test + runbook entry); upgrade Vercel project to Pro plan and bump `vercel.json` `maxDuration` from 300 → 800 as the **first** phase commit; purge the now-unused Cerebras + Groq adapter code paths from `server/adapters/llm-provider.ts` (SIMPLIFY-04); trim CLAUDE.md phase-history bloat down to current-state invariants targeting <10k tokens (DOCS-INT-01, pulled from Phase 34 on 2026-05-09). _(SIMPLIFY-06 v1 archive folded forward into deletion here — Phase 34's old criterion #8 becomes inapplicable.)_ (completed 2026-05-11)
-- [ ] **Phase 30: NIM Throttle Characterization + Cascade Tuning + Pro-Enabled Simplifications** — Empirically characterize NIM throttle window + RPM ceiling + recovery signal; tune `LLM_BATCH_SIZE`, `LLM_V3_CONCURRENCY`, retry/backoff parameters against measured data; retire the 28.2.6 incremental-flush mechanism (SIMPLIFY-01) and relax watchdog defaults (SIMPLIFY-03) — both are Hobby-era 300s-budget workarounds that the Pro 800s ceiling makes deletable.
+- [x] **Phase 30: NIM Throttle Characterization + Cascade Tuning + Pro-Enabled Simplifications** — Empirically characterize NIM throttle window + RPM ceiling + recovery signal; tune `LLM_BATCH_SIZE`, `LLM_V3_CONCURRENCY`, retry/backoff parameters against measured data; retire the 28.2.6 incremental-flush mechanism (SIMPLIFY-01) and relax watchdog defaults (SIMPLIFY-03) — both are Hobby-era 300s-budget workarounds that the Pro 800s ceiling makes deletable. (completed 2026-05-17)
 - [ ] **Phase 31: Cron Stability Validation (7-day Watch)** — Observe daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:llm:v3` healthy across ≥7 consecutive days under normal NIM availability.
 - [ ] **Phase 32: Ghost Event URL Liveness, Dashboard & Prune** — Probe `sourceURL` liveness out-of-band, persist results to Redis with TTL, surface dead-URL counts in API Health dashboard, and let the operator prune dead-URL events behind the existing Bearer gate.
 - [ ] **Phase 33: Actor Metadata Audit, Canonical Catalog & Eval Expansion** — Audit live `events:llm:v3` actor quality; commit canonical actor catalog; extend v3 prompt + schema with `actorConfidence`; extend ground-truth + adversarial fixtures; surface actor-quality counts in dashboard.
@@ -145,6 +145,17 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 5. **Incremental flush retired** (SIMPLIFY-01). `mergeAndPersistLlmEntities` is no longer called from `onBatchComplete`; the single terminal-key write at end-of-run is the canonical shape. `LLM_FLUSH_EVERY_N_BATCHES` env var deleted from `.env.example`, code, and docs. Redis SET-call count per cron run drops measurably (capture the delta).
 6. **Watchdog defaults relaxed** (SIMPLIFY-03). 90s hard / 60s soft per-batch timeouts replaced with values sized against the measured throttle (or the soft-warn category eliminated entirely if the data says it adds no signal). New defaults committed; `callHistory` skip-entry shape for soft-warn either reflects the new threshold or is removed.
    **Plans**: TBD
+
+### Phase 30.1: Cascade fallback fix — re-enable OpenRouter or document single-provider reality (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 30
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 30.1 to break down)
 
 ### Phase 31: Cron Stability Validation (7-day Watch)
 
@@ -236,7 +247,7 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 | Phase                                                                         | Plans Complete | Status      | Completed  |
 | ----------------------------------------------------------------------------- | -------------- | ----------- | ---------- |
 | 29. LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | 13/13          | Complete    | 2026-05-11 |
-| 30. NIM Throttle Characterization & Cascade Tuning                            | 0/0            | Not started | -          |
+| 30. NIM Throttle Characterization & Cascade Tuning                            | 7/7            | Complete    | 2026-05-17 |
 | 31. Cron Stability Validation (7-day Watch)                                   | 0/0            | Not started | -          |
 | 32. Ghost Event URL Liveness, Dashboard & Prune                               | 0/0            | Not started | -          |
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/0            | Not started | -          |
@@ -271,7 +282,7 @@ Deferred from v1.3:
 **Goal:** Resolve operator-blocking rate limit. The 6 req/min global tier in `server/middleware/rateLimit.ts` (applied at `server/index.ts:99` to all `/api/*`) blocks the operator's own browser — flights polling alone is 12 req/min. Three options scoped earlier: (a) remove global tier (per-endpoint limits already tuned for browser), (b) bump to 300/min to keep loose anti-scraper net, (c) bypass when `DASHBOARD_PASSWORD` Bearer present.
 **Resolution:** Folded into Phase 28.2 on 2026-04-30 per 28-CONTEXT.md D-04 — option (c) Bearer-bypass selected. This entry remains for historical traceability.
 **Requirements:** Subsumed by 28-CONTEXT.md D-04
-**Plans:** 13/13 plans complete
+**Plans:** 7/7 plans complete
 
 ### Phase 999.2: `api/vercel-entry.js` build-artifact discipline (BACKLOG)
 

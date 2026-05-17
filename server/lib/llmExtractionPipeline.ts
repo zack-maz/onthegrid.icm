@@ -32,7 +32,6 @@
 import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { saveDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
-import { env } from '../config.js';
 
 import { groupGdeltRows } from './eventGrouping.js';
 import { runEval } from './llmEvalHarness.js';
@@ -66,8 +65,11 @@ const LLM_EVENTS_KEY_ACTIVE = 'events:llm:v3';
 /** Active LLM run-summary key. v3-only post-Phase-29. */
 const LLM_SUMMARY_KEY_ACTIVE = 'events:llm-summary:v3';
 
-/** Active partial cache key — observability-only, written by the v3 extractor. */
-const PARTIAL_KEY_ACTIVE = 'events:llm:v3:partial';
+// Phase 30 D-04 (SIMPLIFY-01): the local `PARTIAL_KEY_ACTIVE` const was
+// retired here when the periodic-flush callback (its sole reader) was
+// deleted. The `events:llm:v3:partial` observability key is still written
+// by the v3 extractor's writePartialCache — its retirement is owned by
+// SIMPLIFY-02 / Phase 34.
 
 /** Redis key tracking the last LLM run start time (15-min cooldown). */
 const LLM_PROCESS_KEY = 'events:llm-process-ts';
@@ -85,40 +87,30 @@ const LLM_SUMMARY_TTL_SEC = 86_400;
 const BATCH_SIZE_ACTIVE = 2;
 
 // ---------------------------------------------------------------------------
-// Phase 28.2.6 Plan 01 — incremental terminal-key write helpers.
+// Phase 30 D-04 (SIMPLIFY-01) — incremental flush retired. The Pro 800s
+// ceiling makes the prior Hobby-era 300s-budget crash-protection rationale
+// obsolete (Plan 06 Run 2 validated 0 watchdog hard-kills inside budget).
+// The terminal write at the end of `runRefreshExtraction`'s IIFE is now
+// the canonical (and only) writer of `events:llm:v3`.
 // ---------------------------------------------------------------------------
-
-/**
- * Phase 28.2.6 D-03 — cadence for incremental terminal-key writes.
- * Default 10 batches between flushes; env-override via LLM_FLUSH_EVERY_N_BATCHES
- * registered in server/config.ts envSchema. N=1 would clobber Redis under
- * concurrency=12; N=10 is the rationale-locked cadence per CONTEXT D-03.
- *
- * Read via the shared `env` object (NOT process.env) so test-time
- * vi.mock('../../config.js', () => ({ env: mockEnv })) propagates correctly
- * into the pipeline closure.
- */
-const FLUSH_EVERY_N_BATCHES_DEFAULT = 10;
-function getFlushEveryNBatches(): number {
-  const parsed = env.LLM_FLUSH_EVERY_N_BATCHES;
-  if (!Number.isFinite(parsed) || parsed < 1) return FLUSH_EVERY_N_BATCHES_DEFAULT;
-  return parsed;
-}
 
 /**
  * Phase 28.2.6 Plan 01 — shared merge-and-persist helper.
  *
- * Wraps the prior L374-388 final-write pattern so it can be called BOTH
- * from the periodic flush hook (every N batches inside the IIFE — added in
- * Task 4b) AND from the original final-flush location after extraction
- * completes. Two-key discipline preserved (D-04 / D-11): writes
- * ConflictEventEntity[] to LLM_EVENTS_KEY_ACTIVE; the LLMCachePayload
- * envelope continues to land on `events:llm:v3:partial` via writePartialCache
- * (UNCHANGED — observability key, written by the v3 extractor only).
+ * Single-purpose: end-of-run terminal write of `ConflictEventEntity[]` to
+ * the active LLM cache key (`events:llm:v3`). Two-key discipline preserved
+ * (D-04 / D-11): writes entities to LLM_EVENTS_KEY_ACTIVE; the
+ * LLMCachePayload envelope continues to land on `events:llm:v3:partial`
+ * via writePartialCache (UNCHANGED — observability key, written by the v3
+ * extractor only).
  *
- * Pitfall 4 — merge-by-id with prior cache. The first incremental flush of
- * a fresh cron tick must merge with llmCachedRef.data so events from earlier
- * ticks survive the write.
+ * Phase 30 D-04: single callsite (end-of-run terminal write only). Periodic
+ * flush retired (SIMPLIFY-01). The earlier periodic-flush hook inside the
+ * onBatchComplete callback was removed because the Pro 800s ceiling makes
+ * the prior Hobby-era crash-protection rationale obsolete.
+ *
+ * Pitfall 4 — merge-by-id with prior cache. The terminal flush merges with
+ * llmCachedRef.data so events from earlier cron ticks survive the write.
  *
  * Pitfall 8 — does NOT call runEval(). The eval harness stays at its
  * existing post-FINAL-geocode location.
@@ -330,93 +322,14 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
         });
 
-        // Phase 28.2.6 Plan 01 Task 4b — periodic-flush wiring inside the
-        // existing onBatchComplete callback chain.
-        //
-        // Cadence (D-03): every N=getFlushEveryNBatches() completed batches
-        // trigger a geocode-then-persist of the just-completed window. The
-        // counter MUST live inside this callback closure so concurrency=12
-        // batch-completion ordering races are serialized through finishBatch's
-        // monotonic ++completedBatchesCounter (Pitfall 2).
-        //
-        // Snapshot-the-array (Pitfall 3): we read the partial-cache envelope
-        // (writePartialCache writes after every batch in v3) and slice from
-        // lastFlushedEventCount → current to grab only events pushed since the
-        // last flush. This avoids reconstructing the slice from prioritizedGroups
-        // (which doesn't track completion order under concurrency=12).
-        //
-        // Two-key discipline (D-04 / D-11): periodic write → terminal key
-        // (`events:llm:v3` ConflictEventEntity[]); partial-key writes are
-        // owned by the v3 extractor's writePartialCache — UNCHANGED.
-        //
-        // Pitfall 8: runEval() is NOT called here. It stays at its existing
-        // post-FINAL-geocode location.
-        const flushEvery = getFlushEveryNBatches();
-        let batchesSinceLastFlush = 0;
-        let lastFlushedEventCount = 0;
-
         const extractResult = await processEventGroups(
           prioritizedGroups,
           async (completed, total) => {
             updateProgress({ completedBatches: completed, totalBatches: total });
-
-            batchesSinceLastFlush++;
-            if (batchesSinceLastFlush < flushEvery) return;
-            batchesSinceLastFlush = 0;
-
-            // Periodic flush — geocode the just-completed window and persist
-            // to the terminal key. Best-effort: any failure is logged and
-            // swallowed so the extraction loop continues. The final-flush at
-            // end-of-pipeline will still attempt a full-cache write.
-            try {
-              const partialCached = await cacheGetSafe<{
-                events: unknown[];
-                progress?: string;
-                complete?: boolean;
-                generatedAt?: string;
-              }>(PARTIAL_KEY_ACTIVE, 999_999_999);
-              const partialEvents = partialCached?.data?.events;
-              if (!Array.isArray(partialEvents) || partialEvents.length <= lastFlushedEventCount) {
-                return; // nothing new since the last flush
-              }
-              const window = partialEvents.slice(lastFlushedEventCount);
-
-              // Geocode the window via the v3-only barrel.
-              // matchedNewsByGroup / bellingcatByGroup are not yet exposed
-              // per-batch — periodic flushes pass empty Maps so the resolver's
-              // POI-amenity-disambiguation branch falls back to gdelt-actiongeo
-              // for groups missing context. Geocode quality on periodic-flush
-              // slices remains valid; final flush picks up any richer context
-              // from the run-result Maps (D-05). Future work could plumb the
-              // accumulators per-batch if quality drift becomes measurable.
-              const geo = await geocodeEnrichedEvents(
-                {
-                  schemaVersion: 'v3',
-                  events: window as never,
-                  matchedNewsByGroup: new Map(),
-                  bellingcatByGroup: new Map(),
-                },
-                prioritizedGroups,
-              );
-              const adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
-
-              if (adapted.length > 0) {
-                await mergeAndPersistLlmEntities(adapted, llmCachedRef, LLM_EVENTS_KEY_ACTIVE);
-                lastFlushedEventCount = partialEvents.length;
-                log.info(
-                  { completed, total, windowSize: window.length, flushed: adapted.length },
-                  'Plan 01 periodic-flush: incremental terminal-key write',
-                );
-              }
-            } catch (flushErr) {
-              // Best-effort — periodic flush failure must NOT abort the
-              // extraction loop. The final flush at end-of-pipeline will
-              // still attempt a full-cache write.
-              log.warn(
-                { err: flushErr, completed, total },
-                'Plan 01 periodic-flush failed (continuing)',
-              );
-            }
+            // Phase 30 D-04 (SIMPLIFY-01): incremental flush retired. Terminal
+            // write at the mergeAndPersistLlmEntities call below is canonical.
+            // Partial-cache observability write stays in v3 extractor's
+            // writePartialCache (SIMPLIFY-02 / Phase 34).
           },
         );
 
@@ -471,9 +384,10 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
 
         const llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
 
-        // Phase 28.2.6 Plan 01 Task 4a — final flush via shared helper.
-        // Same merge-and-persist semantics as the periodic flush (Task 4b);
-        // pure refactor, no behavior change at this site.
+        // Phase 30 D-04 (SIMPLIFY-01) — sole / terminal write of the
+        // canonical `events:llm:v3` key for this cron run. The Phase 28.2.6
+        // Plan 01 Task 4b periodic-flush callsite (formerly inside the
+        // onBatchComplete callback above) was retired here.
         await mergeAndPersistLlmEntities(llmEntities, llmCachedRef, LLM_EVENTS_KEY_ACTIVE);
 
         updateProgress({

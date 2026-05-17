@@ -21,12 +21,14 @@ const { mockEnv } = vi.hoisted(() => ({
   mockEnv: {
     NVIDIA_NIM_API_KEY: 'fake',
     OPENROUTER_API_KEY: '',
-    LLM_BATCH_TIMEOUT_MS: 90000,
+    LLM_BATCH_TIMEOUT_MS: 120_000, // Phase 30 D-02 retune (was 90_000)
     LLM_V3_CONCURRENCY: 1,
     V3_ADAPTIVE_BATCH: false,
     V3_LINEAGE_PREFILTER: false,
     V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
-    LLM_FLUSH_EVERY_N_BATCHES: 5,
+    // Phase 30 D-04 (SIMPLIFY-01): legacy flush-cadence env var stripped
+    // from mockEnv when the Zod schema entry was deleted in Plan 03 Task 2.
+    LLM_BATCH_SIZE: 2, // Phase 30 D-07 — env-tunable (was hard-coded const)
     CRON_SECRET: '',
   },
 }));
@@ -313,7 +315,6 @@ beforeEach(() => {
     delete llmProgressSingleton[k];
   }
   llmProgressSingleton.stage = 'idle';
-  mockEnv.LLM_FLUSH_EVERY_N_BATCHES = 5;
 });
 
 describe('runRefreshExtraction — D-04/D-11 two-key discipline + Pitfall 8', () => {
@@ -321,8 +322,11 @@ describe('runRefreshExtraction — D-04/D-11 two-key discipline + Pitfall 8', ()
     await driveRun(12);
 
     const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
-    // Expect at least 2 — one intermediate flush at batch 10, one final.
-    expect(terminalCalls.length).toBeGreaterThanOrEqual(2);
+    // Phase 30 D-04 (SIMPLIFY-01): the prior assertion was
+    // `.toBeGreaterThanOrEqual(2)` (1 intermediate flush at batch 10 +
+    // 1 terminal). With the periodic-flush mechanism retired the terminal
+    // write is the sole writer, so the happy-path expectation is exactly 1.
+    expect(terminalCalls.length).toBe(1);
 
     for (const [, data] of terminalCalls) {
       expect(Array.isArray(data)).toBe(true);
@@ -362,5 +366,15 @@ describe('runRefreshExtraction — D-04/D-11 two-key discipline + Pitfall 8', ()
     // flush. If a regression makes the periodic-flush helper call runEval(),
     // daily LLM token spend triples.
     expect(runEvalSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('mergeAndPersistLlmEntities is called exactly once per successful run (D-04 / SIMPLIFY-01)', async () => {
+    await driveRun(12);
+    // mergeAndPersistLlmEntities is the writer of events:llm:v3. Pre-Phase-30
+    // it fired every N batches (incremental flush); Phase 30 D-04 retires
+    // that tier and the helper is now invoked exactly once at end-of-pipeline.
+    // Mirrors the runEval-exactly-once assertion shape above.
+    const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
+    expect(terminalCalls.length).toBe(1);
   });
 });
