@@ -102,6 +102,7 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 - **Graceful degradation** — LLM down → `/api/events` serves raw GDELT via Pitfall 1 bridge (`server/routes/events.ts`). Map never goes blank. ADR-0010 makes raw GDELT the terminal fallback.
 - **Eval harness** — `server/lib/llmEvalHarness.ts` `runEval()` against `.planning/eval/ground-truth-events.json` (50 curated events, 11 countries); RESOLVER-ONLY (avoids doubling token spend). Scores at 5/20/100km. Persists baseline `events:llm-eval-baseline:v3` (90d) + adversarial `events:llm-eval-adversarial:v3` (90d) from `runAdversarialEval()` over `.planning/eval/adversarial-injections.json`.
 - **Precision + Toggles** — `exact | neighborhood | city | region` rendered as radius rings via `src/components/map/PrecisionRingLayer.tsx`. Master `showEvents` + 5 sub-toggles per type in filterStore.
+- **Tuned defaults reference** — [`docs/architecture/llm-pipeline-reliability.md`](docs/architecture/llm-pipeline-reliability.md) records the measured throttle window, RPM ceiling, tuned `LLM_V3_CONCURRENCY` / `LLM_BATCH_SIZE` / `LLM_BATCH_TIMEOUT_MS` / `BACKOFF_MS` defaults, and the retired-mechanism rationale (SIMPLIFY-01 incremental flush, SIMPLIFY-03 soft-warn). Phase 31 appends the 7-day watch there.
 
 ## Serverless Cache (Phase 13)
 
