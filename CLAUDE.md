@@ -90,7 +90,7 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 
 ## LLM Event Pipeline
 
-- **Active providers (Phase 29 D-01)** — NVIDIA NIM (primary, qwen-235b instruct model) + OpenRouter (fallback). Prior providers retired Phase 29 — see ADR-0010 for the narrowed-cascade rationale.
+- **Active providers (Phase 29 D-01)** — qwen-235b instruct model. OpenRouter fallback dormant — see `docs/architecture/llm-pipeline-reliability.md` for re-validation history.
 - **Single extractor module** — `server/lib/llmEventExtractor.v3.ts`. Cron-only writer; cache at `events:llm:v3`. v1/v2 modules + runtime toggle deleted Phase 29 (Plans 04-06).
 - **callLLM cascade** — `server/adapters/llm-provider.ts`. Per-event retry budget 2 attempts × 1s/4s exp backoff + ±250ms jitter. Providers gated on circuit breaker `isAvailable` + token-budget `budgetState !== 'hard'`. Synthetic `skipReason` entries appended to `callHistory` on bypass.
 - **Reliability primitives** — `server/lib/llmCircuitBreaker.ts` (sliding 10-call window, paused 5min on >30% error rate), `server/lib/llmDLQ.ts` (Redis SADD bounded 200 entry / 7d TTL at `events:llm-dlq`), `server/lib/llmTokenBudget.ts` (per-provider daily caps, soft 0.8 / hard 0.95, 48h TTL on `llm:tokens:{provider}:YYYY-MM-DD`).

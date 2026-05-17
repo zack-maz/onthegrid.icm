@@ -79,6 +79,32 @@ LLM_V3_CONCURRENCY=12 LLM_BATCH_SIZE=2 LLM_BATCH_TIMEOUT_MS=90000
 - Per-batch adaptive sizing (`V3_ADAPTIVE_BATCH`) — deferred until Phase 31 data argues for it
 - Diff-filter cache-key mismatch (Run 2 surfaced that cached event ids carry `llm-v3-grp-` prefix but group keys do not, so the cron re-processes everything) — surfaced in Plan 06 SUMMARY; follow-up plan TBD
 
+## Phase 30.1 Sub-block (appended 2026-05-17)
+
+Phase 30.1 confronted the silent NIM-only reality the operator surfaced at the Phase 30 boundary. Phase 27.4.4 Plan 02 had hardcoded `skipOpenRouter: true` at `server/lib/llmEventExtractor.v3.ts:622, 929`, removing OpenRouter from the active cascade. The 2026-05-17 04:00 UTC cron exposed the failure mode (NIM 39 rate_limit → breaker tripped → 50+ batches dropped with zero OR attempts).
+
+Re-tested OR free-tier 2026-05-17 via `scripts/probe-openrouter.ts`: 27/30 rate_limited (90.0%). Conclusion: NIM-only active; OpenRouter dormant pending Phase-31-or-later re-validation. Phase 27.4.4's 16/16 measurement stale by 2 months but the free tier is still not viable.
+
+- **D-01 (scope choice):** Minimum scope per D-05 (`rateLimitedPct ≥ 90%` → OpenRouter not viable). No code change in 30.1. The free-tier flip would amplify breaker error rate without delivering successful extractions.
+- **D-08 (terminal fallback):** Per D-08 paragraph (mandatory in BOTH branches): batches still drop on breaker-trip; `/api/events` still serves raw GDELT via the Pitfall 1 bridge. Map never goes blank. The NIM-only declaration acknowledges this failure mode honestly rather than hiding it behind a non-functional cascade claim.
+- **D-09 (breaker untouched):** `server/lib/llmCircuitBreaker.ts` not re-tuned — same discipline as Phase 30 D-09.
+- **D-13 (CLAUDE.md):** "LLM Event Pipeline" line amended to declare OpenRouter fallback dormant pending re-validation. Single-line change; preserves Phase 29 D-06 5018-token budget.
+
+**Phase 31 or fresh-phase follow-up candidates:**
+
+- Paid-OR conversion (~$0.04/day = ~$1.20/mo for full coverage; seed Q4).
+- Adaptive Retry-After-aware NIM limiter (Phase 30 D-01's `retryAfterMs` field is already on `callHistory` — wire it into `nvidiaNimWindow` so post-429 calls wait the server-requested duration).
+- NIM model switch to a lower-cap-friendly variant (would require fresh bake-off vs Phase 27.4.1's qwen-235b lock).
+- Dashboard surface for cascade-degraded state (its own phase; overlaps Phase 32 + Phase 34).
+- Re-run `scripts/probe-openrouter.ts` quarterly to catch envelope improvements that would unlock the free-tier restore.
+
+**Architecture-level numbers** (probe + percentages + cascade decision): [`docs/architecture/llm-pipeline-reliability.md`](../architecture/llm-pipeline-reliability.md#cascade-reality-phase-301-2026-05-17). This sub-block records the **decision**; the architecture doc records the **measurement** (mirrors the Phase 30 sub-block convention).
+
+**Out of scope (carries forward):**
+
+- Free-tier `skipOpenRouter: true` removal — deferred until a future probe lands `< 50%` per D-05.
+- All Phase 31 prep items remain Phase 31's scope (eval-fixture bundling, diff-filter ID-mismatch, CACHE_KEY_PREFIX whitespace gotcha).
+
 <expand_at_36>
 
 ## Consequences
