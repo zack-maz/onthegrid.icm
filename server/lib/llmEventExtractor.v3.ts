@@ -79,8 +79,12 @@ const log = logger.child({ module: 'llm-extractor-v3' });
 
 /** D-10 — BATCH_SIZE reduced from v1's 8 to 2 because each group now carries
  *  far more context (news + Bellingcat + temporal) and fits more comfortably
- *  into the provider's attention budget when batched narrowly. */
-const BATCH_SIZE = 2;
+ *  into the provider's attention budget when batched narrowly.
+ *  Phase 30 D-07 (LLM-RELI-03): now env-tunable via LLM_BATCH_SIZE
+ *  (defaults to 2 — same value as the prior hard-coded const). Raise to
+ *  4-8 only after Plan 06 ±3pp eval regression budget validates the
+ *  wider group context for qwen-235b. */
+const BATCH_SIZE = env.LLM_BATCH_SIZE;
 
 /** Phase 27.4.3 D-08 bake-off — empty/undefined uses freeClaudeRouter's
  *  NVIDIA_NIM_DEFAULT_MODEL. Set V3_BAKEOFF_MODEL=<id> in env to swap the
