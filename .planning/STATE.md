@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: Phase 30 context gathered (feature/30-nim-throttle-characterization)
-last_updated: "2026-05-17T00:38:43.555Z"
-last_activity: 2026-05-16
+status: executing
+last_updated: "2026-05-17T00:53:09.791Z"
+last_activity: 2026-05-17 -- Phase 30 execution started
 progress:
   total_phases: 13
   completed_phases: 1
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 30
-Plan: Not started
-Status: Phase 30 context gathered (feature/30-nim-throttle-characterization)
-Last activity: 2026-05-16
+Phase: 30 (nim-throttle-characterization-cascade-tuning-pro-enabled-sim) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 30
+Last activity: 2026-05-17 -- Phase 30 execution started
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 

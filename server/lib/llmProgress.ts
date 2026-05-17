@@ -97,6 +97,8 @@ export interface LLMPipelineProgress {
       | 'rate_limit_window'
       | 'daily_cap'
       | 'watchdog-soft-warn';
+    // D-01 (Phase 30): NIM Retry-After header capture, milliseconds. Null when header absent (Path B).
+    retryAfterMs?: number | null;
   }>;
 
   /** D-32: per-provider daily token counters mirrored from Redis for fast read. */
@@ -332,6 +334,8 @@ export interface LLMRunSummary {
       | 'rate_limit_window'
       | 'daily_cap'
       | 'watchdog-soft-warn';
+    // D-01 (Phase 30): NIM Retry-After header capture, milliseconds. Null when header absent (Path B).
+    retryAfterMs?: number | null;
   }>;
 
   routingTrace?: Array<{
