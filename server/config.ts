@@ -113,14 +113,12 @@ export const envSchema = z.object({
   //     on verbose groups).
   LLM_BATCH_SIZE: z.coerce.number().int().positive().default(2),
 
-  // Phase 28.2.6 D-03 — cadence for incremental terminal-key writes during
-  // LLM extraction. Default 10 batches between flushes (rationale-locked
-  // via CONTEXT D-03). N=1 would clobber Redis under concurrency=12;
-  // higher values mean fewer writes + larger loss window on Vercel
-  // function-kill. Operator-tunable per Phase 28.1 W5 D-12. Read by
-  // server/lib/llmExtractionPipeline.ts via the shared `env` object so
-  // test mocks (vi.mock('../../config.js', ...)) propagate correctly.
-  LLM_FLUSH_EVERY_N_BATCHES: z.coerce.number().int().positive().default(10),
+  // Phase 30 D-04 (SIMPLIFY-01) — the prior incremental-flush cadence env
+  // var was retired here. The Phase 28.2.6 incremental-flush mechanism is
+  // gone; the terminal write at end of runRefreshExtraction is now the
+  // canonical (and only) writer of events:llm:v3. Operators with the legacy
+  // flush-cadence var still set in their Vercel environment can prune it
+  // post-merge — Zod no longer parses it.
 
   // Phase 27.4.4 D-04 / D-13 / D-18: opt-in feature flags for v3 latency remediation.
   // Default OFF for D-04 + D-18 keeps Gate B telemetry pure; activated post-cutover when
