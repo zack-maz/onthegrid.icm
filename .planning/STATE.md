@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: Phase 30 Waves 1-2 complete (30-01, 30-02); ready for autonomous Wave 3
-last_updated: "2026-05-17T01:42:00.000Z"
-last_activity: 2026-05-17 -- Run 1 baseline captured (122s wall-clock, Path B no 429s, 0 hard-kills)
+status: Phase 30 Waves 1-3 complete (30-01, 30-02, 30-04, 30-05); paused for operator Wave 4
+last_updated: "2026-05-17T02:24:00.000Z"
+last_activity: 2026-05-17 -- Wave 3 tuned defaults committed; awaiting prod redeploy + Run 2 validation cron
 progress:
   total_phases: 13
   completed_phases: 1
   total_plans: 20
-  completed_plans: 15
+  completed_plans: 17
   percent: 75
 ---
 
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 30 (nim-throttle-characterization-cascade-tuning-pro-enabled-sim) — PAUSED after Wave 2
-Plan: 2 of 7 complete (30-01 telemetry+analyzer; 30-02 Run 1 baseline snapshot committed)
-Status: Run 1 captured Path B (no 429s, 0 hard-kills); ready for autonomous Wave 3 (30-04 + 30-05 sequential)
-Last activity: 2026-05-17 -- Run 1 baseline captured (122s wall-clock under 800s Pro ceiling)
+Phase: 30 (nim-throttle-characterization-cascade-tuning-pro-enabled-sim) — PAUSED after Wave 3
+Plan: 4 of 7 complete (30-01 telemetry; 30-02 Run 1; 30-04 soft-warn deleted; 30-05 tuned defaults)
+Status: Tuned defaults committed (sanity-check mode); ready for operator Wave 4 (deploy + Run 2 cron)
+Last activity: 2026-05-17 -- Wave 3 complete; LLM_BATCH_TIMEOUT_MS 90s→120s, BACKOFF [1000,4000]→[2000,8000,32000], RETRY_ATTEMPTS 2→3, JITTER 250→500
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -37,7 +37,7 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | Phase | Name                                                                  | Requirements                                                  | Status      |
 | ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- | ----------- |
 | 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | Context gathered |
-| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Waves 1-2 complete (2/7 plans) |
+| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Waves 1-3 complete (4/7 plans) |
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Not started |
 | 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
