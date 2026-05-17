@@ -97,7 +97,7 @@ Run 1 (Plan 02) measured `watchdogTimeoutCount: 0` at p95 batch latency 33s vs. 
 - **Header docblock (pre-deletion lines 1-19):** Updated to single-tier wording; the `* Soft-warn threshold ...` bullet (pre-deletion line 5) was deleted; the `that both v1 and v2 extractors (Wave 2)` phrasing (pre-deletion line 13) was rewritten to `that the v3 extractor` (RESEARCH gotcha 2 — v1/v2 deleted Phase 29 D-02).
 - **`Wrap a batch promise with timeout + soft-warn + late-resolve guard` (pre-deletion line 61):** Updated to `Wrap a batch promise with a hard-timeout + late-resolve guard`.
 
-### server/__tests__/lib/llmExtractorWatchdog.test.ts
+### server/**tests**/lib/llmExtractorWatchdog.test.ts
 
 - **Describe title** updated from `'withBatchWatchdog (Phase 27.4.1 D-01/D-02/D-05)'` to `'withBatchWatchdog (Phase 27.4.1 D-01/D-05; Phase 30 D-05 soft-warn retired)'`.
 - **Test case 3 deleted (pre-deletion lines 96-130, 35 lines):** the `'soft-warn path: invokes onSoftWarn when threshold crossed, then succeeds without calling onTimeout'` case removed entirely (5+ `onSoftWarn` references, `softWarnMs: 50`).
@@ -117,13 +117,13 @@ Run 1 (Plan 02) measured `watchdogTimeoutCount: 0` at p95 batch latency 33s vs. 
 
 ## LOC Delta (for SIMPLIFY-07 budget tracking in Phase 34)
 
-| File                                                | Insertions | Deletions | Net  |
-| --------------------------------------------------- | ---------- | --------- | ---- |
-| server/lib/llmExtractorWatchdog.ts                  | 11         | 55        | -44  |
-| server/__tests__/lib/llmExtractorWatchdog.test.ts   | 5          | 27        | -22  |
-| server/lib/llmEventExtractor.v3.ts                  | 0          | 25        | -25  |
-| server/lib/llmProgress.ts                           | 11         | 17        | -6   |
-| **Total**                                           | **27**     | **124**   | **-97** |
+| File                                              | Insertions | Deletions | Net     |
+| ------------------------------------------------- | ---------- | --------- | ------- |
+| server/lib/llmExtractorWatchdog.ts                | 11         | 55        | -44     |
+| server/**tests**/lib/llmExtractorWatchdog.test.ts | 5          | 27        | -22     |
+| server/lib/llmEventExtractor.v3.ts                | 0          | 25        | -25     |
+| server/lib/llmProgress.ts                         | 11         | 17        | -6      |
+| **Total**                                         | **27**     | **124**   | **-97** |
 
 `git log -2 --shortstat` confirms `2 files changed, 16 insertions(+), 82 deletions(-)` for Task 1 commit `32a2b51` and `2 files changed, 11 insertions(+), 42 deletions(-)` for Task 2 commit `8c7b03a`.
 
@@ -131,7 +131,7 @@ Run 1 (Plan 02) measured `watchdogTimeoutCount: 0` at p95 batch latency 33s vs. 
 
 `npx vitest run server/__tests__/lib/freeClaudeRouter.retryAfterMs.test.ts` exits 0 with `6 passed (6)` after this plan's commits — the same count Plan 01 closed at. The analyzer's `--fixture=...` smoke runs (Path A `run-with-retry-after.json` and Path B `run-without-retry-after.json`) do not include any `'watchdog-soft-warn'` skipReason rows, so the enum deletion is invisible to the test surface; the production backwards-compat invariant (stale rows under 90d Redis TTL must not crash the analyzer) is preserved by Plan 01's design (unknown-value tolerant), not by any code change in this plan.
 
-## Header Docblock Before-and-After (for SIMPLIFY-* commit narrative in Phase 34)
+## Header Docblock Before-and-After (for SIMPLIFY-\* commit narrative in Phase 34)
 
 **Before (pre-deletion lines 1-19, 19 lines):**
 

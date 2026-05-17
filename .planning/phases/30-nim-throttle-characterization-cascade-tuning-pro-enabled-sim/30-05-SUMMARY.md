@@ -36,8 +36,8 @@ tech-stack:
     - 'Phase 30 D-02 sanity-check pattern: when measured data hits Path B (no signal — here, no 429s in 122s of push at concurrency=12), the "propose" step in characterize → propose → validate is theoretical-with-documented-assumptions, not empirical. Numbers are conservative defensive choices, NOT empirical fits. Honest commit body acknowledges this so future readers understand why new BACKOFF_MS isn''t 2× a measured throttle window.'
     - 'Phase 30 D-07 env-promotion pattern: hard-coded `const BATCH_SIZE = 2` consumer (line 83) becomes `env.LLM_BATCH_SIZE` with byte-identical default (2) at the Zod schema layer. Behavior is unchanged until an operator sets LLM_BATCH_SIZE explicitly. Mirrors the LLM_V3_CONCURRENCY env-tunable pattern from Phase 27.4.4 Plan 02.'
     - 'Pro 800s retry-budget pattern: RETRY_ATTEMPTS 2→3 with BACKOFF [2000,8000,32000] gives a worst-case per-call retry wall-clock of 42s. New LLM_BATCH_TIMEOUT_MS=120s comfortably bounds this. Hobby-era constraints (300s ceiling) would have made this risky; Pro headroom makes it routine.'
-    - 'Test cascade fix pattern (Rule 1): when an env-tunable knob is added, every test file that mocks `''../../config.js''` AND transitively loads the consumer module must have the new env field added to its mockEnv. The full server suite must be run to detect cascade — a per-task test run is insufficient because consumers may live in unrelated test files.'
-    - 'Fake-timer rescue for sleep-bounded test assertions: when BACKOFF_MS extension would push real-timer test runs past their 10s default timeout (e.g. 84s aggregated sleep for 2-provider exhaustion at new constants), `vi.useFakeTimers() + vi.advanceTimersByTimeAsync(...)` makes the sleeps instant while preserving the retry-loop''s sequential awaits.'
+    - "Test cascade fix pattern (Rule 1): when an env-tunable knob is added, every test file that mocks `'../../config.js'` AND transitively loads the consumer module must have the new env field added to its mockEnv. The full server suite must be run to detect cascade — a per-task test run is insufficient because consumers may live in unrelated test files."
+    - "Fake-timer rescue for sleep-bounded test assertions: when BACKOFF_MS extension would push real-timer test runs past their 10s default timeout (e.g. 84s aggregated sleep for 2-provider exhaustion at new constants), `vi.useFakeTimers() + vi.advanceTimersByTimeAsync(...)` makes the sleeps instant while preserving the retry-loop's sequential awaits."
 
 key-files:
   modified:
@@ -52,23 +52,23 @@ key-files:
     - 'server/__tests__/lib/llmExtractionPipeline.terminalShape.test.ts (+2 / -1 — same mockEnv backfill)'
     - 'server/__tests__/lib/llmLineage-prefilter.test.ts (+2 / -1 — same mockEnv backfill)'
     - 'server/__tests__/lib/llmExtractionPipeline.crossBoundary.test.ts (+2 / -1 — same mockEnv backfill)'
-    - 'server/__tests__/middleware/requestId.test.ts (+16 / -0 — full env object added to config mock; previously omitted env entirely, broke after Task 2''s createApp → routes/events.ts → v3.ts transitive load)'
+    - "server/__tests__/middleware/requestId.test.ts (+16 / -0 — full env object added to config mock; previously omitted env entirely, broke after Task 2's createApp → routes/events.ts → v3.ts transitive load)"
 
 key-decisions:
   - "LLM_BATCH_SIZE default kept at 2 (not raised to 4-8 as CONTEXT D-02 invited). Run 1's evalScore.total = 0 (ground-truth fixture not bundled into Vercel deploy output per Plan 02 SUMMARY run-note 2) means the Plan 06 ±3pp regression gate cannot be evaluated — raising would be a guess, not measurement. Plan 06 must land the eval-harness fix before any LLM_BATCH_SIZE bump."
-  - "LLM_V3_CONCURRENCY kept at 12 (not re-derived). CONTEXT D-02 formula `(observed_NIM_steady_RPM × measured_batch_latency_seconds) / 60` is undefined because Run 1 measured steadyStateRpm = 0 (Path B). The 213 batches in 122s wall-clock imply effective parallelism >12 in production, so headroom may exist — but the conservative choice is to keep the default and have Plan 06 re-probe by raising concurrency and watching for the first 429s."
-  - "LLM_BATCH_TIMEOUT_MS bumped 90_000 → 120_000 ms. Derivation: max(2 × p95, throttle_window + 30s). p95 = 33s → 2×33s = 66s. Throttle window absent (Path B). Take max = 66s, then add headroom for long-tail outliers beyond a 213-sample p95 → round up to 120s. Pitfall 4 math at concurrency=12: even worst-case 120s/batch over 17 batches wall-clock stays comfortably inside Pro 800s ceiling."
+  - 'LLM_V3_CONCURRENCY kept at 12 (not re-derived). CONTEXT D-02 formula `(observed_NIM_steady_RPM × measured_batch_latency_seconds) / 60` is undefined because Run 1 measured steadyStateRpm = 0 (Path B). The 213 batches in 122s wall-clock imply effective parallelism >12 in production, so headroom may exist — but the conservative choice is to keep the default and have Plan 06 re-probe by raising concurrency and watching for the first 429s.'
+  - 'LLM_BATCH_TIMEOUT_MS bumped 90_000 → 120_000 ms. Derivation: max(2 × p95, throttle_window + 30s). p95 = 33s → 2×33s = 66s. Throttle window absent (Path B). Take max = 66s, then add headroom for long-tail outliers beyond a 213-sample p95 → round up to 120s. Pitfall 4 math at concurrency=12: even worst-case 120s/batch over 17 batches wall-clock stays comfortably inside Pro 800s ceiling.'
   - "RETRY_ATTEMPTS bumped 2 → 3 per CONTEXT D-02: 'may increase since the 800s budget now allows it without watchdog conflict'. Pro headroom makes the extra attempt routine; worst-case retry wall-clock 2+8+32=42s is bounded by new 120s batch timeout."
-  - "BACKOFF_MS extended [1000, 4000] → [2000, 8000, 32000]. 4× scaling preserved across all three attempts. Conservative bump to give recovery headroom under the now-untested NIM RPM ceiling (Run 1 never approached it). Third element appended for the new RETRY_ATTEMPTS=3. Choice is defensive — Plan 06 with real 429s would inform a tighter fit."
-  - "JITTER_MS bumped 250 → 500 to preserve the ±25% ratio of BACKOFF[0] (250/1000 = 25% → 500/2000 = 25%). CONTEXT D-02 jitter formula."
+  - 'BACKOFF_MS extended [1000, 4000] → [2000, 8000, 32000]. 4× scaling preserved across all three attempts. Conservative bump to give recovery headroom under the now-untested NIM RPM ceiling (Run 1 never approached it). Third element appended for the new RETRY_ATTEMPTS=3. Choice is defensive — Plan 06 with real 429s would inform a tighter fit.'
+  - 'JITTER_MS bumped 250 → 500 to preserve the ±25% ratio of BACKOFF[0] (250/1000 = 25% → 500/2000 = 25%). CONTEXT D-02 jitter formula.'
   - "Constant names (RETRY_ATTEMPTS, BACKOFF_MS, JITTER_MS) PRESERVED per CONTEXT <specifics> guidance ('operators know them'). Did NOT rename to BACKOFF_BASE_MS even though the array now has 3 elements — no test or research surface revealed an ambiguity that warranted breaking the operator-familiarity contract."
   - "Test cascade fix landed as a separate commit (749d93d) AFTER the three task commits. This keeps the task commits semantically pure (Task 1 = schema/.env; Task 2 = consumer; Task 3 = router tune) and isolates the auto-fix narrative for future bisect. Alternative — folding the test backfills into Task 2's commit — would have mixed concerns and obscured the cascade discovery."
 
 patterns-established:
   - "Sanity-check tuning pattern: when measured-data path is unavailable (Path B), document the choice as conservative-by-default with rationale. Don't pretend the numbers are empirical."
-  - "Side-by-side defaults table in commit body: pre-Phase-30 vs post-Phase-30 with derivation rule per row. Future readers + Plan 06 + Plan 07 can quote verbatim."
-  - "Env promotion with byte-identical fallback: keep the prior hard-coded value as the new Zod default so behavior is unchanged until an operator opts in. Mirrors LLM_V3_CONCURRENCY introduction in Phase 27.4.4."
-  - "Fake-timer drain pattern for retry-budget tests: useFakeTimers + advanceTimersByTimeAsync in a loop across each backoff hop. Preserves the sequential-await retry-loop semantics while collapsing real-time."
+  - 'Side-by-side defaults table in commit body: pre-Phase-30 vs post-Phase-30 with derivation rule per row. Future readers + Plan 06 + Plan 07 can quote verbatim.'
+  - 'Env promotion with byte-identical fallback: keep the prior hard-coded value as the new Zod default so behavior is unchanged until an operator opts in. Mirrors LLM_V3_CONCURRENCY introduction in Phase 27.4.4.'
+  - 'Fake-timer drain pattern for retry-budget tests: useFakeTimers + advanceTimersByTimeAsync in a loop across each backoff hop. Preserves the sequential-await retry-loop semantics while collapsing real-time.'
 
 requirements-completed: [LLM-RELI-03, LLM-RELI-04]
 requirements-addressed: [LLM-RELI-03, LLM-RELI-04]
@@ -138,66 +138,70 @@ Each task committed atomically; one Rule-1 auto-fix commit follows:
 
 ## Files Modified
 
-| File | Insertions | Deletions | Net |
-|------|-----------|-----------|-----|
-| server/config.ts | 67 | 8 | +59 |
-| server/lib/llmEventExtractor.v3.ts | 7 | 1 | +6 |
-| server/lib/freeClaudeRouter.ts | 43 | 3 | +40 |
-| .env.example | 38 | 4 | +34 |
-| server/__tests__/config.test.ts | 32 | 0 | +32 |
-| server/__tests__/lib/llmExtractionPipeline.incrementalWrite.test.ts | 32 | 2 | +30 |
-| server/__tests__/lib/freeClaudeRouter.test.ts | 49 | 19 | +30 |
-| server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts | 3 | 1 | +2 |
-| server/__tests__/lib/llmExtractionPipeline.terminalShape.test.ts | 3 | 1 | +2 |
-| server/__tests__/lib/llmLineage-prefilter.test.ts | 3 | 1 | +2 |
-| server/__tests__/lib/llmExtractionPipeline.crossBoundary.test.ts | 3 | 1 | +2 |
-| server/__tests__/middleware/requestId.test.ts | 16 | 0 | +16 |
-| **Total** | **296** | **41** | **+255** |
+| File                                                                | Insertions | Deletions | Net      |
+| ------------------------------------------------------------------- | ---------- | --------- | -------- |
+| server/config.ts                                                    | 67         | 8         | +59      |
+| server/lib/llmEventExtractor.v3.ts                                  | 7          | 1         | +6       |
+| server/lib/freeClaudeRouter.ts                                      | 43         | 3         | +40      |
+| .env.example                                                        | 38         | 4         | +34      |
+| server/**tests**/config.test.ts                                     | 32         | 0         | +32      |
+| server/**tests**/lib/llmExtractionPipeline.incrementalWrite.test.ts | 32         | 2         | +30      |
+| server/**tests**/lib/freeClaudeRouter.test.ts                       | 49         | 19        | +30      |
+| server/**tests**/lib/llmEventExtractor.v3-adaptive.test.ts          | 3          | 1         | +2       |
+| server/**tests**/lib/llmExtractionPipeline.terminalShape.test.ts    | 3          | 1         | +2       |
+| server/**tests**/lib/llmLineage-prefilter.test.ts                   | 3          | 1         | +2       |
+| server/**tests**/lib/llmExtractionPipeline.crossBoundary.test.ts    | 3          | 1         | +2       |
+| server/**tests**/middleware/requestId.test.ts                       | 16         | 0         | +16      |
+| **Total**                                                           | **296**    | **41**    | **+255** |
 
 ## Side-by-Side Defaults Table (for Plan 07 architecture doc)
 
-| Knob | v1.4 (Hobby 300s) | v1.5 sanity-check (Pro 800s) | Derivation rule |
-|------|-------------------|-------------------------------|-----------------|
-| `LLM_V3_CONCURRENCY` | 12 | **12 (unchanged)** | Formula `(RPM × latency_s) / 60` undefined under observed_RPM=0 (Path B) — keep conservative, re-probe in Plan 06 |
-| `LLM_BATCH_SIZE` | 2 (hard-coded) | **2 (env-tunable)** | Eval gate cannot be evaluated (evalScore.total=0); raise only after Plan 06 lands eval-harness fix |
-| `LLM_BATCH_TIMEOUT_MS` | 90_000 | **120_000** | `max(2 × p95, throttle_window + 30s)` = `max(66_000, undef)` rounded up for long-tail headroom |
-| `RETRY_ATTEMPTS` | 2 | **3** | CONTEXT D-02: Pro 800s budget allows extra attempt without watchdog conflict |
-| `BACKOFF_MS` | [1000, 4000] | **[2000, 8000, 32000]** | 4× scaling preserved; conservative bump for untested NIM RPM ceiling; third element for new RETRY_ATTEMPTS=3 |
-| `JITTER_MS` | 250 | **500** | ±25% of BACKOFF[0] ratio preserved: 250/1000 = 500/2000 |
+| Knob                   | v1.4 (Hobby 300s) | v1.5 sanity-check (Pro 800s) | Derivation rule                                                                                                   |
+| ---------------------- | ----------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `LLM_V3_CONCURRENCY`   | 12                | **12 (unchanged)**           | Formula `(RPM × latency_s) / 60` undefined under observed_RPM=0 (Path B) — keep conservative, re-probe in Plan 06 |
+| `LLM_BATCH_SIZE`       | 2 (hard-coded)    | **2 (env-tunable)**          | Eval gate cannot be evaluated (evalScore.total=0); raise only after Plan 06 lands eval-harness fix                |
+| `LLM_BATCH_TIMEOUT_MS` | 90_000            | **120_000**                  | `max(2 × p95, throttle_window + 30s)` = `max(66_000, undef)` rounded up for long-tail headroom                    |
+| `RETRY_ATTEMPTS`       | 2                 | **3**                        | CONTEXT D-02: Pro 800s budget allows extra attempt without watchdog conflict                                      |
+| `BACKOFF_MS`           | [1000, 4000]      | **[2000, 8000, 32000]**      | 4× scaling preserved; conservative bump for untested NIM RPM ceiling; third element for new RETRY_ATTEMPTS=3      |
+| `JITTER_MS`            | 250               | **500**                      | ±25% of BACKOFF[0] ratio preserved: 250/1000 = 500/2000                                                           |
 
 **Operator rollback recipe** (env override; no code revert):
+
 ```
 LLM_V3_CONCURRENCY=12 LLM_BATCH_SIZE=2 LLM_BATCH_TIMEOUT_MS=90000
 ```
+
 (Router constants are NOT env-tunable — in-incident reversion requires `git revert 6d6b427`.)
 
 ## Run 1 Measurements Consumed
 
 From `.planning/phases/30-.../run-1-throttle-snapshot.json` (Plan 02 deliverable):
 
-| Field | Value | Interpretation |
-|-------|-------|----------------|
-| `runTimestamp` | 1778980781669 | 2026-05-17T01:19:41Z |
-| `durationMs` | 122_628 (~123s) | ~85% headroom to 800s Pro ceiling |
-| `batchCount` | 213 | High throughput; implies prod parallelism may already exceed concurrency=12 |
-| `throttleWindowMs.path` | "B" | **NIM did NOT 429 during the run** (key Path B finding) |
-| `throttleWindowMs.median` | 306 | Synthetic gap-inference; NOT a true throttle signal |
-| `steadyStateRpm` | 0 | No rate limiting observed |
-| `recoveryIntervalMs` | null | N/A (no 429s to recover from) |
-| `perBatchLatency.p50` | 21_053 ms | ~21s typical batch |
-| `perBatchLatency.p95` | 33_263 ms | Drives LLM_BATCH_TIMEOUT_MS = 2× = 66s, rounded up to 120s |
-| `watchdogTimeoutCount` | 0 | No hard-kills at the prior 90s threshold; new 120s threshold inherits all that headroom |
-| `evalScore.total` | 0 of 0 | **Eval harness silently failed** — ground-truth fixture not bundled into Vercel deploy output. Blocks Plan 06 deploy gate until fixed. |
+| Field                     | Value           | Interpretation                                                                                                                         |
+| ------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `runTimestamp`            | 1778980781669   | 2026-05-17T01:19:41Z                                                                                                                   |
+| `durationMs`              | 122_628 (~123s) | ~85% headroom to 800s Pro ceiling                                                                                                      |
+| `batchCount`              | 213             | High throughput; implies prod parallelism may already exceed concurrency=12                                                            |
+| `throttleWindowMs.path`   | "B"             | **NIM did NOT 429 during the run** (key Path B finding)                                                                                |
+| `throttleWindowMs.median` | 306             | Synthetic gap-inference; NOT a true throttle signal                                                                                    |
+| `steadyStateRpm`          | 0               | No rate limiting observed                                                                                                              |
+| `recoveryIntervalMs`      | null            | N/A (no 429s to recover from)                                                                                                          |
+| `perBatchLatency.p50`     | 21_053 ms       | ~21s typical batch                                                                                                                     |
+| `perBatchLatency.p95`     | 33_263 ms       | Drives LLM_BATCH_TIMEOUT_MS = 2× = 66s, rounded up to 120s                                                                             |
+| `watchdogTimeoutCount`    | 0               | No hard-kills at the prior 90s threshold; new 120s threshold inherits all that headroom                                                |
+| `evalScore.total`         | 0 of 0          | **Eval harness silently failed** — ground-truth fixture not bundled into Vercel deploy output. Blocks Plan 06 deploy gate until fixed. |
 
 ## Path B Interpretation (Critical for Plan 06 Reader Context)
 
 Run 1 hit **Path B** of the throttle-characterization decision tree. Per CONTEXT D-01:
+
 - Path A: NIM returns `Retry-After` headers on 429s → analyzer captures throttle window directly from `retryAfterMs`
 - Path B: NIM omits the header OR returns no 429s at all → analyzer infers recovery from `callHistory` timestamp gaps
 
 In Run 1, NIM returned ZERO 429s during the 122s window. The `throttleWindowMs.median = 306` is a synthetic gap-inference value from very few sample points — **NOT a measured throttle signal**. Per Plan 02 SUMMARY run-note 1: "**Plan 05 becomes a sanity-check run** rather than a re-tuning run."
 
 This SUMMARY's commits operationalize that sanity-check framing:
+
 - LLM_V3_CONCURRENCY unchanged (no formula input)
 - LLM_BATCH_SIZE unchanged at 2 (no eval gate input)
 - LLM_BATCH_TIMEOUT_MS bumped from latency p95 (real signal — there were 213 successful batches with measured durations)
@@ -218,7 +222,7 @@ See `key-decisions` in frontmatter — 8 substantive choices captured for STATE.
 - **Found during:** Task 3 verification (`npx vitest run server/__tests__/lib/freeClaudeRouter.test.ts`)
 - **Issue:** Test B2 ("two 429s exhaust NVIDIA NIM retries — falls through to OpenRouter") encoded the OLD RETRY_ATTEMPTS=2 assumption. With my retune to 3, two rejections no longer exhaust the retry budget — NIM gets a third attempt that succeeds before the cascade falls through, so `routing[1]?.provider === 'openrouter'` is undefined.
 - **Fix:** Added a 3rd `mockRejectedValueOnce` to the test setup so 3 rejections exhaust the new 3-attempt budget. Renamed the test to `B2: NIM exhausts RETRY_ATTEMPTS=3 of 429s — falls through to OpenRouter`. Added `vi.useFakeTimers()` + `vi.advanceTimersByTimeAsync(...)` to collapse the new 2s + 8s real-timer waits.
-- **Files modified:** server/__tests__/lib/freeClaudeRouter.test.ts
+- **Files modified:** server/**tests**/lib/freeClaudeRouter.test.ts
 - **Verification:** `npx vitest run server/__tests__/lib/freeClaudeRouter.test.ts` → 18/18 pass
 - **Committed in:** 6d6b427 (folded into Task 3 commit — semantically inseparable from the constant change that caused it)
 
@@ -227,7 +231,7 @@ See `key-decisions` in frontmatter — 8 substantive choices captured for STATE.
 - **Found during:** Task 3 verification (same run as #1)
 - **Issue:** Tests B3 / P2 / P3 exercise "all providers exhausted" by mocking sticky rejections. Under new BACKOFF, the worst-case retry-cycle wall-clock is ~84s for 2-provider exhaustion (2 backoffs × 2 providers × ~10s aggregated each). Default vitest test timeout is 10s — tests timed out before assertions could fire.
 - **Fix:** Added `vi.useFakeTimers()` + drain loop (`await vi.advanceTimersByTimeAsync(10_000)` × 4) so sleeps become instant. Preserves the sequential-await retry-loop semantics; only collapses real time.
-- **Files modified:** server/__tests__/lib/freeClaudeRouter.test.ts (same file as #1)
+- **Files modified:** server/**tests**/lib/freeClaudeRouter.test.ts (same file as #1)
 - **Verification:** Same `npx vitest run` confirms 18/18 pass post-fix
 - **Committed in:** 6d6b427 (Task 3 commit — same root cause as #1)
 
@@ -244,10 +248,10 @@ See `key-decisions` in frontmatter — 8 substantive choices captured for STATE.
 
 **`npm run check:env` exits 1 due to pre-existing EXTRA keys.** Documented but NOT fixed:
 
-- `.env.example` contains 14 keys NOT in `server/config.ts` Zod schema: LLM_PIPELINE_V2, LLM_PIPELINE_V3 (deleted in Phase 29 D-02 part C but the `.env.example` blocks were never removed), plus all 12 `VITE_POLL_*` / `VITE_*_KM` / `VITE_SEVERITY_*` keys (client-tier vars consumed by `src/` not `server/`, but the `check:env` script's Zod-shape comparison treats them as schema orphans).
+- `.env.example` contains 14 keys NOT in `server/config.ts` Zod schema: LLM*PIPELINE_V2, LLM_PIPELINE_V3 (deleted in Phase 29 D-02 part C but the `.env.example` blocks were never removed), plus all 12 `VITE_POLL*_`/`VITE\___KM`/`VITE_SEVERITY_\*`keys (client-tier vars consumed by`src/`not`server/`, but the `check:env` script's Zod-shape comparison treats them as schema orphans).
 - Confirmed pre-existing via `git stash + npm run check:env` against Plan 30-04 base — same exit code 1 with same key list.
 - Per executor SCOPE BOUNDARY rule, NOT fixed. The plan's verify criterion `npm run check:env exits 0` cannot pass for reasons unrelated to this plan's work.
-- Logged for a future maintenance phase to either (a) extend `check:env` to whitelist VITE_* + retired LLM_PIPELINE_V[23], or (b) delete the stale `.env.example` blocks. Phase 34 (REDIS-OPT / SIMPLIFY-* cleanup) is a candidate.
+- Logged for a future maintenance phase to either (a) extend `check:env` to whitelist VITE\__ + retired LLM_PIPELINE_V[23], or (b) delete the stale `.env.example` blocks. Phase 34 (REDIS-OPT / SIMPLIFY-_ cleanup) is a candidate.
 
 ---
 
@@ -291,6 +295,7 @@ None. All env knobs have working defaults; no UI surfaces depend on this plan's 
 - Run 2's `watchdogTimeoutCount` should be ≤ Run 1's (0) — the new 120s timeout adds 30s headroom above the 90s default, so this is a stronger lower bound than Run 1.
 
 ---
-*Phase: 30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim*
-*Plan: 05*
-*Completed: 2026-05-17*
+
+_Phase: 30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim_
+_Plan: 05_
+_Completed: 2026-05-17_
