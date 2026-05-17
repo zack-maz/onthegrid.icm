@@ -126,7 +126,7 @@ const NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? 'qwen/qwen3.5-3
 export const NVIDIA_NIM_FALLBACK_MODEL = 'qwen/qwen3.5-397b-a17b';
 
 // D-09: OpenRouter free-tier fallback model.
-const OPENROUTER_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+export const OPENROUTER_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 // D-09: free-tier daily request cap for OpenRouter (rough envelope; per-model
 // caps vary 100-200/day on the free pool).
 const OPENROUTER_DAILY_CAP = 200;

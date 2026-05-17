@@ -102,6 +102,45 @@ export LLM_BATCH_TIMEOUT_MS=90000
 
 ---
 
+## Cascade Reality (Phase 30.1, 2026-05-17)
+
+Phase 27.4.4 Plan 02 hardcoded `skipOpenRouter: true` at two call sites in `server/lib/llmEventExtractor.v3.ts` (main batch path + split-half retry path), which silently removed OpenRouter from the active cascade declared in Phase 29 D-01. The 2026-05-17 04:00 UTC daily cron exposed the failure mode: NIM 39 rate_limit errors → circuit breaker tripped → 50+ batches dropped with `provider: 'nvidia_nim' reason: 'skipped:breaker'`, zero OpenRouter attempts (`used: 0 / cap: 200`).
+
+Phase 30.1 re-validated OpenRouter free-tier rate-limit behavior via `scripts/probe-openrouter.ts` (Plan 01). The probe landed in the **not-viable bucket** (rate_limit fail ≥ 90% per D-05). Restoring the fallback to the free tier would make every batch attempt a guaranteed loser — amplifying breaker error rates without delivering any successful extractions. The free tier is not currently usable.
+
+The cascade therefore remains NIM-only at runtime — `skipOpenRouter: true` stays in place at `server/lib/llmEventExtractor.v3.ts:622, 929`. The Phase 29 D-01 declaration ("NIM (primary) + OpenRouter (fallback)") is **not currently true at runtime**; the active pipeline is single-provider. OpenRouter is dormant pending Phase-31-or-later re-validation (e.g. paid-OR conversion or a fresh probe after a vendor envelope shift).
+
+### Probe result (`scripts/probe-openrouter.ts`, N=30 single-event payloads, 100ms gap)
+
+| Field            | Value                                    |
+| ---------------- | ---------------------------------------- |
+| Date             | 2026-05-17                               |
+| Model            | `meta-llama/llama-3.3-70b-instruct:free` |
+| Total attempts   | 30                                       |
+| rate_limit (429) | 27 (90.0%)                               |
+| other_error      | 3                                        |
+| ok               | 0                                        |
+
+Snapshot: `.planning/phases/30.1-cascade-fallback-fix-re-enable-openrouter-or-document-single/30.1-or-pulse-snapshot.json`.
+
+Decision per D-05 thresholds: `nim-only` (rate_limit fail ≥ 90%). Re-run the probe quarterly (or whenever OR vendor signals an envelope change) to catch improvements that would unlock restoration.
+
+### Negative-evidence signal: routingTrace must contain ZERO `provider: 'openrouter'` rows
+
+A live `/api/cron/refresh-events` run on the NIM-only configuration produces `events:llm-summary:v3.routingTrace` rows with `provider: 'nvidia_nim'` only. Operators verifying the as-built state can run `npm run analyze:llm-run` and assert the routingTrace contains zero OpenRouter entries. This is the inverse of D-14's restored-cascade evidence — same observability primitive, opposite expectation. **No force-trigger required for Plan 04**; the daily 04:00 UTC cron produces this evidence on its own.
+
+### Raw-GDELT terminal fallback contract (unchanged)
+
+When the NIM circuit breaker opens mid-run, batches drop and `/api/events` serves raw GDELT via the Pitfall 1 bridge in `server/routes/events.ts`. The map never goes blank, but enrichment quality degrades to the raw GDELT ontology. Operator visibility of this transition is currently limited to `/api/operator-status` Bearer-gated surfaces; a richer dashboard signal is deferred. This contract is invariant — the Phase 30.1 NIM-only declaration does NOT remove or weaken the terminal fallback; see [`docs/degradation.md`](../degradation.md) Pitfall 1. The NIM-only declaration acknowledges the failure mode the operator observed on 2026-05-17; the terminal-fallback contract is what keeps the user-facing map alive when that failure mode triggers.
+
+### What changes if a future probe re-restores OR
+
+Re-run `scripts/probe-openrouter.ts`. If `summary.decision === 'restored-cascade'`, remove `skipOpenRouter: true` from `server/lib/llmEventExtractor.v3.ts:622, 929` and run the validation cron per Phase 30.1 D-14. The cascade construction in `server/lib/freeClaudeRouter.ts:341-363` is unchanged and ready to fall through; no new routing machinery required.
+
+Decision record: [`docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md`](../adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md) Phase 30.1 sub-block.
+
+---
+
 ## 7-Day Watch (Phase 31, LLM-RELI-06)
 
 Phase 31 appends daily observations here. The 7-day watch validates Phase 30's tuned defaults under real production traffic across a full operational week before declaring v1.5 throttle work "done." The eval-harness fixture-bundling fix is a prerequisite for Phase 31 — without it, eval drift over the 7-day window is unobservable for the same reason Plan 06's correctness gate was INCONCLUSIVE.

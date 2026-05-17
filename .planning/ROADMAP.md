@@ -148,14 +148,17 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 
 ### Phase 30.1: Cascade fallback fix — re-enable OpenRouter or document single-provider reality (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
-**Depends on:** Phase 30
-**Plans:** 0 plans
+**Goal:** Either re-enable the OpenRouter fallback that has been silently disabled since Phase 27.4.4 (`skipOpenRouter: true` hardcoded in `server/lib/llmEventExtractor.v3.ts:622, 929`) OR honestly amend the docs that advertise a NIM → OpenRouter cascade that does not exist at runtime. Drive the choice from one fresh measurement of OpenRouter free-tier rate-limit behavior via `scripts/probe-openrouter.ts`. Makes the Phase 29 D-01 cascade declaration either true (cascade restored) or honestly amended (NIM-only declared).
+**Requirements**: none formally — gap-closure work surfaced by operator review at the Phase 30 boundary. All 17 decisions (D-01..D-17) tracked in `.planning/phases/30.1-.../30.1-CONTEXT.md`.
+**Depends on:** Phase 30 (PR #20 must be merged + `feature/30.1-cascade-fallback-fix` cut from main per D-02)
+**Plans:** 4/4 plans complete
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 30.1 to break down)
+- [x] 30.1-01-PLAN.md — Probe OpenRouter free-tier rate-limit behavior + capture snapshot + operator selects Wave 2 plan (D-03..D-06)
+- [x] 30.1-02-PLAN.md — Right scope (< 50% probe fail): remove `skipOpenRouter: true` from both v3 call sites + rewrite P3 test + force-trigger validation cron + amend docs (D-01, D-07, D-10..D-16) — runs ONLY if probe lands `restored-cascade`
+- [x] 30.1-03-PLAN.md — Middle bucket (50-90% probe fail): docs-only amendment with measured percentages + Phase 31 paid-OR deferral note (D-01, D-08, D-10..D-13) — runs ONLY if probe lands `middle-bucket-defer`
+- [x] 30.1-04-PLAN.md — Minimum scope (> 90% probe fail): docs-only amendment declaring NIM-only active, OR dormant (D-01, D-08, D-10..D-13) — runs ONLY if probe lands `nim-only`
 
 ### Phase 31: Cron Stability Validation (7-day Watch)
 
