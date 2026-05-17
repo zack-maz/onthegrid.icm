@@ -1,23 +1,26 @@
 // @vitest-environment node
 /**
- * Phase 28.2.6 Plan 01 Task 1 — D-03 cadence assertion.
+ * Phase 30 Plan 03 Task 3 — D-04 / SIMPLIFY-01 no-incremental-flush assertion.
  *
  * Drives `runRefreshExtraction` through a controlled number of batches and
- * asserts that `cacheSetSafe('events:llm:v3', ...)` fires every N batches
- * (intermediate flush) AND once more at end-of-pipeline (final flush).
+ * asserts that `cacheSetSafe('events:llm:v3', ...)` fires EXACTLY ONCE per
+ * successful run (the end-of-pipeline terminal write) regardless of batch
+ * count. The pre-Phase-30 every-N-batches incremental flush is gone.
  *
- * The cadence default N=10 is encoded in `env.LLM_FLUSH_EVERY_N_BATCHES`;
- * tests vary the value via the hoisted mockEnv to exercise the env-tunable
- * path without redeploys.
+ * Lineage: the prior cadence assertions (the default-N intermediate
+ * flush and the configurable-N intermediate flush at batches 3 and 6)
+ * were retired alongside the periodic-flush mechanism (Plan 03 Task 1)
+ * and the legacy flush-cadence Zod schema entry (Task 2).
  *
- * Per RESEARCH §Pattern 3 + Pitfall 2: the cadence counter MUST live inside
- * the `onBatchComplete` callback (driven by `finishBatch`'s monotonic
- * `++completedBatchesCounter`). We pin LLM_V3_CONCURRENCY=1 here so completion
- * order equals submission order — keeps the cadence assertion deterministic.
+ * Pitfall 7 scope: this file's `driveRun(N)` covers the happy-path branch
+ * (groups present, soft-cap not paused) — the exactly-once assertion only
+ * applies there. The empty-groups early-return and soft-cap-paused branches
+ * intentionally do NOT call `mergeAndPersistLlmEntities` (they would assert
+ * `terminalCalls.length === 0`); those branches are not covered here.
  *
- * Per Pitfall 4: each terminal-key write merges with prior cache via id-key
- * Map. The "no premature flush" case proves N=10 is honored (no clobber under
- * concurrency=12 in prod).
+ * LLM_V3_CONCURRENCY=1 is pinned for ordering determinism even though
+ * the post-D-04 callback no longer has any cadence semantics — keeps the
+ * harness behavior stable for future test additions.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -35,7 +38,8 @@ const { mockEnv } = vi.hoisted(() => ({
     V3_ADAPTIVE_BATCH: false,
     V3_LINEAGE_PREFILTER: false,
     V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
-    LLM_FLUSH_EVERY_N_BATCHES: 10, // Phase 28.2.6 Plan 01 Task 4a (retired in Plan 30-03)
+    // Phase 30 D-04 (SIMPLIFY-01): legacy flush-cadence env var stripped
+    // from mockEnv when the Zod schema entry was deleted in Plan 03 Task 2.
     LLM_BATCH_SIZE: 2, // Phase 30 D-07 — promoted from hard-coded const
     CRON_SECRET: '',
   },
@@ -364,30 +368,20 @@ beforeEach(() => {
     delete llmProgressSingleton[k];
   }
   llmProgressSingleton.stage = 'idle';
-  // Reset env to default cadence.
-  mockEnv.LLM_FLUSH_EVERY_N_BATCHES = 10;
   mockEnv.LLM_V3_CONCURRENCY = 1;
 });
 
-describe('runRefreshExtraction — D-03 incremental terminal-key cadence', () => {
-  it("cadence: cacheSetSafe('events:llm:v3', ...) is called every 10 batches", async () => {
+describe('runRefreshExtraction — no incremental flush (D-04 / SIMPLIFY-01)', () => {
+  it("12-batch happy path: exactly ONE cacheSetSafe('events:llm:v3', ...) call (terminal only)", async () => {
     await driveRun(12);
-    const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
-    expect(terminalCalls.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("no premature flush: under 10 batches there is exactly ONE cacheSetSafe('events:llm:v3', ...) call (final-only)", async () => {
-    await driveRun(5);
     const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
     expect(terminalCalls.length).toBe(1);
   });
 
-  it('configurable: LLM_FLUSH_EVERY_N_BATCHES=3 fires intermediate at batch 3 and 6', async () => {
-    mockEnv.LLM_FLUSH_EVERY_N_BATCHES = 3;
-    await driveRun(7);
+  it("5-batch happy path: exactly ONE cacheSetSafe('events:llm:v3', ...) call (terminal only)", async () => {
+    await driveRun(5);
     const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
-    // Two intermediate flushes (batches 3 and 6) + 1 final flush = 3 total.
-    expect(terminalCalls.length).toBe(3);
+    expect(terminalCalls.length).toBe(1);
   });
 });
 
