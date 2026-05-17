@@ -236,7 +236,7 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 | Phase                                                                         | Plans Complete | Status      | Completed  |
 | ----------------------------------------------------------------------------- | -------------- | ----------- | ---------- |
 | 29. LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | 13/13          | Complete    | 2026-05-11 |
-| 30. NIM Throttle Characterization & Cascade Tuning                            | 7/7 | Complete    | 2026-05-17 |
+| 30. NIM Throttle Characterization & Cascade Tuning                            | 7/7            | Complete    | 2026-05-17 |
 | 31. Cron Stability Validation (7-day Watch)                                   | 0/0            | Not started | -          |
 | 32. Ghost Event URL Liveness, Dashboard & Prune                               | 0/0            | Not started | -          |
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/0            | Not started | -          |

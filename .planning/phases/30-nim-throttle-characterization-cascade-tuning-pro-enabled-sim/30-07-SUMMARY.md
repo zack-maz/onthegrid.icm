@@ -38,27 +38,27 @@ affects:
 tech-stack:
   added: [] # pure documentation; no production code path touched
   patterns:
-    - "Atomic single-commit closeout pattern (CONTEXT D-08 Commit 7): all three docs writes land in one commit so the closure is a single revertable unit"
-    - "ADR decision / architecture doc measurement separation: ADR-0010 holds the decisions (immutable per Nygard short format); architecture doc holds the numbers (mutable as Phase 31 watch appends)"
+    - 'Atomic single-commit closeout pattern (CONTEXT D-08 Commit 7): all three docs writes land in one commit so the closure is a single revertable unit'
+    - 'ADR decision / architecture doc measurement separation: ADR-0010 holds the decisions (immutable per Nygard short format); architecture doc holds the numbers (mutable as Phase 31 watch appends)'
     - "<expand_at_36> marker pattern: ADR-0010 stub from Phase 29 left a marker; Phase 30 replaces it with the new sub-block + a fresh marker at the end of the block so Phase 36's closeout has a deterministic insertion point"
     - "Honest framing of Path B sanity-check tuning: doc explicitly distinguishes 'conservative defensive choices grounded in measured per-batch latency' from 'empirical fits to a measured throttle window' so future readers don't mistake the new defaults for measurement-derived numbers"
-    - "INCONCLUSIVE-as-status pattern for the eval gate: doc + ADR both record the eval-harness fixture-bundling blocker honestly rather than papering over with PASSED/FAILED that would be misleading"
+    - 'INCONCLUSIVE-as-status pattern for the eval gate: doc + ADR both record the eval-harness fixture-bundling blocker honestly rather than papering over with PASSED/FAILED that would be misleading'
 
 key-files:
   created:
-    - "docs/architecture/llm-pipeline-reliability.md (107 lines; Findings table + Tuned Defaults table + Retired Mechanisms block + Phase 31 placeholder)"
-    - ".planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/30-07-SUMMARY.md (this file)"
+    - 'docs/architecture/llm-pipeline-reliability.md (107 lines; Findings table + Tuned Defaults table + Retired Mechanisms block + Phase 31 placeholder)'
+    - '.planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/30-07-SUMMARY.md (this file)'
   modified:
-    - "docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md (+34 lines; Phase 30 sub-block appended below the <expand_at_36> marker; marker moved to end of new block; Phase 29 content above the marker byte-identical to prior HEAD)"
+    - 'docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md (+34 lines; Phase 30 sub-block appended below the <expand_at_36> marker; marker moved to end of new block; Phase 29 content above the marker byte-identical to prior HEAD)'
     - "CLAUDE.md (+1 line; one new dash-bullet under 'LLM Event Pipeline' as the final bullet of that section before '## Serverless Cache (Phase 13)')"
 
 key-decisions:
-  - "Single atomic commit (CONTEXT D-08 Commit 7 message format) rather than per-file commits — the three writes are semantically coupled (architecture doc + ADR + CLAUDE.md pointer move together or not at all), and the rollback is a single git revert."
+  - 'Single atomic commit (CONTEXT D-08 Commit 7 message format) rather than per-file commits — the three writes are semantically coupled (architecture doc + ADR + CLAUDE.md pointer move together or not at all), and the rollback is a single git revert.'
   - "Run 2's null throttleWindowMs cited as the canonical value in the Findings table over Run 1's synthetic 306 — per Plan 06 SUMMARY guidance ('Run 2's analyzer returned null honestly... the actual change is just sample-size variance'). The 306 is documented for context but explicitly flagged as 'synthetic gap-inference, no real signal'."
   - "Path B framing called out at the top of the architecture doc (right after the 3-line metadata block) so future readers can't miss that the tuning was sanity-check mode, not measured-tuning mode. Same framing in the ADR sub-block D-02 entry."
-  - "Eval gate documented as INCONCLUSIVE (not PASSED, not FAILED) in both the Findings table and the Tuned Defaults block. PASS_MARGIN values explicitly stated as N/A in the ADR sub-block. The blocker carries forward to Phase 31 / a follow-up plan."
+  - 'Eval gate documented as INCONCLUSIVE (not PASSED, not FAILED) in both the Findings table and the Tuned Defaults block. PASS_MARGIN values explicitly stated as N/A in the ADR sub-block. The blocker carries forward to Phase 31 / a follow-up plan.'
   - "Plan 03's ~22 → 1 SET-call delta calculated from Run 2's batchCount=213 × prior 10-batch cadence + 1 terminal write = 22 — math reproduced inline in both the architecture doc Retired Mechanisms block AND the ADR D-04 entry so the audit signal is verifiable without leaving the doc."
-  - "Rollback recipe in architecture doc + ADR explicitly distinguishes env-tunable knobs (LLM_V3_CONCURRENCY / LLM_BATCH_SIZE / LLM_BATCH_TIMEOUT_MS — revert via env) from router constants (BACKOFF_MS / JITTER_MS / RETRY_ATTEMPTS — revert via git revert). Cites the specific Plan 05 commit hash (6d6b427) and Plan 04 commit hash (32a2b51) as the revert targets."
+  - 'Rollback recipe in architecture doc + ADR explicitly distinguishes env-tunable knobs (LLM_V3_CONCURRENCY / LLM_BATCH_SIZE / LLM_BATCH_TIMEOUT_MS — revert via env) from router constants (BACKOFF_MS / JITTER_MS / RETRY_ATTEMPTS — revert via git revert). Cites the specific Plan 05 commit hash (6d6b427) and Plan 04 commit hash (32a2b51) as the revert targets.'
   - "CLAUDE.md insertion uses the '**bold lead** — body' bullet style matching all surrounding bullets in the LLM Event Pipeline section. Single line, no other CLAUDE.md edits. wc -l delta exactly +1."
   - "Prettier auto-formatted the architecture doc's table column widths only (content byte-identical); ran prettier --write then re-checked all three files for green status before staging the commit."
 
@@ -85,23 +85,23 @@ commits:
 
 ## Tasks Executed
 
-| Task | Name                                                                                          | Status   | Commit  |
-| ---- | --------------------------------------------------------------------------------------------- | -------- | ------- |
+| Task | Name                                                                                                                        | Status   | Commit  |
+| ---- | --------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
 | 1    | Write docs/architecture/llm-pipeline-reliability.md (Findings + Tuned Defaults + Retired Mechanisms + Phase 31 placeholder) | complete | 48a1857 |
-| 2    | Append Phase 30 sub-block to ADR-0010 `<expand_at_36>` section (D-01 through D-07, marker moved to end of new block) | complete | 48a1857 |
-| 3    | Insert one pointer line into CLAUDE.md under "LLM Event Pipeline" (matching dash-bullet style) | complete | 48a1857 |
-| 4    | Atomic commit closing Phase 30 ladder (Commit 7 of 7 per CONTEXT D-08)                        | complete | 48a1857 |
+| 2    | Append Phase 30 sub-block to ADR-0010 `<expand_at_36>` section (D-01 through D-07, marker moved to end of new block)        | complete | 48a1857 |
+| 3    | Insert one pointer line into CLAUDE.md under "LLM Event Pipeline" (matching dash-bullet style)                              | complete | 48a1857 |
+| 4    | Atomic commit closing Phase 30 ladder (Commit 7 of 7 per CONTEXT D-08)                                                      | complete | 48a1857 |
 
 All four tasks landed in the single atomic commit `48a1857` per CONTEXT D-08 Commit 7 message format ("one commit closes the ladder").
 
 ## Files Modified
 
-| File                                                              | Insertions | Deletions | Net      |
-| ----------------------------------------------------------------- | ---------- | --------- | -------- |
-| docs/architecture/llm-pipeline-reliability.md                     | 107        | 0         | +107     |
-| docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md         | 30         | 0         | +30      |
-| CLAUDE.md                                                         | 1          | 0         | +1       |
-| **Total**                                                         | **138**    | **0**     | **+138** |
+| File                                                      | Insertions | Deletions | Net      |
+| --------------------------------------------------------- | ---------- | --------- | -------- |
+| docs/architecture/llm-pipeline-reliability.md             | 107        | 0         | +107     |
+| docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md | 30         | 0         | +30      |
+| CLAUDE.md                                                 | 1          | 0         | +1       |
+| **Total**                                                 | **138**    | **0**     | **+138** |
 
 `git show --stat 48a1857` confirms `3 files changed, 138 insertions(+)` (pure additions; no deletions of Phase 29 ADR content; no other CLAUDE.md edits).
 
@@ -111,48 +111,48 @@ All numerical values in the architecture doc Findings table sourced directly fro
 
 **Run 1** (`run-1-throttle-snapshot.json`, runTimestamp 1778980781669 = 2026-05-17T01:19:41Z):
 
-| Field                     | Value (verbatim) | Cell in Findings table |
-| ------------------------- | ---------------- | ---------------------- |
-| `durationMs`              | 122628           | Total wall-clock (ms)  |
-| `batchCount`              | 213              | Total batches          |
-| `watchdogTimeoutCount`    | 0                | Watchdog hard-kill count |
-| `throttleWindowMs.path`   | "B"              | Path (A/B)             |
+| Field                     | Value (verbatim) | Cell in Findings table                          |
+| ------------------------- | ---------------- | ----------------------------------------------- |
+| `durationMs`              | 122628           | Total wall-clock (ms)                           |
+| `batchCount`              | 213              | Total batches                                   |
+| `watchdogTimeoutCount`    | 0                | Watchdog hard-kill count                        |
+| `throttleWindowMs.path`   | "B"              | Path (A/B)                                      |
 | `throttleWindowMs.median` | 306              | Throttle window median (ms) — flagged synthetic |
-| `throttleWindowMs.p95`    | 306              | Throttle window p95 (ms) |
-| `steadyStateRpm`          | 0                | Steady-state RPM       |
-| `recoveryIntervalMs`      | null             | Recovery interval (ms) |
-| `perBatchLatency.p50`     | 21053            | p50 batch latency (ms) |
-| `perBatchLatency.p95`     | 33263            | p95 batch latency (ms) |
-| `evalScore.total`         | 0                | Eval rows — INCONCLUSIVE |
+| `throttleWindowMs.p95`    | 306              | Throttle window p95 (ms)                        |
+| `steadyStateRpm`          | 0                | Steady-state RPM                                |
+| `recoveryIntervalMs`      | null             | Recovery interval (ms)                          |
+| `perBatchLatency.p50`     | 21053            | p50 batch latency (ms)                          |
+| `perBatchLatency.p95`     | 33263            | p95 batch latency (ms)                          |
+| `evalScore.total`         | 0                | Eval rows — INCONCLUSIVE                        |
 
 **Run 2** (`run-2-throttle-snapshot.json`, runTimestamp 1778985361424 = 2026-05-17T02:36:01Z):
 
-| Field                     | Value (verbatim) | Cell in Findings table |
-| ------------------------- | ---------------- | ---------------------- |
-| `durationMs`              | 124533           | Total wall-clock (ms)  |
-| `batchCount`              | 213              | Total batches          |
-| `watchdogTimeoutCount`    | 0                | Watchdog hard-kill count |
-| `throttleWindowMs.path`   | "B"              | Path (A/B)             |
+| Field                     | Value (verbatim) | Cell in Findings table                                                |
+| ------------------------- | ---------------- | --------------------------------------------------------------------- |
+| `durationMs`              | 124533           | Total wall-clock (ms)                                                 |
+| `batchCount`              | 213              | Total batches                                                         |
+| `watchdogTimeoutCount`    | 0                | Watchdog hard-kill count                                              |
+| `throttleWindowMs.path`   | "B"              | Path (A/B)                                                            |
 | `throttleWindowMs.median` | null             | Throttle window median (ms) — cited as canonical per Plan 06 guidance |
-| `throttleWindowMs.p95`    | null             | Throttle window p95 (ms) |
-| `steadyStateRpm`          | 0                | Steady-state RPM       |
-| `recoveryIntervalMs`      | null             | Recovery interval (ms) |
-| `perBatchLatency.p50`     | 19211            | p50 batch latency (ms) |
-| `perBatchLatency.p95`     | 33755            | p95 batch latency (ms) |
-| `evalScore.total`         | 0                | Eval rows — INCONCLUSIVE |
+| `throttleWindowMs.p95`    | null             | Throttle window p95 (ms)                                              |
+| `steadyStateRpm`          | 0                | Steady-state RPM                                                      |
+| `recoveryIntervalMs`      | null             | Recovery interval (ms)                                                |
+| `perBatchLatency.p50`     | 19211            | p50 batch latency (ms)                                                |
+| `perBatchLatency.p95`     | 33755            | p95 batch latency (ms)                                                |
+| `evalScore.total`         | 0                | Eval rows — INCONCLUSIVE                                              |
 
 ## Tuned Defaults Transcribed (from Plan 05)
 
 All values in the architecture doc Tuned Defaults table sourced directly from Plan 05's commit bodies + the `.env.example` / `server/config.ts` schema changes:
 
-| Knob                    | v1.4 default     | v1.5 default (Phase 30)          | Plan 05 source commit |
-| ----------------------- | ---------------- | -------------------------------- | --------------------- |
-| `LLM_V3_CONCURRENCY`    | 12               | 12 (UNCHANGED)                   | held — Path B disabled formula |
-| `LLM_BATCH_SIZE`        | 2 (hard-coded)   | 2 (env-tunable per D-07)         | 6a60179 + e7c639d     |
-| `LLM_BATCH_TIMEOUT_MS`  | 90000            | 120000                           | e7c639d               |
-| `BACKOFF_MS`            | `[1000, 4000]`   | `[2000, 8000, 32000]`            | 6d6b427               |
-| `JITTER_MS`             | 250              | 500                              | 6d6b427               |
-| `RETRY_ATTEMPTS`        | 2                | 3                                | 6d6b427               |
+| Knob                   | v1.4 default   | v1.5 default (Phase 30)  | Plan 05 source commit          |
+| ---------------------- | -------------- | ------------------------ | ------------------------------ |
+| `LLM_V3_CONCURRENCY`   | 12             | 12 (UNCHANGED)           | held — Path B disabled formula |
+| `LLM_BATCH_SIZE`       | 2 (hard-coded) | 2 (env-tunable per D-07) | 6a60179 + e7c639d              |
+| `LLM_BATCH_TIMEOUT_MS` | 90000          | 120000                   | e7c639d                        |
+| `BACKOFF_MS`           | `[1000, 4000]` | `[2000, 8000, 32000]`    | 6d6b427                        |
+| `JITTER_MS`            | 250            | 500                      | 6d6b427                        |
+| `RETRY_ATTEMPTS`       | 2              | 3                        | 6d6b427                        |
 
 ## Retired Mechanisms Audit Signals (from Plans 03 + 04)
 
@@ -197,19 +197,19 @@ Ran `npx prettier --check` on all three files post-edit; the architecture doc re
 
 ## Phase 30 Ladder Summary (CONTEXT D-08 7-commit ladder)
 
-| Commit  | Type     | Title                                                                                   | D-N     |
-| ------- | -------- | --------------------------------------------------------------------------------------- | ------- |
-| 88f70ba | feat(30-01) | widen callHistory with retryAfterMs + capture in NIM 429 catch path                  | D-01    |
-| 388ed8b | feat(30-01) | add scripts/analyze-llm-run.ts + fixtures + npm script                               | D-01    |
-| d8b9f67 | feat(30) | characterize NIM throttle on Pro 800s ceiling (Run 1)                                   | D-02    |
-| 6bdea38 | refactor(30-03) | retire onBatchComplete periodic-flush block                                      | D-04 (SIMPLIFY-01) |
-| 32a2b51 | refactor(30-04) | delete soft-warn tier from BatchWatchdogOptions + watchdog tests                 | D-05 (SIMPLIFY-03) |
-| 8c7b03a | refactor(30-04) | drop softWarnMs args + 'watchdog-soft-warn' enum from v3 + llmProgress           | D-05    |
-| e7c639d | feat(30-05) | promote LLM_BATCH_SIZE to env-tunable + retune LLM_BATCH_TIMEOUT_MS from Run 1       | D-02/D-07 |
-| 6a60179 | feat(30-05) | wire v3 extractor BATCH_SIZE to env.LLM_BATCH_SIZE                                   | D-07    |
-| 6d6b427 | feat(30-05) | tune freeClaudeRouter RETRY_ATTEMPTS / BACKOFF_MS / JITTER_MS                        | D-02    |
-| e7aaf39 | feat(30) | validate tuned defaults via Run 2                                                       | D-02    |
-| **48a1857** | **docs(30)** | **write docs/architecture/llm-pipeline-reliability.md + ADR-0010 append**     | **D-06 (this commit)** |
+| Commit      | Type            | Title                                                                          | D-N                    |
+| ----------- | --------------- | ------------------------------------------------------------------------------ | ---------------------- |
+| 88f70ba     | feat(30-01)     | widen callHistory with retryAfterMs + capture in NIM 429 catch path            | D-01                   |
+| 388ed8b     | feat(30-01)     | add scripts/analyze-llm-run.ts + fixtures + npm script                         | D-01                   |
+| d8b9f67     | feat(30)        | characterize NIM throttle on Pro 800s ceiling (Run 1)                          | D-02                   |
+| 6bdea38     | refactor(30-03) | retire onBatchComplete periodic-flush block                                    | D-04 (SIMPLIFY-01)     |
+| 32a2b51     | refactor(30-04) | delete soft-warn tier from BatchWatchdogOptions + watchdog tests               | D-05 (SIMPLIFY-03)     |
+| 8c7b03a     | refactor(30-04) | drop softWarnMs args + 'watchdog-soft-warn' enum from v3 + llmProgress         | D-05                   |
+| e7c639d     | feat(30-05)     | promote LLM_BATCH_SIZE to env-tunable + retune LLM_BATCH_TIMEOUT_MS from Run 1 | D-02/D-07              |
+| 6a60179     | feat(30-05)     | wire v3 extractor BATCH_SIZE to env.LLM_BATCH_SIZE                             | D-07                   |
+| 6d6b427     | feat(30-05)     | tune freeClaudeRouter RETRY_ATTEMPTS / BACKOFF_MS / JITTER_MS                  | D-02                   |
+| e7aaf39     | feat(30)        | validate tuned defaults via Run 2                                              | D-02                   |
+| **48a1857** | **docs(30)**    | **write docs/architecture/llm-pipeline-reliability.md + ADR-0010 append**      | **D-06 (this commit)** |
 
 The 7 atomic D-N decisions per CONTEXT D-08 are all represented; intermediate `chore(30-03)`, `test(30-03)`, `docs(30-XX)` per-plan SUMMARY commits, and a `fix(30-05)` test-cascade auto-fix accompany the ladder but do not count toward the 7-decision ladder itself.
 

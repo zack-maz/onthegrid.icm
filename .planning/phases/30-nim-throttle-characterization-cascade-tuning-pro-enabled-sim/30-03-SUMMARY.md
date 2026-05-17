@@ -8,11 +8,11 @@ requires:
   - 30-05 (Phase 30 D-02 retuned defaults already shipped — LLM_BATCH_SIZE, LLM_BATCH_TIMEOUT_MS)
   - 28.2.6 (the Phase 28.2.6 Plan 01 mechanism this plan retires)
 provides:
-  - "Single-writer invariant: cron-only mergeAndPersistLlmEntities call at end of runRefreshExtraction IIFE is the sole writer of events:llm:v3"
-  - "~95% reduction in Redis SET-call count for events:llm:v3 per cron run (~22 → 1 at 213-batch run)"
-  - "Regression test (terminalShape.test.ts): mergeAndPersistLlmEntities called exactly once per successful run — mirrors runEval-once invariant"
-  - "Regression test (incrementalWrite.test.ts): events:llm:v3 receives exactly ONE terminal write across 5-batch and 12-batch happy paths"
-  - "Regression test (crossBoundary.test.ts): mid-run abort leaves events:llm:v3 EMPTY (CONTEXT D-04 / T-30-03 accepted disposition)"
+  - 'Single-writer invariant: cron-only mergeAndPersistLlmEntities call at end of runRefreshExtraction IIFE is the sole writer of events:llm:v3'
+  - '~95% reduction in Redis SET-call count for events:llm:v3 per cron run (~22 → 1 at 213-batch run)'
+  - 'Regression test (terminalShape.test.ts): mergeAndPersistLlmEntities called exactly once per successful run — mirrors runEval-once invariant'
+  - 'Regression test (incrementalWrite.test.ts): events:llm:v3 receives exactly ONE terminal write across 5-batch and 12-batch happy paths'
+  - 'Regression test (crossBoundary.test.ts): mid-run abort leaves events:llm:v3 EMPTY (CONTEXT D-04 / T-30-03 accepted disposition)'
 affects:
   - server/lib/llmExtractionPipeline.ts (148 lines deleted, 31 added — onBatchComplete callback shrinkage + helper docblock reword + orphan const/import cleanup)
   - server/config.ts (LLM_FLUSH_EVERY_N_BATCHES Zod entry deleted)
@@ -21,8 +21,8 @@ affects:
 tech-stack:
   added: []
   patterns:
-    - "Atomic-per-decision commit discipline (Phase 29 D-N convention; per CONTEXT D-08 Commits 3 / 6 dependency)"
-    - "Pitfall 7 happy-path-only exactly-once assertion scope (RESEARCH §Pitfall 7)"
+    - 'Atomic-per-decision commit discipline (Phase 29 D-N convention; per CONTEXT D-08 Commits 3 / 6 dependency)'
+    - 'Pitfall 7 happy-path-only exactly-once assertion scope (RESEARCH §Pitfall 7)'
 key-files:
   created:
     - .planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/30-03-SUMMARY.md
@@ -49,21 +49,21 @@ Single-pass deletion of the Phase 28.2.6 Plan 01 incremental-flush mechanism —
 
 ## Tasks Executed
 
-| Task | Name                                                                                            | Status   | Commit  |
-| ---- | ----------------------------------------------------------------------------------------------- | -------- | ------- |
-| 1    | Delete onBatchComplete periodic-flush block + FLUSH_EVERY_N_BATCHES constants/helper + reword helper docblock | complete | 6bdea38 |
-| 2    | Delete LLM_FLUSH_EVERY_N_BATCHES from server/config.ts + .env.example                           | complete | 3635e2a |
+| Task | Name                                                                                                                                                                    | Status   | Commit  |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
+| 1    | Delete onBatchComplete periodic-flush block + FLUSH_EVERY_N_BATCHES constants/helper + reword helper docblock                                                           | complete | 6bdea38 |
+| 2    | Delete LLM_FLUSH_EVERY_N_BATCHES from server/config.ts + .env.example                                                                                                   | complete | 3635e2a |
 | 3    | Update terminalShape.test.ts (add exactly-once mergeAndPersist) + incrementalWrite.test.ts (replace per-N-flush with no-flush) + crossBoundary.test.ts (Rule-3 cascade) | complete | 87d9b57 |
 
 ## Exact Line Ranges Deleted (for SIMPLIFY-07 LOC accounting / Phase 34)
 
-| File | Pre-deletion lines | Post-deletion lines | Net delta |
-|------|--------------------|---------------------|-----------|
-| `server/lib/llmExtractionPipeline.ts` | 590 | 504 | **-86** |
-| `server/config.ts` | block at lines 116-123 (8 lines incl. 7-line Phase 28.2.6 D-03 commentary + 1 Zod entry) | 7-line Phase 30 D-04 tombstone comment | **-1** (8 - 7) |
-| `.env.example` | block at lines 169-173 (5 lines incl. 4-line commentary + 1 var line) | 0 lines | **-5** |
-| Test files (3) | net +0 (assertion replacements, not deletions) | | 0 |
-| **Total** | | | **-92 LOC** |
+| File                                  | Pre-deletion lines                                                                       | Post-deletion lines                    | Net delta      |
+| ------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------- | -------------- |
+| `server/lib/llmExtractionPipeline.ts` | 590                                                                                      | 504                                    | **-86**        |
+| `server/config.ts`                    | block at lines 116-123 (8 lines incl. 7-line Phase 28.2.6 D-03 commentary + 1 Zod entry) | 7-line Phase 30 D-04 tombstone comment | **-1** (8 - 7) |
+| `.env.example`                        | block at lines 169-173 (5 lines incl. 4-line commentary + 1 var line)                    | 0 lines                                | **-5**         |
+| Test files (3)                        | net +0 (assertion replacements, not deletions)                                           |                                        | 0              |
+| **Total**                             |                                                                                          |                                        | **-92 LOC**    |
 
 Detailed `server/lib/llmExtractionPipeline.ts` deletions (Task 1 commit 6bdea38):
 
@@ -78,11 +78,11 @@ Helper docblock at lines 108-148 pre-deletion was reworded: removed "periodic fl
 
 Sourced from Plan 06 Run 2 observation (`run-2-throttle-snapshot.json` — `batchCount: 213`).
 
-| Scenario | SETs on `events:llm:v3` per cron run | Calculation |
-|----------|--------------------------------------|-------------|
-| **Pre-Plan-03** | ~22 | floor(213 / 10) intermediate flushes + 1 terminal = 21 + 1 |
-| **Post-Plan-03** | 1 | Sole terminal write at end-of-pipeline |
-| **Delta** | **~22 → 1 (~95% reduction)** | |
+| Scenario         | SETs on `events:llm:v3` per cron run | Calculation                                                |
+| ---------------- | ------------------------------------ | ---------------------------------------------------------- |
+| **Pre-Plan-03**  | ~22                                  | floor(213 / 10) intermediate flushes + 1 terminal = 21 + 1 |
+| **Post-Plan-03** | 1                                    | Sole terminal write at end-of-pipeline                     |
+| **Delta**        | **~22 → 1 (~95% reduction)**         |                                                            |
 
 The `LLM_FLUSH_EVERY_N_BATCHES=10` default (CONTEXT D-03) drove the intermediate-flush count. The 213-batch number is Run 2's actual observed `batchCount`. The pre-Plan calculation matches the cadence semantics: the callback incremented `batchesSinceLastFlush` on every batch and triggered a flush when it hit 10, so a 213-batch run had floor(213/10) = 21 intermediate flushes (the 13th, 23rd, …, 213th batches — well, the residual 3 don't trigger one).
 
@@ -104,12 +104,12 @@ The terminal callsite is the only invocation outside the helper definition. Conf
 
 ## Test Files: Before/After Assertion Counts
 
-| File | Pre-Plan assertions | Post-Plan assertions | Net |
-|------|---------------------|----------------------|-----|
-| `terminalShape.test.ts` | 3 (two-key-discipline, partial-envelope, intermediate-flushes-skip-runEval) | 4 (same three + new `mergeAndPersistLlmEntities-exactly-once`) | **+1** |
-| `incrementalWrite.test.ts` | 3 (cadence-every-10, no-premature-flush, configurable-N=3) | 2 (`12-batch happy path exactly-once`, `5-batch happy path exactly-once`) | -1 (cadence dropped; configurable-N dropped; happy-path-mirror added; "no premature flush" renamed/restructured) |
-| `crossBoundary.test.ts` | 2 (two-consecutive-partial-runs-equal-continuous, periodic-flush-geocode-quality) | 2 (mid-run-abort-leaves-empty, happy-path-exactly-once) | 0 |
-| **Total assertions** | 8 | 8 | 0 (re-shaped, not lost) |
+| File                       | Pre-Plan assertions                                                               | Post-Plan assertions                                                      | Net                                                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `terminalShape.test.ts`    | 3 (two-key-discipline, partial-envelope, intermediate-flushes-skip-runEval)       | 4 (same three + new `mergeAndPersistLlmEntities-exactly-once`)            | **+1**                                                                                                           |
+| `incrementalWrite.test.ts` | 3 (cadence-every-10, no-premature-flush, configurable-N=3)                        | 2 (`12-batch happy path exactly-once`, `5-batch happy path exactly-once`) | -1 (cadence dropped; configurable-N dropped; happy-path-mirror added; "no premature flush" renamed/restructured) |
+| `crossBoundary.test.ts`    | 2 (two-consecutive-partial-runs-equal-continuous, periodic-flush-geocode-quality) | 2 (mid-run-abort-leaves-empty, happy-path-exactly-once)                   | 0                                                                                                                |
+| **Total assertions**       | 8                                                                                 | 8                                                                         | 0 (re-shaped, not lost)                                                                                          |
 
 The replacement assertions tighten coverage: the original "exactly N flushes" semantics are replaced with "exactly 1 terminal write" + a new negative-shape "0 mid-run writes" assertion (the deletion's main behavioral consequence).
 
@@ -120,6 +120,7 @@ Also updated: every `mockEnv` block (3 files) had `LLM_FLUSH_EVERY_N_BATCHES` pr
 ### Auto-fixed Issues (Rule 3 — blocking)
 
 **1. [Rule 3 - Blocking] `crossBoundary.test.ts` had two tests that asserted now-retired periodic-flush behaviors**
+
 - **Found during:** Task 3 (after running the full server suite to verify no regressions)
 - **Issue:** `server/__tests__/lib/llmExtractionPipeline.crossBoundary.test.ts` had two tests (`two consecutive partial 5-batch runs produce same final state as one continuous 10-batch run` and `periodic flush geocode quality equals final flush geocode quality (D-05)`) that asserted exactly the periodic-flush behavior Task 1 retired. Both tests failed under the post-D-04 code.
 - **Fix:** Rewrote both tests to assert the post-D-04 invariants: (a) mid-run-abort leaves `events:llm:v3` empty (CONTEXT D-04 / T-30-03 accepted disposition), (b) happy-path 10-batch run receives exactly one terminal write (mirror of terminalShape.test.ts). Stripped `LLM_FLUSH_EVERY_N_BATCHES` from this file's `mockEnv` + `beforeEach` reset too. File header docblock rewritten.
@@ -134,6 +135,7 @@ Also updated: every `mockEnv` block (3 files) had `LLM_FLUSH_EVERY_N_BATCHES` pr
 ## Pointer for Plan 07 (reliability doc)
 
 The Plan 07 reliability doc's "Retired Mechanisms" section should reference this Plan 03's:
+
 - **SET-call delta:** Pre ~22 → Post 1 per cron run (~95% reduction) on `events:llm:v3` (sourced from Plan 06 Run 2 `batchCount: 213`).
 - **LOC delta:** -92 LOC across `llmExtractionPipeline.ts` (-86), `server/config.ts` (-1 net), `.env.example` (-5). Feeds Phase 34 SIMPLIFY-07's cumulative v1.5 bundle delta.
 - **Single-writer invariant:** End-of-run `mergeAndPersistLlmEntities` call at `server/lib/llmExtractionPipeline.ts:389` (post-deletion line number) is the sole writer of `events:llm:v3`. Mirrors CLAUDE.md "Cron-only trigger" language.

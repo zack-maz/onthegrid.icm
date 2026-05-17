@@ -356,9 +356,7 @@ describe('runRefreshExtraction — no mid-run terminal write (D-04 / SIMPLIFY-01
     // write site, so the terminal key remains absent (CONTEXT D-04 / threat
     // model T-30-03 accepted disposition: mid-run-crash loses all progress).
     await driveRun(10, { abortAt: 5 });
-    const partialAfterAbort = cacheStore.get('events:llm:v3') as
-      | Array<{ id: string }>
-      | undefined;
+    const partialAfterAbort = cacheStore.get('events:llm:v3') as Array<{ id: string }> | undefined;
     expect(partialAfterAbort).toBeUndefined();
 
     // The cacheSetSpy should also reflect zero terminal writes during the
