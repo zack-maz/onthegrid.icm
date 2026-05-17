@@ -27,6 +27,22 @@ vi.mock('../../config.js', () => ({
     acled: { email: '', password: '' },
     newsRelevanceThreshold: 0.7,
   },
+  // Phase 30 D-07 — the `env` object is consumed by server/lib/llmEventExtractor
+  // .v3.ts (LLM_BATCH_SIZE) and other server-side modules. Mock with safe
+  // defaults so module-load doesn't crash when createApp transitively imports
+  // the v3 extractor through server/routes/events.ts.
+  env: {
+    LLM_BATCH_SIZE: 2,
+    LLM_BATCH_TIMEOUT_MS: 120_000,
+    LLM_V3_CONCURRENCY: 12,
+    V3_ADAPTIVE_BATCH: false,
+    V3_LINEAGE_PREFILTER: false,
+    V3_WATCHDOG_ROLLBACK_THRESHOLD: 2,
+    NVIDIA_NIM_API_KEY: '',
+    OPENROUTER_API_KEY: '',
+    CRON_SECRET: '',
+    NODE_ENV: 'test',
+  },
   // Re-export constants that routes import from config
   WAR_START: Date.UTC(2026, 1, 28),
   IRAN_BBOX: { south: 0, north: 50, west: 20, east: 80 },

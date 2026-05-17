@@ -61,9 +61,44 @@ export type RouterErrorBucket =
 const NVIDIA_NIM_BASE = 'https://integrate.api.nvidia.com/v1';
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 const LLM_TIMEOUT_MS = 120_000;
-const RETRY_ATTEMPTS = 2;
-const BACKOFF_MS = [1000, 4000] as const;
-const JITTER_MS = 250;
+
+// Phase 30 D-02 sanity-check tune (Run 1 baseline — Path B, no 429s):
+//   - Run 1 measured `throttleWindowMs.path = "B"` (NIM did NOT 429 during
+//     the 122s window), `steadyStateRpm = 0`, `watchdogTimeoutCount = 0`,
+//     and `perBatchLatency.p95 = 33_263 ms`. See:
+//     .planning/phases/30-nim-throttle-characterization-cascade-tuning-pro
+//                     -enabled-sim/run-1-throttle-snapshot.json
+//   - Because there is no measured throttle window, BACKOFF_MS is NOT
+//     derived from `throttle_window_median / 2` (the CONTEXT D-02 formula
+//     is undefined under Path B). Numbers here are a conservative-by-
+//     default bump that preserves the prior 4× scaling pattern and gives
+//     more recovery headroom on the Pro 800s ceiling — they are a
+//     defensive choice, not an empirical fit. Plan 06 Run 2 (with eval
+//     harness fixed) re-probes and re-tunes against real 429s if any.
+//
+// Side-by-side defaults (v1.4 → v1.5 sanity-check):
+//   RETRY_ATTEMPTS : 2              → 3                (Pro 800s budget
+//                                                       absorbs the extra
+//                                                       attempt without
+//                                                       watchdog conflict)
+//   BACKOFF_MS     : [1000, 4000]   → [2000, 8000, 32000]   (4× scaling
+//                                                       preserved; third
+//                                                       element added for
+//                                                       the new attempt 3)
+//   JITTER_MS      : 250            → 500              (±25% ratio of
+//                                                       BACKOFF[0] kept:
+//                                                       0.25 × 2000 = 500)
+//
+// Worst-case retry wall-clock per attempt-exhausted call: 2000+8000+32000
+// = 42_000 ms (~42s) ± jitter. New LLM_BATCH_TIMEOUT_MS = 120_000 (Task 1
+// of this plan) comfortably bounds even a fully-retried call.
+//
+// Operator rollback (env override is NOT available — these are constants;
+// in-incident reversion requires `git revert` of this commit):
+//   RETRY_ATTEMPTS = 2; BACKOFF_MS = [1000, 4000]; JITTER_MS = 250.
+const RETRY_ATTEMPTS = 3;
+const BACKOFF_MS = [2000, 8000, 32_000] as const;
+const JITTER_MS = 500;
 // Phase 27.4.4 D-01 — bake-off winner re-confirmed via combo path
 // (operator-approved 2026-04-28 against 27.4.4-01-BAKEOFF.md). qwen/qwen3.5-397b-a17b
 // remains the v3 primary after the 4-candidate 20-event preflight at

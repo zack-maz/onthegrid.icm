@@ -102,12 +102,25 @@ describe('freeClaudeRouter — 429 backoff path', () => {
     expect(routing[0]?.provider).toBe('nvidia_nim');
   });
 
-  it('B2: two 429s exhaust NVIDIA NIM retries — falls through to OpenRouter', async () => {
+  it('B2: NIM exhausts RETRY_ATTEMPTS=3 of 429s — falls through to OpenRouter', async () => {
+    // Phase 30 D-02 tune: RETRY_ATTEMPTS bumped 2→3, so NIM needs THREE
+    // rejections (not two) to exhaust the per-provider retry budget before
+    // the cascade falls through to OpenRouter. BACKOFF_MS = [2000, 8000,
+    // 32000] means real-time waits would exceed the default 10s test
+    // timeout; fake timers + advanceTimersByTimeAsync make the sleeps
+    // instant while preserving the retry-loop's sequential awaits.
+    vi.useFakeTimers();
     createMock
       .mockRejectedValueOnce(new Error('429 rate limit'))
       .mockRejectedValueOnce(new Error('429 rate limit'))
+      .mockRejectedValueOnce(new Error('429 rate limit'))
       .mockResolvedValueOnce({ choices: [{ message: { content: '{"ok":true}' } }] });
-    const { content, routing } = await callLLM([{ role: 'user', content: 'hi' }], '{}');
+    const callPromise = callLLM([{ role: 'user', content: 'hi' }], '{}');
+    // Advance through the two BACKOFF[0]=2000 + BACKOFF[1]=8000 sleeps that
+    // separate the 3 NIM attempts (no sleep after the third — exhausted).
+    await vi.advanceTimersByTimeAsync(2000 + 500); // JITTER_MS ±500
+    await vi.advanceTimersByTimeAsync(8000 + 500);
+    const { content, routing } = await callPromise;
     expect(content).toBe('{"ok":true}');
     expect(routing.length).toBeGreaterThanOrEqual(2);
     expect(routing[1]?.provider).toBe('openrouter');
@@ -115,8 +128,20 @@ describe('freeClaudeRouter — 429 backoff path', () => {
   });
 
   it('B3: all providers exhausted — returns null', async () => {
+    // Phase 30 D-02 tune: RETRY_ATTEMPTS=3 + BACKOFF=[2000,8000,32000]
+    // means the worst-case retry-exhaustion wall-clock is ~42s per provider
+    // = ~84s for both providers. Use fake timers to keep the test inside
+    // its 10s budget while still proving the cascade exits with null.
+    vi.useFakeTimers();
     createMock.mockRejectedValue(new Error('429 rate limit'));
-    const { content, routing } = await callLLM([{ role: 'user', content: 'hi' }], '{}');
+    const callPromise = callLLM([{ role: 'user', content: 'hi' }], '{}');
+    // Drain the full retry budget across both providers (2 backoffs per
+    // provider since attempt N has no trailing sleep on exhaustion).
+    // BACKOFF[0]=2000, BACKOFF[1]=8000 per attempt-pair × 2 providers.
+    for (let i = 0; i < 4; i++) {
+      await vi.advanceTimersByTimeAsync(10_000); // covers 2000+8000+jitter
+    }
+    const { content, routing } = await callPromise;
     expect(content).toBeNull();
     expect(routing.length).toBeGreaterThanOrEqual(2);
   });
@@ -213,8 +238,17 @@ describe('freeClaudeRouter — breaker semantics (per-call, not per-attempt)', (
   it('P2: retries-exhausted records err exactly once (not per-attempt)', async () => {
     // When NIM 429s on every retry attempt, only ONE 'err' should land in
     // the breaker window for that call (not RETRY_ATTEMPTS errs).
+    // Phase 30 D-02 tune: RETRY_ATTEMPTS=3 + BACKOFF=[2000,8000,32000]
+    // means the test would block on ~84s of real-time sleep without fake
+    // timers. Drain through the backoffs to assert the err-record count.
+    vi.useFakeTimers();
     createMock.mockRejectedValue(new Error('429 rate limit'));
-    await callLLM([{ role: 'user', content: 'hi' }], '{}');
+    const callPromise = callLLM([{ role: 'user', content: 'hi' }], '{}');
+    // 2 backoffs per provider × 2 providers = 4 sleeps (max 8s+jitter each).
+    for (let i = 0; i < 4; i++) {
+      await vi.advanceTimersByTimeAsync(10_000);
+    }
+    await callPromise;
     // First provider attempted then exhausted -> one 'err' for nvidia_nim.
     // Second provider also exhausted -> one more 'err' for openrouter.
     const errCalls = recordMock.mock.calls.filter(([, outcome]) => outcome === 'err');
@@ -230,10 +264,17 @@ describe('freeClaudeRouter — skipOpenRouter option', () => {
     // With skipOpenRouter set, the v3 extractor opts out of the OR fallback.
     // OR is unusable on free tier (~16/16 rate_limit observed in dev runs).
     // When NIM fails, the call returns null content — no OR attempt fires.
+    // Phase 30 D-02 tune: RETRY_ATTEMPTS=3 means NIM-only path waits
+    // BACKOFF[0]=2000 + BACKOFF[1]=8000 = 10s+jitter before exhausting,
+    // which would tip the test over the 10s timeout. Use fake timers.
+    vi.useFakeTimers();
     createMock.mockRejectedValue(new Error('429 rate limit'));
-    const { content, routing } = await callLLM([{ role: 'user', content: 'hi' }], '{}', {
+    const callPromise = callLLM([{ role: 'user', content: 'hi' }], '{}', {
       skipOpenRouter: true,
     });
+    await vi.advanceTimersByTimeAsync(2000 + 500);
+    await vi.advanceTimersByTimeAsync(8000 + 500);
+    const { content, routing } = await callPromise;
     expect(content).toBeNull();
     // Routing trace contains only NIM entries (no openrouter).
     const orEntries = routing.filter((r) => r.provider === 'openrouter');
