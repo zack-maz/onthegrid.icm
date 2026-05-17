@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: "Phase 30 context gathered"
-last_updated: "2026-05-16T22:17:12.596Z"
+status: Phase 30 context gathered (feature/30-nim-throttle-characterization)
+last_updated: "2026-05-17T00:38:43.555Z"
 last_activity: 2026-05-16
 progress:
   total_phases: 13
   completed_phases: 1
-  total_plans: 13
+  total_plans: 20
   completed_plans: 13
-  percent: 100
+  percent: 65
 ---
 
 # Project State
@@ -319,4 +319,4 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - Phase 27.4.3 inserted after Phase 27.4.2 (2026-04-25): free-claude-code Routing Evaluation (URGENT) — pivoted from the originally-deferred "Cerebras hang root-cause investigation" to evaluate https://github.com/Alishahryar1/free-claude-code as a replacement for the manual Cerebras/Groq routing in `server/adapters/llm-provider.ts`. Five evaluation criteria (feasibility, reliability, cost/quota, integration shape, eval quality parity ±5pp of Plan 07's 0.940 baseline). Phase 27.4.2 HUMAN-UAT.md tests 1+2 are blocked on this phase landing. Reassigned 27.4.3 number from the prior deck.gl v9 depthTest TS-drift placeholder to this evaluation; deck.gl v9 work renumbers to 27.4.4.
 - Phase 28.2.6 inserted after Phase 28.2.5 (2026-05-07): Fix Vercel cron architecture so events:llm:v3 populates within budget (URGENT) — surfaced during 28.2.5 Plan 05 closeout when force-trigger of /api/cron/refresh-events?force=true returned `dispatched: true` in 400ms but the fire-and-forget IIFE body never executed (Vercel Fluid Compute kills the function once response is sent). Three resolution paths captured in 28.2.5-deferred-items.md for /gsd-discuss-phase 28.2.6 to pick from: (a) incremental terminal-key write refactor (~30 LOC), (b) Vercel Pro plan upgrade ($20/mo for 800s maxDuration), (c) waitUntil migration via @vercel/functions. Phase 28.3 entry now gated on 28.2.6 because the tier-green workflow run that 28.2.5 D-09 set up will keep returning allTiersGreen=false until critical[llmEvents] can flip from `unknown` to `healthy`.
 
-**Planned Phase:** 29 (LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + CLAUDE.md Trim) — 13 plans — 2026-05-10T22:29:12.324Z
+**Planned Phase:** 30 (NIM Throttle Characterization + Cascade Tuning + Pro-Enabled Simplifications) — 7 plans — 2026-05-17T00:38:43.545Z
