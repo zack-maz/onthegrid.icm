@@ -630,7 +630,6 @@ export async function processEventGroupsV3(
           },
           {
             timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-            softWarnMs: 60_000, // D-02 hard-coded — only hard cap is env-tunable
             batchIndex,
             label: 'v3',
             onTimeout: async () => {
@@ -656,29 +655,6 @@ export async function processEventGroupsV3(
               }
               updateProgress({
                 watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1,
-              });
-            },
-            onSoftWarn: (elapsedMs) => {
-              // Append a synthetic soft-warn entry to callHistory so DevApiStatus
-              // shows an amber marker. Field-set must match the LLMPipelineProgress
-              // callHistory element type exactly (durationMs, ok, batchSize,
-              // timestamp). Provider 'nvidia_nim' = the v3 primary.
-              const history = llmProgress.callHistory ?? [];
-              updateProgress({
-                callHistory: [
-                  {
-                    provider: 'nvidia_nim' as const,
-                    model: 'watchdog-soft-warn',
-                    tokensIn: 0,
-                    tokensOut: 0,
-                    durationMs: elapsedMs,
-                    ok: true,
-                    batchSize: batch.length,
-                    timestamp: Date.now(),
-                    skipReason: 'watchdog-soft-warn' as const,
-                  },
-                  ...history,
-                ].slice(0, 20),
               });
             },
           },
@@ -953,7 +929,6 @@ async function splitBatchOnTimeout(
       },
       {
         timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 60_000,
         batchIndex,
         label: 'v3-split',
         onTimeout: async () => {

@@ -72,9 +72,12 @@ export interface LLMPipelineProgress {
    * - `skipReason` widened with two v3-specific values ('rate_limit_window',
    *   'daily_cap') so synthetic skip entries from the v3 RollingWindow
    *   limiter and per-provider daily caps render distinctly.
-   * - 'watchdog-soft-warn' added to skipReason — Phase 27.4.1 added a
-   *   synthetic call-history entry under that exact label; including it on
-   *   the type contract here drops the ad-hoc `as const` at the writer site.
+   *
+   * Phase 30 D-05 / SIMPLIFY-03: the prior soft-warn enum literal was
+   * removed alongside the watchdog soft-warn tier deletion. Stale
+   * events:llm-summary:v3 rows in Redis (90d TTL) may still carry it
+   * for ~3 months post-merge; analyzer (scripts/analyze-llm-run.ts)
+   * treats unknown skipReason values as "ignore" per Plan 01 forward-compat.
    */
   callHistory?: Array<{
     // Phase 27.4.3 (D-09 + Plan 02a): inline literal union covering all four
@@ -90,13 +93,7 @@ export interface LLMPipelineProgress {
     timestamp: number;
     /** v3 routing trace: 'primary' for first-try, 'fall_through:<reason>' for cascade hops. */
     routingReason?: 'primary' | string;
-    skipReason?:
-      | 'breaker'
-      | 'hard_cap'
-      | 'no_client'
-      | 'rate_limit_window'
-      | 'daily_cap'
-      | 'watchdog-soft-warn';
+    skipReason?: 'breaker' | 'hard_cap' | 'no_client' | 'rate_limit_window' | 'daily_cap';
     // D-01 (Phase 30): NIM Retry-After header capture, milliseconds. Null when header absent (Path B).
     retryAfterMs?: number | null;
   }>;
@@ -327,13 +324,10 @@ export interface LLMRunSummary {
     batchSize: number;
     timestamp: number;
     routingReason?: 'primary' | string;
-    skipReason?:
-      | 'breaker'
-      | 'hard_cap'
-      | 'no_client'
-      | 'rate_limit_window'
-      | 'daily_cap'
-      | 'watchdog-soft-warn';
+    // Phase 30 D-05: prior soft-warn enum literal removed; see writer-site
+    // comment in LLMPipelineProgress.callHistory above for backwards-compat
+    // notes on stale Redis rows.
+    skipReason?: 'breaker' | 'hard_cap' | 'no_client' | 'rate_limit_window' | 'daily_cap';
     // D-01 (Phase 30): NIM Retry-After header capture, milliseconds. Null when header absent (Path B).
     retryAfterMs?: number | null;
   }>;

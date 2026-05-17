@@ -1,8 +1,13 @@
 // ---------------------------------------------------------------------------
 // Phase 27.4.1 — Per-batch timeout watchdog for LLM extractor batches.
+// Phase 30 D-05 / SIMPLIFY-03 — single-tier hard-kill watchdog. The 60s
+// soft-warn tier was retired here because Run 1 measured 0 watchdog timeouts
+// at p95 batch latency 33s vs. the prior 60s threshold; the historical
+// Cerebras-running-slow signal it carried is gone with Cerebras (Phase 29
+// D-01); and soft-warn data is now derivable post-run from the analyzer's
+// latency histogram (Phase 30 Plan 01 D-01).
 //
 // Wraps a per-batch Promise with:
-//   * Soft-warn threshold  (D-02, default 60s) — log only, non-terminating.
 //   * Hard-timeout          (D-01, default 90s) — `Promise.race` rejection.
 //   * Late-resolve guard    (D-05) — a `timedOut` closure flag prevents the
 //     late-arriving batch promise from invoking onTimeout a second time or
@@ -10,12 +15,12 @@
 //
 // Caller composes `onTimeout` (typically DLQ enqueue + progress telemetry
 // increment) so this module remains free of redis + progress imports — it is
-// a pure timing primitive that both v1 and v2 extractors (Wave 2) will wrap
-// their `callLLM()` invocations with.
+// a pure timing primitive that the v3 extractor wraps its `callLLM()`
+// invocations with.
 //
 // Design mirrors `server/cache/redis.ts::withTimeout` (the canonical Promise.race
-// + setTimeout pattern already in use for Redis ops) but adds soft-warn, a
-// typed options bag, and a null-return-on-timeout contract.
+// + setTimeout pattern already in use for Redis ops) but adds a typed options
+// bag and a null-return-on-timeout contract.
 // ---------------------------------------------------------------------------
 
 import { logger } from './logger.js';
@@ -28,19 +33,13 @@ const log = logger.child({ module: 'llm-watchdog' });
  * `onTimeout` is invoked ONCE on hard-timeout. The caller composes whatever
  * side-effects should happen (DLQ enqueue, progress counter bump, structured
  * log entry). The watchdog itself does not touch Redis or progress state.
- *
- * `onSoftWarn` is optional and invoked AT MOST ONCE when the batch crosses
- * the soft-warn threshold AND is still running. If the batch completes before
- * softWarnMs elapses, `onSoftWarn` is never called.
  */
 export interface BatchWatchdogOptions {
   /** Hard kill threshold in ms — D-01 default 90_000. */
   timeoutMs: number;
-  /** Soft-warn threshold in ms — D-02 default 60_000. Must be < timeoutMs. */
-  softWarnMs: number;
   /** Zero-based batch index, for error messages and log correlation. */
   batchIndex: number;
-  /** Pipeline label (e.g. 'v1' | 'v2') — appears in the timeout error msg. */
+  /** Pipeline label (e.g. 'v3') — appears in the timeout error msg. */
   label: string;
   /**
    * Invoked once on hard-timeout. Typical composition:
@@ -50,15 +49,10 @@ export interface BatchWatchdogOptions {
    * returns `null` to the caller.
    */
   onTimeout: () => Promise<void>;
-  /**
-   * Invoked once when the soft-warn threshold elapses mid-flight. Receives
-   * the elapsed ms at the moment of firing (equal to softWarnMs). Optional.
-   */
-  onSoftWarn?: (elapsedMs: number) => void;
 }
 
 /**
- * Wrap a batch promise with timeout + soft-warn + late-resolve guard.
+ * Wrap a batch promise with a hard-timeout + late-resolve guard.
  *
  * Contract:
  *   - Returns T when batchFn resolves before timeoutMs.
@@ -94,20 +88,6 @@ export async function withBatchWatchdog<T>(
     }, opts.timeoutMs);
   });
 
-  const softWarnTimer: ReturnType<typeof setTimeout> = setTimeout(() => {
-    if (!timedOut) {
-      try {
-        opts.onSoftWarn?.(opts.softWarnMs);
-        log.info(
-          { batchIndex: opts.batchIndex, label: opts.label, softWarnMs: opts.softWarnMs },
-          'batch crossed soft-warn threshold (still running)',
-        );
-      } catch (err) {
-        log.warn({ err }, 'onSoftWarn handler threw — suppressed');
-      }
-    }
-  }, opts.softWarnMs);
-
   try {
     const result = await Promise.race([workPromise, timeoutPromise]);
     // Work resolved first — return its value. Clean up timers in finally.
@@ -132,7 +112,6 @@ export async function withBatchWatchdog<T>(
     // Work rejected before timeout — propagate the original error.
     throw err;
   } finally {
-    if (softWarnTimer) clearTimeout(softWarnTimer);
     if (hardTimer) clearTimeout(hardTimer);
   }
 }
