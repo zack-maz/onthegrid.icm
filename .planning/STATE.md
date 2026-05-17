@@ -4,7 +4,7 @@ milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: ready_to_plan
 last_updated: "2026-05-17T19:07:53.765Z"
-last_activity: 2026-05-17 -- Phase 30.1 execution started
+last_activity: 2026-05-17 -- Phase 30.1 shipped (PR #21 merged)
 progress:
   total_phases: 14
   completed_phases: 3
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 999.1
+Phase: 31 (Cron Stability Validation — LLM-RELI-06)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-05-17
+Last activity: 2026-05-17 -- Phase 30.1 shipped (PR #21 merged)
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -38,6 +38,7 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- | ----------- |
 | 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | Context gathered |
 | 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Waves 1-3 complete (4/7 plans) |
+| 30.1  | Cascade fallback fix — NIM-only declared honest                       | (gap closure from Phase 30 boundary review)                   | Shipped 2026-05-17 |
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Not started |
 | 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
