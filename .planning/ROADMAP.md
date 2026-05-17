@@ -146,6 +146,16 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 6. **Watchdog defaults relaxed** (SIMPLIFY-03). 90s hard / 60s soft per-batch timeouts replaced with values sized against the measured throttle (or the soft-warn category eliminated entirely if the data says it adds no signal). New defaults committed; `callHistory` skip-entry shape for soft-warn either reflects the new threshold or is removed.
    **Plans**: TBD
 
+### Phase 30.1: Cascade fallback fix — re-enable OpenRouter or document single-provider reality (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 30
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 30.1 to break down)
+
 ### Phase 31: Cron Stability Validation (7-day Watch)
 
 **Goal**: Prove daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:llm:v3` healthy on the Pro 800s ceiling under normal NIM availability — over a real 7-day observation window.
