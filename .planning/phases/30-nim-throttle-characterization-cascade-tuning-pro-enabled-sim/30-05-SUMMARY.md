@@ -248,7 +248,7 @@ See `key-decisions` in frontmatter — 8 substantive choices captured for STATE.
 
 **`npm run check:env` exits 1 due to pre-existing EXTRA keys.** Documented but NOT fixed:
 
-- `.env.example` contains 14 keys NOT in `server/config.ts` Zod schema: LLM*PIPELINE_V2, LLM_PIPELINE_V3 (deleted in Phase 29 D-02 part C but the `.env.example` blocks were never removed), plus all 12 `VITE_POLL*_`/`VITE\___KM`/`VITE_SEVERITY_\*`keys (client-tier vars consumed by`src/`not`server/`, but the `check:env` script's Zod-shape comparison treats them as schema orphans).
+- `.env.example` contains 14 keys NOT in `server/config.ts` Zod schema: LLM*PIPELINE_V2, LLM_PIPELINE_V3 (deleted in Phase 29 D-02 part C but the `.env.example` blocks were never removed), plus all 12 `VITE_POLL*_`/`VITE\_\_\_KM`/`VITE_SEVERITY_\*`keys (client-tier vars consumed by`src/`not`server/`, but the `check:env` script's Zod-shape comparison treats them as schema orphans).
 - Confirmed pre-existing via `git stash + npm run check:env` against Plan 30-04 base — same exit code 1 with same key list.
 - Per executor SCOPE BOUNDARY rule, NOT fixed. The plan's verify criterion `npm run check:env exits 0` cannot pass for reasons unrelated to this plan's work.
 - Logged for a future maintenance phase to either (a) extend `check:env` to whitelist VITE\__ + retired LLM_PIPELINE_V[23], or (b) delete the stale `.env.example` blocks. Phase 34 (REDIS-OPT / SIMPLIFY-_ cleanup) is a candidate.
