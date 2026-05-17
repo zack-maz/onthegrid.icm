@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: Phase 30 Waves 1-3 complete (30-01, 30-02, 30-04, 30-05); paused for operator Wave 4
+status: ready_to_plan
 last_updated: "2026-05-17T02:24:00.000Z"
 last_activity: 2026-05-17 -- Wave 3 tuned defaults committed; awaiting prod redeploy + Run 2 validation cron
 progress:
   total_phases: 13
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 20
   completed_plans: 17
-  percent: 75
+  percent: 15
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 30 (nim-throttle-characterization-cascade-tuning-pro-enabled-sim) — PAUSED after Wave 3
-Plan: 4 of 7 complete (30-01 telemetry; 30-02 Run 1; 30-04 soft-warn deleted; 30-05 tuned defaults)
-Status: Tuned defaults committed (sanity-check mode); ready for operator Wave 4 (deploy + Run 2 cron)
-Last activity: 2026-05-17 -- Wave 3 complete; LLM_BATCH_TIMEOUT_MS 90s→120s, BACKOFF [1000,4000]→[2000,8000,32000], RETRY_ATTEMPTS 2→3, JITTER 250→500
+Phase: 999.1
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-17
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
