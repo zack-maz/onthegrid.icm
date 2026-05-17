@@ -452,12 +452,57 @@ export async function callLLM(
         // === B-1 §3: Error taxonomy increment ===
         const bucket = classifyError(err);
         recordErrorBucket(p.name, bucket);
+
+        // D-01 (Phase 30): capture Retry-After from 429s when the provider supplies it.
+        // OpenAI SDK surfaces response headers on APIError.headers; NIM-specific
+        // header presence verified by Run 1 telemetry. Milliseconds; null when absent.
+        // Per RESEARCH Pitfall 2: NIM 429 header surface is undocumented — analyzer
+        // handles both Path A (header present here → median+p95 of retryAfterMs) and
+        // Path B (header absent → infer recovery from callHistory timestamp gaps).
+        let retryAfterMs: number | null = null;
+        if (bucket === 'rate_limit' && err instanceof Error && 'headers' in err) {
+          const headers = (err as { headers?: Record<string, string> }).headers;
+          const raw = headers?.['retry-after'] ?? headers?.['Retry-After'];
+          if (raw) {
+            const parsed = parseFloat(raw);
+            if (Number.isFinite(parsed) && parsed > 0) retryAfterMs = parsed * 1000;
+          }
+        }
+
+        // Append failed-attempt row to callHistory via updateProgress (existing
+        // mutation pattern; mirrors soft-warn synthetic entry at
+        // llmEventExtractor.v3.ts:662-682). The 20-row .slice(0, 20) cap is
+        // invariant. retryAfterMs is the only D-01-added field on the row shape.
+        // NOTE: this writes per-attempt failure rows, distinct from the success
+        // path's `return` at line 447. RESEARCH gotcha 2: do NOT add a duplicate
+        // `record(p.name, 'err')` here — the existing single recording at the
+        // end of the call (line 479) is unchanged so the breaker window still
+        // sees exactly one 'err' per call, not per attempt.
+        const history = llmProgress.callHistory ?? [];
+        updateProgress({
+          callHistory: [
+            {
+              provider: p.name,
+              model: p.model,
+              tokensIn: 0,
+              tokensOut: 0,
+              durationMs: latencyMs,
+              ok: false,
+              batchSize: opts.batchSize ?? 0,
+              timestamp: Date.now(),
+              retryAfterMs,
+            },
+            ...history,
+          ].slice(0, 20),
+        });
+
         log.warn(
           {
             provider: p.name,
             attempt,
             bucket,
             latencyMs,
+            retryAfterMs,
             err: err instanceof Error ? err.message : String(err),
           },
           'router attempt failed',
