@@ -23,35 +23,35 @@ affects: [30-02, 30-03, 30-04, 30-05, 30-06, 30-07, 31, 36]
 
 # Tech tracking
 tech-stack:
-  added: []  # no new packages; pure refactor + new script + new test
+  added: [] # no new packages; pure refactor + new script + new test
   patterns:
     - "Phase 30 Pattern: analyzer scripts mirror scripts/eval-replay.ts (shebang + multi-line docblock + async main + .catch + argv parsing via find(a => a.startsWith('--flag=')))"
-    - "Phase 30 Pattern: telemetry fields are appended to existing observability surfaces (callHistory row schema) rather than spinning up new Redis sidecar keys"
-    - "Phase 30 Pattern: Path A / Path B branching for undocumented upstream behavior — pre-build both code paths so the production run reveals which is real"
+    - 'Phase 30 Pattern: telemetry fields are appended to existing observability surfaces (callHistory row schema) rather than spinning up new Redis sidecar keys'
+    - 'Phase 30 Pattern: Path A / Path B branching for undocumented upstream behavior — pre-build both code paths so the production run reveals which is real'
 
 key-files:
   created:
-    - "scripts/analyze-llm-run.ts (319 lines)"
-    - "server/__tests__/lib/freeClaudeRouter.retryAfterMs.test.ts (199 lines)"
-    - "tests/fixtures/run-with-retry-after.json (Path A smoke fixture)"
-    - "tests/fixtures/run-without-retry-after.json (Path B smoke fixture)"
+    - 'scripts/analyze-llm-run.ts (319 lines)'
+    - 'server/__tests__/lib/freeClaudeRouter.retryAfterMs.test.ts (199 lines)'
+    - 'tests/fixtures/run-with-retry-after.json (Path A smoke fixture)'
+    - 'tests/fixtures/run-without-retry-after.json (Path B smoke fixture)'
   modified:
-    - "server/lib/llmProgress.ts (+4 lines — retryAfterMs?: number | null on both callHistory writer + summary mirror)"
-    - "server/lib/freeClaudeRouter.ts (+45 lines — retryAfterMs capture + per-attempt failed-row write to callHistory)"
-    - "package.json (+1 line — analyze:llm-run script entry)"
+    - 'server/lib/llmProgress.ts (+4 lines — retryAfterMs?: number | null on both callHistory writer + summary mirror)'
+    - 'server/lib/freeClaudeRouter.ts (+45 lines — retryAfterMs capture + per-attempt failed-row write to callHistory)'
+    - 'package.json (+1 line — analyze:llm-run script entry)'
 
 key-decisions:
-  - "retryAfterMs field shape: number | null (milliseconds, matching latencyMs convention) — additive optional; existing callHistory readers ignore unknown fields"
-  - "Capture site lives in the same updateProgress({callHistory: [...]}) write pattern used by the existing soft-warn synthetic entry (llmEventExtractor.v3.ts:662-682) — preserves the .slice(0, 20) cap invariant"
+  - 'retryAfterMs field shape: number | null (milliseconds, matching latencyMs convention) — additive optional; existing callHistory readers ignore unknown fields'
+  - 'Capture site lives in the same updateProgress({callHistory: [...]}) write pattern used by the existing soft-warn synthetic entry (llmEventExtractor.v3.ts:662-682) — preserves the .slice(0, 20) cap invariant'
   - "Case-insensitive header lookup ('retry-after' ?? 'Retry-After') with parseFloat NaN guard (Number.isFinite && parsed > 0) — rejects malformed values to null safely (T-30-01a mitigation)"
   - "Capture is gated by bucket === 'rate_limit' so non-429 errors (network, timeout, 5xx) emit retryAfterMs:null regardless of incidental headers"
   - "Per-attempt failed-row write was added inside the catch block (previously absent) — provides per-attempt telemetry rows for the analyzer to walk in Path B; breaker-record idempotency preserved (single record('err') still fires once at line 480, not per attempt — RESEARCH gotcha 2 honored)"
-  - "Analyzer accepts --fixture=<path> (smoke-mode, no Redis) AND --snapshot=<path> (writes JSON to disk vs stdout) — neither arg present = Redis read + stdout JSON adjacent to Markdown"
+  - 'Analyzer accepts --fixture=<path> (smoke-mode, no Redis) AND --snapshot=<path> (writes JSON to disk vs stdout) — neither arg present = Redis read + stdout JSON adjacent to Markdown'
   - "Analyzer tolerates skipReason: 'watchdog-soft-warn' in old summaries (Plan 04 retires the enum value but 90d-TTL key serves rows with it for ~90d post-retirement)"
 
 patterns-established:
-  - "Pattern: optional-field widening on observability rows — same pattern Plans 03-05 will use for env-var promotion and watchdog field deletion (atomic both-sites edit in llmProgress.ts; writer schema and summary-mirror schema both touched in one commit)"
-  - "Pattern: TDD with smoke-fixture driver — fixtures committed alongside the new script serve as both regression baseline and operator example for `npm run analyze:llm-run -- --fixture=...` invocation"
+  - 'Pattern: optional-field widening on observability rows — same pattern Plans 03-05 will use for env-var promotion and watchdog field deletion (atomic both-sites edit in llmProgress.ts; writer schema and summary-mirror schema both touched in one commit)'
+  - 'Pattern: TDD with smoke-fixture driver — fixtures committed alongside the new script serve as both regression baseline and operator example for `npm run analyze:llm-run -- --fixture=...` invocation'
 
 requirements-completed: [LLM-RELI-02]
 
@@ -91,12 +91,14 @@ _Note: Task 1 followed full RED → GREEN TDD discipline. Task 2's verification 
 ## Files Created/Modified
 
 ### Created
+
 - `scripts/analyze-llm-run.ts` (319 lines) — operator-facing post-run analyzer; Redis-read or fixture-mode; Path A + Path B branching; JSON snapshot + Markdown table output
 - `server/__tests__/lib/freeClaudeRouter.retryAfterMs.test.ts` (199 lines) — 6 unit tests covering Path A (1.5/2.0), Path B (empty/malformed), non-rate-limit null, breaker idempotency
 - `tests/fixtures/run-with-retry-after.json` — LLMRunSummary Path A fixture (4 × 429 rows with retryAfterMs values)
 - `tests/fixtures/run-without-retry-after.json` — LLMRunSummary Path B fixture (4 × 429 rows with retryAfterMs:null, recoverable 429→200 timestamp gaps)
 
 ### Modified
+
 - `server/lib/llmProgress.ts` (+4 lines) — appended `retryAfterMs?: number | null` to both `LLMPipelineProgress.callHistory` row (lines 100-101) and `LLMRunSummary.callHistory` row (lines 337-338); single-line comment "D-01 (Phase 30): NIM Retry-After header capture, milliseconds. Null when header absent (Path B)."
 - `server/lib/freeClaudeRouter.ts` (+45 lines) — inside catch block at lines 448-477: (a) computed retryAfterMs from `(err as { headers?: Record<string,string> }).headers['retry-after'] ?? headers['Retry-After']` gated on `bucket === 'rate_limit'`, (b) prepended new failed-row to callHistory via updateProgress with the same `.slice(0, 20)` cap pattern as the soft-warn synthetic entry, (c) added retryAfterMs to the existing log.warn payload
 - `package.json` (+1 line) — `"analyze:llm-run": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/analyze-llm-run.ts"` mirroring the eval:replay invocation pattern verbatim
