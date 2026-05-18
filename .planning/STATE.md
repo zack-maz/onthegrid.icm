@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
-status: planning
-last_updated: "2026-05-18T01:41:58.498Z"
-last_activity: "2026-05-17 -- Phase 30.1 shipped (PR #21 merged)"
+status: executing
+last_updated: "2026-05-18T02:05:00.000Z"
+last_activity: 2026-05-18 -- Phase 31 Waves 1+2 complete; halted at Wave 3 operator checkpoint
 progress:
   total_phases: 14
   completed_phases: 3
   total_plans: 29
-  completed_plans: 24
-  percent: 83
+  completed_plans: 26
+  percent: 90
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 31 (Cron Stability Validation — LLM-RELI-06)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-17 -- Phase 30.1 shipped (PR #21 merged)
+Phase: 31 (cron-stability-validation-7-day-watch) — EXECUTING (paused at Wave 3 operator gate)
+Plan: 2 of 5 complete; Wave 3 (Plan 31-03) awaits PR merge + Vercel prod deploy + operator force-trigger
+Status: Phase 31 Waves 1+2 complete on `feature/31-cron-stability-validation` (commits dab6739..1da6636)
+Last activity: 2026-05-18 -- Phase 31 Waves 1+2 complete; halted at Wave 3 operator checkpoint
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 

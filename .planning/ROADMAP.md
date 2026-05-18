@@ -176,8 +176,8 @@ Plans:
 
 Plans:
 
-- [ ] 31-01-PLAN.md — Phase 31 prep fixes (eval-bundle, diff-filter, analyzer --help, runbook quarterly probe) + Wave 0 diff-filter unit test
-- [ ] 31-02-PLAN.md — snapshot-cron-watch.ts + watch-log.json scaffold + contract test + npm run watch:snapshot runner entry
+- [x] 31-01-PLAN.md — Phase 31 prep fixes (eval-bundle, diff-filter, analyzer --help, runbook quarterly probe) + Wave 0 diff-filter unit test
+- [x] 31-02-PLAN.md — snapshot-cron-watch.ts + watch-log.json scaffold + contract test + npm run watch:snapshot runner entry
 - [ ] 31-03-PLAN.md — D-02 prep-validation force-trigger (operator-gated)
 - [ ] 31-04-PLAN.md — Days 1-7 daily snapshot rhythm (operator-gated wall-clock)
 - [ ] 31-05-PLAN.md — Phase close (SUMMARY + architecture-doc narrative + REQ/ROADMAP/STATE updates; conditional 31.1 escalation gate per D-05)
