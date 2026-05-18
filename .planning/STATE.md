@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: planning
-last_updated: "2026-05-18T01:00:52.983Z"
+last_updated: "2026-05-18T01:41:58.498Z"
 last_activity: "2026-05-17 -- Phase 30.1 shipped (PR #21 merged)"
 progress:
   total_phases: 14
   completed_phases: 3
-  total_plans: 24
+  total_plans: 29
   completed_plans: 24
-  percent: 100
+  percent: 83
 ---
 
 # Project State
@@ -321,4 +321,4 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - Phase 28.2.6 inserted after Phase 28.2.5 (2026-05-07): Fix Vercel cron architecture so events:llm:v3 populates within budget (URGENT) — surfaced during 28.2.5 Plan 05 closeout when force-trigger of /api/cron/refresh-events?force=true returned `dispatched: true` in 400ms but the fire-and-forget IIFE body never executed (Vercel Fluid Compute kills the function once response is sent). Three resolution paths captured in 28.2.5-deferred-items.md for /gsd-discuss-phase 28.2.6 to pick from: (a) incremental terminal-key write refactor (~30 LOC), (b) Vercel Pro plan upgrade ($20/mo for 800s maxDuration), (c) waitUntil migration via @vercel/functions. Phase 28.3 entry now gated on 28.2.6 because the tier-green workflow run that 28.2.5 D-09 set up will keep returning allTiersGreen=false until critical[llmEvents] can flip from `unknown` to `healthy`.
 - Phase 30.1 inserted after Phase 30 (2026-05-17): Cascade fallback fix — re-enable OpenRouter or document single-provider reality (URGENT) — surfaced immediately post-Phase-30 by operator review noticing OpenRouter never fired in Run 1 / Run 2 / 04:00 UTC daily cron. Phase 27.4.4's `skipOpenRouter: true` flag is still hardcoded in `server/lib/llmEventExtractor.v3.ts:622, 929`, removing OpenRouter from the cascade entirely. 04:00 UTC cron evidence: NIM 39 rate-limit errors → breaker tripped → 50+ batches `skipped:breaker` → 0 OpenRouter attempts. Phase 30's tuning therefore tunes a single-provider pipeline, not a cascade. Seed context at .planning/phases/30.1-cascade-fallback-fix-.../30.1-CONTEXT-SEED.md. Three scope options (minimum/right/full) for /gsd-discuss-phase 30.1 to pick from.
 
-**Planned Phase:** 30.1 (Cascade fallback fix — re-enable OpenRouter or document single-provider reality) — 4 plans — 2026-05-17T18:36:49.062Z
+**Planned Phase:** 31 (cron-stability-validation-7-day-watch) — 5 plans — 2026-05-18T01:41:58.483Z
