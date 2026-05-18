@@ -420,17 +420,38 @@ var envSchema = z.object({
   // window so a git-revert finds them; operator prunes them when v1.5
   // closes (per RESEARCH.md Open Question 4).
   // Phase 27.4.1 (D-01/D-02/D-03): per-batch timeout for the LLM extractor
-  // watchdog. Default 90_000 ms hard-kills a batch that Cerebras never
-  // returns from; the DLQ absorbs the group and the loop continues.
-  // Soft-warn at 60_000 ms is hard-coded in the watchdog helper; only the
-  // hard cap is env-tunable for in-incident rescue without a redeploy.
-  LLM_BATCH_TIMEOUT_MS: z.coerce.number().int().positive().default(9e4),
+  // watchdog. Default hard-kills a batch that NIM never returns from; the DLQ
+  // absorbs the group and the loop continues. Phase 30 D-05 retired the
+  // 60s soft-warn tier — only the hard cap remains, env-tunable for
+  // in-incident rescue without a redeploy.
+  //
+  // Phase 30 D-02 retune: bumped 90_000 → 120_000 ms. Derivation per
+  // CONTEXT D-02 formula `max(2 × measured_batch_latency_p95, observed
+  // throttle_window + 30s)` against Run 1 baseline
+  // (.planning/phases/30-.../run-1-throttle-snapshot.json):
+  //   - perBatchLatency.p95 = 33_263 ms  → 2× = 66_526 ms
+  //   - throttleWindowMs    = Path B (no 429s) → fallback path (lower bound)
+  //   - Headroom for the long-tail beyond a 213-sample p95 → round up to 120s
+  // Pitfall 4 math at concurrency=12 over ~196 batches: wall-clock stays
+  // comfortably inside the Pro 800s ceiling even at worst-case 120s/batch.
+  // Operator rollback: `LLM_BATCH_TIMEOUT_MS=90000` reverts to v1.4 default.
+  LLM_BATCH_TIMEOUT_MS: z.coerce.number().int().positive().default(12e4),
   // Phase 27.4.4 Plan 02 — v3 batch concurrency. Sequential processing was
   // ~2 batches/min against a NIM ceiling of 40 req/min, leaving ~95% of the
   // rate budget unused. With ~27s/batch latency, default concurrency = 12
   // lands roughly 26 req/min steady-state — well under the 40 cap, with
   // enough headroom to absorb cold-start spikes and per-batch latency
   // variance. Drives 197-batch dev runs from ~95 min → ~10 min.
+  //
+  // Phase 30 D-02 sanity-check (Run 1 baseline): no re-tune.
+  // CONTEXT D-02 formula `(observed_NIM_steady_RPM × measured_batch_latency
+  // _seconds) / 60` is undefined because Run 1 measured `steadyStateRpm = 0`
+  // (Path B — NIM did not return 429s during the 122s window so the analyzer
+  // never observed a steady-state RPM ceiling). The 213 batches in 122s
+  // wall-clock imply effective parallelism >12 in production, which suggests
+  // there is headroom — but without a measured throttle ceiling we keep the
+  // default conservative. Plan 06 Run 2 (with eval harness fixed) can
+  // re-probe by raising concurrency and watching for the first 429s.
   //
   // Tuning knob:
   //   - LLM_V3_CONCURRENCY=1 reverts to fully sequential (rollback path)
@@ -440,14 +461,32 @@ var envSchema = z.object({
   // The setting only affects the per-batch fan-out; resolver geocoding is
   // still serialized at 1 req/s for Nominatim regardless of this value.
   LLM_V3_CONCURRENCY: z.coerce.number().int().positive().default(12),
-  // Phase 28.2.6 D-03 — cadence for incremental terminal-key writes during
-  // LLM extraction. Default 10 batches between flushes (rationale-locked
-  // via CONTEXT D-03). N=1 would clobber Redis under concurrency=12;
-  // higher values mean fewer writes + larger loss window on Vercel
-  // function-kill. Operator-tunable per Phase 28.1 W5 D-12. Read by
-  // server/lib/llmExtractionPipeline.ts via the shared `env` object so
-  // test mocks (vi.mock('../../config.js', ...)) propagate correctly.
-  LLM_FLUSH_EVERY_N_BATCHES: z.coerce.number().int().positive().default(10),
+  // Phase 30 D-07 (LLM-RELI-03) — promoted from the hard-coded
+  // `const BATCH_SIZE = 2` at server/lib/llmEventExtractor.v3.ts (D-10
+  // rationale: each group already carries news + Bellingcat + temporal
+  // context, so narrow batches fit the qwen-235b attention budget better
+  // than wider ones).
+  //
+  // Phase 30 D-02 sanity-check (Run 1 baseline): kept at 2.
+  // CONTEXT D-02 invited a raise toward 4-8 gated by `runEval()` accuracy
+  // under the wider group context (Plan 06 ±3pp absolute regression budget
+  // at 5/20/100km). Run 1's `evalScore.total = 0` because the ground-truth
+  // fixture is not bundled into the Vercel deploy output (Plan 02 SUMMARY
+  // run-note 2) — the gate cannot be evaluated. Raise to 4-8 only after
+  // Plan 06 lands the eval-harness fix and Run 2 confirms the ±3pp budget.
+  //
+  // Tuning knob:
+  //   - LLM_BATCH_SIZE=2   v1.4 default (sized for Hobby 300s ceiling)
+  //   - LLM_BATCH_SIZE=4-8 v1.5 candidates (Plan 06 ±3pp eval gate bounds
+  //     the upper end; wider batches stress the model's schema adherence
+  //     on verbose groups).
+  LLM_BATCH_SIZE: z.coerce.number().int().positive().default(2),
+  // Phase 30 D-04 (SIMPLIFY-01) — the prior incremental-flush cadence env
+  // var was retired here. The Phase 28.2.6 incremental-flush mechanism is
+  // gone; the terminal write at end of runRefreshExtraction is now the
+  // canonical (and only) writer of events:llm:v3. Operators with the legacy
+  // flush-cadence var still set in their Vercel environment can prune it
+  // post-merge — Zod no longer parses it.
   // Phase 27.4.4 D-04 / D-13 / D-18: opt-in feature flags for v3 latency remediation.
   // Default OFF for D-04 + D-18 keeps Gate B telemetry pure; activated post-cutover when
   // ops cost > telemetry purity (D-04, D-18).
@@ -829,9 +868,9 @@ function isAvailable(provider) {
 var NVIDIA_NIM_BASE = "https://integrate.api.nvidia.com/v1";
 var OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 var LLM_TIMEOUT_MS = 12e4;
-var RETRY_ATTEMPTS = 2;
-var BACKOFF_MS = [1e3, 4e3];
-var JITTER_MS = 250;
+var RETRY_ATTEMPTS = 3;
+var BACKOFF_MS = [2e3, 8e3, 32e3];
+var JITTER_MS = 500;
 var NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? "qwen/qwen3.5-397b-a17b";
 var OPENROUTER_DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 var OPENROUTER_DAILY_CAP = 200;
@@ -1038,12 +1077,39 @@ async function callLLM(messages, _schemaText, opts = {}) {
         recordLatency(p.name, latencyMs);
         const bucket = classifyError(err);
         recordErrorBucket(p.name, bucket);
+        let retryAfterMs = null;
+        if (bucket === "rate_limit" && err instanceof Error && "headers" in err) {
+          const headers = err.headers;
+          const raw = headers?.["retry-after"] ?? headers?.["Retry-After"];
+          if (raw) {
+            const parsed = parseFloat(raw);
+            if (Number.isFinite(parsed) && parsed > 0) retryAfterMs = parsed * 1e3;
+          }
+        }
+        const history = llmProgress.callHistory ?? [];
+        updateProgress({
+          callHistory: [
+            {
+              provider: p.name,
+              model: p.model,
+              tokensIn: 0,
+              tokensOut: 0,
+              durationMs: latencyMs,
+              ok: false,
+              batchSize: opts.batchSize ?? 0,
+              timestamp: Date.now(),
+              retryAfterMs
+            },
+            ...history
+          ].slice(0, 20)
+        });
         log37.warn(
           {
             provider: p.name,
             attempt,
             bucket,
             latencyMs,
+            retryAfterMs,
             err: err instanceof Error ? err.message : String(err)
           },
           "router attempt failed"
@@ -81166,19 +81232,6 @@ async function withBatchWatchdog(batchFn, opts) {
       );
     }, opts.timeoutMs);
   });
-  const softWarnTimer = setTimeout(() => {
-    if (!timedOut) {
-      try {
-        opts.onSoftWarn?.(opts.softWarnMs);
-        log15.info(
-          { batchIndex: opts.batchIndex, label: opts.label, softWarnMs: opts.softWarnMs },
-          "batch crossed soft-warn threshold (still running)"
-        );
-      } catch (err) {
-        log15.warn({ err }, "onSoftWarn handler threw \u2014 suppressed");
-      }
-    }
-  }, opts.softWarnMs);
   try {
     const result = await Promise.race([workPromise, timeoutPromise]);
     return result;
@@ -81200,7 +81253,6 @@ async function withBatchWatchdog(batchFn, opts) {
     }
     throw err;
   } finally {
-    if (softWarnTimer) clearTimeout(softWarnTimer);
     if (hardTimer) clearTimeout(hardTimer);
   }
 }
@@ -81317,7 +81369,7 @@ function getHighestTier(sourceUrls) {
 
 // server/lib/llmEventExtractor.v3.ts
 var log16 = logger.child({ module: "llm-extractor-v3" });
-var BATCH_SIZE = 2;
+var BATCH_SIZE = env.LLM_BATCH_SIZE;
 var V3_BAKEOFF_MODEL = process.env.V3_BAKEOFF_MODEL;
 var TEMPORAL_CONTEXT_COUNT = 3;
 var TEMPORAL_CONTEXT_BBOX_DEG = 1;
@@ -81603,8 +81655,6 @@ async function processEventGroupsV3(groups, onBatchComplete) {
           },
           {
             timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-            softWarnMs: 6e4,
-            // D-02 hard-coded — only hard cap is env-tunable
             batchIndex,
             label: "v3",
             onTimeout: async () => {
@@ -81620,25 +81670,6 @@ async function processEventGroupsV3(groups, onBatchComplete) {
               }
               updateProgress({
                 watchdogTimeoutCount: (llmProgress.watchdogTimeoutCount ?? 0) + 1
-              });
-            },
-            onSoftWarn: (elapsedMs) => {
-              const history = llmProgress.callHistory ?? [];
-              updateProgress({
-                callHistory: [
-                  {
-                    provider: "nvidia_nim",
-                    model: "watchdog-soft-warn",
-                    tokensIn: 0,
-                    tokensOut: 0,
-                    durationMs: elapsedMs,
-                    ok: true,
-                    batchSize: batch.length,
-                    timestamp: Date.now(),
-                    skipReason: "watchdog-soft-warn"
-                  },
-                  ...history
-                ].slice(0, 20)
               });
             }
           }
@@ -81842,7 +81873,6 @@ async function splitBatchOnTimeout(contexts, batchIndex) {
       },
       {
         timeoutMs: env.LLM_BATCH_TIMEOUT_MS,
-        softWarnMs: 6e4,
         batchIndex,
         label: "v3-split",
         onTimeout: async () => {
@@ -82006,18 +82036,11 @@ var log18 = logger.child({ module: "llm-extraction-pipeline" });
 var EVENTS_KEY = "events:gdelt";
 var LLM_EVENTS_KEY_ACTIVE = "events:llm:v3";
 var LLM_SUMMARY_KEY_ACTIVE = "events:llm-summary:v3";
-var PARTIAL_KEY_ACTIVE = "events:llm:v3:partial";
 var LLM_PROCESS_KEY = "events:llm-process-ts";
 var LLM_COOLDOWN_MS = 9e5;
 var LLM_REDIS_TTL_SEC2 = 9e3;
 var LLM_SUMMARY_TTL_SEC = 86400;
 var BATCH_SIZE_ACTIVE = 2;
-var FLUSH_EVERY_N_BATCHES_DEFAULT = 10;
-function getFlushEveryNBatches() {
-  const parsed = env.LLM_FLUSH_EVERY_N_BATCHES;
-  if (!Number.isFinite(parsed) || parsed < 1) return FLUSH_EVERY_N_BATCHES_DEFAULT;
-  return parsed;
-}
 async function mergeAndPersistLlmEntities(newlyEnriched, llmCachedRef, key) {
   const llmMergeMap = /* @__PURE__ */ new Map();
   if (llmCachedRef?.data) {
@@ -82091,7 +82114,7 @@ async function runRefreshExtraction(opts) {
             if (e.id) cachedLlmKeys.add(e.id);
           }
         }
-        const newGroups = cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
+        const newGroups = cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(`llm-v3-${g.key}`)) : groups;
         updateProgress({ newGroups: newGroups.length });
         if (newGroups.length === 0) {
           log18.info("LLM: no new groups to process");
@@ -82126,47 +82149,10 @@ async function runRefreshExtraction(opts) {
           stage: "llm-processing",
           totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize)
         });
-        const flushEvery = getFlushEveryNBatches();
-        let batchesSinceLastFlush = 0;
-        let lastFlushedEventCount = 0;
         const extractResult = await processEventGroups(
           prioritizedGroups,
           async (completed, total) => {
             updateProgress({ completedBatches: completed, totalBatches: total });
-            batchesSinceLastFlush++;
-            if (batchesSinceLastFlush < flushEvery) return;
-            batchesSinceLastFlush = 0;
-            try {
-              const partialCached = await cacheGetSafe(PARTIAL_KEY_ACTIVE, 999999999);
-              const partialEvents = partialCached?.data?.events;
-              if (!Array.isArray(partialEvents) || partialEvents.length <= lastFlushedEventCount) {
-                return;
-              }
-              const window = partialEvents.slice(lastFlushedEventCount);
-              const geo = await geocodeEnrichedEvents(
-                {
-                  schemaVersion: "v3",
-                  events: window,
-                  matchedNewsByGroup: /* @__PURE__ */ new Map(),
-                  bellingcatByGroup: /* @__PURE__ */ new Map()
-                },
-                prioritizedGroups
-              );
-              const adapted = enrichedV3ToEntities(geo.events, prioritizedGroups);
-              if (adapted.length > 0) {
-                await mergeAndPersistLlmEntities(adapted, llmCachedRef, LLM_EVENTS_KEY_ACTIVE);
-                lastFlushedEventCount = partialEvents.length;
-                log18.info(
-                  { completed, total, windowSize: window.length, flushed: adapted.length },
-                  "Plan 01 periodic-flush: incremental terminal-key write"
-                );
-              }
-            } catch (flushErr) {
-              log18.warn(
-                { err: flushErr, completed, total },
-                "Plan 01 periodic-flush failed (continuing)"
-              );
-            }
           }
         );
         if (!extractResult.events || extractResult.events.length === 0) {

@@ -274,7 +274,9 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           }
         }
         const newGroups =
-          cachedLlmKeys.size > 0 ? groups.filter((g) => !cachedLlmKeys.has(g.key)) : groups;
+          cachedLlmKeys.size > 0
+            ? groups.filter((g) => !cachedLlmKeys.has(`llm-v3-${g.key}`))
+            : groups;
 
         updateProgress({ newGroups: newGroups.length });
 
