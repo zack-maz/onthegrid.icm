@@ -171,7 +171,16 @@ Plans:
 2. `events:llm:v3` is populated within the daily 26h freshness window on every tick (no `unknown` or `stale` flips on `llmEvents`).
 3. `dlqCount` after each tick stays at zero or matches a documented baseline; any non-zero count has a recorded throttle-event explanation in the operator log.
 4. The 7-day observation window is captured in a single artifact (e.g. a phase SUMMARY block, dashboard screenshot series, or operator log) so the watch is auditable, not anecdotal.
-   **Plans**: TBD
+
+**Plans**: 5 plans
+
+Plans:
+
+- [ ] 31-01-PLAN.md — Phase 31 prep fixes (eval-bundle, diff-filter, analyzer --help, runbook quarterly probe) + Wave 0 diff-filter unit test
+- [ ] 31-02-PLAN.md — snapshot-cron-watch.ts + watch-log.json scaffold + contract test + npm run watch:snapshot runner entry
+- [ ] 31-03-PLAN.md — D-02 prep-validation force-trigger (operator-gated)
+- [ ] 31-04-PLAN.md — Days 1-7 daily snapshot rhythm (operator-gated wall-clock)
+- [ ] 31-05-PLAN.md — Phase close (SUMMARY + architecture-doc narrative + REQ/ROADMAP/STATE updates; conditional 31.1 escalation gate per D-05)
 
 ### Phase 32: Ghost Event URL Liveness, Dashboard & Prune
 
@@ -251,7 +260,7 @@ Plans:
 | ----------------------------------------------------------------------------- | -------------- | ----------- | ---------- |
 | 29. LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | 13/13          | Complete    | 2026-05-11 |
 | 30. NIM Throttle Characterization & Cascade Tuning                            | 7/7            | Complete    | 2026-05-17 |
-| 31. Cron Stability Validation (7-day Watch)                                   | 0/0            | Not started | -          |
+| 31. Cron Stability Validation (7-day Watch)                                   | 0/5            | Not started | -          |
 | 32. Ghost Event URL Liveness, Dashboard & Prune                               | 0/0            | Not started | -          |
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/0            | Not started | -          |
 | 34. Internal Docs + Redis Registry Verification + Redis Optimization          | 0/0            | Not started | -          |
