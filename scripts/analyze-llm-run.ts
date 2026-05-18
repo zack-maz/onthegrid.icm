@@ -38,11 +38,16 @@
  * in Redis (~90d after Plan 04) may carry skipReason: 'watchdog-soft-warn'
  * on callHistory rows. This analyzer ignores unknown enum values rather
  * than crashing.
+ *
+ * Env-var gotcha: `CACHE_KEY_PREFIX="dev: "` (trailing whitespace) is
+ * stripped by `node --env-file-if-exists=`. Export manually before running
+ * if your dev cache uses whitespace-suffixed prefixes — Phase 30.1 deferred.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
 import { cacheGetSafe } from '../server/cache/redis.js';
 import { logger } from '../server/lib/logger.js';
+
 import type { LLMRunSummary } from '../server/lib/llmProgress.js';
 
 const log = logger.child({ module: 'analyze-llm-run' });
@@ -257,6 +262,11 @@ function parseArg(name: string): string | undefined {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    console.log('Usage: npm run analyze:llm-run -- [--fixture=<path>] [--snapshot=<path>]');
+    console.log('Env: CACHE_KEY_PREFIX must be exported manually if it has trailing whitespace.');
+    process.exit(0);
+  }
   const fixture = parseArg('fixture');
   const snapshotPath = parseArg('snapshot');
 
