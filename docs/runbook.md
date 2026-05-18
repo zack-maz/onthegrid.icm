@@ -867,6 +867,22 @@ jq 'select(.stale == true)' vercel.log
 
 ---
 
+## 12. Quarterly LLM Health Probes
+
+Run `npm run probe:openrouter` once per quarter (or when the
+`docs/architecture/llm-pipeline-reliability.md` Cascade Reality
+section becomes >90 days old). Output is
+`.planning/phases/30.1-cascade-fallback-fix-re-enable-openrouter-or-document-single/30.1-or-pulse-snapshot.json`
+plus a stdout `Decision` line. If `decision !== 'nim-only'`
+(i.e., `rateLimitedPct < 90`), the OpenRouter free-tier may
+again be a viable fallback — see
+[`docs/architecture/llm-pipeline-reliability.md`](architecture/llm-pipeline-reliability.md)
+§"Path to Re-Enable" for the cascade-restore steps. The probe
+spends ~15% of the 200/day OpenRouter free-tier daily cap;
+safe to re-run once per planning cycle.
+
+---
+
 ## See also
 
 - [`docs/degradation.md`](./degradation.md) — graceful degradation
