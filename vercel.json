@@ -14,7 +14,8 @@
   ],
   "functions": {
     "api/vercel-entry.js": {
-      "maxDuration": 800
+      "maxDuration": 800,
+      "includeFiles": ".planning/eval/*.json"
     }
   }
 }
