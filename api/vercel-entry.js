@@ -2160,7 +2160,13 @@ async function prioritizeBySeverity(groups) {
 // server/lib/llmEvalHarness.ts
 var log6 = logger.child({ module: "llm-eval-harness" });
 var __dirname3 = dirname3(fileURLToPath3(import.meta.url));
-var GROUND_TRUTH_PATH = resolve3(__dirname3, "../../.planning/eval/ground-truth-events.json");
+var GROUND_TRUTH_CANDIDATES = [
+  resolve3(__dirname3, "../../.planning/eval/ground-truth-events.json"),
+  // dev (tsx src)
+  resolve3(__dirname3, "_eval/ground-truth-events.json")
+  // prod (api/_eval/ bundled)
+];
+var GROUND_TRUTH_PATH = GROUND_TRUTH_CANDIDATES.find((p) => existsSync3(p)) ?? GROUND_TRUTH_CANDIDATES[0];
 var BASELINE_KEY = "events:llm-eval-baseline:v3";
 var BASELINE_TTL_SEC = 90 * 24 * 3600;
 var cachedGroundTruth = void 0;
@@ -2253,10 +2259,13 @@ async function runEval(opts = {}) {
   }
   return score;
 }
-var ADVERSARIAL_FIXTURE_PATH = resolve3(
-  __dirname3,
-  "../../.planning/eval/adversarial-injections.json"
-);
+var ADVERSARIAL_FIXTURE_CANDIDATES = [
+  resolve3(__dirname3, "../../.planning/eval/adversarial-injections.json"),
+  // dev
+  resolve3(__dirname3, "_eval/adversarial-injections.json")
+  // prod bundled
+];
+var ADVERSARIAL_FIXTURE_PATH = ADVERSARIAL_FIXTURE_CANDIDATES.find((p) => existsSync3(p)) ?? ADVERSARIAL_FIXTURE_CANDIDATES[0];
 var ADVERSARIAL_KEY = "events:llm-eval-adversarial:v3";
 var ADVERSARIAL_TTL_SEC = 90 * 24 * 3600;
 var LEAK_CANARY_PREFIX_LEN = 30;
