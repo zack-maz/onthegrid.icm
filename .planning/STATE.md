@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-19T07:30:00.000Z"
-last_activity: 2026-05-19 -- Phase 31 closed early at Day 1 / 7 under operator decision; LLM-RELI-06 validated single-day with caveat; advancing to Phase 32 (GHOST track)
+last_updated: "2026-05-19T08:00:00.000Z"
+last_activity: 2026-05-19 -- Phase 34 (LLM Router Fallback Re-integration) inserted; phases 34/35/36 renumbered to 35/36/37; LLM-RELI-08..11 added; advancing to Phase 32 (GHOST track) next
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 4
-  total_plans: 29
+  total_plans: 34
   completed_plans: 29
-  percent: 100
+  percent: 85
 ---
 
 # Project State
@@ -42,11 +42,12 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Closed early 2026-05-19 (Day 1 / 7 PASS; caveat) |
 | 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
-| 34    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
-| 35    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | Not started |
-| 36    | ADR-0009 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Not started |
+| 34    | LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval) | LLM-RELI-08, LLM-RELI-09, LLM-RELI-10, LLM-RELI-11           | Not started |
+| 35    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
+| 36    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | Not started |
+| 37    | ADR-0010 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Not started |
 
-**Sequencing:** 29 → 30 → 31 → 36 is the LLM-RELI spine (must run in order). Phases 32, 33, 34 are independent of the spine and can run in parallel with 29/30/31. Phase 36 lands after 29/30/31 close so docs reflect shipped state. Phase 37 is the milestone-close gate by construction.
+**Sequencing:** 29 → 30 → 31 → 34 → 37 is the LLM-RELI spine (must run in order). Phases 32 (GHOST) and 33 (ACTOR) are independent of the spine and can run in parallel with 29/30/31. Phase 34 depends on Phase 33 (cascade integration must test all providers against the post-33 `actorConfidence` schema). Phase 35 lands after 29 + 34 close so its Redis-registry sweep inventories the new `llm:tokens:cerebras:*` / `llm:tokens:groq:*` keys. Phase 36 lands after 29/30/31/34 close so docs reflect shipped state. Phase 37 is the milestone-close gate by construction.
 
 Backlog still parked (not in v1.5 unless they block reliability):
 
@@ -324,3 +325,5 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 **Planned Phase:** 31 (cron-stability-validation-7-day-watch) — 5 plans — 2026-05-18T01:41:58.483Z
 
 - Phase 31 closed early under operator decision 2026-05-19 at Day 1 / 7 (Day-1 natural cron PASS captured, commit `d0c16e4`). LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically" — caveat-marked. Snapshot harness retained for ad-hoc capture; D-05 escalation to Phase 31.1 deferred (no FAIL row observed). Phase 37 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0) unaffected and remains the mechanical reliability check at milestone close. See [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md) for the full close-out rationale and resume path.
+
+- Phase 34 (LLM Router Fallback Re-integration) inserted between Phase 33 and the existing Phase 34 (now Phase 35) on 2026-05-19 per operator decision. Goal: restore Cerebras + Groq as cascade fallbacks for NIM (probe-driven; mirrors Phase 30.1's `nim-only` precedent if free tiers fail the gate) plus per-provider eval scoring. Phase 31's Day-1 DLQ baseline (4 × `v3:timeout_watchdog`) is the empirical motivation. Existing Phases 34/35/36 renumbered → 35/36/37. New requirements LLM-RELI-08..11 added. Sequencing: Phase 34 sits on the LLM-RELI spine (29 → 30 → 31 → 34 → 37) and depends on Phase 33 closing first so cascade integration tests against the post-33 `actorConfidence` schema.
