@@ -48,7 +48,7 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 
 ### Multi-URL scoring (GHOST-01, GHOST-03)
 
-- **D-05: Probe ONLY the primary URL per event.** `data.source` for raw GDELT events; `data.sourceUrls[0]` for LLM v3 events. Matches `src/components/detail/EventDetail.tsx:152-163` which renders exactly one URL ("View source" anchor) regardless of how many citations the event has. Secondary URLs in `sourceUrls` are not probed.
+- **D-05: Probe ONLY the primary URL per event.** `data.source` for **both** raw GDELT and LLM v3 events — the v1 template-inherited field. `enrichedV3ToEntities()` at `server/lib/llmExtractionPipeline.ts:478-501` spreads `template.data` and never writes a `sourceUrls[]` field, so v3 entries carry the primary URL at `data.source` identically to raw GDELT. Matches `src/components/detail/EventDetail.tsx:143-164` which renders exactly one URL ("View source" anchor — `d.source`) regardless of how many citations the event has. (Corrected 2026-05-19 during /gsd:plan-phase 32 research dispatch; the original D-05 wording referenced a non-existent `data.sourceUrls[0]` field — see 32-RESEARCH.md Assumption A1.)
 - **D-06: Dashboard "dead-URL event" rule = primary URL has terminal non-live status.** Single number on the dashboard, single drill-down list, single prune-candidate set. No "primary dead, N backups available" hint. Keeps the operator's mental model identical to the "View source" link they already click.
 - **D-07: Status taxonomy → dead-counting.** Terminal dead statuses (count toward the dashboard number, eligible for prune): `404`, `403`, `dead-host` (DNS failure / connection refused / TCP timeout). `unknown` (5xx, network blip, transient error) stays OUT of the count and gets re-probed on the next sweep until it resolves to a terminal status. `live` is live.
 - **D-08: Latest probe status wins. No flap debounce.** No `attemptCount`-based gate on the dashboard count itself. (Cron auto-prune does use `attemptCount >= 3` as a safety threshold — see D-12.) The TTL-driven re-probe cadence self-corrects transient flips within one or two ticks.
@@ -109,8 +109,8 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 - `server/lib/concurrencyLimit.ts` `createLimit(maxConcurrent)` — FIFO queue Phase 32 reuses for D-18's concurrency bound
 
 ### Data shape
-- `server/lib/llmEventExtractor.v3.ts:487` — `events:llm:v3` payload shape; `data.sourceUrls: string[]` field that D-05 reads `[0]` from
-- `server/adapters/gdelt.ts:244` — raw GDELT `source: getCol(cols, COL.SOURCEURL)` (singular) that D-05 reads for raw events
+- `server/lib/llmExtractionPipeline.ts:478-501` — `enrichedV3ToEntities()` writes the v3 entity `data` object; spreads `template.data` (which carries `source`) and never adds a `sourceUrls[]` field. This is what D-05 reads `data.source` from for v3 events.
+- `server/adapters/gdelt.ts:244` — raw GDELT `source: getCol(cols, COL.SOURCEURL)` (singular) sets the template's `data.source` that both raw and v3 entities inherit.
 - `src/components/detail/EventDetail.tsx:143-164` — UI "View source" anchor; canonical source-of-truth for what "primary URL" means to the operator
 
 ### Schema pinning pattern (template for D-22)
