@@ -104,7 +104,7 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 
 - [x] **Phase 29: LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + Cerebras/Groq Adapter Purge + v1/v2 Extractor Deletion + CLAUDE.md Trim** — Retire Cerebras + Groq from the active v3 cascade; **delete v1 + v2 extractor modules entirely** (modules + `POST /api/events/llm-pipeline` override endpoint + `events:llm-pipeline-override` Redis key + DevApiStatus Pin-to-v1/v2 buttons all removed; rationale folded into ADR-0010 at Phase 36 with stub written here — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` already occupies the 0009 slot); prove the map renders cleanly on raw GDELT when both NIM + OpenRouter keys are absent (CI integration test + runbook entry); upgrade Vercel project to Pro plan and bump `vercel.json` `maxDuration` from 300 → 800 as the **first** phase commit; purge the now-unused Cerebras + Groq adapter code paths from `server/adapters/llm-provider.ts` (SIMPLIFY-04); trim CLAUDE.md phase-history bloat down to current-state invariants targeting <10k tokens (DOCS-INT-01, pulled from Phase 34 on 2026-05-09). _(SIMPLIFY-06 v1 archive folded forward into deletion here — Phase 34's old criterion #8 becomes inapplicable.)_ (completed 2026-05-11)
 - [x] **Phase 30: NIM Throttle Characterization + Cascade Tuning + Pro-Enabled Simplifications** — Empirically characterize NIM throttle window + RPM ceiling + recovery signal; tune `LLM_BATCH_SIZE`, `LLM_V3_CONCURRENCY`, retry/backoff parameters against measured data; retire the 28.2.6 incremental-flush mechanism (SIMPLIFY-01) and relax watchdog defaults (SIMPLIFY-03) — both are Hobby-era 300s-budget workarounds that the Pro 800s ceiling makes deletable. (completed 2026-05-17)
-- [ ] **Phase 31: Cron Stability Validation (7-day Watch)** — Observe daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:llm:v3` healthy across ≥7 consecutive days under normal NIM availability.
+- [x] **Phase 31: Cron Stability Validation (7-day Watch)** — Closed early under operator decision 2026-05-19 at Day 1 / 7 (Day-1 natural cron PASS, commit `d0c16e4`). LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically" — see [`docs/architecture/llm-pipeline-reliability.md` §7-Day Watch](../docs/architecture/llm-pipeline-reliability.md#close-summary-early--2026-05-19) and [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md) for caveat + resume path. Snapshot harness remains operational.
 - [ ] **Phase 32: Ghost Event URL Liveness, Dashboard & Prune** — Probe `sourceURL` liveness out-of-band, persist results to Redis with TTL, surface dead-URL counts in API Health dashboard, and let the operator prune dead-URL events behind the existing Bearer gate.
 - [ ] **Phase 33: Actor Metadata Audit, Canonical Catalog & Eval Expansion** — Audit live `events:llm:v3` actor quality; commit canonical actor catalog; extend v3 prompt + schema with `actorConfidence`; extend ground-truth + adversarial fixtures; surface actor-quality counts in dashboard.
 - [ ] **Phase 34: Internal Docs (JSDoc) + Redis Registry + Redis Optimization + Cleanup Sweep** — Bring LLM-pipeline JSDoc current; verify Redis key registry against actual writers/readers; produce key inventory artifact; classify load-bearing vs observability vs retire; right-size TTLs; measure pre/post command-budget delta. **Plus** retire `events:llm:v3:partial` (SIMPLIFY-02), audit + delete `freeClaudeRouter.ts` if orphaned (SIMPLIFY-05), and measure final `api/vercel-entry.js` bundle-size delta vs v1.4's 1.72 MB baseline (SIMPLIFY-07). _(DOCS-INT-01 CLAUDE.md trim moved to Phase 29 on 2026-05-09. SIMPLIFY-06 v1 archive folded into Phase 29's full deletion.)_
@@ -178,9 +178,9 @@ Plans:
 
 - [x] 31-01-PLAN.md — Phase 31 prep fixes (eval-bundle, diff-filter, analyzer --help, runbook quarterly probe) + Wave 0 diff-filter unit test
 - [x] 31-02-PLAN.md — snapshot-cron-watch.ts + watch-log.json scaffold + contract test + npm run watch:snapshot runner entry
-- [ ] 31-03-PLAN.md — D-02 prep-validation force-trigger (operator-gated)
-- [ ] 31-04-PLAN.md — Days 1-7 daily snapshot rhythm (operator-gated wall-clock)
-- [ ] 31-05-PLAN.md — Phase close (SUMMARY + architecture-doc narrative + REQ/ROADMAP/STATE updates; conditional 31.1 escalation gate per D-05)
+- [x] 31-03-PLAN.md — D-02 prep-validation force-trigger (operator-gated) — Day-0 row committed (PR #26)
+- [~] 31-04-PLAN.md — **Closed early at Day 1 / 7** under operator decision 2026-05-19. Day-1 natural cron PASS captured (`d0c16e4`); Days 2–7 not pursued. Snapshot harness stays operational for ad-hoc capture.
+- [x] 31-05-PLAN.md — Phase close (early, caveat-marked): [`31-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md) + [`31-05-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-05-SUMMARY.md) + architecture-doc narrative + REQ/ROADMAP/STATE updates. D-05 escalation deferred (no FAIL row).
 
 ### Phase 32: Ghost Event URL Liveness, Dashboard & Prune
 
@@ -256,16 +256,16 @@ Plans:
 
 ### Progress
 
-| Phase                                                                         | Plans Complete | Status      | Completed  |
-| ----------------------------------------------------------------------------- | -------------- | ----------- | ---------- |
-| 29. LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | 13/13          | Complete    | 2026-05-11 |
-| 30. NIM Throttle Characterization & Cascade Tuning                            | 7/7            | Complete    | 2026-05-17 |
-| 31. Cron Stability Validation (7-day Watch)                                   | 0/5            | Not started | -          |
-| 32. Ghost Event URL Liveness, Dashboard & Prune                               | 0/0            | Not started | -          |
-| 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/0            | Not started | -          |
-| 34. Internal Docs + Redis Registry Verification + Redis Optimization          | 0/0            | Not started | -          |
-| 35. Public Docs Sweep + OpenAPI Additions                                     | 0/0            | Not started | -          |
-| 36. ADR-0010 + Acceptance Gate Closeout                                       | 0/0            | Not started | -          |
+| Phase                                                                         | Plans Complete       | Status                | Completed  |
+| ----------------------------------------------------------------------------- | -------------------- | --------------------- | ---------- |
+| 29. LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | 13/13                | Complete              | 2026-05-11 |
+| 30. NIM Throttle Characterization & Cascade Tuning                            | 7/7                  | Complete              | 2026-05-17 |
+| 31. Cron Stability Validation (7-day Watch)                                   | 4/5 (1 early-closed) | Closed early (caveat) | 2026-05-19 |
+| 32. Ghost Event URL Liveness, Dashboard & Prune                               | 0/0                  | Not started           | -          |
+| 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/0                  | Not started           | -          |
+| 34. Internal Docs + Redis Registry Verification + Redis Optimization          | 0/0                  | Not started           | -          |
+| 35. Public Docs Sweep + OpenAPI Additions                                     | 0/0                  | Not started           | -          |
+| 36. ADR-0010 + Acceptance Gate Closeout                                       | 0/0                  | Not started           | -          |
 
 ### Parallelization Notes
 

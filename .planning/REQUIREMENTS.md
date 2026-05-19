@@ -15,7 +15,7 @@ Requirements for this milestone, grouped by track. Each maps to exactly one road
 - [x] **LLM-RELI-03**: `LLM_BATCH_SIZE` (currently `BATCH_SIZE=2` v1, env-tunable in v3) and `LLM_V3_CONCURRENCY` (default 12) tuned against the characterized throttle. Tuned values committed as defaults; old values documented in the new ADR.
 - [x] **LLM-RELI-04**: Retry / backoff parameters in `callLLM` cascade (`server/adapters/llm-provider.ts`) tuned against the characterized throttle. Per-event retry budget, exponential-backoff base, jitter window all set from measured data, not guessed.
 - [x] **LLM-RELI-05**: LLM-optional architecture proven. With `NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` both unset (or `LLM_PIPELINE_ENABLED=false` if a kill-switch is added), `/api/events` continues to serve raw GDELT through the Pitfall 1 cache bridge. Map renders cleanly with no LLM enrichment. Existing degradation contract honoured.
-- [ ] **LLM-RELI-06**: Daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:llm:v3` healthy. `/api/health` returns `endpoints.llmEvents.status === 'healthy'` after the daily tick. Confirmed across at least 7 consecutive days under normal NIM availability.
+- [ ] **LLM-RELI-06**: Daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:llm:v3` healthy. `/api/health` returns `endpoints.llmEvents.status === 'healthy'` after the daily tick. Confirmed across at least 7 consecutive days under normal NIM availability. **Status (2026-05-19): validated single-day, monitoring continues opportunistically.** Phase 31 closed early at Day 1 / 7 under operator decision (Day-1 natural cron PASS, commit `d0c16e4`; eval 0.98 at all radii; 0 breaker trips; DLQ entries all whitelisted `v3:timeout_watchdog`). The 7-consecutive bar is not met. Snapshot harness (`npm run watch:snapshot -- --http`) remains operational for ad-hoc capture; any future FAIL row escalates to Phase 31.1 per Phase 31 CONTEXT D-05. Caveat documented in [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md) and [`docs/architecture/llm-pipeline-reliability.md` §7-Day Watch](../docs/architecture/llm-pipeline-reliability.md#close-summary-early--2026-05-19). Phase 36 acceptance gate (LLM-RELI-07) is the mechanical reliability check at milestone close and is unaffected.
 - [ ] **LLM-RELI-07**: `prod-connectivity-audit.yml` exit-0 with `audit:connectivity:last-result.allTiersGreen === true` for **3 consecutive runs** (the v1.5 → v1.6 promotion gate; unblocks 999.5 load test).
 
 ### Ghost Event Cleanup — dead source URL probing + dashboard surfacing + pruning
@@ -124,51 +124,51 @@ Explicitly excluded from v1.5. Documented to prevent scope creep.
 
 Empty initially; populated by the roadmap agent during Step 10. Each requirement maps to exactly one phase.
 
-| Requirement  | Phase | Status   |
-| ------------ | ----- | -------- |
-| LLM-RELI-01  | 29    | Complete |
-| LLM-RELI-02  | 30    | Complete |
-| LLM-RELI-03  | 30    | Complete |
-| LLM-RELI-04  | 30    | Complete |
-| LLM-RELI-05  | 29    | Complete |
-| LLM-RELI-06  | 31    | Pending  |
-| LLM-RELI-07  | 36    | Pending  |
-| GHOST-01     | 32    | Pending  |
-| GHOST-02     | 32    | Pending  |
-| GHOST-03     | 32    | Pending  |
-| GHOST-04     | 32    | Pending  |
-| GHOST-05     | 32    | Pending  |
-| ACTOR-01     | 33    | Pending  |
-| ACTOR-02     | 33    | Pending  |
-| ACTOR-03     | 33    | Pending  |
-| ACTOR-04     | 33    | Pending  |
-| ACTOR-05     | 33    | Pending  |
-| DOCS-INT-01  | 29    | Complete |
-| DOCS-INT-02  | 34    | Pending  |
-| DOCS-INT-03  | 34    | Pending  |
-| REDIS-OPT-01 | 34    | Pending  |
-| REDIS-OPT-02 | 34    | Pending  |
-| REDIS-OPT-03 | 34    | Pending  |
-| REDIS-OPT-04 | 34    | Pending  |
-| SIMPLIFY-01  | 30    | Complete |
-| SIMPLIFY-02  | 34    | Pending  |
-| SIMPLIFY-03  | 30    | Complete |
-| SIMPLIFY-04  | 29    | Complete |
-| SIMPLIFY-05  | 34    | Pending  |
-| SIMPLIFY-06  | 29    | Complete |
-| SIMPLIFY-07  | 34    | Pending  |
-| DOCS-PUB-01  | 35    | Pending  |
-| DOCS-PUB-02  | 35    | Pending  |
-| DOCS-PUB-03  | 35    | Pending  |
-| DOCS-PUB-04  | 36    | Pending  |
-| DOCS-PUB-05  | 35    | Pending  |
-| DOCS-API-01  | 35    | Pending  |
-| DOCS-API-02  | 35    | Pending  |
-| DOCS-API-03  | 35    | Pending  |
-| DOCS-API-04  | 35    | Pending  |
-| DOCS-API-05  | 35    | Pending  |
-| DOCS-API-06  | 35    | Pending  |
-| DOCS-API-07  | 35    | Pending  |
+| Requirement  | Phase | Status                                                           |
+| ------------ | ----- | ---------------------------------------------------------------- |
+| LLM-RELI-01  | 29    | Complete                                                         |
+| LLM-RELI-02  | 30    | Complete                                                         |
+| LLM-RELI-03  | 30    | Complete                                                         |
+| LLM-RELI-04  | 30    | Complete                                                         |
+| LLM-RELI-05  | 29    | Complete                                                         |
+| LLM-RELI-06  | 31    | Validated single-day (caveat — Phase 31 closed early 2026-05-19) |
+| LLM-RELI-07  | 36    | Pending                                                          |
+| GHOST-01     | 32    | Pending                                                          |
+| GHOST-02     | 32    | Pending                                                          |
+| GHOST-03     | 32    | Pending                                                          |
+| GHOST-04     | 32    | Pending                                                          |
+| GHOST-05     | 32    | Pending                                                          |
+| ACTOR-01     | 33    | Pending                                                          |
+| ACTOR-02     | 33    | Pending                                                          |
+| ACTOR-03     | 33    | Pending                                                          |
+| ACTOR-04     | 33    | Pending                                                          |
+| ACTOR-05     | 33    | Pending                                                          |
+| DOCS-INT-01  | 29    | Complete                                                         |
+| DOCS-INT-02  | 34    | Pending                                                          |
+| DOCS-INT-03  | 34    | Pending                                                          |
+| REDIS-OPT-01 | 34    | Pending                                                          |
+| REDIS-OPT-02 | 34    | Pending                                                          |
+| REDIS-OPT-03 | 34    | Pending                                                          |
+| REDIS-OPT-04 | 34    | Pending                                                          |
+| SIMPLIFY-01  | 30    | Complete                                                         |
+| SIMPLIFY-02  | 34    | Pending                                                          |
+| SIMPLIFY-03  | 30    | Complete                                                         |
+| SIMPLIFY-04  | 29    | Complete                                                         |
+| SIMPLIFY-05  | 34    | Pending                                                          |
+| SIMPLIFY-06  | 29    | Complete                                                         |
+| SIMPLIFY-07  | 34    | Pending                                                          |
+| DOCS-PUB-01  | 35    | Pending                                                          |
+| DOCS-PUB-02  | 35    | Pending                                                          |
+| DOCS-PUB-03  | 35    | Pending                                                          |
+| DOCS-PUB-04  | 36    | Pending                                                          |
+| DOCS-PUB-05  | 35    | Pending                                                          |
+| DOCS-API-01  | 35    | Pending                                                          |
+| DOCS-API-02  | 35    | Pending                                                          |
+| DOCS-API-03  | 35    | Pending                                                          |
+| DOCS-API-04  | 35    | Pending                                                          |
+| DOCS-API-05  | 35    | Pending                                                          |
+| DOCS-API-06  | 35    | Pending                                                          |
+| DOCS-API-07  | 35    | Pending                                                          |
 
 **Coverage:**
 
