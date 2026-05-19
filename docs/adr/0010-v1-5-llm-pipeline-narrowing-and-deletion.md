@@ -75,7 +75,7 @@ LLM_V3_CONCURRENCY=12 LLM_BATCH_SIZE=2 LLM_BATCH_TIMEOUT_MS=90000
 
 - 7-day cron-stability watch on tuned defaults → Phase 31 (LLM-RELI-06)
 - Eval-harness ground-truth fixture bundling fix (blocker for D-03 correctness gate) → Phase 31 prerequisite or follow-up plan
-- `events:llm:v3:partial` retirement → Phase 34 (SIMPLIFY-02)
+- `events:llm:v3:partial` retirement → Phase 35 (SIMPLIFY-02)
 - Per-batch adaptive sizing (`V3_ADAPTIVE_BATCH`) — deferred until Phase 31 data argues for it
 - Diff-filter cache-key mismatch (Run 2 surfaced that cached event ids carry `llm-v3-grp-` prefix but group keys do not, so the cron re-processes everything) — surfaced in Plan 06 SUMMARY; follow-up plan TBD
 
@@ -95,7 +95,7 @@ Re-tested OR free-tier 2026-05-17 via `scripts/probe-openrouter.ts`: 27/30 rate_
 - Paid-OR conversion (~$0.04/day = ~$1.20/mo for full coverage; seed Q4).
 - Adaptive Retry-After-aware NIM limiter (Phase 30 D-01's `retryAfterMs` field is already on `callHistory` — wire it into `nvidiaNimWindow` so post-429 calls wait the server-requested duration).
 - NIM model switch to a lower-cap-friendly variant (would require fresh bake-off vs Phase 27.4.1's qwen-235b lock).
-- Dashboard surface for cascade-degraded state (its own phase; overlaps Phase 32 + Phase 34).
+- Dashboard surface for cascade-degraded state (its own phase; overlaps Phase 32 + Phase 35).
 - Re-run `scripts/probe-openrouter.ts` quarterly to catch envelope improvements that would unlock the free-tier restore.
 
 **Architecture-level numbers** (probe + percentages + cascade decision): [`docs/architecture/llm-pipeline-reliability.md`](../architecture/llm-pipeline-reliability.md#cascade-reality-phase-301-2026-05-17). This sub-block records the **decision**; the architecture doc records the **measurement** (mirrors the Phase 30 sub-block convention).

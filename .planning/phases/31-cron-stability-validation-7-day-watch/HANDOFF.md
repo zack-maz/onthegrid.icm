@@ -205,7 +205,7 @@ npm run watch:snapshot -- --http --notes='Day-N natural cron'
 
 - Phase 31.1 (gap closure if needed) — only fires if Day-N FAILs and can't recover.
 - Phase 32 (Ghost Event URL Liveness) — independent of LLM-RELI track, can run in parallel.
-- Phase 36 (ADR-0009 + acceptance gate closeout) — milestone-close gate; needs the prod-connectivity-audit to exit-0 + `allTiersGreen=true` for 3 consecutive runs (LLM-RELI-07).
+- Phase 37 (ADR-0009 + acceptance gate closeout) — milestone-close gate; needs the prod-connectivity-audit to exit-0 + `allTiersGreen=true` for 3 consecutive runs (LLM-RELI-07).
 
 ---
 

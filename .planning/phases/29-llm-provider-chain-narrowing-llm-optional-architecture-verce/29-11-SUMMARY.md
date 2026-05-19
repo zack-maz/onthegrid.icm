@@ -14,7 +14,7 @@ affects:
 tech-stack:
   added: []
   patterns:
-    - "ADR stub with `<expand_at_36>` marker — preserves the Michael Nygard short-template skeleton (Status / Date / Deciders / Context / Decision / Consequences / Alternatives / References) while explicitly flagging that the milestone-close rationale is deferred to Phase 36 (the v1.5 milestone-close phase). Phase 36 fills the marker site once the deletion outcomes (bundle size, incident rate, rollback usage) are observable in production. Mirrors the pattern from ADR-0005's Superseded-status amendment workflow — capture-the-decision-now, fill-the-retrospective-later."
+    - "ADR stub with `<expand_at_36>` marker — preserves the Michael Nygard short-template skeleton (Status / Date / Deciders / Context / Decision / Consequences / Alternatives / References) while explicitly flagging that the milestone-close rationale is deferred to Phase 37 (the v1.5 milestone-close phase). Phase 37 fills the marker site once the deletion outcomes (bundle size, incident rate, rollback usage) are observable in production. Mirrors the pattern from ADR-0005's Superseded-status amendment workflow — capture-the-decision-now, fill-the-retrospective-later."
     - 'ADR-numbering pitfall-fix audit trail — RESEARCH.md Pitfall 1 found that the CONTEXT-specified slot 0009 was already taken by the Accepted two-key-split ADR from Phase 27.4.1 (Accepted 2026-04-24). Plan 02 had already renamed all upstream references (CONTEXT / REQUIREMENTS / ROADMAP) to ADR-0010 before Plan 11 ran, so the ADR file landed at 0010 with no rework. The lesson: ADR numbers are global and must be checked against existing files before reservation, not against milestone-internal counters.'
     - 'Index-table column-shape preservation — the plan task hypothesized 4 columns (ADR / Title / Status / Date) but the actual README index has 3 (no Date column). Wrote against the actual file structure, not the hypothesis. Same discipline as the W5 "preserve runtime over documented spec" pattern from Phase 28.1.'
 key-files:
@@ -47,7 +47,7 @@ metrics:
 
 # Phase 29 Plan 11: Add ADR-0010 Stub for v1+v2 Retirement — Summary
 
-D-03 executed: the v1.5 LLM pipeline narrowing + deletion decisions now have a permanent ADR home. Stub structure landed; Phase 36 will fill the `<expand_at_36>` marker with milestone-close rationale once the deletion outcomes are observable in production.
+D-03 executed: the v1.5 LLM pipeline narrowing + deletion decisions now have a permanent ADR home. Stub structure landed; Phase 37 will fill the `<expand_at_36>` marker with milestone-close rationale once the deletion outcomes are observable in production.
 
 ## What landed
 
@@ -66,13 +66,13 @@ Inspected `docs/adr/template.md`, `docs/adr/0009-two-key-split-for-llm-partial-p
 119-line ADR stub with:
 
 - **Header:** Status `Accepted`, Date `2026-05-11`, Deciders `solo author`.
-- **Context (16 lines):** Cascade-drift problem framing — 4 providers configured but only 2 used; ~2 weeks of stable v3 production made the Phase 27.4 D-26/D-40 deep-rollback preservation no longer earn its keep. Includes a paragraph anchoring Phase 29 as "the first phase of the v1.5 milestone" so future readers can follow the Phase 29 → Phase 36 expansion thread.
+- **Context (16 lines):** Cascade-drift problem framing — 4 providers configured but only 2 used; ~2 weeks of stable v3 production made the Phase 27.4 D-26/D-40 deep-rollback preservation no longer earn its keep. Includes a paragraph anchoring Phase 29 as "the first phase of the v1.5 milestone" so future readers can follow the Phase 29 → Phase 37 expansion thread.
 - **Decision (4 numbered items):**
   1. Narrow the active cascade. Cerebras + Groq removed from `server/adapters/llm-provider.ts` runtime path; adapter source files left importable for emergency-only reference.
   2. Delete v1 + v2 extractor modules. Lists the deleted files (`llmEventExtractor.v1.ts`, `llmEventExtractor.v2.ts`), Redis cache keys (`events:llm`, `events:llm:v2`, `events:llm:v2:partial`, `events:llm-summary`, `events:llm-summary:v2`), pipeline-version toggle (`isPipelineV2`, `setPipelineOverride`, `events:llm-pipeline-override` key + endpoint), and the Pitfall 1 bridge that read them. Collapses cache bridge to "serve `events:llm:v3` or raw GDELT."
   3. Prove the LLM-optional architecture. Integration test + runbook procedure.
   4. Vercel Pro upgrade landed in the same phase. 800s maxDuration ceiling unblocks subsequent v1.5 phases (30, 31).
-- **`<expand_at_36>` marker** placed before the Consequences section. Phase 36 will fill milestone-close rationale at this site.
+- **`<expand_at_36>` marker** placed before the Consequences section. Phase 37 will fill milestone-close rationale at this site.
 - **Consequences (positive / negative / neutral):** Scaffolded with 3 bullets per category. Positive: smaller bundle, simpler rollback, obvious active-code-path. Negative: Phase 27.4 D-26/D-40 lock superseded; ADR-0009 partially historical (v2 keys are deletion targets, but writer/reader-shape-isolation principle preserved in v3 partial-key pattern). Neutral: `shouldPauseNewEvents()` soft-cap pause becomes unreachable, documented as Phase 30 cleanup.
 - **Alternatives Considered:** 2 rejected options.
   - Archive v1.ts + v2.ts to `attic/` — rejected per CONTEXT D-02 (archived code creates the same triage burden as preserved code; git history is the archive).
@@ -94,7 +94,7 @@ Two edits to the worktree's `docs/adr/README.md`:
 
    Column alignment matches the existing rows (Markdown pads to nominal width).
 
-2. **One-line summary entry appended** after the ADR-0009 summary, before the Conventions section. Captures the 4 v1.5 narrowing decisions in one paragraph + flags that Phase 36 will expand the `<expand_at_36>` marker.
+2. **One-line summary entry appended** after the ADR-0009 summary, before the Conventions section. Captures the 4 v1.5 narrowing decisions in one paragraph + flags that Phase 37 will expand the `<expand_at_36>` marker.
 
 Acceptance: `grep -c "0010" docs/adr/README.md` → 2 (table row + summary); `grep -c "v1.5 LLM pipeline narrowing and deletion" docs/adr/README.md` → 2 (title + summary heading).
 
@@ -179,13 +179,13 @@ Self-check: PASSED
 - File `docs/adr/README.md` exists — **FOUND**.
 - Commit `f1ca45a` in git log — **FOUND**.
 
-## What Phase 36 picks up
+## What Phase 37 picks up
 
-The `<expand_at_36>` marker sits at line ~54 of the ADR, between Decision item 4 and the Consequences section. Phase 36 (the v1.5 milestone-close phase) will replace the marker with milestone-close rationale once the v1.5 deletion outcomes are observable in production:
+The `<expand_at_36>` marker sits at line ~54 of the ADR, between Decision item 4 and the Consequences section. Phase 37 (the v1.5 milestone-close phase) will replace the marker with milestone-close rationale once the v1.5 deletion outcomes are observable in production:
 
 - Bundle-size delta (LOC removed across Plans 04 / 07 / 08 / 10 — known approximately, but the final compound number is more useful than the per-plan deltas).
 - Incident rate during the v1.5 window (whether any incident required the new `git revert <Phase 29 range>` rollback path, validating or refuting D-02's "git history is the archive" claim).
-- Whether the LLM-optional integration test (Plan 03 / 04 / 09) caught any drift during v1.5 phases 30-35.
+- Whether the LLM-optional integration test (Plan 03 / 04 / 09) caught any drift during v1.5 phases 30-36.
 - Whether the Vercel Pro 800s maxDuration ceiling actually unblocked the v1.5 work it was supposed to (Phases 30, 31).
 
-Phase 36 also fills the `References → Commit range: <filled in at PR merge time>` placeholder with the actual git range — likely the Phase 29 merge commit range from `0aa1c0c` to whatever commit closes out v1.5 SIMPLIFY-06.
+Phase 37 also fills the `References → Commit range: <filled in at PR merge time>` placeholder with the actual git range — likely the Phase 29 merge commit range from `0aa1c0c` to whatever commit closes out v1.5 SIMPLIFY-06.

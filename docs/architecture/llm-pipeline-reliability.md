@@ -86,9 +86,9 @@ export LLM_BATCH_TIMEOUT_MS=90000
 
 **Audit signal:** Redis `events:llm:v3` SET-call count per cron run dropped from **~22 (pre-Plan-03)** to **1 (post-Plan-03)** — approximately a **95% reduction**. Calculation: at Run 2's observed `batchCount = 213`, the prior `LLM_FLUSH_EVERY_N_BATCHES=10` cadence triggered `floor(213 / 10) = 21` intermediate flushes plus 1 terminal write = 22 SETs per cron. Post-Plan-03 the sole terminal write at end-of-pipeline is the only SET on this key.
 
-**What stays:** the `mergeAndPersistLlmEntities` helper itself (called once at end-of-run, `server/lib/llmExtractionPipeline.ts:389` post-deletion). `events:llm:v3:partial` observability key writes inside the v3 extractor's `writePartialCache` stay (owned by SIMPLIFY-02 in Phase 34).
+**What stays:** the `mergeAndPersistLlmEntities` helper itself (called once at end-of-run, `server/lib/llmExtractionPipeline.ts:389` post-deletion). `events:llm:v3:partial` observability key writes inside the v3 extractor's `writePartialCache` stay (owned by SIMPLIFY-02 in Phase 35).
 
-**LOC delta:** -92 LOC across `server/lib/llmExtractionPipeline.ts` (-86), `server/config.ts` (-1 net), `.env.example` (-5). Feeds Phase 34 SIMPLIFY-07's cumulative v1.5 bundle delta.
+**LOC delta:** -92 LOC across `server/lib/llmExtractionPipeline.ts` (-86), `server/config.ts` (-1 net), `.env.example` (-5). Feeds Phase 35 SIMPLIFY-07's cumulative v1.5 bundle delta.
 
 ### SIMPLIFY-03 — Watchdog soft-warn tier (Phase 28.2.5 → eliminated Phase 30)
 
@@ -167,4 +167,4 @@ Full closing rationale: [`.planning/phases/31-cron-stability-validation-7-day-wa
 
 ### What the early close costs
 
-Single-day evidence cannot rule out failure modes that recur on a multi-day cadence (NIM throttle cycles correlated with day-of-week, monthly quota resets, etc.). The 7-day bar was designed to catch those. The early-close decision accepts that risk in exchange for unblocking downstream phase work; Phase 36's acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0 + `allTiersGreen=true`) remains the mechanical reliability check at v1.5 close and is unaffected.
+Single-day evidence cannot rule out failure modes that recur on a multi-day cadence (NIM throttle cycles correlated with day-of-week, monthly quota resets, etc.). The 7-day bar was designed to catch those. The early-close decision accepts that risk in exchange for unblocking downstream phase work; Phase 37's acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0 + `allTiersGreen=true`) remains the mechanical reliability check at v1.5 close and is unaffected.

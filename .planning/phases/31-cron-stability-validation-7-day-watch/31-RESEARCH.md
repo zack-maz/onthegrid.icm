@@ -61,8 +61,8 @@ The watch's observability surface is fully reachable today — `events:llm-summa
 - Dashboard surface for cascade-degraded state — Phase 32 / 34 overlap
 - DLQ-threshold alert key — same dashboard phase candidate
 - GitHub Actions automated snapshot + auto-issue — out of scope (manual operator workflow chosen)
-- ADR-0010 `<expand_at_36>` write — Phase 36 hand-off
-- LLM-RELI-07 (3× consecutive prod-connectivity-audit) — Phase 36 acceptance gate
+- ADR-0010 `<expand_at_36>` write — Phase 37 hand-off
+- LLM-RELI-07 (3× consecutive prod-connectivity-audit) — Phase 37 acceptance gate
 - Provider expansion / paid OR / NIM model switch — out of v1.5 per PROJECT.md
 
 ## Phase Requirements
@@ -677,7 +677,7 @@ Operator wires `npm run watch:snapshot` into a daily shell alias; non-zero exit 
 
 ### Risk 2: Contract-test drift mid-watch
 
-**Surface:** The `watch-log.json` row schema is the single most permanent artifact of Phase 31 (per CONTEXT D-08 + CONTEXT specifics: _"Phase 36 ADR-0010 expansion reads it, future quarterly OR re-probes compare against it, any v1.6 acceptance-gate audit cites it"_). Changing the schema mid-watch breaks the timeseries.
+**Surface:** The `watch-log.json` row schema is the single most permanent artifact of Phase 31 (per CONTEXT D-08 + CONTEXT specifics: _"Phase 37 ADR-0010 expansion reads it, future quarterly OR re-probes compare against it, any v1.6 acceptance-gate audit cites it"_). Changing the schema mid-watch breaks the timeseries.
 
 **Mitigation:**
 

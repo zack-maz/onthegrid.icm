@@ -15,9 +15,9 @@ Empirically measure NIM's throttle behavior on the new Vercel Pro 800s `maxDurat
 - 7-day cron-stability watch on the tuned defaults → Phase 31 (LLM-RELI-06)
 - Ghost event URL liveness / dashboard / prune → Phase 32 (GHOST-01..05)
 - Actor metadata audit / canonical catalog / eval expansion → Phase 33 (ACTOR-01..05)
-- JSDoc audit, Redis registry verification, key inventory, budget delta, `events:llm:v3:partial` retirement (SIMPLIFY-02), `freeClaudeRouter.ts` orphan audit (SIMPLIFY-05), bundle-size delta (SIMPLIFY-07) → Phase 34
-- Public docs sweep + OpenAPI additions → Phase 35
-- Full ADR-0010 + acceptance gate closeout → Phase 36 (DOCS-PUB-04, LLM-RELI-07)
+- JSDoc audit, Redis registry verification, key inventory, budget delta, `events:llm:v3:partial` retirement (SIMPLIFY-02), `freeClaudeRouter.ts` orphan audit (SIMPLIFY-05), bundle-size delta (SIMPLIFY-07) → Phase 35
+- Public docs sweep + OpenAPI additions → Phase 36
+- Full ADR-0010 + acceptance gate closeout → Phase 37 (DOCS-PUB-04, LLM-RELI-07)
 - Provider expansion or v4 router — explicitly out of scope for v1.5 (`PROJECT.md`)
 - Per-batch adaptive sizing — defer until Phase 31 data argues for it
 
@@ -27,7 +27,7 @@ Empirically measure NIM's throttle behavior on the new Vercel Pro 800s `maxDurat
 - Active cascade is NIM (primary) + OpenRouter (fallback) only (Phase 29 D-01). v1/v2 extractors deleted (Phase 29 D-02).
 - Pitfall 1 cache bridge (`server/routes/events.ts`) must NOT regress — `docs/degradation.md` "map never goes blank" contract is invariant.
 - Atomic-per-decision commit discipline: each D-N below lands as a separate commit so `git revert` is surgical.
-- ADR-0010 stub at `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` has an `<expand_at_36>` marker; Phase 30 appends its numbers + rationale to that section. Full ADR closes at Phase 36.
+- ADR-0010 stub at `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` has an `<expand_at_36>` marker; Phase 30 appends its numbers + rationale to that section. Full ADR closes at Phase 37.
 - `logger.child({ module: '...' })` for any new code, never `console.*` (Phase 28.1 W7 convention).
 - TypeScript pinned to ~5.9.3 (CLAUDE.md / Phase 29 convention).
 
@@ -44,7 +44,7 @@ Empirically measure NIM's throttle behavior on the new Vercel Pro 800s `maxDurat
   - Recovery interval (time between the last 429 and the first subsequent 200)
   - Per-batch latency p50 + p95 (for analytical concurrency math in D-02)
   - Watchdog hard-kill count (sanity check on the new defaults from D-04)
-    Script output is a JSON blob + a Markdown table that gets pasted into `docs/architecture/llm-pipeline-reliability.md` (D-03). Lowest LOC; single source of truth; auditable by re-running the script against the same summary. **Rationale for rejecting a sidecar Redis key:** SIMPLIFY-02 is already arguing to retire `events:llm:v3:partial`; adding `events:llm-throttle:v3` would invite the same retirement debate in Phase 34. Phase 30 keeps the observability surface flat.
+    Script output is a JSON blob + a Markdown table that gets pasted into `docs/architecture/llm-pipeline-reliability.md` (D-03). Lowest LOC; single source of truth; auditable by re-running the script against the same summary. **Rationale for rejecting a sidecar Redis key:** SIMPLIFY-02 is already arguing to retire `events:llm:v3:partial`; adding `events:llm-throttle:v3` would invite the same retirement debate in Phase 35. Phase 30 keeps the observability surface flat.
 
 ### Tuning Method (LLM-RELI-03, LLM-RELI-04)
 
@@ -68,7 +68,7 @@ Empirically measure NIM's throttle behavior on the new Vercel Pro 800s `maxDurat
 ### SIMPLIFY-01: Incremental Flush Retirement
 
 - **D-04: Single-pass deletion of `mergeAndPersistLlmEntities` from the `onBatchComplete` hot path; delete `LLM_FLUSH_EVERY_N_BATCHES` env var; keep the helper for the single end-of-run write.**
-  - `server/lib/llmExtractionPipeline.ts:334-405` — the `onBatchComplete` callback that calls `mergeAndPersistLlmEntities` every N batches → deleted; the callback shrinks to just the existing `writePartialCache` observability write (which Phase 34 / SIMPLIFY-02 retires separately).
+  - `server/lib/llmExtractionPipeline.ts:334-405` — the `onBatchComplete` callback that calls `mergeAndPersistLlmEntities` every N batches → deleted; the callback shrinks to just the existing `writePartialCache` observability write (which Phase 35 / SIMPLIFY-02 retires separately).
   - `server/lib/llmExtractionPipeline.ts:477` — the single end-of-run `mergeAndPersistLlmEntities` call stays; this is the canonical terminal write.
   - `server/lib/llmExtractionPipeline.ts:101-104` — `FLUSH_EVERY_N_BATCHES_DEFAULT = 10` constant + the `env.LLM_FLUSH_EVERY_N_BATCHES` parser → both deleted.
   - `.env.example` — `LLM_FLUSH_EVERY_N_BATCHES` block (currently lines ~137-141) → deleted with its commentary.
@@ -137,7 +137,7 @@ Empirically measure NIM's throttle behavior on the new Vercel Pro 800s `maxDurat
 
 - `server/lib/freeClaudeRouter.ts` — the actual NIM + OpenRouter call surface. Lines 65 (`BACKOFF_MS = [1000, 4000]`), 233-238 (jitter), 402-490 (retry loop, callHistory writes) are Phase 30's tuning targets. D-01 adds `retryAfterMs` to the callHistory schema here.
 - `server/adapters/llm-provider.ts` — thin compatibility shim post-Phase-29 (50 LOC). Phase 30 changes here are minimal — most tuning happens in the router.
-- `server/lib/llmEventExtractor.v3.ts` — the active extractor. Lines 80-83 (`BATCH_SIZE = 2` constant, promoted to env-tunable per D-07), 532-635 (batch loop with `withBatchWatchdog`), 632-633 + 955-956 (soft-warn arguments deleted by D-05). Lines 388-423 + 868-873 (partial cache writes — separate concern, owned by SIMPLIFY-02 in Phase 34).
+- `server/lib/llmEventExtractor.v3.ts` — the active extractor. Lines 80-83 (`BATCH_SIZE = 2` constant, promoted to env-tunable per D-07), 532-635 (batch loop with `withBatchWatchdog`), 632-633 + 955-956 (soft-warn arguments deleted by D-05). Lines 388-423 + 868-873 (partial cache writes — separate concern, owned by SIMPLIFY-02 in Phase 35).
 - `server/lib/llmExtractionPipeline.ts` — `runRefreshExtraction()`, the cron-only writer. Lines 70 (`PARTIAL_KEY_ACTIVE`), 84-103 (`BATCH_SIZE_ACTIVE`, `FLUSH_EVERY_N_BATCHES_DEFAULT` — deleted by D-04), 130-160 (`mergeAndPersistLlmEntities`), 322-405 (`onBatchComplete` callback — incremental flush deleted by D-04), 477 (terminal write, stays). The single end-of-run write is the canonical shape post-D-04.
 - `server/lib/llmExtractorWatchdog.ts` — `withBatchWatchdog`. Lines 34-55 + 97-109 + 135 are D-05's deletion targets (`softWarnMs`, `onSoftWarn`, `softWarnTimer`).
 - `server/lib/llmProgress.ts` — `LLMRunSummary` shape consumed by the analyzer (D-01). The analyzer reads `events:llm-summary:v3` written here.
@@ -232,12 +232,12 @@ Empirically measure NIM's throttle behavior on the new Vercel Pro 800s `maxDurat
 
 - **Provider-expansion or v4 router** — explicitly out of v1.5 (`PROJECT.md`). Phase 30 tunes the existing two-provider chain; it does not add a third.
 - **Per-batch adaptive sizing** — `V3_ADAPTIVE_BATCH=true` already exists as an opt-in flag (Phase 27.4.4 D-04). Phase 30 does NOT enable it by default. If Run 1 / Run 2 data argues for it, defer the flip to Phase 31 or a hotfix; out of scope here.
-- **`events:llm:v3:partial` retirement** — owned by SIMPLIFY-02 in Phase 34. D-04 deletes only the incremental-flush mechanism (SIMPLIFY-01); the partial-key observability writes stay in this phase.
-- **`freeClaudeRouter.ts` orphan caller audit** — owned by SIMPLIFY-05 in Phase 34.
+- **`events:llm:v3:partial` retirement** — owned by SIMPLIFY-02 in Phase 35. D-04 deletes only the incremental-flush mechanism (SIMPLIFY-01); the partial-key observability writes stay in this phase.
+- **`freeClaudeRouter.ts` orphan caller audit** — owned by SIMPLIFY-05 in Phase 35.
 - **CLAUDE.md "LLM Pipeline Reliability" subsection** — D-06 rejected this in favor of a dedicated `docs/architecture/` file. If Phase 31's 7-day watch reveals operators want the numbers in CLAUDE.md, revisit then; not now.
 - **Lineage-hash pre-filter (`V3_LINEAGE_PREFILTER`)** — separate Phase 27.4.4 opt-in. Out of scope.
 - **Adversarial eval gating** — D-03 observes adversarial scores without gating on them. If Phase 30 tuning destabilizes adversarial robustness, capture it as a Phase 33 input (actor catalog work).
-- **Bundle-size delta from SIMPLIFY-01 + SIMPLIFY-03** — Phase 34 SIMPLIFY-07 captures the cumulative v1.5 bundle delta. Phase 30 commits inform that measurement but do not measure it themselves.
+- **Bundle-size delta from SIMPLIFY-01 + SIMPLIFY-03** — Phase 35 SIMPLIFY-07 captures the cumulative v1.5 bundle delta. Phase 30 commits inform that measurement but do not measure it themselves.
 
 </deferred>
 

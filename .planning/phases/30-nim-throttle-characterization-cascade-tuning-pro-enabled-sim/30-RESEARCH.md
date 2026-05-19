@@ -38,9 +38,9 @@ All seven file paths and most line ranges in CONTEXT.md verified clean. **Two li
 - 7-day cron-stability watch (LLM-RELI-06) → Phase 31.
 - Ghost event URL liveness / dashboard / prune (GHOST-01..05) → Phase 32.
 - Actor metadata audit / canonical catalog / eval expansion (ACTOR-01..05) → Phase 33.
-- `events:llm:v3:partial` retirement (SIMPLIFY-02), JSDoc audit (DOCS-INT-02), Redis registry verification (DOCS-INT-03), bundle-size delta (SIMPLIFY-07), `freeClaudeRouter.ts` orphan audit (SIMPLIFY-05) → Phase 34.
-- Public docs sweep + OpenAPI additions → Phase 35.
-- Full ADR-0010 closeout + acceptance gate → Phase 36 (LLM-RELI-07).
+- `events:llm:v3:partial` retirement (SIMPLIFY-02), JSDoc audit (DOCS-INT-02), Redis registry verification (DOCS-INT-03), bundle-size delta (SIMPLIFY-07), `freeClaudeRouter.ts` orphan audit (SIMPLIFY-05) → Phase 35.
+- Public docs sweep + OpenAPI additions → Phase 36.
+- Full ADR-0010 closeout + acceptance gate → Phase 37 (LLM-RELI-07).
 - Provider expansion or v4 router (operator-rejected at v1.5 start).
 - Per-batch adaptive sizing — `V3_ADAPTIVE_BATCH=true` exists as opt-in but Phase 30 does NOT enable it by default. Defer to Phase 31 if data argues for it.
 - Lineage-hash pre-filter (`V3_LINEAGE_PREFILTER`) — separate Phase 27.4.4 opt-in, out of scope.
@@ -90,7 +90,7 @@ All seven file paths and most line ranges in CONTEXT.md verified clean. **Two li
 
 | Instead of                                                   | Could Use                                                       | Tradeoff                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/analyze-llm-run.ts` reading `events:llm-summary:v3` | New Redis sidecar key `events:llm-throttle:v3`                  | **Rejected by D-01** — SIMPLIFY-02 is already arguing to retire `events:llm:v3:partial`; new sidecar would invite the same retirement debate in Phase 34. Keep observability surface flat.                                                                                              |
+| `scripts/analyze-llm-run.ts` reading `events:llm-summary:v3` | New Redis sidecar key `events:llm-throttle:v3`                  | **Rejected by D-01** — SIMPLIFY-02 is already arguing to retire `events:llm:v3:partial`; new sidecar would invite the same retirement debate in Phase 35. Keep observability surface flat.                                                                                              |
 | Elim soft-warn entirely (D-05)                               | Relax soft-warn threshold from 60s to ~120s                     | **Rejected by D-05** — on Pro 800s ceiling, a 60s soft-warn at observed p50 batch latency ~27s is mostly noise; the historical signal it carried (Cerebras-running-slow) is gone with Cerebras (Phase 29 D-01). Soft-warn data is derivable post-run from analyzer's latency histogram. |
 | `LLM_BATCH_SIZE` env var (D-07)                              | Keep `BATCH_SIZE = 2` hard-coded; bake new value into the const | **Rejected by D-07 / LLM-RELI-03 wording** — the requirement names the env var canonically; operator override mid-incident is the established pattern (`LLM_V3_CONCURRENCY`, `LLM_BATCH_TIMEOUT_MS` both env-tunable).                                                                  |
 
@@ -305,13 +305,13 @@ The codebase uses numbered anti-patterns. Phase 30 plans must NOT violate any of
 
 | Problem                                        | Don't Build                                                                     | Use Instead                                                                                                                                                             | Why                                                                                                |
 | ---------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Per-attempt rate-limit instrumentation         | New `events:llm-throttle:v3` Redis sidecar key                                  | Add `retryAfterMs?` to existing `callHistory[]` rows (per D-01)                                                                                                         | Flat observability surface; no new retirement debate in Phase 34                                   |
+| Per-attempt rate-limit instrumentation         | New `events:llm-throttle:v3` Redis sidecar key                                  | Add `retryAfterMs?` to existing `callHistory[]` rows (per D-01)                                                                                                         | Flat observability surface; no new retirement debate in Phase 35                                   |
 | Pre-flight NIM probe                           | Synthetic 1-call NIM probe before Run 1 to "measure" throttle                   | The existing `prewarmIfCold()` at `freeClaudeRouter.ts:618-656` already fires a 1-token synthetic NIM call when idle > 60s. Run 1 is the measurement; don't preempt it. | Phase 29 RESEARCH explicitly proscribes pre-flight throttle probes in Phase 30.                    |
 | Eval baseline re-computation                   | Re-run `runEval()` with fresh extraction tokens to "verify" the Phase-29 anchor | Read `events:llm-eval-baseline:v3` (90d TTL, written Phase 29 around 2026-05-12, still live for ~85 more days)                                                          | Phase 27.4.2 Plan 06 established resolver-only eval as the inner-loop ergonomic — zero token spend |
 | Throttle-aware retry queue / token bucket      | Custom token-bucket scheduler that smooths NIM 40rpm cap                        | The existing `RollingWindow(40, 60_000)` at `freeClaudeRouter.ts:155` + per-provider `isAvailable` breaker at `llmCircuitBreaker.ts`                                    | Already implemented; D-02 just tunes the concurrency level that feeds these primitives             |
 | New Redis sidecar to log Run 1/Run 2 snapshots | Per-run telemetry key in Redis                                                  | JSON file at `.planning/phases/30-.../run-N-throttle-snapshot.json` committed alongside the run commit                                                                  | D-08 specifies the snapshot is a checked-in file (Commit 2 artifact) — git is the audit trail      |
 
-**Key insight:** Phase 30 is a deletion phase. The standing instinct to "build a new diagnostics surface" must be resisted; every new artifact is one more thing for Phase 34 to retire.
+**Key insight:** Phase 30 is a deletion phase. The standing instinct to "build a new diagnostics surface" must be resisted; every new artifact is one more thing for Phase 35 to retire.
 
 ## Runtime State Inventory
 
@@ -496,7 +496,7 @@ export interface LLMRunSummary {
 }
 ```
 
-**Note for the planner:** The `skipReason` enum currently includes `'watchdog-soft-warn'` at lines 99 and 334. D-05 deletion of the soft-warn tier means this enum value becomes unreachable. The planner should decide whether to (a) remove it from the schema in Commit 4 (cleaner), or (b) leave it for Phase 34's broader cleanup sweep. Recommendation: remove it atomically in Commit 4 since Commit 4 is already touching the soft-warn surface.
+**Note for the planner:** The `skipReason` enum currently includes `'watchdog-soft-warn'` at lines 99 and 334. D-05 deletion of the soft-warn tier means this enum value becomes unreachable. The planner should decide whether to (a) remove it from the schema in Commit 4 (cleaner), or (b) leave it for Phase 35's broader cleanup sweep. Recommendation: remove it atomically in Commit 4 since Commit 4 is already touching the soft-warn surface.
 
 ### Force-trigger entry point (Run 1 + Run 2)
 

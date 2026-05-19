@@ -69,7 +69,7 @@ const LLM_SUMMARY_KEY_ACTIVE = 'events:llm-summary:v3';
 // retired here when the periodic-flush callback (its sole reader) was
 // deleted. The `events:llm:v3:partial` observability key is still written
 // by the v3 extractor's writePartialCache — its retirement is owned by
-// SIMPLIFY-02 / Phase 34.
+// SIMPLIFY-02 / Phase 35.
 
 /** Redis key tracking the last LLM run start time (15-min cooldown). */
 const LLM_PROCESS_KEY = 'events:llm-process-ts';
@@ -331,7 +331,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
             // Phase 30 D-04 (SIMPLIFY-01): incremental flush retired. Terminal
             // write at the mergeAndPersistLlmEntities call below is canonical.
             // Partial-cache observability write stays in v3 extractor's
-            // writePartialCache (SIMPLIFY-02 / Phase 34).
+            // writePartialCache (SIMPLIFY-02 / Phase 35).
           },
         );
 

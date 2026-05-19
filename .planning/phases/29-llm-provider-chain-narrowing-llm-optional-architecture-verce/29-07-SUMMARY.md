@@ -208,7 +208,7 @@ feat(29-07): simplify Pitfall 1 cache bridge to v3 → raw GDELT only
 ## Documented carry-forward (Plan 08+ scope)
 
 - **`enrichedToEntities` deprecated alias.** Still present at events.ts:255 (`export const enrichedToEntities = enrichedV3ToEntities`). No active callers per Plan 29-06 SUMMARY. Phase 30 or later can delete.
-- **`saveDevLLMCacheV2` / `loadDevLLMCacheV2` misleading names.** Per CONTEXT D-02 / RESEARCH.md A7 the v2-suffixed devFileCache helpers are now used by the v3 pipeline. Rename deferred to Phase 34 (touches dev-fixture file format on disk).
+- **`saveDevLLMCacheV2` / `loadDevLLMCacheV2` misleading names.** Per CONTEXT D-02 / RESEARCH.md A7 the v2-suffixed devFileCache helpers are now used by the v3 pipeline. Rename deferred to Phase 35 (touches dev-fixture file format on disk).
 - **`docs/degradation.md` LLM-bridge section.** None exists today and the bridge simplification confirms the doc's framing remains correct (cache + upstream layers, not LLM-version-bridge layer). If a future operator adds an LLM-degradation subsection, it should describe the v3-only-bridge → raw-GDELT terminal fallback shape, NOT the pre-Phase-29 multi-tier chain.
 
 ## Verification

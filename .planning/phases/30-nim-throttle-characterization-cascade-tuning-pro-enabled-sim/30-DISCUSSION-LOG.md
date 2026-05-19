@@ -104,9 +104,9 @@
 
 - Provider expansion / v4 router — explicitly out of v1.5.
 - Per-batch adaptive sizing (`V3_ADAPTIVE_BATCH`) — defer until data argues.
-- `events:llm:v3:partial` retirement — Phase 34 SIMPLIFY-02.
-- `freeClaudeRouter.ts` orphan caller audit — Phase 34 SIMPLIFY-05.
+- `events:llm:v3:partial` retirement — Phase 35 SIMPLIFY-02.
+- `freeClaudeRouter.ts` orphan caller audit — Phase 35 SIMPLIFY-05.
 - CLAUDE.md "LLM Pipeline Reliability" subsection — revisit if Phase 31 watch demands it.
 - Lineage-hash pre-filter — separate flag, out of scope.
 - Adversarial eval gating — observed only this phase.
-- Bundle-size delta — Phase 34 SIMPLIFY-07 captures cumulative v1.5 delta.
+- Bundle-size delta — Phase 35 SIMPLIFY-07 captures cumulative v1.5 delta.

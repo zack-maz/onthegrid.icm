@@ -72,7 +72,7 @@ a function`. Split observability (`events:llm:v2:partial`) from
   `git revert <Phase 29 range>`. LLM-optional architecture proved by
   integration test + runbook procedure. Vercel Pro upgrade landed in
   the same phase so subsequent v1.5 phases tune against the 800s
-  maxDuration ceiling. Stub — Phase 36 will expand the milestone-close
+  maxDuration ceiling. Stub — Phase 37 will expand the milestone-close
   rationale at the `<expand_at_36>` marker.
 - **ADR-0011 — v3 LLM pipeline architecture.** The positive description
   of the pipeline that remains after ADR-0010's deletions. Six load-
