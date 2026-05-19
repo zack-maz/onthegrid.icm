@@ -43,7 +43,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { z } from 'zod';
 
@@ -249,6 +249,98 @@ async function readHealthStatus(healthUrl: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// HTTP adapter — avoids the Upstash-creds-locally requirement entirely.
+//
+// Reads everything the snapshot row needs from two Bearer- or public-gated
+// prod endpoints:
+//   1. `/api/events/llm-status` — gives the full LLMRunSummary including
+//      callHistory + evalScore + dlqRecent (DLQEntry[]) + dlqCount.
+//   2. `/api/health` — gives endpoints.llmEvents.status (the same field
+//      the Redis-mode reader uses) + endpoints.cronRefreshEvents.lastSuccessTs
+//      (= the bare Date.now() we'd otherwise read from
+//      `cron:lastTick:refresh-events`).
+//
+// Use this mode when the operator does not have prod Upstash creds in
+// `.env.local` (the default for any non-author since the Vercel Marketplace
+// integration injects them at runtime only, and `vercel env pull` returns
+// empty values for those keys). Phase 31-03-SUMMARY.md follow-up #1.
+// ---------------------------------------------------------------------------
+
+interface LlmStatusResponse {
+  lastRun?: {
+    batchCount?: number;
+    callHistory?: Array<{ provider?: string; skipReason?: string }>;
+    evalScore?: { within5km?: number; within20km?: number; within100km?: number; total?: number };
+  };
+  dlqRecent?: Array<{ reason?: string }>;
+  dlqCount?: number;
+}
+
+interface HttpSnapshotData {
+  summary: LLMRunSummary | null;
+  dlq: { count: number; reasons: Record<string, number> };
+  lastTickTs: number | null;
+  healthStatus: string;
+}
+
+async function readSnapshotDataViaHttp(baseUrl: string, bearer: string): Promise<HttpSnapshotData> {
+  const [statusRes, healthRes] = await Promise.all([
+    fetch(`${baseUrl.replace(/\/$/, '')}/api/events/llm-status`, {
+      headers: { Authorization: `Bearer ${bearer}` },
+    }),
+    fetch(`${baseUrl.replace(/\/$/, '')}/api/health`),
+  ]);
+  if (!statusRes.ok) {
+    throw new Error(
+      `/api/events/llm-status returned HTTP ${statusRes.status} ` +
+        `(check DASHBOARD_PASSWORD env or --bearer arg)`,
+    );
+  }
+  if (!healthRes.ok) {
+    throw new Error(`/api/health returned HTTP ${healthRes.status}`);
+  }
+  const statusBody = (await statusRes.json()) as LlmStatusResponse;
+  const healthBody = (await healthRes.json()) as {
+    endpoints?: {
+      llmEvents?: { status?: string };
+      cronRefreshEvents?: { lastSuccessTs?: number | null };
+    };
+  };
+
+  const healthStatus = healthBody.endpoints?.llmEvents?.status;
+  if (typeof healthStatus !== 'string' || healthStatus.length === 0) {
+    throw new Error('/api/health response missing endpoints.llmEvents.status');
+  }
+  const lastTickTs = healthBody.endpoints?.cronRefreshEvents?.lastSuccessTs ?? null;
+
+  // Build the DLQ histogram from dlqRecent. dlqCount is the authoritative total
+  // (may exceed dlqRecent.length since dlqRecent is capped at 50 per /llm-status).
+  const histogram: Record<string, number> = {};
+  for (const entry of statusBody.dlqRecent ?? []) {
+    const reason = entry.reason ?? 'unknown';
+    histogram[reason] = (histogram[reason] ?? 0) + 1;
+  }
+  const dlqCount = statusBody.dlqCount ?? statusBody.dlqRecent?.length ?? 0;
+
+  // Project the run summary onto the LLMRunSummary shape the rest of main()
+  // already consumes. Missing fields are OK — main() only reads callHistory
+  // (for breakerTrips), batchCount, and evalScore.
+  const lr = statusBody.lastRun ?? {};
+  const summary = {
+    batchCount: lr.batchCount ?? 0,
+    callHistory: lr.callHistory ?? [],
+    evalScore: lr.evalScore,
+  } as unknown as LLMRunSummary;
+
+  return {
+    summary,
+    dlq: { count: dlqCount, reasons: histogram },
+    lastTickTs: typeof lastTickTs === 'number' ? lastTickTs : null,
+    healthStatus,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Watch-log persistence
 // ---------------------------------------------------------------------------
 
@@ -345,22 +437,39 @@ function renderMarkdownTable(rows: WatchRow[]): string {
 async function main(): Promise<void> {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log(
-      'Usage: npm run watch:snapshot -- [--tick-date=YYYY-MM-DD] [--force] [--notes="..."] [--health-url=...]',
+      'Usage: npm run watch:snapshot -- [--tick-date=YYYY-MM-DD] [--force] [--notes="..."] [--http] [--base-url=...] [--bearer=...] [--health-url=...]',
     );
     console.log('Exit codes: 0=PASS, 1=FAIL, 2=GAP, 99=script error.');
+    console.log('Modes:');
     console.log(
-      'Env: SNAPSHOT_HEALTH_URL overrides --health-url default of https://otg-iran-monitor.vercel.app/api/health',
+      '  redis (default) — reads events:llm-summary:v3 + events:llm-dlq + cron:lastTick:refresh-events from Upstash via .env.local creds.',
     );
+    console.log(
+      '  http (--http or SNAPSHOT_MODE=http) — reads /api/events/llm-status (Bearer-gated) + /api/health from --base-url. Use when prod Upstash creds are not in .env.local (Marketplace integration injects them at runtime only).',
+    );
+    console.log('Env:');
+    console.log(
+      '  SNAPSHOT_HEALTH_URL — overrides redis-mode /api/health URL (default: https://otg-iran-monitor.vercel.app/api/health).',
+    );
+    console.log(
+      '  SNAPSHOT_BASE_URL   — overrides http-mode base URL (default: https://otg-iran-monitor.vercel.app).',
+    );
+    console.log('  DASHBOARD_PASSWORD  — Bearer used in http-mode for /api/events/llm-status.');
     process.exit(0);
   }
 
   const tickDateArg = parseArg('tick-date');
   const force = process.argv.includes('--force');
   const notesArg = parseArg('notes') ?? '';
+  const mode: 'redis' | 'http' =
+    process.argv.includes('--http') || process.env.SNAPSHOT_MODE === 'http' ? 'http' : 'redis';
   const healthUrl =
     parseArg('health-url') ??
     process.env.SNAPSHOT_HEALTH_URL ??
     'https://otg-iran-monitor.vercel.app/api/health';
+  const baseUrl =
+    parseArg('base-url') ?? process.env.SNAPSHOT_BASE_URL ?? 'https://otg-iran-monitor.vercel.app';
+  const bearer = parseArg('bearer') ?? process.env.DASHBOARD_PASSWORD ?? '';
 
   const tickDate = tickDateArg ?? isoDate(new Date());
   const snapshotAt = new Date().toISOString();
@@ -378,12 +487,29 @@ async function main(): Promise<void> {
     }
   }
 
-  // Read the four data sources for the CURRENT tick.
-  const summary =
-    (await cacheGetSafe<LLMRunSummary>('events:llm-summary:v3', 999_999_999))?.data ?? null;
-  const dlq = await readDlqHistogram();
-  const lastTickTs = await readLastTickTs();
-  const healthStatus = await readHealthStatus(healthUrl);
+  // Read the four data sources for the CURRENT tick — branching on mode.
+  let summary: LLMRunSummary | null;
+  let dlq: { count: number; reasons: Record<string, number> };
+  let lastTickTs: number | null;
+  let healthStatus: string;
+  if (mode === 'http') {
+    if (!bearer) {
+      throw new Error(
+        '--http mode requires DASHBOARD_PASSWORD env (or --bearer arg) for /api/events/llm-status',
+      );
+    }
+    const httpData = await readSnapshotDataViaHttp(baseUrl, bearer);
+    summary = httpData.summary;
+    dlq = httpData.dlq;
+    lastTickTs = httpData.lastTickTs;
+    healthStatus = httpData.healthStatus;
+  } else {
+    summary =
+      (await cacheGetSafe<LLMRunSummary>('events:llm-summary:v3', 999_999_999))?.data ?? null;
+    dlq = await readDlqHistogram();
+    lastTickTs = await readLastTickTs();
+    healthStatus = await readHealthStatus(healthUrl);
+  }
 
   const callHistory = summary?.callHistory ?? [];
   const breakerTrips = callHistory.filter((c) => c.skipReason === 'breaker').length;
@@ -463,12 +589,22 @@ async function main(): Promise<void> {
   process.exit(exitCode);
 }
 
-main().catch((err) => {
-  console.error(err);
-  try {
-    if (existsSync(TMP_PATH)) unlinkSync(TMP_PATH);
-  } catch {
-    /* swallow */
-  }
-  process.exit(99);
-});
+// Only run main() when invoked directly via CLI (e.g. `npm run watch:snapshot`
+// or `tsx scripts/snapshot-cron-watch.ts`). Skip when this module is imported
+// for its exports (schemas, classifyTick, consecutivePassCount) — e.g. by
+// contract tests, the dashboard, or other scripts. Phase 31-03-SUMMARY.md
+// follow-up #2.
+const __isDirectInvocation =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (__isDirectInvocation) {
+  main().catch((err) => {
+    console.error(err);
+    try {
+      if (existsSync(TMP_PATH)) unlinkSync(TMP_PATH);
+    } catch {
+      /* swallow */
+    }
+    process.exit(99);
+  });
+}
