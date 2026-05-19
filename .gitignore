@@ -58,3 +58,6 @@ tmp/
 
 # Claude Code per-session state (agent worktrees, local settings, scheduled-task locks)
 .claude/
+
+# Phase 31 D-02 fix-forward — eval fixtures copied from .planning/eval/ at build time
+api/_eval/

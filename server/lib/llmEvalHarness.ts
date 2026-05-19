@@ -45,8 +45,24 @@ const log = logger.child({ module: 'llm-eval-harness' });
 
 // Module-relative path to the curated ground-truth file committed in Task 1
 // of this plan. Matches the path used at commit time (0c5ec8c).
+//
+// Phase 31 D-02 fix-forward: vercel.json `includeFiles` cannot bundle the
+// `.planning/eval/*.json` fixtures into the serverless function (the bundler
+// silently skips dotfile-prefixed directories regardless of glob form). The
+// build step copies the fixtures to `api/_eval/*.json`; in the deployed
+// function `__dirname` is `<lambda>/api`, so `./_eval/...` resolves cleanly.
+// For local dev (`tsx` from source) the original `../../.planning/eval/...`
+// path still works. We probe both candidates and pick whichever exists.
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const GROUND_TRUTH_PATH = resolve(__dirname, '../../.planning/eval/ground-truth-events.json');
+const GROUND_TRUTH_CANDIDATES = [
+  resolve(__dirname, '../../.planning/eval/ground-truth-events.json'), // dev (tsx src)
+  resolve(__dirname, '_eval/ground-truth-events.json'), // prod (api/_eval/ bundled)
+];
+/** Probed lazily inside loadGroundTruth() so module load stays side-effect-free
+ *  (tests mock `node:fs` via vi.mock + a vi.fn() defined later in the file). */
+function resolveGroundTruthPath(): string {
+  return GROUND_TRUTH_CANDIDATES.find((p) => existsSync(p)) ?? GROUND_TRUTH_CANDIDATES[0]!;
+}
 
 /** Redis key for the eval baseline — survives pipeline cold starts so
  *  DevApiStatus + the /llm-status endpoint can render a reference score
@@ -125,28 +141,29 @@ let cachedGroundTruth: GroundTruthFile | null | undefined = undefined;
 export function loadGroundTruth(): GroundTruthFile | null {
   if (cachedGroundTruth !== undefined) return cachedGroundTruth;
 
+  const groundTruthPath = resolveGroundTruthPath();
   try {
-    if (!existsSync(GROUND_TRUTH_PATH)) {
+    if (!existsSync(groundTruthPath)) {
       log.info(
-        { path: GROUND_TRUTH_PATH },
+        { path: groundTruthPath },
         'ground-truth file absent; eval harness will report zeros',
       );
       cachedGroundTruth = null;
       return null;
     }
 
-    const raw = readFileSync(GROUND_TRUTH_PATH, 'utf-8');
+    const raw = readFileSync(groundTruthPath, 'utf-8');
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      log.warn({ err: parseErr, path: GROUND_TRUTH_PATH }, 'ground-truth JSON parse failed');
+      log.warn({ err: parseErr, path: groundTruthPath }, 'ground-truth JSON parse failed');
       cachedGroundTruth = null;
       return null;
     }
 
     if (!isValidGroundTruth(parsed)) {
-      log.warn({ path: GROUND_TRUTH_PATH }, 'ground-truth failed structural validation');
+      log.warn({ path: groundTruthPath }, 'ground-truth failed structural validation');
       cachedGroundTruth = null;
       return null;
     }
@@ -158,7 +175,7 @@ export function loadGroundTruth(): GroundTruthFile | null {
     );
     return parsed;
   } catch (err) {
-    log.warn({ err, path: GROUND_TRUTH_PATH }, 'failed to load ground-truth file');
+    log.warn({ err, path: groundTruthPath }, 'failed to load ground-truth file');
     cachedGroundTruth = null;
     return null;
   }
@@ -317,11 +334,19 @@ export async function runEval(opts: { model?: string } = {}): Promise<EvalScore>
 // Redis sidecar to render `Prompt-injection robustness: blocked/total`.
 // ---------------------------------------------------------------------------
 
-/** Path to the adversarial fixture, sibling of GROUND_TRUTH_PATH. */
-const ADVERSARIAL_FIXTURE_PATH = resolve(
-  __dirname,
-  '../../.planning/eval/adversarial-injections.json',
-);
+/** Path to the adversarial fixture, sibling of GROUND_TRUTH_CANDIDATES.
+ *  Phase 31 D-02 fix-forward: same dual-candidate probe pattern as
+ *  resolveGroundTruthPath (see note above). Lazy so module load is
+ *  side-effect-free for vi.mock('node:fs', ...). */
+const ADVERSARIAL_FIXTURE_CANDIDATES = [
+  resolve(__dirname, '../../.planning/eval/adversarial-injections.json'), // dev
+  resolve(__dirname, '_eval/adversarial-injections.json'), // prod bundled
+];
+function resolveAdversarialFixturePath(): string {
+  return (
+    ADVERSARIAL_FIXTURE_CANDIDATES.find((p) => existsSync(p)) ?? ADVERSARIAL_FIXTURE_CANDIDATES[0]!
+  );
+}
 
 /** Redis key for the adversarial sub-eval result. Mirrors BASELINE_KEY's
  *  v3 cache-version-bump pattern. */
@@ -389,29 +414,24 @@ export function __resetAdversarialCacheForTests(): void {
 function loadAdversarialFixture(): AdversarialFixture | null {
   if (cachedAdversarialFixture !== undefined) return cachedAdversarialFixture;
 
+  const fixturePath = resolveAdversarialFixturePath();
   try {
-    if (!existsSync(ADVERSARIAL_FIXTURE_PATH)) {
-      log.info(
-        { path: ADVERSARIAL_FIXTURE_PATH },
-        'adversarial fixture absent; sub-eval will report skipped',
-      );
+    if (!existsSync(fixturePath)) {
+      log.info({ path: fixturePath }, 'adversarial fixture absent; sub-eval will report skipped');
       cachedAdversarialFixture = null;
       return null;
     }
-    const raw = readFileSync(ADVERSARIAL_FIXTURE_PATH, 'utf-8');
+    const raw = readFileSync(fixturePath, 'utf-8');
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.entries)) {
-      log.warn(
-        { path: ADVERSARIAL_FIXTURE_PATH },
-        'adversarial fixture failed structural validation',
-      );
+      log.warn({ path: fixturePath }, 'adversarial fixture failed structural validation');
       cachedAdversarialFixture = null;
       return null;
     }
     cachedAdversarialFixture = parsed as AdversarialFixture;
     return cachedAdversarialFixture;
   } catch (err) {
-    log.warn({ err, path: ADVERSARIAL_FIXTURE_PATH }, 'failed to load adversarial fixture');
+    log.warn({ err, path: fixturePath }, 'failed to load adversarial fixture');
     cachedAdversarialFixture = null;
     return null;
   }
