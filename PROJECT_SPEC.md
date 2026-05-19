@@ -1,4 +1,4 @@
-# Iran Conflict Monitor — Project Specification
+# Iran Monitor — Project Specification
 
 ## Overview
 

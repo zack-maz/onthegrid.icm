@@ -6,7 +6,7 @@
 
 ## Context
 
-The core product value of the Iran Conflict Monitor is a live map of
+The core product value of the Iran Monitor is a live map of
 conflict-related events in the Greater Middle East. "Numbers over
 narratives" requires a stream of geocoded events with timestamps,
 event types, and counts — not a curated news feed.

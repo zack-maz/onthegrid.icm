@@ -1,4 +1,4 @@
-# Requirements: Iran Conflict Monitor — v1.5
+# Requirements: Iran Monitor — v1.5
 
 **Defined:** 2026-05-09
 **Milestone:** v1.5 LLM Reliability & Reveal Prep

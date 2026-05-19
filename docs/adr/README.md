@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 This directory contains the Architecture Decision Records (ADRs) for the
-Iran Conflict Monitor. An ADR captures a single significant architectural
+Iran Monitor. An ADR captures a single significant architectural
 or technical decision — the context that motivated it, the decision
 itself, and the consequences (positive, negative, and neutral) that
 followed. The goal is not to document _every_ design choice, but to
@@ -128,7 +128,7 @@ do not.
 
 ---
 
-_These ADRs document decisions made during the Iran Conflict Monitor
+_These ADRs document decisions made during the Iran Monitor
 project (phases 13 through 26.4). They are written in retrospect for
 phases that predate this directory; new decisions from 26.4 onward
 should get ADRs at the time the decision is made._

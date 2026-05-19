@@ -13,7 +13,7 @@
 - Reliability primitives: circuit breaker, DLQ (200-entry SADD bounded set, 7d TTL), token budget (per-provider daily caps with soft 0.8 / hard 0.95 thresholds), watchdog (90s hard kill + 60s soft warn, late-resolve guard via AbortController generation counter).
 - Cron-driven pipeline: `/api/events` is now cache-only. Daily `/api/cron/refresh-events` at 04:00 UTC with `waitUntil` durability and cold-cache self-heal. Operator force-trigger via `?force=true`. NIM-throttle accept-and-fallback strategy preserves "map never goes blank" through extraction failures.
 - Cleanup sweep (Phase 28.1, 7 waves): ghost code deletion via knip + ts-prune triage, 12 operator-tunable env vars, domain constants centralized at `src/lib/domain.ts` with byte-identical server mirror, CSS `@theme` color tokens + `colorBridge.ts`, 0 TypeScript errors / 0 lint errors / 0 react-hooks warnings baseline.
-- Dev/Prod sync (Phase 28.2): domain rename `irt-monitoring.vercel.app` → `otg-iran-monitor.vercel.app` on new Vercel project `onthegrid.icm`. Bearer-bypass for `rateLimiters.public` global tier. Operator-control endpoints Bearer-gated with `operator:audit-log` and per-Bearer `replay-quota` (50/24h cap). Per-field dev/prod gate-swaps; `MapDevExposer` / severity score / `notabilityScore` permanently dev-only.
+- Dev/Prod sync (Phase 28.2): domain rename `irt-monitoring.vercel.app` → `otg-iran-monitor.vercel.app` on new Vercel project `otg-iran-monitor`. Bearer-bypass for `rateLimiters.public` global tier. Operator-control endpoints Bearer-gated with `operator:audit-log` and per-Bearer `replay-quota` (50/24h cap). Per-field dev/prod gate-swaps; `MapDevExposer` / severity score / `notabilityScore` permanently dev-only.
 - Unified API Health dashboard: `Overview` folded into `All APIs` → renamed `API Health`. 4 diagnostic blocks (tier-grouped summary, per-endpoint quality metrics, manual retry, recent-fetch sparkline). New `/api/operator-status` Bearer-gated aggregator. `HealthStatusProvider` single-poll guarantee.
 - Connectivity audit workflow: `.github/workflows/prod-connectivity-audit.yml` with 16-endpoint smoke + rate-limit defense companion. Sidecar Redis key `audit:connectivity:last-result` (7d TTL). Tier-green assertion writes `allTiersGreen` + `tierStatus` into the sidecar with truth table.
 - API green-light gate (Phase 28.2.5): `events:llm:v3` registry promotion. Registry-consistency invariant test ensures every cache-backed `TIER_BY_ENDPOINT` key has a matching `SOURCE_KEYS` entry. Weather tooltip widening (2°→4° + distance hint).
@@ -37,7 +37,7 @@
 
 **Migration notes (v1.3 → v1.4):**
 
-- Domain change: `irt-monitoring.vercel.app` retired; canonical alias is `otg-iran-monitor.vercel.app` on Vercel project `onthegrid.icm`.
+- Domain change: `irt-monitoring.vercel.app` retired; canonical alias is `otg-iran-monitor.vercel.app` on Vercel project `otg-iran-monitor`.
 - Operator Bearer: prod surfaces require `Authorization: Bearer ${DASHBOARD_PASSWORD}`. Same Bearer skips global rate-limit tier.
 - Cron schedule: `/api/events` no longer triggers extraction; `/api/cron/refresh-events` does, daily at 04:00 UTC. Operator force-trigger: `GET /api/cron/refresh-events?force=true` with `Authorization: Bearer ${CRON_SECRET}`.
 - Pipeline version: `LLM_PIPELINE_V3=true` is the default in production. Runtime override via `POST /api/events/llm-pipeline {"version": "v1"|"v2"|"v3"|null}`.

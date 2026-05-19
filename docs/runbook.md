@@ -493,7 +493,7 @@ entity layers are blank because their fetch calls fail.
 
 - `CORS_ORIGIN` env var doesn't match the deployed frontend origin.
   Most common on preview deploys where the URL is dynamic (e.g.
-  `iran-conflict-monitor-git-feature-branch.vercel.app`) and the
+  `otg-iran-monitor-git-feature-branch.vercel.app`) and the
   env var is set to the production URL.
 - Default CORS*ORIGIN is `*` (graceful config loader), so a
   missing env var is safe — a \_wrong\* env var is worse than a
@@ -694,7 +694,7 @@ through the Pitfall 1 cache bridge.
    - `NVIDIA_NIM_API_KEY`
    - `OPENROUTER_API_KEY`
 
-   Dashboard: https://vercel.com/zack-mazs-projects/onthegrid.icm/settings/environment-variables
+   Dashboard: https://vercel.com/zack-mazs-projects/otg-iran-monitor/settings/environment-variables
 
 2. Redeploy production so the new env state takes effect:
 

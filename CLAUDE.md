@@ -1,4 +1,4 @@
-# Iran Conflict Monitor
+# Iran Monitor
 
 ## Project Context
 
@@ -139,7 +139,7 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 ## Vercel Deployment
 
 - **Entry point** — `api/vercel-entry.js` (bundled output; tsup bundles `server/vercel.ts` → `api/vercel-entry.js`). Express app via `createApp()` factory in `server/app.ts`.
-- **Plan + limits** — Vercel **Pro** tier (`onthegrid.icm` project, alias `otg-iran-monitor.vercel.app`). `vercel.json` `functions.api/vercel-entry.js.maxDuration: 800` (Phase 29 D-08 lock; required for ~10-min LLM extraction runs).
+- **Plan + limits** — Vercel **Pro** tier (`otg-iran-monitor` project, alias `otg-iran-monitor.vercel.app`). `vercel.json` `functions.api/vercel-entry.js.maxDuration: 800` (Phase 29 D-08 lock; required for ~10-min LLM extraction runs).
 - **Rewrites** — `/api/*`, `/api/cron/*`, `/health` all → `/api/vercel-entry`; everything else → SPA `index.html`. See `vercel.json` for canonical config.
 - **Rate limiting** — `express-rate-limit` middleware in `server/middleware/rateLimiter.ts`. `rateLimiters.public` global tier (60-req/min) skipped on valid `DASHBOARD_PASSWORD` Bearer via `timingSafeEqual` constant-time compare; per-endpoint tiers (flights 120/min, ships 60/min, events 20/min) unaffected. Empty `DASHBOARD_PASSWORD` falls through to limiter (NOT a 503 — differs from `dashboardAuth.ts` which fail-closes). Tested by `src/__tests__/rate-limit.test.ts`.
 - **Fail-fast config** — Phase 26.3+ `parseEnv()` (Zod) throws on missing/malformed env vars at startup. The prior "Graceful config" defaults pattern was retired (Phase 28.1 W7).

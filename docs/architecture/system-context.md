@@ -1,6 +1,6 @@
 # System Context
 
-The Iran Conflict Monitor is a single-page React application backed by a
+The Iran Monitor is a single-page React application backed by a
 serverless Express API. All upstream data is fetched through the API layer
 so the browser never talks directly to third-party providers, which gives
 us a single place to cache, rate-limit, sanitize, and trace every request.
@@ -18,11 +18,11 @@ further down shows the same topology in plain `flowchart` syntax.
 
 ```mermaid
 C4Context
-    title System Context — Iran Conflict Monitor
+    title System Context — Iran Monitor
 
     Person(user, "User", "OSINT analyst or<br/>curious observer")
 
-    System_Boundary(sys, "Iran Conflict Monitor") {
+    System_Boundary(sys, "Iran Monitor") {
         Container(spa, "Vite + React SPA", "TypeScript, MapLibre, deck.gl, Zustand", "2.5D map UI, hosted as static assets on Vercel CDN")
         Container(api, "Express API", "Node 20, TypeScript, tsup bundle", "Serverless function on Vercel — proxy, cache, rate-limit, validate")
         ContainerDb(cache, "Upstash Redis", "REST client", "Stateless cache for upstream responses; hard TTL = 10x logical TTL")

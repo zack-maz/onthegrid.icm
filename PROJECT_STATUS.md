@@ -1,4 +1,4 @@
-# Iran Conflict Monitor — Project Status
+# Iran Monitor — Project Status
 
 **Last updated:** 2026-05-08
 
