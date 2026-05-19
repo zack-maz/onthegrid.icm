@@ -2166,32 +2166,35 @@ var GROUND_TRUTH_CANDIDATES = [
   resolve3(__dirname3, "_eval/ground-truth-events.json")
   // prod (api/_eval/ bundled)
 ];
-var GROUND_TRUTH_PATH = GROUND_TRUTH_CANDIDATES.find((p) => existsSync3(p)) ?? GROUND_TRUTH_CANDIDATES[0];
+function resolveGroundTruthPath() {
+  return GROUND_TRUTH_CANDIDATES.find((p) => existsSync3(p)) ?? GROUND_TRUTH_CANDIDATES[0];
+}
 var BASELINE_KEY = "events:llm-eval-baseline:v3";
 var BASELINE_TTL_SEC = 90 * 24 * 3600;
 var cachedGroundTruth = void 0;
 function loadGroundTruth() {
   if (cachedGroundTruth !== void 0) return cachedGroundTruth;
+  const groundTruthPath = resolveGroundTruthPath();
   try {
-    if (!existsSync3(GROUND_TRUTH_PATH)) {
+    if (!existsSync3(groundTruthPath)) {
       log6.info(
-        { path: GROUND_TRUTH_PATH },
+        { path: groundTruthPath },
         "ground-truth file absent; eval harness will report zeros"
       );
       cachedGroundTruth = null;
       return null;
     }
-    const raw = readFileSync3(GROUND_TRUTH_PATH, "utf-8");
+    const raw = readFileSync3(groundTruthPath, "utf-8");
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      log6.warn({ err: parseErr, path: GROUND_TRUTH_PATH }, "ground-truth JSON parse failed");
+      log6.warn({ err: parseErr, path: groundTruthPath }, "ground-truth JSON parse failed");
       cachedGroundTruth = null;
       return null;
     }
     if (!isValidGroundTruth(parsed)) {
-      log6.warn({ path: GROUND_TRUTH_PATH }, "ground-truth failed structural validation");
+      log6.warn({ path: groundTruthPath }, "ground-truth failed structural validation");
       cachedGroundTruth = null;
       return null;
     }
@@ -2202,7 +2205,7 @@ function loadGroundTruth() {
     );
     return parsed;
   } catch (err) {
-    log6.warn({ err, path: GROUND_TRUTH_PATH }, "failed to load ground-truth file");
+    log6.warn({ err, path: groundTruthPath }, "failed to load ground-truth file");
     cachedGroundTruth = null;
     return null;
   }
@@ -2265,36 +2268,33 @@ var ADVERSARIAL_FIXTURE_CANDIDATES = [
   resolve3(__dirname3, "_eval/adversarial-injections.json")
   // prod bundled
 ];
-var ADVERSARIAL_FIXTURE_PATH = ADVERSARIAL_FIXTURE_CANDIDATES.find((p) => existsSync3(p)) ?? ADVERSARIAL_FIXTURE_CANDIDATES[0];
+function resolveAdversarialFixturePath() {
+  return ADVERSARIAL_FIXTURE_CANDIDATES.find((p) => existsSync3(p)) ?? ADVERSARIAL_FIXTURE_CANDIDATES[0];
+}
 var ADVERSARIAL_KEY = "events:llm-eval-adversarial:v3";
 var ADVERSARIAL_TTL_SEC = 90 * 24 * 3600;
 var LEAK_CANARY_PREFIX_LEN = 30;
 var cachedAdversarialFixture = void 0;
 function loadAdversarialFixture() {
   if (cachedAdversarialFixture !== void 0) return cachedAdversarialFixture;
+  const fixturePath = resolveAdversarialFixturePath();
   try {
-    if (!existsSync3(ADVERSARIAL_FIXTURE_PATH)) {
-      log6.info(
-        { path: ADVERSARIAL_FIXTURE_PATH },
-        "adversarial fixture absent; sub-eval will report skipped"
-      );
+    if (!existsSync3(fixturePath)) {
+      log6.info({ path: fixturePath }, "adversarial fixture absent; sub-eval will report skipped");
       cachedAdversarialFixture = null;
       return null;
     }
-    const raw = readFileSync3(ADVERSARIAL_FIXTURE_PATH, "utf-8");
+    const raw = readFileSync3(fixturePath, "utf-8");
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.entries)) {
-      log6.warn(
-        { path: ADVERSARIAL_FIXTURE_PATH },
-        "adversarial fixture failed structural validation"
-      );
+      log6.warn({ path: fixturePath }, "adversarial fixture failed structural validation");
       cachedAdversarialFixture = null;
       return null;
     }
     cachedAdversarialFixture = parsed;
     return cachedAdversarialFixture;
   } catch (err) {
-    log6.warn({ err, path: ADVERSARIAL_FIXTURE_PATH }, "failed to load adversarial fixture");
+    log6.warn({ err, path: fixturePath }, "failed to load adversarial fixture");
     cachedAdversarialFixture = null;
     return null;
   }
@@ -79824,7 +79824,7 @@ async function fetchFacilityType(entry, stats) {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "iran-conflict-monitor/1.0 (contact: zackmaz.zam@gmail.com)",
+          "User-Agent": "otg-iran-monitor/1.0 (contact: zackmaz.zam@gmail.com)",
           Accept: "application/json"
         },
         body: `data=${encodeURIComponent(query)}`,
@@ -80098,7 +80098,7 @@ async function fetchSites() {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "iran-conflict-monitor/1.0 (contact: zackmaz.zam@gmail.com)",
+          "User-Agent": "otg-iran-monitor/1.0 (contact: zackmaz.zam@gmail.com)",
           Accept: "application/json"
         },
         body: `data=${encodeURIComponent(QUERY)}`,

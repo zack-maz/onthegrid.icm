@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add key infrastructure sites overlay, news feed, notification center with severity scoring, oil markets tracker, search/filter/UI cleanup, and production deploy sync to the Iran Conflict Monitor.
+**Goal:** Add key infrastructure sites overlay, news feed, notification center with severity scoring, oil markets tracker, search/filter/UI cleanup, and production deploy sync to the Iran Monitor.
 
 **Architecture:** Six sequential phases. Phases 15–16 build independent data pipelines (sites, news). Phase 17 combines them into a notification center and adds the 24h event default. Phase 18 adds an independent markets tracker. Phase 19 cleans up search/filter/UI. Phase 20 verifies and deploys.
 

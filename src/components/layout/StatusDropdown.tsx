@@ -85,7 +85,7 @@ export function StatusDropdown() {
       >
         <span className={`inline-block h-2 w-2 rounded-full ${overallDotClass}`} />
         <h1 className="text-sm font-semibold uppercase tracking-wider text-text-secondary">
-          Iran Conflict Monitor
+          Iran Monitor
         </h1>
         <svg
           viewBox="0 0 24 24"

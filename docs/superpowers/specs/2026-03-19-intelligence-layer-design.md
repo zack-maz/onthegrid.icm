@@ -6,7 +6,7 @@
 
 ## Overview
 
-Six-phase milestone adding key infrastructure sites, news ingestion, a notification center, oil markets tracker, UI/search/filter cleanup, and a production deployment sync to the Iran Conflict Monitor.
+Six-phase milestone adding key infrastructure sites, news ingestion, a notification center, oil markets tracker, UI/search/filter cleanup, and a production deployment sync to the Iran Monitor.
 
 ```
 Phase 15: Key Sites Overlay

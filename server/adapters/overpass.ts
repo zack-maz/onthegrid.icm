@@ -222,7 +222,7 @@ export async function fetchSites(): Promise<{ sites: SiteEntity[]; stats: SiteFi
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'iran-conflict-monitor/1.0 (contact: zackmaz.zam@gmail.com)',
+          'User-Agent': 'otg-iran-monitor/1.0 (contact: zackmaz.zam@gmail.com)',
           Accept: 'application/json',
         },
         body: `data=${encodeURIComponent(QUERY)}`,

@@ -1,4 +1,4 @@
-# Iran Conflict Monitor
+# Iran Monitor
 
 > **Real-time Iran conflict intelligence dashboard. Numbers over narratives.**
 

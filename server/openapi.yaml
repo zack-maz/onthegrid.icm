@@ -1,7 +1,7 @@
 openapi: 3.0.3
 
 info:
-  title: Iran Conflict Monitor API
+  title: Iran Monitor API
   version: 1.0.0
   description: |
     Real-time intelligence API for monitoring Iran conflict data.
@@ -21,14 +21,14 @@ info:
     client IP. See `server/middleware/rateLimit.ts` for the per-endpoint limits
     and rationale.
   contact:
-    name: Iran Conflict Monitor
-    url: https://github.com/zacharymaz/iran-conflict-monitor
+    name: Iran Monitor
+    url: https://github.com/zack-maz/otg-iran-monitor
   license:
     name: Private
     url: https://example.com/license
 
 servers:
-  - url: https://iran-conflict-monitor.vercel.app
+  - url: https://otg-iran-monitor.vercel.app
     description: Production (Vercel serverless)
   - url: http://localhost:3001
     description: Local development
