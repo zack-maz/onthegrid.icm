@@ -143,4 +143,28 @@ Decision record: [`docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md`](.
 
 ## 7-Day Watch (Phase 31, LLM-RELI-06)
 
-Phase 31 appends daily observations here. The 7-day watch validates Phase 30's tuned defaults under real production traffic across a full operational week before declaring v1.5 throttle work "done." The eval-harness fixture-bundling fix is a prerequisite for Phase 31 — without it, eval drift over the 7-day window is unobservable for the same reason Plan 06's correctness gate was INCONCLUSIVE.
+Phase 31 appends daily observations here. The 7-day watch was designed to validate Phase 30's tuned defaults under real production traffic across a full operational week before declaring v1.5 throttle work "done." The eval-harness fixture-bundling fix is a prerequisite for Phase 31 — without it, eval drift over the 7-day window is unobservable for the same reason Plan 06's correctness gate was INCONCLUSIVE.
+
+### Close summary (early — 2026-05-19)
+
+Phase 31 was closed at Day 1 of 7 under operator decision. LLM-RELI-06 is declared **"validated single-day, monitoring continues opportunistically"** rather than fully 7-day-validated. The original D-04 strict 7-consecutive bar and the D-05 3-reset-cycles → 31.1 escalation gate are **deferred, not cancelled**: any future ad-hoc snapshot row classifying FAIL should be treated as Day-1 of the 31.1 escalation conversation. The snapshot harness (`scripts/snapshot-cron-watch.ts`, `npm run watch:snapshot -- --http`) and `watch-log.json` remain operational; ad-hoc capture is one command and the script appends rows idempotently by `tickDate`.
+
+Full closing rationale: [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](../../.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md).
+
+### Observed rows (2 total — Day 0 baseline + Day 1 natural cron)
+
+| tickDate   | natural | result | healthStatus | freshness | batchCount | breakerTrips | dlq                       | eval@5/20/100km    | notes                                                                                                                                                       |
+| ---------- | ------- | ------ | ------------ | --------- | ---------- | ------------ | ------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-18 | false   | PASS   | healthy      | 9m fresh  | 216        | 0            | 0                         | 0.98 / 0.98 / 0.98 | D-02 prep-validation force-trigger. Cold-cache baseline (all 431 groups processed because `events:llm:v3` was empty). Eval-bundle fix verified (49/50).     |
+| 2026-05-19 | true    | PASS   | healthy      | 25m fresh | 180        | 0            | 4 × `v3:timeout_watchdog` | 0.98 / 0.98 / 0.98 | Day 1 natural cron. **Warm-cache `batchCount` 216 → 180 (16% drop)** — Phase 31 prep #2 diff-filter prefix-add fix measurably working. DLQ all whitelisted. |
+
+### Takeaways
+
+- **Prep #1 (eval bundle)** — `evalScore.total` reports real, non-zero values in `/api/cron/health` after Day 0. The 0.98 score at all radii is a real measurement, not a `total: 0` artifact. The 30-day Redis TTL on `events:llm-eval-baseline:v3` keeps drift detection live regardless of further watch days.
+- **Prep #2 (diff-filter prefix-add)** — Warm-cache batch reduction is empirically real (Day 0 → Day 1: 216 → 180). Production behavior matches the unit test from PR #23 `1bfec94`.
+- **Breaker trips: 0** across both rows. NIM-only cascade is not tripping under normal load with Phase 30's tuned defaults.
+- **DLQ**: 4 `v3:timeout_watchdog` entries on Day 1 are inside the watch-script's whitelist (`['v3:timeout_watchdog', 'v3:adaptive-retry-fail']`). This is the documented baseline per D-03; per-event timeouts under NIM throttle are expected and absorbed.
+
+### What the early close costs
+
+Single-day evidence cannot rule out failure modes that recur on a multi-day cadence (NIM throttle cycles correlated with day-of-week, monthly quota resets, etc.). The 7-day bar was designed to catch those. The early-close decision accepts that risk in exchange for unblocking downstream phase work; Phase 36's acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0 + `allTiersGreen=true`) remains the mechanical reliability check at v1.5 close and is unaffected.

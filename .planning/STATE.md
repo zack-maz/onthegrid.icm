@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-18T02:05:00.000Z"
-last_activity: 2026-05-18 -- Phase 31 Waves 1+2 complete; halted at Wave 3 operator checkpoint
+last_updated: "2026-05-19T07:30:00.000Z"
+last_activity: 2026-05-19 -- Phase 31 closed early at Day 1 / 7 under operator decision; LLM-RELI-06 validated single-day with caveat; advancing to Phase 32 (GHOST track)
 progress:
   total_phases: 14
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 29
-  completed_plans: 26
-  percent: 90
+  completed_plans: 29
+  percent: 100
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 31 (cron-stability-validation-7-day-watch) — EXECUTING (paused at Wave 3 operator gate)
-Plan: 2 of 5 complete; Wave 3 (Plan 31-03) awaits PR merge + Vercel prod deploy + operator force-trigger
-Status: Phase 31 Waves 1+2 complete on `feature/31-cron-stability-validation` (commits dab6739..1da6636)
-Last activity: 2026-05-18 -- Phase 31 Waves 1+2 complete; halted at Wave 3 operator checkpoint
+Phase: 32 (Ghost Event URL Liveness, Dashboard & Prune) — NOT STARTED (next available phase on GHOST track, independent of LLM-RELI spine per ROADMAP parallelization notes)
+Plan: 0 of TBD
+Status: Phase 31 closed early at Day 1 / 7 under operator decision 2026-05-19 — LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically." Snapshot harness remains operational; ad-hoc capture via `npm run watch:snapshot -- --http`. Phase 36 acceptance gate (LLM-RELI-07) unaffected.
+Last activity: 2026-05-19 -- Phase 31 closed early; advancing to Phase 32
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -39,7 +39,7 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | Context gathered |
 | 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Waves 1-3 complete (4/7 plans) |
 | 30.1  | Cascade fallback fix — NIM-only declared honest                       | (gap closure from Phase 30 boundary review)                   | Shipped 2026-05-17 |
-| 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Not started |
+| 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Closed early 2026-05-19 (Day 1 / 7 PASS; caveat) |
 | 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
 | 34    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
@@ -322,3 +322,5 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - Phase 30.1 inserted after Phase 30 (2026-05-17): Cascade fallback fix — re-enable OpenRouter or document single-provider reality (URGENT) — surfaced immediately post-Phase-30 by operator review noticing OpenRouter never fired in Run 1 / Run 2 / 04:00 UTC daily cron. Phase 27.4.4's `skipOpenRouter: true` flag is still hardcoded in `server/lib/llmEventExtractor.v3.ts:622, 929`, removing OpenRouter from the cascade entirely. 04:00 UTC cron evidence: NIM 39 rate-limit errors → breaker tripped → 50+ batches `skipped:breaker` → 0 OpenRouter attempts. Phase 30's tuning therefore tunes a single-provider pipeline, not a cascade. Seed context at .planning/phases/30.1-cascade-fallback-fix-.../30.1-CONTEXT-SEED.md. Three scope options (minimum/right/full) for /gsd-discuss-phase 30.1 to pick from.
 
 **Planned Phase:** 31 (cron-stability-validation-7-day-watch) — 5 plans — 2026-05-18T01:41:58.483Z
+
+- Phase 31 closed early under operator decision 2026-05-19 at Day 1 / 7 (Day-1 natural cron PASS captured, commit `d0c16e4`). LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically" — caveat-marked. Snapshot harness retained for ad-hoc capture; D-05 escalation to Phase 31.1 deferred (no FAIL row observed). Phase 36 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0) unaffected and remains the mechanical reliability check at milestone close. See [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md) for the full close-out rationale and resume path.
