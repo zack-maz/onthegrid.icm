@@ -8,7 +8,7 @@
 
 Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extractor modules entirely** (including the override endpoint, the Redis sidecar key, and the DevApiStatus pin buttons), prove the map renders cleanly on raw GDELT when both NIM + OpenRouter keys are absent (CI integration test + runbook entry), upgrade the Vercel project to Pro and bump `vercel.json` `maxDuration: 300 → 800` as the **first** phase commit, and trim CLAUDE.md to a "current-state invariants only" shape targeting <10k tokens.
 
-**Requirements covered:** LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, **SIMPLIFY-06** (folded forward from Phase 34 — full deletion not archive), **DOCS-INT-01** (pulled from Phase 34).
+**Requirements covered:** LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, **SIMPLIFY-06** (folded forward from Phase 35 — full deletion not archive), **DOCS-INT-01** (pulled from Phase 35).
 
 **Out of scope (other phases):**
 
@@ -16,9 +16,9 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 - 7-day cron stability watch → Phase 31 (LLM-RELI-06)
 - Ghost event URL liveness + dashboard → Phase 32 (GHOST-01..05)
 - Actor metadata audit + canonical catalog → Phase 33 (ACTOR-01..05)
-- JSDoc audit + Redis registry verification + key inventory + budget delta + freeClaudeRouter audit + bundle-size delta → Phase 34 (DOCS-INT-02/03, REDIS-OPT-01..04, SIMPLIFY-02/05/07)
-- Public docs sweep + OpenAPI additions → Phase 35
-- Full ADR-0010 + acceptance gate closeout → Phase 36 (DOCS-PUB-04, LLM-RELI-07)
+- JSDoc audit + Redis registry verification + key inventory + budget delta + freeClaudeRouter audit + bundle-size delta → Phase 35 (DOCS-INT-02/03, REDIS-OPT-01..04, SIMPLIFY-02/05/07)
+- Public docs sweep + OpenAPI additions → Phase 36
+- Full ADR-0010 + acceptance gate closeout → Phase 37 (DOCS-PUB-04, LLM-RELI-07)
   </domain>
 
 <decisions>
@@ -45,13 +45,13 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 
 ### ADR Capture
 
-- **D-03: Fold v1+v2 retirement rationale into ADR-0010 at Phase 36, write stub now.** A short ADR-0010 stub file is committed in Phase 29 at `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` containing: the v1→v2→v3 evolution timeline (Phase 27.4 lock dates from `.planning/phases/27.4-*/CONTEXT.md`); what was deleted in Phase 29 (modules, endpoint, Redis key, UI buttons); what the new rollback path is (git revert); and a `<expand_at_36>` marker for the rest of the v1.5 decisions. Phase 36 expands the stub with the full milestone-close rationale. (Numbering note: `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot; Phase 29's v1.5 retirement stub is therefore ADR-0010.)
+- **D-03: Fold v1+v2 retirement rationale into ADR-0010 at Phase 37, write stub now.** A short ADR-0010 stub file is committed in Phase 29 at `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` containing: the v1→v2→v3 evolution timeline (Phase 27.4 lock dates from `.planning/phases/27.4-*/CONTEXT.md`); what was deleted in Phase 29 (modules, endpoint, Redis key, UI buttons); what the new rollback path is (git revert); and a `<expand_at_36>` marker for the rest of the v1.5 decisions. Phase 37 expands the stub with the full milestone-close rationale. (Numbering note: `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot; Phase 29's v1.5 retirement stub is therefore ADR-0010.)
 
 ### LLM-Optional Architecture
 
 - **D-04: Both integration test (CI guard) AND runbook entry (operator-facing).**
   - **Integration test:** `src/__tests__/llm-optional.test.ts` (or `server/__tests__/...` — researcher picks based on existing test infra). Mocks `NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` as undefined, hits `/api/events` through the Express app harness, asserts `response.events.length > 0` AND that the response is sourced through the Pitfall 1 cache bridge (raw GDELT path), NOT from `events:llm:v3`. Runs on every PR. Locks the contract mechanically.
-  - **Runbook entry:** Phase 29 writes the entry directly to `docs/runbook.md` under a new "LLM Pipeline Disabled / Keys Absent" section. Phase 35 ("Public Docs Sweep") only verifies the entry is still accurate after the v1.5 changes — does NOT need to author it from scratch. (Stage in phase dir if `docs/runbook.md` doesn't exist yet — researcher checks.) Section content: 5-step operator smoke (unset both env vars in Vercel, redeploy, hit `/api/events`, confirm events render, confirm DevApiStatus shows raw-GDELT source tier).
+  - **Runbook entry:** Phase 29 writes the entry directly to `docs/runbook.md` under a new "LLM Pipeline Disabled / Keys Absent" section. Phase 36 ("Public Docs Sweep") only verifies the entry is still accurate after the v1.5 changes — does NOT need to author it from scratch. (Stage in phase dir if `docs/runbook.md` doesn't exist yet — researcher checks.) Section content: 5-step operator smoke (unset both env vars in Vercel, redeploy, hit `/api/events`, confirm events render, confirm DevApiStatus shows raw-GDELT source tier).
 
 - **D-05: NO kill-switch env var. "Unset both keys" IS the kill switch.** Operators wanting to disable LLM extraction unset `NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY` in Vercel and redeploy. Same code path as the LLM-optional regression guard. No new `LLM_PIPELINE_ENABLED` env var, no DevApiStatus banner. Less surface area; matches existing `isLLMConfigured` pattern.
 
@@ -77,7 +77,7 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 
 ### Roadmap Side-Effect
 
-- **D-10: Phase 34 scope reduced.** With v1+v2 deletion landing in Phase 29 (D-02), Phase 34's old success criterion #8 "v1 extractor archived (SIMPLIFY-06)" becomes inapplicable. Phase 34's Requirements list updated to remove SIMPLIFY-06; criteria renumbered 8→7 (drop the v1 archive criterion). Already committed as part of this phase's CONTEXT-prep on `feature/29-llm-cascade-narrowing-claude-md-cleanup` branch. REQUIREMENTS.md traceability table updated: SIMPLIFY-06 phase 34 → 29; phase distribution Phase 29 (5) · Phase 34 (9).
+- **D-10: Phase 35 scope reduced.** With v1+v2 deletion landing in Phase 29 (D-02), Phase 35's old success criterion #8 "v1 extractor archived (SIMPLIFY-06)" becomes inapplicable. Phase 35's Requirements list updated to remove SIMPLIFY-06; criteria renumbered 8→7 (drop the v1 archive criterion). Already committed as part of this phase's CONTEXT-prep on `feature/29-llm-cascade-narrowing-claude-md-cleanup` branch. REQUIREMENTS.md traceability table updated: SIMPLIFY-06 phase 35 → 29; phase distribution Phase 29 (5) · Phase 35 (9).
 
 ### Folder + Repo Rename (added 2026-05-09 mid-planning)
 
@@ -153,7 +153,7 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 ### Vercel Project Config
 
 - `vercel.json` — `functions["api/vercel-entry.js"].maxDuration: 300` (the bump target — D-08 changes to 800)
-- `api/vercel-entry.js` — bundled serverless function entry point (1.72 MB at v1.4 close — Phase 34 measures the v1.5 close size)
+- `api/vercel-entry.js` — bundled serverless function entry point (1.72 MB at v1.4 close — Phase 35 measures the v1.5 close size)
 - `https://vercel.com/zack-mazs-projects/onthegrid.icm/settings/billing` — operator action D-08 (Pro upgrade)
 
 ### Override Endpoint + Dashboard Surface (all DELETED in D-02)
@@ -172,7 +172,7 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 ### ADR + Documentation
 
 - `docs/adr/` — directory for ADR-0010 stub (D-03). Directory already exists (ADRs 0001-0009 + README.md + template.md).
-- `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` — written as a stub in Phase 29, expanded in Phase 36 (numbering: 0009 is already taken by the Accepted two-key-split ADR)
+- `docs/adr/ADR-0010-llm-pipeline-v1-5-decisions.md` — written as a stub in Phase 29, expanded in Phase 37 (numbering: 0009 is already taken by the Accepted two-key-split ADR)
 - `docs/runbook.md` — D-04 receives the new "LLM Pipeline Disabled / Keys Absent" section
 - `docs/degradation.md` — Pitfall 1 + cascade fallback contract; must NOT regress (Phase 29 success criterion #4)
 
@@ -233,10 +233,10 @@ Cut Cerebras + Groq out of the active runtime cascade, **delete v1 + v2 extracto
 ## Specific Ideas
 
 - **Token count baseline (CLAUDE.md):** 70461 bytes / 509 lines / ~17.5k tokens (measured 2026-05-09 via `wc -c CLAUDE.md`). Trim target: <10k tokens. Captured in commit message of the trim commit.
-- **Bundle baseline (`api/vercel-entry.js`):** 1.72 MB at v1.4 close (per `.planning/ROADMAP.md` v1.4 quantitative delta). Phase 34 measures the v1.5 close — Phase 29 is informational only, but the v1+v2 deletion in D-02 should drop ~30-50KB before Phase 34 even starts.
+- **Bundle baseline (`api/vercel-entry.js`):** 1.72 MB at v1.4 close (per `.planning/ROADMAP.md` v1.4 quantitative delta). Phase 35 measures the v1.5 close — Phase 29 is informational only, but the v1+v2 deletion in D-02 should drop ~30-50KB before Phase 35 even starts.
 - **Operator action timing:** Pro upgrade happens AFTER CONTEXT.md is committed but BEFORE planner runs. The first commit on the phase branch is `chore(29): bump maxDuration 300 → 800 (Vercel Pro)`. The PR description must call out the Pro dependency.
 - **Override-endpoint cleanup is irreversible at the Redis layer:** `events:llm-pipeline-override` Redis key is left to TTL-expire (7d) rather than DEL'd in code — naturally cleans up. If a stale override is observed in production after deploy, operator can `redis-cli del events:llm-pipeline-override` manually.
-- **No PR-trigger for `prod-connectivity-audit.yml` change:** Phase 29 does NOT promote the audit workflow to PR-trigger. It stays manual-trigger (Phase 28.2 W6 D-29 lock); Phase 36 closes the gate by manual operator runs.
+- **No PR-trigger for `prod-connectivity-audit.yml` change:** Phase 29 does NOT promote the audit workflow to PR-trigger. It stays manual-trigger (Phase 28.2 W6 D-29 lock); Phase 37 closes the gate by manual operator runs.
 
 </specifics>
 

@@ -125,7 +125,7 @@ Total: 6 commits, 7 source files touched (3 docs + 1 dev script + 1 export +
    `retryAfterMs` field is already on `callHistory`; wire it into
    `nvidiaNimWindow` so post-429 calls wait the server-requested duration.
 3. **NIM model switch** to a lower-cap-friendly variant.
-4. **Dashboard surface for cascade-degraded state** (overlaps Phase 32 + Phase 34).
+4. **Dashboard surface for cascade-degraded state** (overlaps Phase 32 + Phase 35).
 5. **Re-run `scripts/probe-openrouter.ts` quarterly.**
 EOF
 )"

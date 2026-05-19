@@ -11,14 +11,14 @@
 
 ## Pre-discussion: Roadmap Re-Scope
 
-Before discussion began, the user requested the CLAUDE.md cleanup (DOCS-INT-01) be pulled forward from Phase 34 to Phase 29 to ship alongside the LLM cascade narrowing.
+Before discussion began, the user requested the CLAUDE.md cleanup (DOCS-INT-01) be pulled forward from Phase 35 to Phase 29 to ship alongside the LLM cascade narrowing.
 
 | Decision             | Choice                                    |
 | -------------------- | ----------------------------------------- |
 | Merge approach       | PR-merge (PR #18 admin-merged squash)     |
-| CLAUDE.md scope move | Move DOCS-INT-01 from Phase 34 → Phase 29 |
+| CLAUDE.md scope move | Move DOCS-INT-01 from Phase 35 → Phase 29 |
 
-Roadmap commit: `c7fad86 docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 34 → Phase 29`
+Roadmap commit: `c7fad86 docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 35 → Phase 29`
 
 ---
 
@@ -39,7 +39,7 @@ Roadmap commit: `c7fad86 docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 
 
 | Option                                                          | Description                                                                                                                   | Selected |
 | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------- |
-| Stay importable, no narrative change in CLAUDE.md (recommended) | Modules + override endpoint preserved; CLAUDE.md just notes "deep-rollback only, not active"; Phase 34 archives v1 separately |          |
+| Stay importable, no narrative change in CLAUDE.md (recommended) | Modules + override endpoint preserved; CLAUDE.md just notes "deep-rollback only, not active"; Phase 35 archives v1 separately |          |
 | Move v1 to \_archive/ in this phase too                         | Pull SIMPLIFY-06 forward; trade-off: scope creep                                                                              |          |
 
 **User's choice:** "Other" — "Add documentation to v1 and v2 to log it happened for things like ADRs but remove from or codebase"
@@ -49,7 +49,7 @@ Roadmap commit: `c7fad86 docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 
 
 | Option                                                                                  | Description                                                                                                                                          | Selected |
 | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| Yes — delete v1+v2 modules + override endpoint, ADR-only history (recommended)          | Modules + route + Redis key + DevApiStatus buttons all deleted; ADR-0009 captures rationale; SIMPLIFY-06 retired from Phase 34; +500-800 LOC deleted | ✓        |
+| Yes — delete v1+v2 modules + override endpoint, ADR-only history (recommended)          | Modules + route + Redis key + DevApiStatus buttons all deleted; ADR-0009 captures rationale; SIMPLIFY-06 retired from Phase 35; +500-800 LOC deleted | ✓        |
 | Yes — but keep the override endpoint as a noop/410 for clean error                      | Same deletion; route returns 410 Gone with explanation; trade-off: zombie code                                                                       |          |
 | No — walk it back, keep v1+v2 as deep-rollback (matches the recommended option from Q2) | Use original recommendation; smallest change                                                                                                         |          |
 
@@ -60,11 +60,11 @@ Roadmap commit: `c7fad86 docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 
 
 | Option                                                                       | Description                                               | Selected |
 | ---------------------------------------------------------------------------- | --------------------------------------------------------- | -------- |
-| Fold into ADR-0009 (Phase 36, the planned milestone-close ADR) (recommended) | Existing ADR-0009 expanded; stub written in Phase 29      | ✓        |
+| Fold into ADR-0009 (Phase 37, the planned milestone-close ADR) (recommended) | Existing ADR-0009 expanded; stub written in Phase 29      | ✓        |
 | Dedicated ADR-0010 in Phase 29                                               | Standalone ADR; ADR-0009 stays for broader v1.5 decisions |          |
 
-**User's choice:** Fold into ADR-0009 (Phase 36) (recommended)
-**Notes:** Stub at `docs/adr/ADR-0009-llm-pipeline-v1-5-decisions.md` lands in Phase 29, full expansion at Phase 36.
+**User's choice:** Fold into ADR-0009 (Phase 37) (recommended)
+**Notes:** Stub at `docs/adr/ADR-0009-llm-pipeline-v1-5-decisions.md` lands in Phase 29, full expansion at Phase 37.
 
 ---
 
@@ -79,7 +79,7 @@ Roadmap commit: `c7fad86 docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 
 | Both — integration test + runbook entry        | CI guard + operator runbook; belt + suspenders                                                                             | ✓        |
 
 **User's choice:** Both — integration test + runbook entry
-**Notes:** Phase 29 writes runbook entry directly to `docs/runbook.md`; Phase 35 only verifies post-fact.
+**Notes:** Phase 29 writes runbook entry directly to `docs/runbook.md`; Phase 36 only verifies post-fact.
 
 ### Q6: Do we add a kill-switch env var (LLM_PIPELINE_ENABLED=false) for operator control?
 
@@ -175,5 +175,5 @@ Roadmap commit: `c7fad86 docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 
 
 ## Roadmap Side-Effects (committed)
 
-- `c7fad86` — `docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 34 → Phase 29`
-- (this commit) — `docs(29): capture phase context` — Phase 29 + Phase 34 scope realignment for SIMPLIFY-06 fold-forward
+- `c7fad86` — `docs(29): pull DOCS-INT-01 (CLAUDE.md trim) from Phase 35 → Phase 29`
+- (this commit) — `docs(29): capture phase context` — Phase 29 + Phase 35 scope realignment for SIMPLIFY-06 fold-forward

@@ -21,7 +21,7 @@ The snapshot harness and `watch-log.json` are untouched — they remain operatio
 
 - It did **not** run Days 2–7 of the natural-cron watch. That's the entire point of the early close.
 - It did **not** delete the snapshot harness, `watch-log.json`, or the eval-bundle / diff-filter preps. All Phase 31 infrastructure stays in place.
-- It did **not** close out the Phase 36 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0). That's still Phase 36's job and is the mechanical reliability check at v1.5 close.
+- It did **not** close out the Phase 37 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0). That's still Phase 37's job and is the mechanical reliability check at v1.5 close.
 - It did **not** open Phase 31.1 — no FAIL row was observed, so the D-05 escalation is dormant.
 
 ## Caveat (consistent wording across all artifacts)

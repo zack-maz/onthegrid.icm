@@ -16,8 +16,8 @@ gap_closure_inline:
         after: 'docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md'
 deferred:
   - truth: 'Full ADR-0010 body expansion (Phase 29 wrote a STUB per D-03; `<expand_at_36>` marker present)'
-    addressed_in: 'Phase 36'
-    evidence: "Phase 36 success criterion 1: 'A new ADR (ADR-0010) is committed under docs/adr/ documenting the v1.5 LLM-pipeline decisions... rationale, trade-offs, rollback plan'. ADR-0010 stub explicitly contains `<expand_at_36>` marker per Plan 11 SUMMARY."
+    addressed_in: 'Phase 37'
+    evidence: "Phase 37 success criterion 1: 'A new ADR (ADR-0010) is committed under docs/adr/ documenting the v1.5 LLM-pipeline decisions... rationale, trade-offs, rollback plan'. ADR-0010 stub explicitly contains `<expand_at_36>` marker per Plan 11 SUMMARY."
   - truth: 'Synthetic >300s invocation verifying Vercel Pro 800s maxDuration (success criterion 5 dashboard + invocation halves)'
     addressed_in: 'Phase 30 / Phase 31'
     evidence: "Phase 30 success criterion 1: 'at least one full extraction run instrumented end-to-end on the Pro 800s ceiling'; Phase 31 7-day stability watch observes daily cron lands healthy on Pro 800s ceiling. The first cron tick post-deploy organically exercises the new ceiling."
@@ -101,7 +101,7 @@ Not applicable in the conventional sense — Phase 29 is primarily a deletion + 
 | LLM-RELI-01 | 29-03          | Narrow active runtime cascade to NIM + OpenRouter                     | ✓ SATISFIED | `server/adapters/llm-provider.ts` thin shim; 0 Cerebras/Groq active imports                                                                           |
 | LLM-RELI-05 | 29-09          | LLM-optional architecture proven; CI guard locks contract             | ✓ SATISFIED | `llm-optional.test.ts` 2/2 pass; runs on every PR (no skip gate)                                                                                      |
 | SIMPLIFY-04 | 29-03          | Cerebras + Groq dead-code purged from llm-provider.ts                 | ✓ SATISFIED | Module header confirms shim mode; isLLMConfigured narrowed                                                                                            |
-| SIMPLIFY-06 | 29-05 + 29-06  | v1 + v2 extractor modules deleted (folded from Phase 34 archive)      | ✓ SATISFIED | `.v1.ts` + `.v2.ts` MISSING; barrel collapsed to v3-only; tests deleted                                                                               |
+| SIMPLIFY-06 | 29-05 + 29-06  | v1 + v2 extractor modules deleted (folded from Phase 35 archive)      | ✓ SATISFIED | `.v1.ts` + `.v2.ts` MISSING; barrel collapsed to v3-only; tests deleted                                                                               |
 | DOCS-INT-01 | 29-12          | CLAUDE.md trimmed to <10k tokens                                      | ⚠ PARTIAL   | Token target hit (5,018 / <10,000); 1 broken markdown link to ADR — minor doc-drift                                                                   |
 | D-01        | 29-03          | Hard-delete Cerebras + Groq from runtime path                         | ✓ SATISFIED | Verified per LLM-RELI-01                                                                                                                              |
 | D-02        | 29-04..29-08   | Delete v1+v2 modules + override route + UI buttons + Redis key writes | ✓ SATISFIED | All deletion targets confirmed via grep + ls + summary cross-check                                                                                    |
@@ -112,7 +112,7 @@ Not applicable in the conventional sense — Phase 29 is primarily a deletion + 
 | D-07        | 29-12          | Verification = token count + 5-item operator spot-check               | ✓ SATISFIED | 73.3% reduction; 5-item skim passes per 29-12 SUMMARY                                                                                                 |
 | D-08        | 29-01          | Pro upgrade BEFORE phase plans; first commit = maxDuration 300 → 800  | ✓ SATISFIED | `vercel.json maxDuration: 800` confirmed; orchestrator brief notes operator pre-confirmed Pro                                                         |
 | D-09        | 29-01          | Synthetic >300s invocation                                            | ? DEFERRED  | Deferred to first organic cron tick / Phase 30 measurement                                                                                            |
-| D-10        | (scope edit)   | Phase 34 success criterion #8 (v1 archive) removed; SIMPLIFY-06 → 29  | ✓ SATISFIED | ROADMAP.md Phase 34 bullet notes "_(DOCS-INT-01 CLAUDE.md trim moved to Phase 29... SIMPLIFY-06 v1 archive folded into Phase 29's full deletion.)_"   |
+| D-10        | (scope edit)   | Phase 35 success criterion #8 (v1 archive) removed; SIMPLIFY-06 → 29  | ✓ SATISFIED | ROADMAP.md Phase 35 bullet notes "_(DOCS-INT-01 CLAUDE.md trim moved to Phase 29... SIMPLIFY-06 v1 archive folded into Phase 29's full deletion.)_"   |
 | D-11        | 29-13          | Folder + repo rename to `otg-iran-monitor`                            | ✓ DOCS DONE | Documentation portion (README + governance docs + debug doc) renamed in commit `3da4563`; operator-side `mv` + `git remote set-url` is OOB post-merge |
 
 **Orphan check:** No requirement IDs from REQUIREMENTS.md are mapped to Phase 29 but missing from a PLAN's `requirements:` field. All 5 ROADMAP requirements (LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01) accounted for above plus D-01 through D-11.
@@ -138,7 +138,7 @@ CLAUDE.md line 151's forward pointer to ADR-0010 references a filename (`ADR-001
 **Recommended closure:** A one-line edit to CLAUDE.md updating the link target. This could land as:
 
 1. A docs hotfix commit appended to the Phase 29 branch before merge (`docs(29): fix CLAUDE.md ADR-0010 link target`), OR
-2. Folded into Phase 35's public-docs sweep (which already touches CLAUDE.md-adjacent docs and would catch this in a routine validation pass), OR
+2. Folded into Phase 36's public-docs sweep (which already touches CLAUDE.md-adjacent docs and would catch this in a routine validation pass), OR
 3. An orchestrator-level `gsd-plan-phase --gaps` follow-up.
 
 **Why this is not a blocker for the phase goal:** The phase goal was the cascade narrowing, LLM-optional proof, Vercel Pro upgrade, and CLAUDE.md trim — all four landed. The phase did not promise broken-link-free markdown; the broken link is a typo-class artifact of two plans diverging on a filename convention mid-phase. The doc-drift does not weaken any of the 8 success criteria materially.

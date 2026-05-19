@@ -7,7 +7,7 @@
 
 Phase 31 was scoped for a 7-day natural-cron observation window (D-04, D-05). Day 1 passed cleanly. The operator elected to close the phase at Day 1 rather than wait for Days 2–7 — the daily watch is unblocking nothing downstream that cannot also be unblocked by the snapshot harness remaining in place, and the LLM-RELI track does not need 7 days of evidence to clear v1.5 spine work.
 
-LLM-RELI-06 is therefore declared **"validated single-day, monitoring continues opportunistically"** in `.planning/REQUIREMENTS.md`. This is weaker than the original D-04 7-consecutive bar; the caveat is captured here and in `docs/architecture/llm-pipeline-reliability.md`. The phase 36 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0 runs) remains in force and is the mechanical reliability check at milestone close.
+LLM-RELI-06 is therefore declared **"validated single-day, monitoring continues opportunistically"** in `.planning/REQUIREMENTS.md`. This is weaker than the original D-04 7-consecutive bar; the caveat is captured here and in `docs/architecture/llm-pipeline-reliability.md`. The phase 37 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0 runs) remains in force and is the mechanical reliability check at milestone close.
 
 ## What landed
 
@@ -44,7 +44,7 @@ Full row data: [`watch-log.json`](./watch-log.json).
 
 ## Resume / re-open path
 
-If 7-day evidence becomes load-bearing later (e.g. milestone audit pushback, Phase 36 acceptance-gate complications, or an unrelated incident sharpens the need to characterize Day-2-through-Day-7 behavior):
+If 7-day evidence becomes load-bearing later (e.g. milestone audit pushback, Phase 37 acceptance-gate complications, or an unrelated incident sharpens the need to characterize Day-2-through-Day-7 behavior):
 
 1. Re-open Phase 31 (or open 31.2 as a new shorter watch phase).
 2. Run `npm run watch:snapshot -- --http --notes='Day-N resumed watch'` each morning; the script appends to the existing `watch-log.json` idempotently.
@@ -59,4 +59,4 @@ D-01 (4 prep fixes), D-02 (prep-validation force-trigger), D-06 (dual JSON + mar
 
 Per `.planning/STATE.md` advance: Phase 32 (Ghost Event URL Liveness, Dashboard & Prune) — independent of the LLM-RELI spine per ROADMAP parallelization notes, GHOST-01..05.
 
-Phase 36 (ADR-0010 + acceptance gate closeout) is still the mechanical milestone-close gate. The 3-consecutive `prod-connectivity-audit.yml` exit-0 + `allTiersGreen=true` requirement remains untouched by this early-close.
+Phase 37 (ADR-0010 + acceptance gate closeout) is still the mechanical milestone-close gate. The 3-consecutive `prod-connectivity-audit.yml` exit-0 + `allTiersGreen=true` requirement remains untouched by this early-close.

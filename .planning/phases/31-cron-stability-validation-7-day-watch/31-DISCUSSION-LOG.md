@@ -120,7 +120,7 @@
 
 **User's choice:** Rich row schema.
 
-**Notes:** Dual JSON + markdown surface with rich per-row schema satisfies criterion 4 ('auditable, not anecdotal') while keeping the markdown narrative for human discoverability and the JSON for downstream tooling / Phase 36 ADR-0010 expansion.
+**Notes:** Dual JSON + markdown surface with rich per-row schema satisfies criterion 4 ('auditable, not anecdotal') while keeping the markdown narrative for human discoverability and the JSON for downstream tooling / Phase 37 ADR-0010 expansion.
 
 ---
 
@@ -162,7 +162,7 @@
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | PR with full artifact + SUMMARY narrative (Recommended) | Final commit appends close-out narrative to architecture doc + writes SUMMARY.md + checks LLM-RELI-06 in REQUIREMENTS.md. Same shape as Phase 30.1 close. | ✓        |
 | Append-only with no separate close commit               | Minimum ceremony; loses the narrative explainer.                                                                                                          |          |
-| Hand the artifact to Phase 36                           | Defers writing, risks rot.                                                                                                                                |          |
+| Hand the artifact to Phase 37                           | Defers writing, risks rot.                                                                                                                                |          |
 
 **User's choice:** PR with full artifact + SUMMARY narrative.
 
@@ -200,6 +200,6 @@ Five small items deferred to researcher/planner judgement (full text in CONTEXT.
 Captured in CONTEXT.md `<deferred>` section; surfaced here for cross-reference:
 
 - **Phase 31.1 (conditional):** Adaptive `Retry-After`-aware NIM limiter — only if D-05 escalation triggers.
-- **Phase 32 / Phase 34 overlap:** Dashboard surface for cascade-degraded state; DLQ-threshold alerts; GH Actions automated snapshot + auto-issue path.
-- **Phase 36:** ADR-0010 `<expand_at_36>` write reads Phase 31's `watch-log.json` as canonical input.
+- **Phase 32 / Phase 35 overlap:** Dashboard surface for cascade-degraded state; DLQ-threshold alerts; GH Actions automated snapshot + auto-issue path.
+- **Phase 37:** ADR-0010 `<expand_at_36>` write reads Phase 31's `watch-log.json` as canonical input.
 - **Out-of-v1.5:** Provider expansion, v4 router, paid OR conversion, NIM model swap — Phase 31 does not revisit unless D-05 escalation forces.

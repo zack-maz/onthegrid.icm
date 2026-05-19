@@ -572,13 +572,13 @@ const extractResult = await processEventGroups(prioritizedGroups, async (complet
 const extractResult = await processEventGroups(prioritizedGroups, async (completed, total) => {
   updateProgress({ completedBatches: completed, totalBatches: total });
   // Phase 30 D-04: incremental flush retired (SIMPLIFY-01). Terminal write at line 477 is canonical.
-  // Partial-cache observability write stays in the v3 extractor's writePartialCache (SIMPLIFY-02 / Phase 34).
+  // Partial-cache observability write stays in the v3 extractor's writePartialCache (SIMPLIFY-02 / Phase 35).
 });
 ```
 
 **Anti-pattern (gotcha 1):** the `lastFlushedEventCount` + `batchesSinceLastFlush` closures (lines 355-356) are deletion-target; the callback signature stays `async (completed, total) => void` so the test harness's mock at `incrementalWrite.test.ts:167-171` still drives it.
 
-**Anti-pattern (gotcha 2):** the partial-cache write at `writePartialCache` (called inside the v3 extractor itself, NOT in this pipeline) STAYS untouched. SIMPLIFY-02 retires the partial key in Phase 34; Phase 30 only retires the periodic-flush mechanism. The test mocks at `terminalShape.test.ts:154-181` simulate this — that test passes (Phase 28.2.6 invariant) before and after D-04.
+**Anti-pattern (gotcha 2):** the partial-cache write at `writePartialCache` (called inside the v3 extractor itself, NOT in this pipeline) STAYS untouched. SIMPLIFY-02 retires the partial key in Phase 35; Phase 30 only retires the periodic-flush mechanism. The test mocks at `terminalShape.test.ts:154-181` simulate this — that test passes (Phase 28.2.6 invariant) before and after D-04.
 
 **Anti-pattern (gotcha 3):** the comment block at lines 87-89 still references "Phase 28.2.6 Plan 01" — clean up to reflect Phase 30 D-04 deletion. The `mergeAndPersistLlmEntities` helper's docblock at 108-129 references "periodic flush hook (every N batches inside the IIFE)" — remove the "periodic flush hook" mention; the helper is now single-purpose.
 
@@ -1008,7 +1008,7 @@ Measurement source: `docs/architecture/llm-pipeline-reliability.md` (Phase 30 D-
 ...
 ```
 
-**Anti-pattern (gotcha):** the `<expand_at_36>` marker is a literal HTML-style comment hint, NOT a placeholder to delete. RESEARCH §Open Questions notes "Full ADR closes at Phase 36" — keep the marker in place so Phase 36 can find it and append the milestone closeout.
+**Anti-pattern (gotcha):** the `<expand_at_36>` marker is a literal HTML-style comment hint, NOT a placeholder to delete. RESEARCH §Open Questions notes "Full ADR closes at Phase 37" — keep the marker in place so Phase 37 can find it and append the milestone closeout.
 
 ---
 

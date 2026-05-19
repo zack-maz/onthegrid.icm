@@ -115,7 +115,7 @@ Run 1 (Plan 02) measured `watchdogTimeoutCount: 0` at p95 batch latency 33s vs. 
 - **LLMPipelineProgress.callHistory.skipReason union (pre-deletion lines 93-99):** the `| 'watchdog-soft-warn'` literal (pre-deletion line 99) deleted; remaining union: `'breaker' | 'hard_cap' | 'no_client' | 'rate_limit_window' | 'daily_cap'`. Inline `as const` ergonomic note paragraph (pre-deletion lines 75-77) deleted; replaced with a 5-line backwards-compat note explaining that stale events:llm-summary:v3 rows under 90d TTL may still carry the value for ~3 months post-merge and that Plan 01's analyzer ignores unknown values.
 - **LLMRunSummary.callHistory.skipReason union (pre-deletion lines 330-336):** same `| 'watchdog-soft-warn'` literal deleted; remaining union identical to LLMPipelineProgress. A short cross-reference comment ("Phase 30 D-05: prior soft-warn enum literal removed; see writer-site comment in LLMPipelineProgress.callHistory above") added pointing readers back to the writer-site comment for backwards-compat notes.
 
-## LOC Delta (for SIMPLIFY-07 budget tracking in Phase 34)
+## LOC Delta (for SIMPLIFY-07 budget tracking in Phase 35)
 
 | File                                              | Insertions | Deletions | Net     |
 | ------------------------------------------------- | ---------- | --------- | ------- |
@@ -131,7 +131,7 @@ Run 1 (Plan 02) measured `watchdogTimeoutCount: 0` at p95 batch latency 33s vs. 
 
 `npx vitest run server/__tests__/lib/freeClaudeRouter.retryAfterMs.test.ts` exits 0 with `6 passed (6)` after this plan's commits — the same count Plan 01 closed at. The analyzer's `--fixture=...` smoke runs (Path A `run-with-retry-after.json` and Path B `run-without-retry-after.json`) do not include any `'watchdog-soft-warn'` skipReason rows, so the enum deletion is invisible to the test surface; the production backwards-compat invariant (stale rows under 90d Redis TTL must not crash the analyzer) is preserved by Plan 01's design (unknown-value tolerant), not by any code change in this plan.
 
-## Header Docblock Before-and-After (for SIMPLIFY-\* commit narrative in Phase 34)
+## Header Docblock Before-and-After (for SIMPLIFY-\* commit narrative in Phase 35)
 
 **Before (pre-deletion lines 1-19, 19 lines):**
 

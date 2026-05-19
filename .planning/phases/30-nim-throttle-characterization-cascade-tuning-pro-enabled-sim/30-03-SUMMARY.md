@@ -34,7 +34,7 @@ key-files:
     - server/__tests__/lib/llmExtractionPipeline.incrementalWrite.test.ts
     - server/__tests__/lib/llmExtractionPipeline.crossBoundary.test.ts
 decisions:
-  - "Plan 03 retires the periodic-flush MECHANISM only — the events:llm:v3:partial observability key writes inside the v3 extractor's writePartialCache STAY untouched (SIMPLIFY-02 / Phase 34 owns the partial-key retirement). The local PARTIAL_KEY_ACTIVE const in llmExtractionPipeline.ts was orphaned by the callback shrinkage and deleted with a tombstone comment; the v3 extractor maintains its own PARTIAL_KEY reference."
+  - "Plan 03 retires the periodic-flush MECHANISM only — the events:llm:v3:partial observability key writes inside the v3 extractor's writePartialCache STAY untouched (SIMPLIFY-02 / Phase 35 owns the partial-key retirement). The local PARTIAL_KEY_ACTIVE const in llmExtractionPipeline.ts was orphaned by the callback shrinkage and deleted with a tombstone comment; the v3 extractor maintains its own PARTIAL_KEY reference."
   - "crossBoundary.test.ts auto-fixed under Rule 3 (blocking, same root cause as Tasks 1-3). Both pre-existing tests (`two consecutive partial runs produce same final state` and `periodic flush geocode quality equals final flush geocode quality`) asserted behaviors that the periodic-flush retirement makes impossible. Replaced with two new tests: a mid-run-abort negative-shape assertion (events:llm:v3 stays empty) and a happy-path exactly-once mirror of the terminalShape.test.ts invariant. This was an in-scope cascading consequence of Task 1's code deletion, not pre-existing tech debt."
   - "Operator's stale Vercel LLM_FLUSH_EVERY_N_BATCHES env-var is harmless once the Zod entry is gone (CONTEXT D-04 / RESEARCH §Runtime State Inventory). Documented in the Task 2 commit body for operator-driven post-merge cleanup."
 metrics:
@@ -55,7 +55,7 @@ Single-pass deletion of the Phase 28.2.6 Plan 01 incremental-flush mechanism —
 | 2    | Delete LLM_FLUSH_EVERY_N_BATCHES from server/config.ts + .env.example                                                                                                   | complete | 3635e2a |
 | 3    | Update terminalShape.test.ts (add exactly-once mergeAndPersist) + incrementalWrite.test.ts (replace per-N-flush with no-flush) + crossBoundary.test.ts (Rule-3 cascade) | complete | 87d9b57 |
 
-## Exact Line Ranges Deleted (for SIMPLIFY-07 LOC accounting / Phase 34)
+## Exact Line Ranges Deleted (for SIMPLIFY-07 LOC accounting / Phase 35)
 
 | File                                  | Pre-deletion lines                                                                       | Post-deletion lines                    | Net delta      |
 | ------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------- | -------------- |
@@ -130,14 +130,14 @@ Also updated: every `mockEnv` block (3 files) had `LLM_FLUSH_EVERY_N_BATCHES` pr
 
 ### Pre-existing Baselines (NOT Plan 03 deviations)
 
-**`npm run check:env` exits 1 at base commit (d8c52ba) and post-Plan**. The script reports `EXTRA in .env.example` for `LLM_PIPELINE_V2 / LLM_PIPELINE_V3` (Phase 29 D-02 part C operator-cleanup-pending) and 12 `VITE_*` client-tier vars that don't belong in the server Zod schema. Plan 03 did NOT regress this baseline — both `LLM_FLUSH_EVERY_N_BATCHES` sites went to 0 atomically. The pre-existing drift is out of scope for SIMPLIFY-01 and is logged for Phase 34 / SIMPLIFY-05 cleanup.
+**`npm run check:env` exits 1 at base commit (d8c52ba) and post-Plan**. The script reports `EXTRA in .env.example` for `LLM_PIPELINE_V2 / LLM_PIPELINE_V3` (Phase 29 D-02 part C operator-cleanup-pending) and 12 `VITE_*` client-tier vars that don't belong in the server Zod schema. Plan 03 did NOT regress this baseline — both `LLM_FLUSH_EVERY_N_BATCHES` sites went to 0 atomically. The pre-existing drift is out of scope for SIMPLIFY-01 and is logged for Phase 35 / SIMPLIFY-05 cleanup.
 
 ## Pointer for Plan 07 (reliability doc)
 
 The Plan 07 reliability doc's "Retired Mechanisms" section should reference this Plan 03's:
 
 - **SET-call delta:** Pre ~22 → Post 1 per cron run (~95% reduction) on `events:llm:v3` (sourced from Plan 06 Run 2 `batchCount: 213`).
-- **LOC delta:** -92 LOC across `llmExtractionPipeline.ts` (-86), `server/config.ts` (-1 net), `.env.example` (-5). Feeds Phase 34 SIMPLIFY-07's cumulative v1.5 bundle delta.
+- **LOC delta:** -92 LOC across `llmExtractionPipeline.ts` (-86), `server/config.ts` (-1 net), `.env.example` (-5). Feeds Phase 35 SIMPLIFY-07's cumulative v1.5 bundle delta.
 - **Single-writer invariant:** End-of-run `mergeAndPersistLlmEntities` call at `server/lib/llmExtractionPipeline.ts:389` (post-deletion line number) is the sole writer of `events:llm:v3`. Mirrors CLAUDE.md "Cron-only trigger" language.
 
 ## Verification Evidence

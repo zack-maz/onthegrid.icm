@@ -48,7 +48,7 @@ All four tasks landed atomically as a single `chore(29)` commit per the plan's e
 
 ### `.planning/phases/29-.../29-CONTEXT.md`
 
-- L21 (`<domain>` block): "Full ADR-0009 + acceptance gate closeout → Phase 36" → "Full ADR-0010 + acceptance gate closeout → Phase 36"
+- L21 (`<domain>` block): "Full ADR-0009 + acceptance gate closeout → Phase 37" → "Full ADR-0010 + acceptance gate closeout → Phase 37"
 - L48 (D-03): Header + body + filename path renamed to ADR-0010; added numbering-collision note citing the existing Accepted `0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` (committed 2026-04-24).
 - L122 (Claude's Discretion): "ADR-0009 stub structure" → "ADR-0010 stub structure" with citation of the existing 0009 slot.
 - L174-175 (Canonical Refs): `docs/adr/` directory description + `ADR-0010-llm-pipeline-v1-5-decisions.md` filename updated. Notes the directory already exists (ADRs 0001-0009 + README.md + template.md).
@@ -69,15 +69,15 @@ All four tasks landed atomically as a single `chore(29)` commit per the plan's e
 ### `.planning/ROADMAP.md`
 
 - L101 (v1.5 scope summary): "ADR-0009" → "ADR-0010" in the DOCS-PUB track description.
-- L105 (Phase 29 entry): "rationale folded into ADR-0009 at Phase 36 with stub written here" → "rationale folded into ADR-0010 at Phase 36 with stub written here — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` already occupies the 0009 slot".
-- L112 (Phase 36 short entry): "Phase 36: ADR-0009 + Acceptance Gate Closeout" → "Phase 36: ADR-0010 + Acceptance Gate Closeout" with citation of the existing 0009 slot.
+- L105 (Phase 29 entry): "rationale folded into ADR-0009 at Phase 37 with stub written here" → "rationale folded into ADR-0010 at Phase 37 with stub written here — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` already occupies the 0009 slot".
+- L112 (Phase 37 short entry): "Phase 37: ADR-0009 + Acceptance Gate Closeout" → "Phase 37: ADR-0010 + Acceptance Gate Closeout" with citation of the existing 0009 slot.
 - L125 (Phase 29 SC#3) — **the reconciliation edit**: replaced "v1 + v2 extractor code paths are still importable as deep-rollback safety per Phase 27.4 D-26/D-40 (operator can flip back via `POST /api/events/llm-pipeline {version: 'v1'}` or `'v2'`); a quick smoke test from the dev DevApiStatus pill exercises both paths." with "v1 + v2 extractor modules + the `POST /api/events/llm-pipeline` override route + the DevApiStatus Pin-to-v1/v2 buttons are DELETED (D-02 supersedes Phase 27.4 D-26/D-40 deep-rollback lock). Rollback path is `git revert <Phase 29 commit range>` — wall-clock minutes, not a Bearer-POST flip. Rationale captured in ADR-0010 stub written this phase."
 - L128 (Phase 29 SC#6) — **companion deviation edit**: SC#6 contained a cross-reference to the old SC#3 wording ("v1 + v2 extractor _modules_ still importable for deep rollback per Criterion 3"). That cross-reference now contradicts the updated SC#3. Rewrote to: "Cerebras + Groq adapter _source files_ themselves stay in `server/adapters/` (importable for emergency rollback) but no production code path imports them. v1 + v2 extractor modules are DELETED per Criterion 3 — the rollback path for the entire Phase 29 surface is `git revert <Phase 29 commit range>`." This preserves the Cerebras/Groq adapter preservation contract from CONTEXT D-01 (those adapter source files are kept) while aligning the v1+v2 module language with the deletion stance from CONTEXT D-02.
 - L130 (Phase 29 SC#8): "Rationale captured in ADR-0009 stub" → "Rationale captured in ADR-0010 stub" + citation of the existing 0009 slot.
-- L204 (Phase 34 SC#8): "folded into ADR-0009" → "folded into ADR-0010".
-- L221 (Phase 36 section header): "Phase 36: ADR-0009 + Acceptance Gate Closeout" → "Phase 36: ADR-0010 + Acceptance Gate Closeout".
-- L224 (Phase 36 Depends on): "but ADR-0009 stands alone" → "but ADR-0010 stands alone".
-- L228 (Phase 36 SC#1): "next sequential number, expected ADR-0009" → "ADR-0010 — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot".
+- L204 (Phase 35 SC#8): "folded into ADR-0009" → "folded into ADR-0010".
+- L221 (Phase 37 section header): "Phase 37: ADR-0009 + Acceptance Gate Closeout" → "Phase 37: ADR-0010 + Acceptance Gate Closeout".
+- L224 (Phase 37 Depends on): "but ADR-0009 stands alone" → "but ADR-0010 stands alone".
+- L228 (Phase 37 SC#1): "next sequential number, expected ADR-0009" → "ADR-0010 — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot".
 - L245 (Progress table row): "36. ADR-0009 + Acceptance Gate Closeout" → "36. ADR-0010 + Acceptance Gate Closeout".
 
 **Net effect:**
@@ -131,7 +131,7 @@ No other deviations. All other ADR-0009 → ADR-0010 renames executed exactly as
 No code or schema changes; doc-only edits. No new endpoints, no auth surface changes, no schema changes. Threat model items T-29-02-01 + T-29-02-02 from the plan both checked:
 
 - **T-29-02-01 (severity: low, missed-reference):** verified via `grep ADR-0009 CONTEXT.md ROADMAP.md REQUIREMENTS.md` → 0 hits remaining in v1.5-retirement context. Mitigated.
-- **T-29-02-02 (severity: low, over-rename of two-key-split refs):** verified by reading the per-edit diff hunks. Every ADR-0009 → ADR-0010 rename was in v1.5-retirement context (D-03 designations, DOCS-PUB-04, Phase 29 SCs, Phase 36 SCs, bundle-size delta refs, progress table). No reference to the existing Accepted two-key-split ADR was touched. Filename `0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` and the bare-numeric `0009` slot citation are preserved everywhere they appear. Mitigated.
+- **T-29-02-02 (severity: low, over-rename of two-key-split refs):** verified by reading the per-edit diff hunks. Every ADR-0009 → ADR-0010 rename was in v1.5-retirement context (D-03 designations, DOCS-PUB-04, Phase 29 SCs, Phase 37 SCs, bundle-size delta refs, progress table). No reference to the existing Accepted two-key-split ADR was touched. Filename `0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` and the bare-numeric `0009` slot citation are preserved everywhere they appear. Mitigated.
 
 ## Known Stubs
 

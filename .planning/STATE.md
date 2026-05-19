@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 Phase: 32 (Ghost Event URL Liveness, Dashboard & Prune) — NOT STARTED (next available phase on GHOST track, independent of LLM-RELI spine per ROADMAP parallelization notes)
 Plan: 0 of TBD
-Status: Phase 31 closed early at Day 1 / 7 under operator decision 2026-05-19 — LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically." Snapshot harness remains operational; ad-hoc capture via `npm run watch:snapshot -- --http`. Phase 36 acceptance gate (LLM-RELI-07) unaffected.
+Status: Phase 31 closed early at Day 1 / 7 under operator decision 2026-05-19 — LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically." Snapshot harness remains operational; ad-hoc capture via `npm run watch:snapshot -- --http`. Phase 37 acceptance gate (LLM-RELI-07) unaffected.
 Last activity: 2026-05-19 -- Phase 31 closed early; advancing to Phase 32
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
-Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivity-audit.yml exit-0 with allTiersGreen=true for 3 consecutive runs (LLM-RELI-07; observed in Phase 36 closeout).
+Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivity-audit.yml exit-0 with allTiersGreen=true for 3 consecutive runs (LLM-RELI-07; observed in Phase 37 closeout).
 
 ## v1.5 Phases (planned)
 
@@ -46,7 +46,7 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | 35    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | Not started |
 | 36    | ADR-0009 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Not started |
 
-**Sequencing:** 29 → 30 → 31 → 36 is the LLM-RELI spine (must run in order). Phases 32, 33, 34 are independent of the spine and can run in parallel with 29/30/31. Phase 35 lands after 29/30/31 close so docs reflect shipped state. Phase 36 is the milestone-close gate by construction.
+**Sequencing:** 29 → 30 → 31 → 36 is the LLM-RELI spine (must run in order). Phases 32, 33, 34 are independent of the spine and can run in parallel with 29/30/31. Phase 36 lands after 29/30/31 close so docs reflect shipped state. Phase 37 is the milestone-close gate by construction.
 
 Backlog still parked (not in v1.5 unless they block reliability):
 
@@ -323,4 +323,4 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 
 **Planned Phase:** 31 (cron-stability-validation-7-day-watch) — 5 plans — 2026-05-18T01:41:58.483Z
 
-- Phase 31 closed early under operator decision 2026-05-19 at Day 1 / 7 (Day-1 natural cron PASS captured, commit `d0c16e4`). LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically" — caveat-marked. Snapshot harness retained for ad-hoc capture; D-05 escalation to Phase 31.1 deferred (no FAIL row observed). Phase 36 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0) unaffected and remains the mechanical reliability check at milestone close. See [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md) for the full close-out rationale and resume path.
+- Phase 31 closed early under operator decision 2026-05-19 at Day 1 / 7 (Day-1 natural cron PASS captured, commit `d0c16e4`). LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically" — caveat-marked. Snapshot harness retained for ad-hoc capture; D-05 escalation to Phase 31.1 deferred (no FAIL row observed). Phase 37 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0) unaffected and remains the mechanical reliability check at milestone close. See [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md) for the full close-out rationale and resume path.

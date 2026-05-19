@@ -13,11 +13,11 @@ Prove the daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:
 **Out of scope (deferred elsewhere):**
 
 - Adaptive `Retry-After`-aware NIM limiter (per Phase 30.1 deferred). Promoted to its own decimal phase (likely 31.1) only if this watch fails ≥3 reset cycles per D-05.
-- Dashboard surface for cascade-degraded state — overlaps Phase 32 (ghost events) and Phase 34 (Redis registry / dashboard). Not 31.
+- Dashboard surface for cascade-degraded state — overlaps Phase 32 (ghost events) and Phase 35 (Redis registry / dashboard). Not 31.
 - Re-enabling OpenRouter / paid-OR conversion / NIM model switch — Phase 30.1 decided NIM-only honest; revisited only if D-05 escalation forces it.
 - Provider expansion / v4 router — explicitly out of scope for v1.5 per `PROJECT.md`.
-- LLM-RELI-07 (3× consecutive `prod-connectivity-audit.yml` exit-0 gate) — Phase 36's milestone close.
-- Full ADR-0010 close-out — Phase 36 owns the `<expand_at_36>` block.
+- LLM-RELI-07 (3× consecutive `prod-connectivity-audit.yml` exit-0 gate) — Phase 37's milestone close.
+- Full ADR-0010 close-out — Phase 37 owns the `<expand_at_36>` block.
 
 **Carrying forward (locked, not re-decided here):**
 
@@ -55,7 +55,7 @@ Prove the daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:
 
 ### Observation Artifact
 
-- **D-06: Both JSON and markdown.** Machine-readable JSON at `.planning/phases/31-cron-stability-validation-7-day-watch/watch-log.json` (one row per daily tick, byte-stable schema, sorted by `tickDate` ascending). Human-readable markdown table appended to a new `## Phase 31 7-Day Watch (LLM-RELI-06, started YYYY-MM-DD)` section in `docs/architecture/llm-pipeline-reliability.md` — placed inside the "7-Day Watch" placeholder section Phase 30 D-06 reserved. Both committed atomically per snapshot (`docs(31): watch-log day N — <status>` commit per day). The dual surface satisfies criterion 4 ("auditable, not anecdotal") and gives Phase 36 a clean ADR-0010 expand-block source.
+- **D-06: Both JSON and markdown.** Machine-readable JSON at `.planning/phases/31-cron-stability-validation-7-day-watch/watch-log.json` (one row per daily tick, byte-stable schema, sorted by `tickDate` ascending). Human-readable markdown table appended to a new `## Phase 31 7-Day Watch (LLM-RELI-06, started YYYY-MM-DD)` section in `docs/architecture/llm-pipeline-reliability.md` — placed inside the "7-Day Watch" placeholder section Phase 30 D-06 reserved. Both committed atomically per snapshot (`docs(31): watch-log day N — <status>` commit per day). The dual surface satisfies criterion 4 ("auditable, not anecdotal") and gives Phase 37 a clean ADR-0010 expand-block source.
 
 - **D-07: `scripts/snapshot-cron-watch.ts` + `npm run watch:snapshot`** is the canonical capture path. Operator runs it once each morning (~04:30 UTC local, after the daily cron tick). Script:
   - Reads `events:llm-summary:v3` (routingTrace, errorTaxonomy, evalScore, latency) and `events:llm-dlq` (SADD members) via the same Upstash client the analyzer uses.
@@ -96,7 +96,7 @@ Prove the daily 04:00 UTC `/api/cron/refresh-events` consistently lands `events:
   1. `docs(31): watch-log day 7 — PASS (7/7 consecutive)` — last snapshot row.
   2. `docs(31): close phase — append SUMMARY + 7-day narrative to architecture doc; check LLM-RELI-06 in REQUIREMENTS.md` — writes SUMMARY.md, appends final-narrative paragraph to the 7-Day Watch section.
   3. PR opened against `main`; squash-merged on CI green (same convention as PRs #20/#21/#22).
-     Phase 36 picks up the artifact for the ADR-0010 `<expand_at_36>` write at milestone close.
+     Phase 37 picks up the artifact for the ADR-0010 `<expand_at_36>` write at milestone close.
 
 ### Claude's Discretion
 
@@ -164,13 +164,13 @@ None. The four "Phase 31 prep" items folded under D-01 originated in Phase 30.1'
 
 - `docs/architecture/llm-pipeline-reliability.md` — Phase 30 D-06 reserved a "7-Day Watch" placeholder section; D-06 above appends the table here
 - `docs/runbook.md` — D-01 prep #4 lands the probe-openrouter quarterly-check paragraph here
-- `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` — `<expand_at_36>` block; Phase 31 does NOT write here (Phase 36 owns the expansion at milestone close)
+- `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` — `<expand_at_36>` block; Phase 31 does NOT write here (Phase 37 owns the expansion at milestone close)
 - `docs/degradation.md` — "map never goes blank" Pitfall 1 contract; read-only reference
 
 ### Vercel + CI Surface
 
 - `vercel.json` — `functions["api/vercel-entry.js"]` block; potential D-01 prep #1 fix target (depending on bundling vector chosen)
-- `.github/workflows/prod-connectivity-audit.yml` — runs separately; the watch's row data does NOT depend on this workflow but it sets the Phase 36 LLM-RELI-07 gate (3 consecutive exit-0)
+- `.github/workflows/prod-connectivity-audit.yml` — runs separately; the watch's row data does NOT depend on this workflow but it sets the Phase 37 LLM-RELI-07 gate (3 consecutive exit-0)
 
 ### Observability Keys (Redis)
 
@@ -227,7 +227,7 @@ None. The four "Phase 31 prep" items folded under D-01 originated in Phase 30.1'
 
 - **The watch is mostly waiting.** Phase 31's wall-clock duration is ≥7 days regardless of plan effort. Plan/execute work to set up prep fixes + snapshot script is on the order of 1-2 hours of focused engineering; the rest is daily 30-second snapshot runs. Plan the phase with that asymmetry in mind: rich prep + dead-simple ongoing rhythm.
 - **D-02's validation force-trigger is the most expensive single tick of the phase** (full prod cron run, ~10 min wall-clock at the 800s ceiling, real NIM token spend). Plan it during operator-watchful hours; don't pre-schedule it.
-- **D-08's row schema is the most permanent artifact of this phase.** It outlives the watch — Phase 36 ADR-0010 expansion reads it, future quarterly OR re-probes (Phase 30.1 deferred) compare against it, any v1.6 acceptance-gate audit cites it. Get the field set right at D-07 implementation; changing schema mid-watch is itself a watch event per D-08.
+- **D-08's row schema is the most permanent artifact of this phase.** It outlives the watch — Phase 37 ADR-0010 expansion reads it, future quarterly OR re-probes (Phase 30.1 deferred) compare against it, any v1.6 acceptance-gate audit cites it. Get the field set right at D-07 implementation; changing schema mid-watch is itself a watch event per D-08.
 - **Phase 30.1's `30.1-or-pulse-snapshot.json` is the pre-prep-fix baseline** for D-02's "materially lower batch count" check. The 2026-05-17 04:00 UTC cron processed 213 batches with ~50 dropped to `skipped:breaker`. Post-diff-filter, the unique-group count should drop materially (estimate 30-50% based on cron re-processing the same set twice pre-fix; researcher confirms the actual delta).
 - **The snapshot script exits 0 on PASS / non-zero on FAIL** so a future operator can wire it into a shell alias or a one-line cron without the script needing to know about alerting. Defers all alerting policy to the operator's shell.
 - **GAP rows are not failures** (D-11). The phase-close artifact narrative explicitly documents this — the watch is testing the CRON's stability, not the operator's attendance.
@@ -244,16 +244,16 @@ These came up during discussion but belong in other phases. Don't lose them.
 
 - **Adaptive `Retry-After`-aware NIM limiter** — Phase 30.1 named this candidate explicitly. Promoted to Phase 31.1 only if the 7-day watch triggers D-05's 3-reset-cycles escalation gate. Phase 30 D-01's `retryAfterMs` field is already populated on `callHistory`; the work is wiring it into `nvidiaNimWindow` so post-429 calls wait the server-requested duration.
 
-### Phase 32 / Phase 34 Overlap
+### Phase 32 / Phase 35 Overlap
 
-- **Dashboard surface for cascade-degraded state** — operator sees nothing when batches drop to `skipped:breaker`. Phase 30.1 deferred this as "its own phase; overlaps Phase 32 (ghost events) + Phase 34 (Redis registry / dashboard)." Phase 31's snapshot-script ergonomic + the `watch-log.json` artifact can inform that dashboard's content shape when it lands.
+- **Dashboard surface for cascade-degraded state** — operator sees nothing when batches drop to `skipped:breaker`. Phase 30.1 deferred this as "its own phase; overlaps Phase 32 (ghost events) + Phase 35 (Redis registry / dashboard)." Phase 31's snapshot-script ergonomic + the `watch-log.json` artifact can inform that dashboard's content shape when it lands.
 - **DLQ-threshold alert** (e.g. `events:llm-dlq` count > baseline for 24h) — same dashboard-phase candidate. Phase 31 does NOT add an alert key; D-10 explicitly rejects new alerting infra in this phase.
 - **GitHub Actions automated snapshot + auto-issue on failure** — Phase 31 chose D-10 manual operator snapshot. The automated path is reasonable for a Phase 31.1 or a Phase 32 dashboard companion; out of scope here.
 
-### Phase 36 Hand-off
+### Phase 37 Hand-off
 
-- **ADR-0010 `<expand_at_36>` write** — Phase 31's `watch-log.json` is the canonical input for the ADR section that documents v1.5's LLM reliability outcomes. Phase 31 closes without touching the ADR; Phase 36 reads the artifact and writes the expansion. Pattern established by Phase 30 (which also deferred its ADR expansion to Phase 36).
-- **LLM-RELI-07 (`prod-connectivity-audit.yml` 3× consecutive exit-0)** — Phase 36 owns this gate. Phase 31's 7-day watch is observational data the audit workflow consumes independently; the workflow itself is not modified by Phase 31.
+- **ADR-0010 `<expand_at_36>` write** — Phase 31's `watch-log.json` is the canonical input for the ADR section that documents v1.5's LLM reliability outcomes. Phase 31 closes without touching the ADR; Phase 37 reads the artifact and writes the expansion. Pattern established by Phase 30 (which also deferred its ADR expansion to Phase 37).
+- **LLM-RELI-07 (`prod-connectivity-audit.yml` 3× consecutive exit-0)** — Phase 37 owns this gate. Phase 31's 7-day watch is observational data the audit workflow consumes independently; the workflow itself is not modified by Phase 31.
 
 ### Cross-Phase Surfaces (Not 31)
 

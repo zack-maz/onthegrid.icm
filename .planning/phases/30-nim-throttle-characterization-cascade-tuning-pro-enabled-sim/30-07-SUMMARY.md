@@ -26,13 +26,13 @@ requires:
       - run-2-throttle-snapshot.json — Run 2 validation numbers; Plan 06 SUMMARY guidance to cite Run 2's null throttle window over Run 1's synthetic 306
 provides:
   - docs/architecture/llm-pipeline-reliability.md — measurement home for Run 1 + Run 2 throttle findings + tuned defaults + retired mechanisms + Phase 31 placeholder
-  - docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md Phase 30 sub-block — decisions D-01 through D-07 with their final numbers + rationale; fresh <expand_at_36> marker for Phase 36 closeout
+  - docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md Phase 30 sub-block — decisions D-01 through D-07 with their final numbers + rationale; fresh <expand_at_36> marker for Phase 37 closeout
   - CLAUDE.md pointer line under "LLM Event Pipeline" — single dash-bullet pointing to the new architecture doc; 5018-token Phase 29 D-06 budget preserved
 affects:
   - phase: 31-cron-stability-validation
     consumes: docs/architecture/llm-pipeline-reliability.md "7-Day Watch" placeholder section — appends daily observations there
   - phase: 36-adr-0009-acceptance-gate-closeout
-    consumes: docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md fresh <expand_at_36> marker — appends Phase 36 closeout there
+    consumes: docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md fresh <expand_at_36> marker — appends Phase 37 closeout there
 
 # Tech tracking
 tech-stack:
@@ -40,7 +40,7 @@ tech-stack:
   patterns:
     - 'Atomic single-commit closeout pattern (CONTEXT D-08 Commit 7): all three docs writes land in one commit so the closure is a single revertable unit'
     - 'ADR decision / architecture doc measurement separation: ADR-0010 holds the decisions (immutable per Nygard short format); architecture doc holds the numbers (mutable as Phase 31 watch appends)'
-    - "<expand_at_36> marker pattern: ADR-0010 stub from Phase 29 left a marker; Phase 30 replaces it with the new sub-block + a fresh marker at the end of the block so Phase 36's closeout has a deterministic insertion point"
+    - "<expand_at_36> marker pattern: ADR-0010 stub from Phase 29 left a marker; Phase 30 replaces it with the new sub-block + a fresh marker at the end of the block so Phase 37's closeout has a deterministic insertion point"
     - "Honest framing of Path B sanity-check tuning: doc explicitly distinguishes 'conservative defensive choices grounded in measured per-batch latency' from 'empirical fits to a measured throttle window' so future readers don't mistake the new defaults for measurement-derived numbers"
     - 'INCONCLUSIVE-as-status pattern for the eval gate: doc + ADR both record the eval-harness fixture-bundling blocker honestly rather than papering over with PASSED/FAILED that would be misleading'
 
@@ -172,11 +172,11 @@ The same framing recurs in:
 - Architecture doc Tuned Defaults block "Plan 06 deploy-gate verdict" paragraph
 - Architecture doc Phase 31 placeholder (calls out eval-harness fix as prerequisite)
 
-This honesty pattern is the deliberate Phase 30 closeout convention: future operators / Phase 31 / Phase 36 readers can see at a glance that the new defaults were not derived from a measured throttle signal, so re-tuning against real 429s is still a live concern when production traffic patterns shift.
+This honesty pattern is the deliberate Phase 30 closeout convention: future operators / Phase 31 / Phase 37 readers can see at a glance that the new defaults were not derived from a measured throttle signal, so re-tuning against real 429s is still a live concern when production traffic patterns shift.
 
 ## ADR-0010 `<expand_at_36>` Marker Preservation
 
-Verified by `grep -c '<expand_at_36>' docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` returning exactly **1** after the commit. The marker was moved (not duplicated) — its prior position (between the Decision section and the Consequences section) has been replaced by the Phase 30 sub-block (with D-01 through D-07 entries + rollback recipe + out-of-scope-carries-forward list), and a fresh `<expand_at_36>` marker now sits at the END of the new block. Phase 36's final closeout has a deterministic insertion point.
+Verified by `grep -c '<expand_at_36>' docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` returning exactly **1** after the commit. The marker was moved (not duplicated) — its prior position (between the Decision section and the Consequences section) has been replaced by the Phase 30 sub-block (with D-01 through D-07 entries + rollback recipe + out-of-scope-carries-forward list), and a fresh `<expand_at_36>` marker now sits at the END of the new block. Phase 37's final closeout has a deterministic insertion point.
 
 Phase 29 content preceding the marker is byte-identical to prior HEAD (verified by `git diff HEAD~1 HEAD -- docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` showing additions only, no deletions).
 
@@ -222,9 +222,9 @@ The architecture doc has a `## 7-Day Watch (Phase 31, LLM-RELI-06)` placeholder 
 3. If the 7-day watch surfaces 429s (Path A signal), re-run `scripts/analyze-llm-run.ts` against the new `events:llm-summary:v3` data and re-derive the Tuned Defaults block against measured throttle window — replace the conservative defensive numbers with empirical fits.
 4. Confirm LLM_V3_CONCURRENCY's held-at-12 default is correct; the formula `(observed_NIM_RPM × measured_batch_latency_seconds) / 60` should be computable once steadyStateRpm > 0.
 
-## Pointer for Phase 36 (DOCS-PUB-04 / LLM-RELI-07 closeout)
+## Pointer for Phase 37 (DOCS-PUB-04 / LLM-RELI-07 closeout)
 
-The ADR-0010 `<expand_at_36>` marker now sits at the END of the Phase 30 sub-block. Phase 36 should append the milestone-closeout sub-block immediately below the marker (mirroring this plan's pattern) and move the marker one more time, OR delete the marker entirely if Phase 36 is the final closure.
+The ADR-0010 `<expand_at_36>` marker now sits at the END of the Phase 30 sub-block. Phase 37 should append the milestone-closeout sub-block immediately below the marker (mirroring this plan's pattern) and move the marker one more time, OR delete the marker entirely if Phase 37 is the final closure.
 
 ## Self-Check: PASSED
 

@@ -165,7 +165,7 @@ None.
 
 - **Phase 29 closeout:** With this commit landed, all 13 plans of Phase 29 are complete. Orchestrator can merge `worktree-agent-a374024f435ddb65a` → `feature/29-llm-cascade-narrowing-claude-md-cleanup`, then open the Phase 29 close PR.
 - **Phase 30 (NIM Throttle Characterization & Cascade Tuning):** unblocked after Phase 29 merges and operator completes the post-merge checklist above. Phase 30 will operate from `/Users/zackmaz/Desktop/otg-iran-monitor` against the renamed GitHub repo.
-- **Phase 36 (milestone-close gate):** the acceptance gate set at v1.5 start — `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs — needs the renamed repo's CI to keep firing. CI badges currently embedded in README point at the new path; the moment the operator completes the GitHub rename, the audit workflow continues working without code changes (workflows use `${{ inputs.target_url }}` + `secrets.*` only).
+- **Phase 37 (milestone-close gate):** the acceptance gate set at v1.5 start — `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs — needs the renamed repo's CI to keep firing. CI badges currently embedded in README point at the new path; the moment the operator completes the GitHub rename, the audit workflow continues working without code changes (workflows use `${{ inputs.target_url }}` + `secrets.*` only).
 - **Vercel deploy continuity:** no regression risk — `vercel.json` and `api/vercel-entry.js` reference no hardcoded `onthegrid.icm` paths; the Vercel project's GitHub link auto-tracks the rename. Operator verification step 4 above is the safety check.
 
 ## Self-Check
