@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-21T19:23:00.000Z"
-last_activity: 2026-05-21 -- Phase 32 Plan 02 complete (probeUrl + sweep orchestrator + writer; 5 commits, 33 contract tests green)
+last_updated: "2026-05-21T02:49:15.236Z"
+last_activity: 2026-05-21
 progress:
   total_phases: 15
   completed_phases: 4
   total_plans: 35
-  completed_plans: 31
+  completed_plans: 32
   percent: 27
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 32 (ghost-event-url-liveness-dashboard-prune) — EXECUTING
-Plan: 3 of 6
-Status: Plan 32-02 complete; Plan 32-03 ready to execute
-Last activity: 2026-05-21 -- Phase 32 Plan 02 complete (probeUrl HEAD-then-GET + SSRF guard + per-host 1s throttle + persistLiveness writer + runProbeSweep + buildProbeCandidates; 5 commits, 33 contract tests green, 2216 total passing)
+Plan: 4 of 6
+Status: Ready to execute
+Last activity: 2026-05-21
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -275,6 +275,12 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 32 Plan 02: `SWEEP_SAFETY_MARGIN_MS = 60_000` exported as a named constant (not a magic number scattered across Plan 32-03's call site). Plan 32-03's cron handler will compute `const deadline = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS` so the safety margin is visible in one place and the executor can't accidentally pass a different value. Pitfall 1 mitigation. (32-02-01)
 - Phase 32 Plan 02: `buildProbeCandidates` uses a minimal local interface (`ConflictEventEntityForProbe` with just `id` + `data.source?`) rather than importing the full ConflictEventEntity discriminated union — avoids pulling MapEntity + server types into the import graph. Runtime `typeof url === 'string'` guard defends against shape drift. (32-02-05)
 - Phase 32 Plan 02: Combined Task 1 commit (probeUrl + SSRF guard in one feat commit) per the plan's "if the diff-split is awkward, ship them as one commit ... is acceptable fallback" clause. The diff was awkward because the SSRF guard requires BOTH the entry-point check AND the redirect-target re-check inside the loop; splitting them would leak the main probeUrl into a state where redirects bypass the guard. (32-02-01)
+- Phase 32 Plan 03: Cron auto-prune uses DIRECT helper invocation (not self-HTTP) per RESEARCH A4 / Discretion §3 — same Vercel function instance has all exports loaded; bearerFingerprint:'cron:refresh-events' literal makes audit-log attribution unambiguous. HTTP route at POST /api/events/prune-dead-urls preserved for operator clicks (Plan 32-05) AND operator-simulated cron triggers ({trigger:'cron'} body bypasses quota). (32-03-03)
+- Phase 32 Plan 03: Probe sweep + auto-prune post-step placed in safeWaitUntil IIFE's `finally` block (not success-only). Dead-URL cleanup is orthogonal to whether LLM extraction itself dispatched fresh enrichments this tick — if extraction failed, we still want to probe/prune dead URLs from prior runs. Probe/prune wrapped in its own try/catch so failures don't surface as extraction errors. (32-03-03)
+- Phase 32 Plan 03: Widen POST /api/events/prune-dead-urls route try/catch to wrap the quota check (Rule 2 inline fix caught by chaos test). Original implementation had `checkPruneQuota(fingerprint)` BEFORE the try block; under Redis death the raw redis.incr surfaced as 500. Widening to include both quota check AND helper call surfaces any redis throw as 503 prune_failed. Pitfall 6 chaos contract preserved. (32-03-04)
+- Phase 32 Plan 03: Exported `LLM_EVENTS_KEY_ACTIVE` + `LLM_REDIS_TTL_SEC` from `server/lib/llmExtractionPipeline.ts` (was module-private). Hand-rolling `'events:llm:v3'` or `9000` inside urlLiveness.ts would be the exact drift class CLAUDE.md §"Serverless Cache" warns against. One truth source — cron writer and prune writer always agree on key + TTL. (32-03-01)
+- Phase 32 Plan 03: MEDIUM-01 plan-checker pin applied inline at the SCAN call site: `(await redis.scan(cursor, {match, count: 200})) as [string | number, string[]]` matches `@upstash/redis ^1.37.0` — silent shape drift now fails TypeScript instead of producing infinite SCAN loops in production. Mirrors Plan 04's buildDeadUrlSample SCAN-signature pin. (32-03-01)
+- Phase 32 Plan 03: Test-side `flushSafeWaitUntil()` pattern for integration tests against fire-and-forget IIFE bodies — mocks safeWaitUntil to capture the IIFE promise into a shared `pendingPromises` array, then drains pending work before assertions. Production safeWaitUntil semantics unchanged (D-12 hard block preserves void return). Documented in `refresh-events-cron.prune.test.ts` JSDoc for reuse in future cron post-step tests. (32-03-03)
 
 ## Pending Todos
 
