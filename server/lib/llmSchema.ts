@@ -170,8 +170,29 @@ export type EnrichedEventV2 = z.infer<typeof enrichedEventV2>;
 // `z.object({...}).strict()` mirroring v2 verbatim.
 // ---------------------------------------------------------------------------
 
+/**
+ * Phase 33 D-10 — actorConfidence is an index-locked parallel array to actors[].
+ *
+ * Ships as `.optional()` for the rollout window (Open Q §1) so legacy v3 cache
+ * entries through `enrichedEventAny` (the cache-read surface in
+ * `llmEventExtractor.v3.ts`) continue to parse during the 24h forward-rollover
+ * window. Required-without-optional would reject every pre-Phase-33 v3 entry
+ * the daily cron reads for the temporal-context block.
+ *
+ * The cross-field length-match invariant (`arr.length === actors.length`) is
+ * enforced in the EXTRACTOR (`repairActorConfidence` in
+ * `server/lib/llmEventExtractor.v3.ts`, Plan 33-04), NOT in a Zod
+ * `.superRefine()`. Zod cannot cross-field-refine without re-asserting the
+ * parent shape, which complicates the discriminated-union cache-read surface.
+ * Server-side repair fills missing/wrong-length entries with `'low'` defaults
+ * before the cache write so post-Phase-33 entries always carry valid data.
+ *
+ * Tighten to required (drop `.optional()`) in a Phase 35+ cleanup phase once
+ * the 24h daily cron has overwritten every cache entry.
+ */
 export const enrichedEventV3 = enrichedEventV2.extend({
   schemaVersion: z.literal('v3'),
+  actorConfidence: z.array(z.enum(['high', 'medium', 'low'])).optional(),
 });
 
 export type EnrichedEventV3 = z.infer<typeof enrichedEventV3>;
@@ -351,12 +372,107 @@ export const EVENT_EXTRACTION_SCHEMA_V2: Record<string, unknown> = {
 // (not response_format.json_schema), because NVIDIA NIM and OpenRouter free
 // models do not reliably support strict JSON Schema mode. Zod validates
 // post-parse — same defense-in-depth as v2.
-//
-// Schema content is byte-identical to v2 — alias for clarity. Plan 02b's
-// v3 extractor stringifies this and embeds it in the system prompt verbatim.
 // ---------------------------------------------------------------------------
 
-export const EVENT_EXTRACTION_SCHEMA_V3: Record<string, unknown> = EVENT_EXTRACTION_SCHEMA_V2;
+/**
+ * Phase 33 D-12 — un-aliased from EVENT_EXTRACTION_SCHEMA_V2 per Open Q §3.
+ *
+ * v3 diverged from v2 in Phase 33 by adding `actorConfidence` (Open Q §2:
+ * required at wire for LLM forcing-function value; server repairs
+ * missing/wrong-length entries via `repairActorConfidence` as
+ * defense-in-depth — Plan 33-04, `server/lib/llmEventExtractor.v3.ts`).
+ *
+ * FUTURE v2 SCHEMA CHANGES DO NOT AUTO-PROPAGATE here. V2 is frozen
+ * post-Phase-29 (v1+v2 extractors deleted; SIMPLIFY-06). If v2 ever changes,
+ * manually port the change here AND assert the divergence in the
+ * llmSchema.test.ts contract suite. The schema-pinning contract test
+ * (`V3 !== V2` referential check) catches accidental re-aliasing.
+ */
+export const EVENT_EXTRACTION_SCHEMA_V3: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          groupKey: { type: 'string' },
+          location: {
+            type: 'object',
+            properties: {
+              country: { type: ['string', 'null'] },
+              admin1: { type: ['string', 'null'] },
+              city: { type: ['string', 'null'] },
+              neighborhood: { type: ['string', 'null'] },
+              landmark: { type: ['string', 'null'] },
+              confidence: { type: 'number', minimum: 0, maximum: 1 },
+            },
+            required: ['country', 'admin1', 'city', 'neighborhood', 'landmark', 'confidence'],
+            additionalProperties: false,
+          },
+          type: {
+            type: 'string',
+            enum: ['airstrike', 'on_ground', 'explosion', 'targeted', 'other'],
+          },
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+          reasoning: { type: 'string' },
+          weaponType: {
+            type: ['string', 'null'],
+            enum: ['airstrike', 'drone', 'missile', 'artillery', 'small_arms', 'IED', null],
+          },
+          targetType: {
+            type: ['string', 'null'],
+            enum: ['military', 'infrastructure', 'civilian', 'leadership', null],
+          },
+          timeOfDay: { type: ['string', 'null'] },
+          durationMinutes: { type: ['integer', 'null'], minimum: 0 },
+          actors: { type: 'array', items: { type: 'string' } },
+          // Phase 33 D-12 — required at wire per Open Q §2 (LLM forcing
+          // function). Server-side repair (`repairActorConfidence` in
+          // llmEventExtractor.v3.ts, Plan 33-04) fills missing/wrong-length
+          // entries with 'low' defaults as defense-in-depth.
+          actorConfidence: {
+            type: 'array',
+            items: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
+          summary: { type: 'string' },
+          casualties: {
+            type: 'object',
+            properties: {
+              killed: { type: ['integer', 'null'] },
+              injured: { type: ['integer', 'null'] },
+              unknown: { type: 'boolean' },
+            },
+            required: ['killed', 'injured', 'unknown'],
+            additionalProperties: false,
+          },
+          sourceCount: { type: 'integer' },
+        },
+        required: [
+          'groupKey',
+          'location',
+          'type',
+          'confidence',
+          'reasoning',
+          'weaponType',
+          'targetType',
+          'timeOfDay',
+          'durationMinutes',
+          'actors',
+          'actorConfidence',
+          'severity',
+          'summary',
+          'casualties',
+          'sourceCount',
+        ],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['events'],
+  additionalProperties: false,
+};
 
 // ---------------------------------------------------------------------------
 // Batch envelope — array of events. Schema-level (Zod) and JSON-Schema-level
