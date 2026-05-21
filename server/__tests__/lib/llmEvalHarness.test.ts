@@ -380,13 +380,28 @@ describe('runEval with no ground-truth available', () => {
 
     const score = await runEval();
 
-    expect(score).toEqual({ within5km: 0, within20km: 0, within100km: 0, total: 0 });
+    // Phase 33 D-13: zero shape now carries actorMatchRate=0 alongside the
+    // geocode buckets. The interface remains additive (existing buckets
+    // unchanged) so pre-33 readers ignore the new field.
+    expect(score).toEqual({
+      within5km: 0,
+      within20km: 0,
+      within100km: 0,
+      total: 0,
+      actorMatchRate: 0,
+    });
     // resolver never called when ground-truth is absent.
     expect(vi.mocked(resolveLocation)).not.toHaveBeenCalled();
     // updateProgress must still fire so DevApiStatus clears any stale score.
     expect(vi.mocked(updateProgress)).toHaveBeenCalledWith(
       expect.objectContaining({
-        evalScore: { within5km: 0, within20km: 0, within100km: 0, total: 0 },
+        evalScore: {
+          within5km: 0,
+          within20km: 0,
+          within100km: 0,
+          total: 0,
+          actorMatchRate: 0,
+        },
       }),
     );
   });

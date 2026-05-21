@@ -111,8 +111,17 @@ export interface LLMPipelineProgress {
    */
   breakerState?: Record<Provider, 'ok' | 'paused'>;
 
-  /** D-20: latest eval harness score (also written to Redis summary on completion). */
-  evalScore?: { within5km: number; within20km: number; within100km: number; total: number };
+  /** D-20: latest eval harness score (also written to Redis summary on completion).
+   *  Phase 33 D-13: extended with optional `actorMatchRate` (resolver-only second-pass
+   *  score over the live events:llm:v3 cache). Optional for backward compat with
+   *  pre-Phase-33 readers. */
+  evalScore?: {
+    within5km: number;
+    within20km: number;
+    within100km: number;
+    total: number;
+    actorMatchRate?: number;
+  };
 
   /** D-22 aggregate: counts per resolver provenance path for DevApiStatus pie. */
   provenanceCounts?: Partial<Record<GeocodeProvenance, number>>;
@@ -275,7 +284,17 @@ export interface LLMRunSummary {
   // Phase 27.4 additional summary fields (optional for read-compat):
   tokenCounters?: { cerebras: number; groq: number };
   dlqCount?: number;
-  evalScore?: { within5km: number; within20km: number; within100km: number; total: number };
+  /** Phase 33 D-13 mirror — actorMatchRate optional field carried through
+   *  end-of-run summary persistence so cold-start dashboard reads see the
+   *  actor-attribution dimension alongside geocode accuracy. Optional for
+   *  forward-compat with pre-Phase-33 readers (which ignore unknown fields). */
+  evalScore?: {
+    within5km: number;
+    within20km: number;
+    within100km: number;
+    total: number;
+    actorMatchRate?: number;
+  };
   provenanceCounts?: Partial<Record<GeocodeProvenance, number>>;
   suspectCount?: number;
   /** Phase 27.4.1 D-06 / 27.4.2 P6: count of batches killed by the timeout watchdog in last run. */
