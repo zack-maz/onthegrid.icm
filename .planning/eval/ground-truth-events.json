@@ -9,7 +9,8 @@
     "Entry count widened from the 35-event Iteration-3 set to 50 events after aggressive mining of Yemen/Houthi theater, Syria 2026 Iran-war strike page, Iraq 2026 Iran-war strike page, and Kurdistan Iranian-strikes page — see 27.4-08-CHECKPOINT.md Iteration-4 section for the change log.",
     "Event-type balance: 20 airstrike, 15 on_ground, 8 explosion, 5 targeted, 2 other. All buckets exceed the plan's 10/6/4/3/2 target.",
     "Iteration 4 finding: The canonical pre-2026-war 'Israel-strikes-Iranian-assets-in-Damascus/Aleppo/T-4' pattern was NOT reproduced in the 2026 Iran war window — Syria-theater kinetic events are predominantly Iraqi-militia and Iran-backed-group missile/drone attacks on US bases inside Syria (Qasrok/Al-Tanf/Palmyra T-4), not Israeli strikes on Syrian Iranian assets. The curation honors this and uses the actual Syria-theater pattern rather than padding with the pre-war paradigm. Also: the expected Israeli strikes on Hudaydah port and US strikes on named Sana'a neighborhoods during the war window are sparsely reported in English-language sources; we admitted only the Houthi-on-Israel strikes (which are well-sourced) and did not manufacture Yemen-interior strike entries.",
-    "Bellingcat investigations of the 2026 war are not yet indexed for most of these events (war is only ~7 weeks old); mainstream reporting (Al Jazeera, Ynet, Times of Israel, Amnesty, CNBC, Bloomberg, Reuters-syndicated, CNN, Al Arabiya, France 24, PBS, L'Orient Today, Cyprus Mail, Stars and Stripes, Middle East Monitor, Rudaw, Kurdistan 24, Shafaq News, Long War Journal, FDD), dedicated Wikipedia event pages, and the war-timeline pages are the primary verification sources, consistent with the plan's 'Secondary OK' tolerance."
+    "Bellingcat investigations of the 2026 war are not yet indexed for most of these events (war is only ~7 weeks old); mainstream reporting (Al Jazeera, Ynet, Times of Israel, Amnesty, CNBC, Bloomberg, Reuters-syndicated, CNN, Al Arabiya, France 24, PBS, L'Orient Today, Cyprus Mail, Stars and Stripes, Middle East Monitor, Rudaw, Kurdistan 24, Shafaq News, Long War Journal, FDD), dedicated Wikipedia event pages, and the war-timeline pages are the primary verification sources, consistent with the plan's 'Secondary OK' tolerance.",
+    "Phase 33 (2026-05-21): additive expectedActor1 / expectedActor2 fields backfilled per ACTOR-04 / D-14 driven by 33-AUDIT-REPORT.md findings. Canonical names sourced verbatim from server/data/actor-catalog.ts ACTOR_CATALOG (e.g. 'Israeli Defense Forces', 'Islamic Revolutionary Guard Corps', 'US Armed Forces', 'Hezbollah', 'Houthis', 'Iranian Armed Forces'). Backfill: 50/50 events have non-null expectedActor1 (the war-window source attribution was unambiguous for every entry). Eval scoring uses case-insensitive substring AND-match against the LIVE events:llm:v3 cache labels (Open Q §4 path c)."
   ],
   "events": [
     {
@@ -31,7 +32,9 @@
         "neighborhood": null,
         "landmark": "Natanz nuclear enrichment complex",
         "confidence": 0.95
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Islamic Revolutionary Guard Corps"
     },
     {
       "id": "gt-002",
@@ -52,7 +55,9 @@
         "neighborhood": null,
         "landmark": "Fordow Fuel Enrichment Plant",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Islamic Revolutionary Guard Corps"
     },
     {
       "id": "gt-003",
@@ -73,7 +78,9 @@
         "neighborhood": null,
         "landmark": "Isfahan Nuclear Technology Center",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Iranian Armed Forces"
     },
     {
       "id": "gt-004",
@@ -94,7 +101,9 @@
         "neighborhood": null,
         "landmark": "Khondab heavy water reactor",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Iranian Armed Forces"
     },
     {
       "id": "gt-005",
@@ -115,7 +124,9 @@
         "neighborhood": null,
         "landmark": "Kharg Island",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "US Armed Forces",
+      "expectedActor2": "Iranian Armed Forces"
     },
     {
       "id": "gt-006",
@@ -136,7 +147,9 @@
         "neighborhood": "Shahrak-e Al-Mahdi",
         "landmark": null,
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "US Armed Forces",
+      "expectedActor2": "Islamic Revolutionary Guard Corps"
     },
     {
       "id": "gt-007",
@@ -157,7 +170,9 @@
         "neighborhood": null,
         "landmark": "Bandar Abbas naval base",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Iranian Armed Forces"
     },
     {
       "id": "gt-008",
@@ -178,7 +193,9 @@
         "neighborhood": "Raouche",
         "landmark": "Ramada hotel",
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "IRGC Quds Force"
     },
     {
       "id": "gt-009",
@@ -199,7 +216,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "US Armed Forces",
+      "expectedActor2": "Popular Mobilization Forces"
     },
     {
       "id": "gt-010",
@@ -220,7 +239,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-011",
@@ -241,7 +262,9 @@
         "neighborhood": "Ramat Lehi",
         "landmark": null,
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-012",
@@ -262,7 +285,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-013",
@@ -283,7 +308,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-014",
@@ -304,7 +331,9 @@
         "neighborhood": null,
         "landmark": "Al Udeid Air Base",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": "US Central Command"
     },
     {
       "id": "gt-015",
@@ -325,7 +354,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.7
-      }
+      },
+      "expectedActor1": "Hezbollah",
+      "expectedActor2": "Israeli Defense Forces"
     },
     {
       "id": "gt-016",
@@ -346,7 +377,9 @@
         "neighborhood": "Dahieh",
         "landmark": null,
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Hezbollah"
     },
     {
       "id": "gt-017",
@@ -367,7 +400,9 @@
         "neighborhood": "Ramlet al-Baida",
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Hezbollah"
     },
     {
       "id": "gt-018",
@@ -388,7 +423,9 @@
         "neighborhood": "Eastern Tehran outskirts",
         "landmark": null,
         "confidence": 0.7
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Iranian Armed Forces"
     },
     {
       "id": "gt-019",
@@ -409,7 +446,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-020",
@@ -430,7 +469,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Islamic Revolutionary Guard Corps"
     },
     {
       "id": "gt-021",
@@ -451,7 +492,9 @@
         "neighborhood": null,
         "landmark": "Bushehr Nuclear Power Plant",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Iranian Armed Forces"
     },
     {
       "id": "gt-022",
@@ -472,7 +515,9 @@
         "neighborhood": null,
         "landmark": "Diego Garcia military base",
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": "US Armed Forces"
     },
     {
       "id": "gt-023",
@@ -493,7 +538,9 @@
         "neighborhood": "Juffair",
         "landmark": "Naval Support Activity Bahrain",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": "US Navy"
     },
     {
       "id": "gt-024",
@@ -514,7 +561,9 @@
         "neighborhood": "Diplomatic Area",
         "landmark": "Crowne Plaza hotel",
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": "US Armed Forces"
     },
     {
       "id": "gt-025",
@@ -535,7 +584,9 @@
         "neighborhood": null,
         "landmark": "Ras Laffan Industrial City",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-026",
@@ -556,7 +607,9 @@
         "neighborhood": null,
         "landmark": "Mesaieed Industrial Area",
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-027",
@@ -577,7 +630,9 @@
         "neighborhood": null,
         "landmark": "Saudi Aramco Ras Tanura refinery",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-028",
@@ -598,7 +653,9 @@
         "neighborhood": null,
         "landmark": "RAF Akrotiri airbase",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Hezbollah",
+      "expectedActor2": null
     },
     {
       "id": "gt-029",
@@ -619,7 +676,9 @@
         "neighborhood": "Al Seef",
         "landmark": "US Consulate General",
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": "US Armed Forces"
     },
     {
       "id": "gt-030",
@@ -641,7 +700,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-031",
@@ -662,7 +723,9 @@
         "neighborhood": null,
         "landmark": "Zrarieh Bridge over Litani River",
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Hezbollah"
     },
     {
       "id": "gt-032",
@@ -683,7 +746,9 @@
         "neighborhood": "Jnah",
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Hezbollah"
     },
     {
       "id": "gt-033",
@@ -704,7 +769,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.6
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": "Hezbollah"
     },
     {
       "id": "gt-034",
@@ -725,7 +792,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Israeli Defense Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-035",
@@ -746,7 +815,9 @@
         "neighborhood": null,
         "landmark": "Mina Salman Port",
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-036",
@@ -767,7 +838,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Houthis",
+      "expectedActor2": "Israeli Defense Forces"
     },
     {
       "id": "gt-037",
@@ -788,7 +861,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Houthis",
+      "expectedActor2": "Israeli Defense Forces"
     },
     {
       "id": "gt-038",
@@ -809,7 +884,9 @@
         "neighborhood": null,
         "landmark": "Ben Gurion Airport",
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Houthis",
+      "expectedActor2": null
     },
     {
       "id": "gt-039",
@@ -830,7 +907,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Houthis",
+      "expectedActor2": "Israeli Defense Forces"
     },
     {
       "id": "gt-040",
@@ -839,7 +918,7 @@
       "notes": "Phase 27.4.4 Plan 02: known sparse-OSM ceiling event (~100km miss in resolver-only mode). Truth coord 33.33,41.0 corresponds to the Akashat phosphate-mine + PMF-19 base area in Al-Qa'im District (Wikipedia: 33°20'N 41°00'E). Nominatim has no entry for the mine, the PMF base, or any place at that coord — reverse-geocoding 33.33,41.0 returns 'Al-Rutba Central Subdistrict'. The query 'Akashat, Al Anbar, Iraq' returns a different settlement (also called Akashat) at 33.67,39.97 in Al-Rutba District, ~100km west-northwest of the strike location. The LocationHierarchyV2 schema has no admin2/district field to disambiguate. In production, ctx.bellingcatCoord (from extractBellingcatGeo on article text) would override this if the source contains explicit coords; the resolver-only eval cannot reach that path. Treat this event's miss as the honest sparse-OSM ceiling for the corpus, not a resolver bug.",
       "truth": {
         "lat": 33.33,
-        "lng": 41.0,
+        "lng": 41,
         "precision": "city",
         "landmark": null,
         "country": "Iraq",
@@ -852,7 +931,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "US Armed Forces",
+      "expectedActor2": "Popular Mobilization Forces"
     },
     {
       "id": "gt-041",
@@ -873,7 +954,9 @@
         "neighborhood": null,
         "landmark": "Habbaniyah (RAF Habbaniya) military complex",
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "US Armed Forces",
+      "expectedActor2": "Popular Mobilization Forces"
     },
     {
       "id": "gt-042",
@@ -894,7 +977,9 @@
         "neighborhood": null,
         "landmark": "Umm Qasr Naval Base",
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "Popular Mobilization Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-043",
@@ -915,7 +1000,9 @@
         "neighborhood": null,
         "landmark": "Al-Harir Air Base",
         "confidence": 0.9
-      }
+      },
+      "expectedActor1": "Islamic Revolutionary Guard Corps",
+      "expectedActor2": "US Armed Forces"
     },
     {
       "id": "gt-044",
@@ -936,7 +1023,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": "Peshmerga"
     },
     {
       "id": "gt-045",
@@ -944,7 +1033,7 @@
       "sourceUrl": "https://www.longwarjournal.org/archives/2026/03/home-of-kurdistan-region-president-targeted-american-universities-threatened-as-attacks-escalate-in-iraq.php",
       "truth": {
         "lat": 36.867,
-        "lng": 43.0,
+        "lng": 43,
         "precision": "city",
         "landmark": null,
         "country": "Iraq",
@@ -957,7 +1046,9 @@
         "neighborhood": null,
         "landmark": "Residence of Kurdistan Region President",
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Kataib Hezbollah",
+      "expectedActor2": null
     },
     {
       "id": "gt-046",
@@ -978,7 +1069,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.7
-      }
+      },
+      "expectedActor1": "US Armed Forces",
+      "expectedActor2": "Kataib Hezbollah"
     },
     {
       "id": "gt-047",
@@ -999,7 +1092,9 @@
         "neighborhood": null,
         "landmark": "Tiyas Air Base",
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "Popular Mobilization Forces",
+      "expectedActor2": "US Armed Forces"
     },
     {
       "id": "gt-048",
@@ -1020,7 +1115,9 @@
         "neighborhood": null,
         "landmark": "Kharab al-Jir military base",
         "confidence": 0.8
-      }
+      },
+      "expectedActor1": "Popular Mobilization Forces",
+      "expectedActor2": "US Armed Forces"
     },
     {
       "id": "gt-049",
@@ -1041,7 +1138,9 @@
         "neighborhood": null,
         "landmark": null,
         "confidence": 0.75
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     },
     {
       "id": "gt-050",
@@ -1062,7 +1161,9 @@
         "neighborhood": "Haifa Bay",
         "landmark": "Bazan Group oil refinery",
         "confidence": 0.85
-      }
+      },
+      "expectedActor1": "Iranian Armed Forces",
+      "expectedActor2": null
     }
   ]
 }
