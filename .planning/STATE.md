@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-21T02:10:58.000Z"
-last_activity: 2026-05-21 -- Phase 32 Plan 01 complete
+last_updated: "2026-05-21T19:23:00.000Z"
+last_activity: 2026-05-21 -- Phase 32 Plan 02 complete (probeUrl + sweep orchestrator + writer; 5 commits, 33 contract tests green)
 progress:
   total_phases: 15
   completed_phases: 4
   total_plans: 35
-  completed_plans: 30
+  completed_plans: 31
   percent: 27
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 32 (ghost-event-url-liveness-dashboard-prune) — EXECUTING
-Plan: 2 of 6
-Status: Plan 32-01 complete; Plan 32-02 ready to execute
-Last activity: 2026-05-21 -- Phase 32 Plan 01 complete (UrlLiveness schema + pruneQuota + audit-log widening; 4 commits, 25 contract tests green)
+Plan: 3 of 6
+Status: Plan 32-02 complete; Plan 32-03 ready to execute
+Last activity: 2026-05-21 -- Phase 32 Plan 02 complete (probeUrl HEAD-then-GET + SSRF guard + per-host 1s throttle + persistLiveness writer + runProbeSweep + buildProbeCandidates; 5 commits, 33 contract tests green, 2216 total passing)
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -266,6 +266,15 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 32 Plan 01: `OperatorAuditEntry.operation` union widening (`'pipeline-swap' | 'replay' | 'prune-dead-urls'`) landed as standalone `chore(32)` commit (Task 5) ahead of any consumer — PATTERNS.md Primary-risk mitigation; Plan 32-03's first consumer commit (prune endpoint + helper) reviewable in isolation without the union-widening noise mixed in. (32-01-05)
 - Phase 32 Plan 01: MEDIUM-02 plan-checker fix applied: `pruneQuota.test.ts` asserts `expect(process.env.NODE_ENV).toBe('test')` at file-import time so any future test-runner config drift (vitest no longer forcing NODE_ENV=test) fails this file loudly rather than silently compromising assertions elsewhere that gate on test-mode behavior. (32-01-04)
 - Phase 32 Plan 01: `log = logger.child({ module: 'urlLiveness' })` binding pre-wired in `server/lib/urlLiveness.ts` at Task 2 even though unused at that surface — avoids a follow-up import edit in Plan 32-02 (probe/sweep consumers). Referenced via `void log` to keep eslint's `no-unused-vars` quiet at zero runtime cost. (32-01-02)
+- Phase 32 Plan 02: waitForHostSlot reserves the next slot SYNCHRONOUSLY before awaiting (atomicity fix caught during Task 4 testing). Without it, N concurrent same-host dispatchers all read the same `prior` value and race to update, coalescing to 1 throttle gap instead of N-1. Math.max(now, target) floors against negative-jitter underflow. The plan's pseudocode (set AFTER await) was wrong; this is the corrected canonical pattern for any shared-state throttle map under concurrent dispatch. (32-02-02 → 32-02-04)
+- Phase 32 Plan 02: Two-checkpoint deadline guard inside runProbeSweep — `if (Date.now() > deadlineMs) skippedBudget++; return;` runs at TASK ENTRY AND AGAIN after `waitForHostSlot` returns. A saturated same-host batch can otherwise consume seconds of throttle wait time AFTER the entry-gate check nominally cleared, overrunning Vercel maxDuration. Single-checkpoint designs leak budget after the per-task entry gate. (32-02-04)
+- Phase 32 Plan 02: SSRF guard re-checks every redirect target inside the `for (let hop = 0; ...)` loop — a public-host primary URL can still pivot to a private host via a hostile `Location` header. Cheap to add (one regex match per hop), expensive to debug if missing. Initial-URL-only checks leak the redirect attack surface. (32-02-01)
+- Phase 32 Plan 02: Probe entry writes route exclusively through `cacheSetSafe` (Pitfall 6 chaos-test contract). Sidecar count INCR/DECR can't use cacheSetSafe (wraps CacheEntry<T> shape, not integer counters) so raw redis.incr/decr are wrapped in try/catch and degrade-open. The ONLY raw `redis.set` call in urlLiveness.ts is the underflow floor on `URL_LIVENESS_COUNT_KEY` — documented as the sole permitted bypass of the chaos contract. (32-02-03)
+- Phase 32 Plan 02: Sidecar INCR/DECR fires ONLY on prior→next dead-set transition (Pitfall 3 throughput rule). dead→dead transitions monotonically increment attemptCount but do NOT touch the count key (already counted at the first dead transition). Live→live, unknown→unknown, dead→dead, live→unknown, unknown→live: zero sidecar touches. Cuts Redis command volume on the steady-state sweep path. (32-02-03)
+- Phase 32 Plan 02: `isTerminalDead(status)` exported as a named helper so sweep (sidecar maintenance) + prune (Plan 32-03's pruneDeadUrlEvents) share one truth source on what "dead" means. Same pattern as `ttlSecForStatus` from Plan 32-01 — extract the predicate, don't duplicate it across consumers. (32-02-03)
+- Phase 32 Plan 02: `SWEEP_SAFETY_MARGIN_MS = 60_000` exported as a named constant (not a magic number scattered across Plan 32-03's call site). Plan 32-03's cron handler will compute `const deadline = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS` so the safety margin is visible in one place and the executor can't accidentally pass a different value. Pitfall 1 mitigation. (32-02-01)
+- Phase 32 Plan 02: `buildProbeCandidates` uses a minimal local interface (`ConflictEventEntityForProbe` with just `id` + `data.source?`) rather than importing the full ConflictEventEntity discriminated union — avoids pulling MapEntity + server types into the import graph. Runtime `typeof url === 'string'` guard defends against shape drift. (32-02-05)
+- Phase 32 Plan 02: Combined Task 1 commit (probeUrl + SSRF guard in one feat commit) per the plan's "if the diff-split is awkward, ship them as one commit ... is acceptable fallback" clause. The diff was awkward because the SSRF guard requires BOTH the entry-point check AND the redirect-target re-check inside the loop; splitting them would leak the main probeUrl into a state where redirects bypass the guard. (32-02-01)
 
 ## Pending Todos
 
