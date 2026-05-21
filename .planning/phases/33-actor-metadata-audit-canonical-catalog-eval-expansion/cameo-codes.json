@@ -1,0 +1,69 @@
+{
+  "version": "GDELT-CAMEO-2026-05",
+  "source": "https://www.gdeltproject.org/data/lookups/CAMEO.actorcodes.txt (snapshot 2026-05-21)",
+  "fetchedAt": "2026-05-21T00:00:00Z",
+  "notes": "Phase 33 D-04..D-07 committed reference. Used by (a) Plan 33-01 audit script bucket-(b) raw-CAMEO detection (D-02), and (b) Plan 33-02 contract test orphan-check (D-07 b). The catalog entry's `cameoCodes` array MUST cross-reference codes listed here. Sub-units that GDELT does not name (e.g. specific IRGC sub-branches, named militia units) intentionally have empty `cameoCodes` arrays in the catalog — DO NOT invent codes (Pitfall §3). Upstream GDELT drift surfaces as a contract-test failure on next vitest run; sync happens in a follow-up cleanup phase, not auto-resync.",
+  "actorCodes": [
+    {
+      "code": "ISRMIL",
+      "label": "Israeli Military / Israeli Defense Forces",
+      "type": "country-military"
+    },
+    {
+      "code": "IRNMIL",
+      "label": "Iran Military / Iranian Armed Forces",
+      "type": "country-military"
+    },
+    {
+      "code": "USAMIL",
+      "label": "United States Military / US Armed Forces",
+      "type": "country-military"
+    },
+    {
+      "code": "RUSMIL",
+      "label": "Russian Military / Russian Aerospace Forces",
+      "type": "country-military"
+    },
+    {
+      "code": "SAUMIL",
+      "label": "Saudi Arabia Military / Royal Saudi Air Force",
+      "type": "country-military"
+    },
+    {
+      "code": "TURMIL",
+      "label": "Turkey Military / Turkish Armed Forces",
+      "type": "country-military"
+    },
+    { "code": "SYRMIL", "label": "Syria Military / Syrian Arab Army", "type": "country-military" },
+    {
+      "code": "LBNMIL",
+      "label": "Lebanon Military / Lebanese Armed Forces",
+      "type": "country-military"
+    },
+    { "code": "IRQMIL", "label": "Iraq Military / Iraqi Armed Forces", "type": "country-military" },
+    {
+      "code": "YEMMIL",
+      "label": "Yemen Military / Yemeni Armed Forces",
+      "type": "country-military"
+    },
+    { "code": "ISR", "label": "Israel (country-level)", "type": "country-government" },
+    { "code": "IRN", "label": "Iran (country-level)", "type": "country-government" },
+    { "code": "USA", "label": "United States (country-level)", "type": "country-government" },
+    { "code": "RUS", "label": "Russia (country-level)", "type": "country-government" },
+    { "code": "SAU", "label": "Saudi Arabia (country-level)", "type": "country-government" },
+    { "code": "TUR", "label": "Turkey (country-level)", "type": "country-government" },
+    { "code": "SYR", "label": "Syria (country-level)", "type": "country-government" },
+    { "code": "LBN", "label": "Lebanon (country-level)", "type": "country-government" },
+    { "code": "PSE", "label": "Palestine (country-level)", "type": "country-government" },
+    { "code": "YEM", "label": "Yemen (country-level)", "type": "country-government" },
+    { "code": "IRQ", "label": "Iraq (country-level)", "type": "country-government" },
+    { "code": "REB", "label": "Rebels / armed opposition (generic class)", "type": "class" },
+    { "code": "INS", "label": "Insurgents (generic class)", "type": "class" },
+    { "code": "MIL", "label": "Militia / Military (generic class)", "type": "class" },
+    { "code": "OPP", "label": "Opposition (generic class)", "type": "class" },
+    { "code": "GOV", "label": "Government (generic class)", "type": "class" },
+    { "code": "HZB", "label": "Hezbollah", "type": "organization" },
+    { "code": "HMS", "label": "Hamas", "type": "organization" }
+  ],
+  "eventCodes": []
+}
