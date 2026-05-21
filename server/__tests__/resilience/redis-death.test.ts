@@ -311,4 +311,42 @@ describe('Chaos: Redis death', () => {
       expect(status, `${name} returned ${status}`).not.toBe(500);
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // Phase 32 Plan 32-03 Task 4 — chaos coverage for the prune endpoint.
+  //
+  // POST /api/events/prune-dead-urls splices entries out of events:llm:v3
+  // and DELs the url-liveness keys. Under simulated Redis death the helper
+  // throws on the very first redis call; the route's catch-block must
+  // translate that into a 503 prune_failed response — NEVER 500.
+  //
+  // The route accepts 200 OR 503 (RESEARCH Pitfall 6 / 32-PATTERNS.md
+  // L877-896): 200 is possible if cacheGetSafe's in-memory fallback returns
+  // an empty cache (helper returns {prunedCount:0, prunedIds:[]} without
+  // touching redis.del/decrby); 503 is the catch-block path when any
+  // raw redis call throws. The contract is "never 500".
+  //
+  // dashboardAuth is bypassed because NODE_ENV !== 'production' here.
+  // ---------------------------------------------------------------------------
+  it('POST /api/events/prune-dead-urls returns 200 or 503 (NEVER 500) under Redis death', async () => {
+    const res = await request(baseUrl)
+      .post('/api/events/prune-dead-urls')
+      .send({ trigger: 'manual' });
+
+    expect(res.status).not.toBe(500);
+    expect([200, 503]).toContain(res.status);
+
+    if (res.status === 503) {
+      // 503 envelope must use the route's documented shape, not the
+      // generic UPSTREAM_ERROR envelope (the route returns its own
+      // {error:'prune_failed', detail} payload).
+      expect(res.body.error).toBe('prune_failed');
+      expect(typeof res.body.detail).toBe('string');
+    }
+    if (res.status === 200) {
+      // Helper degraded to {prunedCount:0, prunedIds:[]} via
+      // cacheGetSafe's in-memory fallback.
+      expect(res.body).toEqual({ prunedCount: 0, prunedIds: [] });
+    }
+  });
 });

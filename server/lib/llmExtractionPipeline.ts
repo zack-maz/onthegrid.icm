@@ -45,6 +45,23 @@ import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js'
 import { logger } from './logger.js';
 import { safeWaitUntil } from './safeWaitUntil.js';
 import { getHighestTier } from './sourceTiers.js';
+// Phase 32 Plan 32-03 Task 3 — cron post-step. After the existing
+// extraction work resolves inside the safeWaitUntil IIFE, run the URL
+// liveness probe sweep (Plan 32-02) and then the auto-prune helper
+// (Plan 32-03 Task 1) — gated on a wall-clock deadline so we stay
+// inside Vercel Pro's 800s `maxDuration` (Pitfall 1, RESEARCH A6).
+//
+// DIRECT helper invocation (NOT self-HTTP) per RESEARCH A4 / Discretion
+// §3 — simpler tests, no env-dependent deployment URL, audit-log path
+// is identical (helper writes `bearerFingerprint:'cron:refresh-events'`
+// per RESEARCH A8). The HTTP route at POST /api/events/prune-dead-urls
+// (Plan 32-03 Task 2) is for operator clicks only.
+import {
+  buildProbeCandidates,
+  pruneDeadUrlEvents,
+  runProbeSweep,
+  SWEEP_SAFETY_MARGIN_MS,
+} from './urlLiveness.js';
 
 import type { ConflictEventEntity } from '../types.js';
 import type { GeocodeProvenance } from './llmSchema.js';
@@ -59,8 +76,16 @@ const log = logger.child({ module: 'llm-extraction-pipeline' });
 /** Redis key for raw GDELT events the helper reads as input. */
 const EVENTS_KEY = 'events:gdelt';
 
-/** Active terminal LLM cache key. v3-only post-Phase-29. */
-const LLM_EVENTS_KEY_ACTIVE = 'events:llm:v3';
+/**
+ * Active terminal LLM cache key. v3-only post-Phase-29.
+ *
+ * Phase 32 Plan 32-03 exports this so `pruneDeadUrlEvents`
+ * (server/lib/urlLiveness.ts) shares one truth source on the v3 key
+ * literal — the splice writer would otherwise hand-roll the string,
+ * which is the exact drift class CLAUDE.md §"Serverless Cache" warns
+ * against.
+ */
+export const LLM_EVENTS_KEY_ACTIVE = 'events:llm:v3';
 
 /** Active LLM run-summary key. v3-only post-Phase-29. */
 const LLM_SUMMARY_KEY_ACTIVE = 'events:llm-summary:v3';
@@ -77,8 +102,14 @@ const LLM_PROCESS_KEY = 'events:llm-process-ts';
 /** 15 minute cooldown between LLM processing runs. */
 const LLM_COOLDOWN_MS = 900_000;
 
-/** Hard Redis TTL for LLM caches (2.5h, 10x logical). */
-const LLM_REDIS_TTL_SEC = 9000;
+/**
+ * Hard Redis TTL for LLM caches (2.5h, 10x logical).
+ *
+ * Phase 32 Plan 32-03 exports this so `pruneDeadUrlEvents`'s
+ * cacheSetSafe write-back uses the same TTL the cron writer uses —
+ * the splice-back must not silently re-TTL the v3 cache.
+ */
+export const LLM_REDIS_TTL_SEC = 9000;
 
 /** 24-hour TTL for LLM run summary (retained across runs). */
 const LLM_SUMMARY_TTL_SEC = 86_400;
@@ -169,6 +200,15 @@ export interface RunRefreshResult {
  * dispatch decision is made.
  */
 export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRefreshResult> {
+  // Phase 32 Plan 32-03 Task 3 — wall-clock start captured at function
+  // entry. The post-extraction probe sweep computes its deadline as
+  // `cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS` so we stay inside
+  // Vercel Pro's 800s `maxDuration` with a 60s safety margin reserved
+  // for the prune + audit-log writes (Pitfall 1 / RESEARCH A6). One
+  // truth source across handler boundary — the SWEEP_SAFETY_MARGIN_MS
+  // constant is exported from urlLiveness.ts (Plan 32-02).
+  const cronStart = Date.now();
+
   // 1. Active pipeline is v3-only post-Phase-29 — no version dispatch needed.
 
   // 2. D-10 cold-cache probe — BEFORE the cooldown check. If the active LLM
@@ -415,6 +455,53 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           /* best-effort */
         }
         log.warn({ err: llmErr }, 'LLM background processing failed');
+      } finally {
+        // Phase 32 Plan 32-03 Task 3 — cron post-step. Runs AFTER the
+        // existing extraction work resolves (success OR error path) so
+        // probe+prune cleanup happens regardless of whether LLM
+        // extraction itself dispatched fresh enrichments this tick.
+        //
+        // Deadline budget plumbing (Pitfall 1 / RESEARCH A6):
+        //   deadlineMs = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS
+        // — passed into runProbeSweep so each task short-circuits past
+        // the cutoff. After the sweep returns, the auto-prune ONLY fires
+        // if `Date.now() < deadlineMs` so we don't kick off the splice
+        // mid-`cacheSet` and get killed by Vercel's maxDuration.
+        //
+        // Direct helper invocation (NOT self-HTTP) per RESEARCH A4 /
+        // Discretion §3 — the prune helper writes the audit-log entry
+        // with `bearerFingerprint:'cron:refresh-events'` (RESEARCH A8)
+        // so the source remains unambiguous.
+        //
+        // Wrapped in its own try/catch — probe/prune failures must NOT
+        // break the extraction outcome. log.error surfaces the failure
+        // via the standard pino observability path.
+        try {
+          const deadlineMs = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS;
+          const candidates = await buildProbeCandidates();
+          const sweep = await runProbeSweep({
+            eventIdsWithUrls: candidates,
+            deadlineMs,
+          });
+          log.info(
+            { probed: sweep.probed, skippedBudget: sweep.skippedBudget },
+            'phase 32 probe sweep complete',
+          );
+          if (Date.now() < deadlineMs) {
+            const pruneResult = await pruneDeadUrlEvents({ trigger: 'cron' });
+            log.info(
+              { prunedCount: pruneResult.prunedCount, prunedIds: pruneResult.prunedIds },
+              'phase 32 cron auto-prune complete',
+            );
+          } else {
+            log.warn(
+              { deadlineMs, now: Date.now() },
+              'phase 32 deadline elapsed; skipping cron auto-prune for this tick',
+            );
+          }
+        } catch (probePruneErr) {
+          log.error({ err: probePruneErr }, 'phase 32 probe/prune post-step failed');
+        }
       }
     })(),
   );

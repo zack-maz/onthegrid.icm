@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
@@ -884,6 +884,14 @@ function DevApiStatusAllApisTab({
   // Phase 28.2 W5 Task 7.5 — Operator Actions block state. Sourced from
   // /api/operator-status (Bearer-gated read-only aggregator). One fetch
   // on mount + every 30s while the tab is open.
+  //
+  // Phase 32 Plan 05 — `prune` field added (optional; older servers that
+  // pre-date Plan 32-04 still type-check + render without it). The shape
+  // mirrors the server contract pinned by operator-status.test.ts (Plan 04
+  // Task 1): `deadUrlCount` is the O(1) sidecar read, `last24hPrunes` is
+  // derived from the audit-log pass, `deadUrlSample` is the bounded SCAN
+  // drill-down (cap 20). `byBearer[].prunes` is also optional — server may
+  // include it once Plan 32-04 lands but older deploys won't.
   interface OperatorStatus {
     audit24h: number;
     byBearer: Array<{
@@ -891,45 +899,58 @@ function DevApiStatusAllApisTab({
       actions: number;
       swaps: number;
       replays: number;
+      prunes?: number;
     }>;
     advEval: { total: number; blocked: number; leaked: number } | null;
+    prune?: {
+      deadUrlCount: number;
+      last24hPrunes: number;
+      deadUrlSample: Array<{
+        eventId: string;
+        url: string;
+        status: 'dead-host' | '403' | '404';
+      }>;
+    } | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    const fetchOpStatus = async () => {
-      try {
-        const res = await fetch('/api/operator-status', {
-          headers: { ...dashboardAuthHeaders() },
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as Partial<OperatorStatus>;
-        // Defensive shape check — if the response doesn't carry the
-        // operator-status fields (e.g., a test fetch spy returning a
-        // /api/health body, or a mid-deploy schema regression) hide
-        // the block entirely instead of crashing on missing fields.
-        // Phase 29 D-02 part A — pipeline override field removed from response.
-        if (
-          typeof data?.audit24h !== 'number' ||
-          !Array.isArray(data?.byBearer) ||
-          !('advEval' in data)
-        ) {
-          return;
-        }
-        if (!cancelled) setOpStatus(data as OperatorStatus);
-      } catch {
-        // Network failure — block hides gracefully (degrade-open)
+  // Phase 32 Plan 05 MEDIUM-03 — `fetchOpStatus` hoisted out of the
+  // useEffect closure into a named useCallback so the prune button handler
+  // can trigger an immediate refresh after a successful prune (200) without
+  // waiting for the next 30s poll cycle. No-op refactor: the body is the
+  // same as the prior inline closure, just named + memoized.
+  const fetchOpStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/operator-status', {
+        headers: { ...dashboardAuthHeaders() },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as Partial<OperatorStatus>;
+      // Defensive shape check — if the response doesn't carry the
+      // operator-status fields (e.g., a test fetch spy returning a
+      // /api/health body, or a mid-deploy schema regression) hide
+      // the block entirely instead of crashing on missing fields.
+      // `prune` is optional (Phase 32 Plan 04) — not gated here.
+      if (
+        typeof data?.audit24h !== 'number' ||
+        !Array.isArray(data?.byBearer) ||
+        !('advEval' in data)
+      ) {
+        return;
       }
-    };
+      setOpStatus(data as OperatorStatus);
+    } catch {
+      // Network failure — block hides gracefully (degrade-open)
+    }
+  }, []);
+  useEffect(() => {
     void fetchOpStatus();
     const id = setInterval(() => {
       void fetchOpStatus();
     }, 30_000);
     return () => {
-      cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [fetchOpStatus]);
 
   // Phase 28.2 W6 Plan 06 Task 7 — audit-result banner state.
   // Sourced from /api/audit-status (no auth gate; sidecar key written by
@@ -997,6 +1018,37 @@ function DevApiStatusAllApisTab({
       }
     } catch {
       // Network failure — don't update alert state
+    }
+  };
+
+  // Phase 32 Plan 05 (GHOST-04, D-10) — dead-URL prune trigger. Mirrors
+  // replayProbe() above but POSTs to /api/events/prune-dead-urls and, on
+  // 200, kicks an immediate fetchOpStatus refresh so `prune.deadUrlCount`
+  // drops in-place without waiting for the next 30s poll. 429 surfaces
+  // through pruneQuotaAlert (50/24h per Bearer per D-15). Network failures
+  // degrade-open per the existing operator-actions convention.
+  const [pruneQuotaAlert, setPruneQuotaAlert] = useState<{ resetsAt: string } | null>(null);
+  const pruneHandler = async (): Promise<void> => {
+    try {
+      const res = await fetch('/api/events/prune-dead-urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...dashboardAuthHeaders(),
+        },
+        body: JSON.stringify({ trigger: 'manual' }),
+      });
+      if (res.status === 429) {
+        const body = (await res.json()) as { resetsAt?: string };
+        setPruneQuotaAlert({ resetsAt: body.resetsAt ?? '' });
+      } else if (res.ok) {
+        setPruneQuotaAlert(null);
+        // MEDIUM-03 resolution — refresh `prune.deadUrlCount` immediately
+        // instead of waiting for the 30s polling tick.
+        void fetchOpStatus();
+      }
+    } catch {
+      // Network failure — degrade-open (existing operator-actions convention)
     }
   };
 
@@ -1547,6 +1599,70 @@ function DevApiStatusAllApisTab({
             Run replay probe
           </button>
         </div>
+
+        {/* Phase 32 Plan 05 (GHOST-03, GHOST-04, D-10) — dead-URL count +
+            drill-down list + Prune {N} dead events button. Sourced from
+            /api/operator-status `prune` block (Plan 32-04). Renders only
+            when the server returns the optional `prune` field; pre-Plan-04
+            deploys silently skip this block. One-click destructive action
+            (no confirmation modal per Discretion §3 — mirrors the existing
+            replay-test-trigger UX). 429 surfaces through prune-quota-alert;
+            200 triggers an immediate fetchOpStatus refresh so the count
+            drops in-place. */}
+        {opStatus?.prune != null && (
+          <>
+            <div className="mt-1 text-text-muted" data-testid="dead-url-count">
+              Dead URL events: {opStatus.prune.deadUrlCount}
+            </div>
+            {opStatus.prune.deadUrlSample.length > 0 && (
+              <ul
+                className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
+                data-testid="dead-url-list"
+              >
+                {opStatus.prune.deadUrlSample.map((entry) => (
+                  <li key={entry.eventId} className="flex items-baseline gap-2 py-0.5">
+                    <span className="font-mono text-text-muted/60">{entry.status}</span>
+                    <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
+                    <span className="truncate text-text-muted/70" title={entry.url}>
+                      {entry.url}
+                    </span>
+                  </li>
+                ))}
+                {opStatus.prune.deadUrlCount > opStatus.prune.deadUrlSample.length && (
+                  <li
+                    className="py-0.5 italic text-text-muted/40"
+                    data-testid="dead-url-list-truncated"
+                  >
+                    … and {opStatus.prune.deadUrlCount - opStatus.prune.deadUrlSample.length} more
+                  </li>
+                )}
+              </ul>
+            )}
+            {opStatus.prune.deadUrlCount > 0 && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => void pruneHandler()}
+                  className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+                  data-testid="prune-dead-urls-trigger"
+                >
+                  Prune {opStatus.prune.deadUrlCount} dead events
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Phase 32 Plan 05 — 429 prune-quota alert. Mirrors the existing
+            replay-quota-alert above. px-2 py-1 spacing — multiples of 4. */}
+        {pruneQuotaAlert && (
+          <div
+            className="mt-2 mb-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-400"
+            data-testid="prune-quota-alert"
+          >
+            Prune quota reached: 50 of 50 in last 24h. Resets at {pruneQuotaAlert.resetsAt}.
+          </div>
+        )}
       </section>
 
       {/* Phase 29 Plan 08 D-02 part D — confirm modal removed. The
