@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-19T08:00:00.000Z"
-last_activity: 2026-05-19 -- Phase 34 (LLM Router Fallback Re-integration) inserted; phases 34/35/36 renumbered to 35/36/37; LLM-RELI-08..11 added; advancing to Phase 32 (GHOST track) next
+last_updated: "2026-05-21T01:58:35.303Z"
+last_activity: 2026-05-21 -- Phase 32 execution started
 progress:
   total_phases: 15
   completed_phases: 4
-  total_plans: 34
+  total_plans: 35
   completed_plans: 29
-  percent: 85
+  percent: 27
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 32 (Ghost Event URL Liveness, Dashboard & Prune) — NOT STARTED (next available phase on GHOST track, independent of LLM-RELI spine per ROADMAP parallelization notes)
-Plan: 0 of TBD
-Status: Phase 31 closed early at Day 1 / 7 under operator decision 2026-05-19 — LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically." Snapshot harness remains operational; ad-hoc capture via `npm run watch:snapshot -- --http`. Phase 37 acceptance gate (LLM-RELI-07) unaffected.
-Last activity: 2026-05-19 -- Phase 31 closed early; advancing to Phase 32
+Phase: 32 (ghost-event-url-liveness-dashboard-prune) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 32
+Last activity: 2026-05-21 -- Phase 32 execution started
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
