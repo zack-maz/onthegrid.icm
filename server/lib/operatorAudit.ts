@@ -45,8 +45,18 @@ export interface OperatorAuditEntry {
   timestamp: number;
   /** SHA-256(DASHBOARD_PASSWORD).slice(0, 8) — never the raw secret. */
   bearerFingerprint: string;
-  /** Which operator-control endpoint fired this entry. */
-  operation: 'pipeline-swap' | 'replay';
+  /**
+   * Which operator-control endpoint fired this entry.
+   *
+   * Phase 32 widens to admit `'prune-dead-urls'` — see
+   * `operator:audit-log` entries produced by `pruneDeadUrlEvents()`
+   * (Plan 32-03). Both the dashboard "Prune N dead events" button and
+   * the cron auto-prune step inside `/api/cron/refresh-events` write
+   * `operation: 'prune-dead-urls'` entries, distinguished by
+   * `bearerFingerprint` (operator hash vs literal `'cron:refresh-events'`
+   * per CONTEXT D-11).
+   */
+  operation: 'pipeline-swap' | 'replay' | 'prune-dead-urls';
   /** Sanitized request args (e.g. {version: 'v3'} or {groupKey: 'grp-x'}). */
   args: Record<string, unknown>;
   /** 'ok' on the successful path; 'error' if a future caller wants to record
