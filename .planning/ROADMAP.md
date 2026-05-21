@@ -209,8 +209,15 @@ Plans:
 3. The v3 LLM extractor emits canonical actor names where possible, raw CAMEO actor codes are mapped through the catalog before write, and a new `actorConfidence` field appears in `events:llm:v3` payloads.
 4. The daily eval scores actor-match rate alongside geocode accuracy at 5/20/100 km thresholds; adversarial fixtures gain at least one actor-confusion injection and the score is visible in the API Health dashboard's eval block.
 5. API Health dashboard surfaces actor-quality counts (null actors, raw-CAMEO actors, ambiguous-string actors, low-confidence actors) and a per-event drill-down list — reusing the existing 28.2 W5 D-23 quality-metrics block.
-   **Plans**: TBD
-   **UI hint**: yes
+   **Plans** (7):
+
+- [ ] 33-01-PLAN.md — Wave 1: shared actorClassifier module (D-02 deterministic rules) + one-shot audit script + 33-AUDIT-REPORT.md stub (ACTOR-01).
+- [ ] 33-02-PLAN.md — Wave 1: canonical actor catalog at server/data/actor-catalog.ts + cameo-codes.json snapshot + 5-invariant contract test (ACTOR-02 / D-04..D-07).
+- [ ] 33-03-PLAN.md — Wave 2: enrichedEventV3 Zod extend with actorConfidence (.optional() for rollout) + EVENT_EXTRACTION_SCHEMA_V3 un-alias with actorConfidence in properties + required (ACTOR-03 / D-10, D-12).
+- [ ] 33-04-PLAN.md — Wave 2: llmEventExtractor.v3.ts server-side post-mapping (applyCatalogToEvents) + actorConfidence repair (repairActorConfidence) + SYSTEM_PROMPT_V3 extension (ACTOR-03 / D-08, D-09, D-10 server enforcement).
+- [ ] 33-05-PLAN.md — Wave 3: llmEvalHarness.ts actorMatchRate (D-13 + Open Q §4 landmark+country substring match) + ground-truth backfill ≥30/50 (D-14) + 3 adversarial actor-confusion injections (D-15) + llmProgress.ts mirror (ACTOR-04).
+- [ ] 33-06-PLAN.md — Wave 3: /api/operator-status actorQuality block computed lazily over events:llm:v3 + inline CAMEO subset (PATTERNS risk #3) + degrade-open + integration tests (ACTOR-05 server-side / D-16).
+- [ ] 33-07-PLAN.md — Wave 3: DevApiStatus.tsx Actor Quality sub-block per UI-SPEC (pinned mount point + pinned testIDs + pinned color tokens) + RTL tests (ACTOR-05 client-side / D-17).
 
 ### Phase 34: LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)
 
@@ -286,7 +293,7 @@ Plans:
 | 30. NIM Throttle Characterization & Cascade Tuning                            | 7/7                  | Complete              | 2026-05-17 |
 | 31. Cron Stability Validation (7-day Watch)                                   | 4/5 (1 early-closed) | Closed early (caveat) | 2026-05-19 |
 | 32. Ghost Event URL Liveness, Dashboard & Prune                               | 6/6                  | Complete              | 2026-05-21 |
-| 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/0                  | Not started           | -          |
+| 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/7                  | Planned               | -          |
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 0/5                  | Not started           | -          |
 | 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 0/0                  | Not started           | -          |
 | 36. Public Docs Sweep + OpenAPI Additions                                     | 0/0                  | Not started           | -          |

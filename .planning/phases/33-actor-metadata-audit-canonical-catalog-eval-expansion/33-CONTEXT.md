@@ -125,14 +125,14 @@ Make actor metadata in `events:llm:v3` operator-trustworthy via four mechanical 
   Computed lazily on each `/api/operator-status` call by scanning the already-deserialized `events:llm:v3` payload. **No new Redis sidecar** (matches Phase 32 D-13 smallest-blast-radius). `sample` capped at 20 entries (matches `LIMIT_DRILL_DOWN` from `operator-status.ts:50`).
 - **D-17:** **Dashboard render** — `src/components/ui/DevApiStatus.tsx` adds an "Actor Quality" sub-block inside the existing 28.2 W5 D-23 quality-metrics block (rendered as a row alongside Operator Actions, ~line 1481). Layout: `Null: X · Raw-CAMEO: Y · Ambiguous: Z · Low-confidence: W`. Drill-down list reuses the same expandable row pattern as the prune block (Phase 32 D-10). No new aggregator endpoint; reuses the existing `/api/operator-status` poll loop.
 
-### Backfill strategy (cross-cutting)
+### Backfill strategy (cross-cutting) [informational]
 
-- **D-18:** **Forward-only canonicalization.** Existing `events:llm:v3` entries are NOT re-extracted to add `actorConfidence` or apply the catalog retroactively. The daily 04:00 UTC `/api/cron/refresh-events` cron overwrites entries naturally over the 24h window. Operator can force a full refresh via `GET /api/cron/refresh-events?force=true` (existing operator surface) immediately after deploy if needed. Preserves anti-pattern #17 (cron-only writer); no special migration script writing to `events:llm:v3`.
+- **D-18 [informational]:** **Forward-only canonicalization.** Existing `events:llm:v3` entries are NOT re-extracted to add `actorConfidence` or apply the catalog retroactively. The daily 04:00 UTC `/api/cron/refresh-events` cron overwrites entries naturally over the 24h window. Operator can force a full refresh via `GET /api/cron/refresh-events?force=true` (existing operator surface) immediately after deploy if needed. Preserves anti-pattern #17 (cron-only writer); no special migration script writing to `events:llm:v3`. This is an absence-of-task constraint — no plan ships migration code; the daily cron is the only writer. Tracked as informational because there is no code artifact to cite.
 
-### Branch + commit discipline (locked from prior phases)
+### Branch + commit discipline (locked from prior phases) [informational]
 
-- **D-19:** Branch `feature/33-actor-metadata-audit-canonical-catalog-eval-expansion` cut from `main` before any code change. CONTEXT.md, DISCUSSION-LOG.md, and the discuss-phase checkpoint may sit on the current branch as scaffold.
-- **D-20:** Atomic per-decision commits with `feat(33):` / `docs(33):` / `chore(33):` / `test(33):` prefixes. ~20 D-N decisions → roughly 20 commits + close PR.
+- **D-19 [informational]:** Branch `feature/33-actor-metadata-audit-canonical-catalog-eval-expansion` cut from `main` before any code change. CONTEXT.md, DISCUSSION-LOG.md, and the discuss-phase checkpoint may sit on the current branch as scaffold. Workflow constraint enforced by `/gsd:execute-phase` at phase start — not a plan-level task.
+- **D-20 [informational]:** Atomic per-decision commits with `feat(33):` / `docs(33):` / `chore(33):` / `test(33):` prefixes. ~20 D-N decisions → roughly 20 commits + close PR. Workflow constraint enforced by executor commit discipline — not a plan-level task.
 
 ### Claude's Discretion
 
