@@ -34,6 +34,7 @@
 
 import { z } from 'zod';
 
+import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import { logger } from './logger.js';
 
 // ============================================================================
@@ -395,15 +396,130 @@ function pruneStaleHostSlots(): void {
 }
 
 // ============================================================================
+// Plan 32-02 Task 3 — persistLiveness writer (D-12 / RESEARCH A2)
+// ============================================================================
+
+/**
+ * D-07 — terminal-dead statuses count toward the dashboard dead-URL
+ * surface and are eligible for prune. Exported so Plan 32-03 reuses the
+ * predicate inside `pruneDeadUrlEvents` (and the sweep+prune INCR/DECR
+ * sidecar maintenance share one truth source).
+ */
+export function isTerminalDead(status: UrlLivenessStatus): boolean {
+  return status === '404' || status === '403' || status === 'dead-host';
+}
+
+/**
+ * Logical TTL passed to `cacheGetSafe` — the safe wrapper uses this only
+ * to set the `stale` flag on the response envelope; the read itself
+ * always returns whatever is in Redis (or the in-memory fallback). For
+ * the probe path we don't gate on stale-ness — we always trust the most
+ * recent stored value as `prior`. A huge sentinel (~31y) suppresses the
+ * stale flag in all realistic conditions.
+ */
+const LIVENESS_READ_LOGICAL_TTL_MS = 999_999_999;
+
+/**
+ * Probe writer. Reads the prior `events:url-liveness:{eventId}` entry
+ * (if any), derives the next `UrlLiveness` via the D-12 / RESEARCH A2
+ * monotonic-with-reset attemptCount semantics, validates the result
+ * against `UrlLivenessSchema` (paranoid drift catch), persists via
+ * `cacheSetSafe` exclusively (Pitfall 6 — chaos-test contract holds),
+ * and maintains the sidecar `events:url-liveness-count` integer on
+ * live↔terminal-dead transitions (Pitfall 3).
+ *
+ * attemptCount semantics (RESEARCH A2):
+ *   prior=null,             next ∈ {live, unknown}     → attemptCount=0
+ *   prior=null,             next ∈ {terminal-dead}     → attemptCount=1
+ *   prior=terminal-dead,    next ∈ {terminal-dead}     → attemptCount=prior+1
+ *   prior=terminal-dead,    next ∈ {live, unknown}     → attemptCount=0
+ *   prior ∈ {live, unknown}, next=anything             → attemptCount=
+ *                                                        (next dead ? 1 : 0)
+ *
+ * Sidecar INCR fires only on the prior→next transition NOT-DEAD → DEAD.
+ * DECR fires only on DEAD → NOT-DEAD. Same-state transitions (dead→dead,
+ * live→live, unknown→unknown) do NOT touch the sidecar. Underflow
+ * floors at 0 via `redis.set(KEY, 0)` so a DECR race past zero
+ * self-heals.
+ *
+ * Kept module-private. Test access flows through the NODE_ENV='test'
+ * `__test__` export. Plan 32-03's `pruneDeadUrlEvents` reads the entry
+ * shape but does NOT call this writer — prune is a delete, not a
+ * status transition.
+ */
+async function persistLiveness(
+  eventId: string,
+  urlProbed: string,
+  probeResult: ProbeResult,
+): Promise<void> {
+  const key = `${URL_LIVENESS_KEY_PREFIX}${eventId}`;
+  const priorEntry = await cacheGetSafe<UrlLiveness>(key, LIVENESS_READ_LOGICAL_TTL_MS);
+  const prior: UrlLiveness | null = priorEntry?.data ?? null;
+
+  // D-12 / RESEARCH A2 — monotonic-with-reset-on-live-or-unknown.
+  const nextDead = isTerminalDead(probeResult.status);
+  const priorDead = prior !== null && isTerminalDead(prior.status);
+  let attemptCount: number;
+  if (!nextDead) {
+    // Any live / unknown transition resets the counter (the "≥3
+    // consecutive ticks" rule needs an unbroken run).
+    attemptCount = 0;
+  } else if (priorDead) {
+    // dead → dead: monotonic increment.
+    attemptCount = prior.attemptCount + 1;
+  } else {
+    // not-dead → dead (or first write that's dead): start at 1.
+    attemptCount = 1;
+  }
+
+  const next: UrlLiveness = {
+    status: probeResult.status,
+    lastProbedAt: new Date().toISOString(),
+    attemptCount,
+    lastUrlProbed: urlProbed,
+    lastHttpStatus: probeResult.httpStatus,
+  };
+
+  // Paranoid contract guard — throws on schema drift so the failing
+  // sweep task surfaces via the catch-all log.warn in runProbeSweep.
+  UrlLivenessSchema.parse(next);
+
+  await cacheSetSafe(key, next, ttlSecForStatus(next.status));
+
+  // Pitfall 3 — sidecar count maintenance on dead-set transitions only.
+  // Wrap raw redis.incr/decr in try/catch (cacheSetSafe shape doesn't
+  // fit integer counters; Pitfall 6 note says raw incr/decr must
+  // degrade-open).
+  try {
+    if (!priorDead && nextDead) {
+      await redis.incr(URL_LIVENESS_COUNT_KEY);
+    } else if (priorDead && !nextDead) {
+      const after = await redis.decr(URL_LIVENESS_COUNT_KEY);
+      if (typeof after === 'number' && after < 0) {
+        // Underflow race (concurrent prune ran between our read of
+        // `prior` and the DECR) — floor at 0.
+        await redis.set(URL_LIVENESS_COUNT_KEY, 0);
+      }
+    }
+  } catch (err) {
+    log.warn(
+      { err, eventId, priorDead, nextDead },
+      'sidecar count update failed (degrade-open)',
+    );
+  }
+}
+
+// ============================================================================
 // Test-only export (NODE_ENV=test-gated) — MEDIUM-02 plan-checker fix
 // ============================================================================
 
 /**
- * NODE_ENV-gated visibility for module-private throttle helpers. Used
- * by `server/__tests__/lib/urlLiveness.sweep.test.ts` to assert the
- * D-18 polite-citizen contract without breaking encapsulation in
- * production builds. Consumers in dev/prod NEVER see this surface — it
- * resolves to `undefined` whenever NODE_ENV !== 'test'.
+ * NODE_ENV-gated visibility for module-private throttle + writer
+ * helpers. Used by `server/__tests__/lib/urlLiveness.sweep.test.ts` to
+ * assert the D-18 polite-citizen contract + the D-12 attemptCount
+ * semantics without breaking encapsulation in production builds.
+ * Consumers in dev/prod NEVER see this surface — it resolves to
+ * `undefined` whenever NODE_ENV !== 'test'.
  *
  * MEDIUM-02 plan-checker fix: the sweep test file asserts
  * `expect(process.env.NODE_ENV).toBe('test')` at file-import time so
@@ -412,5 +528,5 @@ function pruneStaleHostSlots(): void {
  */
 export const __test__ =
   process.env.NODE_ENV === 'test'
-    ? { waitForHostSlot, pruneStaleHostSlots, hostNext }
+    ? { waitForHostSlot, pruneStaleHostSlots, hostNext, persistLiveness }
     : undefined;
