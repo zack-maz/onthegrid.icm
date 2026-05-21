@@ -336,10 +336,11 @@ describe('POST /api/events/prune-dead-urls — Plan 32-03 Task 2', () => {
     expect(mockPruneHelper).not.toHaveBeenCalled();
   });
 
-  // Test 5 — cron trigger bypasses quota (D-15)
-  it('trigger:cron bypasses quota (D-15 cron-bypass)', async () => {
-    // Drive INCR way over cap — if quota path executed we'd see 429.
-    mockIncr.mockResolvedValue(1000);
+  // Test 5 — CR-01 regression: request body `trigger:'cron'` MUST NOT
+  // bypass the operator quota and MUST NOT spoof the audit-log fingerprint.
+  // The cron path uses direct helper invocation; HTTP route is always manual.
+  it('CR-01 — request-body trigger:cron does NOT bypass quota or spoof fingerprint', async () => {
+    mockIncr.mockResolvedValue(1);
     mockPruneHelper.mockResolvedValue({ prunedCount: 1, prunedIds: ['X'] });
 
     const res = await fetch(`${baseUrl}/api/events/prune-dead-urls`, {
@@ -348,12 +349,32 @@ describe('POST /api/events/prune-dead-urls — Plan 32-03 Task 2', () => {
       body: JSON.stringify({ trigger: 'cron' }),
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { prunedCount: number };
-    expect(body.prunedCount).toBe(1);
 
-    // Quota counter NOT incremented on cron path.
-    expect(mockIncr).not.toHaveBeenCalled();
+    // Quota counter IS incremented — the body-provided 'cron' is ignored.
+    expect(mockIncr).toHaveBeenCalledTimes(1);
+    // Helper invoked with trigger='manual' (NOT 'cron') and the operator's
+    // own fingerprint (NOT the literal 'cron:refresh-events' sentinel).
     expect(mockPruneHelper).toHaveBeenCalledTimes(1);
+    const [opts] = mockPruneHelper.mock.calls[0]! as Array<{
+      trigger: string;
+      fingerprint: string;
+    }>;
+    expect(opts.trigger).toBe('manual');
+    expect(opts.fingerprint).not.toBe('cron:refresh-events');
+    expect(opts.fingerprint.length).toBeGreaterThan(0);
+  });
+
+  // Test 5b — CR-01 regression: 51st call still 429s even with body trigger
+  // forging 'cron'. Confirms the quota is unconditional on the HTTP route.
+  it('CR-01 — request-body trigger:cron still hits the 50/24h cap (429)', async () => {
+    mockIncr.mockResolvedValue(51);
+    const res = await fetch(`${baseUrl}/api/events/prune-dead-urls`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trigger: 'cron' }),
+    });
+    expect(res.status).toBe(429);
+    expect(mockPruneHelper).not.toHaveBeenCalled();
   });
 
   // Test 6 — helper receives the right args

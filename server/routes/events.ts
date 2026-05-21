@@ -536,12 +536,16 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
 // `Retry-After` header on 429; `{error:'prune_failed', detail}` on 503
 // (helper throw — Pitfall 6 chaos-test contract: 200|503, NEVER 500).
 {
-  eventsRouter.post('/prune-dead-urls', dashboardAuth, async (req, res) => {
-    // Whitelist `trigger`: anything other than the literal 'cron' resolves
-    // to 'manual' so malformed bodies (or missing JSON entirely) default
-    // to the safe path with quota enforcement.
-    const rawTrigger = (req.body as { trigger?: unknown } | undefined)?.trigger;
-    const trigger: 'manual' | 'cron' = rawTrigger === 'cron' ? 'cron' : 'manual';
+  eventsRouter.post('/prune-dead-urls', dashboardAuth, async (_req, res) => {
+    // Phase 32 CR-01 fix — `trigger` is ALWAYS 'manual' over HTTP.
+    // The cron post-step at `llmExtractionPipeline.ts` calls
+    // `pruneDeadUrlEvents({ trigger: 'cron' })` DIRECTLY (never via this
+    // route), so the HTTP path has no legitimate cron caller. Previously
+    // the route read `trigger` from the request body, which let any
+    // authenticated operator skip the 50/24h `checkPruneQuota` AND record
+    // themselves as `bearerFingerprint: 'cron:refresh-events'` in the
+    // audit log — anonymizing the action and bypassing rate-limiting.
+    const trigger = 'manual' as const;
     const fingerprint = bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? '');
 
     // Chaos-test contract: the entire body is wrapped in try/catch so
@@ -550,18 +554,16 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     // surface as a 500. Under chaos / Redis death, the route degrades
     // to 503 prune_failed (RESEARCH Pitfall 6).
     try {
-      // D-15 — manual trigger consumes a slot; cron BYPASSES quota
-      // (system caller, not subject to operator-tier rate limiting).
-      if (trigger !== 'cron') {
-        const quota = await checkPruneQuota(fingerprint);
-        if (!quota.allowed) {
-          res.set('Retry-After', String(quota.retryAfterSeconds));
-          return res.status(429).json({
-            error: 'prune_quota_exceeded',
-            message: `Prune quota reached: ${quota.cap} of ${quota.cap} in last 24h.`,
-            resetsAt: quota.resetsAt,
-          });
-        }
+      // D-15 — manual trigger always consumes a quota slot. The HTTP
+      // route is unconditionally manual after the CR-01 fix.
+      const quota = await checkPruneQuota(fingerprint);
+      if (!quota.allowed) {
+        res.set('Retry-After', String(quota.retryAfterSeconds));
+        return res.status(429).json({
+          error: 'prune_quota_exceeded',
+          message: `Prune quota reached: ${quota.cap} of ${quota.cap} in last 24h.`,
+          resetsAt: quota.resetsAt,
+        });
       }
 
       // Audit-log responsibility lives in the helper (D-14) — the route
