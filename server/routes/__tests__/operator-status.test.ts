@@ -493,8 +493,15 @@ describe('/api/operator-status — Phase 32 Plan 04 `prune` block', () => {
       const nextCursor = end >= TOTAL ? 0 : end;
       return [nextCursor, page];
     });
-    mockCacheGetSafe.mockImplementation(async (_key: string) => {
-      scannedKeysTotal += 1;
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      // Phase 33 Plan 06 — `/api/operator-status` aggregator also reads
+      // `events:llm:v3` for the actorQuality block. Scope the SCAN-budget
+      // counter to URL-liveness keys only, otherwise the actorQuality
+      // cacheGetSafe call inflates `scannedKeysTotal` past the
+      // `MAX_SCAN_KEYS` contract by 1 (off-by-one observed in CI 2026-05-21).
+      if (key.startsWith('events:url-liveness:')) {
+        scannedKeysTotal += 1;
+      }
       // All `unknown` — never matches the terminal-dead filter, so LIMIT_DRILL_DOWN=20 cap never trips.
       return {
         data: {
