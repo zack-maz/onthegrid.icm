@@ -3,10 +3,13 @@ import { describe, it, expect } from 'vitest';
 
 import {
   enrichedEventV2,
+  enrichedEventV3,
   enrichedEventAny,
   derivePrecision,
   deriveSuspect,
   GEOCODE_PROVENANCE_VALUES,
+  EVENT_EXTRACTION_SCHEMA_V2,
+  EVENT_EXTRACTION_SCHEMA_V3,
   type GeocodeProvenance,
   type LocationHierarchyV2,
 } from '../../lib/llmSchema.js';
@@ -283,5 +286,134 @@ describe('GeocodeProvenance exhaustiveness (D-22)', () => {
     for (const p of GEOCODE_PROVENANCE_VALUES) {
       expect(exhaustive(p)).toBe(p);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 33 D-10: enrichedEventV3 + actorConfidence (.optional() rollout)
+//
+// Per CONTEXT.md D-10 and RESEARCH.md Open Q §1, actorConfidence ships as
+// z.array(z.enum(['high','medium','low'])).optional() so legacy v3 cache
+// entries (pre-Phase 33) continue to parse through enrichedEventAny during
+// the 24h forward-rollout window. Tighten to required in a Phase 35+ cleanup
+// once daily cron rollover completes.
+// ---------------------------------------------------------------------------
+
+/** Build a minimal valid v3 payload (v2 shape + schemaVersion='v3'). */
+function validV3Payload(): Record<string, unknown> {
+  return {
+    schemaVersion: 'v3',
+    groupKey: 'grp-v3-001',
+    location: {
+      country: 'Iran',
+      admin1: null,
+      city: null,
+      neighborhood: null,
+      landmark: null,
+      confidence: 0.7,
+    },
+    type: 'airstrike',
+    confidence: 0.7,
+    reasoning: 'v3 fixture for Phase 33 actorConfidence tests',
+    weaponType: null,
+    targetType: null,
+    timeOfDay: null,
+    durationMinutes: null,
+    actors: ['IRGC', 'IDF'],
+    severity: 'high',
+    summary: 'v3 fixture event.',
+    casualties: { killed: null, injured: null, unknown: true },
+    sourceCount: 3,
+  };
+}
+
+describe('Phase 33 enrichedEventV3 — actorConfidence (D-10, Open Q §1 .optional() rollout)', () => {
+  it('accepts payload WITH actorConfidence array of enum values', () => {
+    const payload = validV3Payload();
+    payload.actorConfidence = ['high', 'medium'];
+    const result = enrichedEventV3.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts payload WITHOUT actorConfidence (rollout-window forward-compat)', () => {
+    // Open Q §1: .optional() preserves legacy v3 cache reads through enrichedEventAny
+    const payload = validV3Payload();
+    // intentionally omit actorConfidence — represents legacy pre-Phase-33 cache entries
+    const result = enrichedEventV3.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid actorConfidence enum value', () => {
+    const payload = validV3Payload();
+    payload.actorConfidence = ['certain']; // not in ['high','medium','low']
+    const result = enrichedEventV3.safeParse(payload);
+    expect(result.success).toBe(false);
+  });
+
+  it('admits legacy v3 payload (no actorConfidence) via enrichedEventAny discriminated union', () => {
+    // Forward-compat: enrichedEventAny is the cache-read surface in
+    // llmEventExtractor.v3.ts (temporal-context block). Rejecting legacy
+    // entries here would break the daily cron's prior-snapshot read.
+    const payload = validV3Payload();
+    const result = enrichedEventAny.safeParse(payload);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schemaVersion).toBe('v3');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 33 D-12: EVENT_EXTRACTION_SCHEMA_V3 un-aliased + actorConfidence
+//
+// Per CONTEXT.md D-12 and RESEARCH.md Open Q §3, the V3 JSON-Schema literal
+// is un-aliased from V2 so that adding actorConfidence to the v3 wire
+// contract does NOT pollute the v2 contract. Per Open Q §2, actorConfidence
+// is required at the wire level (LLM forcing-function value); server-side
+// repair fills missing/wrong-length entries as defense-in-depth (Plan 33-04).
+// ---------------------------------------------------------------------------
+
+describe('Phase 33 EVENT_EXTRACTION_SCHEMA_V3 — un-aliased + actorConfidence (D-12, Open Q §2/§3)', () => {
+  it('is un-aliased from V2 (Open Q §3)', () => {
+    // Referential inequality after un-aliasing — accidental re-aliasing
+    // would silently re-pollute V2 with any future V3 edits.
+    expect(EVENT_EXTRACTION_SCHEMA_V3).not.toBe(EVENT_EXTRACTION_SCHEMA_V2);
+  });
+
+  it('declares actorConfidence in events.items.properties with the expected enum', () => {
+    // Navigate the nested JSON Schema literal. Type narrowing via `as` casts
+    // is acceptable here — schema literals are `Record<string, unknown>` by
+    // design.
+    const eventsSchema = (EVENT_EXTRACTION_SCHEMA_V3.properties as Record<string, unknown>)
+      .events as Record<string, unknown>;
+    const itemsSchema = eventsSchema.items as Record<string, unknown>;
+    const itemProps = itemsSchema.properties as Record<string, unknown>;
+    const actorConfidenceSchema = itemProps.actorConfidence as Record<string, unknown> | undefined;
+    expect(actorConfidenceSchema).toBeDefined();
+    expect(actorConfidenceSchema!.type).toBe('array');
+    const itemsConstraint = actorConfidenceSchema!.items as Record<string, unknown>;
+    expect(itemsConstraint.type).toBe('string');
+    expect(itemsConstraint.enum).toEqual(['high', 'medium', 'low']);
+  });
+
+  it('declares actorConfidence in events.items.required (Open Q §2 — wire required)', () => {
+    const eventsSchema = (EVENT_EXTRACTION_SCHEMA_V3.properties as Record<string, unknown>)
+      .events as Record<string, unknown>;
+    const itemsSchema = eventsSchema.items as Record<string, unknown>;
+    const requiredArr = itemsSchema.required as string[];
+    expect(Array.isArray(requiredArr)).toBe(true);
+    expect(requiredArr.includes('actorConfidence')).toBe(true);
+  });
+
+  it('V2 literal is unchanged — frozen, no actorConfidence leak', () => {
+    // V2 must remain canonical for the v2 rollback path. The un-alias is the
+    // mechanism that prevents v3 additions from contaminating v2.
+    const v2EventsSchema = (EVENT_EXTRACTION_SCHEMA_V2.properties as Record<string, unknown>)
+      .events as Record<string, unknown>;
+    const v2ItemsSchema = v2EventsSchema.items as Record<string, unknown>;
+    const v2ItemProps = v2ItemsSchema.properties as Record<string, unknown>;
+    expect(v2ItemProps.actorConfidence).toBeUndefined();
+    const v2RequiredArr = v2ItemsSchema.required as string[];
+    expect(v2RequiredArr.includes('actorConfidence')).toBe(false);
   });
 });
