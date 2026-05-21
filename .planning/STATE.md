@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.5
-milestone_name: LLM Reliability & Reveal Prep
-status: executing
-last_updated: "2026-05-21T20:34:57.656Z"
-last_activity: 2026-05-21 -- Phase 33 planning complete
+milestone_name: LLM Reliability & Reveal Prep — 🚧 IN PROGRESS
+status: completed
+last_updated: "2026-05-21T20:57:05.912Z"
+last_activity: 2026-05-21 -- Phase 33 marked complete
 progress:
   total_phases: 15
   completed_phases: 5
-  total_plans: 42
-  completed_plans: 40
+  total_plans: 43
+  completed_plans: 42
   percent: 33
 ---
 
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 33 (Actor Metadata Audit, Canonical Catalog & Eval Expansion) — NOT STARTED
+Phase: 33 — COMPLETE
 Plan: 0 of TBD
-Status: Ready to execute
-Last activity: 2026-05-21 -- Phase 33 planning complete
+Status: Phase 33 complete
+Last activity: 2026-05-21 -- Phase 33 marked complete
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
