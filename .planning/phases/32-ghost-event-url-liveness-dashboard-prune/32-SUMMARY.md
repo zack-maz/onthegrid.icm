@@ -105,6 +105,15 @@ Cross-checked against `32-RESEARCH.md` §"Architectural Responsibility Map" pres
 
 **No tier drift.** Every helper / route / UI block ships exactly where RESEARCH §"Architectural Responsibility Map" said it should.
 
+## Post-Review Security Fixes (2026-05-21, inline before merge)
+
+The `gsd-code-reviewer` advisory pass surfaced 2 Critical findings (audit at `32-REVIEW.md`). Operator chose to land surgical fixes on the same PR rather than ship to a gap-closure phase:
+
+- **CR-01** — `POST /api/events/prune-dead-urls` read `trigger` from the request body, letting any authenticated operator bypass the 50/24h quota AND record their action as `bearerFingerprint: 'cron:refresh-events'` (anonymizing themselves). Fixed in commit `53dd880`: trigger is now hardcoded to `'manual'` on the HTTP route; the cron path continues to call the helper directly with `trigger:'cron'`. Two regression tests added.
+- **CR-02** — SSRF guard's `PRIVATE_HOST_REGEX` anchored at `^` against literal `'::1'`/`'fc'`/`'fd'` but `URL.hostname` returns IPv6 with brackets (`'[::1]'`). Stored URLs like `http://[::1]:6379/` PASSED the guard. Same gap for `[fd00::]/8` / `[fe80::]/10` / IPv4-mapped IPv6. Fixed in commit `d85ddc8`: `isPrivateHost` strips brackets + adds explicit v6 alternates (`::1`, `::`, `::ffff:`, `fe80:`, ULA `f[cd][0-9a-f]{2}:`) + hex disambiguation defangs false-positives like `fc-barcelona.com`. 7 regression tests added.
+
+Net test count: 2259 → 2267 passing. 6 Warning + 5 Info findings remain advisory — defer to opportunistic cleanup or future polish phase.
+
 ## Operator UAT Manual-Only Checklist (Plan 32-06 Task 4)
 
 UAT exercised against a local server running with `NODE_ENV=production` + real Upstash credentials + real `DASHBOARD_PASSWORD` Bearer, plus a Vercel preview deploy at `https://otg-iran-monitor-79jywcbcb-zack-mazs-projects.vercel.app` (deploy id `dpl_9pmXkq6oS64XDqA56EHHdRwuMAnk`, ready=READY). Each item is verbatim from `32-VALIDATION.md` §"Manual-Only Verifications":

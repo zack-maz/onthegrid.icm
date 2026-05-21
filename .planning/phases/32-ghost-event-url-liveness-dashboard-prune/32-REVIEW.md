@@ -11,15 +11,20 @@ files_reviewed_list:
   - server/routes/events.ts
   - server/routes/operator-status.ts
   - src/components/ui/DevApiStatus.tsx
-status: issues_found
-critical_count: 2
+status: critical_resolved
+critical_count: 0
+critical_resolved: 2
 warning_count: 6
 info_count: 5
 findings:
-  critical: 2
+  critical: 0
+  critical_resolved: 2
   warning: 6
   info: 5
   total: 13
+resolutions:
+  CR-01: "Resolved 2026-05-21 in commit 53dd880 — HTTP route trigger hardcoded to 'manual'; 2 regression tests added"
+  CR-02: "Resolved 2026-05-21 in commit d85ddc8 — bracket-stripping + IPv6 alternates + fc/fd hex disambiguation; 7 regression tests added"
 ---
 
 # Phase 32: Code Review Report
