@@ -204,12 +204,24 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     mockFetch.mockClear();
     vi.stubGlobal('fetch', mockFetch);
     // Seed dashboardAuthHeaders() so the Bearer spread is non-empty in
-    // test 4. Same storage key dashboardAuth.ts uses.
-    try {
-      window.localStorage.setItem('dashboard:auth-key', 'test-bearer-key');
-    } catch {
-      /* jsdom localStorage should be fine */
-    }
+    // test 4. NOTE: Node 22's built-in localStorage shadows jsdom's, but
+    // it's no-op unless `--localstorage-file` is provided. Stub a working
+    // localStorage with an in-memory Map backing store so dashboardAuth's
+    // `localStorage.getItem` returns the seeded key.
+    const store = new Map<string, string>();
+    const ls = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, String(v)),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+      key: (i: number) => Array.from(store.keys())[i] ?? null,
+      get length() {
+        return store.size;
+      },
+    } satisfies Storage;
+    vi.stubGlobal('localStorage', ls);
+    Object.defineProperty(window, 'localStorage', { value: ls, configurable: true });
+    ls.setItem('dashboard:auth-key', 'test-bearer-key');
     resetAllStores();
     useUIStore.setState({
       isDevApiStatusOpen: false,
@@ -225,11 +237,6 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    try {
-      window.localStorage.removeItem('dashboard:auth-key');
-    } catch {
-      /* noop */
-    }
   });
 
   it('renders `Dead URL events: 3` when prune.deadUrlCount === 3', async () => {
