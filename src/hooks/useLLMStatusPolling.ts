@@ -24,7 +24,16 @@ export interface LLMRunSummary {
   schemaVersion?: 'v1' | 'v2' | 'v3';
   tokenCounters?: { cerebras: number; groq: number };
   dlqCount?: number;
-  evalScore?: { within5km: number; within20km: number; within100km: number; total: number };
+  // Phase 33 D-13 — actorMatchRate added to evalScore (ACTOR-04). Optional
+  // for forward-compat: pre-Phase-33 cron baselines lack the field; daily cron
+  // overwrites within 24h.
+  evalScore?: {
+    within5km: number;
+    within20km: number;
+    within100km: number;
+    total: number;
+    actorMatchRate?: number;
+  };
   provenanceCounts?: Record<string, number>;
   suspectCount?: number;
   // Phase 27.4.2 P6 — surface watchdog kill count on cold-start dashboard reads
@@ -223,7 +232,15 @@ export interface LLMStatus {
   dlqCount?: number;
   dlqRecent?: Array<{ id: string; reason: string; lastError: string; timestamp: number }>;
   breakerState?: { cerebras: 'ok' | 'paused'; groq: 'ok' | 'paused' };
-  evalScore?: { within5km: number; within20km: number; within100km: number; total: number };
+  // Phase 33 D-13 — actorMatchRate added to evalScore (ACTOR-04). Optional
+  // for forward-compat across the rollout window.
+  evalScore?: {
+    within5km: number;
+    within20km: number;
+    within100km: number;
+    total: number;
+    actorMatchRate?: number;
+  };
   provenanceCounts?: Record<string, number>;
   suspectCount?: number;
 

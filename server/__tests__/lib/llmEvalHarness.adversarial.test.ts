@@ -99,8 +99,9 @@ describe('runAdversarialEval — Phase 28.2 Plan 03 Task 5 / B-2', () => {
     expect(typeof result.score).toBe('number');
     expect(typeof result.byCategory).toBe('object');
     expect(typeof result.generatedAt).toBe('string');
-    // The on-disk fixture has 10 entries.
-    expect(result.total).toBe(10);
+    // The on-disk fixture has 13 entries after Phase 33 D-15 soft cap-bump
+    // (10 → 13 — adv-011 / adv-012 / adv-013 actor-confusion injections).
+    expect(result.total).toBe(13);
     // Every entry classified — blocked + leaked === total.
     expect(result.blocked + result.leaked).toBe(result.total);
     // score === blocked / total within float tolerance.
@@ -119,9 +120,9 @@ describe('runAdversarialEval — Phase 28.2 Plan 03 Task 5 / B-2', () => {
     });
 
     const result = await runAdversarialEval();
-    // All 10 entries should be blocked since neither output nor hierarchy
-    // leaks canary text.
-    expect(result.blocked).toBe(10);
+    // All 13 entries (Phase 33 D-15 cap-bump) should be blocked since neither
+    // output nor hierarchy leaks canary text.
+    expect(result.blocked).toBe(13);
     expect(result.leaked).toBe(0);
     expect(result.score).toBe(1);
   });
@@ -155,7 +156,9 @@ describe('runAdversarialEval — Phase 28.2 Plan 03 Task 5 / B-2', () => {
 
     const result = await runAdversarialEval();
     expect(result.leaked).toBeGreaterThanOrEqual(1);
-    expect(result.blocked).toBeLessThan(10);
+    // Phase 33 D-15: fixture grew to 13 entries; the leaked-entry condition
+    // pulls at least one out of the blocked column.
+    expect(result.blocked).toBeLessThan(13);
   });
 
   // Test 4 — Redis persist
@@ -209,5 +212,40 @@ describe('runAdversarialEval — Phase 28.2 Plan 03 Task 5 / B-2', () => {
     // Every fixture entry triggers a throw → all blocked.
     expect(result.blocked).toBe(result.total);
     expect(result.leaked).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 33 adversarial — actor-confusion injections (D-15).
+//
+// The committed fixture is extended (Plan 33-05 Task 2) with three new
+// entries — adv-011 (side-swap), adv-012 (ambiguity), adv-013
+// (code-as-actor). Total entry count rises from 10 to 13 (Open Q §5 soft
+// cap-bump; documented in 33-05-SUMMARY).
+//
+// These tests are wire-level fixture-shape verification — they parse the
+// real committed fixture and assert the three new ids parse and carry the
+// expected category strings. No mock setup needed.
+// ---------------------------------------------------------------------------
+
+describe('Phase 33 adversarial — actor-confusion injections (D-15)', () => {
+  // Single FS read shared across all it.each branches.
+  const fixturePath = resolve(__dirname, '../../../.planning/eval/adversarial-injections.json');
+  const fixture = JSON.parse(readFileSync(fixturePath, 'utf-8')) as {
+    entries: Array<{ id: string; category: string }>;
+  };
+
+  it.each([
+    ['adv-011', 'actor-confusion-side-swap'],
+    ['adv-012', 'actor-confusion-ambiguity'],
+    ['adv-013', 'actor-confusion-code-as-actor'],
+  ])('%s parses and carries the expected category %s', (id, category) => {
+    const entry = fixture.entries.find((e) => e.id === id);
+    expect(entry).toBeDefined();
+    expect(entry!.category).toBe(category);
+  });
+
+  it('total fixture entry count is exactly 13 after D-15 soft cap-bump', () => {
+    expect(fixture.entries.length).toBe(13);
   });
 });

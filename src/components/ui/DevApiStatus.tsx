@@ -911,6 +911,23 @@ function DevApiStatusAllApisTab({
         status: 'dead-host' | '403' | '404';
       }>;
     } | null;
+    // Phase 33 D-17 — actor metadata quality counts from /api/operator-status
+    // (Plan 33-06 server surface). `null` (or field absent) when the server
+    // has not yet shipped Plan 33-06 — silent skip in the render gate below
+    // mirrors the Phase 32 D-10 forward-compat pattern for the `prune` block.
+    actorQuality?: {
+      totalEvents: number;
+      nullActors: number;
+      rawCameoActors: number;
+      ambiguousActors: number;
+      lowConfidenceActors: number;
+      sample: Array<{
+        eventId: string;
+        actors: string[];
+        actorConfidence: Array<'high' | 'medium' | 'low'>;
+        issue: 'null' | 'raw-cameo' | 'ambiguous' | 'low-confidence';
+      }>;
+    } | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
   // Phase 32 Plan 05 MEDIUM-03 — `fetchOpStatus` hoisted out of the
@@ -1653,6 +1670,69 @@ function DevApiStatusAllApisTab({
           </>
         )}
 
+        {/* Phase 33 D-17 — Actor Quality sub-block. Read-only counters +
+            drill-down sample. Mounted between the Phase 32 prune block close
+            (above) and the pruneQuotaAlert (below) per UI-SPEC §"DOM Mount
+            Point". Render gate `opStatus?.actorQuality != null` silently
+            skips when a pre-Phase-33 server deploy doesn't carry the field
+            (matches Phase 32 D-10 forward-compat). Color tokens come from
+            existing @theme CSS vars only — zero new tokens per UI-SPEC
+            §Color (D-13 single-source-of-truth contract preserved). */}
+        {opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents > 0 && (
+          <>
+            <div
+              className="mt-1 text-text-muted"
+              data-testid="actor-quality-row"
+              aria-label={`Actor quality counters: ${opStatus.actorQuality.nullActors} null actors, ${opStatus.actorQuality.rawCameoActors} raw CAMEO codes, ${opStatus.actorQuality.ambiguousActors} ambiguous strings, ${opStatus.actorQuality.lowConfidenceActors} low confidence`}
+            >
+              Actor quality: Null: {opStatus.actorQuality.nullActors} · Raw-CAMEO:{' '}
+              {opStatus.actorQuality.rawCameoActors} · Ambiguous:{' '}
+              {opStatus.actorQuality.ambiguousActors} · Low-confidence:{' '}
+              {opStatus.actorQuality.lowConfidenceActors}
+            </div>
+            {opStatus.actorQuality.sample.length > 0 && (
+              <ul
+                className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
+                data-testid="actor-quality-list"
+                aria-label="Actor quality drill-down sample (up to 20 events)"
+              >
+                {opStatus.actorQuality.sample.map((entry) => {
+                  const issueColor =
+                    entry.issue === 'null'
+                      ? 'text-text-muted/60'
+                      : entry.issue === 'raw-cameo' || entry.issue === 'ambiguous'
+                        ? 'text-[color:var(--color-faction-disputed)]'
+                        : 'text-[color:var(--color-event-other)]';
+                  return (
+                    <li
+                      key={entry.eventId}
+                      className="flex items-baseline gap-2 py-0.5"
+                      data-testid={`actor-quality-row-${entry.eventId}`}
+                    >
+                      <span className={`font-mono ${issueColor}`}>{entry.issue}</span>
+                      <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
+                      <span className="truncate text-text-muted/70">{entry.actors.join(', ')}</span>
+                    </li>
+                  );
+                })}
+                {opStatus.actorQuality.sample.length === 20 && (
+                  <li
+                    className="py-0.5 italic text-text-muted/40"
+                    data-testid="actor-quality-list-truncated"
+                  >
+                    … and more
+                  </li>
+                )}
+              </ul>
+            )}
+          </>
+        )}
+        {opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents === 0 && (
+          <div className="mt-1 text-text-muted italic" data-testid="actor-quality-empty">
+            Actor quality: no data
+          </div>
+        )}
+
         {/* Phase 32 Plan 05 — 429 prune-quota alert. Mirrors the existing
             replay-quota-alert above. px-2 py-1 spacing — multiples of 4. */}
         {pruneQuotaAlert && (
@@ -2364,6 +2444,10 @@ function EvalScoreBlock({ evalScore }: { evalScore: LLMStatus['evalScore'] }) {
   }
   const pct20 = Math.round((evalScore.within20km / evalScore.total) * 100);
   const gatePass = pct20 >= 80;
+  const actorMatchPct =
+    typeof evalScore.actorMatchRate === 'number'
+      ? Math.round(evalScore.actorMatchRate * 100)
+      : null;
   return (
     <div className="mt-2">
       <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
@@ -2383,6 +2467,12 @@ function EvalScoreBlock({ evalScore }: { evalScore: LLMStatus['evalScore'] }) {
           {evalScore.within100km}/{evalScore.total}
         </span>
       </div>
+      {actorMatchPct !== null && (
+        <div className="mt-0.5 text-[9px] text-white/60" data-testid="eval-actor-match-rate">
+          Actor match (Phase 33 ACTOR-04):{' '}
+          <span className="text-white/80 tabular-nums">{actorMatchPct}%</span>
+        </div>
+      )}
       <div className="mt-0.5 text-[9px]">
         D-25 gate (≥80% @20km):{' '}
         {gatePass ? (

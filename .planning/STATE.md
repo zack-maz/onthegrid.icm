@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.5
-milestone_name: LLM Reliability & Reveal Prep
-status: executing
-last_updated: "2026-05-21T03:25:00.000Z"
-last_activity: 2026-05-21
+milestone_name: LLM Reliability & Reveal Prep — 🚧 IN PROGRESS
+status: completed
+last_updated: "2026-05-21T20:57:05.912Z"
+last_activity: 2026-05-21 -- Phase 33 marked complete
 progress:
   total_phases: 15
   completed_phases: 5
-  total_plans: 35
-  completed_plans: 35
-  percent: 32
+  total_plans: 43
+  completed_plans: 42
+  percent: 33
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 33 (Actor Metadata Audit, Canonical Catalog & Eval Expansion) — NOT STARTED
+Phase: 33 — COMPLETE
 Plan: 0 of TBD
-Status: Phase 32 (Ghost Event URL Liveness, Dashboard & Prune) closed 2026-05-21 — GHOST-01..05 all complete; 22 D-N decisions landed atomically; +63 new tests; 2259 total passing; zero new npm deps; chaos-test contract preserved; operator UAT pending against deployed preview (Plan 32-06 Task 4 human-verify checkpoint).
-Last activity: 2026-05-21 — Phase 32 closed
+Status: Phase 33 complete
+Last activity: 2026-05-21 -- Phase 33 marked complete
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 

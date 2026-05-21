@@ -24,8 +24,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { cacheSetSafe } from '../cache/redis.js';
+import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 
+import { LLM_EVENTS_KEY_ACTIVE } from './llmExtractionPipeline.js';
 import { updateProgress } from './llmProgress.js';
 import { resolveLocation } from './llmResolver.js';
 import { locationHierarchyV2 } from './llmSchema.js';
@@ -33,6 +34,7 @@ import { budgetState, getDailyTokens } from './llmTokenBudget.js';
 import { logger } from './logger.js';
 
 import type { LocationHierarchyV2 } from './llmSchema.js';
+import type { ConflictEventEntity } from '../types.js';
 
 // Phase 27.4.3 Plan 05 D-17 — Trigger 2 (eval-drop). Thread the new score
 // into the auto-rollback check after baseline persistence. The check is a
@@ -98,6 +100,19 @@ export interface GroundTruthEvent {
     admin1?: string | null;
   };
   hierarchy: LocationHierarchyV2;
+  /**
+   * Phase 33 D-14 — canonical attacker actor name (sourced verbatim from
+   * `server/data/actor-catalog.ts ACTOR_CATALOG`). null when source
+   * attribution is ambiguous; absent on pre-Phase-33 files (additive-
+   * optional).
+   */
+  expectedActor1?: string | null;
+  /**
+   * Phase 33 D-14 — canonical target / second-party actor name.
+   * Optional even when expectedActor1 is set (many events name only one
+   * actor unambiguously).
+   */
+  expectedActor2?: string | null;
 }
 
 /**
@@ -123,6 +138,20 @@ export interface EvalScore {
   within20km: number;
   within100km: number;
   total: number;
+  /**
+   * Phase 33 D-13 — case-insensitive substring AND-match rate against
+   * ground-truth expectedActor1 (+ optional expectedActor2) over the LIVE
+   * `events:llm:v3` cache. Range 0..1; 0 when no ground-truth events carry
+   * expectedActor1.
+   *
+   * Resolver-only constraint preserved (Phase 27.4 D-25): the second pass
+   * READS the cache via cacheGetSafe, never re-extracts via LLM.
+   *
+   * Join uses landmark + country case-insensitive substring (Open Q §4
+   * path c) — the synthetic `gt-NNN` id is NOT a real GDELT groupKey, so
+   * direct id-join is broken-by-design.
+   */
+  actorMatchRate: number;
 }
 
 /**
@@ -250,7 +279,13 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 export async function runEval(opts: { model?: string } = {}): Promise<EvalScore> {
   const gt = loadGroundTruth();
   if (!gt) {
-    const zero: EvalScore = { within5km: 0, within20km: 0, within100km: 0, total: 0 };
+    const zero: EvalScore = {
+      within5km: 0,
+      within20km: 0,
+      within100km: 0,
+      total: 0,
+      actorMatchRate: 0,
+    };
     // Still emit the zero score so DevApiStatus clears any stale value from a
     // previous run with a valid ground-truth file.
     updateProgress({ evalScore: zero });
@@ -279,11 +314,85 @@ export async function runEval(opts: { model?: string } = {}): Promise<EvalScore>
     }
   }
 
+  // ==========================================================================
+  // PHASE 33 D-13 — actor-match scoring over live cache.
+  //
+  // Second pass after the geocode-resolver loop. Reads the LIVE
+  // events:llm:v3 cache (cron-written by the daily extractor) and scores
+  // actor-attribution accuracy against the ground-truth expectedActor1 /
+  // expectedActor2 fields backfilled by D-14.
+  //
+  // RESOLVER-ONLY constraint preserved (Phase 27.4 D-25): this block only
+  // calls cacheGetSafe; it never calls resolveLocation, never calls callLLM.
+  // Token spend remains zero.
+  //
+  // JOIN STRATEGY (Open Q §4 path c — landmark + country substring): the
+  // ground-truth id `gt-NNN` is synthetic and has no relationship to the
+  // live `groupKey` (which is GDELT-derived). Direct join is broken.
+  // Instead, match each ground-truth event to one or more live events whose
+  // `label` contains BOTH `hierarchy.landmark` (when set) AND
+  // `hierarchy.country` as case-insensitive substrings.
+  //
+  // SCORING: for each ground-truth event with non-null expectedActor1,
+  // count it as a MATCH iff at least one candidate live event's actors[]
+  // contains expectedActor1 (case-insensitive substring) AND
+  // (expectedActor2 === null OR actors[] also contains expectedActor2).
+  // Score = matched / total-with-expectedActor1. 0 when total === 0.
+  //
+  // DEGRADE-OPEN: Redis failure on the cacheGetSafe read produces a 0
+  // actorMatchRate and a warn log — never throws.
+  // ==========================================================================
+  let actorMatched = 0;
+  let actorTotal = 0;
+  try {
+    const liveEntry = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY_ACTIVE, 999_999_999);
+    const liveEvents: ConflictEventEntity[] = liveEntry?.data ?? [];
+
+    for (const gtEvent of gt.events) {
+      const exp1 = gtEvent.expectedActor1;
+      const exp2 = gtEvent.expectedActor2;
+      if (typeof exp1 !== 'string') continue;
+
+      actorTotal += 1;
+
+      const landmark = (gtEvent.hierarchy.landmark ?? '').toLowerCase();
+      const country = (gtEvent.hierarchy.country ?? '').toLowerCase();
+      const exp1Low = exp1.toLowerCase();
+      const exp2Low = typeof exp2 === 'string' ? exp2.toLowerCase() : null;
+
+      // Path c join: substring match on label against landmark AND country.
+      // Falls back to country-only when landmark is null so country-resolved
+      // events still contribute. Empty-string landmarks are treated as a
+      // wildcard (matches all labels) by the `.length > 0` guard.
+      const candidates = liveEvents.filter((e) => {
+        const label = (e.label ?? '').toLowerCase();
+        const landmarkOk = landmark.length === 0 ? true : label.includes(landmark);
+        const countryOk = country.length === 0 ? true : label.includes(country);
+        return landmarkOk && countryOk;
+      });
+
+      for (const cand of candidates) {
+        const actors: string[] =
+          (cand.data as { actors?: string[] }).actors?.map((a) => a.toLowerCase()) ?? [];
+        const has1 = actors.some((a) => a.includes(exp1Low));
+        const has2 = exp2Low === null ? true : actors.some((a) => a.includes(exp2Low));
+        if (has1 && has2) {
+          actorMatched += 1;
+          break; // count once per ground-truth event
+        }
+      }
+    }
+  } catch (err) {
+    log.warn({ err }, 'D-13 actorMatchRate computation failed; falling back to 0');
+  }
+  const actorMatchRate = actorTotal === 0 ? 0 : actorMatched / actorTotal;
+
   const score: EvalScore = {
     within5km: w5,
     within20km: w20,
     within100km: w100,
     total: gt.events.length,
+    actorMatchRate,
   };
 
   // Live progress — picked up by buildSummary() in llmProgress.ts and

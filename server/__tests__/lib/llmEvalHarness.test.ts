@@ -40,6 +40,13 @@ vi.mock('../../cache/redis.js', () => ({
   cacheSetSafe: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Phase 33 D-13 — pipeline module is imported only for the LLM_EVENTS_KEY_ACTIVE
+// const. Mock it to avoid pulling the real transitively-imported llmCircuitBreaker /
+// llmDLQ / llmTokenBudget chain into this test module's graph.
+vi.mock('../../lib/llmExtractionPipeline.js', () => ({
+  LLM_EVENTS_KEY_ACTIVE: 'events:llm:v3',
+}));
+
 // Mocked so Test 9 can assert the eval harness NEVER calls it (A6 / Pitfall 8).
 vi.mock('../../adapters/llm-provider.js', () => ({
   callLLM: vi.fn(),
@@ -48,7 +55,7 @@ vi.mock('../../adapters/llm-provider.js', () => ({
 
 // Imports AFTER mocks are registered.
 import { callLLM } from '../../adapters/llm-provider.js';
-import { cacheSetSafe } from '../../cache/redis.js';
+import { cacheGetSafe, cacheSetSafe } from '../../cache/redis.js';
 import {
   loadGroundTruth,
   runEval,
@@ -146,6 +153,7 @@ beforeEach(() => {
   vi.mocked(resolveLocation).mockReset();
   vi.mocked(updateProgress).mockReset();
   vi.mocked(cacheSetSafe).mockReset().mockResolvedValue(undefined);
+  vi.mocked(cacheGetSafe).mockReset().mockResolvedValue(null);
   vi.mocked(callLLM).mockReset();
 });
 
@@ -372,14 +380,165 @@ describe('runEval with no ground-truth available', () => {
 
     const score = await runEval();
 
-    expect(score).toEqual({ within5km: 0, within20km: 0, within100km: 0, total: 0 });
+    // Phase 33 D-13: zero shape now carries actorMatchRate=0 alongside the
+    // geocode buckets. The interface remains additive (existing buckets
+    // unchanged) so pre-33 readers ignore the new field.
+    expect(score).toEqual({
+      within5km: 0,
+      within20km: 0,
+      within100km: 0,
+      total: 0,
+      actorMatchRate: 0,
+    });
     // resolver never called when ground-truth is absent.
     expect(vi.mocked(resolveLocation)).not.toHaveBeenCalled();
     // updateProgress must still fire so DevApiStatus clears any stale score.
     expect(vi.mocked(updateProgress)).toHaveBeenCalledWith(
       expect.objectContaining({
-        evalScore: { within5km: 0, within20km: 0, within100km: 0, total: 0 },
+        evalScore: {
+          within5km: 0,
+          within20km: 0,
+          within100km: 0,
+          total: 0,
+          actorMatchRate: 0,
+        },
       }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runEval — actorMatchRate (D-13).
+//
+// The second pass over the live `events:llm:v3` cache, scored against the
+// ground-truth fixture's `expectedActor1` (+ optional `expectedActor2`)
+// fields. Join is case-insensitive substring match on landmark + country
+// against the live entity's `label` (Open Q §4 path c) — NOT on the synthetic
+// `gt-NNN` id, which has no relationship to the live groupKey.
+// ---------------------------------------------------------------------------
+
+describe('runEval — actorMatchRate (D-13)', () => {
+  // gt-001 carries Natanz + Iran; we inject expectedActor1 + (optional)
+  // expectedActor2 into the fixture-shaped JSON the readFileSync mock returns.
+  const gtNatanzWithActors = {
+    ...gtEventOne,
+    expectedActor1: 'Israeli Defense Forces',
+    expectedActor2: 'Islamic Revolutionary Guard Corps',
+  };
+
+  // Live cache entry whose actors array contains BOTH expected canonicals as
+  // case-insensitive substrings, and whose label contains both landmark and
+  // country tokens.
+  const liveNatanzMatch = {
+    id: 'llm-v3-natanz-2026-03-03',
+    type: 'airstrike' as const,
+    lat: 33.7225,
+    lng: 51.7261,
+    timestamp: 1_741_000_000_000,
+    label: 'Natanz nuclear enrichment complex, Iran',
+    data: {
+      eventType: 'airstrike',
+      subEventType: 'CAMEO 195',
+      fatalities: 0,
+      actor1: 'idf',
+      actor2: 'irgc',
+      notes: '',
+      source: 'gdelt',
+      goldsteinScale: -10,
+      locationName: 'Natanz, Iran',
+      cameoCode: '195',
+      actors: ['ISRAELI DEFENSE FORCES', 'Islamic Revolutionary Guard Corps'],
+    },
+  };
+
+  beforeEach(() => {
+    mockExistsSync.mockReturnValue(true);
+    // The fixture-shaped JSON returned by readFileSync — single GT event with
+    // expectedActor{1,2} populated.
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        version: 1,
+        curatedAt: '2026-04-21',
+        source: 'test',
+        events: [gtNatanzWithActors],
+      }),
+    );
+    vi.mocked(resolveLocation).mockResolvedValue(resolvedLoc(33.72, 51.73));
+  });
+
+  it('returns actorMatchRate as a number in [0,1] on the score object', async () => {
+    vi.mocked(cacheGetSafe).mockResolvedValue({
+      data: [liveNatanzMatch],
+      fetchedAt: Date.now(),
+    });
+
+    const score = await runEval();
+
+    expect(typeof (score as { actorMatchRate: number }).actorMatchRate).toBe('number');
+    const rate = (score as { actorMatchRate: number }).actorMatchRate;
+    expect(rate).toBeGreaterThanOrEqual(0);
+    expect(rate).toBeLessThanOrEqual(1);
+  });
+
+  it('case-insensitive substring AND-match — expectedActor1 + expectedActor2 both found counts as a match', async () => {
+    vi.mocked(cacheGetSafe).mockResolvedValue({
+      data: [liveNatanzMatch],
+      fetchedAt: Date.now(),
+    });
+
+    const score = await runEval();
+
+    // gt has 1 event with expectedActor1; live entry matches → 1/1.
+    expect((score as { actorMatchRate: number }).actorMatchRate).toBe(1);
+  });
+
+  it('returns 0 actorMatchRate when no ground-truth events carry expectedActor1', async () => {
+    // Override mock to return GT event WITHOUT expectedActor1.
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        version: 1,
+        curatedAt: '2026-04-21',
+        source: 'test',
+        events: [gtEventOne], // no expectedActor1 field
+      }),
+    );
+    vi.mocked(cacheGetSafe).mockResolvedValue({
+      data: [liveNatanzMatch],
+      fetchedAt: Date.now(),
+    });
+
+    const score = await runEval();
+
+    expect((score as { actorMatchRate: number }).actorMatchRate).toBe(0);
+  });
+
+  it('persists actorMatchRate as part of the baseline score in Redis', async () => {
+    vi.mocked(cacheGetSafe).mockResolvedValue({
+      data: [liveNatanzMatch],
+      fetchedAt: Date.now(),
+    });
+
+    await runEval();
+
+    // The runEval call writes BOTH the live cache read (cacheGetSafe) and the
+    // baseline write (cacheSetSafe). The baseline write MUST include the new
+    // field — search for the baseline-key write among the recorded calls.
+    const baselineCall = vi
+      .mocked(cacheSetSafe)
+      .mock.calls.find(([key]) => key === 'events:llm-eval-baseline:v3');
+    expect(baselineCall).toBeDefined();
+    const payload = baselineCall![1] as { actorMatchRate: number };
+    expect(payload.actorMatchRate).toBe(1);
+  });
+
+  it('degrades open on Redis live-cache read failure — actorMatchRate falls back to 0', async () => {
+    // Simulate a Redis hiccup on the second-pass live cache read.
+    vi.mocked(cacheGetSafe).mockRejectedValue(new Error('redis unreachable'));
+
+    const score = await runEval();
+
+    // Resolver-only / geocode buckets still scored; actorMatchRate falls back
+    // to 0 without throwing.
+    expect((score as { actorMatchRate: number }).actorMatchRate).toBe(0);
   });
 });

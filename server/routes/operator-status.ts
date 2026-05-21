@@ -23,6 +23,8 @@
 import { Router, type Request, type Response } from 'express';
 
 import { cacheGetSafe, redis } from '../cache/redis.js';
+import { classifyEventActors } from '../lib/actorClassifier.js';
+import { LLM_EVENTS_KEY_ACTIVE } from '../lib/llmExtractionPipeline.js';
 import { logger } from '../lib/logger.js';
 import {
   isTerminalDead,
@@ -31,6 +33,8 @@ import {
   type UrlLiveness,
 } from '../lib/urlLiveness.js';
 import { dashboardAuth } from '../middleware/dashboardAuth.js';
+
+import type { ConflictEventEntity } from '../types.js';
 
 const log = logger.child({ module: 'operator-status' });
 
@@ -48,6 +52,79 @@ export const operatorStatusRouter = Router();
  * `prune.deadUrlCount > LIMIT_DRILL_DOWN`.
  */
 const LIMIT_DRILL_DOWN = 20;
+
+// ============================================================================
+// Phase 33 Plan 06 — actorQuality block (D-16) constants + shape
+// ============================================================================
+
+/**
+ * INLINE_CAMEO_CODES — hardcoded subset of well-known CAMEO actor codes used by
+ * the `/api/operator-status` actorQuality block to detect bucket (b) raw-CAMEO
+ * actor strings.
+ *
+ * PATTERNS critical risk #3 — the full codebook lives at
+ * `.planning/phases/33-actor-metadata-audit-canonical-catalog-eval-expansion/cameo-codes.json`
+ * (Plan 33-02). That file is NOT bundled into the Vercel server build artifact,
+ * so the route cannot read it at runtime. This subset covers the country-
+ * military + class codes most likely to surface as raw CAMEO actors in
+ * `events:llm:v3` for the Iran-conflict region.
+ *
+ * Drift between this subset and the canonical committed codebook is acceptable
+ * per D-16 (counts here are observability, not enforcement). The audit script
+ * (Plan 33-01) remains the canonical full-codebook consumer.
+ */
+const INLINE_CAMEO_CODES: ReadonlySet<string> = new Set([
+  // Country-military (3-letter country prefix + MIL)
+  'ISRMIL',
+  'IRNMIL',
+  'USAMIL',
+  'USMIL',
+  'RUSMIL',
+  'SAUMIL',
+  'TURMIL',
+  'SYRMIL',
+  'LBNMIL',
+  'EGYMIL',
+  'JORMIL',
+  'IRQMIL',
+  // Country (generic, FIPS / ISO-ish 3-letter)
+  'ISR',
+  'IRN',
+  'USA',
+  'RUS',
+  'SAU',
+  'TUR',
+  'SYR',
+  'LBN',
+  'PSE',
+  'YEM',
+  'IRQ',
+  // Class / role codes (3-letter generic)
+  'REB',
+  'INS',
+  'MIL',
+  'GOV',
+  'COP',
+  'OPP',
+]);
+
+/**
+ * Bucket / sample shape returned to dashboard consumers (Plan 33-07).
+ * D-16 contract verbatim — drift here breaks the dashboard render contract.
+ */
+interface ActorQualityBlock {
+  totalEvents: number;
+  nullActors: number;
+  rawCameoActors: number;
+  ambiguousActors: number;
+  lowConfidenceActors: number;
+  sample: Array<{
+    eventId: string;
+    actors: string[];
+    actorConfidence: ('high' | 'medium' | 'low')[];
+    issue: 'null' | 'raw-cameo' | 'ambiguous' | 'low-confidence';
+  }>;
+}
 
 /**
  * Pitfall 3 budget guard — hard ceiling on the number of `events:url-liveness:*`
@@ -315,7 +392,98 @@ operatorStatusRouter.get(
       const deadUrlSample = await buildDeadUrlSample();
       const prune = { deadUrlCount, last24hPrunes, deadUrlSample };
 
-      res.json({ audit24h, byBearer, advEval, prune });
+      // ===== Phase 33 Plan 06 D-16 — actorQuality block =====
+      //
+      // Lazy compute over the already-deserialized `events:llm:v3` payload.
+      // ZERO new Redis sidecars (matches Phase 32 D-13 smallest-blast-radius):
+      // one `cacheGetSafe` call, in-memory classification via the shared
+      // `classifyEventActors` helper (Pitfall §1 dedup with the audit script),
+      // bucket counts + bounded sample[].
+      //
+      // Degrade-open contract (T-33-05b):
+      //   - cacheGetSafe throws (caller-mocked path) → catch, log.warn, leave
+      //     `actorQuality = null`. Route stays 200.
+      //   - cacheGetSafe returns null (cache miss / Upstash + memCache both
+      //     empty) → also leave `actorQuality = null`. The dashboard renders
+      //     a "no data" placeholder rather than zeros that would look like a
+      //     healthy empty cache.
+      //
+      // Wall-clock budget: O(N) classification where N ≤ ~300 events — well
+      // under the aggregator poll budget per RESEARCH §Wall-clock budget.
+      //
+      // Sample issue priority order (first match wins per event):
+      //   null > raw-cameo > ambiguous > low-confidence
+      // The bucket counters increment for EVERY matching issue (an event can
+      // simultaneously count in rawCameoActors AND lowConfidenceActors), but
+      // the single sample row carries the highest-priority issue tag only.
+      let actorQuality: ActorQualityBlock | null = null;
+      try {
+        const cached = await cacheGetSafe<ConflictEventEntity[]>(
+          LLM_EVENTS_KEY_ACTIVE,
+          999_999_999,
+        );
+        if (cached?.data) {
+          const entities = cached.data;
+          let nullActors = 0;
+          let rawCameoActors = 0;
+          let ambiguousActors = 0;
+          let lowConfidenceActors = 0;
+          const sample: ActorQualityBlock['sample'] = [];
+
+          for (const entity of entities) {
+            const data = entity.data as {
+              actors?: string[];
+              actorConfidence?: ('high' | 'medium' | 'low')[];
+            };
+            const actors = data.actors ?? [];
+            const actorConfidence = data.actorConfidence ?? [];
+            const issues = classifyEventActors(actors, INLINE_CAMEO_CODES);
+
+            let firstIssue: ActorQualityBlock['sample'][number]['issue'] | null = null;
+            if (issues.includes('null')) {
+              nullActors += 1;
+              firstIssue = 'null';
+            }
+            if (issues.includes('raw-cameo')) {
+              rawCameoActors += 1;
+              firstIssue = firstIssue ?? 'raw-cameo';
+            }
+            if (issues.includes('ambiguous')) {
+              ambiguousActors += 1;
+              firstIssue = firstIssue ?? 'ambiguous';
+            }
+            if (actorConfidence.includes('low')) {
+              lowConfidenceActors += 1;
+              firstIssue = firstIssue ?? 'low-confidence';
+            }
+
+            if (firstIssue && sample.length < LIMIT_DRILL_DOWN) {
+              sample.push({
+                eventId: entity.id,
+                actors,
+                actorConfidence,
+                issue: firstIssue,
+              });
+            }
+          }
+
+          actorQuality = {
+            totalEvents: entities.length,
+            nullActors,
+            rawCameoActors,
+            ambiguousActors,
+            lowConfidenceActors,
+            sample,
+          };
+        }
+        // cached === null OR cached.data missing → actorQuality stays null
+        // (D-16 + T-33-05b degrade-open contract).
+      } catch (err) {
+        log.warn({ err }, 'failed to compute actorQuality block');
+        // actorQuality stays null
+      }
+
+      res.json({ audit24h, byBearer, advEval, prune, actorQuality });
     } catch (err) {
       log.error({ err }, '/api/operator-status failed');
       res.status(500).json({ error: 'operator_status_failed' });
