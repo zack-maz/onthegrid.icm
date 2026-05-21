@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-21T03:15:30.578Z"
+last_updated: "2026-05-21T03:25:00.000Z"
 last_activity: 2026-05-21
 progress:
   total_phases: 15
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 35
-  completed_plans: 34
-  percent: 27
+  completed_plans: 35
+  percent: 32
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 32 (ghost-event-url-liveness-dashboard-prune) — EXECUTING
-Plan: 6 of 6
-Status: Plan 32-05 shipped (8a47ec7 RED + 393b1c9 GREEN); 32-06 (phase close) next
-Last activity: 2026-05-21
+Phase: 33 (Actor Metadata Audit, Canonical Catalog & Eval Expansion) — NOT STARTED
+Plan: 0 of TBD
+Status: Phase 32 (Ghost Event URL Liveness, Dashboard & Prune) closed 2026-05-21 — GHOST-01..05 all complete; 22 D-N decisions landed atomically; +63 new tests; 2259 total passing; zero new npm deps; chaos-test contract preserved; operator UAT pending against deployed preview (Plan 32-06 Task 4 human-verify checkpoint).
+Last activity: 2026-05-21 — Phase 32 closed
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -40,7 +40,7 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Waves 1-3 complete (4/7 plans) |
 | 30.1  | Cascade fallback fix — NIM-only declared honest                       | (gap closure from Phase 30 boundary review)                   | Shipped 2026-05-17 |
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Closed early 2026-05-19 (Day 1 / 7 PASS; caveat) |
-| 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Plans 01-05 complete (5/6) — 32-06 close pending |
+| 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | COMPLETE — Plans 32-01..32-06; GHOST-01..05 closed 2026-05-21 |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
 | 34    | LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval) | LLM-RELI-08, LLM-RELI-09, LLM-RELI-10, LLM-RELI-11           | Not started |
 | 35    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
@@ -293,6 +293,10 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 32 Plan 05 (Rule 3 deviation): jsdom localStorage stub workaround for Node 22 — `window.localStorage.setItem` is `undefined` because Node 22's built-in localStorage (which requires `--localstorage-file` for persistence) shadows jsdom's Storage shim. Installed an in-memory Map-backed `Storage` stub via `vi.stubGlobal('localStorage', ls)` + `Object.defineProperty(window, 'localStorage', { value: ls, configurable: true })` in `beforeEach` so `dashboardAuthHeaders()` reads the seeded Bearer key. Pattern reusable for any future jsdom test that touches dashboardAuth. (32-05-02)
 - Phase 32 Plan 05: Drill-down list rendered as `<ul max-h-40 overflow-y-auto>` with `flex items-baseline gap-2` per-row (not a `<table>`). Matches the existing `operator-actions-bearer-row` style at L1496-1504 — lighter than table semantics for a transient bounded list. Truncation row uses Unicode ellipsis `…` (U+2026) matching the bearerFingerprint slice convention at L1501. Tailwind classes for the Prune button copied byte-for-byte from `replay-test-trigger` so no new utility class is invented (verified: `grep -c "rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5" DevApiStatus.tsx` returns 2). (32-05-01)
 - Phase 32 Plan 05: Test 6 (post-200 fetchOpStatus refresh) asserts `mockFetch.calls.filter(url === '/api/operator-status').length AFTER > BEFORE` instead of exact-total assertion. The `useEffect` poller can fire on mount + setInterval + post-click in any timing order; before/after delta is robust to runner timing without coupling to a specific count. (32-05-02)
+- Phase 32 close: URL liveness probe runs inside cron-only writer (anti-pattern #17 preserved); piggybacks `/api/cron/refresh-events` rather than adding a 4th cron entry (D-01). No new Vercel cron surface; probe sweep runs as a `finally`-block post-step inside `safeWaitUntil` IIFE after `runRefreshExtraction` resolves so dead-URL cleanup runs even when extraction itself errors.
+- Phase 32 close: Per-event Redis key `events:url-liveness:{eventId}` (probe results, tiered TTL via `ttlSecForStatus`) + sidecar count `events:url-liveness-count` (O(1) dashboard polls, Pitfall 3 mitigation). Sidecar maintained jointly by Plan 32-02 `persistLiveness` (INCR on live→dead) and Plan 32-03 `pruneDeadUrlEvents` (DECRBY on prune). Underflow floors at 0 via the lone permitted raw `redis.set(KEY, 0)` call documented in CLAUDE.md.
+- Phase 32 close: Cron auto-prune gated on `attemptCount >= 3` consecutive ticks (D-12); manual prune has no gate (operator owns the call). Primary URL is `data.source` (NOT `data.sourceUrls[0]`) for both raw GDELT and LLM v3 entities (D-05 / RESEARCH A1 — `enrichedV3ToEntities` spreads `template.data` and never writes a `sourceUrls[]` field; v3 inherits `data.source` identically to raw GDELT).
+- Phase 32 close: `attemptCount` semantics = monotonic-with-reset-on-live-or-unknown (RESEARCH A2 / D-12). Pure-monotonic accumulation would conflate dead→live→dead with three-in-a-row-dead and falsely trigger the cron auto-prune gate. The monotonic-with-reset rule makes "≥3 consecutive terminal-dead ticks" a one-line check inside `persistLiveness`.
 
 ## Pending Todos
 
