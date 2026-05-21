@@ -162,12 +162,11 @@ const PER_HOST_INTERVAL_MS = 1_000;
 const JITTER_MS = 200;
 const MAX_REDIRECTS = 3;
 const PROBE_UA = 'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)';
-// These three are consumed by Tasks 2 (throttle map) + 4 (sweep
-// orchestrator) — `void`-reference here so the no-unused-vars rule + tsc
-// `noUnusedLocals` stay quiet while the foundation lands ahead of consumers.
+// Consumed by Task 4 (sweep orchestrator) — `void`-reference here so
+// the no-unused-vars rule + tsc `noUnusedLocals` stay quiet while the
+// foundation lands ahead of the runProbeSweep callsite. Tasks 2/3
+// consume PER_HOST_INTERVAL_MS + JITTER_MS directly.
 void PROBE_CONCURRENCY;
-void PER_HOST_INTERVAL_MS;
-void JITTER_MS;
 
 /**
  * Pitfall 1 / RESEARCH A6 — caller-supplied wall-clock cutoff for the
@@ -344,3 +343,74 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
     return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
   }
 }
+
+// ============================================================================
+// Plan 32-02 Task 2 — per-host throttle map (D-18 polite-citizen contract)
+// ============================================================================
+
+/**
+ * Module-singleton hostname → next-allowed-timestamp map. Persists across
+ * `runProbeSweep` invocations within a single warm Vercel function
+ * instance — so back-to-back sweeps don't burst the same publisher.
+ *
+ * Pitfall 2: this Map can grow unboundedly across long-warm function
+ * instances. `pruneStaleHostSlots()` runs at end-of-sweep and removes
+ * entries older than `now - 60s`; daily cold-start naturally resets the
+ * full state.
+ */
+const hostNext = new Map<string, number>();
+
+/**
+ * D-18 — block until the per-host probe slot is available, then reserve
+ * the next slot. Mirrors the philosophical contract of the Nominatim
+ * 1-req/s throttle (CLAUDE.md §LLM pipeline). ±JITTER_MS prevents
+ * stampede when many hosts unblock simultaneously.
+ */
+async function waitForHostSlot(hostname: string): Promise<void> {
+  const now = Date.now();
+  const prior = hostNext.get(hostname) ?? 0;
+  // Symmetric jitter in [-JITTER_MS, +JITTER_MS]. Floor so the test
+  // assertion "≥ PER_HOST_INTERVAL_MS - JITTER_MS" holds deterministically.
+  const jitter = Math.floor((Math.random() - 0.5) * 2 * JITTER_MS);
+  const target = Math.max(now, prior) + jitter;
+  if (target > now) {
+    await new Promise<void>((resolve) => setTimeout(resolve, target - now));
+  }
+  // Reserve the slot. Math.max guards against a negative-jitter `target`
+  // that fell below `now` — without it, the next call could fire under
+  // PER_HOST_INTERVAL_MS after this one.
+  hostNext.set(hostname, Math.max(now, target) + PER_HOST_INTERVAL_MS);
+}
+
+/**
+ * Pitfall 2 — drop hostname entries whose next-allowed timestamp is
+ * already 60s in the past. Called at end-of-sweep so the map doesn't
+ * leak memory across warm-instance lifetime.
+ */
+function pruneStaleHostSlots(): void {
+  const cutoff = Date.now() - 60_000;
+  for (const [host, ts] of hostNext) {
+    if (ts < cutoff) hostNext.delete(host);
+  }
+}
+
+// ============================================================================
+// Test-only export (NODE_ENV=test-gated) — MEDIUM-02 plan-checker fix
+// ============================================================================
+
+/**
+ * NODE_ENV-gated visibility for module-private throttle helpers. Used
+ * by `server/__tests__/lib/urlLiveness.sweep.test.ts` to assert the
+ * D-18 polite-citizen contract without breaking encapsulation in
+ * production builds. Consumers in dev/prod NEVER see this surface — it
+ * resolves to `undefined` whenever NODE_ENV !== 'test'.
+ *
+ * MEDIUM-02 plan-checker fix: the sweep test file asserts
+ * `expect(process.env.NODE_ENV).toBe('test')` at file-import time so
+ * runner-config drift (vitest no longer forcing NODE_ENV=test) fails
+ * loudly rather than silently producing `__test__ === undefined`.
+ */
+export const __test__ =
+  process.env.NODE_ENV === 'test'
+    ? { waitForHostSlot, pruneStaleHostSlots, hostNext }
+    : undefined;
