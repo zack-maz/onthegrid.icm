@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-21T02:49:15.236Z"
+last_updated: "2026-05-21T03:01:00.691Z"
 last_activity: 2026-05-21
 progress:
   total_phases: 15
   completed_phases: 4
   total_plans: 35
-  completed_plans: 32
+  completed_plans: 33
   percent: 27
 ---
 
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 32 (ghost-event-url-liveness-dashboard-prune) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-05-21
 
@@ -281,6 +281,12 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 32 Plan 03: Exported `LLM_EVENTS_KEY_ACTIVE` + `LLM_REDIS_TTL_SEC` from `server/lib/llmExtractionPipeline.ts` (was module-private). Hand-rolling `'events:llm:v3'` or `9000` inside urlLiveness.ts would be the exact drift class CLAUDE.md §"Serverless Cache" warns against. One truth source — cron writer and prune writer always agree on key + TTL. (32-03-01)
 - Phase 32 Plan 03: MEDIUM-01 plan-checker pin applied inline at the SCAN call site: `(await redis.scan(cursor, {match, count: 200})) as [string | number, string[]]` matches `@upstash/redis ^1.37.0` — silent shape drift now fails TypeScript instead of producing infinite SCAN loops in production. Mirrors Plan 04's buildDeadUrlSample SCAN-signature pin. (32-03-01)
 - Phase 32 Plan 03: Test-side `flushSafeWaitUntil()` pattern for integration tests against fire-and-forget IIFE bodies — mocks safeWaitUntil to capture the IIFE promise into a shared `pendingPromises` array, then drains pending work before assertions. Production safeWaitUntil semantics unchanged (D-12 hard block preserves void return). Documented in `refresh-events-cron.prune.test.ts` JSDoc for reuse in future cron post-step tests. (32-03-03)
+- Phase 32 Plan 04: `/api/operator-status` aggregator surfaces `prune` sibling block — sidecar O(1) read for `deadUrlCount` (Pitfall 3 mitigation; `redis.get(URL_LIVENESS_COUNT_KEY)` replaces N×GET over the liveness keyspace), in-memory derivation for `last24hPrunes` (zero extra Redis round-trips — reuses the same `last24h` array the existing aggregator already iterates), bounded SCAN drill-down for `deadUrlSample` (LIMIT_DRILL_DOWN=20 payload cap + MAX_SCAN_KEYS=200 wall-clock-budget cap). Per-block degrade-open envelopes around the sidecar read AND the SCAN helper mirror the existing advEval pattern — partial degrade always preserved over no surface (Pitfall 6 chaos contract for read-only routes). (32-04-01)
+- Phase 32 Plan 04: Local `AuditEntry.operation` union widened to admit `'prune-dead-urls'` matching the canonical `OperatorAuditEntry.operation` widened in Plan 32-01 Task 5. Without this widening, SADD entries with the new tag would parse fine at the canonical layer but drop silently from the aggregator pass. Two-tier widening (canonical + local-narrow at each consumer) is the established lower-coupling pattern: aggregator only reads `timestamp`/`bearerFingerprint`/`operation`, not the full canonical type. (32-04-01)
+- Phase 32 Plan 04: `byBearer[].prunes` counter added to the per-fingerprint aggregator map value (alongside existing `actions`/`swaps`/`replays`). Increments per `prune-dead-urls` audit entry, attributed to BOTH operator fingerprints AND to the literal `'cron:refresh-events'` pseudo-fingerprint (RESEARCH A8) so manual + cron prunes stay distinguishable in the Operator Actions block. (32-04-01)
+- Phase 32 Plan 04: `buildDeadUrlSample()` extracted as a module-private helper (not exported) — keeps the route's GET handler readable + isolates the degrade-open try/catch. Cursor short-circuits via uniform `cursor = 0` assignment across all three termination paths (LIMIT exhaustion, MAX_SCAN_KEYS exhaustion, natural cursor return). MEDIUM-01 plan-checker SCAN-signature pin applied for the second time in the phase: `(await redis.scan(cursor, {...})) as [string | number, string[]]` matches `@upstash/redis ^1.37.0`. (32-04-01)
+- Phase 32 Plan 04: LOW-03 plan-checker drill-down resolution fully delivered server-side — `prune.deadUrlSample` returns `Array<{eventId, url, status}>` so Plan 32-05's UI work consumes the drill-down list directly without an additional API call. Each entry has bare `eventId` (no key prefix), `url` from `lastUrlProbed`, and `status` narrowed to the terminal-dead union via `isTerminalDead` predicate (one truth source across sweep + prune + dashboard). (32-04-01)
+- Phase 32 Plan 04: TDD discipline — landed RED commit (`af11707`) before GREEN commit (`5435196`). Plan's verbal "feat then test" ordering accepted as fallback; test-first matches the `<task tdd="true">` declaration in the PLAN.md frontmatter. Mock-shape mismatch for `cacheGetSafe` caught during local RED authoring (route's `cached?.data` dereference expects `{data, stale, lastFresh}` envelope, not bare `UrlLiveness` payload) — aligned to runtime contract from `server/cache/redis.ts:211` before committing. (32-04-01)
 
 ## Pending Todos
 
