@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-21T01:58:35.303Z"
-last_activity: 2026-05-21 -- Phase 32 execution started
+last_updated: "2026-05-21T02:10:58.000Z"
+last_activity: 2026-05-21 -- Phase 32 Plan 01 complete
 progress:
   total_phases: 15
   completed_phases: 4
   total_plans: 35
-  completed_plans: 29
+  completed_plans: 30
   percent: 27
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 32 (ghost-event-url-liveness-dashboard-prune) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 32
-Last activity: 2026-05-21 -- Phase 32 execution started
+Plan: 2 of 6
+Status: Plan 32-01 complete; Plan 32-02 ready to execute
+Last activity: 2026-05-21 -- Phase 32 Plan 01 complete (UrlLiveness schema + pruneQuota + audit-log widening; 4 commits, 25 contract tests green)
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -260,6 +260,12 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 27.4.2 Plan 06 inner-loop ergonomic: `npm run eval:replay` runs `runEval()` resolver-only via `scripts/eval-replay.ts` and prints per-distance JSON + the D-25 deploy-gate ratio. Cost ~50s on cold Nominatim cache, instant on warm. Zero LLM token spend per A6 / Pitfall 8. Used between every Wave 2 sub-lever change per D-12 micro-iteration cadence. Mirrors `scripts/refresh-water-facilities.ts` shape with `node --env-file-if-exists=.env --import tsx/esm` runner pattern. (27.4.2-06)
 - Phase 27.4.2 Plan 06 D-07 hang-recurrence response: `setProviderOrderOverride([groq, cerebras])` is the canonical incantation when `watchdogTimeoutCount ≥ 3` is observed in a run. Module-level `_providerOrderOverride` in `server/adapters/llm-provider.ts` mirrors `setPipelineOverride` from `server/config.ts:230-242`, no Redis persistence (wave-scoped, ops-managed). Cold-start naturally clears it. Phase close runbook restores `setProviderOrderOverride(null)` per T-27.4.2-03 mitigation. (27.4.2-06)
 - Phase 27.4.2 Plan 06 closed RESEARCH §6 Pitfall 3: `watchdogTimeoutCount` field added to `LLMRunSummary` interface + `buildSummary()` body in `server/lib/llmProgress.ts` + frontend mirror in `src/hooks/useLLMStatusPolling.ts` per A9 sync rule. Pre-Plan-06 the field was set on the live singleton but lost across the idle transition because `buildSummary()` did not thread it. Now operator-checkable post-run via `/api/events/llm-status` and DevApiStatus dashboard. (27.4.2-06)
+- Phase 32 Plan 01: dual schema-test placement (canonical at `server/__tests__/lib/urlLiveness.schema.test.ts` + literal-path shim at `src/__tests__/lib/urlLiveness.schema.test.ts` per RESEARCH A5) — shim uses direct-import not vitest test-file re-import so it survives canonical file moves. Both files run under `npx vitest run`; future schema drift fails BOTH locations. (32-01-03)
+- Phase 32 Plan 01: `attemptCount` JSDoc pins monotonic-with-reset-on-live-or-unknown semantics (Claude's Discretion §4). Pure-monotonic accumulation would conflate dead→live→dead with three-in-a-row-dead and falsely trigger D-12's cron auto-prune `attemptCount >= 3` gate. The monotonic-with-reset rule makes the "≥3 consecutive terminal-dead ticks" semantics a one-line check inside the Plan 32-02 probe writer. (32-01-02)
+- Phase 32 Plan 01: `server/lib/pruneQuota.ts` cloned verbatim from `server/lib/replayQuota.ts` (single namespace swap to `operator:prune-quota:`) rather than refactored into a generic `createDailyQuotaCounter()` factory — CONTEXT D-15 explicit "consistency-with-existing-pattern wins" + intentional future-divergence room if destructive-action cap ever needs to tighten. Test asserts `! grep "operator:replay-quota:"` to guard against accidental copy-paste regression. (32-01-04)
+- Phase 32 Plan 01: `OperatorAuditEntry.operation` union widening (`'pipeline-swap' | 'replay' | 'prune-dead-urls'`) landed as standalone `chore(32)` commit (Task 5) ahead of any consumer — PATTERNS.md Primary-risk mitigation; Plan 32-03's first consumer commit (prune endpoint + helper) reviewable in isolation without the union-widening noise mixed in. (32-01-05)
+- Phase 32 Plan 01: MEDIUM-02 plan-checker fix applied: `pruneQuota.test.ts` asserts `expect(process.env.NODE_ENV).toBe('test')` at file-import time so any future test-runner config drift (vitest no longer forcing NODE_ENV=test) fails this file loudly rather than silently compromising assertions elsewhere that gate on test-mode behavior. (32-01-04)
+- Phase 32 Plan 01: `log = logger.child({ module: 'urlLiveness' })` binding pre-wired in `server/lib/urlLiveness.ts` at Task 2 even though unused at that surface — avoids a follow-up import edit in Plan 32-02 (probe/sweep consumers). Referenced via `void log` to keep eslint's `no-unused-vars` quiet at zero runtime cost. (32-01-02)
 
 ## Pending Todos
 
