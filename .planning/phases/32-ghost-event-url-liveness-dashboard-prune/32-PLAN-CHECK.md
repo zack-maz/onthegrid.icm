@@ -29,6 +29,7 @@ created: 2026-05-19
 ### MEDIUM-01: Upstash `redis.scan` API shape — Plan 03 Task 1
 **Risk:** If the executor's SCAN call doesn't match `@upstash/redis ^1.37.0`'s `Promise<[number, string[]]>` return shape, the prune helper silently no-ops in production while mocked tests pass green.
 **Fix:** Add a one-line interface note in Plan 03 Task 1's `<interfaces>` block citing the exact SCAN signature. Alternative: skip SCAN entirely and iterate the in-memory `events:llm:v3` entity list (already loaded from `cacheGetSafe`). Researcher's RESEARCH section flagged this as acceptable O(N-events).
+**Status 2026-05-19:** PARTIALLY RESOLVED by LOW-03 drill-down work — Plan 04 Task 1's `buildDeadUrlSample` helper now pins SCAN signature `Promise<[string | number, string[]]>` with explicit `as` cast and a deviation-note hint in the action body. Plan 03 Task 1 still needs the same pin during execution; flagged as a Plan 03 execute-time deviation note rather than a re-spawn-the-planner blocker.
 
 ### MEDIUM-02: `__test__` conditional export — Plan 02 Task 2
 **Risk:** `process.env.NODE_ENV === 'test'`-gated exports for module-private throttle helpers depend on Vitest setting `NODE_ENV=test` reliably during the run.
@@ -37,6 +38,7 @@ created: 2026-05-19
 ### MEDIUM-03: `fetchOpStatus` reference — Plan 05 Task 1
 **Risk:** Plan 05 Task 1 action body calls `void fetchOpStatus()` after a successful prune but does not declare its scope/origin in `<interfaces>`.
 **Fix:** Add `fetchOpStatus` to Plan 05 Task 1's `<interfaces>` block with its declaration line from `DevApiStatus.tsx` (or correct call shape — e.g. `setOpStatusRefreshTick(t => t + 1)`).
+**Status 2026-05-19:** RESOLVED. Plan 05 Task 1 `<behavior>` block now instructs the executor to locate `fetchOpStatus` during Read-First and hoist it to a named `useCallback` if it's currently a closure (no-op refactor — same body, named). Done message updated.
 
 ---
 
@@ -44,7 +46,7 @@ created: 2026-05-19
 
 - **LOW-01** `pruneDeadUrlEvents` reads `events:llm:v3` twice (minor Redis command overhead; comment for cost analysis).
 - **LOW-02** Schema-validation failure log level — `log.error` vs `log.warn` inconsistency between `persistLiveness` and `runProbeSweep`.
-- **LOW-03** Drill-down list missing in Plan 05 — ROADMAP success criterion 1 says "count + drill-down list" but Plan 05 Task 1 only renders the count + button. **Operator-visible scope gap; see decision below.**
+- **LOW-03** Drill-down list missing in Plan 05 — ROADMAP success criterion 1 says "count + drill-down list" but Plan 05 Task 1 only renders the count + button. **RESOLVED 2026-05-19**: operator chose "Add drill-down to Plan 05 Task 1." Plan 04 now surfaces `prune.deadUrlSample: Array<{eventId, url, status}>` (SCAN-based, cap 20, MAX_SCAN_KEYS 200, degrade-open). Plan 05 Task 1 renders `<ul data-testid="dead-url-list">` with status + eventId + url + truncation row. 3 new jsdom tests + 4 new operator-status integration tests added. Plan 04 also pins SCAN signature for `@upstash/redis ^1.37.0` (incidentally resolves MEDIUM-01).
 - **LOW-04** No time-bound on Plan 06 Task 4 UAT checkpoint — could leave STATE.md hanging if operator delays.
 - **LOW-05** Plan 02 Task 4 per-host-throttle test uses real timers — potential CI flakiness on slow runners. Add `{ timeout: 10_000 }` or use `vi.useFakeTimers()`.
 
