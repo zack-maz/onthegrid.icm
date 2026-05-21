@@ -28,7 +28,7 @@ Requirements for this milestone, grouped by track. Each maps to exactly one road
 - [x] **GHOST-02**: Probe results stored in Redis under a dedicated key (e.g. `events:url-liveness:{eventId}` with TTL) carrying `{status: 'live'|'404'|'403'|'dead-host'|'unknown', lastProbedAt, attemptCount}`. Schema pinned by a contract test.
 - [x] **GHOST-03**: Dead-URL events surfaced in the API Health dashboard tab as a count + drill-down list. Operator can see which events have broken links without leaving the dashboard.
 - [x] **GHOST-04**: Operator can prune dead-URL events. Mechanism (one of): manual button in the dashboard, scheduled prune in the daily cron, or an operator endpoint behind the existing Bearer gate. Pruned events are removed from `events:llm:v3` and the in-flight cluster index.
-- [ ] **GHOST-05**: URL liveness probing respects polite-citizen contracts — concurrency-limited, jittered, per-host throttled (analogous to the 1-req/s Nominatim throttle), and skips already-fresh entries (TTL-gated).
+- [x] **GHOST-05**: URL liveness probing respects polite-citizen contracts — concurrency-limited, jittered, per-host throttled (analogous to the 1-req/s Nominatim throttle), and skips already-fresh entries (TTL-gated). (Plan 32-02: `createLimit(8)` global concurrency, per-host 1 req/s throttle via module-singleton Map with synchronous slot reservation, ±200ms jitter, 10s timeout, 3-hop redirect cap, HEAD-then-GET-on-405, identifying User-Agent `IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)`, no retry; TTL-gated re-probe via Plan 32-01's tiered `ttlSecForStatus()` — live 7d / terminal-dead 24h / unknown 1h.)
 
 ### Event Metadata Accuracy — actor labeling, canonicalization, audit, eval expansion
 
@@ -145,7 +145,7 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 | GHOST-02     | 32    | Complete |
 | GHOST-03     | 32    | Complete |
 | GHOST-04     | 32    | Complete |
-| GHOST-05     | 32    | Pending                                                          |
+| GHOST-05     | 32    | Complete |
 | ACTOR-01     | 33    | Pending                                                          |
 | ACTOR-02     | 33    | Pending                                                          |
 | ACTOR-03     | 33    | Pending                                                          |
