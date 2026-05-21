@@ -518,3 +518,314 @@ describe('/api/operator-status — Phase 32 Plan 04 `prune` block', () => {
     expect(res.body.prune.deadUrlSample).toEqual([]);
   });
 });
+
+/**
+ * Phase 33 Plan 06 — `/api/operator-status` actorQuality block (D-16).
+ *
+ * The aggregator surfaces actor-metadata health from the LLM-enriched events
+ * cache (`events:llm:v3`) so the API Health dashboard (Plan 33-07) can render
+ * continuous bucket counts + low-confidence counters without re-running the
+ * one-shot audit script (Plan 33-01).
+ *
+ *   actorQuality: {
+ *     totalEvents: number;
+ *     nullActors: number;       // bucket (a) — null/empty/whitespace
+ *     rawCameoActors: number;   // bucket (b) — raw CAMEO ∩ codebook
+ *     ambiguousActors: number;  // bucket (c) — ambiguous deny-list
+ *     lowConfidenceActors: number; // actorConfidence.includes('low')
+ *     sample: Array<{           // capped at LIMIT_DRILL_DOWN (20)
+ *       eventId: string;
+ *       actors: string[];
+ *       actorConfidence: ('high'|'medium'|'low')[];
+ *       issue: 'null' | 'raw-cameo' | 'ambiguous' | 'low-confidence';
+ *     }>;
+ *   } | null
+ *
+ * PATTERNS critical risk #3 — the codebook subset is INLINE in the route
+ * (not loaded from .planning/) because .planning/ is NOT bundled into the
+ * Vercel server build artifact.
+ *
+ * T-33-05b — degrade-open: any Redis flap inside the actorQuality block
+ * leaves `actorQuality: null` on a 200 response, never bubbles a 500.
+ */
+describe('/api/operator-status — Phase 33 Plan 06 actorQuality block (D-16)', () => {
+  const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+  const ORIGINAL_DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Default: empty audit log + empty SCAN + null sidecar reads.
+    mockRedis.smembers.mockResolvedValue([]);
+    mockRedis.scan.mockResolvedValue([0, []]);
+    mockRedis.get.mockResolvedValue(null);
+    // Default cacheGetSafe: null (cache miss). Individual tests override
+    // to supply ConflictEventEntity[] payloads for the actorQuality block.
+    mockCacheGetSafe.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+    process.env.DASHBOARD_PASSWORD = ORIGINAL_DASHBOARD_PASSWORD;
+  });
+
+  // ---------------------------------------------------------------------------
+  // Shape + bucket counts — D-16 verbatim
+  // ---------------------------------------------------------------------------
+
+  it('actorQuality: returns block with computed counts when events:llm:v3 cache populated', async () => {
+    process.env.NODE_ENV = 'development';
+
+    // 4 events covering 4 buckets:
+    //   - actors:[]                      → 'null'
+    //   - actors:['ISRMIL'] (raw CAMEO)  → 'raw-cameo'
+    //   - actors:['forces'] (ambiguous)  → 'ambiguous'
+    //   - actors:['Israeli Defense Forces'] (clean), conf high → no bucket-a/b/c
+    const payload = {
+      data: [
+        {
+          id: 'llm-v3-evt-1',
+          type: 'airstrike',
+          lat: 32,
+          lng: 35,
+          timestamp: Date.now(),
+          label: 'evt-1',
+          data: { actors: [], actorConfidence: [] },
+        },
+        {
+          id: 'llm-v3-evt-2',
+          type: 'airstrike',
+          lat: 32,
+          lng: 35,
+          timestamp: Date.now(),
+          label: 'evt-2',
+          data: { actors: ['ISRMIL'], actorConfidence: ['low'] },
+        },
+        {
+          id: 'llm-v3-evt-3',
+          type: 'airstrike',
+          lat: 32,
+          lng: 35,
+          timestamp: Date.now(),
+          label: 'evt-3',
+          data: { actors: ['forces'], actorConfidence: ['low'] },
+        },
+        {
+          id: 'llm-v3-evt-4',
+          type: 'airstrike',
+          lat: 32,
+          lng: 35,
+          timestamp: Date.now(),
+          label: 'evt-4',
+          data: { actors: ['Israeli Defense Forces'], actorConfidence: ['high'] },
+        },
+      ],
+      stale: false,
+      lastFresh: Date.now(),
+    };
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') return payload;
+      return null;
+    });
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+
+    expect(res.body.actorQuality).toBeDefined();
+    expect(res.body.actorQuality).not.toBeNull();
+    const aq = res.body.actorQuality as {
+      totalEvents: number;
+      nullActors: number;
+      rawCameoActors: number;
+      ambiguousActors: number;
+      lowConfidenceActors: number;
+      sample: Array<{
+        eventId: string;
+        actors: string[];
+        actorConfidence: ('high' | 'medium' | 'low')[];
+        issue: 'null' | 'raw-cameo' | 'ambiguous' | 'low-confidence';
+      }>;
+    };
+
+    expect(aq.totalEvents).toBe(4);
+    expect(aq.nullActors).toBe(1);
+    expect(aq.rawCameoActors).toBe(1);
+    expect(aq.ambiguousActors).toBe(1);
+    // 3 events carry 'low' in actorConfidence (evt-2, evt-3 explicit; evt-1 is empty actors[]
+    // and the implementation default-substitutes 'low' for missing confidence only when
+    // actors is non-empty — evt-1's empty actorConfidence is empty too).
+    expect(aq.lowConfidenceActors).toBeGreaterThanOrEqual(2);
+    expect(Array.isArray(aq.sample)).toBe(true);
+    // 3 of the 4 events are bucket-a/b/c hits → at least 3 sample entries.
+    expect(aq.sample.length).toBeGreaterThanOrEqual(3);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Sample cap = LIMIT_DRILL_DOWN (20)
+  // ---------------------------------------------------------------------------
+
+  it('actorQuality.sample: capped at LIMIT_DRILL_DOWN (20) when more issues exist', async () => {
+    process.env.NODE_ENV = 'development';
+
+    // 30 events all with actors:[] → all bucket-a hits.
+    const entities = Array.from({ length: 30 }, (_, i) => ({
+      id: `llm-v3-evt-${i}`,
+      type: 'airstrike',
+      lat: 32,
+      lng: 35,
+      timestamp: Date.now(),
+      label: `evt-${i}`,
+      data: { actors: [], actorConfidence: [] },
+    }));
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') {
+        return { data: entities, stale: false, lastFresh: Date.now() };
+      }
+      return null;
+    });
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+    expect(res.body.actorQuality.sample.length).toBe(20);
+    // All 30 events count toward bucket-a, regardless of sample cap.
+    expect(res.body.actorQuality.nullActors).toBe(30);
+    expect(res.body.actorQuality.totalEvents).toBe(30);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Sample entry shape
+  // ---------------------------------------------------------------------------
+
+  it('actorQuality.sample: entries carry eventId, actors, actorConfidence, issue (one of 4 union members)', async () => {
+    process.env.NODE_ENV = 'development';
+
+    const payload = {
+      data: [
+        {
+          id: 'llm-v3-bad',
+          type: 'airstrike',
+          lat: 32,
+          lng: 35,
+          timestamp: Date.now(),
+          label: 'bad',
+          data: { actors: ['forces'], actorConfidence: ['low'] },
+        },
+      ],
+      stale: false,
+      lastFresh: Date.now(),
+    };
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') return payload;
+      return null;
+    });
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+    expect(res.body.actorQuality.sample.length).toBeGreaterThanOrEqual(1);
+
+    const s = res.body.actorQuality.sample[0] as {
+      eventId: string;
+      actors: string[];
+      actorConfidence: string[];
+      issue: string;
+    };
+    expect(s).toHaveProperty('eventId');
+    expect(s).toHaveProperty('actors');
+    expect(s).toHaveProperty('actorConfidence');
+    expect(s).toHaveProperty('issue');
+    expect(['null', 'raw-cameo', 'ambiguous', 'low-confidence']).toContain(s.issue);
+    expect(s.eventId).toBe('llm-v3-bad');
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-33-05b — degrade-open contract (Redis throw / null cache)
+  // ---------------------------------------------------------------------------
+
+  it('actorQuality: degrade-open when cacheGetSafe throws → actorQuality === null, route 200', async () => {
+    process.env.NODE_ENV = 'development';
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') throw new Error('redis down');
+      return null;
+    });
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    // Per Pitfall 6 dual-gate: degrade-open must not 500.
+    expect(res.status).toBe(200);
+    expect(res.body.actorQuality).toBeNull();
+  });
+
+  it('actorQuality: degrade-open when cacheGetSafe returns null → actorQuality === null, route 200', async () => {
+    process.env.NODE_ENV = 'development';
+    // cacheGetSafe returns null when both Redis and memCache miss.
+    mockCacheGetSafe.mockResolvedValue(null);
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+    // Per D-16 + T-33-05b: no payload → degrade-open with actorQuality === null.
+    expect(res.body.actorQuality).toBeNull();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Low-confidence detection (actorConfidence.includes('low'))
+  // ---------------------------------------------------------------------------
+
+  it('actorQuality.lowConfidenceActors: increments for every event whose actorConfidence carries a low entry', async () => {
+    process.env.NODE_ENV = 'development';
+
+    const payload = {
+      data: [
+        {
+          id: 'low-1',
+          type: 'airstrike',
+          lat: 32,
+          lng: 35,
+          timestamp: Date.now(),
+          label: 'low-1',
+          data: { actors: ['Israeli Defense Forces'], actorConfidence: ['low'] },
+        },
+        {
+          id: 'low-2',
+          type: 'airstrike',
+          lat: 32,
+          lng: 35,
+          timestamp: Date.now(),
+          label: 'low-2',
+          data: {
+            actors: ['Quds Force', 'Hezbollah'],
+            actorConfidence: ['high', 'low'],
+          },
+        },
+        {
+          id: 'high-only',
+          type: 'airstrike',
+          lat: 32,
+          lng: 35,
+          timestamp: Date.now(),
+          label: 'high-only',
+          data: { actors: ['Hamas'], actorConfidence: ['high'] },
+        },
+      ],
+      stale: false,
+      lastFresh: Date.now(),
+    };
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') return payload;
+      return null;
+    });
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+    expect(res.body.actorQuality.lowConfidenceActors).toBe(2);
+    // The 'high-only' event has no bucket-a/b/c hit AND no 'low' confidence,
+    // so the sample should not include it.
+    const sampleIds = (res.body.actorQuality.sample as Array<{ eventId: string }>).map(
+      (s) => s.eventId,
+    );
+    expect(sampleIds).not.toContain('high-only');
+  });
+});
