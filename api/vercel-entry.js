@@ -82127,9 +82127,16 @@ var JITTER_MS2 = 200;
 var MAX_REDIRECTS = 3;
 var PROBE_UA = "IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)";
 var SWEEP_SAFETY_MARGIN_MS = 6e4;
-var PRIVATE_HOST_REGEX = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|::1|fc|fd)/i;
+var PRIVATE_HOST_REGEX = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/i;
 function isPrivateHost(hostname) {
-  return PRIVATE_HOST_REGEX.test(hostname);
+  const h = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  if (PRIVATE_HOST_REGEX.test(h)) return true;
+  if (/^::1$/i.test(h)) return true;
+  if (/^::$/i.test(h)) return true;
+  if (/^::ffff:/i.test(h)) return true;
+  if (/^fe80:/i.test(h)) return true;
+  if (/^f[cd][0-9a-f]{2}:/i.test(h)) return true;
+  return false;
 }
 async function fetchOnce(url, method) {
   const controller = new AbortController();
@@ -83180,21 +83187,18 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
   });
 }
 {
-  eventsRouter.post("/prune-dead-urls", dashboardAuth, async (req, res) => {
-    const rawTrigger = req.body?.trigger;
-    const trigger = rawTrigger === "cron" ? "cron" : "manual";
+  eventsRouter.post("/prune-dead-urls", dashboardAuth, async (_req, res) => {
+    const trigger = "manual";
     const fingerprint = bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? "");
     try {
-      if (trigger !== "cron") {
-        const quota = await checkPruneQuota(fingerprint);
-        if (!quota.allowed) {
-          res.set("Retry-After", String(quota.retryAfterSeconds));
-          return res.status(429).json({
-            error: "prune_quota_exceeded",
-            message: `Prune quota reached: ${quota.cap} of ${quota.cap} in last 24h.`,
-            resetsAt: quota.resetsAt
-          });
-        }
+      const quota = await checkPruneQuota(fingerprint);
+      if (!quota.allowed) {
+        res.set("Retry-After", String(quota.retryAfterSeconds));
+        return res.status(429).json({
+          error: "prune_quota_exceeded",
+          message: `Prune quota reached: ${quota.cap} of ${quota.cap} in last 24h.`,
+          resetsAt: quota.resetsAt
+        });
       }
       const result = await pruneDeadUrlEvents({ trigger, fingerprint });
       return res.json(result);
