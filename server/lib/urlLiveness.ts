@@ -36,6 +36,20 @@ import { z } from 'zod';
 
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import { createLimit } from './concurrencyLimit.js';
+// Phase 32 Plan 32-03 — reuse the canonical v3 cache key + LLM Redis TTL
+// from llmExtractionPipeline so the prune splice writer shares ONE truth
+// source with the cron writer. Hand-rolling the literal 'events:llm:v3'
+// or the 9000s TTL here is the exact drift class CLAUDE.md §"Serverless
+// Cache" warns against. The plan-checker MEDIUM-01 note (Upstash SCAN
+// signature) is honored inline at the SCAN call below — the cast to
+// `Promise<[string | number, string[]]>` matches @upstash/redis ^1.37.0
+// and the pinning pattern Plan 04's buildDeadUrlSample uses for its
+// SCAN iteration.
+import {
+  LLM_EVENTS_KEY_ACTIVE,
+  LLM_REDIS_TTL_SEC,
+} from './llmExtractionPipeline.js';
+import { appendOperatorAuditEntry } from './operatorAudit.js';
 import { logger } from './logger.js';
 
 // ============================================================================
@@ -664,6 +678,190 @@ export async function runProbeSweep(opts: {
   await Promise.all(tasks);
   pruneStaleHostSlots();
   return { probed, skippedBudget };
+}
+
+// ============================================================================
+// Plan 32-03 Task 1 — pruneDeadUrlEvents helper (D-12, D-13, D-14)
+// ============================================================================
+
+/**
+ * Minimal shape pruneDeadUrlEvents needs from an `events:llm:v3` entry.
+ * Avoids importing the full `ConflictEventEntity` discriminated union —
+ * same rationale as `ConflictEventEntityForProbe` above.
+ */
+interface ConflictEventEntityForPrune {
+  id: string;
+}
+
+/**
+ * Read-side stale ignore: prune is a deliberate destructive action and
+ * must operate against whatever the cache currently holds. Same sentinel
+ * shape as the probe path.
+ */
+const PRUNE_READ_LOGICAL_TTL_MS = 999_999_999;
+
+/**
+ * D-12 + D-13 + D-14 — splice dead-URL events out of `events:llm:v3`.
+ *
+ * Called from two paths:
+ *   - `POST /api/events/prune-dead-urls` (operator click via the API
+ *     Health dashboard button — Plan 32-05) with `trigger:'manual'` +
+ *     the operator's Bearer fingerprint.
+ *   - `runRefreshExtraction` cron post-step (Plan 32-03 Task 3) with
+ *     `trigger:'cron'` (no fingerprint — audit log records the literal
+ *     string `'cron:refresh-events'` per RESEARCH A8).
+ *
+ * Filter logic:
+ *   - For every event in `events:llm:v3`, look up its
+ *     `events:url-liveness:{id}` entry.
+ *   - Event is a prune candidate IFF the liveness entry exists AND
+ *     `isTerminalDead(status)` is true.
+ *   - When `trigger === 'cron'`, additionally require `attemptCount >= 3`
+ *     (D-12 — only events terminal-dead across ≥3 consecutive ticks are
+ *     eligible for unattended deletion). Manual trigger has no
+ *     attemptCount gate (D-09 — operator can prune any flagged event).
+ *
+ * Delete scope (D-13 — smallest blast radius):
+ *   - Splice out of `events:llm:v3` via cacheSetSafe.
+ *   - DEL the `events:url-liveness:{id}` keys via bulk `redis.del`.
+ *   - DECR the `events:url-liveness-count` sidecar by prunedCount (paired
+ *     with the persistLiveness INCR from Plan 32-02 — the count stays
+ *     consistent across probe-time INCR and prune-time DECR).
+ *   - Does NOT touch `llmLineage`, `callHistory`, news cluster indices,
+ *     `operator:audit-log`, or anything else.
+ *
+ * Audit log (D-14 — RESEARCH Common Op 2 path (b)):
+ *   - `{operation:'prune-dead-urls', args:{trigger, prunedCount, prunedIds},
+ *      result:'ok'}`. Stashing the count + ids in `args` (rather than
+ *     widening `OperatorAuditEntry.result` to admit a struct) avoids
+ *     schema migration and is forensically sufficient — operators drill
+ *     in via `/operator-status` and see the IDs.
+ *
+ * SCAN signature (MEDIUM-01 plan-checker pin):
+ *   `redis.scan` on `@upstash/redis ^1.37.0` returns
+ *   `Promise<[string | number, string[]]>` — cursor type is string OR
+ *   number depending on Upstash response shape. We cast explicitly so
+ *   the executor's inferred type matches the runtime contract.
+ *
+ * Race window (T-32-07 / RESEARCH Pitfall 4 / Open Question 3):
+ *   GET → splice → SET against `/api/events` reads is documented but
+ *   not mutex-locked in v1. The map can flicker a dead event for ≤1
+ *   poll cycle (≤15min logical TTL) until the next refresh. Operator
+ *   can re-extract via `/llm-replay` if mis-pruned. Promote to a
+ *   Redis-backed lock only if a real overlap is observed in audit-log
+ *   telemetry.
+ *
+ * Errors:
+ *   The helper does NOT catch its own errors — chaos-test compatibility
+ *   (RESEARCH Pitfall 6) requires the route handler at
+ *   `POST /api/events/prune-dead-urls` to translate a Redis throw into
+ *   `503 prune_failed`, NOT `500`. Caller's try/catch is the contract.
+ */
+export async function pruneDeadUrlEvents(opts: {
+  trigger: 'manual' | 'cron';
+  fingerprint?: string;
+}): Promise<{ prunedCount: number; prunedIds: string[] }> {
+  // 1. Read the v3 cache. If empty / null → nothing to prune.
+  const v3 = await cacheGetSafe<ConflictEventEntityForPrune[]>(
+    LLM_EVENTS_KEY_ACTIVE,
+    PRUNE_READ_LOGICAL_TTL_MS,
+  );
+  const events = Array.isArray(v3?.data) ? v3.data : [];
+  if (events.length === 0) {
+    return { prunedCount: 0, prunedIds: [] };
+  }
+
+  // 2. SCAN the events:url-liveness:* keyspace.
+  //    MEDIUM-01 — pin Upstash @upstash/redis ^1.37.0 signature.
+  const livenessKeys: string[] = [];
+  let cursor: string | number = '0';
+  do {
+    const reply = (await redis.scan(cursor, {
+      match: `${URL_LIVENESS_KEY_PREFIX}*`,
+      count: 200,
+    })) as [string | number, string[]];
+    cursor = reply[0];
+    for (const key of reply[1]) livenessKeys.push(key);
+  } while (cursor !== '0' && cursor !== 0);
+
+  // 3. For each scanned liveness key, load the entry + apply the filter.
+  const prunedIds: string[] = [];
+  for (const key of livenessKeys) {
+    const eventId = key.startsWith(URL_LIVENESS_KEY_PREFIX)
+      ? key.slice(URL_LIVENESS_KEY_PREFIX.length)
+      : null;
+    if (!eventId) continue;
+
+    const cached = await cacheGetSafe<UrlLiveness>(key, PRUNE_READ_LOGICAL_TTL_MS);
+    const entry = cached?.data ?? null;
+    if (!entry) continue;
+
+    // D-07 — only terminal-dead statuses are ever pruned.
+    if (!isTerminalDead(entry.status)) continue;
+
+    // D-12 cron gate — manual trigger bypasses, cron requires ≥3 ticks.
+    if (opts.trigger === 'cron' && entry.attemptCount < 3) continue;
+
+    prunedIds.push(eventId);
+  }
+
+  if (prunedIds.length === 0) {
+    // No prune candidates — still write the audit-log entry so operator
+    // sees the no-op (forensic completeness). Skip the splice + DEL +
+    // DECR steps since there's nothing to mutate.
+    await appendOperatorAuditEntry({
+      timestamp: Date.now(),
+      bearerFingerprint:
+        opts.trigger === 'cron' ? 'cron:refresh-events' : (opts.fingerprint ?? 'unknown'),
+      operation: 'prune-dead-urls',
+      args: { trigger: opts.trigger, prunedCount: 0, prunedIds: [] },
+      result: 'ok',
+    });
+    return { prunedCount: 0, prunedIds: [] };
+  }
+
+  // 4. Splice prunedIds out of the v3 events[] array, write back.
+  const prunedSet = new Set(prunedIds);
+  const spliced = events.filter((e) => !prunedSet.has(e.id));
+  await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, spliced, LLM_REDIS_TTL_SEC);
+
+  // 5. Bulk DEL the url-liveness keys.
+  const keysToDelete = prunedIds.map((id) => `${URL_LIVENESS_KEY_PREFIX}${id}`);
+  await redis.del(...keysToDelete);
+
+  // 6. Decrement the sidecar count by prunedCount.
+  //    @upstash/redis exposes DECRBY natively; one round-trip beats N decr() calls.
+  //    Pitfall 6 — degrade-open on Redis throw (mirror persistLiveness shape).
+  try {
+    const after = await redis.decrby(URL_LIVENESS_COUNT_KEY, prunedIds.length);
+    if (typeof after === 'number' && after < 0) {
+      // Underflow (concurrent prune raced us past 0) — floor at 0.
+      await redis.set(URL_LIVENESS_COUNT_KEY, 0);
+    }
+  } catch (err) {
+    log.warn({ err, prunedCount: prunedIds.length }, 'sidecar DECRBY failed (degrade-open)');
+  }
+
+  // 7. Append the audit-log entry (D-14 + RESEARCH A8).
+  await appendOperatorAuditEntry({
+    timestamp: Date.now(),
+    bearerFingerprint:
+      opts.trigger === 'cron' ? 'cron:refresh-events' : (opts.fingerprint ?? 'unknown'),
+    operation: 'prune-dead-urls',
+    args: {
+      trigger: opts.trigger,
+      prunedCount: prunedIds.length,
+      prunedIds,
+    },
+    result: 'ok',
+  });
+
+  log.info(
+    { trigger: opts.trigger, prunedCount: prunedIds.length },
+    'pruneDeadUrlEvents complete',
+  );
+
+  return { prunedCount: prunedIds.length, prunedIds };
 }
 
 // ============================================================================

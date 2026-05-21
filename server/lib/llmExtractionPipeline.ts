@@ -59,8 +59,16 @@ const log = logger.child({ module: 'llm-extraction-pipeline' });
 /** Redis key for raw GDELT events the helper reads as input. */
 const EVENTS_KEY = 'events:gdelt';
 
-/** Active terminal LLM cache key. v3-only post-Phase-29. */
-const LLM_EVENTS_KEY_ACTIVE = 'events:llm:v3';
+/**
+ * Active terminal LLM cache key. v3-only post-Phase-29.
+ *
+ * Phase 32 Plan 32-03 exports this so `pruneDeadUrlEvents`
+ * (server/lib/urlLiveness.ts) shares one truth source on the v3 key
+ * literal — the splice writer would otherwise hand-roll the string,
+ * which is the exact drift class CLAUDE.md §"Serverless Cache" warns
+ * against.
+ */
+export const LLM_EVENTS_KEY_ACTIVE = 'events:llm:v3';
 
 /** Active LLM run-summary key. v3-only post-Phase-29. */
 const LLM_SUMMARY_KEY_ACTIVE = 'events:llm-summary:v3';
@@ -77,8 +85,14 @@ const LLM_PROCESS_KEY = 'events:llm-process-ts';
 /** 15 minute cooldown between LLM processing runs. */
 const LLM_COOLDOWN_MS = 900_000;
 
-/** Hard Redis TTL for LLM caches (2.5h, 10x logical). */
-const LLM_REDIS_TTL_SEC = 9000;
+/**
+ * Hard Redis TTL for LLM caches (2.5h, 10x logical).
+ *
+ * Phase 32 Plan 32-03 exports this so `pruneDeadUrlEvents`'s
+ * cacheSetSafe write-back uses the same TTL the cron writer uses —
+ * the splice-back must not silently re-TTL the v3 cache.
+ */
+export const LLM_REDIS_TTL_SEC = 9000;
 
 /** 24-hour TTL for LLM run summary (retained across runs). */
 const LLM_SUMMARY_TTL_SEC = 86_400;
