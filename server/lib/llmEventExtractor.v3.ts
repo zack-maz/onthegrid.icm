@@ -26,6 +26,10 @@
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { redis } from '../cache/redis.js';
 import { env } from '../config.js';
+// Phase 33 D-08 — canonical actor catalog used by applyCatalogToEvents
+// (post-validate server-side mapping). Catalog is the single source of truth
+// for actor naming; LLM prompt compliance (D-09) is best-effort.
+import { canonicalize } from '../data/actor-catalog.js';
 
 import { createLimit } from './concurrencyLimit.js';
 import { extractBellingcatGeo } from './eventScoring.js';
@@ -158,6 +162,52 @@ export const SYSTEM_PROMPT_V3 = [
   '',
   '- Output ONLY the JSON object. Any reasoning must go in the "reasoning" field, not in <think> blocks (those are stripped).',
 ].join('\n');
+
+// ---------------------------------------------------------------------------
+// Phase 33 D-08 + D-10 — server-side post-validate helpers.
+//
+// These run AFTER batchResponseV3.safeParse() succeeds and BEFORE results.push
+// (see line ~786 below). The catalog (`server/data/actor-catalog.ts`, Plan
+// 33-02) is the single source of truth for actor naming; the LLM prompt hint
+// (D-09) is best-effort. Both helpers are exported so the unit test at
+// `server/__tests__/lib/llmEventExtractor.v3.canonicalize.test.ts` can
+// vi.mock the catalog and target them directly.
+// ---------------------------------------------------------------------------
+
+/** Phase 33 D-08 — walk each event's actors[] through the canonical catalog.
+ *  Matched aliases get replaced by their canonicalName; unmatched actors pass
+ *  through unchanged (D-08 pass-through contract). Cron-only writer
+ *  invariant (anti-pattern #17) preserved — this runs inside the existing
+ *  runRefreshExtraction() call path. */
+export function applyCatalogToEvents(events: EnrichedEventV3[]): EnrichedEventV3[] {
+  return events.map((event) => ({
+    ...event,
+    actors: event.actors.map((a) => canonicalize(a)?.canonicalName ?? a),
+  }));
+}
+
+/** Phase 33 D-10 — server-side defense-in-depth for actorConfidence.
+ *
+ *  Repairs the index-locked-parallel-array invariant from the schema so every
+ *  cache write under `events:llm:v3` carries an actorConfidence array of
+ *  exactly `actors.length`. Behavior:
+ *    - missing (null/undefined) → fill with 'low' × actors.length
+ *    - length mismatch          → overwrite with 'low' × actors.length
+ *    - valid length-matched     → pass through unchanged
+ *
+ *  Conservative 'low' default inflates the dashboard's `lowConfidenceActors`
+ *  counter on day-1 until the LLM begins emitting actorConfidence reliably
+ *  (Open Q §2 monitoring window — operator should watch
+ *  schemaFailures.nvidia_nim.missingField for one cron tick post-deploy). */
+export function repairActorConfidence(event: EnrichedEventV3): EnrichedEventV3 {
+  if (event.actorConfidence == null || event.actorConfidence.length !== event.actors.length) {
+    return {
+      ...event,
+      actorConfidence: event.actors.map(() => 'low' as const),
+    };
+  }
+  return event;
+}
 
 // ---------------------------------------------------------------------------
 // Types used internally + exported for tests.
@@ -777,7 +827,19 @@ export async function processEventGroupsV3(
           return;
         }
 
-        results.push(...validated.data.events);
+        // === PHASE 33 D-08 — server-side post-mapping canonicalization ===
+        // Walk each validated event's actors[] through the catalog so cache
+        // writes carry canonicalNames regardless of LLM prompt compliance
+        // (D-09 hint is best-effort; this step is the enforcement).
+        const canonicalizedEvents = applyCatalogToEvents(validated.data.events);
+        // === PHASE 33 D-10 — actorConfidence repair (defense-in-depth) ===
+        // Fills / repairs to the index-locked length so the schema invariant
+        // holds for every cache write even when the LLM omits the field or
+        // returns a wrong-length array. Open Q §2 monitoring: watch
+        // schemaFailures.nvidia_nim.missingField for one cron tick post-deploy.
+        const repairedEvents = canonicalizedEvents.map(repairActorConfidence);
+
+        results.push(...repairedEvents);
         allFailed = false;
 
         // === B-2 D-13 lineage capture per event in the validated batch ===
@@ -789,11 +851,15 @@ export async function processEventGroupsV3(
         // geocoder updates the full resolved coord on the cache entry, but
         // lineage records the LLM's structured-extraction lineage which is
         // complete here.
+        //
+        // Phase 33 — iterate over `repairedEvents` (post-D-08 + D-10) so the
+        // lineage cache records the same canonical/repaired payload that
+        // flows to `events:llm:v3`.
         const promptText = `${SYSTEM_PROMPT_V3}\n\n${userPrompt}`;
         const reasoningTrace = '';
         const model = routing[0]?.model ?? 'unknown';
         const batchDurationMs = Date.now() - t0;
-        for (const enrichedEvt of validated.data.events) {
+        for (const enrichedEvt of repairedEvents) {
           const eventId = `llm-v3-${enrichedEvt.groupKey}`;
           const { lineageHash } = await appendLineage(eventId, {
             prompt: promptText,
