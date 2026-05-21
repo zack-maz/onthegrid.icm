@@ -35,6 +35,7 @@
 import { z } from 'zod';
 
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
+import { createLimit } from './concurrencyLimit.js';
 import { logger } from './logger.js';
 
 // ============================================================================
@@ -163,11 +164,6 @@ const PER_HOST_INTERVAL_MS = 1_000;
 const JITTER_MS = 200;
 const MAX_REDIRECTS = 3;
 const PROBE_UA = 'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)';
-// Consumed by Task 4 (sweep orchestrator) — `void`-reference here so
-// the no-unused-vars rule + tsc `noUnusedLocals` stay quiet while the
-// foundation lands ahead of the runProbeSweep callsite. Tasks 2/3
-// consume PER_HOST_INTERVAL_MS + JITTER_MS directly.
-void PROBE_CONCURRENCY;
 
 /**
  * Pitfall 1 / RESEARCH A6 — caller-supplied wall-clock cutoff for the
@@ -374,13 +370,17 @@ async function waitForHostSlot(hostname: string): Promise<void> {
   // assertion "≥ PER_HOST_INTERVAL_MS - JITTER_MS" holds deterministically.
   const jitter = Math.floor((Math.random() - 0.5) * 2 * JITTER_MS);
   const target = Math.max(now, prior) + jitter;
+  // Reserve the NEXT slot SYNCHRONOUSLY before awaiting. Without this,
+  // concurrent same-host dispatchers (e.g. 4 items dispatched into
+  // createLimit(8) on the same hostname) all read the same `prior`
+  // simultaneously and race to update — coalescing to ~1 throttle gap
+  // instead of N-1. Math.max(now, target) floors against the
+  // negative-jitter case.
+  const reservedAt = Math.max(now, target);
+  hostNext.set(hostname, reservedAt + PER_HOST_INTERVAL_MS);
   if (target > now) {
     await new Promise<void>((resolve) => setTimeout(resolve, target - now));
   }
-  // Reserve the slot. Math.max guards against a negative-jitter `target`
-  // that fell below `now` — without it, the next call could fire under
-  // PER_HOST_INTERVAL_MS after this one.
-  hostNext.set(hostname, Math.max(now, target) + PER_HOST_INTERVAL_MS);
 }
 
 /**
@@ -507,6 +507,77 @@ async function persistLiveness(
       'sidecar count update failed (degrade-open)',
     );
   }
+}
+
+// ============================================================================
+// Plan 32-02 Task 4 — runProbeSweep orchestrator (D-03, D-18, Pitfall 1)
+// ============================================================================
+
+/**
+ * D-03 — best-effort partial sweep. Given a candidate list (built by
+ * `buildProbeCandidates` — Task 5), probes each candidate's URL under
+ * `createLimit(PROBE_CONCURRENCY=8)` concurrency cap + per-host 1-req/s
+ * throttle + caller-supplied `deadlineMs` wall-clock cutoff.
+ *
+ * Each task body does the deadline check FIRST (before any URL parse or
+ * fetch), so when budget is exhausted the remaining items short-circuit
+ * to `skippedBudget++` without consuming wall-clock or Redis calls.
+ *
+ * Plan 32-03 will compute `deadlineMs` as
+ *   `cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS`
+ * inside `/api/cron/refresh-events`, reserving the 60s safety margin
+ * for the post-sweep prune + audit-log writes under Vercel Pro's 800s
+ * `maxDuration` (Pitfall 1).
+ *
+ * On exit, `pruneStaleHostSlots()` runs (Pitfall 2) so the per-host
+ * throttle map doesn't grow unboundedly across warm-instance lifetime.
+ *
+ * Errors inside each task body (URL parse, probeUrl unexpected throw,
+ * persistLiveness throw) are caught and logged via `log.warn` — one
+ * bad task never poisons the rest of the sweep.
+ */
+export async function runProbeSweep(opts: {
+  eventIdsWithUrls: Array<{ eventId: string; url: string }>;
+  deadlineMs: number;
+}): Promise<{ probed: number; skippedBudget: number }> {
+  const limit = createLimit(PROBE_CONCURRENCY);
+  let probed = 0;
+  let skippedBudget = 0;
+
+  const tasks = opts.eventIdsWithUrls.map(({ eventId, url }) =>
+    limit(async () => {
+      // Pitfall 1 — deadline guard MUST be the first statement in the
+      // task body. Items dispatched AFTER the deadline must NOT touch
+      // fetch or Redis.
+      if (Date.now() > opts.deadlineMs) {
+        skippedBudget++;
+        return;
+      }
+
+      try {
+        const host = new URL(url).hostname;
+        await waitForHostSlot(host);
+        // Re-check deadline AFTER the throttle wait — the per-host
+        // throttle can push us past the cutoff. (Without this, a
+        // saturated same-host batch could overrun the Vercel
+        // maxDuration after the throttle wait, defeating Pitfall 1.)
+        if (Date.now() > opts.deadlineMs) {
+          skippedBudget++;
+          return;
+        }
+        const result = await probeUrl(url);
+        await persistLiveness(eventId, url, result);
+        probed++;
+      } catch (err) {
+        // Log but never re-throw — one bad URL never poisons the sweep.
+        log.warn({ err, eventId, url }, 'probe sweep task failed');
+      }
+    }),
+  );
+
+  await Promise.all(tasks);
+  pruneStaleHostSlots();
+  return { probed, skippedBudget };
 }
 
 // ============================================================================
