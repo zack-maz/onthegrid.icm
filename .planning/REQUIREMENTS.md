@@ -141,11 +141,11 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 | LLM-RELI-09  | 34    | Pending                                                          |
 | LLM-RELI-10  | 34    | Pending                                                          |
 | LLM-RELI-11  | 34    | Pending                                                          |
-| GHOST-01     | 32    | Complete |
-| GHOST-02     | 32    | Complete |
-| GHOST-03     | 32    | Complete |
-| GHOST-04     | 32    | Complete |
-| GHOST-05     | 32    | Complete |
+| GHOST-01     | 32    | Complete                                                         |
+| GHOST-02     | 32    | Complete                                                         |
+| GHOST-03     | 32    | Complete                                                         |
+| GHOST-04     | 32    | Complete                                                         |
+| GHOST-05     | 32    | Complete                                                         |
 | ACTOR-01     | 33    | Pending                                                          |
 | ACTOR-02     | 33    | Pending                                                          |
 | ACTOR-03     | 33    | Pending                                                          |

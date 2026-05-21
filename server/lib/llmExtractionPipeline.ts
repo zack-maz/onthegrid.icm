@@ -500,10 +500,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
             );
           }
         } catch (probePruneErr) {
-          log.error(
-            { err: probePruneErr },
-            'phase 32 probe/prune post-step failed',
-          );
+          log.error({ err: probePruneErr }, 'phase 32 probe/prune post-step failed');
         }
       }
     })(),

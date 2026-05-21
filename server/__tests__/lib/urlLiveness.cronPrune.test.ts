@@ -85,26 +85,53 @@ const { pruneDeadUrlEvents, URL_LIVENESS_KEY_PREFIX } = await import('../../lib/
 //   E → 403, attemptCount=4    (4-tick dead — both triggers prune)
 // ---------------------------------------------------------------------------
 
-const EVENTS = [
-  { id: 'A' },
-  { id: 'B' },
-  { id: 'C' },
-  { id: 'D' },
-  { id: 'E' },
-];
+const EVENTS = [{ id: 'A' }, { id: 'B' }, { id: 'C' }, { id: 'D' }, { id: 'E' }];
 
-const LIVENESS_BY_ID: Record<string, {
-  status: 'live' | '404' | '403' | 'dead-host' | 'unknown';
-  attemptCount: number;
-  lastUrlProbed: string;
-  lastHttpStatus: number | null;
-  lastProbedAt: string;
-}> = {
-  A: { status: '404', attemptCount: 1, lastUrlProbed: 'https://a.example/x', lastHttpStatus: 404, lastProbedAt: '2026-05-20T00:00:00.000Z' },
-  B: { status: 'dead-host', attemptCount: 3, lastUrlProbed: 'https://b.example/x', lastHttpStatus: null, lastProbedAt: '2026-05-20T00:00:00.000Z' },
-  C: { status: 'unknown', attemptCount: 5, lastUrlProbed: 'https://c.example/x', lastHttpStatus: 500, lastProbedAt: '2026-05-20T00:00:00.000Z' },
-  D: { status: 'live', attemptCount: 0, lastUrlProbed: 'https://d.example/x', lastHttpStatus: 200, lastProbedAt: '2026-05-20T00:00:00.000Z' },
-  E: { status: '403', attemptCount: 4, lastUrlProbed: 'https://e.example/x', lastHttpStatus: 403, lastProbedAt: '2026-05-20T00:00:00.000Z' },
+const LIVENESS_BY_ID: Record<
+  string,
+  {
+    status: 'live' | '404' | '403' | 'dead-host' | 'unknown';
+    attemptCount: number;
+    lastUrlProbed: string;
+    lastHttpStatus: number | null;
+    lastProbedAt: string;
+  }
+> = {
+  A: {
+    status: '404',
+    attemptCount: 1,
+    lastUrlProbed: 'https://a.example/x',
+    lastHttpStatus: 404,
+    lastProbedAt: '2026-05-20T00:00:00.000Z',
+  },
+  B: {
+    status: 'dead-host',
+    attemptCount: 3,
+    lastUrlProbed: 'https://b.example/x',
+    lastHttpStatus: null,
+    lastProbedAt: '2026-05-20T00:00:00.000Z',
+  },
+  C: {
+    status: 'unknown',
+    attemptCount: 5,
+    lastUrlProbed: 'https://c.example/x',
+    lastHttpStatus: 500,
+    lastProbedAt: '2026-05-20T00:00:00.000Z',
+  },
+  D: {
+    status: 'live',
+    attemptCount: 0,
+    lastUrlProbed: 'https://d.example/x',
+    lastHttpStatus: 200,
+    lastProbedAt: '2026-05-20T00:00:00.000Z',
+  },
+  E: {
+    status: '403',
+    attemptCount: 4,
+    lastUrlProbed: 'https://e.example/x',
+    lastHttpStatus: 403,
+    lastProbedAt: '2026-05-20T00:00:00.000Z',
+  },
 };
 
 function seedCacheGetSafe(): void {
@@ -127,10 +154,7 @@ function seedScan(): void {
   // Pin Upstash signature `Promise<[string | number, string[]]>` per
   // MEDIUM-01. Returning cursor as the string '0' is the canonical
   // "end of iteration" sentinel for @upstash/redis ^1.37.0.
-  scanMock.mockResolvedValueOnce([
-    '0',
-    EVENTS.map((e) => `${URL_LIVENESS_KEY_PREFIX}${e.id}`),
-  ]);
+  scanMock.mockResolvedValueOnce(['0', EVENTS.map((e) => `${URL_LIVENESS_KEY_PREFIX}${e.id}`)]);
 }
 
 beforeEach(() => {

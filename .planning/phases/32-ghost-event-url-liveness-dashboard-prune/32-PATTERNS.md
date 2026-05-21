@@ -8,27 +8,27 @@
 
 ## File Classification
 
-| New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
-|-------------------|------|-----------|----------------|---------------|
-| `server/lib/urlLiveness.ts` | service (probe + schema + sweep) | request-response + batch | `server/adapters/nominatim.ts` (fetch+timeout) + `server/lib/concurrencyLimit.ts` (FIFO) | role-match (composite) |
-| `server/lib/pruneQuota.ts` | service (quota counter) | CRUD | `server/lib/replayQuota.ts` | exact |
-| `server/lib/pruneDeadUrlEvents.ts` | service (helper) | CRUD | `server/lib/operatorAudit.ts` (SADD bounded write pattern) | role-match |
-| `server/routes/events.ts` (add prune route) | controller (operator endpoint) | request-response | `server/routes/events.ts:437-509` (`/llm-replay` handler) | exact |
-| `server/routes/cron-refresh-events.ts` (extend) | controller (cron handler) | batch | `server/routes/refresh-events-cron.ts` (existing cron handler) | exact |
-| `server/routes/operator-status.ts` (extend) | controller (aggregator) | request-response | `server/routes/operator-status.ts:77-154` (existing aggregator) | exact |
-| `src/components/ui/DevApiStatus.tsx` (extend) | component (operator UI) | request-response | `src/components/ui/DevApiStatus.tsx:1540-1549` (`replayProbe` + button) | exact |
-| `server/__tests__/lib/urlLiveness.schema.test.ts` | test (schema contract) | — | `server/__tests__/scripts/snapshot-cron-watch.test.ts` | role-match |
-| `src/__tests__/lib/urlLiveness.schema.test.ts` | test (shim) | — | `server/__tests__/scripts/snapshot-cron-watch.test.ts` | partial |
-| `server/__tests__/lib/urlLiveness.probe.test.ts` | test (unit, mocked-fetch) | — | `server/__tests__/lib/freeClaudeRouter.test.ts` (mock matrix) | role-match |
-| `server/__tests__/lib/urlLiveness.sweep.test.ts` | test (unit, concurrency) | — | `server/__tests__/lib/freeClaudeRouter.test.ts` | role-match |
-| `server/__tests__/lib/urlLiveness.cronPrune.test.ts` | test (unit) | — | `server/__tests__/lib/llmTokenBudget.test.ts` | role-match |
-| `server/__tests__/lib/pruneQuota.test.ts` | test (quota) | — | `server/__tests__/routes/events.replayQuota.test.ts` | exact |
-| `server/__tests__/routes/events.prune.test.ts` | test (integration) | — | `server/__tests__/routes/events.replayQuota.test.ts` | exact |
-| `server/__tests__/routes/refresh-events-cron.prune.test.ts` | test (integration) | — | `server/__tests__/routes/refresh-events-cron.test.ts` | exact |
-| `src/__tests__/components/DevApiStatus.prune.test.tsx` | test (jsdom) | — | `src/__tests__/DevApiStatusV3.test.tsx` | role-match |
-| `server/__tests__/routes/operator-status.test.ts` (extend) | test (integration) | — | existing file (extend) | exact |
-| `server/__tests__/resilience/redis-death.test.ts` (extend) | test (chaos) | — | existing file (extend) | exact |
-| `CLAUDE.md` §"Serverless Cache" (extend) | docs | — | existing CLAUDE.md entries | exact |
+| New/Modified File                                           | Role                             | Data Flow                | Closest Analog                                                                           | Match Quality          |
+| ----------------------------------------------------------- | -------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------- | ---------------------- |
+| `server/lib/urlLiveness.ts`                                 | service (probe + schema + sweep) | request-response + batch | `server/adapters/nominatim.ts` (fetch+timeout) + `server/lib/concurrencyLimit.ts` (FIFO) | role-match (composite) |
+| `server/lib/pruneQuota.ts`                                  | service (quota counter)          | CRUD                     | `server/lib/replayQuota.ts`                                                              | exact                  |
+| `server/lib/pruneDeadUrlEvents.ts`                          | service (helper)                 | CRUD                     | `server/lib/operatorAudit.ts` (SADD bounded write pattern)                               | role-match             |
+| `server/routes/events.ts` (add prune route)                 | controller (operator endpoint)   | request-response         | `server/routes/events.ts:437-509` (`/llm-replay` handler)                                | exact                  |
+| `server/routes/cron-refresh-events.ts` (extend)             | controller (cron handler)        | batch                    | `server/routes/refresh-events-cron.ts` (existing cron handler)                           | exact                  |
+| `server/routes/operator-status.ts` (extend)                 | controller (aggregator)          | request-response         | `server/routes/operator-status.ts:77-154` (existing aggregator)                          | exact                  |
+| `src/components/ui/DevApiStatus.tsx` (extend)               | component (operator UI)          | request-response         | `src/components/ui/DevApiStatus.tsx:1540-1549` (`replayProbe` + button)                  | exact                  |
+| `server/__tests__/lib/urlLiveness.schema.test.ts`           | test (schema contract)           | —                        | `server/__tests__/scripts/snapshot-cron-watch.test.ts`                                   | role-match             |
+| `src/__tests__/lib/urlLiveness.schema.test.ts`              | test (shim)                      | —                        | `server/__tests__/scripts/snapshot-cron-watch.test.ts`                                   | partial                |
+| `server/__tests__/lib/urlLiveness.probe.test.ts`            | test (unit, mocked-fetch)        | —                        | `server/__tests__/lib/freeClaudeRouter.test.ts` (mock matrix)                            | role-match             |
+| `server/__tests__/lib/urlLiveness.sweep.test.ts`            | test (unit, concurrency)         | —                        | `server/__tests__/lib/freeClaudeRouter.test.ts`                                          | role-match             |
+| `server/__tests__/lib/urlLiveness.cronPrune.test.ts`        | test (unit)                      | —                        | `server/__tests__/lib/llmTokenBudget.test.ts`                                            | role-match             |
+| `server/__tests__/lib/pruneQuota.test.ts`                   | test (quota)                     | —                        | `server/__tests__/routes/events.replayQuota.test.ts`                                     | exact                  |
+| `server/__tests__/routes/events.prune.test.ts`              | test (integration)               | —                        | `server/__tests__/routes/events.replayQuota.test.ts`                                     | exact                  |
+| `server/__tests__/routes/refresh-events-cron.prune.test.ts` | test (integration)               | —                        | `server/__tests__/routes/refresh-events-cron.test.ts`                                    | exact                  |
+| `src/__tests__/components/DevApiStatus.prune.test.tsx`      | test (jsdom)                     | —                        | `src/__tests__/DevApiStatusV3.test.tsx`                                                  | role-match             |
+| `server/__tests__/routes/operator-status.test.ts` (extend)  | test (integration)               | —                        | existing file (extend)                                                                   | exact                  |
+| `server/__tests__/resilience/redis-death.test.ts` (extend)  | test (chaos)                     | —                        | existing file (extend)                                                                   | exact                  |
+| `CLAUDE.md` §"Serverless Cache" (extend)                    | docs                             | —                        | existing CLAUDE.md entries                                                               | exact                  |
 
 ---
 
@@ -47,6 +47,7 @@
 **Analog 1 (probe fetch+timeout):** `server/adapters/nominatim.ts:20-29`
 
 **Imports pattern** (nominatim:1-3 + logger shape from any lib file):
+
 ```typescript
 // @vitest-environment node is NOT needed in the lib file — tests carry it
 import { createLimit } from './concurrencyLimit.js';
@@ -56,6 +57,7 @@ import { z } from 'zod';
 ```
 
 **fetch-with-timeout pattern** (nominatim.ts:20-29 — confirmed):
+
 ```typescript
 // nominatim.ts:20-29 is the template for fetchOnce():
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response | null> {
@@ -77,34 +79,41 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
 **Analog 2 (concurrency bound):** `server/lib/concurrencyLimit.ts:35-75`
 
 **createLimit API** (confirmed from reading the file):
+
 - `createLimit(maxConcurrent: number): LimitWrapper`
 - `LimitWrapper = <T>(fn: () => Promise<T>) => Promise<T>`
 - FIFO ordering; error propagates through the returned Promise (no swallowing)
 - Throws on `maxConcurrent < 1` or non-integer
 
 **Core sweep pattern** (from concurrencyLimit.ts usage + RESEARCH Pattern 1):
+
 ```typescript
 // Mirrors server/lib/llmEventExtractor.v3.ts (createLimit usage for batches)
-const limit = createLimit(8);                        // D-18 concurrency bound
+const limit = createLimit(8); // D-18 concurrency bound
 const tasks = candidates.map(({ eventId, url }) =>
   limit(async () => {
-    if (Date.now() > opts.deadlineMs) { skippedBudget++; return; }
+    if (Date.now() > opts.deadlineMs) {
+      skippedBudget++;
+      return;
+    }
     const host = new URL(url).hostname;
-    await waitForHostSlot(host);                     // per-host 1 req/s (D-18)
+    await waitForHostSlot(host); // per-host 1 req/s (D-18)
     const result = await probeUrl(url);
     await persistLiveness(eventId, url, result);
     probed++;
-  })
+  }),
 );
 await Promise.all(tasks);
 ```
 
 **Logger child pattern** (from any existing lib file, e.g. operatorAudit.ts:31):
+
 ```typescript
 const log = logger.child({ module: 'urlLiveness' });
 ```
 
 **Zod schema pattern** (snapshot-cron-watch.ts:85-110 shape):
+
 ```typescript
 // Use z.object({...}).strict() — extra keys THROW (contract-pinning purpose).
 // Mirrors WatchRowSchema / WatchLogSchema in snapshot-cron-watch.ts.
@@ -121,6 +130,7 @@ export type UrlLiveness = z.infer<typeof UrlLivenessSchema>;
 ```
 
 **cacheSetSafe pattern** (redis.ts:234-242 — confirmed):
+
 ```typescript
 // Every probe write goes through cacheSetSafe — NEVER redis.set directly.
 // Rationale: redis.ts:238 has the 2s REDIS_OP_TIMEOUT_MS guard; chaos test
@@ -134,16 +144,20 @@ await cacheSetSafe(
 ```
 
 **Sidecar count key pattern** (RESEARCH Pitfall 3 — no existing codebase analog for INCR/DECR):
+
 ```typescript
 // The sidecar INCR/DECR is NOT covered by cacheSetSafe (RESEARCH Pitfall 6 note).
 // Wrap raw redis.incr/redis.decr in try/catch. Floor at 0 after DECR.
 try {
   if (wasDeadBeforeAndNowLive) await redis.decr('events:url-liveness-count');
-  if (wasNotDeadAndNowDead)    await redis.incr('events:url-liveness-count');
-} catch { /* degrade-open: stale count is acceptable */ }
+  if (wasNotDeadAndNowDead) await redis.incr('events:url-liveness-count');
+} catch {
+  /* degrade-open: stale count is acceptable */
+}
 ```
 
 **SSRF guard pattern** (RESEARCH Security §"SSRF via stored URL"):
+
 ```typescript
 // Add BEFORE any fetch call. Defense-in-depth per ASVS V11.
 const PRIVATE_HOST_REGEX =
@@ -155,20 +169,24 @@ function isPrivateHost(hostname: string): boolean {
 ```
 
 **Named exports pattern** (follows any lib module — no default export):
+
 - Export: `UrlLivenessSchema`, `UrlLivenessStatus`, `UrlLiveness` (type), `ttlSecForStatus`, `probeUrl`, `runProbeSweep`, `pruneDeadUrlEvents`, `URL_LIVENESS_KEY_PREFIX`, `URL_LIVENESS_COUNT_KEY`
 - No default export — matches `concurrencyLimit.ts` (named only), `operatorAudit.ts` (named only)
 
 **Pattern dimensions to clone from nominatim.ts:**
+
 - `fetchWithTimeout` shape: `AbortController` + `clearTimeout` in `finally`
 - Returns `null` on catch (not throw) — callers check for null
 - `const timer = setTimeout(...)` with `clearTimeout(timer)` in finally
 
 **Pattern dimensions to DIVERGE from nominatim.ts:**
+
 - nominatim uses `redirect: 'follow'` (default); urlLiveness uses `redirect: 'manual'` (D-17)
 - nominatim retries on some errors; urlLiveness has NO retry (D-18 explicit: "NO retry on transient")
 - nominatim reads `NOMINATIM_FETCH_TIMEOUT_MS` env var; urlLiveness hardcodes `10_000` (D-18)
 
 **Pattern dimensions to clone from concurrencyLimit.ts:**
+
 - `createLimit(8)` instantiation in module scope or inside `runProbeSweep`
 - Each `limit(async () => {...})` task returns a Promise; `Promise.all(tasks)` at the end
 - Error propagation: task errors surface through the returned Promise (no swallowing inside the limit wrapper itself)
@@ -182,6 +200,7 @@ function isPrivateHost(hostname: string): boolean {
 **Confirmed from reading replayQuota.ts:1-87:**
 
 **Full structure to clone:**
+
 ```typescript
 // replayQuota.ts LINES 1-87 — clone verbatim, changing:
 //   QUOTA_KEY_PREFIX = 'operator:prune-quota:'    (was 'operator:replay-quota:')
@@ -198,6 +217,7 @@ function isPrivateHost(hostname: string): boolean {
 ```
 
 **Lazy import pattern** (replayQuota.ts:61):
+
 ```typescript
 // replayQuota.ts uses `await import('../cache/redis.js')` inside the function
 // (not at top-level) so vi.mock in tests applies consistently.
@@ -208,6 +228,7 @@ const { redis } = await import('../cache/redis.js');
 **Naming convention:** `checkPruneQuota` (mirrors `checkReplayQuota`). Return type `PruneQuotaResult` (mirrors `ReplayQuotaResult`).
 
 **Pattern dimensions to DIVERGE from replayQuota.ts:**
+
 - Key prefix changes from `'operator:replay-quota:'` to `'operator:prune-quota:'`
 - All JSDoc references updated from "replay" to "prune"
 - There is NO other behavioral divergence — this is intentional by D-15 ("Consistency-with-existing-pattern wins")
@@ -219,6 +240,7 @@ const { redis } = await import('../cache/redis.js');
 **Analog:** `server/lib/operatorAudit.ts:75-113` (SADD bounded-set write) + `server/routes/events.ts:467-477` (Redis read-then-splice pattern)
 
 **Core operation sequence** (from RESEARCH Architecture Diagram lines 159-175):
+
 ```typescript
 // 1. Read all url-liveness keys (SCAN or batch cacheGetSafe)
 // 2. Filter: status in ['404', '403', 'dead-host'] AND
@@ -233,6 +255,7 @@ const { redis } = await import('../cache/redis.js');
 ```
 
 **Import pattern:**
+
 ```typescript
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import { appendOperatorAuditEntry } from './operatorAudit.js';
@@ -241,6 +264,7 @@ import type { UrlLiveness } from './urlLiveness.js';
 ```
 
 **Error handling pattern** (mirrors operatorAudit.ts degrade-open):
+
 ```typescript
 // Best-effort: never throw from pruneDeadUrlEvents itself.
 // Errors are logged; caller (endpoint) wraps in try/catch for 503.
@@ -248,6 +272,7 @@ import type { UrlLiveness } from './urlLiveness.js';
 ```
 
 **Audit entry shape** (operatorAudit.ts:43-57, widened per RESEARCH):
+
 ```typescript
 // OperatorAuditEntry.operation union MUST be widened in operatorAudit.ts:49:
 //   operation: 'pipeline-swap' | 'replay' | 'prune-dead-urls'
@@ -262,11 +287,13 @@ await appendOperatorAuditEntry({
 ```
 
 **Naming convention:**
+
 - Export: `pruneDeadUrlEvents(opts: { trigger: 'manual' | 'cron'; fingerprint?: string }): Promise<{ prunedCount: number; prunedIds: string[] }>`
 - Module-level `const log = logger.child({ module: 'pruneDeadUrlEvents' })`
 - No default export
 
 **Pattern dimensions to DIVERGE from operatorAudit.ts:**
+
 - operatorAudit never reads or mutates `events:llm:v3` — pruneDeadUrlEvents does both
 - The GET→splice→SET race (RESEARCH Pitfall 4) must be documented in JSDoc; mutex is optional (planner picks, recommended: skip for v1)
 
@@ -281,6 +308,7 @@ await appendOperatorAuditEntry({
 **Analog:** `server/routes/events.ts:436-509` — the existing `POST /api/events/llm-replay/:groupKey` handler (same file, ~70 lines down)
 
 **Confirmed imports already in the file** (grep output lines 24-34):
+
 ```typescript
 import { appendOperatorAuditEntry, bearerFingerprint } from '../lib/operatorAudit.js';
 import { checkReplayQuota } from '../lib/replayQuota.js';
@@ -288,12 +316,14 @@ import { dashboardAuth } from '../middleware/dashboardAuth.js';
 ```
 
 **New imports to add:**
+
 ```typescript
 import { pruneDeadUrlEvents } from '../lib/pruneDeadUrlEvents.js';
 import { checkPruneQuota } from '../lib/pruneQuota.js';
 ```
 
 **Handler structure** (mirrors llm-replay at events.ts:437-509):
+
 ```typescript
 // Pattern from events.ts:436-438 — wrap in a block, always register (not conditional):
 {
@@ -325,6 +355,7 @@ import { checkPruneQuota } from '../lib/pruneQuota.js';
 ```
 
 **Key pattern differences vs llm-replay:**
+
 - llm-replay is `POST /llm-replay/:groupKey` (parameterized); prune is `POST /prune-dead-urls` (no param)
 - llm-replay triggers LLM extraction (expensive, NOT retried on 429); prune calls Redis-backed helper
 - llm-replay returns 500 on extraction failure (events.ts:504); prune returns **503** (never 500) per chaos-test contract
@@ -332,6 +363,7 @@ import { checkPruneQuota } from '../lib/pruneQuota.js';
 - Cron `trigger: 'cron'` BYPASSES quota (D-15); llm-replay has no cron bypass concept
 
 **Pattern dimensions to clone:**
+
 - `{...eventsRouter.post(..., dashboardAuth, async (req, res) => {...})}` block structure (events.ts:436)
 - `bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? '')` fingerprint derivation (events.ts:454)
 - `checkReplayQuota` → `checkPruneQuota` pattern (events.ts:455-462)
@@ -339,6 +371,7 @@ import { checkPruneQuota } from '../lib/pruneQuota.js';
 - Audit entry written BEFORE responding (events.ts:490-500 comment) — but here, delegated to helper
 
 **Pattern dimensions to DIVERGE:**
+
 - Error response is 503 not 500 (chaos test requires `200 | 503`, never `500`)
 - No `:groupKey` param
 - `req.body?.trigger` whitelist (not `req.params.groupKey`)
@@ -351,10 +384,12 @@ import { checkPruneQuota } from '../lib/pruneQuota.js';
 **Analog:** Existing handler at `/Users/zackmaz/Desktop/otg-iran-monitor/server/routes/cron-refresh-events.ts` (the cron route that calls `runRefreshExtraction`)
 
 **Extension point** (RESEARCH line 869):
+
 - Extend `runRefreshExtraction()` in `server/lib/llmExtractionPipeline.ts` with optional post-extraction steps, OR add sequential calls in the cron handler after `runRefreshExtraction` resolves inside the `safeWaitUntil` body
 - **Recommended path** (RESEARCH Discretion §3): extend the existing `safeWaitUntil` IIFE body in `llmExtractionPipeline.ts:258-444` — keeps the `safeWaitUntil` envelope intact, easier to test via existing cron mock pattern
 
 **safeWaitUntil contract** (safeWaitUntil.ts:63 — confirmed):
+
 ```typescript
 // safeWaitUntil takes Promise<unknown>, returns void — NEVER await it.
 // The cron handler already wraps runRefreshExtraction in safeWaitUntil.
@@ -362,9 +397,9 @@ import { checkPruneQuota } from '../lib/pruneQuota.js';
 // runRefreshExtraction resolves. No second safeWaitUntil call needed.
 safeWaitUntil(
   (async () => {
-    await runRefreshExtraction(opts);         // existing
+    await runRefreshExtraction(opts); // existing
     // === PHASE 32 ADDITIONS ===
-    const deadline = cronStart + 800_000 - 60_000;   // SAFETY_MARGIN_MS=60s
+    const deadline = cronStart + 800_000 - 60_000; // SAFETY_MARGIN_MS=60s
     const { probed, skippedBudget } = await runProbeSweep({
       eventIdsWithUrls: await buildProbeCandidates(),
       deadlineMs: deadline,
@@ -379,6 +414,7 @@ safeWaitUntil(
 ```
 
 **cron.lastTick write pattern** (RESEARCH CONTEXT:147):
+
 ```
 // Per CLAUDE.md §Redis: `:refresh-events` cron tick key writes ONLY AFTER
 // runRefreshExtraction resolves. Phase 32 must NOT move this write
@@ -387,12 +423,14 @@ safeWaitUntil(
 ```
 
 **Pattern dimensions to clone from existing cron handler:**
+
 - `timingSafeEqual` on `CRON_SECRET` (Bearer gate for cron — same as existing)
 - `log = logger.child({ module: 'cronRefreshEvents' })` shape
 - `cooldown` + `?force=true` bypass logic (existing; Phase 32 adds AFTER extraction only)
 - `res.json({ dispatched, reason, ... })` response (existing; Phase 32 extends result fields)
 
 **Pattern dimensions to DIVERGE:**
+
 - Phase 32 adds wall-clock deadline plumbing: `const cronStart = Date.now()` at handler entry
 - Phase 32 passes `deadlineMs` to `runProbeSweep` — existing extraction does not have a deadline parameter
 
@@ -403,17 +441,20 @@ safeWaitUntil(
 **Analog:** `server/routes/operator-status.ts:77-154` (entire existing file — extend the GET handler)
 
 **Current response shape** (operator-status.ts:148 — confirmed):
+
 ```typescript
 res.json({ audit24h, byBearer, advEval });
 ```
 
 **Extended response shape** (D-14, D-23):
+
 ```typescript
 res.json({ audit24h, byBearer, advEval, prune });
 //                                       ^^^^ new sibling block
 ```
 
 **prune block construction pattern** (mirrors advEval pattern at operator-status.ts:131-145):
+
 ```typescript
 // Read sidecar count key (O(1) per Pitfall 3 mitigation):
 let deadUrlCount = 0;
@@ -431,6 +472,7 @@ const prune = { deadUrlCount, last24hPrunes };
 ```
 
 **AuditEntry interface extension** (operator-status.ts:49-53 — confirmed):
+
 ```typescript
 // Current:
 interface AuditEntry {
@@ -442,11 +484,12 @@ interface AuditEntry {
 interface AuditEntry {
   timestamp: number;
   bearerFingerprint: string;
-  operation: 'pipeline-swap' | 'replay' | 'prune-dead-urls';  // ← add
+  operation: 'pipeline-swap' | 'replay' | 'prune-dead-urls'; // ← add
 }
 ```
 
 **byBearer aggregator** (operator-status.ts:110-125 — must extend):
+
 ```typescript
 // Current: cur.swaps / cur.replays
 // After Phase 32: also count cur.prunes for prune-dead-urls entries
@@ -454,11 +497,13 @@ interface AuditEntry {
 ```
 
 **Pattern dimensions to clone:**
+
 - `try { const raw = await redis.get(...); } catch (err) { log.warn(...); }` error isolation per block
 - `|| 0` + `Math.max(0, ...)` defensive coercion for numeric Redis values
 - Type guard before use (matches advEval null check at operator-status.ts:135-145)
 
 **Pattern dimensions to DIVERGE:**
+
 - `deadUrlCount` uses `redis.get` directly (not `cacheGetSafe`) because it is an integer scalar, not a `CacheEntry<T>` shape. Tolerate stale count on Redis-death (degrade-open: count returns 0)
 - `last24hPrunes` is derived from the already-read `entries` array — no second Redis call
 
@@ -473,6 +518,7 @@ interface AuditEntry {
 **Analog:** `src/components/ui/DevApiStatus.tsx:1519-1549` (the existing `quotaAlert` block + `replayProbe` button, lines confirmed by read)
 
 **Existing `OperatorStatus` interface** (DevApiStatus.tsx:887-895 — confirmed):
+
 ```typescript
 interface OperatorStatus {
   audit24h: number;
@@ -487,6 +533,7 @@ interface OperatorStatus {
 ```
 
 **Extension** (add `prune` field and update validation guard):
+
 ```typescript
 interface OperatorStatus {
   // ... existing fields ...
@@ -497,6 +544,7 @@ interface OperatorStatus {
 ```
 
 **fetchOpStatus pattern** (DevApiStatus.tsx:900-906 — confirmed, mirrors for prune button):
+
 ```typescript
 // Prune POST call mirrors replayProbe() at DevApiStatus.tsx:983-1001:
 const pruneHandler = async (): Promise<void> => {
@@ -511,59 +559,71 @@ const pruneHandler = async (): Promise<void> => {
       setPruneQuotaAlert({ resetsAt: body.resetsAt ?? '' });
     } else if (res.ok) {
       setPruneQuotaAlert(null);
-      void fetchOpStatus();   // refresh count after successful prune
+      void fetchOpStatus(); // refresh count after successful prune
     }
-  } catch { /* degrade-open */ }
+  } catch {
+    /* degrade-open */
+  }
 };
 ```
 
 **Button render pattern** (mirrors DevApiStatus.tsx:1540-1549):
+
 ```tsx
-{/* Phase 32 — dead-URL count + prune button */}
-{opStatus?.prune != null && (
-  <>
-    <div className="mt-1 text-text-muted" data-testid="dead-url-count">
-      Dead URL events: {opStatus.prune.deadUrlCount}
-    </div>
-    {opStatus.prune.deadUrlCount > 0 && (
-      <div className="mt-2">
-        <button
-          type="button"
-          onClick={() => void pruneHandler()}
-          className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-          data-testid="prune-dead-urls-trigger"
-        >
-          Prune {opStatus.prune.deadUrlCount} dead events
-        </button>
+{
+  /* Phase 32 — dead-URL count + prune button */
+}
+{
+  opStatus?.prune != null && (
+    <>
+      <div className="mt-1 text-text-muted" data-testid="dead-url-count">
+        Dead URL events: {opStatus.prune.deadUrlCount}
       </div>
-    )}
-  </>
-)}
-{pruneQuotaAlert && (
-  <div
-    className="mb-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-400"
-    data-testid="prune-quota-alert"
-  >
-    Prune quota reached: 50 of 50 in last 24h. Resets at {pruneQuotaAlert.resetsAt}.
-  </div>
-)}
+      {opStatus.prune.deadUrlCount > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => void pruneHandler()}
+            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+            data-testid="prune-dead-urls-trigger"
+          >
+            Prune {opStatus.prune.deadUrlCount} dead events
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+{
+  pruneQuotaAlert && (
+    <div
+      className="mb-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-400"
+      data-testid="prune-quota-alert"
+    >
+      Prune quota reached: 50 of 50 in last 24h. Resets at {pruneQuotaAlert.resetsAt}.
+    </div>
+  );
+}
 ```
 
 **Tailwind className pattern:** Clone exactly from `replayProbe` button (DevApiStatus.tsx:1544-1548): `"rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"`. All spacing uses multiples of 4 per project convention.
 
 **dashboardAuthHeaders import** (DevApiStatus.tsx:8 — already imported):
+
 ```typescript
 import { shouldRenderDashboard, dashboardAuthHeaders } from '@/lib/dashboardAuth';
 // No new import needed for the prune button.
 ```
 
 **Pattern dimensions to clone:**
+
 - `useState<{ resetsAt: string } | null>(null)` for `pruneQuotaAlert` (mirrors `quotaAlert` at DevApiStatus.tsx:977)
 - `data-testid="prune-dead-urls-trigger"` + `data-testid="dead-url-count"` + `data-testid="prune-quota-alert"` (mirrors `replay-test-trigger` + `replay-quota-alert` naming convention)
 - `void pruneHandler()` invocation (matches `void replayProbe()` pattern)
 - `...dashboardAuthHeaders()` spread in fetch headers (confirmed at DevApiStatus.tsx:989)
 
 **Pattern dimensions to DIVERGE:**
+
 - `replayProbe` button always renders; prune button renders ONLY when `deadUrlCount > 0` (D-10 — operator can only prune when something is flagged dead)
 - Button label is dynamic: `Prune {N} dead events` (not static text)
 - `fetchOpStatus()` is re-invoked after successful prune to refresh the count — `replayProbe` does NOT refresh `opStatus`
@@ -579,6 +639,7 @@ import { shouldRenderDashboard, dashboardAuthHeaders } from '@/lib/dashboardAuth
 **Analog:** `server/__tests__/scripts/snapshot-cron-watch.test.ts:1-110` (canonical schema-pinning pattern)
 
 **Pattern to clone** (snapshot-cron-watch.test.ts:1-80):
+
 ```typescript
 // @vitest-environment node            ← line 1, mandatory for server tests
 import { describe, it, expect } from 'vitest';
@@ -598,14 +659,16 @@ describe('Phase 32 urlLiveness schema contract', () => {
       expect(() => UrlLivenessSchema.parse({ ...validEntry(), extra: true } as unknown)).toThrow();
     });
     it('rejects unknown status value', () => {
-      expect(() => UrlLivenessSchema.parse({ ...validEntry(), status: 'gone' } as unknown)).toThrow();
+      expect(() =>
+        UrlLivenessSchema.parse({ ...validEntry(), status: 'gone' } as unknown),
+      ).toThrow();
     });
   });
 
   describe('ttlSecForStatus — D-20 TTL upper bounds', () => {
     it('live ≤ 7 days', () => expect(ttlSecForStatus('live')).toBeLessThanOrEqual(7 * 86400));
-    it('404 ≤ 24h',    () => expect(ttlSecForStatus('404')).toBeLessThanOrEqual(86400));
-    it('403 ≤ 24h',    () => expect(ttlSecForStatus('403')).toBeLessThanOrEqual(86400));
+    it('404 ≤ 24h', () => expect(ttlSecForStatus('404')).toBeLessThanOrEqual(86400));
+    it('403 ≤ 24h', () => expect(ttlSecForStatus('403')).toBeLessThanOrEqual(86400));
     it('dead-host ≤ 24h', () => expect(ttlSecForStatus('dead-host')).toBeLessThanOrEqual(86400));
     it('unknown ≤ 1h', () => expect(ttlSecForStatus('unknown')).toBeLessThanOrEqual(3600));
   });
@@ -613,6 +676,7 @@ describe('Phase 32 urlLiveness schema contract', () => {
 ```
 
 **Pattern dimensions to clone:**
+
 - `// @vitest-environment node` on line 1
 - `.strict()` schema on the module-under-test (not in the test; test verifies the strictness via extra-key rejection)
 - TTL upper-bound assertions (mirrors RESEARCH §Validation Architecture "TTL upper bound per status asserted")
@@ -625,6 +689,7 @@ describe('Phase 32 urlLiveness schema contract', () => {
 **Analog:** None (5-line shim, unique pattern)
 
 **Pattern (RESEARCH Recommendation b)**:
+
 ```typescript
 // @vitest-environment node
 /**
@@ -647,13 +712,14 @@ import '../../../server/__tests__/lib/urlLiveness.schema.test.js';
 **Analog:** `server/__tests__/lib/freeClaudeRouter.test.ts:1-57` (mock matrix setup + vi.hoisted + `// @vitest-environment node`)
 
 **Mock setup pattern** (freeClaudeRouter.test.ts:1-57 — confirmed):
+
 ```typescript
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Hoist fetch mock
 const fetchMock = vi.fn();
-vi.stubGlobal('fetch', fetchMock);  // OR: vi.mock('node-fetch', ...) depending on runtime
+vi.stubGlobal('fetch', fetchMock); // OR: vi.mock('node-fetch', ...) depending on runtime
 
 vi.mock('../../cache/redis.js', () => ({
   cacheGetSafe: vi.fn(async () => null),
@@ -667,6 +733,7 @@ vi.mock('../../lib/logger.js', () => ({
 ```
 
 **Test cases** (maps to RESEARCH §Validation Architecture test matrix):
+
 - `'live'`: HEAD 200 → `{ status: 'live', httpStatus: 200 }`
 - `'404'`: HEAD 404 → `{ status: '404' }`
 - `'403'`: HEAD 403 → `{ status: '403' }`
@@ -679,6 +746,7 @@ vi.mock('../../lib/logger.js', () => ({
 - `'SSRF guard'`: `probeUrl('http://localhost/secret')` → `{ status: 'unknown' }`
 
 **Pattern dimensions to clone from freeClaudeRouter.test.ts:**
+
 - `vi.useFakeTimers()` / `vi.useRealTimers()` in `beforeEach`/`afterEach` for timeout tests
 - `vi.mock` hoisted before dynamic imports
 - `const { callLLM } = await import('../../lib/...')` — dynamic import AFTER mocks registered
@@ -690,15 +758,21 @@ vi.mock('../../lib/logger.js', () => ({
 **Analog:** `server/__tests__/lib/freeClaudeRouter.test.ts` (vi.hoisted + parallel async test pattern) + `server/__tests__/lib/llmTokenBudget.test.ts` (Redis mock + `// @vitest-environment node`)
 
 **Key test cases:**
+
 - `createLimit(8)` bound: fire 16 probe tasks simultaneously; assert no more than 8 active concurrently (use a counter incremented inside the task, asserting `max === 8`)
 - Per-host 1s throttle: two events sharing the same hostname; assert second probe fires ≥ 900ms after first (vi.useFakeTimers)
 - Deadline-skip: `deadlineMs = Date.now()` (already elapsed); assert all tasks increment `skippedBudget`, none call fetch
 - Sweep priority: events with no liveness key get sorted before events with old `lastProbedAt` (unit test on the sort function, not the full sweep)
 
 **vi.useFakeTimers pattern** (freeClaudeRouter.test.ts:80):
+
 ```typescript
-beforeEach(() => { vi.useFakeTimers(); });
-afterEach(() => { vi.useRealTimers(); });
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 // For per-host throttle test: vi.advanceTimersByTime(1100) to simulate 1.1s elapsed
 ```
 
@@ -709,6 +783,7 @@ afterEach(() => { vi.useRealTimers(); });
 **Analog:** `server/__tests__/lib/llmTokenBudget.test.ts:1-60` (Redis mock + `// @vitest-environment node` + module-under-test tests without HTTP)
 
 **Key test cases:**
+
 - `attemptCount >= 3 gate`: event with `attemptCount: 2` and `status: '404'` NOT pruned by cron call
 - `attemptCount >= 3 gate`: event with `attemptCount: 3` and `status: '404'` IS pruned by cron call
 - `manual bypass gate`: event with `attemptCount: 1` and `status: '404'` IS pruned by manual trigger
@@ -716,6 +791,7 @@ afterEach(() => { vi.useRealTimers(); });
 - `live status NOT pruned`: event with `status: 'live'` never pruned regardless of attemptCount
 
 **Redis mock pattern** (llmTokenBudget.test.ts:3-33):
+
 ```typescript
 vi.mock('../../cache/redis.js', () => {
   const getMock = vi.fn();
@@ -732,12 +808,14 @@ vi.mock('../../cache/redis.js', () => {
 **Analog:** `server/__tests__/routes/events.replayQuota.test.ts:1-416` (exact structural clone)
 
 **This test is a near-verbatim clone.** Key differences:
+
 - Import `checkPruneQuota` instead of going through the HTTP route
 - Key prefix is `operator:prune-quota:` (not `operator:replay-quota:`)
 - Test 5 (Pitfall 6 — no events:llm:v3 write) is NOT applicable; omit it
 - All quota behaviors (INCR, 50-cap, 51st → allowed:false, Retry-After, UTC midnight reset) are identical
 
 **Mock setup** (events.replayQuota.test.ts:28-91 — use the same `vi.hoisted` pattern for `mockIncr`, `mockExpire`):
+
 ```typescript
 // @vitest-environment node
 const { mockIncr, mockExpire } = vi.hoisted(() => ({
@@ -756,12 +834,14 @@ vi.mock('../../cache/redis.js', () => ({
 **Analog:** `server/__tests__/routes/events.replayQuota.test.ts:1-416` (closest match — same supertest harness, same mock boilerplate, same 7-test matrix structure)
 
 **Confirmed mock boilerplate** (events.replayQuota.test.ts:96-250 — copy verbatim, update module paths):
+
 - `vi.mock('../../middleware/rateLimit.js', ...)` pass-through
 - `vi.mock('../../config.js', ...)` minimal config
 - `vi.mock('../../cache/redis.js', ...)` with `cacheStore` Map + mockIncr/mockSadd etc.
 - All adapter mocks (identical to replayQuota.test.ts since `createApp()` mounts all routes)
 
 **Test cases** (D-09, D-10, D-15):
+
 1. No Bearer in prod → 401 (matches replayQuota test 1 logic)
 2. `trigger: 'manual'`, under cap (mockIncr returns 1) → 200 + `{ prunedCount, prunedIds }`
 3. `trigger: 'manual'`, 50th INCR → 200 (cap inclusive)
@@ -779,6 +859,7 @@ vi.mock('../../cache/redis.js', () => ({
 **Analog:** `server/__tests__/routes/refresh-events-cron.test.ts:1-80+` (exact pattern)
 
 **Pattern to clone** (refresh-events-cron.test.ts:16-79):
+
 ```typescript
 // @vitest-environment node
 // Uses vi.hoisted + module-level mock setup (no supertest — lightweight mock pattern)
@@ -799,6 +880,7 @@ vi.mock('../../lib/urlLiveness.js', () => ({
 ```
 
 **Test cases:**
+
 1. After `runRefreshExtraction` resolves, `runProbeSweep` is called with `deadlineMs` in future
 2. After probe sweep, `pruneDeadUrlEvents({ trigger: 'cron' })` is called
 3. If budget exhausted (Date.now() > deadlineMs before prune), prune is NOT called
@@ -811,6 +893,7 @@ vi.mock('../../lib/urlLiveness.js', () => ({
 **Analog:** `src/__tests__/DevApiStatusV3.test.tsx:1-316` (jsdom, React render, fireEvent, vi.mock hooks)
 
 **Pattern to clone** (DevApiStatusV3.test.tsx:1-155):
+
 ```typescript
 // @vitest-environment jsdom     ← NOT needed (vite.config.ts:56 default is jsdom)
 // but DO NOT add // @vitest-environment node — would break React render
@@ -821,6 +904,7 @@ import { DevApiStatus } from '@/components/ui/DevApiStatus';
 ```
 
 **fetch mock for operator-status** (mirrors DevApiStatusV3.test.tsx implicit global fetch):
+
 ```typescript
 // Mock global fetch to return the operator-status payload with prune block:
 const mockFetch = vi.fn();
@@ -840,6 +924,7 @@ beforeEach(() => {
 ```
 
 **Test cases** (RESEARCH §Validation Architecture jsdom tests):
+
 1. `dead-url-count` renders "Dead URL events: 3" when `prune.deadUrlCount = 3`
 2. `prune-dead-urls-trigger` button is present when `deadUrlCount > 0`
 3. Button is NOT rendered when `deadUrlCount === 0`
@@ -848,6 +933,7 @@ beforeEach(() => {
 6. 200 response → `pruneQuotaAlert` clears; `fetchOpStatus` re-runs (mockFetch called twice)
 
 **openAndSelectApiHealthTab helper** (mirrors DevApiStatusV3.test.tsx:107-112):
+
 ```typescript
 function openAndSelectApiHealthTab() {
   useUIStore.setState({ isDevApiStatusOpen: true, activeDevApiStatusTab: 'apiHealth' });
@@ -861,6 +947,7 @@ function openAndSelectApiHealthTab() {
 **Analog:** `server/__tests__/routes/operator-status.test.ts` (the file to extend — read it before modifying)
 
 **Extension pattern:** Add a new `describe` block at the end of the file or add assertions to the existing shape test:
+
 ```typescript
 it('response includes prune block with deadUrlCount and last24hPrunes', async () => {
   // Seed: mock redis.get('events:url-liveness-count') to return 5
@@ -880,17 +967,23 @@ it('response includes prune block with deadUrlCount and last24hPrunes', async ()
 **Analog:** Existing file — extend `cachedRoutes` array (redis-death.test.ts:257)
 
 **Extension** (lines 257+ — add to `cachedRoutes` array):
+
 ```typescript
 const cachedRoutes: { name: string; path: string; method?: string; body?: unknown }[] = [
   // ... existing entries ...
-  { name: 'prune-dead-urls', path: '/api/events/prune-dead-urls', method: 'POST',
-    body: { trigger: 'manual' } },
+  {
+    name: 'prune-dead-urls',
+    path: '/api/events/prune-dead-urls',
+    method: 'POST',
+    body: { trigger: 'manual' },
+  },
 ];
 // Test assertion stays identical:
 // expect([200, 503]).toContain(res.status) — never 500
 ```
 
 **Key point from chaos test pattern** (redis-death.test.ts:185-203 — confirmed):
+
 - The chaos mock throws on `redis.get`, `redis.set`, `redis.del`, `cacheGet`, `cacheSet`
 - `cacheGetSafe` and `cacheSetSafe` are NOT mocked (they are the system under test)
 - Phase 32's prune handler must use ONLY `cacheGetSafe`/`cacheSetSafe` for the events:llm:v3 mutation, or wrap direct `redis.*` calls in try/catch returning 503 on error
@@ -906,6 +999,7 @@ const cachedRoutes: { name: string; path: string; method?: string; body?: unknow
 **Analog:** Existing entries in `CLAUDE.md` (lines following `## Serverless Cache`)
 
 **Pattern:** Each entry is a single bullet following the format:
+
 ```
 - **`key-name`** — description (TTL, writer, reader).
 ```
@@ -955,8 +1049,8 @@ const cachedRoutes: { name: string; path: string; method?: string; body?: unknow
 **Source:** `server/lib/operatorAudit.ts:31` + `server/lib/safeWaitUntil.ts:46`
 
 ```typescript
-const log = logger.child({ module: 'urlLiveness' });     // urlLiveness.ts
-const log = logger.child({ module: 'pruneQuota' });      // pruneQuota.ts
+const log = logger.child({ module: 'urlLiveness' }); // urlLiveness.ts
+const log = logger.child({ module: 'pruneQuota' }); // pruneQuota.ts
 const log = logger.child({ module: 'pruneDeadUrlEvents' }); // pruneDeadUrlEvents.ts
 // NEVER console.log / console.warn / console.error in any new module.
 ```
@@ -989,10 +1083,10 @@ All tests that render `<DevApiStatus>` must call `resetAllStores()` in `beforeEa
 
 ## No Analog Found
 
-| File | Role | Data Flow | Reason |
-|------|------|-----------|--------|
-| `server/lib/urlLiveness.ts` — SSRF guard | utility (security) | N/A | No existing outbound HTTP probe with private-IP block exists in the codebase. Pattern derived from RESEARCH Security §V11 + ASVS guidance. Implement as a module-scope regex check before every `probeUrl` call. |
-| `events:url-liveness-count` sidecar increment pattern | cache write pattern | CRUD | No existing integer sidecar key maintained by writes in the codebase. Existing INCR usage (`replayQuota.ts:67`) is quota-only; sidecar count pattern (INCR on state-transition, DECR on prune, floor at 0) is novel to Phase 32. Closest is `redis.incr` in `replayQuota.ts:67` — use the same lazy import + try/catch shape, but the state-transition-conditional logic is new. |
+| File                                                  | Role                | Data Flow | Reason                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------- | ------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/lib/urlLiveness.ts` — SSRF guard              | utility (security)  | N/A       | No existing outbound HTTP probe with private-IP block exists in the codebase. Pattern derived from RESEARCH Security §V11 + ASVS guidance. Implement as a module-scope regex check before every `probeUrl` call.                                                                                                                                                                 |
+| `events:url-liveness-count` sidecar increment pattern | cache write pattern | CRUD      | No existing integer sidecar key maintained by writes in the codebase. Existing INCR usage (`replayQuota.ts:67`) is quota-only; sidecar count pattern (INCR on state-transition, DECR on prune, floor at 0) is novel to Phase 32. Closest is `redis.incr` in `replayQuota.ts:67` — use the same lazy import + try/catch shape, but the state-transition-conditional logic is new. |
 
 ---
 

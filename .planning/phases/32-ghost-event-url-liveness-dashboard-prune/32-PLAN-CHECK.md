@@ -27,15 +27,18 @@ created: 2026-05-19
 ## MEDIUM-Severity Concerns (3) — address inline during execution
 
 ### MEDIUM-01: Upstash `redis.scan` API shape — Plan 03 Task 1
+
 **Risk:** If the executor's SCAN call doesn't match `@upstash/redis ^1.37.0`'s `Promise<[number, string[]]>` return shape, the prune helper silently no-ops in production while mocked tests pass green.
 **Fix:** Add a one-line interface note in Plan 03 Task 1's `<interfaces>` block citing the exact SCAN signature. Alternative: skip SCAN entirely and iterate the in-memory `events:llm:v3` entity list (already loaded from `cacheGetSafe`). Researcher's RESEARCH section flagged this as acceptable O(N-events).
 **Status 2026-05-19:** PARTIALLY RESOLVED by LOW-03 drill-down work — Plan 04 Task 1's `buildDeadUrlSample` helper now pins SCAN signature `Promise<[string | number, string[]]>` with explicit `as` cast and a deviation-note hint in the action body. Plan 03 Task 1 still needs the same pin during execution; flagged as a Plan 03 execute-time deviation note rather than a re-spawn-the-planner blocker.
 
 ### MEDIUM-02: `__test__` conditional export — Plan 02 Task 2
+
 **Risk:** `process.env.NODE_ENV === 'test'`-gated exports for module-private throttle helpers depend on Vitest setting `NODE_ENV=test` reliably during the run.
 **Fix:** Add `expect(process.env.NODE_ENV).toBe('test')` at the top of `urlLiveness.sweep.test.ts`, or pivot to `vi.importActual` + `vi.mock` injection for module-private visibility.
 
 ### MEDIUM-03: `fetchOpStatus` reference — Plan 05 Task 1
+
 **Risk:** Plan 05 Task 1 action body calls `void fetchOpStatus()` after a successful prune but does not declare its scope/origin in `<interfaces>`.
 **Fix:** Add `fetchOpStatus` to Plan 05 Task 1's `<interfaces>` block with its declaration line from `DevApiStatus.tsx` (or correct call shape — e.g. `setOpStatusRefreshTick(t => t + 1)`).
 **Status 2026-05-19:** RESOLVED. Plan 05 Task 1 `<behavior>` block now instructs the executor to locate `fetchOpStatus` during Read-First and hoist it to a named `useCallback` if it's currently a closure (no-op refactor — same body, named). Done message updated.
@@ -53,12 +56,15 @@ created: 2026-05-19
 ---
 
 ## Decision Coverage Matrix (22/22 ✓)
+
 See plan-checker verdict above — all D-01 through D-22 traced to specific tasks across the 6 plans. D-05 corrected (`data.source` for both raw GDELT and v3) is honored everywhere.
 
 ## Requirement Coverage Matrix (5/5 ✓)
+
 GHOST-01 through GHOST-05 each have one or more covering tasks.
 
 ## Invariant Coverage (12/12 ✓)
+
 All 12 mandatory invariants from RESEARCH (sidecar count key, deadline guard, direct helper invocation, monotonic-with-reset attemptCount, dual schema test placement, cron bearerFingerprint literal, in-memory throttle, chaos-test extension, CLAUDE.md registry update, branch-per-phase, atomic per-decision commits, zero new deps) are addressed.
 
 ---

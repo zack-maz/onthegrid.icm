@@ -86,9 +86,7 @@ describe('Phase 32 Plan 02 Task 1 — probeUrl', () => {
     });
 
     it('HEAD 405 → GET with Range fallback, then 200 → status:live (D-16)', async () => {
-      fetchMock
-        .mockResolvedValueOnce(makeResponse(405))
-        .mockResolvedValueOnce(makeResponse(200));
+      fetchMock.mockResolvedValueOnce(makeResponse(405)).mockResolvedValueOnce(makeResponse(200));
       const result = await probeUrl('https://cdn.example.com/article');
       expect(result.status).toBe('live');
       expect(result.httpStatus).toBe(200);

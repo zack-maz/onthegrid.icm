@@ -11,61 +11,61 @@ requires:
     provides: "checkPruneQuota(fingerprint), OperatorAuditEntry.operation widened to admit 'prune-dead-urls', bearerFingerprint() helper"
   - phase: 32
     plan: 02
-    provides: "buildProbeCandidates(), runProbeSweep({eventIdsWithUrls, deadlineMs}), SWEEP_SAFETY_MARGIN_MS, isTerminalDead(), URL_LIVENESS_KEY_PREFIX, URL_LIVENESS_COUNT_KEY"
+    provides: 'buildProbeCandidates(), runProbeSweep({eventIdsWithUrls, deadlineMs}), SWEEP_SAFETY_MARGIN_MS, isTerminalDead(), URL_LIVENESS_KEY_PREFIX, URL_LIVENESS_COUNT_KEY'
   - phase: 28.2
-    provides: "/llm-replay route template + dashboardAuth + operator:audit-log SADD pattern (Plan 32-03 mirrors verbatim)"
+    provides: '/llm-replay route template + dashboardAuth + operator:audit-log SADD pattern (Plan 32-03 mirrors verbatim)'
   - phase: 29
-    provides: "Vercel Pro 800s maxDuration (D-08) — Pitfall 1 deadline budget is computed against this ceiling"
+    provides: 'Vercel Pro 800s maxDuration (D-08) — Pitfall 1 deadline budget is computed against this ceiling'
 provides:
-  - "server/lib/urlLiveness.ts — pruneDeadUrlEvents({trigger, fingerprint?}) helper splicing dead-URL events out of events:llm:v3 + DEL liveness keys + DECRBY sidecar + audit-log entry"
-  - "server/routes/events.ts — POST /api/events/prune-dead-urls behind dashboardAuth + quota (50/24h manual; cron bypass) + 503-on-throw chaos-test contract"
+  - 'server/lib/urlLiveness.ts — pruneDeadUrlEvents({trigger, fingerprint?}) helper splicing dead-URL events out of events:llm:v3 + DEL liveness keys + DECRBY sidecar + audit-log entry'
+  - 'server/routes/events.ts — POST /api/events/prune-dead-urls behind dashboardAuth + quota (50/24h manual; cron bypass) + 503-on-throw chaos-test contract'
   - "server/lib/llmExtractionPipeline.ts — runRefreshExtraction's safeWaitUntil IIFE extended with finally-block post-step: buildProbeCandidates → runProbeSweep → pruneDeadUrlEvents({trigger:'cron'}); cronStart captured at function entry; deadlineMs = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS; auto-prune gated on `Date.now() < deadlineMs`"
-  - "server/lib/llmExtractionPipeline.ts — exported LLM_EVENTS_KEY_ACTIVE + LLM_REDIS_TTL_SEC for downstream consumers (was: module-private)"
-  - "server/__tests__/lib/urlLiveness.cronPrune.test.ts — 10 helper-level tests pinning D-12 attemptCount gate + D-07 status filter + D-13 delete scope + D-14 audit-log shape + RESEARCH A8 fingerprint literal"
-  - "server/__tests__/routes/events.prune.test.ts — 8 route-level tests pinning D-09 Bearer gate + D-15 manual quota + cron bypass + 503-on-throw + audit delegation"
-  - "server/__tests__/routes/refresh-events-cron.prune.test.ts — 4 cron integration tests pinning post-step dispatch order + deadline plumbing"
-  - "server/__tests__/resilience/redis-death.test.ts — extended chaos coverage for POST /api/events/prune-dead-urls (200|503, NEVER 500)"
+  - 'server/lib/llmExtractionPipeline.ts — exported LLM_EVENTS_KEY_ACTIVE + LLM_REDIS_TTL_SEC for downstream consumers (was: module-private)'
+  - 'server/__tests__/lib/urlLiveness.cronPrune.test.ts — 10 helper-level tests pinning D-12 attemptCount gate + D-07 status filter + D-13 delete scope + D-14 audit-log shape + RESEARCH A8 fingerprint literal'
+  - 'server/__tests__/routes/events.prune.test.ts — 8 route-level tests pinning D-09 Bearer gate + D-15 manual quota + cron bypass + 503-on-throw + audit delegation'
+  - 'server/__tests__/routes/refresh-events-cron.prune.test.ts — 4 cron integration tests pinning post-step dispatch order + deadline plumbing'
+  - 'server/__tests__/resilience/redis-death.test.ts — extended chaos coverage for POST /api/events/prune-dead-urls (200|503, NEVER 500)'
 affects: [32-04-operator-status-aggregator, 32-05-dashboard-button, 32-06-close]
 
 # Tech tracking
 tech-stack:
-  added: []  # Zero new npm dependencies — uses existing @upstash/redis ^1.37.0 SCAN + node:crypto for fingerprints
+  added: [] # Zero new npm dependencies — uses existing @upstash/redis ^1.37.0 SCAN + node:crypto for fingerprints
   patterns:
-    - "Bearer-gated destructive action: POST route mounted with dashboardAuth + per-fingerprint daily quota INCR + 503-on-redis-throw (chaos-test contract)"
+    - 'Bearer-gated destructive action: POST route mounted with dashboardAuth + per-fingerprint daily quota INCR + 503-on-redis-throw (chaos-test contract)'
     - "DIRECT helper invocation from cron (NOT self-HTTP) per RESEARCH A4: cron post-step calls pruneDeadUrlEvents({trigger:'cron'}) inside the same Vercel function instance as the extraction work — no env-dependent deployment URL, no second auth hop"
-    - "finally-block post-step inside safeWaitUntil IIFE: probe/prune cleanup runs on success AND error paths of the existing extraction logic — dead-URL cleanup is orthogonal to whether LLM extraction itself dispatched fresh enrichments this tick"
+    - 'finally-block post-step inside safeWaitUntil IIFE: probe/prune cleanup runs on success AND error paths of the existing extraction logic — dead-URL cleanup is orthogonal to whether LLM extraction itself dispatched fresh enrichments this tick'
     - "Wall-clock deadline plumbing across handler↔helper boundary: cronStart captured at runRefreshExtraction() entry, deadlineMs = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS threaded into runProbeSweep AND used as the auto-prune gate so we stay inside Vercel Pro's 800s maxDuration with 60s safety margin reserved for prune + audit-log writes"
     - "MEDIUM-01 plan-checker pin: redis.scan cast to `Promise<[string | number, string[]]>` matches @upstash/redis ^1.37.0 — mirrors Plan 04's buildDeadUrlSample pattern"
-    - "Bulk DECRBY for sidecar count (not N×DECR) — one round-trip beats N — wrapped in try/catch + redis.set underflow floor (Pitfall 6 degrade-open mirroring persistLiveness shape)"
-    - "Audit-log responsibility lives in the helper, NOT the route: avoids double-write between manual-via-route and cron-via-direct-call; Task 2 test 8 pins this invariant"
-    - "Test-side flushSafeWaitUntil() helper: mocks safeWaitUntil to capture the IIFE promise into a shared array so integration tests can await the fire-and-forget post-step before assertions"
+    - 'Bulk DECRBY for sidecar count (not N×DECR) — one round-trip beats N — wrapped in try/catch + redis.set underflow floor (Pitfall 6 degrade-open mirroring persistLiveness shape)'
+    - 'Audit-log responsibility lives in the helper, NOT the route: avoids double-write between manual-via-route and cron-via-direct-call; Task 2 test 8 pins this invariant'
+    - 'Test-side flushSafeWaitUntil() helper: mocks safeWaitUntil to capture the IIFE promise into a shared array so integration tests can await the fire-and-forget post-step before assertions'
     - "Widen route try/catch to wrap the quota check too — chaos-test caught the original implementation calling checkPruneQuota's raw redis.incr OUTSIDE the try block, surfacing as 500 instead of 503 (Rule 2 inline fix)"
 
 key-files:
   modified:
-    - "server/lib/urlLiveness.ts (540 → 870 lines; +330 lines for pruneDeadUrlEvents helper + JSDoc + Plan 32-03 imports)"
-    - "server/lib/llmExtractionPipeline.ts (+82 lines; cronStart capture + safeWaitUntil finally-block post-step + exports for LLM_EVENTS_KEY_ACTIVE / LLM_REDIS_TTL_SEC)"
-    - "server/routes/events.ts (+72 lines; POST /prune-dead-urls + imports for pruneDeadUrlEvents + checkPruneQuota)"
-    - "server/__tests__/resilience/redis-death.test.ts (+45 lines; standalone POST /prune-dead-urls 200|503 chaos test)"
+    - 'server/lib/urlLiveness.ts (540 → 870 lines; +330 lines for pruneDeadUrlEvents helper + JSDoc + Plan 32-03 imports)'
+    - 'server/lib/llmExtractionPipeline.ts (+82 lines; cronStart capture + safeWaitUntil finally-block post-step + exports for LLM_EVENTS_KEY_ACTIVE / LLM_REDIS_TTL_SEC)'
+    - 'server/routes/events.ts (+72 lines; POST /prune-dead-urls + imports for pruneDeadUrlEvents + checkPruneQuota)'
+    - 'server/__tests__/resilience/redis-death.test.ts (+45 lines; standalone POST /prune-dead-urls 200|503 chaos test)'
   created:
-    - "server/__tests__/lib/urlLiveness.cronPrune.test.ts (320 lines, 10 tests)"
-    - "server/__tests__/routes/events.prune.test.ts (430 lines, 8 tests)"
-    - "server/__tests__/routes/refresh-events-cron.prune.test.ts (290 lines, 4 tests)"
+    - 'server/__tests__/lib/urlLiveness.cronPrune.test.ts (320 lines, 10 tests)'
+    - 'server/__tests__/routes/events.prune.test.ts (430 lines, 8 tests)'
+    - 'server/__tests__/routes/refresh-events-cron.prune.test.ts (290 lines, 4 tests)'
 
 key-decisions:
   - "Cron auto-prune uses DIRECT helper invocation, not self-HTTP (RESEARCH A4 / Discretion §3). Trade-off: bypasses the HTTP route's dashboardAuth gate but is the only caller inside the same Vercel function instance — the bearerFingerprint:'cron:refresh-events' literal in the audit-log unambiguously identifies the source. Self-HTTP would have required either env-dependent deployment URL or a localhost loopback hack; both fail the cron-only-writer discipline."
-  - "post-step lives in `finally` block (not in the success branch only): probe/prune cleanup runs even when the LLM extraction body throws. Dead-URL maintenance is orthogonal to whether LLM extraction dispatched fresh enrichments this tick — if extraction failed, we still want to probe + prune dead URLs from prior runs."
+  - 'post-step lives in `finally` block (not in the success branch only): probe/prune cleanup runs even when the LLM extraction body throws. Dead-URL maintenance is orthogonal to whether LLM extraction dispatched fresh enrichments this tick — if extraction failed, we still want to probe + prune dead URLs from prior runs.'
   - "Route try/catch widened to include the quota check (Rule 2 inline fix caught by chaos test). The first implementation had checkPruneQuota BEFORE the try block; under Redis death its raw redis.incr threw and propagated to Express's default 500 handler. Widening the try/catch to wrap both the quota check AND the helper call surfaces ANY redis throw as 503 prune_failed."
   - "Exported LLM_EVENTS_KEY_ACTIVE + LLM_REDIS_TTL_SEC from llmExtractionPipeline.ts (was module-private). Hand-rolling the literals 'events:llm:v3' and 9000 in pruneDeadUrlEvents would have been the exact drift class CLAUDE.md §'Serverless Cache' warns against. One truth source — the cron writer and prune writer always agree on key + TTL."
   - "DECRBY (not N×DECR) for sidecar count maintenance — one round-trip beats N. Wrapped in try/catch + redis.set(KEY, 0) underflow floor mirroring persistLiveness's Pitfall 6 degrade-open semantics. If a concurrent prune race drives the counter past 0, the next tick's persistLiveness/pruneDeadUrlEvents re-stabilizes."
   - "Audit-log responsibility is the helper's, not the route's. Task 2 test 8 pins this so a future refactor can't accidentally introduce double-write between operator-via-HTTP and cron-via-direct-call."
-  - "MEDIUM-01 plan-checker pin applied inline at the SCAN call: cast `(await redis.scan(cursor, {...})) as [string | number, string[]]` matches @upstash/redis ^1.37.0 — silent shape drift now fails TypeScript instead of producing infinite SCAN loops in production."
+  - 'MEDIUM-01 plan-checker pin applied inline at the SCAN call: cast `(await redis.scan(cursor, {...})) as [string | number, string[]]` matches @upstash/redis ^1.37.0 — silent shape drift now fails TypeScript instead of producing infinite SCAN loops in production.'
 
 patterns-established:
   - "Bearer-gated destructive endpoint template: clone /llm-replay shape + swap to checkPruneQuota + tighten chaos-test contract (200|503, never 500). Future destructive operator endpoints inherit this exact shape — quota check INSIDE the try/catch, helper call INSIDE the try/catch, audit-log inside the helper, route returns helper's bare return value or 429/503 envelope."
   - "Cron post-step pattern: capture cronStart at runRefreshExtraction() entry, plumb deadline through to long-running probes, gate any subsequent destructive action on `Date.now() < deadlineMs`. Future cron-piggyback cleanup work (e.g. dead-news-cluster scan, stale-geocode prune) consumes this same plumbing — finally-block placement + try/catch wrap + bearerFingerprint:'cron:...' literal."
   - "DIRECT-helper-from-cron over self-HTTP-from-cron: any in-process cleanup that calls a Bearer-gated endpoint should be refactored as a shared helper that both the route AND the cron import. The route owns auth/quota/audit-log envelope; the cron consumes the bare helper with `bearerFingerprint:'cron:<job-name>'` for audit-log attribution."
-  - "Test-side safeWaitUntil draining: integration tests against fire-and-forget IIFE bodies need a shared `pendingPromises` array + `flushSafeWaitUntil()` helper so assertions can run after the post-step completes. Production semantics unchanged (D-12 hard block preserves void return)."
+  - 'Test-side safeWaitUntil draining: integration tests against fire-and-forget IIFE bodies need a shared `pendingPromises` array + `flushSafeWaitUntil()` helper so assertions can run after the post-step completes. Production semantics unchanged (D-12 hard block preserves void return).'
 
 requirements-completed: [GHOST-01, GHOST-04]
 
@@ -159,6 +159,7 @@ No other deviations — the plan executed cleanly. The three small refinements d
 ## Self-Check: PASSED
 
 **Files exist:**
+
 - `server/lib/urlLiveness.ts` — FOUND (540 → 870 lines)
 - `server/routes/events.ts` — FOUND (modified)
 - `server/lib/llmExtractionPipeline.ts` — FOUND (modified)
@@ -169,12 +170,14 @@ No other deviations — the plan executed cleanly. The three small refinements d
 - `.planning/phases/32-ghost-event-url-liveness-dashboard-prune/32-03-SUMMARY.md` — FOUND (this file)
 
 **Commits exist on `feature/32-ghost-event-url-liveness-dashboard-prune`:**
+
 - `fa34bf1` feat(32): pruneDeadUrlEvents helper with attemptCount gate + audit-log (D-12, D-13, D-14) — FOUND
 - `0c1b434` feat(32): POST /api/events/prune-dead-urls behind dashboardAuth (D-09, D-14, D-15) — FOUND
 - `d845d90` feat(32): cron post-step calls runProbeSweep + pruneDeadUrlEvents inside safeWaitUntil (D-02, D-11, Pitfall 1) — FOUND
 - `2524c34` test(32): redis-death chaos covers POST /api/events/prune-dead-urls (200|503, never 500) — FOUND
 
 **Automated verify commands (all PASS):**
+
 - `git rev-parse --abbrev-ref HEAD` → `feature/32-ghost-event-url-liveness-dashboard-prune`
 - `npx vitest run server/__tests__/lib/urlLiveness.cronPrune.test.ts server/__tests__/routes/events.prune.test.ts server/__tests__/routes/refresh-events-cron.prune.test.ts` → 3 files / 22 tests passed (10 + 8 + 4)
 - `npx vitest run server/__tests__/resilience/redis-death.test.ts` → 11 tests passed (10 existing + 1 new prune coverage)
@@ -221,11 +224,13 @@ The 11th test is the new `POST /api/events/prune-dead-urls returns 200 or 503 (N
 ## Next Plan Readiness
 
 **Plan 32-04 (operator-status aggregator)** is unblocked:
+
 - `operator:audit-log` entries with `operation:'prune-dead-urls'` are now being written by both manual (route) and cron (helper) paths.
 - `args.trigger`, `args.prunedCount`, `args.prunedIds` are stashed in the audit entry per RESEARCH Common Op 2 path (b) — Plan 32-04's aggregator just reads SMEMBERS, parses JSON, and groups by operation type.
 - The sidecar `events:url-liveness-count` integer is maintained on both probe (INCR via Plan 02 persistLiveness) AND prune (DECRBY via Plan 03 pruneDeadUrlEvents) — Plan 32-04's dashboard count surface can read this single key.
 
 **Plan 32-05 (dashboard button)** is unblocked:
+
 - `POST /api/events/prune-dead-urls` is live, Bearer-gated, body `{trigger:'manual'}`.
 - Returns `{prunedCount, prunedIds}` on success; 429 with `Retry-After` at quota; 503 with `prune_failed` on Redis death.
 - Plan 32-05's button can `fetch('/api/events/prune-dead-urls', {method:'POST', body:JSON.stringify({trigger:'manual'})})` and render the JSON result directly.
@@ -235,6 +240,7 @@ The 11th test is the new `POST /api/events/prune-dead-urls returns 200 or 503 (N
 **Blockers / concerns:** None for Plan 32-03 completion. Plan-checker LOW-01 (`pruneDeadUrlEvents reads events:llm:v3 twice`) is observably ONE read per call in the final implementation — the cost concern was a planning-time over-flag. No action needed.
 
 ---
-*Phase: 32-ghost-event-url-liveness-dashboard-prune*
-*Plan: 03*
-*Completed: 2026-05-21*
+
+_Phase: 32-ghost-event-url-liveness-dashboard-prune_
+_Plan: 03_
+_Completed: 2026-05-21_

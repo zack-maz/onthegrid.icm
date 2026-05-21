@@ -152,7 +152,9 @@ interface OperatorStatusPayload {
   } | null;
 }
 
-function makeOpStatus(overrides: Partial<OperatorStatusPayload['prune']> = {}): OperatorStatusPayload {
+function makeOpStatus(
+  overrides: Partial<OperatorStatusPayload['prune']> = {},
+): OperatorStatusPayload {
   return {
     audit24h: 1,
     byBearer: [],
@@ -174,7 +176,8 @@ let pruneResponse: { status: number; body: unknown } = {
 };
 
 const mockFetch = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : String(input);
+  const url =
+    typeof input === 'string' ? input : input instanceof URL ? input.toString() : String(input);
   if (url === '/api/operator-status') {
     return {
       ok: true,
@@ -256,7 +259,9 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     await waitFor(() => {
       expect(screen.getByTestId('prune-dead-urls-trigger')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('prune-dead-urls-trigger').textContent).toMatch(/Prune 3 dead events/);
+    expect(screen.getByTestId('prune-dead-urls-trigger').textContent).toMatch(
+      /Prune 3 dead events/,
+    );
   });
 
   it('does NOT render the button or drill-down list when deadUrlCount === 0', async () => {

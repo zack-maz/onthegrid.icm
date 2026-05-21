@@ -431,9 +431,7 @@ describe('POST /api/events/prune-dead-urls — Plan 32-03 Task 2', () => {
     // real helper, but since the helper is a spy, mockSadd MUST NOT be
     // called from the route's own code path. (i.e. the route delegates
     // audit-log responsibility to the helper; no double-write.)
-    const auditCalls = mockSadd.mock.calls.filter(
-      (c) => c[0] === 'operator:audit-log',
-    );
+    const auditCalls = mockSadd.mock.calls.filter((c) => c[0] === 'operator:audit-log');
     expect(auditCalls.length).toBe(0);
   });
 });

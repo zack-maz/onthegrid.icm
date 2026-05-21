@@ -56,16 +56,10 @@ const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
 const urlLivenessModule = await import('../../lib/urlLiveness.js');
-const {
-  __test__,
-  URL_LIVENESS_KEY_PREFIX,
-  URL_LIVENESS_COUNT_KEY,
-} = urlLivenessModule;
+const { __test__, URL_LIVENESS_KEY_PREFIX, URL_LIVENESS_COUNT_KEY } = urlLivenessModule;
 
 if (!__test__) {
-  throw new Error(
-    'urlLiveness __test__ export is undefined — NODE_ENV !== "test" at module load',
-  );
+  throw new Error('urlLiveness __test__ export is undefined — NODE_ENV !== "test" at module load');
 }
 
 beforeEach(() => {
@@ -414,7 +408,10 @@ describe('Plan 02 Task 4 — runProbeSweep (D-03, D-18, Pitfall 1)', () => {
 // ===========================================================================
 
 describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
-  function makeEntity(id: string, source: string | undefined | null = `https://${id}.example.com/`) {
+  function makeEntity(
+    id: string,
+    source: string | undefined | null = `https://${id}.example.com/`,
+  ) {
     return { id, data: { source } };
   }
 
@@ -427,11 +424,7 @@ describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
     // entities) and once per [eventId, url] pair for the liveness key.
     cacheGetSafeMock.mockImplementation(async (key: string) => {
       if (key === 'events:llm:v3') {
-        return cacheHit([
-          makeEntity('a'),
-          makeEntity('b'),
-          makeEntity('c'),
-        ]);
+        return cacheHit([makeEntity('a'), makeEntity('b'), makeEntity('c')]);
       }
       if (key === `${URL_LIVENESS_KEY_PREFIX}a`) {
         return cacheHit({
@@ -464,11 +457,7 @@ describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
   it('Tier B sorted oldest lastProbedAt first', async () => {
     cacheGetSafeMock.mockImplementation(async (key: string) => {
       if (key === 'events:llm:v3') {
-        return cacheHit([
-          makeEntity('A'),
-          makeEntity('B'),
-          makeEntity('C'),
-        ]);
+        return cacheHit([makeEntity('A'), makeEntity('B'), makeEntity('C')]);
       }
       const stamps: Record<string, string> = {
         [`${URL_LIVENESS_KEY_PREFIX}A`]: '2026-01-01T00:00:00.000Z',

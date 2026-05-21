@@ -2,43 +2,60 @@
 phase: 32-ghost-event-url-liveness-dashboard-prune
 plan: 02
 subsystem: infra
-tags: [redis, fetch, http-probe, ssrf-guard, concurrency, rate-limit, schema-contract, typescript, vitest]
+tags:
+  [
+    redis,
+    fetch,
+    http-probe,
+    ssrf-guard,
+    concurrency,
+    rate-limit,
+    schema-contract,
+    typescript,
+    vitest,
+  ]
 
 # Dependency graph
 requires:
   - phase: 32
     plan: 01
-    provides: "UrlLivenessSchema (Zod .strict()), UrlLivenessStatus enum, ttlSecForStatus(), URL_LIVENESS_KEY_PREFIX, URL_LIVENESS_COUNT_KEY, pre-wired `log` binding, attemptCount JSDoc semantics"
+    provides: 'UrlLivenessSchema (Zod .strict()), UrlLivenessStatus enum, ttlSecForStatus(), URL_LIVENESS_KEY_PREFIX, URL_LIVENESS_COUNT_KEY, pre-wired `log` binding, attemptCount JSDoc semantics'
 provides:
-  - "server/lib/urlLiveness.ts — probeUrl (D-16/D-17/D-21), runProbeSweep (D-03), buildProbeCandidates (D-04), persistLiveness (D-12/Pitfall-3, NODE_ENV-gated), waitForHostSlot + pruneStaleHostSlots (D-18/Pitfall-2, NODE_ENV-gated), isTerminalDead helper, SWEEP_SAFETY_MARGIN_MS constant, ProbeResult interface, isPrivateHost SSRF guard, PROBE_UA + MAX_REDIRECTS + PROBE_CONCURRENCY + PROBE_TIMEOUT_MS + PER_HOST_INTERVAL_MS + JITTER_MS knobs (D-18)"
-  - "server/__tests__/lib/urlLiveness.probe.test.ts — 13 mocked-fetch tests (full D-07 taxonomy + SSRF + UA + Range fallback + redirect chain)"
-  - "server/__tests__/lib/urlLiveness.sweep.test.ts — 20 tests (Tasks 2-5: throttle / persistLiveness / runProbeSweep / buildProbeCandidates)"
-affects: [32-03-prune-endpoint-and-cron, 32-04-operator-status-aggregator, 32-05-dashboard-button, 32-06-close]
+  - 'server/lib/urlLiveness.ts — probeUrl (D-16/D-17/D-21), runProbeSweep (D-03), buildProbeCandidates (D-04), persistLiveness (D-12/Pitfall-3, NODE_ENV-gated), waitForHostSlot + pruneStaleHostSlots (D-18/Pitfall-2, NODE_ENV-gated), isTerminalDead helper, SWEEP_SAFETY_MARGIN_MS constant, ProbeResult interface, isPrivateHost SSRF guard, PROBE_UA + MAX_REDIRECTS + PROBE_CONCURRENCY + PROBE_TIMEOUT_MS + PER_HOST_INTERVAL_MS + JITTER_MS knobs (D-18)'
+  - 'server/__tests__/lib/urlLiveness.probe.test.ts — 13 mocked-fetch tests (full D-07 taxonomy + SSRF + UA + Range fallback + redirect chain)'
+  - 'server/__tests__/lib/urlLiveness.sweep.test.ts — 20 tests (Tasks 2-5: throttle / persistLiveness / runProbeSweep / buildProbeCandidates)'
+affects:
+  [
+    32-03-prune-endpoint-and-cron,
+    32-04-operator-status-aggregator,
+    32-05-dashboard-button,
+    32-06-close,
+  ]
 
 # Tech tracking
 tech-stack:
-  added: []  # Zero new npm dependencies — uses standard `fetch` + `AbortController` from Node 20 / Vercel runtime
+  added: [] # Zero new npm dependencies — uses standard `fetch` + `AbortController` from Node 20 / Vercel runtime
   patterns:
     - "HEAD-then-GET probe with 405 fallback + manual redirect counting (Phase 32 divergence from nominatim.ts's fetch-with-timeout pattern; redirect:'manual' + Range:'bytes=0-1023')"
-    - "SSRF defense-in-depth: PRIVATE_HOST_REGEX rejects loopback / RFC1918 / link-local / cloud-metadata / IPv6 ULA hostnames AND re-checks every redirect target"
+    - 'SSRF defense-in-depth: PRIVATE_HOST_REGEX rejects loopback / RFC1918 / link-local / cloud-metadata / IPv6 ULA hostnames AND re-checks every redirect target'
     - "Per-host throttle Map with synchronous slot reservation (atomicity fix — `hostNext.set(...)` BEFORE the setTimeout-Promise await so N concurrent same-host dispatchers don't all read the same `prior` and coalesce to 1 throttle gap)"
     - "NODE_ENV='test'-gated `__test__` export for module-private throttle + writer helpers (MEDIUM-02 plan-checker fix; test file asserts process.env.NODE_ENV at file-load)"
-    - "createLimit(N) FIFO concurrency primitive from server/lib/concurrencyLimit.ts (same primitive that gates LLM v3 batches)"
-    - "Deadline guard at TASK ENTRY + AFTER throttle wait (two checkpoints — a saturated same-host batch can otherwise overrun Vercel maxDuration after the per-task gate nominally cleared)"
-    - "Sidecar count INCR/DECR fires on prior→next dead-set transition only (Pitfall 3 throughput rule); raw redis.incr/decr wrapped in try/catch (Pitfall 6 degrade-open); underflow floors at 0 via redis.set"
-    - "Probe entry writes go through cacheSetSafe EXCLUSIVELY (Pitfall 6 — chaos-test contract); the only raw redis.set call is the underflow floor on the count key"
-    - "ISO-8601 byte-lex sort == chronological sort (well-known JS idiom — no Date.parse or library needed) for D-04 Tier B oldest-lastProbedAt ordering"
+    - 'createLimit(N) FIFO concurrency primitive from server/lib/concurrencyLimit.ts (same primitive that gates LLM v3 batches)'
+    - 'Deadline guard at TASK ENTRY + AFTER throttle wait (two checkpoints — a saturated same-host batch can otherwise overrun Vercel maxDuration after the per-task gate nominally cleared)'
+    - 'Sidecar count INCR/DECR fires on prior→next dead-set transition only (Pitfall 3 throughput rule); raw redis.incr/decr wrapped in try/catch (Pitfall 6 degrade-open); underflow floors at 0 via redis.set'
+    - 'Probe entry writes go through cacheSetSafe EXCLUSIVELY (Pitfall 6 — chaos-test contract); the only raw redis.set call is the underflow floor on the count key'
+    - 'ISO-8601 byte-lex sort == chronological sort (well-known JS idiom — no Date.parse or library needed) for D-04 Tier B oldest-lastProbedAt ordering'
 
 key-files:
   modified:
-    - "server/lib/urlLiveness.ts (153 → 540 lines; +387 lines of probe + sweep + writer + sort + helpers)"
+    - 'server/lib/urlLiveness.ts (153 → 540 lines; +387 lines of probe + sweep + writer + sort + helpers)'
   created:
-    - "server/__tests__/lib/urlLiveness.probe.test.ts (193 lines, 13 tests — full D-07 status taxonomy + SSRF guard + User-Agent + Range fallback + redirect chain)"
-    - "server/__tests__/lib/urlLiveness.sweep.test.ts (485 lines, 20 tests — Tasks 2-5 mocked-fetch + Redis matrix)"
+    - 'server/__tests__/lib/urlLiveness.probe.test.ts (193 lines, 13 tests — full D-07 status taxonomy + SSRF guard + User-Agent + Range fallback + redirect chain)'
+    - 'server/__tests__/lib/urlLiveness.sweep.test.ts (485 lines, 20 tests — Tasks 2-5 mocked-fetch + Redis matrix)'
 
 key-decisions:
-  - "waitForHostSlot reserves the next slot synchronously BEFORE awaiting (atomicity fix caught during Task 4 testing) — without it, N concurrent same-host dispatchers all read the same `prior` value and race to update, coalescing to a single throttle gap instead of N-1. Math.max(now, target) floors against the negative-jitter case so the reservation never lands in the past."
-  - "Deadline guard re-runs AFTER waitForHostSlot returns (two-checkpoint design) — a saturated same-host batch can consume seconds of throttle wait time and overrun Vercel maxDuration after the per-task entry gate nominally cleared. Adding a second `if (Date.now() > deadlineMs) skippedBudget++; return;` after the throttle wait closes that gap."
+  - 'waitForHostSlot reserves the next slot synchronously BEFORE awaiting (atomicity fix caught during Task 4 testing) — without it, N concurrent same-host dispatchers all read the same `prior` value and race to update, coalescing to a single throttle gap instead of N-1. Math.max(now, target) floors against the negative-jitter case so the reservation never lands in the past.'
+  - 'Deadline guard re-runs AFTER waitForHostSlot returns (two-checkpoint design) — a saturated same-host batch can consume seconds of throttle wait time and overrun Vercel maxDuration after the per-task entry gate nominally cleared. Adding a second `if (Date.now() > deadlineMs) skippedBudget++; return;` after the throttle wait closes that gap.'
   - "SSRF guard re-checks every redirect target — a hostile 3xx Location header can otherwise pivot from a public host into the Vercel sandbox's private network. The defense-in-depth re-check inside the redirect loop covers this attack vector even though the initial URL is operator-stored (low-trust → can't be assumed safe regardless)."
   - "Probe entry writes route exclusively through cacheSetSafe (Pitfall 6). Sidecar INCR/DECR can't use cacheSetSafe (it wraps CacheEntry<T> shape, not integer counters) so raw redis.incr/decr are wrapped in try/catch and degrade-open. Underflow on DECR floors at 0 via the single raw `redis.set(URL_LIVENESS_COUNT_KEY, 0)` call — documented as the sole permitted bypass of the chaos-test contract."
   - "buildProbeCandidates uses a minimal local interface (ConflictEventEntityForProbe with just `id` + `data.source?`) rather than importing the full ConflictEventEntity discriminated union — avoids pulling MapEntity + server/types.js into the import graph. The runtime `typeof url === 'string'` guard defends against any drift in the assumed shape."
@@ -47,9 +64,9 @@ key-decisions:
   - "Combined Task 1 commit (probeUrl + SSRF guard) per the plan's fallback option — the diff-split between the main probe primitive and the SSRF early-return is awkward (the SSRF guard is 2 lines + 1 regex; pulling it into its own commit would leak the main probeUrl into a state where the redirect target re-check has no analog). One commit citing both decisions in the body is the plan-blessed alternative."
 
 patterns-established:
-  - "Atomic throttle reservation: capture `prior`, compute `target`, synchronously update the Map, THEN await. This is the canonical fix for ANY shared-state throttle map under concurrent dispatch — applies anywhere createLimit fans out to per-resource gates."
-  - "Two-checkpoint deadline guard: check at task entry AND after any internal wait that could consume meaningful time (throttle, retry sleep, large fetch body). Single-checkpoint designs leak budget after the per-task entry gate."
-  - "SSRF re-check on every redirect target: a stored URL that passes the initial guard can still pivot via a hostile Location header. Cheap to add (one regex match per hop), expensive to debug if missing."
+  - 'Atomic throttle reservation: capture `prior`, compute `target`, synchronously update the Map, THEN await. This is the canonical fix for ANY shared-state throttle map under concurrent dispatch — applies anywhere createLimit fans out to per-resource gates.'
+  - 'Two-checkpoint deadline guard: check at task entry AND after any internal wait that could consume meaningful time (throttle, retry sleep, large fetch body). Single-checkpoint designs leak budget after the per-task entry gate.'
+  - 'SSRF re-check on every redirect target: a stored URL that passes the initial guard can still pivot via a hostile Location header. Cheap to add (one regex match per hop), expensive to debug if missing.'
   - "isTerminalDead() exported as a named helper so sweep (Task 3 sidecar maintenance) + prune (Plan 32-03's pruneDeadUrlEvents) share one truth source on what 'dead' means. Same pattern as `ttlSecForStatus` from Plan 32-01 — extract the predicate, don't duplicate it across consumers."
   - "Mocked-fetch matrix via vi.stubGlobal('fetch', mock) + dynamic import after vi.mock registration. Mirrors freeClaudeRouter.test.ts. Future probe-adjacent tests (e.g. Plan 32-04 prune helper that re-probes during the splice) should clone this boilerplate verbatim."
 
@@ -148,12 +165,14 @@ All three are surfaced inline in the relevant commit messages and the JSDoc of t
 ## Self-Check: PASSED
 
 **Files exist:**
+
 - `server/lib/urlLiveness.ts` — FOUND (153 → 540 lines)
 - `server/__tests__/lib/urlLiveness.probe.test.ts` — FOUND
 - `server/__tests__/lib/urlLiveness.sweep.test.ts` — FOUND
 - `.planning/phases/32-ghost-event-url-liveness-dashboard-prune/32-02-SUMMARY.md` — FOUND (this file)
 
 **Commits exist on `feature/32-ghost-event-url-liveness-dashboard-prune`:**
+
 - `e891f40` feat(32): probeUrl HEAD-then-GET + SSRF guard (D-16, D-17, D-18, D-21) — FOUND
 - `f54b4b2` feat(32): per-host 1s throttle + pruneStaleHostSlots (D-18, Pitfall 2) — FOUND
 - `3534aa2` feat(32): persistLiveness writer + sidecar count maintenance (D-12, Pitfall 3) — FOUND
@@ -161,6 +180,7 @@ All three are surfaced inline in the relevant commit messages and the JSDoc of t
 - `f7159f0` feat(32): buildProbeCandidates with D-04 two-tier priority sort — FOUND
 
 **Automated verify commands (all PASS):**
+
 - `git rev-parse --abbrev-ref HEAD` → `feature/32-ghost-event-url-liveness-dashboard-prune`
 - `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts server/__tests__/lib/urlLiveness.sweep.test.ts server/__tests__/lib/urlLiveness.schema.test.ts` → 3 test files / 47 tests passed (13 probe + 20 sweep + 14 schema)
 - `grep -q "PROBE_UA = 'IranMonitor-LinkCheck/1.0" server/lib/urlLiveness.ts` → OK
@@ -215,6 +235,7 @@ All three are surfaced inline in the relevant commit messages and the JSDoc of t
 **Blockers / concerns:** None for Plan 32-02 completion. The Plan 03 plan-checker MEDIUM-01 (Upstash SCAN signature) is unaffected by Plan 32-02; it's a Plan 32-03 execute-time note.
 
 ---
-*Phase: 32-ghost-event-url-liveness-dashboard-prune*
-*Plan: 02*
-*Completed: 2026-05-21*
+
+_Phase: 32-ghost-event-url-liveness-dashboard-prune_
+_Plan: 02_
+_Completed: 2026-05-21_

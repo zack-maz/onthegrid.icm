@@ -24,7 +24,7 @@ findings:
   total: 13
 resolutions:
   CR-01: "Resolved 2026-05-21 in commit 53dd880 — HTTP route trigger hardcoded to 'manual'; 2 regression tests added"
-  CR-02: "Resolved 2026-05-21 in commit d85ddc8 — bracket-stripping + IPv6 alternates + fc/fd hex disambiguation; 7 regression tests added"
+  CR-02: 'Resolved 2026-05-21 in commit d85ddc8 — bracket-stripping + IPv6 alternates + fc/fd hex disambiguation; 7 regression tests added'
 ---
 
 # Phase 32: Code Review Report
@@ -58,12 +58,13 @@ Several Warning-tier issues compound those: the dead-URL drill-down's outer erro
 2. **Audit-log fingerprint** (passed to `pruneDeadUrlEvents`, which at `urlLiveness.ts:813-815` records `bearerFingerprint: opts.trigger === 'cron' ? 'cron:refresh-events' : opts.fingerprint`).
 
 Any operator with a valid `DASHBOARD_PASSWORD` Bearer can therefore:
+
 - Drain the events cache without rate-limiting (50/24h ceiling does not apply).
 - Have the audit log record the action as `bearerFingerprint: 'cron:refresh-events'` instead of their own SHA-256 fingerprint — anonymizing the operator and breaking forensic attribution.
 
-CONTEXT D-11 says the cron path uses `'cron:refresh-events'` as its fingerprint *because the call originates inside the cron handler*, not because the request body says so. In the actual implementation, the cron path calls `pruneDeadUrlEvents()` *directly* (`llmExtractionPipeline.ts:491`) — it never goes through this HTTP route. The route's `trigger: 'cron'` branch therefore has no legitimate caller; it is purely an attack surface.
+CONTEXT D-11 says the cron path uses `'cron:refresh-events'` as its fingerprint _because the call originates inside the cron handler_, not because the request body says so. In the actual implementation, the cron path calls `pruneDeadUrlEvents()` _directly_ (`llmExtractionPipeline.ts:491`) — it never goes through this HTTP route. The route's `trigger: 'cron'` branch therefore has no legitimate caller; it is purely an attack surface.
 
-The in-code comment at `events.ts:529-532` describes this as a documented bypass for operator-simulated cron, but D-15 says the cron's `cron:refresh-events` fingerprint bypasses quota — *not* that operators can claim that fingerprint.
+The in-code comment at `events.ts:529-532` describes this as a documented bypass for operator-simulated cron, but D-15 says the cron's `cron:refresh-events` fingerprint bypasses quota — _not_ that operators can claim that fingerprint.
 
 **Fix:** Reject `trigger: 'cron'` over the HTTP route entirely. Force the trigger and fingerprint to come from authentication context, not the request body:
 
@@ -124,15 +125,15 @@ This is defense-in-depth — Vercel's egress is unlikely to route to these addre
 function isPrivateHost(hostname: string): boolean {
   // Node's URL.hostname returns IPv6 with surrounding brackets, e.g. '[::1]'.
   // Strip them before pattern-matching so the v6 alternates anchor correctly.
-  const h = hostname.startsWith('[') && hostname.endsWith(']')
-    ? hostname.slice(1, -1)
-    : hostname;
-  return PRIVATE_HOST_REGEX.test(h)
-    || /^::1$/i.test(h)
-    || /^::$/i.test(h)
-    || /^::ffff:/i.test(h) // v4-mapped v6 — re-run the v4 portion if needed
-    || /^fe80:/i.test(h)
-    || /^f[cd][0-9a-f]{2}:/i.test(h); // ULA fc00::/7 with hex disambiguation
+  const h = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+  return (
+    PRIVATE_HOST_REGEX.test(h) ||
+    /^::1$/i.test(h) ||
+    /^::$/i.test(h) ||
+    /^::ffff:/i.test(h) || // v4-mapped v6 — re-run the v4 portion if needed
+    /^fe80:/i.test(h) ||
+    /^f[cd][0-9a-f]{2}:/i.test(h)
+  ); // ULA fc00::/7 with hex disambiguation
 }
 ```
 
@@ -193,18 +194,20 @@ CONTEXT D-01/D-02 ("Probe pass runs AFTER `runRefreshExtraction()` resolves") ca
 
 ```ts
 // At end of runRefreshExtraction, regardless of dispatch outcome:
-safeWaitUntil((async () => {
-  try {
-    const deadlineMs = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS;
-    const candidates = await buildProbeCandidates();
-    const sweep = await runProbeSweep({ eventIdsWithUrls: candidates, deadlineMs });
-    if (Date.now() < deadlineMs) {
-      await pruneDeadUrlEvents({ trigger: 'cron' });
+safeWaitUntil(
+  (async () => {
+    try {
+      const deadlineMs = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS;
+      const candidates = await buildProbeCandidates();
+      const sweep = await runProbeSweep({ eventIdsWithUrls: candidates, deadlineMs });
+      if (Date.now() < deadlineMs) {
+        await pruneDeadUrlEvents({ trigger: 'cron' });
+      }
+    } catch (err) {
+      log.error({ err }, 'phase 32 probe/prune post-step failed');
     }
-  } catch (err) {
-    log.error({ err }, 'phase 32 probe/prune post-step failed');
-  }
-})());
+  })(),
+);
 ```
 
 This guarantees probe coverage on every cron tick, decoupled from LLM extraction state.
@@ -226,9 +229,7 @@ The inline comment at 437-462 explicitly documents "Pitfall 6 — chaos-test con
 
 ```ts
 // In server/cache/redis.ts:
-export async function cacheSetSafe<T>(
-  key: string, data: T, redisTtlSec: number,
-): Promise<boolean> {
+export async function cacheSetSafe<T>(key: string, data: T, redisTtlSec: number): Promise<boolean> {
   memCache.set(key, { data, fetchedAt: Date.now() });
   try {
     await withTimeout(cacheSet(key, data, redisTtlSec), REDIS_OP_TIMEOUT_MS, `cacheSet(${key})`);
@@ -284,6 +285,7 @@ Or refactor both no-op paths to share one terminal write block.
 **Severity:** Warning
 
 **Issue:** `pruneHandler` handles two response shapes:
+
 - `res.status === 429` → set `pruneQuotaAlert`
 - `res.ok` (200) → clear alert, refresh status
 
@@ -297,9 +299,11 @@ This violates the "operator stays informed" UX expectation surrounding destructi
 const [pruneError, setPruneError] = useState<string | null>(null);
 const pruneHandler = async (): Promise<void> => {
   try {
-    const res = await fetch('/api/events/prune-dead-urls', { /* ... */ });
+    const res = await fetch('/api/events/prune-dead-urls', {
+      /* ... */
+    });
     if (res.status === 429) {
-      const body = await res.json() as { resetsAt?: string };
+      const body = (await res.json()) as { resetsAt?: string };
       setPruneQuotaAlert({ resetsAt: body.resetsAt ?? '' });
       setPruneError(null);
     } else if (res.ok) {
@@ -363,9 +367,10 @@ detail: err instanceof Error ? err.name : 'unknown',
 **File:** `server/lib/urlLiveness.ts:100-111`
 **Severity:** Info
 
-**Issue:** The "monotonic-with-reset on live-or-unknown" semantics for `attemptCount` are documented in the schema comment but the schema itself only validates `z.number().int().nonnegative()`. The cron auto-prune gate at `urlLiveness.ts:803` (`attemptCount >= 3`) depends on the writer correctly resetting on transitions. If a future writer regression accumulates monotonically (no reset), the cron auto-prune would prune flapping URLs after 3 *total* dead ticks rather than 3 *consecutive*.
+**Issue:** The "monotonic-with-reset on live-or-unknown" semantics for `attemptCount` are documented in the schema comment but the schema itself only validates `z.number().int().nonnegative()`. The cron auto-prune gate at `urlLiveness.ts:803` (`attemptCount >= 3`) depends on the writer correctly resetting on transitions. If a future writer regression accumulates monotonically (no reset), the cron auto-prune would prune flapping URLs after 3 _total_ dead ticks rather than 3 _consecutive_.
 
 **Fix:** Add behavioral tests in `urlLiveness.sweep.test.ts` (or a separate `persistLiveness.test.ts`) that assert:
+
 - live → dead → live → dead transitions leave `attemptCount === 1`, not 2.
 - dead → dead → dead transitions yield 1 → 2 → 3.
 - unknown breaks the streak.
@@ -402,7 +407,9 @@ The `__test__` export at line 884-887 exposes `persistLiveness` for exactly this
 **Fix:** Wrap in `useCallback` for consistency:
 
 ```tsx
-const pruneHandler = useCallback(async () => { /* ... */ }, [fetchOpStatus]);
+const pruneHandler = useCallback(async () => {
+  /* ... */
+}, [fetchOpStatus]);
 ```
 
 ---

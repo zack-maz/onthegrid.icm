@@ -83,15 +83,18 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 </decisions>
 
 <canonical_refs>
+
 ## Canonical References
 
 **Downstream agents MUST read these before planning or implementing.**
 
 ### Roadmap + requirements
+
 - `.planning/ROADMAP.md` §"Phase 32: Ghost Event URL Liveness, Dashboard & Prune" — goal, depends-on, success criteria (lines 186-197)
 - `.planning/REQUIREMENTS.md` §"Ghost Event Cleanup" — GHOST-01..05 normative requirement text (lines 25-31)
 
 ### Cron-only writer + Pitfall 1 contract (load-bearing for D-01, D-13)
+
 - `CLAUDE.md` §"LLM Event Pipeline" — anti-pattern #17 (cron-only writer; never re-introduce fire-and-forget from `/api/events`)
 - `CLAUDE.md` §"Serverless Cache" — active Redis keys registry; Phase 32 adds `events:url-liveness:{eventId}` + `operator:prune-quota:*`
 - `server/routes/events.ts:170-215` — Pitfall 1 raw-GDELT fallback bridge (invariant; prune must not break this)
@@ -99,6 +102,7 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 - `docs/degradation.md` — "map never goes blank" contract
 
 ### Operator action pattern (load-bearing for D-09, D-14, D-15)
+
 - `server/routes/events.ts:437` — existing `POST /api/events/llm-replay` Bearer-gated operator action (template for D-09's prune endpoint)
 - `server/routes/operator-status.ts` — `/api/operator-status` aggregator; reads `operator:audit-log` SMEMBERS, surfaces to dashboard
 - `server/middleware/dashboardAuth.ts` — Bearer-gate middleware Phase 32 reuses verbatim
@@ -106,17 +110,21 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 - `src/components/ui/DevApiStatus.tsx:1475-1540` — Operator Actions block; D-10's button lands here
 
 ### Probe + concurrency primitives
+
 - `server/lib/concurrencyLimit.ts` `createLimit(maxConcurrent)` — FIFO queue Phase 32 reuses for D-18's concurrency bound
 
 ### Data shape
+
 - `server/lib/llmExtractionPipeline.ts:478-501` — `enrichedV3ToEntities()` writes the v3 entity `data` object; spreads `template.data` (which carries `source`) and never adds a `sourceUrls[]` field. This is what D-05 reads `data.source` from for v3 events.
 - `server/adapters/gdelt.ts:244` — raw GDELT `source: getCol(cols, COL.SOURCEURL)` (singular) sets the template's `data.source` that both raw and v3 entities inherit.
 - `src/components/detail/EventDetail.tsx:143-164` — UI "View source" anchor; canonical source-of-truth for what "primary URL" means to the operator
 
 ### Schema pinning pattern (template for D-22)
+
 - `server/__tests__/lib/freeClaudeRouter.test.ts` — schema-pinning contract test pattern
 
 ### Architecture history (context, not load-bearing)
+
 - `.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-CONTEXT.md` — D-08 Vercel Pro 800s `maxDuration` decision (governs D-02's probe budget)
 - `.planning/phases/31-cron-stability-validation-7-day-watch/31-CONTEXT.md` — D-01 cron-tick discipline, atomic-per-decision commit convention
 - `docs/architecture/llm-pipeline-reliability.md` — Nominatim 1 req/s polite-citizen analogue (template for D-18's per-host throttle)
@@ -126,9 +134,11 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 </canonical_refs>
 
 <code_context>
+
 ## Existing Code Insights
 
 ### Reusable Assets
+
 - **`server/lib/concurrencyLimit.ts` `createLimit(n)`** — FIFO queue Phase 32 reuses for D-18's 8-concurrent probe bound. Identical to how `server/lib/llmEventExtractor.v3.ts` bounds LLM v3 batches.
 - **`server/middleware/dashboardAuth.ts`** — Bearer middleware D-09's `POST /api/events/prune-dead-urls` mounts behind verbatim.
 - **`operator:audit-log` SADD pattern** — established Phase 28.2 W3 for `/llm-replay`; D-14 reuses entry-shape and surfacing path. Zero new aggregator code.
@@ -138,6 +148,7 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 - **EventDetail "View source" anchor** (`src/components/detail/EventDetail.tsx:152-163`) — already renders ONE URL per event. D-05's "primary URL" rule mirrors this exactly.
 
 ### Established Patterns
+
 - **Cron-only writer discipline (anti-pattern #17).** `/api/events` stays read-only. Probe writes happen inside `/api/cron/refresh-events`; prune writes happen inside the Bearer-gated `POST /api/events/prune-dead-urls` (operator-triggered, not fire-and-forget).
 - **Atomic per-decision commits.** Each D-N lands as its own commit (`feat(32):` / `docs(32):` / `chore(32):`). 22 decisions → roughly 22 commits + the close PR.
 - **Branch-per-phase from `main`.** `feature/32-ghost-event-url-liveness-dashboard-prune`. CONTEXT.md may sit on current branch; code work must branch first.
@@ -146,6 +157,7 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 - **Zod `parseEnv()` fail-fast on missing env vars** (Phase 26.3+). D-21's User-Agent is hardcoded (not env-tunable) so no parse contribution.
 
 ### Integration Points
+
 - **`/api/cron/refresh-events` handler** — wraps `runRefreshExtraction()`; D-02 appends a probe sweep step after that resolves; D-11 appends an auto-prune step after the probe sweep.
 - **`events:llm:v3` payload `events[]` array** — D-13 splices entries out by ID during prune.
 - **`events:url-liveness:{eventId}` Redis key family (NEW)** — written by probe sweep; DELed by prune; surfaced via dashboard count + drill-down.
@@ -179,5 +191,5 @@ Probe `sourceURL` liveness for events in `events:llm:v3` out-of-band of `/api/ev
 
 ---
 
-*Phase: 32-ghost-event-url-liveness-dashboard-prune*
-*Context gathered: 2026-05-19*
+_Phase: 32-ghost-event-url-liveness-dashboard-prune_
+_Context gathered: 2026-05-19_

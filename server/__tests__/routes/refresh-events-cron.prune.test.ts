@@ -47,9 +47,7 @@ const {
     bellingcatByGroup: new Map(),
   })),
   mockGeocodeEnrichedEvents: vi.fn(async () => ({ events: [] })),
-  mockBuildProbeCandidates: vi.fn(
-    async () => [{ eventId: 'e1', url: 'https://example.com/a' }],
-  ),
+  mockBuildProbeCandidates: vi.fn(async () => [{ eventId: 'e1', url: 'https://example.com/a' }]),
   mockRunProbeSweep: vi.fn(async () => ({ probed: 1, skippedBudget: 0 })),
   mockPruneDeadUrlEvents: vi.fn(async () => ({ prunedCount: 0, prunedIds: [] as string[] })),
   mockRunEval: vi.fn(async () => ({ within5km: 0, within20km: 0, within100km: 0, total: 0 })),
@@ -236,9 +234,7 @@ beforeEach(() => {
     matchedNewsByGroup: new Map(),
     bellingcatByGroup: new Map(),
   });
-  mockBuildProbeCandidates.mockResolvedValue([
-    { eventId: 'e1', url: 'https://example.com/a' },
-  ]);
+  mockBuildProbeCandidates.mockResolvedValue([{ eventId: 'e1', url: 'https://example.com/a' }]);
   mockRunProbeSweep.mockResolvedValue({ probed: 1, skippedBudget: 0 });
   mockPruneDeadUrlEvents.mockResolvedValue({ prunedCount: 0, prunedIds: [] });
 });
@@ -261,9 +257,7 @@ describe('Phase 32 D-02 / D-11 — cron post-step (probe sweep + auto-prune)', (
       eventIdsWithUrls: Array<{ eventId: string; url: string }>;
       deadlineMs: number;
     };
-    expect(sweepArg.eventIdsWithUrls).toEqual([
-      { eventId: 'e1', url: 'https://example.com/a' },
-    ]);
+    expect(sweepArg.eventIdsWithUrls).toEqual([{ eventId: 'e1', url: 'https://example.com/a' }]);
     expect(sweepArg.deadlineMs).toBeGreaterThan(Date.now());
   });
 

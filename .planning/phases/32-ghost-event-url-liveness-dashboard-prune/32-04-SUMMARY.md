@@ -2,7 +2,8 @@
 phase: 32-ghost-event-url-liveness-dashboard-prune
 plan: 04
 subsystem: api
-tags: [redis, sidecar, scan, audit-log, aggregator, dashboardAuth, scan-cast, low-03-drilldown, vitest]
+tags:
+  [redis, sidecar, scan, audit-log, aggregator, dashboardAuth, scan-cast, low-03-drilldown, vitest]
 
 # Dependency graph
 requires:
@@ -11,50 +12,50 @@ requires:
     provides: "URL_LIVENESS_COUNT_KEY + URL_LIVENESS_KEY_PREFIX exports; OperatorAuditEntry.operation widened to admit 'prune-dead-urls'; UrlLiveness type"
   - phase: 32
     plan: 02
-    provides: "events:url-liveness-count sidecar maintained by persistLiveness (INCR on live→dead); isTerminalDead() predicate exported"
+    provides: 'events:url-liveness-count sidecar maintained by persistLiveness (INCR on live→dead); isTerminalDead() predicate exported'
   - phase: 32
     plan: 03
     provides: "events:url-liveness-count DECRBY on prune; operator:audit-log entries with operation='prune-dead-urls' written by both manual route and cron auto-prune"
   - phase: 28.2
-    provides: "/api/operator-status aggregator scaffold (audit24h + byBearer + advEval — Phase 32 Plan 04 adds the `prune` sibling block)"
+    provides: '/api/operator-status aggregator scaffold (audit24h + byBearer + advEval — Phase 32 Plan 04 adds the `prune` sibling block)'
 provides:
-  - "server/routes/operator-status.ts — GET /api/operator-status response gains `prune: {deadUrlCount, last24hPrunes, deadUrlSample}` sibling block"
+  - 'server/routes/operator-status.ts — GET /api/operator-status response gains `prune: {deadUrlCount, last24hPrunes, deadUrlSample}` sibling block'
   - "server/routes/operator-status.ts — local AuditEntry.operation union widened to 'pipeline-swap' | 'replay' | 'prune-dead-urls'"
-  - "server/routes/operator-status.ts — byFingerprint Map value extended with `prunes: number` counter; byBearer[] result shape carries the new field"
-  - "server/routes/operator-status.ts — buildDeadUrlSample() module-private helper: SCAN events:url-liveness:* (cap 20 entries, MAX_SCAN_KEYS=200 budget); degrade-open on Redis throw"
-  - "server/routes/__tests__/operator-status.test.ts — 11 new contract tests pinning deadUrlCount + last24hPrunes + byBearer.prunes + deadUrlSample shapes + degrade-open paths"
+  - 'server/routes/operator-status.ts — byFingerprint Map value extended with `prunes: number` counter; byBearer[] result shape carries the new field'
+  - 'server/routes/operator-status.ts — buildDeadUrlSample() module-private helper: SCAN events:url-liveness:* (cap 20 entries, MAX_SCAN_KEYS=200 budget); degrade-open on Redis throw'
+  - 'server/routes/__tests__/operator-status.test.ts — 11 new contract tests pinning deadUrlCount + last24hPrunes + byBearer.prunes + deadUrlSample shapes + degrade-open paths'
 affects: [32-05-dashboard-button-and-drilldown-list, 32-06-close]
 
 # Tech tracking
 tech-stack:
-  added: []  # Zero new npm dependencies — reuses existing @upstash/redis ^1.37.0 SCAN + cache/redis cacheGetSafe + lib/urlLiveness exports
+  added: [] # Zero new npm dependencies — reuses existing @upstash/redis ^1.37.0 SCAN + cache/redis cacheGetSafe + lib/urlLiveness exports
   patterns:
-    - "Sidecar-key O(1) read for dashboard counts (Pitfall 3 mitigation): `redis.get(URL_LIVENESS_COUNT_KEY)` replaces what would have been an N×GET over the events:url-liveness:* keyspace per dashboard poll. Maintained jointly by Plan 32-02 (INCR on probe) and Plan 32-03 (DECRBY on prune)."
-    - "Defensive numeric coercion at every Redis-integer reader boundary: `Math.max(0, Number(raw) || 0)` handles null absence, string drift, NaN garbage, and DECR underflow with one expression. T-32-11 mitigation."
+    - 'Sidecar-key O(1) read for dashboard counts (Pitfall 3 mitigation): `redis.get(URL_LIVENESS_COUNT_KEY)` replaces what would have been an N×GET over the events:url-liveness:* keyspace per dashboard poll. Maintained jointly by Plan 32-02 (INCR on probe) and Plan 32-03 (DECRBY on prune).'
+    - 'Defensive numeric coercion at every Redis-integer reader boundary: `Math.max(0, Number(raw) || 0)` handles null absence, string drift, NaN garbage, and DECR underflow with one expression. T-32-11 mitigation.'
     - "Per-block try/catch envelope inside the aggregator GET handler: sidecar count read, advEval read, and buildDeadUrlSample SCAN each have their own degrade-open try/catch so a single subsystem failure doesn't cascade past its block. Mirrors the advEval pattern at the same offset (Pitfall 6 chaos-test contract for read-only routes)."
-    - "Derived counter inside an already-parsed audit pass: `last24hPrunes` filters the SAME `last24h` array the existing aggregator already iterates — zero additional Redis round-trips. Same pattern used by `byFingerprint` for swaps/replays/prunes."
+    - 'Derived counter inside an already-parsed audit pass: `last24hPrunes` filters the SAME `last24h` array the existing aggregator already iterates — zero additional Redis round-trips. Same pattern used by `byFingerprint` for swaps/replays/prunes.'
     - "Bounded SCAN drill-down with dual budget guards (LOW-03 drill-down resolution): LIMIT_DRILL_DOWN=20 caps the payload, MAX_SCAN_KEYS=200 caps the wall-clock budget. Cursor short-circuited via `cursor = 0` assignment inside the loop so a runaway keyspace can't blow the aggregator budget."
-    - "MEDIUM-01 plan-checker pin (also applied in Plan 32-03 pruneDeadUrlEvents): `redis.scan(cursor, opts)` cast `as [string | number, string[]]` matches @upstash/redis ^1.37.0 — silent shape drift fails TypeScript instead of producing infinite SCAN loops in production. Tests mock the tuple shape verbatim."
-    - "Single truth source for terminal-dead predicate: `isTerminalDead(status)` imported from urlLiveness.ts (not duplicated as a local string-union check). Same predicate used by sweep sidecar maintenance + prune helper + this aggregator. Drift impossible by construction."
+    - 'MEDIUM-01 plan-checker pin (also applied in Plan 32-03 pruneDeadUrlEvents): `redis.scan(cursor, opts)` cast `as [string | number, string[]]` matches @upstash/redis ^1.37.0 — silent shape drift fails TypeScript instead of producing infinite SCAN loops in production. Tests mock the tuple shape verbatim.'
+    - 'Single truth source for terminal-dead predicate: `isTerminalDead(status)` imported from urlLiveness.ts (not duplicated as a local string-union check). Same predicate used by sweep sidecar maintenance + prune helper + this aggregator. Drift impossible by construction.'
     - "AuditEntry.operation union widening applied in TWO places per phase (Plan 32-01 widened the canonical OperatorAuditEntry in operatorAudit.ts; Plan 32-04 widens the LOCAL copy in operator-status.ts). Otherwise SADD entries with `operation: 'prune-dead-urls'` parse successfully at the canonical layer but drop silently from the aggregator pass."
 
 key-files:
   modified:
-    - "server/routes/operator-status.ts (155 → 326 lines; +174 lines for `prune` block + buildDeadUrlSample helper + AuditEntry/aggregator widening + JSDoc; -4 lines from the old byFingerprint Map type signature)"
-    - "server/routes/__tests__/operator-status.test.ts (148 → 521 lines; +373 lines for the Phase 32 Plan 04 describe block + extended mock surface for redis.scan / cacheGetSafe)"
-  created: []  # No new files — all changes are extensions
+    - 'server/routes/operator-status.ts (155 → 326 lines; +174 lines for `prune` block + buildDeadUrlSample helper + AuditEntry/aggregator widening + JSDoc; -4 lines from the old byFingerprint Map type signature)'
+    - 'server/routes/__tests__/operator-status.test.ts (148 → 521 lines; +373 lines for the Phase 32 Plan 04 describe block + extended mock surface for redis.scan / cacheGetSafe)'
+  created: [] # No new files — all changes are extensions
 
 key-decisions:
-  - "Helper extraction over inline SCAN loop: `buildDeadUrlSample()` is module-private (not exported) so its degrade-open try/catch is the canonical scope for SCAN failures. Inlining the loop inside the GET handler would have either (a) added a 3rd nested try/catch making the handler hard to read or (b) collapsed the SCAN error path into the outer 500 handler — both worse than helper extraction."
+  - 'Helper extraction over inline SCAN loop: `buildDeadUrlSample()` is module-private (not exported) so its degrade-open try/catch is the canonical scope for SCAN failures. Inlining the loop inside the GET handler would have either (a) added a 3rd nested try/catch making the handler hard to read or (b) collapsed the SCAN error path into the outer 500 handler — both worse than helper extraction.'
   - "deadUrlSample short-circuit uses `cursor = 0` (not `break` from the outer do/while): the do/while loop condition checks `cursor !== 0 && cursor !== '0'`, so assigning 0 lets the existing loop exit naturally. `break` would have worked equally but `cursor = 0` is uniform with the LIMIT_DRILL_DOWN and MAX_SCAN_KEYS exhaustion paths inside the inner for-loop. Single termination mechanism throughout."
-  - "Local AuditEntry vs canonical OperatorAuditEntry kept SEPARATE (not refactored to import-and-reuse). The local interface ignores `args` / `result` / `errorMessage` deliberately — the aggregator only reads `timestamp` / `bearerFingerprint` / `operation`. Coupling the local copy to the full canonical type would force future audit-log extensions to widen this aggregator surface unnecessarily. Local-narrow + sync-on-union-widening is the lower-coupling design."
+  - 'Local AuditEntry vs canonical OperatorAuditEntry kept SEPARATE (not refactored to import-and-reuse). The local interface ignores `args` / `result` / `errorMessage` deliberately — the aggregator only reads `timestamp` / `bearerFingerprint` / `operation`. Coupling the local copy to the full canonical type would force future audit-log extensions to widen this aggregator surface unnecessarily. Local-narrow + sync-on-union-widening is the lower-coupling design.'
   - "Mocked `redis.scan` returns `[0, []]` by default (not `mockResolvedValue` per-test): individual tests override via `mockResolvedValueOnce` / `mockImplementation`, but the default exists in `beforeEach` so any test that doesn't care about the sample path gets a clean empty drill-down without per-test boilerplate. Mirrors the existing `mockRedis.smembers.mockResolvedValue([])` default at the original test scaffold."
   - "Test mock for `cacheGetSafe` returns the cached envelope shape `{data, stale, lastFresh}` (not just the `data` payload) so it matches the runtime contract from `server/cache/redis.ts:211`. Tests that mock it as a bare value would compile against the type signature but the route's `cached?.data` dereference would dispense `undefined` and the SCAN filter would silently drop every entry. Caught during local test authoring."
 
 patterns-established:
-  - "Dashboard aggregator sidecar-read pattern: `redis.get<number | string>` + `Math.max(0, Number(raw) || 0)` is the canonical shape for ANY future numeric sidecar surfaced on /api/operator-status. Future GHOST-style ghost-counters (e.g. stale-news-cluster count, orphaned-geocode count) clone this exactly."
-  - "Bounded SCAN drill-down for aggregator surfaces: any future dashboard list that needs more than a count + less than a full streaming export uses this triple: (a) LIMIT_DRILL_DOWN to cap payload, (b) MAX_SCAN_KEYS to cap wall-clock budget, (c) `cursor = 0` short-circuit inside both inner-break and outer-loop-exit paths."
-  - "Per-block degrade-open inside an aggregator: the route handler stays the backstop for unexpected throws (returns 500 once), but every individual sub-block (audit-log read, sidecar read, eval-payload read, SCAN drill-down) MUST have its own try/catch returning a safe default. This is the read-only-route correctness contract — partial degrade is always better than no surface."
+  - 'Dashboard aggregator sidecar-read pattern: `redis.get<number | string>` + `Math.max(0, Number(raw) || 0)` is the canonical shape for ANY future numeric sidecar surfaced on /api/operator-status. Future GHOST-style ghost-counters (e.g. stale-news-cluster count, orphaned-geocode count) clone this exactly.'
+  - 'Bounded SCAN drill-down for aggregator surfaces: any future dashboard list that needs more than a count + less than a full streaming export uses this triple: (a) LIMIT_DRILL_DOWN to cap payload, (b) MAX_SCAN_KEYS to cap wall-clock budget, (c) `cursor = 0` short-circuit inside both inner-break and outer-loop-exit paths.'
+  - 'Per-block degrade-open inside an aggregator: the route handler stays the backstop for unexpected throws (returns 500 once), but every individual sub-block (audit-log read, sidecar read, eval-payload read, SCAN drill-down) MUST have its own try/catch returning a safe default. This is the read-only-route correctness contract — partial degrade is always better than no surface.'
 
 requirements-completed: [GHOST-03]
 
@@ -132,15 +133,18 @@ Tests mock `cacheGetSafe` to return `{data: <UrlLiveness>, stale: false, lastFre
 ## Self-Check: PASSED
 
 **Files exist:**
+
 - `server/routes/operator-status.ts` — FOUND (155 → 326 lines)
 - `server/routes/__tests__/operator-status.test.ts` — FOUND (148 → 521 lines)
 - `.planning/phases/32-ghost-event-url-liveness-dashboard-prune/32-04-SUMMARY.md` — FOUND (this file)
 
 **Commits exist on `feature/32-ghost-event-url-liveness-dashboard-prune`:**
+
 - `af11707` test(32-04): add failing contract tests for /api/operator-status prune block — FOUND
 - `5435196` feat(32-04): /api/operator-status surfaces prune block (GHOST-03, Pitfall 3) — FOUND
 
 **Automated verify commands (all PASS):**
+
 - `git rev-parse --abbrev-ref HEAD` → `feature/32-ghost-event-url-liveness-dashboard-prune`
 - `npx vitest run server/routes/__tests__/operator-status.test.ts` → 14 tests passed (3 original + 11 new)
 - `grep -q "URL_LIVENESS_COUNT_KEY" server/routes/operator-status.ts` → OK (2 references: import + use)
@@ -245,6 +249,7 @@ Curl-style sample of the new `/api/operator-status` response. Bearer header omit
 ## Next Plan Readiness
 
 **Plan 32-05 (dashboard button + drill-down list)** is unblocked:
+
 - `/api/operator-status` JSON response now contains the full `prune` block surface — count, last24h aggregate, AND the cap-20 drill-down list.
 - LOW-03 plan-checker drill-down resolution is fully delivered server-side: Plan 32-05's UI just renders `opStatus.prune.deadUrlSample` as a `<ul data-testid="dead-url-list">` with status badge + eventId + url + truncation row when `prune.deadUrlCount > prune.deadUrlSample.length`.
 - MEDIUM-03 plan-checker resolution (Plan 05 `fetchOpStatus` reference) is unaffected by Plan 04 — the dashboard already polls /api/operator-status and Plan 05's instruction to hoist `fetchOpStatus` into a named callback for prune-button reuse remains valid.
@@ -255,6 +260,7 @@ Curl-style sample of the new `/api/operator-status` response. Bearer header omit
 **Blockers / concerns:** None. Plan-checker MEDIUM-01 (SCAN signature pin) is satisfied for the second time in the phase (Plan 32-03 + Plan 32-04 both apply the cast). LOW-03 (drill-down list) is fully resolved — Plan 32-05's UI work consumes the deadUrlSample directly.
 
 ---
-*Phase: 32-ghost-event-url-liveness-dashboard-prune*
-*Plan: 04*
-*Completed: 2026-05-20*
+
+_Phase: 32-ghost-event-url-liveness-dashboard-prune_
+_Plan: 04_
+_Completed: 2026-05-20_

@@ -14,52 +14,53 @@ The "primary URL" the probe targets is **`data.source`** — for BOTH raw GDELT 
 
 ## Architectural Responsibility Map
 
-| Capability | Primary Tier | Secondary Tier | Rationale |
-|------------|-------------|----------------|-----------|
-| URL liveness probe (outbound HTTP) | Server (Node Express + Vercel function) | — | Egress from operator's Vercel deployment — no browser CORS / no client-side egress |
-| Per-event liveness storage (`events:url-liveness:{eventId}`) | Redis (Upstash, via `cacheGetSafe`/`cacheSetSafe`) | In-memory fallback | Survives function cold-starts; per-event keying is cheap (write-once-per-sweep, read-batch-by-dashboard) |
-| Probe sweep orchestration | Server cron handler (`refresh-events-cron.ts` route, after `runRefreshExtraction` resolves inside `safeWaitUntil` body) | — | Cron-only writer discipline (anti-pattern #17); `/api/events` stays read-only |
-| Prune endpoint (delete event + url-liveness key) | Server (`/api/events/prune-dead-urls` POST behind `dashboardAuth`) | — | Same Bearer trust boundary as `/llm-replay`; mounted in `server/routes/events.ts` alongside existing operator-action endpoints |
-| Rate-limit + audit log | Redis (`operator:prune-quota:{fingerprint}:{date}` INCR; `operator:audit-log` SADD) | — | Reuses the entire operator-action audit machinery from Phase 28.2 W3 with zero new aggregator surface |
-| Dashboard count + drill-down + prune button | Browser (React `DevApiStatus.tsx` Operator Actions block) | Server `/api/operator-status` aggregator (extends current shape with `prune` sibling block) | The single Bearer-gated aggregator already exists and serves the API Health tab; this phase extends it |
-| Dead-URL count surfaced to dashboard | Server (`/api/operator-status` extension) | — | Aggregating N url-liveness keys client-side would balloon Redis round-trips; aggregate server-side once |
+| Capability                                                   | Primary Tier                                                                                                            | Secondary Tier                                                                              | Rationale                                                                                                                      |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| URL liveness probe (outbound HTTP)                           | Server (Node Express + Vercel function)                                                                                 | —                                                                                           | Egress from operator's Vercel deployment — no browser CORS / no client-side egress                                             |
+| Per-event liveness storage (`events:url-liveness:{eventId}`) | Redis (Upstash, via `cacheGetSafe`/`cacheSetSafe`)                                                                      | In-memory fallback                                                                          | Survives function cold-starts; per-event keying is cheap (write-once-per-sweep, read-batch-by-dashboard)                       |
+| Probe sweep orchestration                                    | Server cron handler (`refresh-events-cron.ts` route, after `runRefreshExtraction` resolves inside `safeWaitUntil` body) | —                                                                                           | Cron-only writer discipline (anti-pattern #17); `/api/events` stays read-only                                                  |
+| Prune endpoint (delete event + url-liveness key)             | Server (`/api/events/prune-dead-urls` POST behind `dashboardAuth`)                                                      | —                                                                                           | Same Bearer trust boundary as `/llm-replay`; mounted in `server/routes/events.ts` alongside existing operator-action endpoints |
+| Rate-limit + audit log                                       | Redis (`operator:prune-quota:{fingerprint}:{date}` INCR; `operator:audit-log` SADD)                                     | —                                                                                           | Reuses the entire operator-action audit machinery from Phase 28.2 W3 with zero new aggregator surface                          |
+| Dashboard count + drill-down + prune button                  | Browser (React `DevApiStatus.tsx` Operator Actions block)                                                               | Server `/api/operator-status` aggregator (extends current shape with `prune` sibling block) | The single Bearer-gated aggregator already exists and serves the API Health tab; this phase extends it                         |
+| Dead-URL count surfaced to dashboard                         | Server (`/api/operator-status` extension)                                                                               | —                                                                                           | Aggregating N url-liveness keys client-side would balloon Redis round-trips; aggregate server-side once                        |
 
 ## Standard Stack
 
 ### Core (all already present — Phase 32 adds zero new deps)
 
-| Library | Version | Purpose | Why Standard |
-|---------|---------|---------|--------------|
-| `node:fetch` (global, undici under the hood as of Node 22) | Node 22.x [VERIFIED: `engines.node: "22.x"` in `package.json:7`] | HTTP probes (HEAD then GET-with-Range) | Every existing outbound HTTP call in `server/adapters/` uses global `fetch` ([VERIFIED: grep across `server/adapters/{opensky,adsb-lol,gdelt,gdelt-doc,nominatim,overpass,rss,yahoo-finance,open-meteo*,acled}.ts`]; zero use `undici` directly). Node 22 ships undici as the global `fetch` implementation natively; adding `undici` as a direct dep would duplicate the runtime |
-| `AbortController` / `AbortSignal.timeout(ms)` | built-in | 10s per-request timeout (D-18) | Already the project convention — `server/adapters/adsb-lol.ts:20` uses `AbortSignal.timeout()`; `server/adapters/nominatim.ts:21-30` uses the longer-form `AbortController + setTimeout + abort()` for the 10s Nominatim deadline |
-| `@upstash/redis` | 1.37 [VERIFIED: `package.json:60` `"@upstash/redis": "^1.37.0"`] | per-event liveness storage + quota counter | Already the project Redis client; `cacheGetSafe`/`cacheSetSafe` wrappers at `server/cache/redis.ts:138-216` handle 2s timeout + in-memory fallback |
-| `zod` | 3.25 [VERIFIED: `package.json:80` `"zod": "^3.25.76"`] | `UrlLivenessSchema` for D-22 contract test | Project schema standard — `scripts/snapshot-cron-watch.ts:85-110` shows the `.strict()` pattern Phase 32 mirrors |
-| `createLimit(8)` | local — `server/lib/concurrencyLimit.ts` | FIFO concurrency bound for the probe sweep | Reused verbatim from LLM v3 batch dispatch; 30-LOC primitive with deliberate "no p-limit dep" rationale in JSDoc (`concurrencyLimit.ts:9-15`) |
-| `pino` (via `logger.child({module: 'urlLiveness'})`) | 10.3 | structured logging | CLAUDE.md mandates `logger.child(...)`, never `console.*` — see `server/lib/logger.ts` for redaction-aware setup |
+| Library                                                    | Version                                                          | Purpose                                    | Why Standard                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node:fetch` (global, undici under the hood as of Node 22) | Node 22.x [VERIFIED: `engines.node: "22.x"` in `package.json:7`] | HTTP probes (HEAD then GET-with-Range)     | Every existing outbound HTTP call in `server/adapters/` uses global `fetch` ([VERIFIED: grep across `server/adapters/{opensky,adsb-lol,gdelt,gdelt-doc,nominatim,overpass,rss,yahoo-finance,open-meteo*,acled}.ts`]; zero use `undici` directly). Node 22 ships undici as the global `fetch` implementation natively; adding `undici` as a direct dep would duplicate the runtime |
+| `AbortController` / `AbortSignal.timeout(ms)`              | built-in                                                         | 10s per-request timeout (D-18)             | Already the project convention — `server/adapters/adsb-lol.ts:20` uses `AbortSignal.timeout()`; `server/adapters/nominatim.ts:21-30` uses the longer-form `AbortController + setTimeout + abort()` for the 10s Nominatim deadline                                                                                                                                                 |
+| `@upstash/redis`                                           | 1.37 [VERIFIED: `package.json:60` `"@upstash/redis": "^1.37.0"`] | per-event liveness storage + quota counter | Already the project Redis client; `cacheGetSafe`/`cacheSetSafe` wrappers at `server/cache/redis.ts:138-216` handle 2s timeout + in-memory fallback                                                                                                                                                                                                                                |
+| `zod`                                                      | 3.25 [VERIFIED: `package.json:80` `"zod": "^3.25.76"`]           | `UrlLivenessSchema` for D-22 contract test | Project schema standard — `scripts/snapshot-cron-watch.ts:85-110` shows the `.strict()` pattern Phase 32 mirrors                                                                                                                                                                                                                                                                  |
+| `createLimit(8)`                                           | local — `server/lib/concurrencyLimit.ts`                         | FIFO concurrency bound for the probe sweep | Reused verbatim from LLM v3 batch dispatch; 30-LOC primitive with deliberate "no p-limit dep" rationale in JSDoc (`concurrencyLimit.ts:9-15`)                                                                                                                                                                                                                                     |
+| `pino` (via `logger.child({module: 'urlLiveness'})`)       | 10.3                                                             | structured logging                         | CLAUDE.md mandates `logger.child(...)`, never `console.*` — see `server/lib/logger.ts` for redaction-aware setup                                                                                                                                                                                                                                                                  |
 
 ### Supporting (existing helpers Phase 32 leans on)
 
-| Library / Helper | Path | Purpose | When to Use |
-|------------------|------|---------|-------------|
-| `cacheGetSafe<T>` / `cacheSetSafe<T>` | `server/cache/redis.ts:138, 213` | safe Redis read/write with 2s timeout + in-memory fallback | EVERY url-liveness Redis op — chaos test compatibility |
-| `safeWaitUntil` | `server/lib/safeWaitUntil.ts:62` | Vercel `waitUntil` shim w/ local-dev fallback | The probe sweep runs INSIDE the existing `safeWaitUntil` body in `runRefreshExtraction` (lines 258-444 of `llmExtractionPipeline.ts`), so we are already inside Vercel's allowance — no new `safeWaitUntil` call needed |
-| `dashboardAuth` middleware | `server/middleware/dashboardAuth.ts:31` | Bearer-token gate (constant-time compare) | Mounted on the new `POST /api/events/prune-dead-urls` route exactly as `POST /api/events/llm-replay/:groupKey` does at `server/routes/events.ts:437` |
-| `appendOperatorAuditEntry` | `server/lib/operatorAudit.ts:69` | SADD bounded audit-log writer (500 cap, 30d TTL, SPOP eviction) | Called once per successful prune call from the endpoint handler — `args: {trigger: 'manual' | 'cron'}, result: 'ok' \| 'error'` |
-| `bearerFingerprint` | `server/lib/operatorAudit.ts:62` | SHA-256 truncated-to-8-hex fingerprint of the Bearer | Used both to tag the audit entry AND to key the new `operator:prune-quota:*` namespace — same identity model as replay quota |
-| `checkReplayQuota` pattern | `server/lib/replayQuota.ts:58` | INCR per-day key with first-INCR-sets-TTL idiom | Pattern lifted verbatim into a new `checkPruneQuota(fingerprint)` in `server/lib/pruneQuota.ts`; 50/24h cap (D-15) |
-| `OperatorAuditEntry.operation` union | `server/lib/operatorAudit.ts:43` | Currently `'pipeline-swap' \| 'replay'` | **Must widen** to `'pipeline-swap' \| 'replay' \| 'prune-dead-urls'`; the `byBearer` aggregator at `operator-status.ts:118-119` must learn the new tag (or render it unbucketed) |
+| Library / Helper                      | Path                                    | Purpose                                                         | When to Use                                                                                                                                                                                                             |
+| ------------------------------------- | --------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `cacheGetSafe<T>` / `cacheSetSafe<T>` | `server/cache/redis.ts:138, 213`        | safe Redis read/write with 2s timeout + in-memory fallback      | EVERY url-liveness Redis op — chaos test compatibility                                                                                                                                                                  |
+| `safeWaitUntil`                       | `server/lib/safeWaitUntil.ts:62`        | Vercel `waitUntil` shim w/ local-dev fallback                   | The probe sweep runs INSIDE the existing `safeWaitUntil` body in `runRefreshExtraction` (lines 258-444 of `llmExtractionPipeline.ts`), so we are already inside Vercel's allowance — no new `safeWaitUntil` call needed |
+| `dashboardAuth` middleware            | `server/middleware/dashboardAuth.ts:31` | Bearer-token gate (constant-time compare)                       | Mounted on the new `POST /api/events/prune-dead-urls` route exactly as `POST /api/events/llm-replay/:groupKey` does at `server/routes/events.ts:437`                                                                    |
+| `appendOperatorAuditEntry`            | `server/lib/operatorAudit.ts:69`        | SADD bounded audit-log writer (500 cap, 30d TTL, SPOP eviction) | Called once per successful prune call from the endpoint handler — `args: {trigger: 'manual'                                                                                                                             | 'cron'}, result: 'ok' \| 'error'` |
+| `bearerFingerprint`                   | `server/lib/operatorAudit.ts:62`        | SHA-256 truncated-to-8-hex fingerprint of the Bearer            | Used both to tag the audit entry AND to key the new `operator:prune-quota:*` namespace — same identity model as replay quota                                                                                            |
+| `checkReplayQuota` pattern            | `server/lib/replayQuota.ts:58`          | INCR per-day key with first-INCR-sets-TTL idiom                 | Pattern lifted verbatim into a new `checkPruneQuota(fingerprint)` in `server/lib/pruneQuota.ts`; 50/24h cap (D-15)                                                                                                      |
+| `OperatorAuditEntry.operation` union  | `server/lib/operatorAudit.ts:43`        | Currently `'pipeline-swap' \| 'replay'`                         | **Must widen** to `'pipeline-swap' \| 'replay' \| 'prune-dead-urls'`; the `byBearer` aggregator at `operator-status.ts:118-119` must learn the new tag (or render it unbucketed)                                        |
 
 ### Alternatives Considered
 
-| Instead of | Could Use | Tradeoff |
-|------------|-----------|----------|
-| global `fetch` + `AbortController` | `undici` Dispatcher with `pool` per-host | Pool would automatically per-host-throttle and reuse connections — but project has zero existing `undici` usage. Adding a direct dep contradicts the `createLimit` "no `p-limit` because we keep deps small" precedent (`concurrencyLimit.ts:11-15`). Boring choice wins |
-| Self-HTTP cron→endpoint invocation (POST to `https://otg-iran-monitor.vercel.app/api/events/prune-dead-urls` w/ system Bearer) | Direct function call to a shared `pruneDeadUrlEvents(opts)` helper | Self-HTTP exercises the audit-log path identically AND validates the Bearer gate end-to-end on every cron run, but introduces (a) a circular call back into the same function instance, (b) a need for the Vercel-deployment URL in env, (c) doubled latency. **Pick: shared helper** (see Discretion §3 below) |
-| New `events:url-liveness-count` sidecar key written on each sweep | `SCAN MATCH events:url-liveness:* COUNT 100` from `/operator-status` per request | SCAN is O(N) over the Redis keyspace each dashboard poll; the sidecar count key is O(1). **Pick: sidecar count key** maintained by the cron writer + delta-on-prune. See Risk §3 below |
+| Instead of                                                                                                                     | Could Use                                                                        | Tradeoff                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| global `fetch` + `AbortController`                                                                                             | `undici` Dispatcher with `pool` per-host                                         | Pool would automatically per-host-throttle and reuse connections — but project has zero existing `undici` usage. Adding a direct dep contradicts the `createLimit` "no `p-limit` because we keep deps small" precedent (`concurrencyLimit.ts:11-15`). Boring choice wins                                        |
+| Self-HTTP cron→endpoint invocation (POST to `https://otg-iran-monitor.vercel.app/api/events/prune-dead-urls` w/ system Bearer) | Direct function call to a shared `pruneDeadUrlEvents(opts)` helper               | Self-HTTP exercises the audit-log path identically AND validates the Bearer gate end-to-end on every cron run, but introduces (a) a circular call back into the same function instance, (b) a need for the Vercel-deployment URL in env, (c) doubled latency. **Pick: shared helper** (see Discretion §3 below) |
+| New `events:url-liveness-count` sidecar key written on each sweep                                                              | `SCAN MATCH events:url-liveness:* COUNT 100` from `/operator-status` per request | SCAN is O(N) over the Redis keyspace each dashboard poll; the sidecar count key is O(1). **Pick: sidecar count key** maintained by the cron writer + delta-on-prune. See Risk §3 below                                                                                                                          |
 
 **Installation:** None. All packages confirmed present in `package.json`.
 
 **Version verification (commands run during research):**
+
 ```bash
 # package.json inspection (no remote registry call needed)
 grep -E "undici|zod|@upstash/redis|express" package.json   # → zero undici matches; zod ^3.25.76; @upstash/redis ^1.37.0; express ^5.2.1
@@ -70,9 +71,9 @@ All versions [VERIFIED: read directly from `/Users/zackmaz/Desktop/otg-iran-moni
 
 ## Package Legitimacy Audit
 
-| Package | Registry | Age | Downloads | Source Repo | slopcheck | Disposition |
-|---------|----------|-----|-----------|-------------|-----------|-------------|
-| _none added_ | n/a | n/a | n/a | n/a | n/a | Phase 32 adds zero new packages |
+| Package      | Registry | Age | Downloads | Source Repo | slopcheck | Disposition                     |
+| ------------ | -------- | --- | --------- | ----------- | --------- | ------------------------------- |
+| _none added_ | n/a      | n/a | n/a       | n/a         | n/a       | Phase 32 adds zero new packages |
 
 **Packages removed due to slopcheck [SLOP] verdict:** none
 **Packages flagged as suspicious [SUS]:** none
@@ -247,6 +248,7 @@ scripts/
 **When to use:** Inside `runProbeSweep()` only — never call `probeUrl` standalone from a request handler (anti-pattern #17).
 
 **Example:**
+
 ```typescript
 // Source: pattern derived from server/lib/llmEventExtractor.v3.ts:559-606 (parallel batches via
 // createLimit) and server/adapters/nominatim.ts:20-30 (fetch-with-timeout).
@@ -256,12 +258,12 @@ import { logger } from './logger.js';
 
 const log = logger.child({ module: 'urlLiveness' });
 
-const PROBE_CONCURRENCY = 8;          // D-18
-const PROBE_TIMEOUT_MS = 10_000;      // D-18
-const PER_HOST_INTERVAL_MS = 1_000;   // D-18 (Nominatim parity)
-const JITTER_MS = 200;                // D-18 (±200ms)
-const MAX_REDIRECTS = 3;              // D-17
-const PROBE_UA = 'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)';   // D-21
+const PROBE_CONCURRENCY = 8; // D-18
+const PROBE_TIMEOUT_MS = 10_000; // D-18
+const PER_HOST_INTERVAL_MS = 1_000; // D-18 (Nominatim parity)
+const JITTER_MS = 200; // D-18 (±200ms)
+const MAX_REDIRECTS = 3; // D-17
+const PROBE_UA = 'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)'; // D-21
 
 const hostNext = new Map<string, number>();
 
@@ -278,7 +280,7 @@ async function waitForHostSlot(hostname: string): Promise<void> {
 
 export async function runProbeSweep(opts: {
   eventIdsWithUrls: Array<{ eventId: string; url: string }>;
-  deadlineMs: number;          // wall-clock budget (Vercel maxDuration aware)
+  deadlineMs: number; // wall-clock budget (Vercel maxDuration aware)
 }): Promise<{ probed: number; skippedBudget: number }> {
   const limit = createLimit(PROBE_CONCURRENCY);
   let probed = 0;
@@ -374,7 +376,7 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
         'User-Agent': PROBE_UA,
         ...(method === 'GET' ? { Range: 'bytes=0-1023' } : {}),
       },
-      redirect: 'manual',           // we count hops ourselves (D-17)
+      redirect: 'manual', // we count hops ourselves (D-17)
     };
     return await fetch(url, init);
   } catch {
@@ -396,17 +398,17 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 
 ## Don't Hand-Roll
 
-| Problem | Don't Build | Use Instead | Why |
-|---------|-------------|-------------|-----|
-| Bearer-token authentication | Custom header parsing + comparison | `dashboardAuth` middleware (`server/middleware/dashboardAuth.ts:31`) | Already does constant-time compare with `timingSafeEqual`, dev bypass via NODE_ENV, fail-closed in prod on missing config |
-| SHA-256 truncated Bearer fingerprint | Direct `createHash` call | `bearerFingerprint(password)` (`server/lib/operatorAudit.ts:62`) | Single identity model shared with audit log + quota counter; changing the truncation length in one place would silently fork |
-| Operator-action audit log | New SADD bounded-set helper | `appendOperatorAuditEntry({...})` (`server/lib/operatorAudit.ts:69`) | Already implements 500-cap + 30d TTL + SPOP eviction; aggregator at `/api/operator-status` already reads it |
-| Per-Bearer per-day quota | New INCR + TTL flow | Pattern-copy of `checkReplayQuota` (`server/lib/replayQuota.ts:58`) into `checkPruneQuota` | Identical INCR-then-EXPIRE-on-first idiom, identical 48h TTL, identical UTC-midnight reset calculation |
-| Concurrency-bounded async queue | Promise.all + manual counter | `createLimit(8)` (`server/lib/concurrencyLimit.ts:35`) | 30-LOC FIFO queue; explicit "no p-limit dep" rationale already documented |
-| Redis-with-fallback wrapper | Direct `redis.get`/`redis.set` | `cacheGetSafe`/`cacheSetSafe` (`server/cache/redis.ts:138, 213`) | Provides 2s timeout (REDIS_OP_TIMEOUT_MS) + in-memory fallback that the chaos test (`server/__tests__/resilience/redis-death.test.ts`) hits |
-| `safeWaitUntil` shim for cron background work | Direct `waitUntil()` call | The cron handler is already inside one via `runRefreshExtraction()` (`server/lib/llmExtractionPipeline.ts:258`) | The probe sweep + prune call sit INSIDE the existing IIFE — no second `safeWaitUntil` call needed |
-| HTTP per-host throttle | New module | `Map<hostname, nextAllowedAt: number>` in `urlLiveness.ts` module scope | The Nominatim adapter doesn't actually implement a Redis-backed per-host throttle either — it just sleeps. Pattern-match the in-memory approach; the module-singleton survives warm starts on Fluid Compute |
-| URL parsing / canonicalization | `urlparse`/`whatwg-url` dep | Built-in `new URL(rawUrl)` | The `URL` global throws on malformed input — wrap in try/catch in the sweep loop |
+| Problem                                       | Don't Build                        | Use Instead                                                                                                     | Why                                                                                                                                                                                                         |
+| --------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bearer-token authentication                   | Custom header parsing + comparison | `dashboardAuth` middleware (`server/middleware/dashboardAuth.ts:31`)                                            | Already does constant-time compare with `timingSafeEqual`, dev bypass via NODE_ENV, fail-closed in prod on missing config                                                                                   |
+| SHA-256 truncated Bearer fingerprint          | Direct `createHash` call           | `bearerFingerprint(password)` (`server/lib/operatorAudit.ts:62`)                                                | Single identity model shared with audit log + quota counter; changing the truncation length in one place would silently fork                                                                                |
+| Operator-action audit log                     | New SADD bounded-set helper        | `appendOperatorAuditEntry({...})` (`server/lib/operatorAudit.ts:69`)                                            | Already implements 500-cap + 30d TTL + SPOP eviction; aggregator at `/api/operator-status` already reads it                                                                                                 |
+| Per-Bearer per-day quota                      | New INCR + TTL flow                | Pattern-copy of `checkReplayQuota` (`server/lib/replayQuota.ts:58`) into `checkPruneQuota`                      | Identical INCR-then-EXPIRE-on-first idiom, identical 48h TTL, identical UTC-midnight reset calculation                                                                                                      |
+| Concurrency-bounded async queue               | Promise.all + manual counter       | `createLimit(8)` (`server/lib/concurrencyLimit.ts:35`)                                                          | 30-LOC FIFO queue; explicit "no p-limit dep" rationale already documented                                                                                                                                   |
+| Redis-with-fallback wrapper                   | Direct `redis.get`/`redis.set`     | `cacheGetSafe`/`cacheSetSafe` (`server/cache/redis.ts:138, 213`)                                                | Provides 2s timeout (REDIS_OP_TIMEOUT_MS) + in-memory fallback that the chaos test (`server/__tests__/resilience/redis-death.test.ts`) hits                                                                 |
+| `safeWaitUntil` shim for cron background work | Direct `waitUntil()` call          | The cron handler is already inside one via `runRefreshExtraction()` (`server/lib/llmExtractionPipeline.ts:258`) | The probe sweep + prune call sit INSIDE the existing IIFE — no second `safeWaitUntil` call needed                                                                                                           |
+| HTTP per-host throttle                        | New module                         | `Map<hostname, nextAllowedAt: number>` in `urlLiveness.ts` module scope                                         | The Nominatim adapter doesn't actually implement a Redis-backed per-host throttle either — it just sleeps. Pattern-match the in-memory approach; the module-singleton survives warm starts on Fluid Compute |
+| URL parsing / canonicalization                | `urlparse`/`whatwg-url` dep        | Built-in `new URL(rawUrl)`                                                                                      | The `URL` global throws on malformed input — wrap in try/catch in the sweep loop                                                                                                                            |
 
 **Key insight:** Phase 32 is a refactor-shaped feature build — every primitive is already in the repo, mostly developed under Phase 28.2 W3 (operator-action audit log + quota) and Phase 27.4.4 (concurrency limiter + dashboard auth + safeWaitUntil). The new code is glue + the probe primitive + a Zod schema.
 
@@ -414,13 +416,13 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 
 **Trigger:** Phase 32 is feature-add, not rename. Runtime state inventory is mostly N/A. Documented anyway for completeness:
 
-| Category | Items Found | Action Required |
-|----------|-------------|------------------|
-| Stored data | None — `events:url-liveness:*` keys are new. `events:llm:v3` IS mutated (events spliced on prune); blast radius is internal to this phase's prune handler | New code |
-| Live service config | None — no external service registrations | None |
-| OS-registered state | None — Vercel cron schedule (`vercel.json` `crons[]`) is **unchanged**; D-01 explicitly piggybacks rather than adding a 4th entry | None |
-| Secrets/env vars | None new. `DASHBOARD_PASSWORD` (existing) gates the prune endpoint; `CRON_SECRET` (existing) gates the cron route. No `VITE_PROBE_*` env added per CONTEXT D-18 + Deferred: "Env-tunable probe knobs" deferred until incident-driven need | None |
-| Build artifacts / installed packages | No new deps. `api/vercel-entry.js` bundle gets ~3-5KB larger from `urlLiveness.ts` + `pruneQuota.ts` + Zod schema; well under SIMPLIFY-07 budget concerns | Rebuild via `npm run build` after merge — standard |
+| Category                             | Items Found                                                                                                                                                                                                                               | Action Required                                    |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Stored data                          | None — `events:url-liveness:*` keys are new. `events:llm:v3` IS mutated (events spliced on prune); blast radius is internal to this phase's prune handler                                                                                 | New code                                           |
+| Live service config                  | None — no external service registrations                                                                                                                                                                                                  | None                                               |
+| OS-registered state                  | None — Vercel cron schedule (`vercel.json` `crons[]`) is **unchanged**; D-01 explicitly piggybacks rather than adding a 4th entry                                                                                                         | None                                               |
+| Secrets/env vars                     | None new. `DASHBOARD_PASSWORD` (existing) gates the prune endpoint; `CRON_SECRET` (existing) gates the cron route. No `VITE_PROBE_*` env added per CONTEXT D-18 + Deferred: "Env-tunable probe knobs" deferred until incident-driven need | None                                               |
+| Build artifacts / installed packages | No new deps. `api/vercel-entry.js` bundle gets ~3-5KB larger from `urlLiveness.ts` + `pruneQuota.ts` + Zod schema; well under SIMPLIFY-07 budget concerns                                                                                 | Rebuild via `npm run build` after merge — standard |
 
 ## Common Pitfalls
 
@@ -431,6 +433,7 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 **Why it happens:** The probe sweep has no awareness of wall-clock or remaining `maxDuration` headroom.
 
 **How to avoid:**
+
 - Pass a `deadlineMs: number` into `runProbeSweep()` set to `cronStartTimestamp + 800_000 - SAFETY_MARGIN_MS` (recommend `SAFETY_MARGIN_MS = 60_000` — leaves 60s for the prune call + audit-log writes).
 - Each task in the sweep checks `Date.now() > opts.deadlineMs` BEFORE entering the throttle/fetch sequence (see pattern code above). Tasks past the deadline increment `skippedBudget` and return — they get re-prioritized next tick because D-04's "never-probed first" sort still routes them.
 - The "best-effort partial sweep" (D-03) IS this contract; the planner must wire the deadline plumbing or D-03 collapses to "best-effort happens by crash."
@@ -444,6 +447,7 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 **Why it happens:** Module-singleton state never gets GC'd.
 
 **How to avoid:**
+
 - Add a sweep-end cleanup: at the end of `runProbeSweep()`, iterate `hostNext` and `delete()` entries where `nextAllowedAt < Date.now() - 60_000` (i.e., entries older than 60s — well past the 1s throttle window).
 - Cold-start resets the map to empty automatically. Vercel Fluid Compute cold-starts on most cron ticks anyway (cron runs every 24h, far past warm-window TTL), so the warm-instance unbounded-growth pathology is theoretical for THIS callsite. Document the cleanup as defense-in-depth.
 
@@ -456,6 +460,7 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 **Why it happens:** Per-event keys are right for write-time TTL granularity but wrong for read-time aggregation.
 
 **How to avoid:**
+
 - Add a sidecar Redis key `events:url-liveness-count` (single integer). The cron writer maintains it:
   - On probe-write that transitions live → terminal-dead: `INCR events:url-liveness-count`
   - On probe-write that transitions terminal-dead → live (or terminal-dead → unknown): `DECR events:url-liveness-count`
@@ -473,9 +478,10 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 **Why it happens:** Upstash REST is not transactional across the GET/SET sequence (no MULTI/EXEC equivalent in the REST client we use).
 
 **How to avoid:**
+
 - This race is **acceptable** by Pitfall-1-bridge invariant — the map serves cached data; a one-poll-cycle (≤15min logical TTL) flicker of a dead event is operationally fine.
 - The harder failure mode is **double-write loss**: if two prune calls overlap (e.g., operator clicks button while cron is mid-prune), the second SET clobbers the first's pruned-state. Mitigations:
-  - Cron's prune runs INSIDE `safeWaitUntil` after probe sweep — the same function instance that just probed. A second concurrent prune from the operator button would have to land on a *different* function instance.
+  - Cron's prune runs INSIDE `safeWaitUntil` after probe sweep — the same function instance that just probed. A second concurrent prune from the operator button would have to land on a _different_ function instance.
   - Document the race in JSDoc on `pruneDeadUrlEvents()`. Operator's manual prune that overlaps cron prune may result in fewer-than-expected deletions for one tick (the next cron tick re-prunes whatever survived).
   - Optional belt-and-suspenders: a Redis-backed mutex via `redis.set('lock:prune-dead-urls', '1', { nx: true, ex: 60 })`. Returns null on contention → return 409 from the endpoint. Plan-level decision; the planner should pin one approach.
 
@@ -488,6 +494,7 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 **Why it happens:** Bounded set is bounded; new tags pull from the same pool.
 
 **How to avoid:**
+
 - This is **operationally acceptable** — the 30d TTL is a soft window, the 500 cap is a hard limit, and CONTEXT D-14 explicitly mirrors `/llm-replay`'s shape without a separate audit log. Documenting expected entry-rate change in the SUMMARY is enough.
 - If the cap proves too tight, REDIS-OPT-03 (Phase 35) will already be re-classifying the audit log alongside other observability-only keys. Phase 32 doesn't need to pre-solve.
 - DO NOT add a second audit-log set (`operator:prune-audit-log`) — defeats the unified `/api/operator-status` aggregator and forces the dashboard to merge two streams.
@@ -501,6 +508,7 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 **Why it happens:** The 2s `REDIS_OP_TIMEOUT_MS` (`server/cache/redis.ts:107`) is the contract — anything that doesn't go through the safe wrapper bypasses it.
 
 **How to avoid:**
+
 - Every probe-write goes through `cacheSetSafe(key, value, ttlSec)`, never `redis.set(...)` directly.
 - The sidecar count key (Pitfall 3) uses `redis.incr/decr` which is NOT covered by `cacheSetSafe`. Wrap those calls in try/catch + `Promise.race(... withTimeout(...))` manually OR accept that the count key degrades silently to "stale count" when Redis is unreachable (the dashboard shows the previous tick's count).
 - The prune endpoint MUST tolerate Redis death — return 503 with `{ error: 'redis_unavailable' }` rather than 500. The chaos test will assert prune returns 200 OR 503, never 500 (line 19 of redis-death.test.ts).
@@ -528,9 +536,9 @@ function primaryUrl(entity: ConflictEventEntity): string | null {
 // Source: server/lib/operatorAudit.ts:69 + server/routes/events.ts:494-500
 await appendOperatorAuditEntry({
   timestamp: Date.now(),
-  bearerFingerprint: fingerprint,                  // for cron: literal 'cron:refresh-events' (D-11)
-  operation: 'prune-dead-urls',                    // must widen union in operatorAudit.ts:49
-  args: { trigger: 'cron' as const },              // D-14
+  bearerFingerprint: fingerprint, // for cron: literal 'cron:refresh-events' (D-11)
+  operation: 'prune-dead-urls', // must widen union in operatorAudit.ts:49
+  args: { trigger: 'cron' as const }, // D-14
   result: 'ok',
 });
 // D-14 strictly says `result: { prunedCount, prunedIds }` but the existing OperatorAuditEntry
@@ -565,7 +573,7 @@ eventsRouter.post('/prune-dead-urls', dashboardAuth, async (req, res) => {
   }
 
   try {
-    const result = await pruneDeadUrlEvents({ trigger });   // D-09 single helper
+    const result = await pruneDeadUrlEvents({ trigger }); // D-09 single helper
     await appendOperatorAuditEntry({
       timestamp: Date.now(),
       bearerFingerprint: trigger === 'cron' ? 'cron:refresh-events' : fingerprint,
@@ -613,11 +621,11 @@ export const UrlLivenessSchema = z
 export type UrlLiveness = z.infer<typeof UrlLivenessSchema>;
 
 const TTL_SEC_BY_STATUS: Record<UrlLivenessStatus, number> = {
-  live: 7 * 24 * 3600,         // 7d (D-20)
-  '404': 24 * 3600,            // 24h (D-20)
-  '403': 24 * 3600,            // 24h (D-20)
-  'dead-host': 24 * 3600,      // 24h (D-20)
-  unknown: 3600,               // 1h  (D-20)
+  live: 7 * 24 * 3600, // 7d (D-20)
+  '404': 24 * 3600, // 24h (D-20)
+  '403': 24 * 3600, // 24h (D-20)
+  'dead-host': 24 * 3600, // 24h (D-20)
+  unknown: 3600, // 1h  (D-20)
 };
 
 export function ttlSecForStatus(status: UrlLivenessStatus): number {
@@ -627,13 +635,13 @@ export function ttlSecForStatus(status: UrlLivenessStatus): number {
 
 ## State of the Art
 
-| Old Approach | Current Approach | When Changed | Impact |
-|--------------|------------------|--------------|--------|
-| `setInterval` cron in process | Vercel cron via `vercel.json crons[]` | Phase 13 (v1.0 deployment) | This phase piggybacks on the existing 04:00 UTC entry rather than adding a 4th — Hobby's 3-cron cap was lifted by Vercel Pro upgrade (Phase 29) but CONTEXT D-01 still chose piggyback for "minimal operational surface" |
-| Fire-and-forget cache writes from `/api/events` | Cron-only writer discipline (anti-pattern #17) | Phase 27.4.6 | Phase 32 inherits the discipline; probe writes happen only inside the cron-handler `safeWaitUntil` IIFE |
-| Direct `redis.get/set` in routes | `cacheGetSafe/cacheSetSafe` + in-memory fallback | Phase 13 + chaos test added Phase 28.2.7 | Phase 32 probe writes use `cacheSetSafe`; the chaos test will fail any new code that bypasses |
-| `console.log` debug | `pino` via `logger.child(...)` | Phase 28.x | CLAUDE.md mandatory; phase code uses `logger.child({ module: 'urlLiveness' })` |
-| Per-route handcoded auth | `dashboardAuth` middleware | Phase 27.4.4 | New prune endpoint mounts behind this verbatim |
+| Old Approach                                    | Current Approach                                 | When Changed                             | Impact                                                                                                                                                                                                                   |
+| ----------------------------------------------- | ------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `setInterval` cron in process                   | Vercel cron via `vercel.json crons[]`            | Phase 13 (v1.0 deployment)               | This phase piggybacks on the existing 04:00 UTC entry rather than adding a 4th — Hobby's 3-cron cap was lifted by Vercel Pro upgrade (Phase 29) but CONTEXT D-01 still chose piggyback for "minimal operational surface" |
+| Fire-and-forget cache writes from `/api/events` | Cron-only writer discipline (anti-pattern #17)   | Phase 27.4.6                             | Phase 32 inherits the discipline; probe writes happen only inside the cron-handler `safeWaitUntil` IIFE                                                                                                                  |
+| Direct `redis.get/set` in routes                | `cacheGetSafe/cacheSetSafe` + in-memory fallback | Phase 13 + chaos test added Phase 28.2.7 | Phase 32 probe writes use `cacheSetSafe`; the chaos test will fail any new code that bypasses                                                                                                                            |
+| `console.log` debug                             | `pino` via `logger.child(...)`                   | Phase 28.x                               | CLAUDE.md mandatory; phase code uses `logger.child({ module: 'urlLiveness' })`                                                                                                                                           |
+| Per-route handcoded auth                        | `dashboardAuth` middleware                       | Phase 27.4.4                             | New prune endpoint mounts behind this verbatim                                                                                                                                                                           |
 
 **Deprecated/outdated:**
 
@@ -652,17 +660,17 @@ export function ttlSecForStatus(status: UrlLivenessStatus): number {
 
 ## Assumptions Log
 
-| # | Claim | Section | Risk if Wrong |
-|---|-------|---------|---------------|
-| A1 | The "primary URL" for LLM v3 events should be read from `entity.data.source` (the v1 template-inherited field), not `entity.data.sourceUrls[0]` | Summary, Common Operation 1, Anti-Patterns | If the planner reads CONTEXT D-05 literally and looks for `sourceUrls[0]`, the lookup returns `undefined` → entity skipped from probe sweep → silent zero-coverage of LLM v3 events. Surface this prominently in the plan |
-| A2 | `attemptCount` semantics: monotonic-with-reset-on-live-or-unknown transition (Discretion §4) | D-22 code example, Common Operation 4 | If the planner picks pure-monotonic, the cron auto-prune rule (D-12 "≥3 consecutive ticks") fires after non-consecutive dead readings — false positives — and operator complains a flapping URL got auto-pruned |
-| A3 | Sidecar `events:url-liveness-count` integer key is necessary (Pitfall 3) | Pitfall 3, Architecture diagram | If planner skips the sidecar, dashboard polls do N Redis GETs per session; Upstash command budget (already 92% per REDIS-OPT-04) tips into red. Alternative: dashboard polls less frequently than 30s, or computes count only on operator click |
-| A4 | Cron's prune call uses the shared helper (`pruneDeadUrlEvents()` direct invocation), not self-HTTP (Discretion §3) | Discretion §3, Common Operation 3, Architecture diagram | If planner picks self-HTTP, audit-log shows two distinct call paths per cron tick (the probe + the self-call) and the deployment URL must be in env; testing requires either mocking `fetch` or running the local Express server. Direct invocation is simpler |
-| A5 | D-22 schema test placement at `server/__tests__/lib/urlLiveness.schema.test.ts` (canonical) with a 5-line shim at `src/__tests__/lib/urlLiveness.schema.test.ts` for literal CONTEXT compliance | Recommended Project Structure note | If planner places ONLY at the `src/` path and runs jsdom env, the test is slower and exercises ESM cross-boundary imports that don't otherwise need testing. If planner places ONLY at server path, technically violates CONTEXT D-22 verbatim |
-| A6 | The cron handler's wall-clock budget for the probe sweep is `cronStartTimestamp + 800_000 - 60_000` (Pitfall 1) | Pitfall 1, runProbeSweep signature | If the planner picks a smaller margin (e.g., 10s), the prune call after the probe sweep may itself get killed mid-`cacheSet`. Plan should pin the value with a comment tying it to the audit-log call + cacheSetSafe round-trip budget |
-| A7 | Per-host throttle map (`Map<hostname, nextAllowedAt>`) is in-module memory, not Redis-backed | Pattern 1, Pitfall 2 | If planner Redis-backs it, each probe adds 2 round-trips (read prior + write new) — undoes the latency budget. In-module is fine for a once-daily cron; cold-start resets are acceptable |
-| A8 | Cron auto-prune uses literal string `'cron:refresh-events'` as `bearerFingerprint` so audit-log entries unambiguously identify cron-vs-operator origin (D-11) | Common Operation 3 | If planner uses the operator's hashed fingerprint or skips the entry entirely, audit-log surface fails the "source unambiguous" intent of D-11 |
-| A9 | Phase 32 introduces ZERO new npm dependencies (slopcheck N/A) | Package Legitimacy Audit | If planner sneaks in `linkinator`, `link-check`, or similar dead-link library, slopcheck must run AND the rationale (vs. the boring 30-LOC fetch we recommend) must defeat the existing "no `p-limit` because keep deps small" precedent. Default: keep boring |
+| #   | Claim                                                                                                                                                                                           | Section                                                 | Risk if Wrong                                                                                                                                                                                                                                                  |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | The "primary URL" for LLM v3 events should be read from `entity.data.source` (the v1 template-inherited field), not `entity.data.sourceUrls[0]`                                                 | Summary, Common Operation 1, Anti-Patterns              | If the planner reads CONTEXT D-05 literally and looks for `sourceUrls[0]`, the lookup returns `undefined` → entity skipped from probe sweep → silent zero-coverage of LLM v3 events. Surface this prominently in the plan                                      |
+| A2  | `attemptCount` semantics: monotonic-with-reset-on-live-or-unknown transition (Discretion §4)                                                                                                    | D-22 code example, Common Operation 4                   | If the planner picks pure-monotonic, the cron auto-prune rule (D-12 "≥3 consecutive ticks") fires after non-consecutive dead readings — false positives — and operator complains a flapping URL got auto-pruned                                                |
+| A3  | Sidecar `events:url-liveness-count` integer key is necessary (Pitfall 3)                                                                                                                        | Pitfall 3, Architecture diagram                         | If planner skips the sidecar, dashboard polls do N Redis GETs per session; Upstash command budget (already 92% per REDIS-OPT-04) tips into red. Alternative: dashboard polls less frequently than 30s, or computes count only on operator click                |
+| A4  | Cron's prune call uses the shared helper (`pruneDeadUrlEvents()` direct invocation), not self-HTTP (Discretion §3)                                                                              | Discretion §3, Common Operation 3, Architecture diagram | If planner picks self-HTTP, audit-log shows two distinct call paths per cron tick (the probe + the self-call) and the deployment URL must be in env; testing requires either mocking `fetch` or running the local Express server. Direct invocation is simpler |
+| A5  | D-22 schema test placement at `server/__tests__/lib/urlLiveness.schema.test.ts` (canonical) with a 5-line shim at `src/__tests__/lib/urlLiveness.schema.test.ts` for literal CONTEXT compliance | Recommended Project Structure note                      | If planner places ONLY at the `src/` path and runs jsdom env, the test is slower and exercises ESM cross-boundary imports that don't otherwise need testing. If planner places ONLY at server path, technically violates CONTEXT D-22 verbatim                 |
+| A6  | The cron handler's wall-clock budget for the probe sweep is `cronStartTimestamp + 800_000 - 60_000` (Pitfall 1)                                                                                 | Pitfall 1, runProbeSweep signature                      | If the planner picks a smaller margin (e.g., 10s), the prune call after the probe sweep may itself get killed mid-`cacheSet`. Plan should pin the value with a comment tying it to the audit-log call + cacheSetSafe round-trip budget                         |
+| A7  | Per-host throttle map (`Map<hostname, nextAllowedAt>`) is in-module memory, not Redis-backed                                                                                                    | Pattern 1, Pitfall 2                                    | If planner Redis-backs it, each probe adds 2 round-trips (read prior + write new) — undoes the latency budget. In-module is fine for a once-daily cron; cold-start resets are acceptable                                                                       |
+| A8  | Cron auto-prune uses literal string `'cron:refresh-events'` as `bearerFingerprint` so audit-log entries unambiguously identify cron-vs-operator origin (D-11)                                   | Common Operation 3                                      | If planner uses the operator's hashed fingerprint or skips the entry entirely, audit-log surface fails the "source unambiguous" intent of D-11                                                                                                                 |
+| A9  | Phase 32 introduces ZERO new npm dependencies (slopcheck N/A)                                                                                                                                   | Package Legitimacy Audit                                | If planner sneaks in `linkinator`, `link-check`, or similar dead-link library, slopcheck must run AND the rationale (vs. the boring 30-LOC fetch we recommend) must defeat the existing "no `p-limit` because keep deps small" precedent. Default: keep boring |
 
 ## Open Questions
 
@@ -683,22 +691,22 @@ export function ttlSecForStatus(status: UrlLivenessStatus): number {
 
 ## Environment Availability
 
-| Dependency | Required By | Available | Version | Fallback |
-|------------|------------|-----------|---------|----------|
-| Node 22 runtime | All code | ✓ | 22.x [VERIFIED: `package.json:7` `"engines.node": "22.x"`] | — |
-| Global `fetch` (undici under the hood) | Probe primitive | ✓ | built-in to Node 22 | — |
-| `AbortController` | 10s timeout (D-18) | ✓ | built-in | — |
-| Upstash Redis (REST) | All Redis ops | ✓ | `@upstash/redis ^1.37.0` | `cacheGetSafe`/`cacheSetSafe` in-memory fallback for reads; new code mirrors that |
-| Vercel Pro `maxDuration: 800` | Probe sweep budget | ✓ | `vercel.json:18` confirmed | — (Pitfall 1: budget plumbing must respect deadline) |
-| `dashboardAuth` middleware | Bearer gate | ✓ | `server/middleware/dashboardAuth.ts:31` | — |
-| `appendOperatorAuditEntry` | Audit log | ✓ | `server/lib/operatorAudit.ts:69` | — |
-| `checkReplayQuota` pattern | Quota counter | ✓ | `server/lib/replayQuota.ts:58` | Clone shape into `checkPruneQuota` |
-| `createLimit` | Concurrency bound | ✓ | `server/lib/concurrencyLimit.ts:35` | — |
-| `safeWaitUntil` | Cron background work | ✓ | `server/lib/safeWaitUntil.ts:62` (already wrapping the cron IIFE) | — |
-| `pino` logger | Structured logging | ✓ | `^10.3.1` | — |
-| `zod` for schema | D-22 contract test | ✓ | `^3.25.76` | — |
-| Vitest + jsdom (frontend tests) | DevApiStatus button tests | ✓ | `vitest ^4.1.0`, `jsdom ^28.1.0` | — |
-| `supertest` (route tests) | Endpoint integration tests | ✓ | `^7.2.2` | — |
+| Dependency                             | Required By                | Available | Version                                                           | Fallback                                                                          |
+| -------------------------------------- | -------------------------- | --------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Node 22 runtime                        | All code                   | ✓         | 22.x [VERIFIED: `package.json:7` `"engines.node": "22.x"`]        | —                                                                                 |
+| Global `fetch` (undici under the hood) | Probe primitive            | ✓         | built-in to Node 22                                               | —                                                                                 |
+| `AbortController`                      | 10s timeout (D-18)         | ✓         | built-in                                                          | —                                                                                 |
+| Upstash Redis (REST)                   | All Redis ops              | ✓         | `@upstash/redis ^1.37.0`                                          | `cacheGetSafe`/`cacheSetSafe` in-memory fallback for reads; new code mirrors that |
+| Vercel Pro `maxDuration: 800`          | Probe sweep budget         | ✓         | `vercel.json:18` confirmed                                        | — (Pitfall 1: budget plumbing must respect deadline)                              |
+| `dashboardAuth` middleware             | Bearer gate                | ✓         | `server/middleware/dashboardAuth.ts:31`                           | —                                                                                 |
+| `appendOperatorAuditEntry`             | Audit log                  | ✓         | `server/lib/operatorAudit.ts:69`                                  | —                                                                                 |
+| `checkReplayQuota` pattern             | Quota counter              | ✓         | `server/lib/replayQuota.ts:58`                                    | Clone shape into `checkPruneQuota`                                                |
+| `createLimit`                          | Concurrency bound          | ✓         | `server/lib/concurrencyLimit.ts:35`                               | —                                                                                 |
+| `safeWaitUntil`                        | Cron background work       | ✓         | `server/lib/safeWaitUntil.ts:62` (already wrapping the cron IIFE) | —                                                                                 |
+| `pino` logger                          | Structured logging         | ✓         | `^10.3.1`                                                         | —                                                                                 |
+| `zod` for schema                       | D-22 contract test         | ✓         | `^3.25.76`                                                        | —                                                                                 |
+| Vitest + jsdom (frontend tests)        | DevApiStatus button tests  | ✓         | `vitest ^4.1.0`, `jsdom ^28.1.0`                                  | —                                                                                 |
+| `supertest` (route tests)              | Endpoint integration tests | ✓         | `^7.2.2`                                                          | —                                                                                 |
 
 **Missing dependencies with no fallback:** none
 
@@ -710,39 +718,40 @@ export function ttlSecForStatus(status: UrlLivenessStatus): number {
 
 ### Test Framework
 
-| Property | Value |
-|----------|-------|
-| Framework | Vitest 4.1.0 (server: `--environment node`, frontend: `--environment jsdom`) |
-| Config file | `vite.config.ts` (test config inline) |
-| Quick run command | `npx vitest run server/__tests__/lib/urlLiveness.schema.test.ts` |
-| Full suite command | `npx vitest run` (covers all phase tests + existing 2193 baseline) |
+| Property           | Value                                                                        |
+| ------------------ | ---------------------------------------------------------------------------- |
+| Framework          | Vitest 4.1.0 (server: `--environment node`, frontend: `--environment jsdom`) |
+| Config file        | `vite.config.ts` (test config inline)                                        |
+| Quick run command  | `npx vitest run server/__tests__/lib/urlLiveness.schema.test.ts`             |
+| Full suite command | `npx vitest run` (covers all phase tests + existing 2193 baseline)           |
 
 ### Phase Requirements → Test Map
 
-| Req ID | Behavior | Test Type | Automated Command | File Exists? |
-|--------|----------|-----------|-------------------|-------------|
-| GHOST-02 | `events:url-liveness:{eventId}` schema (`{status, lastProbedAt, attemptCount, lastUrlProbed, lastHttpStatus}`) parses valid + rejects invalid | unit (zod schema) | `npx vitest run server/__tests__/lib/urlLiveness.schema.test.ts` | ❌ Wave 0 — D-22 contract test |
-| GHOST-02 | TTL upper bound per status (`live` ≤ 7d, dead ≤ 24h, unknown ≤ 1h) is asserted | unit | (same file as above) | ❌ Wave 0 |
-| GHOST-05 | `createLimit(8)` correctly bounds in-flight requests (no more than 8 concurrent) | unit | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "concurrency"` | ❌ Wave 0 |
-| GHOST-05 | Per-host throttle waits ≥1s between requests to same hostname | unit | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "per-host throttle"` | ❌ Wave 0 |
-| GHOST-05 | 10s per-request timeout fires (mocked `fetch` returns hanging promise) | unit | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "timeout"` | ❌ Wave 0 |
-| GHOST-05 | HEAD → GET-with-Range fallback fires on 405 | unit | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "HEAD then GET"` | ❌ Wave 0 |
-| GHOST-05 | Redirect chain limit (≤3 hops; 4th hop returns `unknown`) | unit | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "redirect"` | ❌ Wave 0 |
-| GHOST-05 | User-Agent header is sent on every request | unit | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "User-Agent"` | ❌ Wave 0 |
-| GHOST-05 | DNS failure / ECONNREFUSED → `dead-host` (mocked `fetch` throws) | unit | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "dead-host"` | ❌ Wave 0 |
-| GHOST-04 | `POST /prune-dead-urls` returns 401 without Bearer in prod | integration (supertest) | `npx vitest run server/__tests__/routes/events.prune.test.ts -t "401 without bearer"` | ❌ Wave 0 |
-| GHOST-04 | `POST /prune-dead-urls` returns 429 + Retry-After at 51st call/day per Bearer | integration | `npx vitest run server/__tests__/routes/events.prune.test.ts -t "quota"` | ❌ Wave 0 |
-| GHOST-04 | Cron `trigger: 'cron'` bypasses quota | integration | `npx vitest run server/__tests__/routes/events.prune.test.ts -t "cron bypass"` | ❌ Wave 0 |
-| GHOST-04 | Successful prune: events spliced from `events:llm:v3`; matching `events:url-liveness:*` keys DEL'd; audit entry written | integration | `npx vitest run server/__tests__/routes/events.prune.test.ts -t "splice and audit"` | ❌ Wave 0 |
-| GHOST-04 | Cron auto-prune respects `attemptCount >= 3` (events with attemptCount < 3 not pruned) | integration | `npx vitest run server/__tests__/lib/urlLiveness.cronPrune.test.ts -t "attemptCount gate"` | ❌ Wave 0 |
-| GHOST-03 | `/api/operator-status` response includes new `prune.deadUrlCount` field | integration (supertest) | `npx vitest run server/__tests__/routes/operator-status.test.ts -t "prune block"` | ❌ Wave 0 (extend existing) |
-| GHOST-03 | DevApiStatus renders "Dead URL events: N" when `opStatus.prune.deadUrlCount > 0` | unit (jsdom) | `npx vitest run src/__tests__/components/DevApiStatus.prune.test.tsx -t "dead-url count"` | ❌ Wave 0 |
-| GHOST-03 | Clicking "Prune N dead events" button issues `POST /api/events/prune-dead-urls` with operator Bearer | unit (jsdom) | `npx vitest run src/__tests__/components/DevApiStatus.prune.test.tsx -t "click prune"` | ❌ Wave 0 |
-| GHOST-01 | Cron handler calls `runProbeSweep()` after `runRefreshExtraction` resolves AND then calls `pruneDeadUrlEvents({trigger:'cron'})` | integration | `npx vitest run server/__tests__/routes/refresh-events-cron.prune.test.ts -t "post-extraction sweep+prune"` | ❌ Wave 0 |
-| GHOST-01, GHOST-04, GHOST-05 | Redis-death chaos: probe writes that throw don't crash cron handler; prune endpoint returns 503 not 500 | chaos | `npx vitest run server/__tests__/resilience/redis-death.test.ts -t "prune-dead-urls"` | ❌ Wave 0 (extend existing) |
-| GHOST-02 | `pruneQuota` INCR-then-EXPIRE semantics (51st call returns allowed=false) | unit | `npx vitest run server/__tests__/lib/pruneQuota.test.ts` | ❌ Wave 0 (clone replayQuota.test.ts) |
+| Req ID                       | Behavior                                                                                                                                      | Test Type               | Automated Command                                                                                           | File Exists?                          |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| GHOST-02                     | `events:url-liveness:{eventId}` schema (`{status, lastProbedAt, attemptCount, lastUrlProbed, lastHttpStatus}`) parses valid + rejects invalid | unit (zod schema)       | `npx vitest run server/__tests__/lib/urlLiveness.schema.test.ts`                                            | ❌ Wave 0 — D-22 contract test        |
+| GHOST-02                     | TTL upper bound per status (`live` ≤ 7d, dead ≤ 24h, unknown ≤ 1h) is asserted                                                                | unit                    | (same file as above)                                                                                        | ❌ Wave 0                             |
+| GHOST-05                     | `createLimit(8)` correctly bounds in-flight requests (no more than 8 concurrent)                                                              | unit                    | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "concurrency"`                            | ❌ Wave 0                             |
+| GHOST-05                     | Per-host throttle waits ≥1s between requests to same hostname                                                                                 | unit                    | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "per-host throttle"`                      | ❌ Wave 0                             |
+| GHOST-05                     | 10s per-request timeout fires (mocked `fetch` returns hanging promise)                                                                        | unit                    | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "timeout"`                                | ❌ Wave 0                             |
+| GHOST-05                     | HEAD → GET-with-Range fallback fires on 405                                                                                                   | unit                    | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "HEAD then GET"`                          | ❌ Wave 0                             |
+| GHOST-05                     | Redirect chain limit (≤3 hops; 4th hop returns `unknown`)                                                                                     | unit                    | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "redirect"`                               | ❌ Wave 0                             |
+| GHOST-05                     | User-Agent header is sent on every request                                                                                                    | unit                    | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "User-Agent"`                             | ❌ Wave 0                             |
+| GHOST-05                     | DNS failure / ECONNREFUSED → `dead-host` (mocked `fetch` throws)                                                                              | unit                    | `npx vitest run server/__tests__/lib/urlLiveness.probe.test.ts -t "dead-host"`                              | ❌ Wave 0                             |
+| GHOST-04                     | `POST /prune-dead-urls` returns 401 without Bearer in prod                                                                                    | integration (supertest) | `npx vitest run server/__tests__/routes/events.prune.test.ts -t "401 without bearer"`                       | ❌ Wave 0                             |
+| GHOST-04                     | `POST /prune-dead-urls` returns 429 + Retry-After at 51st call/day per Bearer                                                                 | integration             | `npx vitest run server/__tests__/routes/events.prune.test.ts -t "quota"`                                    | ❌ Wave 0                             |
+| GHOST-04                     | Cron `trigger: 'cron'` bypasses quota                                                                                                         | integration             | `npx vitest run server/__tests__/routes/events.prune.test.ts -t "cron bypass"`                              | ❌ Wave 0                             |
+| GHOST-04                     | Successful prune: events spliced from `events:llm:v3`; matching `events:url-liveness:*` keys DEL'd; audit entry written                       | integration             | `npx vitest run server/__tests__/routes/events.prune.test.ts -t "splice and audit"`                         | ❌ Wave 0                             |
+| GHOST-04                     | Cron auto-prune respects `attemptCount >= 3` (events with attemptCount < 3 not pruned)                                                        | integration             | `npx vitest run server/__tests__/lib/urlLiveness.cronPrune.test.ts -t "attemptCount gate"`                  | ❌ Wave 0                             |
+| GHOST-03                     | `/api/operator-status` response includes new `prune.deadUrlCount` field                                                                       | integration (supertest) | `npx vitest run server/__tests__/routes/operator-status.test.ts -t "prune block"`                           | ❌ Wave 0 (extend existing)           |
+| GHOST-03                     | DevApiStatus renders "Dead URL events: N" when `opStatus.prune.deadUrlCount > 0`                                                              | unit (jsdom)            | `npx vitest run src/__tests__/components/DevApiStatus.prune.test.tsx -t "dead-url count"`                   | ❌ Wave 0                             |
+| GHOST-03                     | Clicking "Prune N dead events" button issues `POST /api/events/prune-dead-urls` with operator Bearer                                          | unit (jsdom)            | `npx vitest run src/__tests__/components/DevApiStatus.prune.test.tsx -t "click prune"`                      | ❌ Wave 0                             |
+| GHOST-01                     | Cron handler calls `runProbeSweep()` after `runRefreshExtraction` resolves AND then calls `pruneDeadUrlEvents({trigger:'cron'})`              | integration             | `npx vitest run server/__tests__/routes/refresh-events-cron.prune.test.ts -t "post-extraction sweep+prune"` | ❌ Wave 0                             |
+| GHOST-01, GHOST-04, GHOST-05 | Redis-death chaos: probe writes that throw don't crash cron handler; prune endpoint returns 503 not 500                                       | chaos                   | `npx vitest run server/__tests__/resilience/redis-death.test.ts -t "prune-dead-urls"`                       | ❌ Wave 0 (extend existing)           |
+| GHOST-02                     | `pruneQuota` INCR-then-EXPIRE semantics (51st call returns allowed=false)                                                                     | unit                    | `npx vitest run server/__tests__/lib/pruneQuota.test.ts`                                                    | ❌ Wave 0 (clone replayQuota.test.ts) |
 
 ### Sampling Rate
+
 - **Per task commit:** `npx vitest run server/__tests__/lib/urlLiveness.schema.test.ts server/__tests__/lib/pruneQuota.test.ts` (~5s)
 - **Per wave merge:** `npx vitest run server/__tests__/lib/urlLiveness.*.test.ts server/__tests__/routes/events.prune.test.ts server/__tests__/routes/refresh-events-cron.prune.test.ts` (~30s)
 - **Phase gate:** `npx vitest run` (full suite green; ~3min on this codebase)
@@ -771,37 +780,38 @@ No framework install needed — Vitest is already in `devDependencies` (`^4.1.0`
 
 ### Applicable ASVS Categories
 
-| ASVS Category | Applies | Standard Control |
-|---------------|---------|-----------------|
-| V2 Authentication | yes | `dashboardAuth` middleware (`server/middleware/dashboardAuth.ts:31`) — constant-time Bearer compare via `timingSafeEqual` |
-| V3 Session Management | no | Bearer is stateless; no server-side session |
-| V4 Access Control | yes | Same Bearer gate; quota counter (`operator:prune-quota:*`) prevents abuse |
-| V5 Input Validation | yes | Zod (`UrlLivenessSchema`) for read-side parse; `req.body?.trigger` whitelist for endpoint (only `'cron' \| 'manual'`) |
-| V6 Cryptography | yes | `bearerFingerprint()` uses Node `createHash('sha256')` — built-in, never hand-roll. Bearer compare uses `timingSafeEqual` not `===` |
-| V10 Configuration | yes | `DASHBOARD_PASSWORD` empty → 503 fail-closed (existing dashboardAuth behavior); `CRON_SECRET` empty → no auth on cron route (existing) |
+| ASVS Category                          | Applies                | Standard Control                                                                                                                                 |
+| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| V2 Authentication                      | yes                    | `dashboardAuth` middleware (`server/middleware/dashboardAuth.ts:31`) — constant-time Bearer compare via `timingSafeEqual`                        |
+| V3 Session Management                  | no                     | Bearer is stateless; no server-side session                                                                                                      |
+| V4 Access Control                      | yes                    | Same Bearer gate; quota counter (`operator:prune-quota:*`) prevents abuse                                                                        |
+| V5 Input Validation                    | yes                    | Zod (`UrlLivenessSchema`) for read-side parse; `req.body?.trigger` whitelist for endpoint (only `'cron' \| 'manual'`)                            |
+| V6 Cryptography                        | yes                    | `bearerFingerprint()` uses Node `createHash('sha256')` — built-in, never hand-roll. Bearer compare uses `timingSafeEqual` not `===`              |
+| V10 Configuration                      | yes                    | `DASHBOARD_PASSWORD` empty → 503 fail-closed (existing dashboardAuth behavior); `CRON_SECRET` empty → no auth on cron route (existing)           |
 | V11 SSRF (Server-Side Request Forgery) | **yes — load-bearing** | Probe makes outbound HTTP based on URL stored in cache. Threat: attacker controls a stored URL → probe issues request to internal infrastructure |
-| V13 API & Web Service | yes | Endpoint is JSON in/out; no XML/SOAP parsing |
+| V13 API & Web Service                  | yes                    | Endpoint is JSON in/out; no XML/SOAP parsing                                                                                                     |
 
 ### Known Threat Patterns for {Node 22 + Express 5 + Upstash REST}
 
-| Pattern | STRIDE | Standard Mitigation |
-|---------|--------|---------------------|
+| Pattern                                                                                | STRIDE                     | Standard Mitigation                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **SSRF via stored URL — probe hits localhost / internal IP / cloud metadata endpoint** | Tampering, Info Disclosure | `URL` parse + hostname allow-deny check: reject hosts that resolve to private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 incl. AWS/GCP metadata, ::1, fc00::/7). The probe runs INSIDE the Vercel sandbox — these private ranges shouldn't even be routable from Vercel's egress, but defense-in-depth. Skip the request entirely; tag as `unknown` |
-| **Bearer brute force** | Spoofing | `dashboardAuth` already uses `timingSafeEqual`; `rateLimiters.public` 60/min bypassed only by valid Bearer (`server/middleware/rateLimit.ts:78-95`) so an unauthenticated brute-forcer is rate-limited by the public-tier limiter |
-| **Replay-style DoS — operator clicks Prune 1000x to exhaust budget** | DoS | `operator:prune-quota:{fingerprint}:{date}` INCR-with-48h-TTL caps at 50/24h (D-15) — mirrors `/llm-replay` quota |
-| **Cron replay (CRON_SECRET leak)** | Spoofing | Cron route at `server/routes/refresh-events-cron.ts:40-52` uses `timingSafeEqual` on `CRON_SECRET`; same pattern Phase 32 inherits without modification |
-| **Audit log spoofing — caller sets bearerFingerprint** | Repudiation | `bearerFingerprint` is computed server-side from `DASHBOARD_PASSWORD` (`appendOperatorAuditEntry` caller controls the value but only one identity exists for the operator's Bearer); cron caller uses literal `'cron:refresh-events'` so source is unambiguous |
-| **Prune endpoint deletes events maliciously** | Integrity | Bearer gate + audit log + 50/24h quota; prune is recoverable via `/llm-replay` against the source groupKey (CONTEXT Deferred §"Soft-delete") |
-| **HEAD/GET request hangs probe forever** | DoS | 10s `AbortController` timeout (D-18) per request × 3 hops max = 30s upper bound per URL; deadline check in sweep loop caps the whole pass |
-| **Probe-induced bandwidth exhaustion** | DoS | HEAD-first (zero body); GET fallback uses `Range: bytes=0-1023` (~1KB cap) |
-| **Honest-citizen revolt — publisher blocks our IP after seeing too many probes** | Availability | Per-host 1 req/s throttle + ±200ms jitter + identifying User-Agent (D-21 — gives publishers a contact path to ask us to stop). 8-concurrent global cap means even a worst-case all-same-host backlog never exceeds 1 req/s/host |
+| **Bearer brute force**                                                                 | Spoofing                   | `dashboardAuth` already uses `timingSafeEqual`; `rateLimiters.public` 60/min bypassed only by valid Bearer (`server/middleware/rateLimit.ts:78-95`) so an unauthenticated brute-forcer is rate-limited by the public-tier limiter                                                                                                                                             |
+| **Replay-style DoS — operator clicks Prune 1000x to exhaust budget**                   | DoS                        | `operator:prune-quota:{fingerprint}:{date}` INCR-with-48h-TTL caps at 50/24h (D-15) — mirrors `/llm-replay` quota                                                                                                                                                                                                                                                             |
+| **Cron replay (CRON_SECRET leak)**                                                     | Spoofing                   | Cron route at `server/routes/refresh-events-cron.ts:40-52` uses `timingSafeEqual` on `CRON_SECRET`; same pattern Phase 32 inherits without modification                                                                                                                                                                                                                       |
+| **Audit log spoofing — caller sets bearerFingerprint**                                 | Repudiation                | `bearerFingerprint` is computed server-side from `DASHBOARD_PASSWORD` (`appendOperatorAuditEntry` caller controls the value but only one identity exists for the operator's Bearer); cron caller uses literal `'cron:refresh-events'` so source is unambiguous                                                                                                                |
+| **Prune endpoint deletes events maliciously**                                          | Integrity                  | Bearer gate + audit log + 50/24h quota; prune is recoverable via `/llm-replay` against the source groupKey (CONTEXT Deferred §"Soft-delete")                                                                                                                                                                                                                                  |
+| **HEAD/GET request hangs probe forever**                                               | DoS                        | 10s `AbortController` timeout (D-18) per request × 3 hops max = 30s upper bound per URL; deadline check in sweep loop caps the whole pass                                                                                                                                                                                                                                     |
+| **Probe-induced bandwidth exhaustion**                                                 | DoS                        | HEAD-first (zero body); GET fallback uses `Range: bytes=0-1023` (~1KB cap)                                                                                                                                                                                                                                                                                                    |
+| **Honest-citizen revolt — publisher blocks our IP after seeing too many probes**       | Availability               | Per-host 1 req/s throttle + ±200ms jitter + identifying User-Agent (D-21 — gives publishers a contact path to ask us to stop). 8-concurrent global cap means even a worst-case all-same-host backlog never exceeds 1 req/s/host                                                                                                                                               |
 
 **SSRF mitigation — recommended implementation:**
 
 ```typescript
 // Source: defense-in-depth derived from V11 ASVS guidance.
 // Add to urlLiveness.ts BEFORE the first fetch call.
-const PRIVATE_HOST_REGEX = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|::1|fc|fd)/i;
+const PRIVATE_HOST_REGEX =
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|::1|fc|fd)/i;
 function isPrivateHost(hostname: string): boolean {
   return PRIVATE_HOST_REGEX.test(hostname);
 }
@@ -822,6 +832,7 @@ Recommended **5 plans**, dependencies as labeled. Each plan is a wave-shaped sli
 ### Plan 32-01 — Schema, Probe Primitive, Quota Helper (Wave 0 + foundational Wave 1)
 
 **Scope:**
+
 - D-19 Redis key shape + D-22 Zod schema (`UrlLivenessSchema`, `UrlLivenessStatus`)
 - D-20 tiered TTL (`ttlSecForStatus`)
 - D-22 contract test at both server canonical + CONTEXT path shim (resolves Open Question 1)
@@ -840,6 +851,7 @@ Recommended **5 plans**, dependencies as labeled. Each plan is a wave-shaped sli
 ### Plan 32-02 — Probe Primitive (`probeUrl`, `runProbeSweep`)
 
 **Scope:**
+
 - D-16 HEAD → GET-with-Range fallback on 405
 - D-17 redirect-follow ≤3 hops with terminal-status win
 - D-18 polite-citizen knobs: 10s timeout, `createLimit(8)`, per-host 1s throttle, ±200ms jitter, no retry
@@ -860,6 +872,7 @@ Recommended **5 plans**, dependencies as labeled. Each plan is a wave-shaped sli
 ### Plan 32-03 — Prune Endpoint + Cron Wire-Up
 
 **Scope:**
+
 - D-09 `POST /api/events/prune-dead-urls` route mounted behind `dashboardAuth` in `server/routes/events.ts`
 - D-11 cron auto-prune call (direct helper invocation, not self-HTTP — Discretion §3)
 - D-12 `attemptCount >= 3` gate inside `pruneDeadUrlEvents` when `trigger: 'cron'`
@@ -882,6 +895,7 @@ Recommended **5 plans**, dependencies as labeled. Each plan is a wave-shaped sli
 ### Plan 32-04 — Operator-Status Extension + Dead-URL Count Sidecar
 
 **Scope:**
+
 - Add `events:url-liveness-count` sidecar integer key (Pitfall 3 mitigation; resolves Open Question / Assumption A3)
 - Maintain it from the probe writer (INCR on live→terminal-dead transition, DECR on terminal-dead→non-terminal, DECR on prune)
 - Extend `/api/operator-status` response with new `prune: { deadUrlCount, last24hPrunes }` block (siblings of existing `audit24h`, `byBearer`, `advEval`)
@@ -899,6 +913,7 @@ Recommended **5 plans**, dependencies as labeled. Each plan is a wave-shaped sli
 ### Plan 32-05 — Dashboard Surface (DevApiStatus button + drill-down)
 
 **Scope:**
+
 - D-10 "Prune N dead events" button in Operator Actions block (`src/components/ui/DevApiStatus.tsx:1475-1540`)
 - Dead-URL count row
 - Drill-down list (operator can click to see which eventIds are flagged)
@@ -919,6 +934,7 @@ Recommended **5 plans**, dependencies as labeled. Each plan is a wave-shaped sli
 ### Plan 32-06 — Docs & Close
 
 **Scope:**
+
 - Update CLAUDE.md "Serverless Cache" key registry to add `events:url-liveness:{eventId}`, `events:url-liveness-count`, `operator:prune-quota:{fingerprint}:{date}`
 - Update `.env.example` if any new env vars (NONE per D-18 — verify and confirm)
 - `32-SUMMARY.md` with file changes, decisions executed, audit-log shape, runbook note (operator how-to: "If you see Dead URL events > 0 on the dashboard, click Prune; otherwise the daily cron handles it at 04:00 UTC")
@@ -954,6 +970,7 @@ These do not change any locked decision; they confirm the chosen approach is ind
 ## Sources
 
 ### Primary (HIGH confidence)
+
 - `/Users/zackmaz/Desktop/otg-iran-monitor/.planning/phases/32-ghost-event-url-liveness-dashboard-prune/32-CONTEXT.md` — 22 locked decisions
 - `/Users/zackmaz/Desktop/otg-iran-monitor/server/middleware/dashboardAuth.ts:31` — Bearer middleware
 - `/Users/zackmaz/Desktop/otg-iran-monitor/server/lib/operatorAudit.ts:62,69` — fingerprint + audit log
@@ -976,15 +993,18 @@ These do not change any locked decision; they confirm the chosen approach is ind
 - `/Users/zackmaz/Desktop/otg-iran-monitor/server/__tests__/scripts/snapshot-cron-watch.test.ts:1-110` — schema-pinning pattern (D-22 template)
 
 ### Secondary (MEDIUM confidence)
+
 - IETF link-checker norms (no single canonical RFC; convention recap from Lychee/Linkinator docs)
 - Vercel `waitUntil` semantics (re-confirmed from project's existing safeWaitUntil JSDoc)
 
 ### Tertiary (LOW confidence)
+
 - None — Phase 32 is entirely covered by primary in-repo sources.
 
 ## Metadata
 
 **Confidence breakdown:**
+
 - Standard stack: HIGH — every primitive is already in the repo, version-pinned
 - Architecture: HIGH — five plans map 1:1 to existing pattern templates
 - Pitfalls: HIGH — the six identified pitfalls are based on read of the existing chaos test, the SafeWaitUntil docstring's own pitfall list, and the operator-status aggregator's existing N-key-aggregation problem

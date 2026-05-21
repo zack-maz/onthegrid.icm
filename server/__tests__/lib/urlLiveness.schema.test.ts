@@ -26,11 +26,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import {
-  UrlLivenessSchema,
-  type UrlLiveness,
-  ttlSecForStatus,
-} from '../../lib/urlLiveness.js';
+import { UrlLivenessSchema, type UrlLiveness, ttlSecForStatus } from '../../lib/urlLiveness.js';
 
 function validEntry(overrides: Partial<UrlLiveness> = {}): UrlLiveness {
   return {
@@ -63,9 +59,7 @@ describe('Phase 32 D-22 — UrlLiveness schema contract', () => {
     });
 
     it('rejects extra keys (strict() mode)', () => {
-      expect(() =>
-        UrlLivenessSchema.parse({ ...validEntry(), extra: true } as unknown),
-      ).toThrow();
+      expect(() => UrlLivenessSchema.parse({ ...validEntry(), extra: true } as unknown)).toThrow();
     });
 
     it('rejects unknown status enum value', () => {

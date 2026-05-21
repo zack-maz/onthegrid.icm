@@ -45,10 +45,7 @@ import { createLimit } from './concurrencyLimit.js';
 // `Promise<[string | number, string[]]>` matches @upstash/redis ^1.37.0
 // and the pinning pattern Plan 04's buildDeadUrlSample uses for its
 // SCAN iteration.
-import {
-  LLM_EVENTS_KEY_ACTIVE,
-  LLM_REDIS_TTL_SEC,
-} from './llmExtractionPipeline.js';
+import { LLM_EVENTS_KEY_ACTIVE, LLM_REDIS_TTL_SEC } from './llmExtractionPipeline.js';
 import { appendOperatorAuditEntry } from './operatorAudit.js';
 import { logger } from './logger.js';
 
@@ -211,8 +208,7 @@ const PRIVATE_HOST_REGEX =
 function isPrivateHost(hostname: string): boolean {
   // Node's URL.hostname returns IPv6 with surrounding brackets, e.g. '[::1]'.
   // Strip them so the v6 alternates below anchor against the bare address.
-  const h =
-    hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+  const h = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
   if (PRIVATE_HOST_REGEX.test(h)) return true;
   // IPv6 loopback + unspecified + IPv4-mapped + link-local + ULA.
   // The fc/fd alternates require `[0-9a-f]{2}:` to ensure a real v6 hextet
@@ -537,10 +533,7 @@ async function persistLiveness(
       }
     }
   } catch (err) {
-    log.warn(
-      { err, eventId, priorDead, nextDead },
-      'sidecar count update failed (degrade-open)',
-    );
+    log.warn({ err, eventId, priorDead, nextDead }, 'sidecar count update failed (degrade-open)');
   }
 }
 
@@ -624,10 +617,7 @@ export async function buildProbeCandidates(): Promise<Array<{ eventId: string; u
   // ISO-8601 byte-lex sort == chronological sort (well-known JS idiom).
   tierB.sort((a, b) => a.lastProbedAt.localeCompare(b.lastProbedAt));
 
-  return [
-    ...tierA,
-    ...tierB.map(({ eventId, url }) => ({ eventId, url })),
-  ];
+  return [...tierA, ...tierB.map(({ eventId, url }) => ({ eventId, url }))];
 }
 
 // ============================================================================
@@ -877,10 +867,7 @@ export async function pruneDeadUrlEvents(opts: {
     result: 'ok',
   });
 
-  log.info(
-    { trigger: opts.trigger, prunedCount: prunedIds.length },
-    'pruneDeadUrlEvents complete',
-  );
+  log.info({ trigger: opts.trigger, prunedCount: prunedIds.length }, 'pruneDeadUrlEvents complete');
 
   return { prunedCount: prunedIds.length, prunedIds };
 }

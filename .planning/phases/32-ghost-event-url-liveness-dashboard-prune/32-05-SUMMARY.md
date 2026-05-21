@@ -2,7 +2,19 @@
 phase: 32-ghost-event-url-liveness-dashboard-prune
 plan: 05
 subsystem: ui
-tags: [react, useCallback, jsdom, vitest, dashboardAuth, operator-status, drill-down, prune, ghost-03, ghost-04]
+tags:
+  [
+    react,
+    useCallback,
+    jsdom,
+    vitest,
+    dashboardAuth,
+    operator-status,
+    drill-down,
+    prune,
+    ghost-03,
+    ghost-04,
+  ]
 
 # Dependency graph
 requires:
@@ -11,50 +23,50 @@ requires:
     provides: "URL_LIVENESS_COUNT_KEY + isTerminalDead() exported; OperatorAuditEntry.operation widened to admit 'prune-dead-urls'"
   - phase: 32
     plan: 02
-    provides: "events:url-liveness-count sidecar maintained by persistLiveness (the integer Plan 04 reads + Plan 05 displays)"
+    provides: 'events:url-liveness-count sidecar maintained by persistLiveness (the integer Plan 04 reads + Plan 05 displays)'
   - phase: 32
     plan: 03
     provides: "POST /api/events/prune-dead-urls Bearer-gated endpoint with 50/24h quota (the destination of the Prune button's click)"
   - phase: 32
     plan: 04
-    provides: "GET /api/operator-status response gains `prune: {deadUrlCount, last24hPrunes, deadUrlSample}` sibling block — the payload Plan 05 consumes"
+    provides: 'GET /api/operator-status response gains `prune: {deadUrlCount, last24hPrunes, deadUrlSample}` sibling block — the payload Plan 05 consumes'
   - phase: 28.2
-    provides: "DevApiStatus.tsx Operator Actions block (replay-test-trigger + replay-quota-alert UX pattern Plan 05 mirrors)"
+    provides: 'DevApiStatus.tsx Operator Actions block (replay-test-trigger + replay-quota-alert UX pattern Plan 05 mirrors)'
 provides:
-  - "src/components/ui/DevApiStatus.tsx OperatorStatus interface — extended with optional `prune?: {deadUrlCount, last24hPrunes, deadUrlSample} | null` field + optional `byBearer[].prunes`"
-  - "src/components/ui/DevApiStatus.tsx fetchOpStatus — hoisted out of the useEffect closure into a named useCallback so the prune button handler can trigger an immediate refresh after a successful prune (PLAN-CHECK MEDIUM-03 resolution)"
+  - 'src/components/ui/DevApiStatus.tsx OperatorStatus interface — extended with optional `prune?: {deadUrlCount, last24hPrunes, deadUrlSample} | null` field + optional `byBearer[].prunes`'
+  - 'src/components/ui/DevApiStatus.tsx fetchOpStatus — hoisted out of the useEffect closure into a named useCallback so the prune button handler can trigger an immediate refresh after a successful prune (PLAN-CHECK MEDIUM-03 resolution)'
   - "src/components/ui/DevApiStatus.tsx pruneHandler — POSTs to /api/events/prune-dead-urls with body {trigger:'manual'} + dashboardAuthHeaders() spread; 429 → pruneQuotaAlert; 200 → clear alert + immediate fetchOpStatus refresh; network errors degrade-open"
-  - "src/components/ui/DevApiStatus.tsx Operator Actions render extension — 4 new data-testid surfaces: dead-url-count, dead-url-list (with dead-url-list-truncated row), prune-dead-urls-trigger, prune-quota-alert"
-  - "src/__tests__/components/DevApiStatus.prune.test.tsx — 9 jsdom test cases covering count render, button gating, click POST contract, 429 alert path, 200 refresh path, drill-down rendering, truncation row, and empty-state hiding"
+  - 'src/components/ui/DevApiStatus.tsx Operator Actions render extension — 4 new data-testid surfaces: dead-url-count, dead-url-list (with dead-url-list-truncated row), prune-dead-urls-trigger, prune-quota-alert'
+  - 'src/__tests__/components/DevApiStatus.prune.test.tsx — 9 jsdom test cases covering count render, button gating, click POST contract, 429 alert path, 200 refresh path, drill-down rendering, truncation row, and empty-state hiding'
 affects: [32-06-close]
 
 # Tech tracking
 tech-stack:
-  added: []  # Zero new npm dependencies — useCallback already in React, vi.stubGlobal + @testing-library/react already in use
+  added: [] # Zero new npm dependencies — useCallback already in React, vi.stubGlobal + @testing-library/react already in use
   patterns:
-    - "useCallback-hoisted fetchOpStatus pattern: any cross-action handler that needs to drive an immediate poll refresh consumes the named callback directly instead of duplicating the fetch body. Stable reference + same-body refactor = no behavioral change but lets new callsites (here: pruneHandler post-200) opt into refresh without coupling to setInterval."
-    - "Optional-block surface conditionality: an entire UI block can hinge on `opStatus?.prune != null` so pre-rollout server deploys that omit the field render the older Operator Actions surface verbatim. Frontend-and-backend deploy ordering becomes a non-issue (LOW-coupling deployment pattern)."
+    - 'useCallback-hoisted fetchOpStatus pattern: any cross-action handler that needs to drive an immediate poll refresh consumes the named callback directly instead of duplicating the fetch body. Stable reference + same-body refactor = no behavioral change but lets new callsites (here: pruneHandler post-200) opt into refresh without coupling to setInterval.'
+    - 'Optional-block surface conditionality: an entire UI block can hinge on `opStatus?.prune != null` so pre-rollout server deploys that omit the field render the older Operator Actions surface verbatim. Frontend-and-backend deploy ordering becomes a non-issue (LOW-coupling deployment pattern).'
     - "Drill-down list with truncation row: when a count exceeds the bounded sample length, render the sample as a flex-baseline-gap `<ul>` capped by `max-h-40 overflow-y-auto`, then append an italic 'and N more' row (`data-testid='dead-url-list-truncated'`). The truncation row makes the cap visible to the operator without driving a second SCAN; reusable for any future bounded-SCAN drill-down surface."
-    - "Mock-fetch routing by URL inside vi.fn: DevApiStatus.prune.test.tsx routes /api/operator-status (GET, opStatusPayload-controlled), /api/events/prune-dead-urls (POST, pruneResponse-controlled), and falls through to 404 for any other URL. Establishes a reusable jsdom pattern for components that fetch from multiple endpoints; per-case override via module-level mutables instead of per-test setup."
+    - 'Mock-fetch routing by URL inside vi.fn: DevApiStatus.prune.test.tsx routes /api/operator-status (GET, opStatusPayload-controlled), /api/events/prune-dead-urls (POST, pruneResponse-controlled), and falls through to 404 for any other URL. Establishes a reusable jsdom pattern for components that fetch from multiple endpoints; per-case override via module-level mutables instead of per-test setup.'
     - "Node 22 + jsdom localStorage workaround: Node 22's built-in localStorage shadows jsdom's but is a no-op without `--localstorage-file`. Stub a working in-memory Map-backed Storage via vi.stubGlobal + Object.defineProperty(window, 'localStorage', ...) in beforeEach so libraries that read localStorage directly (here: dashboardAuthHeaders) see seeded values. Reusable for any future test that touches dashboardAuth in jsdom."
 
 key-files:
   modified:
-    - "src/components/ui/DevApiStatus.tsx (+71 lines: useCallback import, OperatorStatus.prune optional field, fetchOpStatus useCallback hoist, pruneHandler + pruneQuotaAlert state, dead-URL count + drill-down list + Prune button + 429 alert render block)"
+    - 'src/components/ui/DevApiStatus.tsx (+71 lines: useCallback import, OperatorStatus.prune optional field, fetchOpStatus useCallback hoist, pruneHandler + pruneQuotaAlert state, dead-URL count + drill-down list + Prune button + 429 alert render block)'
   created:
-    - "src/__tests__/components/DevApiStatus.prune.test.tsx (394 lines: 9 jsdom tests for the Phase 32 dashboard surface — count display, button visibility gate, click POST contract, 429 alert, 200 refresh, drill-down rendering, truncation row, empty-state hiding)"
+    - 'src/__tests__/components/DevApiStatus.prune.test.tsx (394 lines: 9 jsdom tests for the Phase 32 dashboard surface — count display, button visibility gate, click POST contract, 429 alert, 200 refresh, drill-down rendering, truncation row, empty-state hiding)'
 
 key-decisions:
   - "Single feat commit covers BOTH count display (GHOST-03) and Prune button (GHOST-04) rather than two separate commits. The plan's action body offered the choice and the diff is small (~70 LOC); collapsing into one commit keeps the audit trail aligned with the two-task plan (RED test commit → GREEN feat commit) and matches Plan 32-04's RED/GREEN cadence verbatim."
   - "fetchOpStatus hoisted to useCallback rather than refactored into a custom hook. MEDIUM-03 resolution called for a 'named callback' — useCallback satisfies that without introducing a new hook file or coupling. The closure body is byte-identical to the prior inline lambda; the only behavioral change is that pruneHandler can call it on demand after a successful prune."
   - "Test 6 (200 → fetchOpStatus refresh) uses `mockFetch.mock.calls.filter(url === '/api/operator-status').length` instead of awaiting a specific call sequence. The component's useEffect can fire fetchOpStatus on mount + on the 30s setInterval + on the post-prune trigger; comparing before-click vs after-click counts is more robust than asserting an exact total."
-  - "localStorage stub installed in beforeEach (not in a shared setup file). The Node 22 localStorage shadow only affects tests that read dashboardAuthHeaders() in jsdom — extending src/test/setup.ts would touch every existing test for a single-test concern. Local-scoped stub keeps the blast radius to this file; future tests that touch dashboardAuth can copy the stub block."
+  - 'localStorage stub installed in beforeEach (not in a shared setup file). The Node 22 localStorage shadow only affects tests that read dashboardAuthHeaders() in jsdom — extending src/test/setup.ts would touch every existing test for a single-test concern. Local-scoped stub keeps the blast radius to this file; future tests that touch dashboardAuth can copy the stub block.'
   - "Drill-down list rendered as a `<ul>` not a `<table>`. The plan's analog suggested either; `<ul>` with flex-baseline-gap per-row is lighter-weight, matches the existing operator-actions-bearer-row pattern, and avoids table-header semantics for a transient ordered-but-not-tabular list. max-h-40 overflow-y-auto bounds the visible height when 20 entries render."
   - "Truncation row uses `…` (Unicode ellipsis U+2026) not three dots. Matches the cap-display convention elsewhere in DevApiStatus (e.g., bearerFingerprint slice(0,8)+'…' truncation at L1501). Single visible glyph = less horizontal space + matches the byBearer row style."
 
 patterns-established:
-  - "useCallback hoist for cross-handler refresh: any time a render-driven setInterval poller body needs to be invoked imperatively from another callback, hoist it into a useCallback with the same deps as the wrapping useEffect. The useEffect then becomes a one-liner `void hoisted()` + `setInterval(() => void hoisted(), MS)`. Pattern reusable anywhere DevApiStatus or another polling component grows a new action that needs to drive a refresh."
-  - "Optional frontend-block + optional server-field: when adding a new backend response field, render the frontend block ONLY when `data?.newField != null`. The backend can ship its widening at any time; the frontend renders the older or newer surface transparently. Pattern reusable for any future operator-status / health surface widening."
+  - 'useCallback hoist for cross-handler refresh: any time a render-driven setInterval poller body needs to be invoked imperatively from another callback, hoist it into a useCallback with the same deps as the wrapping useEffect. The useEffect then becomes a one-liner `void hoisted()` + `setInterval(() => void hoisted(), MS)`. Pattern reusable anywhere DevApiStatus or another polling component grows a new action that needs to drive a refresh.'
+  - 'Optional frontend-block + optional server-field: when adding a new backend response field, render the frontend block ONLY when `data?.newField != null`. The backend can ship its widening at any time; the frontend renders the older or newer surface transparently. Pattern reusable for any future operator-status / health surface widening.'
   - "jsdom Bearer-header assertion via per-test mockFetch + localStorage stub: when a component spreads dashboardAuthHeaders() into a fetch, the jsdom test seeds localStorage via vi.stubGlobal('localStorage', mapBackedStorage) + Object.defineProperty(window, 'localStorage', ...), then asserts `(call[1].headers as Record<string, string>).Authorization` matches the expected Bearer string. Pattern reusable for any future dashboard-action test that issues a POST with the operator Bearer."
 
 requirements-completed: [GHOST-03, GHOST-04]
@@ -287,7 +299,13 @@ The component consumes `prune` from `/api/operator-status` (Plan 32-04). Sample 
   "audit24h": 12,
   "byBearer": [
     { "bearerFingerprint": "a3f9c8d1", "actions": 8, "swaps": 0, "replays": 5, "prunes": 3 },
-    { "bearerFingerprint": "cron:refresh-events", "actions": 4, "swaps": 0, "replays": 0, "prunes": 4 }
+    {
+      "bearerFingerprint": "cron:refresh-events",
+      "actions": 4,
+      "swaps": 0,
+      "replays": 0,
+      "prunes": 4
+    }
   ],
   "advEval": { "total": 25, "blocked": 24, "leaked": 1 },
   "prune": {
@@ -324,6 +342,6 @@ No other deviation from PATTERNS analogs.
 
 ---
 
-*Phase: 32-ghost-event-url-liveness-dashboard-prune*
-*Plan: 05*
-*Completed: 2026-05-21*
+_Phase: 32-ghost-event-url-liveness-dashboard-prune_
+_Plan: 05_
+_Completed: 2026-05-21_
