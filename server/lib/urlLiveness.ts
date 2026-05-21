@@ -142,12 +142,205 @@ export function ttlSecForStatus(status: UrlLivenessStatus): number {
 /**
  * Pino child logger for the urlLiveness module. Pre-declared here so
  * Plans 02/03 (probe + sweep + prune helpers) do not need to re-edit
- * imports. Unused at this surface — referenced by `void` below to keep
- * the eslint `no-unused-vars` rule quiet at zero-cost.
+ * imports.
  */
 const log = logger.child({ module: 'urlLiveness' });
-// Reference the binding so eslint's `no-unused-vars` (and TS's
-// `noUnusedLocals` if it ever flips on) stays quiet until Plans 02/03
-// land their consumers. Zero runtime cost (a property read on
-// `pino.Logger`).
-void log;
+
+// ============================================================================
+// Plan 32-02 — probe primitives (D-16, D-17, D-18, D-21)
+// ============================================================================
+
+/**
+ * D-18 — polite-citizen constants. Hard-coded per CONTEXT "no new
+ * env-tunable surfaces" — these are domain knobs for this phase, not
+ * operator levers. If a future incident requires emergency tuning,
+ * promote to a `VITE_PROBE_*` env family in a separate decimal phase.
+ */
+const PROBE_CONCURRENCY = 8;
+const PROBE_TIMEOUT_MS = 10_000;
+const PER_HOST_INTERVAL_MS = 1_000;
+const JITTER_MS = 200;
+const MAX_REDIRECTS = 3;
+const PROBE_UA = 'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)';
+// These three are consumed by Tasks 2 (throttle map) + 4 (sweep
+// orchestrator) — `void`-reference here so the no-unused-vars rule + tsc
+// `noUnusedLocals` stay quiet while the foundation lands ahead of consumers.
+void PROBE_CONCURRENCY;
+void PER_HOST_INTERVAL_MS;
+void JITTER_MS;
+
+/**
+ * Pitfall 1 / RESEARCH A6 — caller-supplied wall-clock cutoff for the
+ * sweep. Plan 32-03 will compute this as `cronStart + 800_000 - 60_000`
+ * so the 60s safety margin reserves time for the post-sweep prune +
+ * audit-log writes under Vercel Pro's 800s `maxDuration`. Exported here
+ * so all callsites cite the same constant.
+ */
+export const SWEEP_SAFETY_MARGIN_MS = 60_000;
+
+/**
+ * Defense-in-depth SSRF guard (RESEARCH §Security V11). Rejects URLs
+ * whose hostname maps to RFC1918 private space, loopback, link-local,
+ * IPv6 ULA, ::1, or the AWS / GCP / Azure cloud-metadata services.
+ * The probe runs inside the Vercel sandbox; these ranges should never
+ * be routable from Vercel egress, but a stored URL that points at one
+ * is a tampering signal regardless. Returns `unknown` without issuing
+ * fetch.
+ */
+const PRIVATE_HOST_REGEX =
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|::1|fc|fd)/i;
+
+function isPrivateHost(hostname: string): boolean {
+  return PRIVATE_HOST_REGEX.test(hostname);
+}
+
+/**
+ * Internal shape returned by `probeUrl`. The probe writer (Task 3)
+ * derives the `UrlLiveness` Zod-validated entry from this plus the
+ * prior cached value.
+ */
+export interface ProbeResult {
+  status: UrlLivenessStatus;
+  httpStatus: number | null;
+  finalUrl: string;
+}
+
+/**
+ * fetch-with-timeout helper. Diverges from `server/adapters/nominatim.ts`
+ * in two places per CONTEXT D-16 / D-17:
+ *   - `redirect: 'manual'` so Phase 32 counts hops itself (not fetch)
+ *   - GET branch sets `Range: bytes=0-1023` so 405-fallback caps the
+ *     download to 1 KiB
+ */
+async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const headers: Record<string, string> = { 'User-Agent': PROBE_UA };
+    if (method === 'GET') headers.Range = 'bytes=0-1023';
+    return await fetch(url, {
+      method,
+      headers,
+      redirect: 'manual',
+      signal: controller.signal,
+    });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * D-16 / D-17 / D-18 / D-21 — single-URL liveness probe.
+ *
+ * Method sequence:
+ *   1. HEAD with `redirect: 'manual'`. 200 → live; 404 → 404; 403 → 403.
+ *   2. On 405, GET with `Range: bytes=0-1023`. 200 → live; 4xx/5xx → same
+ *      taxonomy.
+ *   3. On 3xx with a `location` header, follow up to MAX_REDIRECTS (3)
+ *      hops, counting hops manually. 4th 3xx → `unknown`.
+ *   4. fetch throws (DNS / ECONNREFUSED / abort) → `dead-host`.
+ *   5. Any other code (5xx, 451, 410, ...) → `unknown`.
+ *
+ * Defense-in-depth: hostname is checked against `PRIVATE_HOST_REGEX`
+ * before any fetch — SSRF target URLs short-circuit to `unknown` with
+ * NO outbound request issued.
+ */
+export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
+  // Stage 0 — URL parse + SSRF guard.
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    // Malformed URL — treat as dead-host (no DNS resolution possible).
+    return { status: 'dead-host', httpStatus: null, finalUrl: rawUrl };
+  }
+  if (isPrivateHost(parsed.hostname)) {
+    log.warn({ rawUrl }, 'probe target rejected by SSRF guard');
+    return { status: 'unknown', httpStatus: null, finalUrl: rawUrl };
+  }
+
+  let currentUrl = rawUrl;
+
+  try {
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      // First request is HEAD; subsequent redirect hops also HEAD.
+      let res = await fetchOnce(currentUrl, 'HEAD');
+
+      // fetch threw or aborted (network/DNS/timeout) → dead-host.
+      if (res === null) {
+        return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+      }
+
+      // 405 Method Not Allowed — fall back to GET (D-16). CDN-fronted
+      // publishers (Cloudflare, Fastly) often refuse HEAD.
+      if (res.status === 405) {
+        res = await fetchOnce(currentUrl, 'GET');
+        if (res === null) {
+          return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+        }
+      }
+
+      const code = res.status;
+
+      // 2xx → live.
+      if (code >= 200 && code < 300) {
+        return { status: 'live', httpStatus: code, finalUrl: currentUrl };
+      }
+
+      // Specific 4xx codes that count toward the dashboard dead surface.
+      if (code === 404) {
+        return { status: '404', httpStatus: 404, finalUrl: currentUrl };
+      }
+      if (code === 403) {
+        return { status: '403', httpStatus: 403, finalUrl: currentUrl };
+      }
+
+      // 3xx — follow up to MAX_REDIRECTS hops. On the (MAX_REDIRECTS+1)th
+      // 3xx (i.e. hop === MAX_REDIRECTS at this branch), return unknown.
+      if (code >= 300 && code < 400) {
+        if (hop >= MAX_REDIRECTS) {
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+        }
+        const location = res.headers.get('location');
+        if (!location) {
+          // 3xx without Location — protocol violation. Bail with unknown.
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+        }
+        // Resolve relative redirects against the current URL.
+        try {
+          currentUrl = new URL(location, currentUrl).toString();
+        } catch {
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+        }
+        // Re-run SSRF guard for each redirect target (defense-in-depth —
+        // a hostile redirect can point at a private host).
+        try {
+          if (isPrivateHost(new URL(currentUrl).hostname)) {
+            log.warn(
+              { rawUrl, redirectTarget: currentUrl },
+              'redirect target rejected by SSRF guard',
+            );
+            return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          }
+        } catch {
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+        }
+        continue; // next hop
+      }
+
+      // Any other code (5xx, 451, 410, 4xx not in {403,404,405}) → unknown.
+      return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+    }
+
+    // Loop exhausted without return (shouldn't be reachable; MAX_REDIRECTS+1
+    // iterations always terminate inside the loop). Treat as unknown.
+    return { status: 'unknown', httpStatus: null, finalUrl: currentUrl };
+  } catch (err) {
+    // Catch-all guard — any unexpected throw collapses to dead-host so
+    // the sweep keeps moving.
+    log.warn({ err, rawUrl }, 'probeUrl unexpected throw');
+    return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+  }
+}
