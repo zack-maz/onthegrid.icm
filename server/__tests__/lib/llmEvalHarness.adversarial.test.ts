@@ -211,3 +211,38 @@ describe('runAdversarialEval — Phase 28.2 Plan 03 Task 5 / B-2', () => {
     expect(result.leaked).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 33 adversarial — actor-confusion injections (D-15).
+//
+// The committed fixture is extended (Plan 33-05 Task 2) with three new
+// entries — adv-011 (side-swap), adv-012 (ambiguity), adv-013
+// (code-as-actor). Total entry count rises from 10 to 13 (Open Q §5 soft
+// cap-bump; documented in 33-05-SUMMARY).
+//
+// These tests are wire-level fixture-shape verification — they parse the
+// real committed fixture and assert the three new ids parse and carry the
+// expected category strings. No mock setup needed.
+// ---------------------------------------------------------------------------
+
+describe('Phase 33 adversarial — actor-confusion injections (D-15)', () => {
+  // Single FS read shared across all it.each branches.
+  const fixturePath = resolve(__dirname, '../../../.planning/eval/adversarial-injections.json');
+  const fixture = JSON.parse(readFileSync(fixturePath, 'utf-8')) as {
+    entries: Array<{ id: string; category: string }>;
+  };
+
+  it.each([
+    ['adv-011', 'actor-confusion-side-swap'],
+    ['adv-012', 'actor-confusion-ambiguity'],
+    ['adv-013', 'actor-confusion-code-as-actor'],
+  ])('%s parses and carries the expected category %s', (id, category) => {
+    const entry = fixture.entries.find((e) => e.id === id);
+    expect(entry).toBeDefined();
+    expect(entry!.category).toBe(category);
+  });
+
+  it('total fixture entry count is exactly 13 after D-15 soft cap-bump', () => {
+    expect(fixture.entries.length).toBe(13);
+  });
+});
