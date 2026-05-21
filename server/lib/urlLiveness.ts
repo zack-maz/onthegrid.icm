@@ -196,12 +196,33 @@ export const SWEEP_SAFETY_MARGIN_MS = 60_000;
  * be routable from Vercel egress, but a stored URL that points at one
  * is a tampering signal regardless. Returns `unknown` without issuing
  * fetch.
+ *
+ * Phase 32 CR-02 fix — IPv6 alternates split out into `IPV6_PRIVATE`
+ * because `URL.hostname` returns bracket-wrapped form for v6
+ * (`'[::1]'`, `'[fd00::1]'`, `'[fe80::1]'`). The IPv4 regex anchors at
+ * `^` and never matched the leading `[`; brackets are now stripped
+ * before pattern-matching. The `fc`/`fd` ULA alternates also gained
+ * `[0-9a-f]{2}:` hex disambiguation so legitimate hostnames like
+ * `fc-barcelona.com` and `fdcompany.com` no longer false-positive-block.
  */
 const PRIVATE_HOST_REGEX =
-  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|::1|fc|fd)/i;
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/i;
 
 function isPrivateHost(hostname: string): boolean {
-  return PRIVATE_HOST_REGEX.test(hostname);
+  // Node's URL.hostname returns IPv6 with surrounding brackets, e.g. '[::1]'.
+  // Strip them so the v6 alternates below anchor against the bare address.
+  const h =
+    hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+  if (PRIVATE_HOST_REGEX.test(h)) return true;
+  // IPv6 loopback + unspecified + IPv4-mapped + link-local + ULA.
+  // The fc/fd alternates require `[0-9a-f]{2}:` to ensure a real v6 hextet
+  // (defangs false positives like `fc-barcelona.com`).
+  if (/^::1$/i.test(h)) return true;
+  if (/^::$/i.test(h)) return true;
+  if (/^::ffff:/i.test(h)) return true;
+  if (/^fe80:/i.test(h)) return true;
+  if (/^f[cd][0-9a-f]{2}:/i.test(h)) return true;
+  return false;
 }
 
 /**

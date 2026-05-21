@@ -197,5 +197,56 @@ describe('Phase 32 Plan 02 Task 1 — probeUrl', () => {
       expect(result.status).toBe('unknown');
       expect(fetchMock).not.toHaveBeenCalled();
     });
+
+    // CR-02 regression — URL.hostname returns IPv6 with surrounding brackets
+    // (e.g. '[::1]'). The previous regex anchored at `^` against literal
+    // '::1' / 'fc' / 'fd' and never matched the leading '[', leaving the
+    // probe open to fetches against IPv6 loopback / link-local / ULA hosts.
+    it('CR-02 — IPv6 loopback http://[::1]/ → status:unknown WITHOUT calling fetch', async () => {
+      const result = await probeUrl('http://[::1]:6379/secret');
+      expect(result.status).toBe('unknown');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('CR-02 — IPv6 ULA http://[fd00::1]/ → status:unknown WITHOUT calling fetch', async () => {
+      const result = await probeUrl('http://[fd00::1]/admin');
+      expect(result.status).toBe('unknown');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('CR-02 — IPv6 link-local http://[fe80::1]/ → status:unknown WITHOUT calling fetch', async () => {
+      const result = await probeUrl('http://[fe80::1]/admin');
+      expect(result.status).toBe('unknown');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('CR-02 — IPv4-mapped-IPv6 http://[::ffff:127.0.0.1]/ → status:unknown WITHOUT calling fetch', async () => {
+      const result = await probeUrl('http://[::ffff:127.0.0.1]/admin');
+      expect(result.status).toBe('unknown');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('CR-02 — IPv6 unspecified http://[::]/ → status:unknown WITHOUT calling fetch', async () => {
+      const result = await probeUrl('http://[::]/admin');
+      expect(result.status).toBe('unknown');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    // CR-02 negative test — legitimate hostnames containing 'fc'/'fd' prefixes
+    // (e.g. 'fc-barcelona.com', 'fdcompany.com') must NOT be false-positive-blocked
+    // now that ULA detection requires the `[0-9a-f]{2}:` hex disambiguation.
+    it('CR-02 — legitimate hostname "fc-barcelona.com" is NOT blocked by SSRF guard', async () => {
+      fetchMock.mockResolvedValueOnce(makeResponse(200));
+      const result = await probeUrl('https://fc-barcelona.com/players');
+      expect(result.status).toBe('live');
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    it('CR-02 — legitimate hostname "fdcompany.com" is NOT blocked by SSRF guard', async () => {
+      fetchMock.mockResolvedValueOnce(makeResponse(200));
+      const result = await probeUrl('https://fdcompany.com/about');
+      expect(result.status).toBe('live');
+      expect(fetchMock).toHaveBeenCalled();
+    });
   });
 });
