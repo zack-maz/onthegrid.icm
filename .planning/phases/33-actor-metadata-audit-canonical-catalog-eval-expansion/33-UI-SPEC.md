@@ -1,7 +1,7 @@
 ---
 phase: 33
 slug: actor-metadata-audit-canonical-catalog-eval-expansion
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-05-21
