@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep
 status: executing
-last_updated: "2026-05-21T03:01:00.691Z"
+last_updated: "2026-05-21T03:15:30.578Z"
 last_activity: 2026-05-21
 progress:
   total_phases: 15
   completed_phases: 4
   total_plans: 35
-  completed_plans: 33
+  completed_plans: 34
   percent: 27
 ---
 
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 32 (ghost-event-url-liveness-dashboard-prune) — EXECUTING
-Plan: 5 of 6
-Status: Ready to execute
+Plan: 6 of 6
+Status: Plan 32-05 shipped (8a47ec7 RED + 393b1c9 GREEN); 32-06 (phase close) next
 Last activity: 2026-05-21
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
@@ -40,7 +40,7 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Waves 1-3 complete (4/7 plans) |
 | 30.1  | Cascade fallback fix — NIM-only declared honest                       | (gap closure from Phase 30 boundary review)                   | Shipped 2026-05-17 |
 | 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Closed early 2026-05-19 (Day 1 / 7 PASS; caveat) |
-| 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Not started |
+| 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | Plans 01-05 complete (5/6) — 32-06 close pending |
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
 | 34    | LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval) | LLM-RELI-08, LLM-RELI-09, LLM-RELI-10, LLM-RELI-11           | Not started |
 | 35    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
@@ -287,6 +287,12 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 32 Plan 04: `buildDeadUrlSample()` extracted as a module-private helper (not exported) — keeps the route's GET handler readable + isolates the degrade-open try/catch. Cursor short-circuits via uniform `cursor = 0` assignment across all three termination paths (LIMIT exhaustion, MAX_SCAN_KEYS exhaustion, natural cursor return). MEDIUM-01 plan-checker SCAN-signature pin applied for the second time in the phase: `(await redis.scan(cursor, {...})) as [string | number, string[]]` matches `@upstash/redis ^1.37.0`. (32-04-01)
 - Phase 32 Plan 04: LOW-03 plan-checker drill-down resolution fully delivered server-side — `prune.deadUrlSample` returns `Array<{eventId, url, status}>` so Plan 32-05's UI work consumes the drill-down list directly without an additional API call. Each entry has bare `eventId` (no key prefix), `url` from `lastUrlProbed`, and `status` narrowed to the terminal-dead union via `isTerminalDead` predicate (one truth source across sweep + prune + dashboard). (32-04-01)
 - Phase 32 Plan 04: TDD discipline — landed RED commit (`af11707`) before GREEN commit (`5435196`). Plan's verbal "feat then test" ordering accepted as fallback; test-first matches the `<task tdd="true">` declaration in the PLAN.md frontmatter. Mock-shape mismatch for `cacheGetSafe` caught during local RED authoring (route's `cached?.data` dereference expects `{data, stale, lastFresh}` envelope, not bare `UrlLiveness` payload) — aligned to runtime contract from `server/cache/redis.ts:211` before committing. (32-04-01)
+- Phase 32 Plan 05: `OperatorStatus.prune` field added as OPTIONAL (`prune?: {...} | null`) and `byBearer[].prunes?` widened to optional. Older Plan-32-04-pre-deploy servers omitting `prune` still type-check and the conditional render path `opStatus?.prune != null && ...` hides the new UI cleanly — frontend can deploy ahead of backend without breakage. Single-direction (server-then-client) deploy ordering is the conservative path; this widens it to either-direction. (32-05-01)
+- Phase 32 Plan 05: `fetchOpStatus` hoisted out of the operator-status `useEffect` closure into a named `useCallback` (PLAN-CHECK MEDIUM-03 resolution). The polling `useEffect` now consumes the callback as a dep AND `pruneHandler` calls it directly in the `res.ok` branch after a successful prune POST — drops `prune.deadUrlCount` in-place without waiting for the next 30s poll tick. Stable reference (empty-dep useCallback) ensures the effect doesn't re-fire on parent re-renders. (32-05-01)
+- Phase 32 Plan 05: Single feat commit covers both GHOST-03 (count display) AND GHOST-04 (Prune button) rather than two separate commits — plan offered the choice; collapsed form chosen because diff is small (~70 LOC), the two surfaces share the same `opStatus?.prune != null` conditional, and splitting them would produce a count-but-no-button intermediate state with no useful behavior to test independently. (32-05-01)
+- Phase 32 Plan 05 (Rule 3 deviation): jsdom localStorage stub workaround for Node 22 — `window.localStorage.setItem` is `undefined` because Node 22's built-in localStorage (which requires `--localstorage-file` for persistence) shadows jsdom's Storage shim. Installed an in-memory Map-backed `Storage` stub via `vi.stubGlobal('localStorage', ls)` + `Object.defineProperty(window, 'localStorage', { value: ls, configurable: true })` in `beforeEach` so `dashboardAuthHeaders()` reads the seeded Bearer key. Pattern reusable for any future jsdom test that touches dashboardAuth. (32-05-02)
+- Phase 32 Plan 05: Drill-down list rendered as `<ul max-h-40 overflow-y-auto>` with `flex items-baseline gap-2` per-row (not a `<table>`). Matches the existing `operator-actions-bearer-row` style at L1496-1504 — lighter than table semantics for a transient bounded list. Truncation row uses Unicode ellipsis `…` (U+2026) matching the bearerFingerprint slice convention at L1501. Tailwind classes for the Prune button copied byte-for-byte from `replay-test-trigger` so no new utility class is invented (verified: `grep -c "rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5" DevApiStatus.tsx` returns 2). (32-05-01)
+- Phase 32 Plan 05: Test 6 (post-200 fetchOpStatus refresh) asserts `mockFetch.calls.filter(url === '/api/operator-status').length AFTER > BEFORE` instead of exact-total assertion. The `useEffect` poller can fire on mount + setInterval + post-click in any timing order; before/after delta is robust to runner timing without coupling to a specific count. (32-05-02)
 
 ## Pending Todos
 

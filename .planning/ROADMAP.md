@@ -284,7 +284,7 @@ Plans:
 | 29. LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | 13/13                | Complete              | 2026-05-11 |
 | 30. NIM Throttle Characterization & Cascade Tuning                            | 7/7                  | Complete              | 2026-05-17 |
 | 31. Cron Stability Validation (7-day Watch)                                   | 4/5 (1 early-closed) | Closed early (caveat) | 2026-05-19 |
-| 32. Ghost Event URL Liveness, Dashboard & Prune                               | 4/6 | In Progress|  |
+| 32. Ghost Event URL Liveness, Dashboard & Prune                               | 5/6 | In Progress|  |
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 0/0                  | Not started           | -          |
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 0/5                  | Not started           | -          |
 | 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 0/0                  | Not started           | -          |
