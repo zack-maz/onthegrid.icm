@@ -17,13 +17,13 @@ created: 2026-05-21
 
 ## Design System
 
-| Property | Value |
-| --- | --- |
-| Tool | none (Tailwind v4 CSS-first `@theme`, no shadcn) |
-| Preset | not applicable — project uses bespoke CSS-var palette in `src/styles/app.css` `@theme` block (D-13 single source of truth) |
-| Component library | none (raw Tailwind v4 + Zustand stores; no Radix/Base UI) |
-| Icon library | none in this sub-block (counters are text + numbers; no glyphs introduced) |
-| Font | system-ui stack (declared in `app.css` `@layer base body`); `font-mono` only on event-id + status code cells per existing prune-block precedent |
+| Property          | Value                                                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool              | none (Tailwind v4 CSS-first `@theme`, no shadcn)                                                                                                |
+| Preset            | not applicable — project uses bespoke CSS-var palette in `src/styles/app.css` `@theme` block (D-13 single source of truth)                      |
+| Component library | none (raw Tailwind v4 + Zustand stores; no Radix/Base UI)                                                                                       |
+| Icon library      | none in this sub-block (counters are text + numbers; no glyphs introduced)                                                                      |
+| Font              | system-ui stack (declared in `app.css` `@layer base body`); `font-mono` only on event-id + status code cells per existing prune-block precedent |
 
 **Detection evidence (auto-mode):**
 
@@ -39,15 +39,15 @@ created: 2026-05-21
 
 Declared values (must be multiples of 4):
 
-| Token | Value | Usage in this sub-block |
-| --- | --- | --- |
-| xs | 4px | `mt-1` between count-row and drill-down list; gap between status badge + eventId in each row (`gap-1`) |
-| sm | 8px | `gap-2` between drill-down columns (status / eventId / actors / confidence) per Phase 32 D-10 precedent |
-| md | 16px | Not used inside this sub-block (parent Operator Actions section already pads at `px-3 py-2`) |
-| lg | 24px | Not used inside this sub-block |
-| xl | 32px | Not used inside this sub-block |
-| 2xl | 48px | Not used inside this sub-block |
-| 3xl | 64px | Not used inside this sub-block |
+| Token | Value | Usage in this sub-block                                                                                 |
+| ----- | ----- | ------------------------------------------------------------------------------------------------------- |
+| xs    | 4px   | `mt-1` between count-row and drill-down list; gap between status badge + eventId in each row (`gap-1`)  |
+| sm    | 8px   | `gap-2` between drill-down columns (status / eventId / actors / confidence) per Phase 32 D-10 precedent |
+| md    | 16px  | Not used inside this sub-block (parent Operator Actions section already pads at `px-3 py-2`)            |
+| lg    | 24px  | Not used inside this sub-block                                                                          |
+| xl    | 32px  | Not used inside this sub-block                                                                          |
+| 2xl   | 48px  | Not used inside this sub-block                                                                          |
+| 3xl   | 64px  | Not used inside this sub-block                                                                          |
 
 **Exceptions:** The drill-down `<li>` rows reuse the prune-block's `py-0.5` vertical padding (2px) — this is below the 4-multiple floor but is **pinned by Phase 32 precedent on the same row pattern**, NOT a Phase 33 introduction. Auto-selected: inherit the precedent verbatim rather than diverge for one new sub-block (consistency over abstract rule compliance). If the ui-checker flags this, the resolution is to lift the entire Operator Actions row family to `py-1` in a separate cleanup — Phase 33 must not introduce a one-off divergence.
 
@@ -63,12 +63,12 @@ Declared values (must be multiples of 4):
 
 Inherited from existing DevApiStatus precedent. **No new sizes or weights introduced.**
 
-| Role | Size | Weight | Line Height | Where in sub-block |
-| --- | --- | --- | --- | --- |
-| Count row | 12px (`text-xs`) | 400 (regular) | 1.5 (default) | `Null: X · Raw-CAMEO: Y · Ambiguous: Z · Low-confidence: W` |
-| Drill-down row | 10px (`text-[10px]`) | 400 (regular) | 1.5 (default) | Each `<li>` row in the expandable list |
-| Drill-down mono cells | 10px (`text-[10px]`) | 400 (regular) — `font-mono` | 1.5 | eventId, issue badge code, actorConfidence cells |
-| Empty / truncation hint | 10px (`text-[10px]`) | 400 (regular) — `italic` | 1.5 | "… and N more" footer; "No actor-quality data" empty state |
+| Role                    | Size                 | Weight                      | Line Height   | Where in sub-block                                          |
+| ----------------------- | -------------------- | --------------------------- | ------------- | ----------------------------------------------------------- |
+| Count row               | 12px (`text-xs`)     | 400 (regular)               | 1.5 (default) | `Null: X · Raw-CAMEO: Y · Ambiguous: Z · Low-confidence: W` |
+| Drill-down row          | 10px (`text-[10px]`) | 400 (regular)               | 1.5 (default) | Each `<li>` row in the expandable list                      |
+| Drill-down mono cells   | 10px (`text-[10px]`) | 400 (regular) — `font-mono` | 1.5           | eventId, issue badge code, actorConfidence cells            |
+| Empty / truncation hint | 10px (`text-[10px]`) | 400 (regular) — `italic`    | 1.5           | "… and N more" footer; "No actor-quality data" empty state  |
 
 **Why two sizes (12px + 10px):** the count row reads as a primary status line (matches `dead-url-count` at `text-text-muted` base inheriting `text-xs` from the parent section's `text-xs` at line 1532); the drill-down list collapses to 10px to fit eventId + actors + confidence in one row without wrap (matches Phase 32 D-10 `text-[10px]` at line 1619). Both sizes already exist throughout the file; this contract introduces zero new typography.
 
@@ -80,12 +80,12 @@ Inherited from existing DevApiStatus precedent. **No new sizes or weights introd
 
 The dashboard ships a single dark-mode theme. The 60/30/10 split is **already fixed at the dashboard level** and Phase 33 sub-block inherits it — no new palette decisions land here.
 
-| Role | Value | Usage |
-| --- | --- | --- |
-| Dominant (60%) | `--color-surface` = `oklch(0.145 0 0)` (`#1a1a1a`-ish) | Page background, dashboard panel surface |
-| Secondary (30%) | `--color-surface-elevated` = `oklch(0.185 0 0)` + `bg-white/5` overlays | Operator Actions section background; expanded-row inner cards |
-| Accent (10%) | `--color-accent-yellow` = `oklch(0.795 0.184 86.05)` | **Reserved for** the existing 429 quota-alert banners (`replay-quota-alert`, `prune-quota-alert`). Phase 33 introduces **no new accent usage** — the actor-quality block has no error/warning surface of its own. |
-| Destructive | `--color-accent-red` = `oklch(0.577 0.245 27.33)` | NOT USED in this phase. Phase 33 has **no destructive action** (no prune button, no delete, no confirm modal). Listed for completeness only. |
+| Role            | Value                                                                   | Usage                                                                                                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dominant (60%)  | `--color-surface` = `oklch(0.145 0 0)` (`#1a1a1a`-ish)                  | Page background, dashboard panel surface                                                                                                                                                                          |
+| Secondary (30%) | `--color-surface-elevated` = `oklch(0.185 0 0)` + `bg-white/5` overlays | Operator Actions section background; expanded-row inner cards                                                                                                                                                     |
+| Accent (10%)    | `--color-accent-yellow` = `oklch(0.795 0.184 86.05)`                    | **Reserved for** the existing 429 quota-alert banners (`replay-quota-alert`, `prune-quota-alert`). Phase 33 introduces **no new accent usage** — the actor-quality block has no error/warning surface of its own. |
+| Destructive     | `--color-accent-red` = `oklch(0.577 0.245 27.33)`                       | NOT USED in this phase. Phase 33 has **no destructive action** (no prune button, no delete, no confirm modal). Listed for completeness only.                                                                      |
 
 Accent reserved for (verbatim list, no Phase 33 additions): 429 quota alerts only (`replay-quota-alert`, `prune-quota-alert`). The new sub-block does NOT introduce another amber surface.
 
@@ -95,12 +95,12 @@ The drill-down sample row carries an `issue` field with four enum values (`'null
 
 Auto-selected mapping (recommended default — chosen to reuse existing `--color-event-*` and `--color-faction-*` vars rather than introduce new tokens; rationale below the table):
 
-| Issue value | Visual treatment | CSS var used | Why this token |
-| --- | --- | --- | --- |
-| `null` | `text-text-muted/60` (no border, plain muted gray text) | `--color-text-muted` (`oklch(0.5 0 0)`) | Null = absence-of-data; muted-text reads as "missing" without escalating attention |
-| `raw-cameo` | `text-[color:var(--color-faction-disputed)]` (#f59e0b amber) | `--color-faction-disputed` | Code-as-actor = ambiguous attribution, same semantic as faction-disputed (we don't know whose side this is) |
-| `ambiguous` | `text-[color:var(--color-faction-disputed)]` (#f59e0b amber) | `--color-faction-disputed` | Same semantic family as raw-cameo (attribution unclear). Same color; the `issue` enum string itself differentiates. |
-| `low-confidence` | `text-[color:var(--color-event-other)]` (#dc5a5a dim red) | `--color-event-other` | "Other" event color reads as soft-warning without the urgency of airstrike-red; matches the dim-red palette family for catch-all-degraded-state |
+| Issue value      | Visual treatment                                             | CSS var used                            | Why this token                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `null`           | `text-text-muted/60` (no border, plain muted gray text)      | `--color-text-muted` (`oklch(0.5 0 0)`) | Null = absence-of-data; muted-text reads as "missing" without escalating attention                                                              |
+| `raw-cameo`      | `text-[color:var(--color-faction-disputed)]` (#f59e0b amber) | `--color-faction-disputed`              | Code-as-actor = ambiguous attribution, same semantic as faction-disputed (we don't know whose side this is)                                     |
+| `ambiguous`      | `text-[color:var(--color-faction-disputed)]` (#f59e0b amber) | `--color-faction-disputed`              | Same semantic family as raw-cameo (attribution unclear). Same color; the `issue` enum string itself differentiates.                             |
+| `low-confidence` | `text-[color:var(--color-event-other)]` (#dc5a5a dim red)    | `--color-event-other`                   | "Other" event color reads as soft-warning without the urgency of airstrike-red; matches the dim-red palette family for catch-all-degraded-state |
 
 **Rationale for reusing existing tokens, not introducing new ones:**
 
@@ -115,17 +115,17 @@ Auto-selected mapping (recommended default — chosen to reuse existing `--color
 
 ## Copywriting Contract
 
-| Element | Copy |
-| --- | --- |
-| Count row label | `Actor quality:` (prefix, matches the existing `Dead URL events:` / `24h actions:` / `Prompt-injection robustness:` row-label cadence) |
-| Count row content | `Null: {nullActors} · Raw-CAMEO: {rawCameoActors} · Ambiguous: {ambiguousActors} · Low-confidence: {lowConfidenceActors}` (verbatim from CONTEXT.md D-17, `·` separator matches existing DevApiStatus row style) |
-| Empty state heading | `Actor quality: no data` (renders when `actorQuality.totalEvents === 0`, e.g. fresh deploy before first cron tick) |
-| Empty state body | `Waiting for first refresh-events cron tick.` (matches the implicit voice of the existing `loading filter stats…` italic placeholder at line 1705) |
-| Drill-down empty state | NOT rendered. If `sample.length === 0` but `totalEvents > 0` and at least one of the four counts is non-zero, this is a server-side aggregator bug — surface as a silent no-op (no error copy) and rely on the contract test (D-22-analog for Phase 33) to fail the regression on CI. Matches Phase 32 silent-skip pattern at line 1612 for `opStatus?.prune == null`. |
-| Truncation footer | `… and {count} more` (verbatim from Phase 32 D-10 at line 1636 — same `data-testid="actor-quality-list-truncated"` pattern) |
-| Primary CTA | NOT APPLICABLE — Phase 33 introduces **no button, no operator action, no destructive surface**. The sub-block is read-only counters + read-only drill-down list. |
-| Error state | NOT APPLICABLE at the sub-block level. If `/api/operator-status` returns 5xx or throws, the entire `opStatus` is null and the parent block silently skips (existing Phase 28.2 W5 D-23 pattern). The actor-quality sub-block inherits this — no new error UI introduced. |
-| Destructive confirmation | NOT APPLICABLE — no destructive action in Phase 33. (Contrast: Phase 32 has a "Prune N dead events" button. Phase 33 has no equivalent — the operator never deletes actors; they observe quality counts and let the next cron tick re-extract.) |
+| Element                  | Copy                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Count row label          | `Actor quality:` (prefix, matches the existing `Dead URL events:` / `24h actions:` / `Prompt-injection robustness:` row-label cadence)                                                                                                                                                                                                                                 |
+| Count row content        | `Null: {nullActors} · Raw-CAMEO: {rawCameoActors} · Ambiguous: {ambiguousActors} · Low-confidence: {lowConfidenceActors}` (verbatim from CONTEXT.md D-17, `·` separator matches existing DevApiStatus row style)                                                                                                                                                       |
+| Empty state heading      | `Actor quality: no data` (renders when `actorQuality.totalEvents === 0`, e.g. fresh deploy before first cron tick)                                                                                                                                                                                                                                                     |
+| Empty state body         | `Waiting for first refresh-events cron tick.` (matches the implicit voice of the existing `loading filter stats…` italic placeholder at line 1705)                                                                                                                                                                                                                     |
+| Drill-down empty state   | NOT rendered. If `sample.length === 0` but `totalEvents > 0` and at least one of the four counts is non-zero, this is a server-side aggregator bug — surface as a silent no-op (no error copy) and rely on the contract test (D-22-analog for Phase 33) to fail the regression on CI. Matches Phase 32 silent-skip pattern at line 1612 for `opStatus?.prune == null`. |
+| Truncation footer        | `… and {count} more` (verbatim from Phase 32 D-10 at line 1636 — same `data-testid="actor-quality-list-truncated"` pattern)                                                                                                                                                                                                                                            |
+| Primary CTA              | NOT APPLICABLE — Phase 33 introduces **no button, no operator action, no destructive surface**. The sub-block is read-only counters + read-only drill-down list.                                                                                                                                                                                                       |
+| Error state              | NOT APPLICABLE at the sub-block level. If `/api/operator-status` returns 5xx or throws, the entire `opStatus` is null and the parent block silently skips (existing Phase 28.2 W5 D-23 pattern). The actor-quality sub-block inherits this — no new error UI introduced.                                                                                               |
+| Destructive confirmation | NOT APPLICABLE — no destructive action in Phase 33. (Contrast: Phase 32 has a "Prune N dead events" button. Phase 33 has no equivalent — the operator never deletes actors; they observe quality counts and let the next cron tick re-extract.)                                                                                                                        |
 
 **Voice consistency check:** all copy uses the same terse, machine-style cadence as the existing rows (`24h actions: 12`, `Dead URL events: 3`, `Prompt-injection robustness: 8/10`). No prose, no apologies, no "please" / "sorry" patterns. Numbers + labels + dots.
 
@@ -200,12 +200,12 @@ Render gate: `{opStatus?.actorQuality != null && (...)}` — silent skip when th
 
 ## Component Inventory (delta for this phase)
 
-| Component | Status | Notes |
-| --- | --- | --- |
-| ActorQuality sub-block | NEW — inline JSX inside `DevApiStatus.tsx`, not extracted to a separate component file | Auto-selected: matches Phase 32 D-10's inline-JSX precedent (line 1612-1654). Extraction to `<ActorQualityBlock />` is a refactor candidate if Phase 35 (Internal Docs + Cleanup) decides to consolidate Operator Actions sub-blocks; out of scope for Phase 33. |
-| Issue badge `<span>` | NEW — inline span with conditional color class | One color-mapping ternary; no shared component (4 enum values, used in one place). |
-| Truncation footer `<li>` | NEW — verbatim mirror of Phase 32 line 1632-1638 | Same render conditions (`actorQuality.sample.length < actorQuality.totalIssueEvents`). |
-| Empty state `<div>` | NEW — replaces sub-block render when `totalEvents === 0` | Single conditional branch; no shared component. |
+| Component                | Status                                                                                 | Notes                                                                                                                                                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ActorQuality sub-block   | NEW — inline JSX inside `DevApiStatus.tsx`, not extracted to a separate component file | Auto-selected: matches Phase 32 D-10's inline-JSX precedent (line 1612-1654). Extraction to `<ActorQualityBlock />` is a refactor candidate if Phase 35 (Internal Docs + Cleanup) decides to consolidate Operator Actions sub-blocks; out of scope for Phase 33. |
+| Issue badge `<span>`     | NEW — inline span with conditional color class                                         | One color-mapping ternary; no shared component (4 enum values, used in one place).                                                                                                                                                                               |
+| Truncation footer `<li>` | NEW — verbatim mirror of Phase 32 line 1632-1638                                       | Same render conditions (`actorQuality.sample.length < actorQuality.totalIssueEvents`).                                                                                                                                                                           |
+| Empty state `<div>`      | NEW — replaces sub-block render when `totalEvents === 0`                               | Single conditional branch; no shared component.                                                                                                                                                                                                                  |
 
 No new icon files, no new font files, no new image assets, no new CSS classes outside the `@theme` block.
 
@@ -215,25 +215,25 @@ No new icon files, no new font files, no new image assets, no new CSS classes ou
 
 No shadcn registry is active in this project (no `components.json`). No third-party blocks are introduced in Phase 33. Registry vetting gate is not applicable.
 
-| Registry | Blocks Used | Safety Gate |
-| --- | --- | --- |
-| shadcn official | none | not applicable (no shadcn) |
-| third-party | none | not applicable |
+| Registry        | Blocks Used | Safety Gate                |
+| --------------- | ----------- | -------------------------- |
+| shadcn official | none        | not applicable (no shadcn) |
+| third-party     | none        | not applicable             |
 
 ---
 
 ## Pre-Population Trace
 
-| Section | Source | Decisions Used |
-| --- | --- | --- |
-| Design System | Detected — no `components.json`, no `tailwind.config.*`, Tailwind v4 `@theme` block present | 5 (tool, preset, lib, icon, font all derived) |
-| Spacing | CONTEXT.md D-17 + Phase 32 prune-block precedent (`src/components/ui/DevApiStatus.tsx:1612-1665`) | 7 (all token rows + exception note) |
-| Typography | DevApiStatus.tsx existing patterns (`text-xs`, `text-[10px]`, `font-mono`) — zero new sizes | 4 (all role rows) |
-| Color | `src/styles/app.css` `@theme` (24 entity vars) + `colorBridge.ts` (D-13 contract) + auto-selected issue-badge mapping | 4 (60/30/10/destructive) + 4 issue-badge mappings |
-| Copywriting | CONTEXT.md D-17 (count format) + Phase 32 prune-block precedent + auto-selected empty/error copy | 7 (label / content / 2 empty states / truncation / primary CTA / error / destructive) |
-| Interaction | Phase 32 D-10 prune-list precedent + Phase 28.2 W5 D-23 quality-metrics precedent | 6 (loading / default-zero / hover / expansion / keyboard / poll) + 5 test IDs + accessibility checks |
-| DOM Mount | CONTEXT.md D-17 line-reference (~line 1481) + Phase 32 closing-fragment position | 1 mount-point decision + 3 rationales |
-| Registry | Detected — no shadcn, no third-party | 0 (N/A) |
+| Section       | Source                                                                                                                | Decisions Used                                                                                       |
+| ------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Design System | Detected — no `components.json`, no `tailwind.config.*`, Tailwind v4 `@theme` block present                           | 5 (tool, preset, lib, icon, font all derived)                                                        |
+| Spacing       | CONTEXT.md D-17 + Phase 32 prune-block precedent (`src/components/ui/DevApiStatus.tsx:1612-1665`)                     | 7 (all token rows + exception note)                                                                  |
+| Typography    | DevApiStatus.tsx existing patterns (`text-xs`, `text-[10px]`, `font-mono`) — zero new sizes                           | 4 (all role rows)                                                                                    |
+| Color         | `src/styles/app.css` `@theme` (24 entity vars) + `colorBridge.ts` (D-13 contract) + auto-selected issue-badge mapping | 4 (60/30/10/destructive) + 4 issue-badge mappings                                                    |
+| Copywriting   | CONTEXT.md D-17 (count format) + Phase 32 prune-block precedent + auto-selected empty/error copy                      | 7 (label / content / 2 empty states / truncation / primary CTA / error / destructive)                |
+| Interaction   | Phase 32 D-10 prune-list precedent + Phase 28.2 W5 D-23 quality-metrics precedent                                     | 6 (loading / default-zero / hover / expansion / keyboard / poll) + 5 test IDs + accessibility checks |
+| DOM Mount     | CONTEXT.md D-17 line-reference (~line 1481) + Phase 32 closing-fragment position                                      | 1 mount-point decision + 3 rationales                                                                |
+| Registry      | Detected — no shadcn, no third-party                                                                                  | 0 (N/A)                                                                                              |
 
 **Total auto-selections logged inline:** badge color mapping (4 buckets), badge render shape (plain text vs chip), hover state (none), drill-down expansion (always-visible), keyboard nav (none), empty state copy, drill-down empty handling, sub-block position (between prune block and quota alert), component extraction (inline-JSX, no separate file). All recommended-default selections per --auto mode; CONTEXT.md decisions D-16 + D-17 are untouched and treated as immutable.
 

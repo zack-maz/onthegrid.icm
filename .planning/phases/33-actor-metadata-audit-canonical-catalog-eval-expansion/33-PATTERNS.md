@@ -8,32 +8,32 @@
 
 ## File Classification
 
-| New/Modified File                                                              | Role                          | Data Flow         | Closest Analog                                                                            | Match Quality |
-| ------------------------------------------------------------------------------ | ----------------------------- | ----------------- | ----------------------------------------------------------------------------------------- | ------------- |
-| `server/data/actor-catalog.ts`                                                 | static-data module (NEW)      | —                 | `src/lib/factions.ts` + `src/lib/ethnicGroups.ts`                                         | exact (sibling pattern) |
-| `src/__tests__/lib/actorCatalog.test.ts`                                       | contract test (NEW)           | —                 | `src/__tests__/lib/colorBridge.test.ts`                                                   | exact         |
-| `server/lib/actorClassifier.ts`                                                | shared classifier module (NEW)| transform         | `server/lib/eventScoring.ts` (pure-fn classifier) + `server/adapters/gdelt.ts:153-194` (classifyByBaseCode) | role-match (composite) |
-| `server/__tests__/lib/actorClassifier.test.ts`                                 | unit test (NEW)               | —                 | `server/__tests__/lib/eventScoring.test.ts` / `server/__tests__/lib/llmTokenBudget.test.ts` | role-match |
-| `.planning/phases/33-*/audit/run-audit.ts`                                     | one-shot script (NEW)         | batch             | `scripts/snapshot-v3-redis.ts` + `scripts/snapshot-cron-watch.ts`                         | exact         |
-| `.planning/phases/33-*/cameo-codes.json`                                       | static reference (NEW)        | —                 | `.planning/eval/ground-truth-events.json` (committed JSON fixture)                        | role-match    |
-| `.planning/phases/33-*/33-AUDIT-REPORT.md`                                     | phase artifact (NEW)          | —                 | `.planning/phases/31-*/31-SUMMARY.md` style                                               | exact         |
-| `server/lib/llmSchema.ts` (extend)                                             | schema definition (MODIFIED)  | —                 | `server/lib/llmSchema.ts:173-175` (existing v2→v3 `.extend()` site)                       | exact (self-analog) |
-| `server/lib/llmEventExtractor.v3.ts` (D-08 canonicalization)                   | service / pipeline (MODIFIED) | transform         | `server/lib/llmEventExtractor.v3.ts:780-810` (existing post-validate site)                | exact (self-analog) |
-| `server/lib/llmEventExtractor.v3.ts` (D-09 prompt)                             | service / prompt (MODIFIED)   | —                 | `server/lib/llmEventExtractor.v3.ts:125-160` (SYSTEM_PROMPT_V3 array)                     | exact (self-analog) |
-| `server/lib/llmEvalHarness.ts` (D-13 actorMatchRate)                           | service / eval (MODIFIED)     | request-response  | `server/lib/llmEvalHarness.ts:250-312` (existing `runEval()`)                             | exact (self-analog) |
-| `server/lib/llmProgress.ts` (D-13 mirror)                                      | service / progress (MODIFIED) | —                 | `server/lib/llmProgress.ts:50-90` (existing optional-field extensions)                    | exact (self-analog) |
-| `server/routes/operator-status.ts` (D-16 actorQuality block)                   | controller (MODIFIED)         | request-response  | `server/routes/operator-status.ts:282-316` (existing `prune` block — Phase 32 D-16)       | exact         |
-| `src/components/ui/DevApiStatus.tsx` (D-17 actor-quality sub-block)            | component (MODIFIED)          | request-response  | `src/components/ui/DevApiStatus.tsx:1603-1654` (Phase 32 prune sub-block)                 | exact         |
-| `.planning/eval/ground-truth-events.json` (D-14 backfill)                      | fixture (MODIFIED)            | —                 | existing file (self-extend; additive optional fields)                                     | exact         |
-| `.planning/eval/adversarial-injections.json` (D-15 append)                     | fixture (MODIFIED)            | —                 | existing file (self-extend; 3 new entries)                                                | exact         |
-| `server/__tests__/lib/llmSchema.test.ts` (extend D-10/D-12)                    | contract test (MODIFIED)      | —                 | `server/__tests__/lib/llmSchema.test.ts:1-80` (existing schema-acceptance tests)          | exact (self-analog) |
-| `server/__tests__/lib/llmEvalHarness.test.ts` (extend D-13)                    | unit test (MODIFIED)          | —                 | `server/__tests__/lib/llmEvalHarness.test.ts:1-80` (existing harness tests)               | exact (self-analog) |
-| `server/__tests__/lib/llmEvalHarness.adversarial.test.ts` (extend D-15)        | integration test (MODIFIED)   | —                 | `server/__tests__/lib/llmEvalHarness.adversarial.test.ts:1-80` (existing)                 | exact (self-analog) |
-| `server/__tests__/lib/llmEventExtractor.v3.canonicalize.test.ts`               | unit test (NEW)               | —                 | `server/__tests__/lib/freeClaudeRouter.test.ts` (vi.hoisted + dynamic import)             | role-match    |
-| `server/__tests__/lib/llmEventExtractor.v3.prompt.test.ts`                     | snapshot test (NEW)           | —                 | `server/__tests__/lib/llmSchema.test.ts` (constant-shape assertion pattern)               | role-match    |
-| `server/__tests__/lib/llmEvalHarness.groundTruthSchema.test.ts`                | contract test (NEW)           | —                 | `server/__tests__/lib/llmEvalHarness.adversarial.test.ts:77-90` (real on-disk JSON read)  | exact         |
-| `server/routes/__tests__/operator-status.test.ts` (extend D-16)                | integration test (MODIFIED)   | —                 | `server/routes/__tests__/operator-status.test.ts:1-100` (existing supertest pattern)      | exact (self-analog) |
-| `src/__tests__/components/DevApiStatus.actorQuality.test.tsx`                  | RTL test (NEW)                | —                 | `src/__tests__/components/DevApiStatus.prune.test.tsx` (full Phase 32 jsdom matrix)       | exact         |
+| New/Modified File                                                       | Role                           | Data Flow        | Closest Analog                                                                                              | Match Quality           |
+| ----------------------------------------------------------------------- | ------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `server/data/actor-catalog.ts`                                          | static-data module (NEW)       | —                | `src/lib/factions.ts` + `src/lib/ethnicGroups.ts`                                                           | exact (sibling pattern) |
+| `src/__tests__/lib/actorCatalog.test.ts`                                | contract test (NEW)            | —                | `src/__tests__/lib/colorBridge.test.ts`                                                                     | exact                   |
+| `server/lib/actorClassifier.ts`                                         | shared classifier module (NEW) | transform        | `server/lib/eventScoring.ts` (pure-fn classifier) + `server/adapters/gdelt.ts:153-194` (classifyByBaseCode) | role-match (composite)  |
+| `server/__tests__/lib/actorClassifier.test.ts`                          | unit test (NEW)                | —                | `server/__tests__/lib/eventScoring.test.ts` / `server/__tests__/lib/llmTokenBudget.test.ts`                 | role-match              |
+| `.planning/phases/33-*/audit/run-audit.ts`                              | one-shot script (NEW)          | batch            | `scripts/snapshot-v3-redis.ts` + `scripts/snapshot-cron-watch.ts`                                           | exact                   |
+| `.planning/phases/33-*/cameo-codes.json`                                | static reference (NEW)         | —                | `.planning/eval/ground-truth-events.json` (committed JSON fixture)                                          | role-match              |
+| `.planning/phases/33-*/33-AUDIT-REPORT.md`                              | phase artifact (NEW)           | —                | `.planning/phases/31-*/31-SUMMARY.md` style                                                                 | exact                   |
+| `server/lib/llmSchema.ts` (extend)                                      | schema definition (MODIFIED)   | —                | `server/lib/llmSchema.ts:173-175` (existing v2→v3 `.extend()` site)                                         | exact (self-analog)     |
+| `server/lib/llmEventExtractor.v3.ts` (D-08 canonicalization)            | service / pipeline (MODIFIED)  | transform        | `server/lib/llmEventExtractor.v3.ts:780-810` (existing post-validate site)                                  | exact (self-analog)     |
+| `server/lib/llmEventExtractor.v3.ts` (D-09 prompt)                      | service / prompt (MODIFIED)    | —                | `server/lib/llmEventExtractor.v3.ts:125-160` (SYSTEM_PROMPT_V3 array)                                       | exact (self-analog)     |
+| `server/lib/llmEvalHarness.ts` (D-13 actorMatchRate)                    | service / eval (MODIFIED)      | request-response | `server/lib/llmEvalHarness.ts:250-312` (existing `runEval()`)                                               | exact (self-analog)     |
+| `server/lib/llmProgress.ts` (D-13 mirror)                               | service / progress (MODIFIED)  | —                | `server/lib/llmProgress.ts:50-90` (existing optional-field extensions)                                      | exact (self-analog)     |
+| `server/routes/operator-status.ts` (D-16 actorQuality block)            | controller (MODIFIED)          | request-response | `server/routes/operator-status.ts:282-316` (existing `prune` block — Phase 32 D-16)                         | exact                   |
+| `src/components/ui/DevApiStatus.tsx` (D-17 actor-quality sub-block)     | component (MODIFIED)           | request-response | `src/components/ui/DevApiStatus.tsx:1603-1654` (Phase 32 prune sub-block)                                   | exact                   |
+| `.planning/eval/ground-truth-events.json` (D-14 backfill)               | fixture (MODIFIED)             | —                | existing file (self-extend; additive optional fields)                                                       | exact                   |
+| `.planning/eval/adversarial-injections.json` (D-15 append)              | fixture (MODIFIED)             | —                | existing file (self-extend; 3 new entries)                                                                  | exact                   |
+| `server/__tests__/lib/llmSchema.test.ts` (extend D-10/D-12)             | contract test (MODIFIED)       | —                | `server/__tests__/lib/llmSchema.test.ts:1-80` (existing schema-acceptance tests)                            | exact (self-analog)     |
+| `server/__tests__/lib/llmEvalHarness.test.ts` (extend D-13)             | unit test (MODIFIED)           | —                | `server/__tests__/lib/llmEvalHarness.test.ts:1-80` (existing harness tests)                                 | exact (self-analog)     |
+| `server/__tests__/lib/llmEvalHarness.adversarial.test.ts` (extend D-15) | integration test (MODIFIED)    | —                | `server/__tests__/lib/llmEvalHarness.adversarial.test.ts:1-80` (existing)                                   | exact (self-analog)     |
+| `server/__tests__/lib/llmEventExtractor.v3.canonicalize.test.ts`        | unit test (NEW)                | —                | `server/__tests__/lib/freeClaudeRouter.test.ts` (vi.hoisted + dynamic import)                               | role-match              |
+| `server/__tests__/lib/llmEventExtractor.v3.prompt.test.ts`              | snapshot test (NEW)            | —                | `server/__tests__/lib/llmSchema.test.ts` (constant-shape assertion pattern)                                 | role-match              |
+| `server/__tests__/lib/llmEvalHarness.groundTruthSchema.test.ts`         | contract test (NEW)            | —                | `server/__tests__/lib/llmEvalHarness.adversarial.test.ts:77-90` (real on-disk JSON read)                    | exact                   |
+| `server/routes/__tests__/operator-status.test.ts` (extend D-16)         | integration test (MODIFIED)    | —                | `server/routes/__tests__/operator-status.test.ts:1-100` (existing supertest pattern)                        | exact (self-analog)     |
+| `src/__tests__/components/DevApiStatus.actorQuality.test.tsx`           | RTL test (NEW)                 | —                | `src/__tests__/components/DevApiStatus.prune.test.tsx` (full Phase 32 jsdom matrix)                         | exact                   |
 
 ---
 
@@ -288,8 +288,17 @@ const RAW_CAMEO_REGEX = /^[A-Z]{3,5}$/;
 
 // D-02 (c) static deny-list — case-insensitive match.
 const AMBIGUOUS_DENY_LIST = new Set([
-  'soldiers', 'forces', 'militants', 'troops', 'fighters',
-  'the army', 'gunmen', 'attackers', 'rebels', 'insurgents', 'militia',
+  'soldiers',
+  'forces',
+  'militants',
+  'troops',
+  'fighters',
+  'the army',
+  'gunmen',
+  'attackers',
+  'rebels',
+  'insurgents',
+  'militia',
 ]);
 
 /**
@@ -297,10 +306,7 @@ const AMBIGUOUS_DENY_LIST = new Set([
  * Bucket (d) source-disagreement is NOT auto-detected — reserved for
  * human spot-check in the audit report. Returns 'ok' for clean strings.
  */
-export function classifyActor(
-  actor: string,
-  cameoCodebook: Set<string>,
-): ActorIssue {
+export function classifyActor(actor: string, cameoCodebook: Set<string>): ActorIssue {
   const trimmed = actor.trim();
   if (trimmed.length === 0) return 'null'; // bucket (a) — empty string variant
   if (RAW_CAMEO_REGEX.test(trimmed) && cameoCodebook.has(trimmed)) return 'raw-cameo';
@@ -605,11 +611,21 @@ export const EVENT_EXTRACTION_SCHEMA_V3: Record<string, unknown> = {
           /* ... */
         },
         required: [
-          'groupKey', 'location', 'type', 'confidence', 'reasoning',
-          'weaponType', 'targetType', 'timeOfDay', 'durationMinutes',
+          'groupKey',
+          'location',
+          'type',
+          'confidence',
+          'reasoning',
+          'weaponType',
+          'targetType',
+          'timeOfDay',
+          'durationMinutes',
           'actors',
           'actorConfidence', // ← Open Q §2: ship required in wire schema; server-side repair as defense-in-depth
-          'severity', 'summary', 'casualties', 'sourceCount',
+          'severity',
+          'summary',
+          'casualties',
+          'sourceCount',
         ],
         additionalProperties: false,
       },
@@ -674,10 +690,7 @@ function applyCatalogToEvents(events: EnrichedEventV3[]): EnrichedEventV3[] {
 
 /** D-10 — fill/repair actorConfidence to be length-locked with actors. */
 function repairActorConfidence(event: EnrichedEventV3): EnrichedEventV3 {
-  if (
-    event.actorConfidence == null ||
-    event.actorConfidence.length !== event.actors.length
-  ) {
+  if (event.actorConfidence == null || event.actorConfidence.length !== event.actors.length) {
     return {
       ...event,
       actorConfidence: event.actors.map(() => 'low' as const),
@@ -754,7 +767,10 @@ export interface EvalScore {
 // Lines 264-280 — current runEval loop (resolver-only per A6 / Pitfall 8):
 for (const ev of gt.events) {
   try {
-    const resolved = await resolveLocation(ev.hierarchy, { centroidLat: ev.truth.lat, centroidLng: ev.truth.lng });
+    const resolved = await resolveLocation(ev.hierarchy, {
+      centroidLat: ev.truth.lat,
+      centroidLng: ev.truth.lng,
+    });
     const dKm = haversineKm(resolved.lat, resolved.lng, ev.truth.lat, ev.truth.lng);
     if (dKm <= 5) w5++;
     if (dKm <= 20) w20++;
@@ -935,37 +951,54 @@ let actorQuality: {
 try {
   // Reuse the SAME cache read as prune sample SCAN — but actorQuality reads
   // the whole v3 array (one GET, not a SCAN).
-  const cached = await cacheGetSafe<ConflictEventEntity[]>(
-    LLM_EVENTS_KEY_ACTIVE,
-    999_999_999,
-  );
+  const cached = await cacheGetSafe<ConflictEventEntity[]>(LLM_EVENTS_KEY_ACTIVE, 999_999_999);
   const entities = cached?.data ?? [];
 
   // CAMEO codebook for bucket-b — load from the committed phase artifact,
   // OR (if bundling .planning/ into the server build is forbidden) use a
   // hardcoded subset of well-known actor codes here. Researcher's call;
   // recommend hardcoded subset for server-side simplicity.
-  const cameoCodebook = new Set(['ISRMIL', 'IRNMIL', 'USMIL', /* ... */]);
+  const cameoCodebook = new Set(['ISRMIL', 'IRNMIL', 'USMIL' /* ... */]);
 
-  let nullActors = 0, rawCameoActors = 0, ambiguousActors = 0, lowConfidenceActors = 0;
+  let nullActors = 0,
+    rawCameoActors = 0,
+    ambiguousActors = 0,
+    lowConfidenceActors = 0;
   const sample: typeof actorQuality.sample = [];
 
   for (const entity of entities) {
     const actors = (entity.data as { actors?: string[] }).actors ?? [];
-    const actorConfidence = (entity.data as { actorConfidence?: ('high'|'medium'|'low')[] }).actorConfidence ?? actors.map(() => 'low' as const);
+    const actorConfidence =
+      (entity.data as { actorConfidence?: ('high' | 'medium' | 'low')[] }).actorConfidence ??
+      actors.map(() => 'low' as const);
     const issues = classifyEventActors(actors, cameoCodebook);
     let firstIssue: 'null' | 'raw-cameo' | 'ambiguous' | 'low-confidence' | null = null;
-    if (issues.includes('null')) { nullActors++; firstIssue = 'null'; }
-    if (issues.includes('raw-cameo')) { rawCameoActors++; firstIssue = firstIssue ?? 'raw-cameo'; }
-    if (issues.includes('ambiguous')) { ambiguousActors++; firstIssue = firstIssue ?? 'ambiguous'; }
-    if (actorConfidence.includes('low')) { lowConfidenceActors++; firstIssue = firstIssue ?? 'low-confidence'; }
+    if (issues.includes('null')) {
+      nullActors++;
+      firstIssue = 'null';
+    }
+    if (issues.includes('raw-cameo')) {
+      rawCameoActors++;
+      firstIssue = firstIssue ?? 'raw-cameo';
+    }
+    if (issues.includes('ambiguous')) {
+      ambiguousActors++;
+      firstIssue = firstIssue ?? 'ambiguous';
+    }
+    if (actorConfidence.includes('low')) {
+      lowConfidenceActors++;
+      firstIssue = firstIssue ?? 'low-confidence';
+    }
     if (firstIssue && sample.length < LIMIT_DRILL_DOWN) {
       sample.push({ eventId: entity.id, actors, actorConfidence, issue: firstIssue });
     }
   }
   actorQuality = {
     totalEvents: entities.length,
-    nullActors, rawCameoActors, ambiguousActors, lowConfidenceActors,
+    nullActors,
+    rawCameoActors,
+    ambiguousActors,
+    lowConfidenceActors,
     sample,
   };
 } catch (err) {
@@ -1003,93 +1036,97 @@ res.json({ audit24h, byBearer, advEval, prune, actorQuality });
 **Current Phase 32 prune sub-block (confirmed at lines 1612-1654):**
 
 ```tsx
-{opStatus?.prune != null && (
-  <>
-    <div className="mt-1 text-text-muted" data-testid="dead-url-count">
-      Dead URL events: {opStatus.prune.deadUrlCount}
-    </div>
-    {opStatus.prune.deadUrlSample.length > 0 && (
-      <ul
-        className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
-        data-testid="dead-url-list"
-      >
-        {opStatus.prune.deadUrlSample.map((entry) => (
-          <li key={entry.eventId} className="flex items-baseline gap-2 py-0.5">
-            <span className="font-mono text-text-muted/60">{entry.status}</span>
-            <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
-            <span className="truncate text-text-muted/70" title={entry.url}>
-              {entry.url}
-            </span>
-          </li>
-        ))}
-        {opStatus.prune.deadUrlCount > opStatus.prune.deadUrlSample.length && (
-          <li
-            className="py-0.5 italic text-text-muted/40"
-            data-testid="dead-url-list-truncated"
-          >
-            … and {opStatus.prune.deadUrlCount - opStatus.prune.deadUrlSample.length} more
-          </li>
-        )}
-      </ul>
-    )}
-    {/* Phase 33: NO button — actor-quality is read-only counters + drill-down */}
-  </>
-)}
+{
+  opStatus?.prune != null && (
+    <>
+      <div className="mt-1 text-text-muted" data-testid="dead-url-count">
+        Dead URL events: {opStatus.prune.deadUrlCount}
+      </div>
+      {opStatus.prune.deadUrlSample.length > 0 && (
+        <ul
+          className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
+          data-testid="dead-url-list"
+        >
+          {opStatus.prune.deadUrlSample.map((entry) => (
+            <li key={entry.eventId} className="flex items-baseline gap-2 py-0.5">
+              <span className="font-mono text-text-muted/60">{entry.status}</span>
+              <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
+              <span className="truncate text-text-muted/70" title={entry.url}>
+                {entry.url}
+              </span>
+            </li>
+          ))}
+          {opStatus.prune.deadUrlCount > opStatus.prune.deadUrlSample.length && (
+            <li className="py-0.5 italic text-text-muted/40" data-testid="dead-url-list-truncated">
+              … and {opStatus.prune.deadUrlCount - opStatus.prune.deadUrlSample.length} more
+            </li>
+          )}
+        </ul>
+      )}
+      {/* Phase 33: NO button — actor-quality is read-only counters + drill-down */}
+    </>
+  );
+}
 ```
 
 **Phase 33 D-17 target (mirror prune-block shape, omit button, add empty state):**
 
 ```tsx
-{/* Phase 33 D-17 — Actor Quality sub-block. Read-only counters + drill-down.
+{
+  /* Phase 33 D-17 — Actor Quality sub-block. Read-only counters + drill-down.
     Mount point: between line 1654 (prune block close) and line 1658
     (pruneQuotaAlert). Render gate: opStatus?.actorQuality != null silently
-    skips when pre-Phase-33 server deploys don't carry the field. */}
-{opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents > 0 && (
-  <>
-    <div
-      className="mt-1 text-text-muted"
-      data-testid="actor-quality-row"
-      aria-label={`Actor quality counters: ${opStatus.actorQuality.nullActors} null actors, ${opStatus.actorQuality.rawCameoActors} raw CAMEO codes, ${opStatus.actorQuality.ambiguousActors} ambiguous strings, ${opStatus.actorQuality.lowConfidenceActors} low confidence`}
-    >
-      Actor quality: Null: {opStatus.actorQuality.nullActors} · Raw-CAMEO:{' '}
-      {opStatus.actorQuality.rawCameoActors} · Ambiguous:{' '}
-      {opStatus.actorQuality.ambiguousActors} · Low-confidence:{' '}
-      {opStatus.actorQuality.lowConfidenceActors}
-    </div>
-    {opStatus.actorQuality.sample.length > 0 && (
-      <ul
-        className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
-        data-testid="actor-quality-list"
-        aria-label="Actor quality drill-down sample (up to 20 events)"
+    skips when pre-Phase-33 server deploys don't carry the field. */
+}
+{
+  opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents > 0 && (
+    <>
+      <div
+        className="mt-1 text-text-muted"
+        data-testid="actor-quality-row"
+        aria-label={`Actor quality counters: ${opStatus.actorQuality.nullActors} null actors, ${opStatus.actorQuality.rawCameoActors} raw CAMEO codes, ${opStatus.actorQuality.ambiguousActors} ambiguous strings, ${opStatus.actorQuality.lowConfidenceActors} low confidence`}
       >
-        {opStatus.actorQuality.sample.map((entry) => {
-          const issueColor =
-            entry.issue === 'null'
-              ? 'text-text-muted/60'
-              : entry.issue === 'raw-cameo' || entry.issue === 'ambiguous'
-                ? 'text-[color:var(--color-faction-disputed)]'
-                : 'text-[color:var(--color-event-other)]'; // 'low-confidence'
-          return (
-            <li
-              key={entry.eventId}
-              className="flex items-baseline gap-2 py-0.5"
-              data-testid={`actor-quality-row-${entry.eventId}`}
-            >
-              <span className={`font-mono ${issueColor}`}>{entry.issue}</span>
-              <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
-              <span className="truncate text-text-muted/70">{entry.actors.join(', ')}</span>
-            </li>
-          );
-        })}
-      </ul>
-    )}
-  </>
-)}
-{opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents === 0 && (
-  <div className="mt-1 text-text-muted italic" data-testid="actor-quality-empty">
-    Actor quality: no data
-  </div>
-)}
+        Actor quality: Null: {opStatus.actorQuality.nullActors} · Raw-CAMEO:{' '}
+        {opStatus.actorQuality.rawCameoActors} · Ambiguous: {opStatus.actorQuality.ambiguousActors}{' '}
+        · Low-confidence: {opStatus.actorQuality.lowConfidenceActors}
+      </div>
+      {opStatus.actorQuality.sample.length > 0 && (
+        <ul
+          className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
+          data-testid="actor-quality-list"
+          aria-label="Actor quality drill-down sample (up to 20 events)"
+        >
+          {opStatus.actorQuality.sample.map((entry) => {
+            const issueColor =
+              entry.issue === 'null'
+                ? 'text-text-muted/60'
+                : entry.issue === 'raw-cameo' || entry.issue === 'ambiguous'
+                  ? 'text-[color:var(--color-faction-disputed)]'
+                  : 'text-[color:var(--color-event-other)]'; // 'low-confidence'
+            return (
+              <li
+                key={entry.eventId}
+                className="flex items-baseline gap-2 py-0.5"
+                data-testid={`actor-quality-row-${entry.eventId}`}
+              >
+                <span className={`font-mono ${issueColor}`}>{entry.issue}</span>
+                <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
+                <span className="truncate text-text-muted/70">{entry.actors.join(', ')}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
+{
+  opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents === 0 && (
+    <div className="mt-1 text-text-muted italic" data-testid="actor-quality-empty">
+      Actor quality: no data
+    </div>
+  );
+}
 ```
 
 **OperatorStatus interface extension (`DevApiStatus.tsx:895-914` — confirmed shape, add actorQuality field):**
@@ -1237,12 +1274,15 @@ const { applyCatalogToEvents, repairActorConfidence } = await import(
 
 describe('applyCatalogToEvents (D-08)', () => {
   it('replaces matched aliases with canonical names', () => {
-    const input = [{ actors: ['IDF', 'irgc'], /* ... */ }];
+    const input = [{ actors: ['IDF', 'irgc'] /* ... */ }];
     const output = applyCatalogToEvents(input as never);
-    expect(output[0].actors).toEqual(['Israeli Defense Forces', 'Islamic Revolutionary Guard Corps']);
+    expect(output[0].actors).toEqual([
+      'Israeli Defense Forces',
+      'Islamic Revolutionary Guard Corps',
+    ]);
   });
   it('passes unmatched actors through unchanged', () => {
-    const input = [{ actors: ['UnknownGroup'], /* ... */ }];
+    const input = [{ actors: ['UnknownGroup'] /* ... */ }];
     const output = applyCatalogToEvents(input as never);
     expect(output[0].actors).toEqual(['UnknownGroup']);
   });
@@ -1451,7 +1491,9 @@ describe('/api/operator-status — Phase 33 actorQuality block (D-16)', () => {
 
   it('sample cap = 20 (LIMIT_DRILL_DOWN)', async () => {
     const entities = Array.from({ length: 30 }, (_, i) => ({
-      id: `evt-${i}`, data: { actors: [], actorConfidence: [] }, label: '...',
+      id: `evt-${i}`,
+      data: { actors: [], actorConfidence: [] },
+      label: '...',
     }));
     mockCacheGetSafe.mockResolvedValue({ data: entities });
     // ... assertion: res.body.actorQuality.sample.length === 20
@@ -1667,9 +1709,9 @@ const { runEval } = await import('../../lib/llmEvalHarness.js'); // dynamic impo
 
 ## No Analog Found
 
-| File | Role | Data Flow | Reason |
-|------|------|-----------|--------|
-| `server/lib/actorClassifier.ts` — bucket-d (source-disagreement) detection | utility | N/A | D-02 explicitly defers bucket-d to human spot-check. No analog needed; the shared classifier covers only buckets a/b/c. The audit report seeds bucket-d candidates from a/b/c overlap (D-03), which is novel to Phase 33 and has no existing precedent in the codebase. |
+| File                                                                       | Role    | Data Flow | Reason                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------- | ------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/lib/actorClassifier.ts` — bucket-d (source-disagreement) detection | utility | N/A       | D-02 explicitly defers bucket-d to human spot-check. No analog needed; the shared classifier covers only buckets a/b/c. The audit report seeds bucket-d candidates from a/b/c overlap (D-03), which is novel to Phase 33 and has no existing precedent in the codebase. |
 
 ---
 

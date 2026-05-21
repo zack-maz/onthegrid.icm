@@ -81,8 +81,9 @@ Make actor metadata in `events:llm:v3` operator-trustworthy via four mechanical 
 - **D-09:** **Prompt updated with a best-effort hint.** `llmEventExtractor.v3.ts` SYSTEM_PROMPT line 143 ("9. actors: array of actor names involved") is extended with: "Prefer canonical full names (e.g., 'Islamic Revolutionary Guard Corps' over 'IRGC' or 'Iranian forces'). Server-side mapping handles known variants." Not the enforcement point; D-08 is.
 - **D-10:** **`actorConfidence` shape = parallel array, index-locked to `actors[]`.**
   ```ts
-  actorConfidence: z.array(z.enum(['high', 'medium', 'low']))
-    .superRefine((arr, ctx) => { /* asserts arr.length === actors.length */ })
+  actorConfidence: z.array(z.enum(['high', 'medium', 'low'])).superRefine((arr, ctx) => {
+    /* asserts arr.length === actors.length */
+  });
   ```
   Forward-compat default: if the LLM omits `actorConfidence` or returns the wrong length, the extractor fills/repairs with `'low'` for every entry server-side before write. Project pattern (cf. `aliases: string[]`) prefers flat arrays over per-actor objects.
 - **D-11:** **Cache key stays `events:llm:v3`** (no bump to v3.1). Field is additive + forward-compat:
@@ -110,9 +111,9 @@ Make actor metadata in `events:llm:v3` operator-trustworthy via four mechanical 
   ```ts
   actorQuality: {
     totalEvents: number;
-    nullActors: number;          // bucket (a) from D-02
-    rawCameoActors: number;      // bucket (b) from D-02
-    ambiguousActors: number;     // bucket (c) from D-02
+    nullActors: number; // bucket (a) from D-02
+    rawCameoActors: number; // bucket (b) from D-02
+    ambiguousActors: number; // bucket (c) from D-02
     lowConfidenceActors: number; // count where any actor entry has actorConfidence='low'
     sample: Array<{
       eventId: string;
