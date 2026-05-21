@@ -544,30 +544,37 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     const trigger: 'manual' | 'cron' = rawTrigger === 'cron' ? 'cron' : 'manual';
     const fingerprint = bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? '');
 
-    // D-15 — manual trigger consumes a slot; cron BYPASSES quota
-    // (system caller, not subject to operator-tier rate limiting).
-    if (trigger !== 'cron') {
-      const quota = await checkPruneQuota(fingerprint);
-      if (!quota.allowed) {
-        res.set('Retry-After', String(quota.retryAfterSeconds));
-        return res.status(429).json({
-          error: 'prune_quota_exceeded',
-          message: `Prune quota reached: ${quota.cap} of ${quota.cap} in last 24h.`,
-          resetsAt: quota.resetsAt,
-        });
-      }
-    }
-
-    // Audit-log responsibility lives in the helper (D-14) — the route
-    // intentionally does NOT write to operator:audit-log here. Avoids
-    // double-write between manual-via-route and cron-via-direct-call.
+    // Chaos-test contract: the entire body is wrapped in try/catch so
+    // that even checkPruneQuota's `redis.incr` (which is NOT wrapped
+    // in cacheSetSafe — it's a raw INCR for quota bookkeeping) cannot
+    // surface as a 500. Under chaos / Redis death, the route degrades
+    // to 503 prune_failed (RESEARCH Pitfall 6).
     try {
+      // D-15 — manual trigger consumes a slot; cron BYPASSES quota
+      // (system caller, not subject to operator-tier rate limiting).
+      if (trigger !== 'cron') {
+        const quota = await checkPruneQuota(fingerprint);
+        if (!quota.allowed) {
+          res.set('Retry-After', String(quota.retryAfterSeconds));
+          return res.status(429).json({
+            error: 'prune_quota_exceeded',
+            message: `Prune quota reached: ${quota.cap} of ${quota.cap} in last 24h.`,
+            resetsAt: quota.resetsAt,
+          });
+        }
+      }
+
+      // Audit-log responsibility lives in the helper (D-14) — the route
+      // intentionally does NOT write to operator:audit-log here. Avoids
+      // double-write between manual-via-route and cron-via-direct-call.
       const result = await pruneDeadUrlEvents({ trigger, fingerprint });
       return res.json(result);
     } catch (err) {
       // 503 not 500 — chaos-test contract (RESEARCH Pitfall 6). Any
-      // Redis death surfaces here as a degrade-open `prune_failed`
-      // response with a short error tail.
+      // Redis death (quota INCR, helper SCAN, helper DEL/DECRBY) surfaces
+      // here as a degrade-open `prune_failed` response with a short
+      // error tail. The audit-log helper itself is degrade-open
+      // internally so it won't propagate.
       return res.status(503).json({
         error: 'prune_failed',
         detail: String(err).slice(0, 200),
