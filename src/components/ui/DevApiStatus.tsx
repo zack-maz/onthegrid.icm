@@ -2444,6 +2444,10 @@ function EvalScoreBlock({ evalScore }: { evalScore: LLMStatus['evalScore'] }) {
   }
   const pct20 = Math.round((evalScore.within20km / evalScore.total) * 100);
   const gatePass = pct20 >= 80;
+  const actorMatchPct =
+    typeof evalScore.actorMatchRate === 'number'
+      ? Math.round(evalScore.actorMatchRate * 100)
+      : null;
   return (
     <div className="mt-2">
       <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
@@ -2463,6 +2467,12 @@ function EvalScoreBlock({ evalScore }: { evalScore: LLMStatus['evalScore'] }) {
           {evalScore.within100km}/{evalScore.total}
         </span>
       </div>
+      {actorMatchPct !== null && (
+        <div className="mt-0.5 text-[9px] text-white/60" data-testid="eval-actor-match-rate">
+          Actor match (Phase 33 ACTOR-04):{' '}
+          <span className="text-white/80 tabular-nums">{actorMatchPct}%</span>
+        </div>
+      )}
       <div className="mt-0.5 text-[9px]">
         D-25 gate (≥80% @20km):{' '}
         {gatePass ? (
