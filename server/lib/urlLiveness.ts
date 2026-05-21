@@ -510,6 +510,92 @@ async function persistLiveness(
 }
 
 // ============================================================================
+// Plan 32-02 Task 5 — buildProbeCandidates priority sort (D-04)
+// ============================================================================
+
+/**
+ * Minimal shape this module needs from a `events:llm:v3` cache entry.
+ * Avoids importing the full `ConflictEventEntity` discriminated union
+ * (which would pull in MapEntity + server types and bloat the import
+ * graph). The runtime check `typeof url === 'string'` defends against
+ * any drift in this assumed shape.
+ */
+interface ConflictEventEntityForProbe {
+  id: string;
+  data: { source?: string | null };
+}
+
+/**
+ * Logical TTL for the v3 cache read. Same sentinel rationale as
+ * `persistLiveness` — we want whatever is in Redis regardless of
+ * stale-ness.
+ */
+const V3_READ_LOGICAL_TTL_MS = 999_999_999;
+
+/**
+ * D-04 — build the sweep candidate list with two-tier priority sort:
+ *   Tier A: events with NO `events:url-liveness:{eventId}` key yet
+ *           (sorted first; never-probed → dashboard count converges fast
+ *           for new events). Internal order within Tier A follows the
+ *           natural input order from `events:llm:v3` — deterministic
+ *           and stable.
+ *   Tier B: events with a prior liveness key, sorted ascending by
+ *           `lastProbedAt` (oldest first — re-probe stale verdicts).
+ *           ISO-8601 byte-lex sort equals chronological sort.
+ *
+ * Entities whose `data.source` is empty / missing / non-string are
+ * silently dropped (no probe target — the dashboard count remains 0 for
+ * those events). Logged at debug rather than throw so a malformed event
+ * never poisons the candidate list.
+ *
+ * Reads `events:llm:v3` once and one `events:url-liveness:{eventId}`
+ * lookup per candidate. Plan 32-03 will call this immediately before
+ * `runProbeSweep` inside the cron handler.
+ */
+export async function buildProbeCandidates(): Promise<Array<{ eventId: string; url: string }>> {
+  const v3 = await cacheGetSafe<ConflictEventEntityForProbe[]>(
+    'events:llm:v3',
+    V3_READ_LOGICAL_TTL_MS,
+  );
+  const entities = v3?.data ?? [];
+  if (!Array.isArray(entities) || entities.length === 0) {
+    return [];
+  }
+
+  const tierA: Array<{ eventId: string; url: string }> = [];
+  const tierB: Array<{ eventId: string; url: string; lastProbedAt: string }> = [];
+
+  for (const entity of entities) {
+    const url = entity?.data?.source;
+    if (!url || typeof url !== 'string' || url.length === 0) {
+      // No primary URL — nothing to probe. Skip silently.
+      continue;
+    }
+    const prior = await cacheGetSafe<UrlLiveness>(
+      `${URL_LIVENESS_KEY_PREFIX}${entity.id}`,
+      LIVENESS_READ_LOGICAL_TTL_MS,
+    );
+    if (!prior?.data) {
+      tierA.push({ eventId: entity.id, url });
+    } else {
+      tierB.push({
+        eventId: entity.id,
+        url,
+        lastProbedAt: prior.data.lastProbedAt,
+      });
+    }
+  }
+
+  // ISO-8601 byte-lex sort == chronological sort (well-known JS idiom).
+  tierB.sort((a, b) => a.lastProbedAt.localeCompare(b.lastProbedAt));
+
+  return [
+    ...tierA,
+    ...tierB.map(({ eventId, url }) => ({ eventId, url })),
+  ];
+}
+
+// ============================================================================
 // Plan 32-02 Task 4 — runProbeSweep orchestrator (D-03, D-18, Pitfall 1)
 // ============================================================================
 
