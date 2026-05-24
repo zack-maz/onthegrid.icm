@@ -105,6 +105,31 @@ Re-tested OR free-tier 2026-05-17 via `scripts/probe-openrouter.ts`: 27/30 rate_
 - Free-tier `skipOpenRouter: true` removal — deferred until a future probe lands `< 50%` per D-05.
 - All Phase 31 prep items remain Phase 31's scope (eval-fixture bundling, diff-filter ID-mismatch, CACHE_KEY_PREFIX whitespace gotcha).
 
+## Phase 34 Sub-block (appended 2026-05-23)
+
+Phase 34 was inserted 2026-05-19 to restore Cerebras + Groq adapters (deleted Phase 29 SIMPLIFY-04) so NIM throttle events stop translating into DLQ entries (Phase 31 Day-1 baseline: 4 × `v3:timeout_watchdog`). The plan was probe-driven: only providers whose free-tier throttle is empirically independent of NIM's would land in the cascade.
+
+**Outcome: `cerebras-groq-deferred` (operator decision — probe not run).** The operator chose to skip Cerebras + Groq integration entirely rather than provision free-tier accounts and run the probe. This matches Phase 30.1's `nim-only` precedent: a deliberate empirical decision that "free-tier provider expansion is not currently the right lever" is itself a load-bearing close-out per CONTEXT.md D-02. No code lands in this phase; no probe artifact exists.
+
+- **D-01 (scope choice):** Honest deferral — operator skipped probe + adapter restoration. Plans 34-01 through 34-04 SKIPPED; only Plan 34-05 (this close-out) executed.
+- **D-02 (close-out branch):** Triggered the "both providers deferred" branch baked into CONTEXT.md D-02. The empirical "no probe needed — operator deferral is sufficient" finding is the deliverable.
+- **D-08 (terminal fallback):** Unchanged from Phase 30.1 — `/api/events` continues to serve raw GDELT when `events:llm:v3` is empty (Pitfall 1 bridge). Map never goes blank. NIM throttle events still translate into DLQ entries under the current single-provider cascade; this is the failure mode Phase 34 was designed to mitigate but is now deferred.
+- **D-31 (CLAUDE.md):** "Active providers" line updated to declare Cerebras + Groq deferred alongside OpenRouter. Single-line change; preserves Phase 29 D-06 5018-token budget. No new Redis registry entries added (no adapters means no `llm:tokens:cerebras|groq` keys).
+
+**Phase-35-or-later follow-up candidates (if the deferral is reconsidered):**
+
+- Run `scripts/probe-cerebras-groq.ts` (planned but unimplemented in Plan 34-01 — would need to be written) against fresh Cerebras + Groq free-tier accounts to measure actual rate-limit behavior against the v3 extractor payload shape.
+- Adopt a paid provider tier on either Cerebras or Groq (~$5-50/mo depending on volume) to bypass the free-tier rate-limit ceiling.
+- Adaptive Retry-After-aware NIM limiter (Phase 30 D-01's `retryAfterMs` field is already on `callHistory` — wire it into `nvidiaNimWindow` so post-429 calls wait the server-requested duration). Addresses the DLQ-baseline pain without provider expansion.
+- Per-provider eval infrastructure (`providerProvenance` + `EvalScore.byProvider`) and `cascade_exhausted` DLQ taxonomy were also deferred — re-introduce in a future phase if/when a multi-provider story emerges.
+
+**Architecture-level numbers** (none — no probe ran): [`docs/architecture/llm-pipeline-reliability.md`](../architecture/llm-pipeline-reliability.md#multi-provider-cascade-phase-34-2026-05-23). This sub-block records the **decision**; the architecture doc records the **deferral rationale** (mirrors the Phase 30 + 30.1 sub-block convention).
+
+**Out of scope (carries forward to future phases):**
+
+- All four LLM-RELI-08..11 requirements close as Done with the deferral outcome. If a future phase restores multi-provider cascade work, those phases inherit fresh requirement IDs (LLM-RELI-12+).
+- Existing planning artifacts (`34-CONTEXT.md`, `34-RESEARCH.md`, `34-01-PLAN.md` through `34-05-PLAN.md`) remain in `.planning/phases/34-.../` as the audit trail for what was planned but not executed.
+
 <expand_at_36>
 
 ## Consequences

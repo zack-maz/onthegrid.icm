@@ -141,6 +141,45 @@ Decision record: [`docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md`](.
 
 ---
 
+## Multi-Provider Cascade (Phase 34, 2026-05-23)
+
+Phase 34 was inserted 2026-05-19 to widen the v3 cascade with Cerebras + Groq free-tier fallbacks (deleted Phase 29 SIMPLIFY-04) so NIM throttle events stop translating into DLQ entries. The Phase 31 Day-1 baseline (4 × `v3:timeout_watchdog` on a single PASS-day cron) was the empirical motivation.
+
+**Outcome: `cerebras-groq-deferred` (operator decision, no probe run).** The operator chose to defer provisioning free-tier accounts for both providers rather than measure their rate-limit behavior. This is the "both providers deferred" branch baked into the CONTEXT.md D-02 outcome table — the close-out path requires no code change, only a deferral record.
+
+### Cascade shape as of 2026-05-23
+
+| Slot     | Provider   | Status   | Notes                                                                                |
+| -------- | ---------- | -------- | ------------------------------------------------------------------------------------ |
+| Primary  | NVIDIA NIM | Active   | `qwen/qwen3.5-397b-a17b` per Phase 27.4.4 D-01 bake-off                              |
+| Fallback | OpenRouter | Dormant  | `skipOpenRouter: true` at v3.ts:673, 996 per Phase 30.1 (free tier 90% rate-limited) |
+| Fallback | Cerebras   | Deferred | Phase 34 — no probe, no adapter; operator deferred provisioning                      |
+| Fallback | Groq       | Deferred | Phase 34 — no probe, no adapter; operator deferred provisioning                      |
+
+The active cascade is therefore single-provider (NIM only). The Pitfall 1 raw-GDELT terminal fallback remains the user-visible safety net when NIM is throttled — same contract as Phase 30.1.
+
+### Why no probe ran
+
+CONTEXT.md D-02 baked in three outcome buckets per provider (`<50%` → integrate, `50-90%` → middle-bucket defer, `≥90%` → defer). All three buckets — and the combined "both deferred" branch — produce a valid close-out. Skipping the probe entirely is operationally equivalent to a "both deferred" probe outcome: no providers land in the cascade, the deferral rationale is captured here + in ADR-0010, and the planning artifacts under `.planning/phases/34-.../` remain as the audit trail for what was planned but not executed.
+
+### Raw-GDELT terminal fallback contract (unchanged)
+
+Same as Phase 30.1: when the NIM circuit breaker opens mid-run, batches drop and `/api/events` serves raw GDELT via the Pitfall 1 bridge in `server/routes/events.ts`. The map never goes blank. Operator visibility of this transition is currently limited to `/api/operator-status` Bearer-gated surfaces. The Phase 34 deferral does NOT change this contract; it acknowledges that the DLQ-baseline pain remains a known failure mode under the current single-provider cascade.
+
+### What changes if a future phase restores Cerebras / Groq / per-provider eval
+
+The artifacts under `.planning/phases/34-llm-router-fallback-re-integration-cerebras-groq-per-provide/` are the ready-to-execute plan for a future provider-restoration phase:
+
+- `34-CONTEXT.md` — 33 implementation decisions (D-01..D-33) covering probe methodology, adapter shape, cascade ordering, per-provider eval design, DLQ reason union extension, validation cron protocol.
+- `34-RESEARCH.md` — verified code touchpoint line locations + two corrections to CONTEXT.md (Cerebras model name + 5 RPM rate-limit ceiling).
+- `34-01-PLAN.md` through `34-05-PLAN.md` — executable plan files.
+
+A future phase can re-use these artifacts directly (re-running `gsd-execute-phase 34 --auto --no-transition` after populating `CEREBRAS_API_KEY` + `GROQ_API_KEY` in `.env.local`), or extract them into a fresh decimal phase if scope changes.
+
+Decision record: [`docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md`](../adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md) Phase 34 sub-block.
+
+---
+
 ## 7-Day Watch (Phase 31, LLM-RELI-06)
 
 Phase 31 appends daily observations here. The 7-day watch was designed to validate Phase 30's tuned defaults under real production traffic across a full operational week before declaring v1.5 throttle work "done." The eval-harness fixture-bundling fix is a prerequisite for Phase 31 — without it, eval drift over the 7-day window is unobservable for the same reason Plan 06's correctness gate was INCONCLUSIVE.
