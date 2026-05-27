@@ -257,7 +257,7 @@ Plans:
 7. **`server/lib/freeClaudeRouter.ts` audited** (SIMPLIFY-05). Either deleted (if zero live callers) along with its imports and tests, or kept with a top-of-file JSDoc block documenting the live callers and why it stays. No "is this still used?" ambiguity for future readers.
 8. **Bundle-size delta measured** (SIMPLIFY-07). `api/vercel-entry.js` size at Phase 35 close vs v1.4's 1.72 MB baseline is captured in the SUMMARY.md and folded into ADR-0010. Net reduction expected; stretch goal: drop below 1.5 MB. _(SIMPLIFY-06 v1 extractor archive folded into Phase 29's full deletion — this phase does not handle v1 anymore.)_
 
-**Plans:** 1/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 
@@ -267,13 +267,13 @@ Plans:
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
-- [ ] 35-02-PLAN.md — Retire `events:llm:v3:partial` (SIMPLIFY-02 / D-12, D-13)
-- [ ] 35-03-PLAN.md — `freeClaudeRouter.ts` callers block (SIMPLIFY-05 / D-15, D-16)
+- [x] 35-02-PLAN.md — Retire `events:llm:v3:partial` (SIMPLIFY-02 / D-12, D-13)
+- [x] 35-03-PLAN.md — `freeClaudeRouter.ts` callers block (SIMPLIFY-05 / D-15, D-16)
 
 **Wave 3** _(blocked on Wave 2 completion)_
 
 - [ ] 35-04-PLAN.md — JSDoc audit of 7 LLM-pipeline modules (DOCS-INT-02 / D-09, D-10)
-- [ ] 35-05-PLAN.md — TTL right-sizing (REDIS-OPT-03 / D-17, D-18)
+- [x] 35-05-PLAN.md — TTL right-sizing (REDIS-OPT-03 / D-17, D-18)
 
 **Wave 4** _(blocked on Wave 3 completion)_
 
@@ -316,7 +316,7 @@ Plans:
 | 32. Ghost Event URL Liveness, Dashboard & Prune                               | 6/6                  | Complete              | 2026-05-21 |
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 7/7                  | Complete              | 2026-05-21 |
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 1/5 (4 skipped)      | Closed (deferred)     | 2026-05-23 |
-| 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 1/6                  | In Progress           |            |
+| 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 4/6                  | In Progress           |            |
 | 36. Public Docs Sweep + OpenAPI Additions                                     | 0/0                  | Not started           | -          |
 | 37. ADR-0010 + Acceptance Gate Closeout                                       | 0/0                  | Not started           | -          |
 
