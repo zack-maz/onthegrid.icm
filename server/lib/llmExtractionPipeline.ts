@@ -92,9 +92,11 @@ const LLM_SUMMARY_KEY_ACTIVE = 'events:llm-summary:v3';
 
 // Phase 30 D-04 (SIMPLIFY-01): the local `PARTIAL_KEY_ACTIVE` const was
 // retired here when the periodic-flush callback (its sole reader) was
-// deleted. The `events:llm:v3:partial` observability key is still written
-// by the v3 extractor's writePartialCache — its retirement is owned by
-// SIMPLIFY-02 / Phase 35.
+// deleted.
+// Phase 35 D-12 (SIMPLIFY-02): the `events:llm:v3:partial` observability key
+// has now been retired in the v3 extractor too. The v3 extractor's
+// writePartialCache writer was deleted in this phase; the terminal-key write
+// at end of run is the sole canonical shape going forward.
 
 /** Redis key tracking the last LLM run start time (15-min cooldown). */
 const LLM_PROCESS_KEY = 'events:llm-process-ts';
@@ -129,11 +131,9 @@ const BATCH_SIZE_ACTIVE = 2;
  * Phase 28.2.6 Plan 01 — shared merge-and-persist helper.
  *
  * Single-purpose: end-of-run terminal write of `ConflictEventEntity[]` to
- * the active LLM cache key (`events:llm:v3`). Two-key discipline preserved
- * (D-04 / D-11): writes entities to LLM_EVENTS_KEY_ACTIVE; the
- * LLMCachePayload envelope continues to land on `events:llm:v3:partial`
- * via writePartialCache (UNCHANGED — observability key, written by the v3
- * extractor only).
+ * the active LLM cache key (`events:llm:v3`). Sole writer of the terminal
+ * key (Phase 35 D-12 / SIMPLIFY-02 retired the partial-key observability
+ * envelope; the previous two-key discipline collapses to one-key discipline).
  *
  * Phase 30 D-04: single callsite (end-of-run terminal write only). Periodic
  * flush retired (SIMPLIFY-01). The earlier periodic-flush hook inside the

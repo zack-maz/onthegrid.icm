@@ -11,9 +11,12 @@
  *
  * Cache keys bumped per D-04:
  *   events:llm:v2 → events:llm:v3
- *   events:llm:v2:partial → events:llm:v3:partial
  *
  * v1/v2 extractors remain shipped untouched (rollback safety per D-21).
+ *
+ * Phase 35 D-12 (SIMPLIFY-02): the partial-key envelope (`events:llm:v3:partial`)
+ * is retired. Hobby-era 300s-budget mitigation; Pro 800s makes terminal-key writes
+ * reliably finish, so the partial-key carried no live signal.
  *
  * Phase 27.4.3 D-08 bake-off: set V3_BAKEOFF_MODEL=<id> to override the
  * freeClaudeRouter primary model for a single extractor run. Used during
@@ -23,7 +26,7 @@
 // Phase 27.4.3 D-03 — LLM call source swapped from llm-provider to
 // freeClaudeRouter (NVIDIA NIM → OpenRouter cascade). Routing decisions feed
 // llmProgress.routingTrace below.
-import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
+import { cacheGetSafe } from '../cache/redis.js';
 import { redis } from '../cache/redis.js';
 import { env } from '../config.js';
 // Phase 33 D-08 — canonical actor catalog used by applyCatalogToEvents
@@ -112,15 +115,12 @@ const NEWS_KEY = 'news:gdelt';
  * to v3 cache keys; v2 keys preserved for the rollback path.
  */
 const EVENTS_LLM_V3_KEY = 'events:llm:v3';
-/**
- * Partial-progress cache for the v3 extractor — written per-batch from
- * writePartialCache. Holds LLMCachePayload<EnrichedEventV3> envelopes so
- * DevApiStatus / /llm-status can show in-flight progress without colliding
- * with the terminal ConflictEventEntity[] key above. Readers of the main
- * /api/events endpoint NEVER touch this key.
- */
-const EVENTS_LLM_V3_PARTIAL_KEY = 'events:llm:v3:partial';
-export { EVENTS_LLM_V3_KEY, EVENTS_LLM_V3_PARTIAL_KEY };
+// Phase 35 D-12 (SIMPLIFY-02): the prior partial-key const +
+// writePartialCache writer were retired. Hobby-era 300s-budget mitigation;
+// Pro 800s makes terminal-key writes reliably finish, so the partial-key
+// envelope carried no live signal. Production cleanup: natural TTL expiry
+// within LLM_REDIS_TTL_SEC (≈ 2.5h) of deploy. See ADR-0010 Phase 35 sub-block.
+export { EVENTS_LLM_V3_KEY };
 
 // ---------------------------------------------------------------------------
 // System prompt (D-05 verbatim, expanded for D-11..D-14, v3 D-10 schema-in-prompt).
@@ -256,27 +256,16 @@ export interface GeocodedEnrichedEventV3 extends EnrichedEventV3 {
   displayName: string;
 }
 
-/**
- * Phase 27.4.3 D-04 — cache envelope for `events:llm:v3:partial`.
- *
- * Wraps the events array with progress metadata so readers (DevApiStatus /
- * /llm-status) can distinguish a partial snapshot (mid-run) from a final
- * snapshot (complete=true). Mirrors the v2 envelope verbatim; the user-
- * facing /api/events reader NEVER touches this key — it reads
- * `events:llm:v3` (the terminal ConflictEventEntity[] key written by the
- * route after geocoding completes).
- */
-export interface LLMCachePayload {
-  events: EnrichedEventV3[];
-  progress: `${number}/${number}`;
-  complete: boolean;
-  generatedAt: string;
-}
+// Phase 35 D-12 (SIMPLIFY-02): LLMCachePayload interface retired alongside
+// writePartialCache writer. Sole production consumer was writePartialCache;
+// only test files referenced the type. Removed in this commit. See
+// EVENTS_LLM_V3_KEY tombstone above and ADR-0010 Phase 35 sub-block.
 
-/** Phase 27.4.1 D-07 — Redis hard TTL for the partial/final cache snapshot.
- *  Must match the LLM_REDIS_TTL_SEC used in server/routes/events.ts so the
- *  partial writes don't expire out of band with the caller's expectations. */
-const LLM_REDIS_TTL_SEC = 9000;
+// Phase 35 D-12 (SIMPLIFY-02): the local LLM_REDIS_TTL_SEC const was retired
+// here when writePartialCache (its sole consumer) was deleted. The canonical
+// 9000s TTL is now sourced exclusively from server/lib/llmExtractionPipeline.ts
+// (where it is exported for the terminal-key writer and the urlLiveness splice
+// path).
 
 // ---------------------------------------------------------------------------
 // Prompt builder — GDELT headers + 3 conditional enrichment blocks.
@@ -439,45 +428,7 @@ async function loadTemporalContext(group: EventGroup): Promise<PriorEnrichedEven
   }
 }
 
-// ---------------------------------------------------------------------------
-// Per-batch partial cache writer (D-04 — observability key, never user-facing).
-// ---------------------------------------------------------------------------
-
-/**
- * Phase 27.4.3 D-04 — write a partial/final snapshot of the in-progress events
- * array to `events:llm:v3:partial`, a key RESERVED FOR OBSERVABILITY. The
- * terminal /api/events reader never touches this key — it reads
- * `events:llm:v3` which is only ever written by the route-level geocode-then-
- * write step (server/routes/events.ts) with the correct ConflictEventEntity[]
- * shape.
- *
- * Why two keys: LLMCachePayload carries EnrichedEventV3[] (pre-geocode shape).
- * Splitting the keys makes the progress/observability vs user-facing-cache
- * boundary explicit (mirrors v2 27.4.1 post-ship discipline).
- *
- * Wrapped in cacheSetSafe so Redis failures don't propagate (D-29).
- * `complete: true` is written exactly once, after the last batch of
- * the run.
- */
-async function writePartialCache(
-  events: EnrichedEventV3[],
-  completed: number,
-  total: number,
-  complete: boolean,
-): Promise<void> {
-  const payload: LLMCachePayload = {
-    events,
-    progress: `${completed}/${total}`,
-    complete,
-    generatedAt: new Date().toISOString(),
-  };
-  try {
-    await cacheSetSafe(EVENTS_LLM_V3_PARTIAL_KEY, payload, LLM_REDIS_TTL_SEC);
-  } catch (err) {
-    // cacheSetSafe already swallows internally, but belt+suspenders.
-    log.warn({ err, completed, total, complete }, 'partial cache write failed');
-  }
-}
+// writePartialCache retired Phase 35 / SIMPLIFY-02 — see EVENTS_LLM_V3_KEY tombstone above.
 
 // ---------------------------------------------------------------------------
 // Main batch processor.
@@ -603,10 +554,10 @@ export async function processEventGroupsV3(
   // and serialize correctly. The shared `results` array, allFailed flag,
   // matchedNewsByGroup/bellingcatByGroup maps, and llmProgress mutations
   // all rely on this. completedBatchesCounter goes through finishBatch so
-  // onBatchComplete + writePartialCache see monotonically-increasing counts
-  // instead of per-batch indices (which jump out of order under concurrency).
-  // writePartialCache uses last-writer-wins on the observability-only
-  // events:llm:v3:partial key.
+  // onBatchComplete sees monotonically-increasing counts instead of per-batch
+  // indices (which jump out of order under concurrency).
+  // Phase 35 D-12 (SIMPLIFY-02): writePartialCache retired; finishBatch only
+  // drives onBatchComplete now (terminal-key writes are the canonical shape).
   const limit = createLimit(env.LLM_V3_CONCURRENCY);
   let completedBatchesCounter = 0;
   const finishBatch = async (): Promise<void> => {
@@ -616,7 +567,6 @@ export async function processEventGroupsV3(
     // synchronously between batch completions. Required for the cadence
     // counter race-safety contract under concurrency=12.
     await onBatchComplete?.(c, totalBatches);
-    await writePartialCache(results, c, totalBatches, false);
   };
 
   const tasks: Promise<void>[] = [];
@@ -913,9 +863,8 @@ export async function processEventGroupsV3(
 
   await Promise.all(tasks);
 
-  // Final write with complete=true so readers can distinguish mid-run partial
-  // from a terminated-run final.
-  await writePartialCache(results, totalBatches, totalBatches, true);
+  // Phase 35 D-12 (SIMPLIFY-02): final writePartialCache call retired here
+  // — terminal-key writes from runRefreshExtraction are the canonical shape.
 
   // Phase 29 D-02 part A — auto-rollback v3 -> v2 trigger removed (Plan 05
   // D-17 Trigger 1). The rollback target (v2) is being deleted in Plan 05/06.

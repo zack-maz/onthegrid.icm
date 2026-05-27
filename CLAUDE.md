@@ -114,7 +114,6 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 **Active Redis keys (current-state registry):**
 
 - **`events:llm:v3`** — active terminal LLM-enriched cache; cron writer (sole); `/api/events` reader. Only key written by the cascade.
-- **`events:llm:v3:partial`** — observability-only incremental write during cron run; `LLMCachePayload` envelope; never served to clients.
 - **`events:llm-summary:v3`** — last-run summary metadata; `/api/events/llm-status` reader.
 - **`events:llm-dlq`** — SADD bounded set, 200 cap, 7d TTL; failed extractions with `reason: 'timeout_watchdog'` etc.; `lastError` capped 500 chars.
 - **`events:llm-process-ts`** — cooldown sentinel for cron extraction (15-min default; bypassed by `?force=true` or empty cache self-heal).
