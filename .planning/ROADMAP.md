@@ -257,13 +257,13 @@ Plans:
 7. **`server/lib/freeClaudeRouter.ts` audited** (SIMPLIFY-05). Either deleted (if zero live callers) along with its imports and tests, or kept with a top-of-file JSDoc block documenting the live callers and why it stays. No "is this still used?" ambiguity for future readers.
 8. **Bundle-size delta measured** (SIMPLIFY-07). `api/vercel-entry.js` size at Phase 35 close vs v1.4's 1.72 MB baseline is captured in the SUMMARY.md and folded into ADR-0010. Net reduction expected; stretch goal: drop below 1.5 MB. _(SIMPLIFY-06 v1 extractor archive folded into Phase 29's full deletion — this phase does not handle v1 anymore.)_
 
-**Plans:** 6 plans
+**Plans:** 1/6 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 35-01-PLAN.md — Registry inventory + drift-gate vitest + baseline measurements (D-01..D-04, D-05..D-08, D-14, D-19, D-20)
+- [x] 35-01-PLAN.md — Registry inventory + drift-gate vitest + baseline measurements (D-01..D-04, D-05..D-08, D-14, D-19, D-20)
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
@@ -316,7 +316,7 @@ Plans:
 | 32. Ghost Event URL Liveness, Dashboard & Prune                               | 6/6                  | Complete              | 2026-05-21 |
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 7/7                  | Complete              | 2026-05-21 |
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 1/5 (4 skipped)      | Closed (deferred)     | 2026-05-23 |
-| 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 0/6                  | Planned               | -          |
+| 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 1/6                  | In Progress           |            |
 | 36. Public Docs Sweep + OpenAPI Additions                                     | 0/0                  | Not started           | -          |
 | 37. ADR-0010 + Acceptance Gate Closeout                                       | 0/0                  | Not started           | -          |
 
