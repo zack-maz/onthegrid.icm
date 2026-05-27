@@ -41,27 +41,27 @@ Requirements for this milestone, grouped by track. Each maps to exactly one road
 ### Documentation — Internal (CLAUDE.md + JSDoc + comments)
 
 - [x] **DOCS-INT-01**: `CLAUDE.md` trimmed. Phase-history bloat (verbose 27.x / 28.x narrative blocks) condensed to current-state invariants only. Targets a meaningful token-count reduction (e.g. ~30k → <20k) without losing live-decision context.
-- [ ] **DOCS-INT-02**: Inline JSDoc + comments around the LLM pipeline modules (`server/lib/llmExtractionPipeline.ts`, `server/lib/llmEventExtractor.v3.ts`, `server/lib/llmResolver.ts`, `server/lib/llmCircuitBreaker.ts`, `server/lib/llmDLQ.ts`, `server/lib/llmTokenBudget.ts`, `server/lib/llmExtractorWatchdog.ts`) audited and brought current. Each module's public API has a one-line JSDoc that matches the v1.5 implementation.
-- [ ] **DOCS-INT-03**: Redis key registry (CLAUDE.md "Serverless Cache" section) verified against actual writers and readers in the codebase. Every key listed has at least one writer and at least one reader; orphaned entries removed; missing keys added. Forms the input for the REDIS-OPT-\* track.
+- [x] **DOCS-INT-02**: Inline JSDoc + comments around the LLM pipeline modules (`server/lib/llmExtractionPipeline.ts`, `server/lib/llmEventExtractor.v3.ts`, `server/lib/llmResolver.ts`, `server/lib/llmCircuitBreaker.ts`, `server/lib/llmDLQ.ts`, `server/lib/llmTokenBudget.ts`, `server/lib/llmExtractorWatchdog.ts`) audited and brought current. Each module's public API has a one-line JSDoc that matches the v1.5 implementation.
+- [x] **DOCS-INT-03**: Redis key registry (CLAUDE.md "Serverless Cache" section) verified against actual writers and readers in the codebase. Every key listed has at least one writer and at least one reader; orphaned entries removed; missing keys added. Forms the input for the REDIS-OPT-\* track.
 
 ### Redis Optimization — keep what's load-bearing, retire the rest
 
-- [ ] **REDIS-OPT-01**: Full Redis key inventory produced as a single auditable artifact (e.g. `docs/architecture/redis-keys.md` or a generated table inside CLAUDE.md). Each key carries: writers (file:line), readers (file:line), TTL, value shape, business purpose, current cardinality estimate, hit/miss telemetry if available. Builds on DOCS-INT-03's verification pass.
-- [ ] **REDIS-OPT-02**: Each key classified as `load-bearing` (must keep) / `observability-only` (keep but cap) / `retire` (remove writers + delete from prod). Explicit rationale per key. Retired keys are removed from code in the same phase; deleted from prod via a one-time cleanup script or natural TTL expiry, whichever is documented as the safer path.
-- [ ] **REDIS-OPT-03**: TTLs right-sized against actual freshness requirements. Daily-cron-fed keys (e.g. `events:llm:v3` on 26h, eval baselines on 90d) reviewed against their producer cadence; observability-only keys capped (DLQ at 200 entries / 7d, audit log at 500 / 30d already; replay history not yet capped). Tightening lands as code changes with regression tests for any contract-pinned shapes.
-- [ ] **REDIS-OPT-04**: Pre/post Redis command-budget impact measured against the Upstash dashboard or `INFO commandstats` proxy. Baseline reading captured at REDIS-OPT-01 (memory note: command budget at ~92% as of v1.3 close). Goal: a measurable absolute reduction documented in the new ADR (DOCS-PUB-04 ADR-0010 may merge with this; or a separate sequentially-numbered ADR if scope warrants).
+- [x] **REDIS-OPT-01**: Full Redis key inventory produced as a single auditable artifact (e.g. `docs/architecture/redis-keys.md` or a generated table inside CLAUDE.md). Each key carries: writers (file:line), readers (file:line), TTL, value shape, business purpose, current cardinality estimate, hit/miss telemetry if available. Builds on DOCS-INT-03's verification pass.
+- [x] **REDIS-OPT-02**: Each key classified as `load-bearing` (must keep) / `observability-only` (keep but cap) / `retire` (remove writers + delete from prod). Explicit rationale per key. Retired keys are removed from code in the same phase; deleted from prod via a one-time cleanup script or natural TTL expiry, whichever is documented as the safer path.
+- [x] **REDIS-OPT-03**: TTLs right-sized against actual freshness requirements. Daily-cron-fed keys (e.g. `events:llm:v3` on 26h, eval baselines on 90d) reviewed against their producer cadence; observability-only keys capped (DLQ at 200 entries / 7d, audit log at 500 / 30d already; replay history not yet capped). Tightening lands as code changes with regression tests for any contract-pinned shapes.
+- [x] **REDIS-OPT-04**: Pre/post Redis command-budget impact measured against the Upstash dashboard or `INFO commandstats` proxy. Baseline reading captured at REDIS-OPT-01 (memory note: command budget at ~92% as of v1.3 close). Goal: a measurable absolute reduction documented in the new ADR (DOCS-PUB-04 ADR-0010 may merge with this; or a separate sequentially-numbered ADR if scope warrants).
 
 ### Pipeline Simplification — retire Hobby-era workarounds + general dead-code purge
 
 These requirements turn the Vercel Pro upgrade and the v3-cascade-narrowing decision into actual code deletion, not just bypassed paths. Goal: smaller bundle, fewer code paths, less Redis churn — and the simplifications themselves act as reliability improvements (less to break).
 
 - [x] **SIMPLIFY-01**: Retire `mergeAndPersistLlmEntities` incremental flush + `LLM_FLUSH_EVERY_N_BATCHES` env var. Single terminal-key write at end of run becomes the canonical shape on Pro's 800s ceiling. The 28.2.6 Plan 01 incremental flush was a 300s-budget mitigation; with 800s headroom it's pure complexity + Redis command churn. Lands in Phase 30 alongside the cascade-tuning work because the new defaults (CONCURRENCY, BATCH_SIZE) are sized against the post-simplification flow.
-- [ ] **SIMPLIFY-02**: Retire `events:llm:v3:partial` observability key. Either delete entirely (cleanest) or downgrade to a debug-only flag behind an env var. Pre-Pro it was load-bearing for "did extraction make progress before getting killed?"; post-Pro extraction reliably finishes so partial state stops carrying signal. Phase 35 (Redis-opt) is the right home — REDIS-OPT-01..02 already classifies keys, and `events:llm:v3:partial` is a top retirement candidate.
+- [x] **SIMPLIFY-02**: Retire `events:llm:v3:partial` observability key. Either delete entirely (cleanest) or downgrade to a debug-only flag behind an env var. Pre-Pro it was load-bearing for "did extraction make progress before getting killed?"; post-Pro extraction reliably finishes so partial state stops carrying signal. Phase 35 (Redis-opt) is the right home — REDIS-OPT-01..02 already classifies keys, and `events:llm:v3:partial` is a top retirement candidate.
 - [x] **SIMPLIFY-03**: Watchdog defaults relaxed against the 800s ceiling. Current 90s hard-kill / 60s soft-warn per batch was sized to leave room for ~3 batches in 300s; on Pro the per-batch budget is much more generous. Either bump to ~180s/120s or evaluate whether the soft-warn category is still useful at all. New defaults committed against the measured throttle behavior from LLM-RELI-02 — soft-warn entries in `callHistory` should drop to near-zero under normal NIM availability.
 - [x] **SIMPLIFY-04**: Cerebras + Groq adapter dead-code purged from `server/adapters/llm-provider.ts` runtime path. LLM-RELI-01 retires them from the runtime cascade; SIMPLIFY-04 follows up by deleting the adapter functions, the `CEREBRAS_API_KEY` / `GROQ_API_KEY` checks, and the synthetic `skipReason: 'no_client'` callHistory entries. v1 + v2 extractor code paths preserved (per Phase 27.4 D-26/D-40 they're deep-rollback safety) but the live cascade has zero references to Cerebras/Groq after this lands. Bundle-size impact tracked toward SIMPLIFY-07.
-- [ ] **SIMPLIFY-05**: `server/lib/freeClaudeRouter.ts` (Phase 27.4.3 vendored router) caller audit. If it has live callers, document them in a JSDoc block at the top of the file; if it has zero live callers (orphaned because the cutover deferred per the 27.4.3 audit), delete the file + supporting imports + tests. Phase 35 is the right home (broader cleanup phase).
+- [x] **SIMPLIFY-05**: `server/lib/freeClaudeRouter.ts` (Phase 27.4.3 vendored router) caller audit. If it has live callers, document them in a JSDoc block at the top of the file; if it has zero live callers (orphaned because the cutover deferred per the 27.4.3 audit), delete the file + supporting imports + tests. Phase 35 is the right home (broader cleanup phase).
 - [x] **SIMPLIFY-06**: v1 extractor (`server/lib/llmEventExtractor.v1.ts`) archived to a clearly-marked location (e.g. `server/lib/_archive/llmEventExtractor.v1.ts`) or the `attic/` convention. The v2 path stays in the bridge but its role is documented as deep-rollback only. The goal is making the active runtime path obviously the active path — readers shouldn't have to triage "is v1 still live?" on every visit.
-- [ ] **SIMPLIFY-07**: `api/vercel-entry.js` bundle-size delta measured pre/post v1.5. Baseline: 1.72 MB at v1.4 close (up from 1.2 MB at v1.3 close). Target: net reduction documented in ADR-0010. Each SIMPLIFY-01..06 contributes; Phase 35 captures the final measurement and writes the delta into the closing artifact. Stretch goal: shrink below 1.5 MB.
+- [x] **SIMPLIFY-07**: `api/vercel-entry.js` bundle-size delta measured pre/post v1.5. Baseline: 1.72 MB at v1.4 close (up from 1.2 MB at v1.3 close). Target: net reduction documented in ADR-0010. Each SIMPLIFY-01..06 contributes; Phase 35 captures the final measurement and writes the delta into the closing artifact. Stretch goal: shrink below 1.5 MB.
 
 ### Documentation — Public (README + architecture + runbook + ADRs)
 
@@ -152,19 +152,19 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 | ACTOR-04     | 33    | Complete                                                         |
 | ACTOR-05     | 33    | Pending                                                          |
 | DOCS-INT-01  | 29    | Complete                                                         |
-| DOCS-INT-02  | 35    | Pending                                                          |
-| DOCS-INT-03  | 35    | Pending                                                          |
-| REDIS-OPT-01 | 35    | Pending                                                          |
-| REDIS-OPT-02 | 35    | Pending                                                          |
-| REDIS-OPT-03 | 35    | Pending                                                          |
-| REDIS-OPT-04 | 35    | Pending                                                          |
+| DOCS-INT-02  | 35    | Complete (2026-05-27)                                            |
+| DOCS-INT-03  | 35    | Complete (2026-05-27)                                            |
+| REDIS-OPT-01 | 35    | Complete (2026-05-27)                                            |
+| REDIS-OPT-02 | 35    | Complete (2026-05-27)                                            |
+| REDIS-OPT-03 | 35    | Complete (2026-05-27)                                            |
+| REDIS-OPT-04 | 35    | Complete (2026-05-27)                                            |
 | SIMPLIFY-01  | 30    | Complete                                                         |
-| SIMPLIFY-02  | 35    | Pending                                                          |
+| SIMPLIFY-02  | 35    | Complete (2026-05-27)                                            |
 | SIMPLIFY-03  | 30    | Complete                                                         |
 | SIMPLIFY-04  | 29    | Complete                                                         |
-| SIMPLIFY-05  | 35    | Pending                                                          |
+| SIMPLIFY-05  | 35    | Complete (2026-05-27)                                            |
 | SIMPLIFY-06  | 29    | Complete                                                         |
-| SIMPLIFY-07  | 35    | Pending                                                          |
+| SIMPLIFY-07  | 35    | Complete (2026-05-27)                                            |
 | DOCS-PUB-01  | 36    | Pending                                                          |
 | DOCS-PUB-02  | 36    | Pending                                                          |
 | DOCS-PUB-03  | 36    | Pending                                                          |
