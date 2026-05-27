@@ -174,6 +174,7 @@ async function mergeAndPersistLlmEntities(
 // Public API.
 // ---------------------------------------------------------------------------
 
+/** Options for `runRefreshExtraction` — caller-supplied trigger metadata + cooldown override. */
 export interface RunRefreshOpts {
   /** Provenance label stamped onto `llmProgress.lastTriggerSource` (D-06). */
   triggeredBy: 'cron' | 'manual';
@@ -182,6 +183,7 @@ export interface RunRefreshOpts {
   forceCooldown?: boolean;
 }
 
+/** Result of `runRefreshExtraction` — dispatch decision + skip reason if not dispatched. */
 export interface RunRefreshResult {
   /** true if a fresh extraction was kicked off (fire-and-forget). */
   dispatched: boolean;
