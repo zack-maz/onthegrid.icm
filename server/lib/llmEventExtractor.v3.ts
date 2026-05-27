@@ -126,6 +126,7 @@ export { EVENTS_LLM_V3_KEY };
 // System prompt (D-05 verbatim, expanded for D-11..D-14, v3 D-10 schema-in-prompt).
 // ---------------------------------------------------------------------------
 
+/** v3 extractor system prompt — schema-in-prompt (D-05/D-10); joined with `\n` for callLLM. */
 export const SYSTEM_PROMPT_V3 = [
   'You are a conflict event analyst extracting structured data from GDELT event records.',
   '',
@@ -223,12 +224,14 @@ export interface NewsArticleForPrompt {
   publishedAt: number;
 }
 
+/** Prior enriched event injected into the prompt's TEMPORAL CONTEXT BLOCK (±72h / ±1° bbox). */
 export interface PriorEnrichedEventForPrompt {
   summary: string;
   location: LocationHierarchyV2;
   timestamp: number;
 }
 
+/** Per-group prompt assembly inputs: raw group + matched news + bellingcat hits + temporal events. */
 export interface PromptContext {
   group: EventGroup;
   matchedNews: NewsArticleForPrompt[];
@@ -246,6 +249,7 @@ export interface V3ExtractionRun {
   bellingcatByGroup: Map<string, { lat: number; lng: number }>;
 }
 
+/** EnrichedEventV3 after geocodeEnrichedEventsV3 — adds resolved coord + provenance + precision + display fields. */
 export interface GeocodedEnrichedEventV3 extends EnrichedEventV3 {
   resolvedLat: number;
   resolvedLng: number;
@@ -271,6 +275,7 @@ export interface GeocodedEnrichedEventV3 extends EnrichedEventV3 {
 // Prompt builder — GDELT headers + 3 conditional enrichment blocks.
 // ---------------------------------------------------------------------------
 
+/** Build the per-batch user prompt: GDELT headers + NEWS BLOCK + TEMPORAL BLOCK + BELLINGCAT BLOCK as applicable. */
 export function buildBatchUserPromptV3(contexts: PromptContext[]): string {
   const lines: string[] = ['Analyze these GDELT event groups and extract structured data:\n'];
 
@@ -438,6 +443,7 @@ async function loadTemporalContext(group: EventGroup): Promise<PriorEnrichedEven
 // second round of Redis reads.
 // ---------------------------------------------------------------------------
 
+/** Run the v3 batch extractor over `groups` with parallel batches + concurrency limit; returns enriched events + per-group maps for geocoding. */
 export async function processEventGroupsV3(
   groups: EventGroup[],
   onBatchComplete?: (completed: number, total: number) => void | Promise<void>,
@@ -1016,6 +1022,7 @@ async function splitBatchOnTimeout(
 // populated from parsed Bellingcat title hints (W2 fix).
 // ---------------------------------------------------------------------------
 
+/** Geocode each enriched event through the 6-path resolver (uses per-group news + bellingcat hints); returns GeocodedEnrichedEventV3[]. */
 export async function geocodeEnrichedEventsV3(
   events: EnrichedEventV3[],
   groupsByKey: Map<string, EventGroup>,
