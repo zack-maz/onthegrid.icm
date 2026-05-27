@@ -14,11 +14,13 @@ import { logger } from './logger.js';
 
 const log = logger.child({ module: 'llm-dlq' });
 
+/** Redis key for the dead-letter queue (SADD bounded set, 200 cap, 7d TTL). */
 export const DLQ_KEY = 'events:llm-dlq';
 const DLQ_TTL_SEC = 7 * 24 * 3600;
 const DLQ_MAX = 200;
 const LAST_ERROR_MAX_CHARS = 500; // Pitfall 7
 
+/** Dead-letter entry: id + classified failure reason + capped lastError + timestamp. */
 export interface DLQEntry {
   id: string;
   // Phase 27.4.3 (D-09 + integration_points DLQ taxonomy): widened with four
@@ -50,6 +52,7 @@ function parseEntry(raw: unknown): DLQEntry | null {
   }
 }
 
+/** Add a dead-letter entry to `events:llm-dlq` (caps `lastError` at 500 chars; LRU-evicts oldest when above 200 entries). */
 export async function enqueueDLQ(entry: DLQEntry): Promise<void> {
   const capped: DLQEntry = {
     ...entry,
@@ -83,6 +86,7 @@ export async function enqueueDLQ(entry: DLQEntry): Promise<void> {
   }
 }
 
+/** Return up to `limit` DLQ entries, newest first; on Redis failure returns `[]`. */
 export async function listDLQ(limit = 50): Promise<DLQEntry[]> {
   try {
     const all = await redis.smembers(DLQ_KEY);
@@ -97,6 +101,7 @@ export async function listDLQ(limit = 50): Promise<DLQEntry[]> {
   }
 }
 
+/** Cardinality of the DLQ set; returns 0 on Redis failure (degrade-open for the operator dashboard). */
 export async function countDLQ(): Promise<number> {
   try {
     return (await redis.scard(DLQ_KEY)) ?? 0;
