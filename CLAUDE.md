@@ -118,6 +118,10 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 - **`events:llm-summary:v3`** — last-run summary metadata; `/api/events/llm-status` reader.
 - **`events:llm-dlq`** — SADD bounded set, 200 cap, 7d TTL; failed extractions with `reason: 'timeout_watchdog'` etc.; `lastError` capped 500 chars.
 - **`events:llm-process-ts`** — cooldown sentinel for cron extraction (15-min default; bypassed by `?force=true` or empty cache self-heal).
+- **`events:llm:v3:lineage:{eventId}` (Phase 27.4.3 D-13)** — HSET of per-event lineage record (prompt/response/parsed/coord/reasoningTrace/lineageHash); 7d TTL. Writer: `server/lib/llmLineage.ts:57` `appendLineage`. Reader: lineage drill-down (DevApiStatus) + `scripts/snapshot-v3-redis.ts`.
+- **`events:llm:v3:lineage-keys` (Phase 27.4.3 D-13)** — ZADD sorted-set index of lineage entries; 7d TTL; capped 500 entries (`LINEAGE_MAX_ENTRIES`). Writer: `server/lib/llmLineage.ts:78`. LRU eviction via `ZREMRANGEBYRANK`.
+- **`events:llm:v3:group-lineage:{hash}` (Phase 27.4.4 D-18)** — pre-filter cache for group-level lineage; 7d TTL. Reader: `server/lib/llmEventExtractor.v3.ts:529-587` (`processEventGroupsV3` pre-filter loop). Write side not yet implemented (Plan 02 Gate B follow-up — see `server/lib/llmLineage.ts:104` comment).
+- **`events:llm-pipeline-audit` (Phase 27.4.3 D-15)** — LPUSH + LTRIM bounded list (200 cap); 90d TTL. Writer: `server/lib/pipelineAudit.ts:33-35` `appendPipelineAudit`. Reader: `server/lib/pipelineAudit.ts:44` `listPipelineAudit`. Historical record of pipeline-version flips — no new writers expected post-Phase-29.
 - **`events:llm-eval-baseline:v3`** — `runEval()` resolver-only accuracy baseline; 90d TTL.
 - **`events:llm-eval-adversarial:v3`** — `runAdversarialEval()` prompt-injection robustness (`.planning/eval/adversarial-injections.json` fixtures); 90d TTL; folded into `/api/cron/health`.
 - **`events:gdelt`** — raw GDELT cache (15-min logical TTL); polling-layer writer; Pitfall 1 terminal fallback when v3 is empty.
@@ -126,8 +130,9 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 - **`sites:v3`** — Overpass static infrastructure (24h TTL).
 - **`water:facilities:v3`** — Overpass water facilities with Latin-label admission gate + desalination synthesis (24h TTL).
 - **`water:precip`** — Open-Meteo 30-day precipitation anomaly (6h TTL); `findNearestPrecip` 4° Manhattan cutoff.
-- **`news:gdelt`** + **`news:feed`** — GDELT DOC + RSS clustered news (15-min TTL); Jaccard 0.8 dedup, 7-day window.
-- **`markets:yahoo`** — Yahoo Finance commodity prices (60s TTL).
+- **`news:feed`** — clustered render-target cache (RSS + GDELT-DOC merged, Jaccard 0.8 dedup, 7-day window); 15-min TTL. Writer: `server/routes/news.ts:28` (`NEWS_FEED_KEY`). Reader: same file + `server/lib/healthSources.ts:40`.
+- **`news:gdelt`** — raw GDELT-DOC LLM-input cache; 15-min TTL. Writer: GDELT-DOC adapter (`server/adapters/gdelt-doc.ts`). Reader: `server/lib/llmEventExtractor.v3.ts:107` (NEWS BLOCK in prompt); `server/routes/events.ts:672` (Pitfall 1 fallback path).
+- **`markets:yahoo:{range}`** — Yahoo Finance commodity prices, one key per `range ∈ {1d, 5d, 1mo, ytd}` (4 keys total); 60s TTL. Writer/reader: `server/routes/markets.ts:26` (`cacheKey = \`markets:yahoo:${range}\``).
 - **`geocode:{lat},{lon}`** + **`geocode:fwd:constrained:v2:{hash}`** — Nominatim cache (30d logical / 90d hard), 1 req/s throttle, ME-viewbox-constrained forward geocode.
 - **`llm:tokens:{provider}:YYYY-MM-DD`** — daily token budget counter; 48h TTL.
 - **`llm:lastProgress` (Phase 28.2.7)** — Redis-backed write-through for `llmProgress` singleton so `probeLlmStatus()` survives Vercel Fluid Compute cold starts. Shape `{startedAt, completedAt}`. Write fires in `resetProgress()` always (D-01) and in `updateProgress()` only on terminal transitions (D-02). Reader at `server/routes/health.ts` falls back to in-memory singleton with `latest = redisLatest ?? memLatest`.
