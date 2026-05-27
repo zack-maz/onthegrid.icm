@@ -25,6 +25,7 @@ const log = logger.child({ module: 'llm-token-budget' });
 // nvidia_nim/openrouter limits below are zero-cost type-compat defaults that
 // resolve to budgetState='hard' if ever invoked, which would safely skip the
 // provider rather than corrupt counters.
+/** Provider identifier — alias of the circuit-breaker's `Provider` union (4 names, same canonical list). */
 export type Provider = BreakerProvider;
 
 /** Daily token ceilings per provider (free tier). */
@@ -49,11 +50,13 @@ const TTL_48H_SEC = 172_800;
 const SOFT_CAP_RATIO = 0.8;
 const HARD_CAP_RATIO = 0.95;
 
+/** Build the per-provider per-UTC-day token counter key `llm:tokens:{provider}:YYYY-MM-DD`. */
 export function todayKey(provider: Provider): string {
   const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
   return `llm:tokens:${provider}:${today}`;
 }
 
+/** Atomically INCRBY the per-provider daily counter by `n` and refresh the 48h TTL; returns new value (0 on Redis failure). */
 export async function incrDailyTokens(provider: Provider, n: number): Promise<number> {
   if (n <= 0) return await getDailyTokens(provider);
   try {
@@ -71,6 +74,7 @@ export async function incrDailyTokens(provider: Provider, n: number): Promise<nu
   }
 }
 
+/** Read the per-provider daily token total (0 on Redis failure or never-written). */
 export async function getDailyTokens(provider: Provider): Promise<number> {
   try {
     const v = await redis.get<number>(todayKey(provider));
@@ -80,6 +84,7 @@ export async function getDailyTokens(provider: Provider): Promise<number> {
   }
 }
 
+/** Classify a `used` token count against `DAILY_LIMITS[provider]` — `ok` < 80%, `soft` 80-95%, `hard` ≥ 95%. */
 export function budgetState(provider: Provider, used: number): 'ok' | 'soft' | 'hard' {
   const limit = DAILY_LIMITS[provider];
   if (used >= limit * HARD_CAP_RATIO) return 'hard';
