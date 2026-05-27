@@ -17,7 +17,6 @@ import { redis } from '../server/cache/redis.js';
 
 const KEYS = [
   'events:llm:v3',
-  'events:llm:v3:partial',
   'events:llm:v2',
   'events:llm:v2:partial',
   'events:llm-dlq',

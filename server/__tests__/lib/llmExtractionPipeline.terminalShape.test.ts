@@ -1,18 +1,19 @@
 // @vitest-environment node
 /**
- * Phase 28.2.6 Plan 01 Task 2 — D-04 / D-11 two-key discipline guard.
+ * Phase 35 D-12 (SIMPLIFY-02) one-key discipline guard.
  *
  * Asserts:
  *  1. `events:llm:v3` (terminal key) holds `ConflictEventEntity[]` shape —
  *     every element has `id/lat/lng/type` and NEVER the envelope keys
  *     `progress/complete/generatedAt`. This guards against a regression of
  *     Phase 27.4.1 commit `a5c8846`.
- *  2. `events:llm:v3:partial` (observability key) holds `LLMCachePayload`
- *     envelope shape `{events, progress, complete, generatedAt}`. The
- *     extractor's writePartialCache is the only writer and we never confuse
- *     the two keys.
- *  3. `runEval()` is called exactly ONCE per run (Pitfall 8). The
+ *  2. `runEval()` is called exactly ONCE per run (Pitfall 8). The
  *     intermediate-flush helper does NOT call runEval.
+ *
+ * Phase 35 D-12 (SIMPLIFY-02): the prior Test 2 (`events:llm:v3:partial`
+ * holds LLMCachePayload envelope) was deleted alongside the writePartialCache
+ * writer retirement. The terminal-key Test 1 is preserved; the one-key
+ * discipline replaces the prior two-key discipline.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -153,35 +154,14 @@ const processEventGroupsMock = vi.fn(
     for (let c = 1; c <= total; c++) {
       const batchEvents = enrichedEventsByBatch[c] ?? [];
       allEvents.push(...batchEvents);
-      // Simulate the v3 extractor's writePartialCache writing an envelope to
-      // events:llm:v3:partial for each batch — this is what production does
-      // (per Phase 27.4.1 D-07). Required to exercise Test 2's assertion.
-      await cacheSetSpy(
-        'events:llm:v3:partial',
-        {
-          events: allEvents.slice(),
-          progress: `${c}/${total}`,
-          complete: false,
-          generatedAt: new Date().toISOString(),
-        },
-        9000,
-      );
+      // Phase 35 D-12 (SIMPLIFY-02): writePartialCache writer retired, so this
+      // mock no longer simulates the partial-key write. Only onBatchComplete
+      // drives terminal-key writes via the pipeline now.
       const ret = onBatchComplete?.(c, total);
       if (ret && typeof (ret as Promise<void>).then === 'function') {
         await ret;
       }
     }
-    // Final partial-cache write with complete=true, mirroring v3 extractor.
-    await cacheSetSpy(
-      'events:llm:v3:partial',
-      {
-        events: allEvents.slice(),
-        progress: `${total}/${total}`,
-        complete: true,
-        generatedAt: new Date().toISOString(),
-      },
-      9000,
-    );
     return {
       schemaVersion: 'v3' as const,
       events: allEvents,
@@ -317,8 +297,8 @@ beforeEach(() => {
   llmProgressSingleton.stage = 'idle';
 });
 
-describe('runRefreshExtraction — D-04/D-11 two-key discipline + Pitfall 8', () => {
-  it('two-key discipline: events:llm:v3 holds ConflictEventEntity[] (NOT LLMCachePayload envelope)', async () => {
+describe('runRefreshExtraction — Phase 35 D-12 one-key discipline + Pitfall 8', () => {
+  it('one-key discipline: events:llm:v3 holds ConflictEventEntity[] (terminal-key shape)', async () => {
     await driveRun(12);
 
     const terminalCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3');
@@ -341,22 +321,6 @@ describe('runRefreshExtraction — D-04/D-11 two-key discipline + Pitfall 8', ()
       expect(first).not.toHaveProperty('progress');
       expect(first).not.toHaveProperty('complete');
       expect(first).not.toHaveProperty('generatedAt');
-    }
-  });
-
-  it('two-key discipline: events:llm:v3:partial holds LLMCachePayload envelope', async () => {
-    await driveRun(12);
-
-    const partialCalls = cacheSetSpy.mock.calls.filter(([k]) => k === 'events:llm:v3:partial');
-    expect(partialCalls.length).toBeGreaterThan(0);
-
-    for (const [, data] of partialCalls) {
-      const env = data as Record<string, unknown>;
-      expect(env).toHaveProperty('events');
-      expect(env).toHaveProperty('progress');
-      expect(env).toHaveProperty('complete');
-      expect(env).toHaveProperty('generatedAt');
-      expect(typeof env.progress).toBe('string');
     }
   });
 

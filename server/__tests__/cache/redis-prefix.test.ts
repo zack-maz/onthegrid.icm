@@ -117,12 +117,8 @@ describe('redis CACHE_KEY_PREFIX wrapper', () => {
   it('prefixes ALL string args for variadic key methods (del/unlink)', async () => {
     process.env.CACHE_KEY_PREFIX = 'dev:';
     const { redis } = await import('../../cache/redis.js');
-    await redis.del('events:llm:v3', 'events:llm:v3:partial', 'events:llm-pipeline-audit');
-    expect(calls[0].args).toEqual([
-      'dev:events:llm:v3',
-      'dev:events:llm:v3:partial',
-      'dev:events:llm-pipeline-audit',
-    ]);
+    await redis.del('events:llm:v3', 'events:llm-pipeline-audit');
+    expect(calls[0].args).toEqual(['dev:events:llm:v3', 'dev:events:llm-pipeline-audit']);
   });
 
   it('passes through non-key methods unchanged (ping/dbsize)', async () => {

@@ -173,19 +173,9 @@ const processEventGroupsMock = vi.fn(
       }
       const batchEvents = enrichedEventsByBatch[c] ?? [];
       allEvents.push(...batchEvents);
-      // Mirror v3 extractor's writePartialCache so the periodic-flush
-      // callback can read the just-completed window from
-      // events:llm:v3:partial.
-      await cacheSetSpy(
-        'events:llm:v3:partial',
-        {
-          events: allEvents.slice(),
-          progress: `${c}/${total}`,
-          complete: false,
-          generatedAt: new Date().toISOString(),
-        },
-        9000,
-      );
+      // Phase 35 D-12 (SIMPLIFY-02): writePartialCache writer retired, so this
+      // mock no longer simulates the partial-key write. onBatchComplete drives
+      // terminal-key writes directly via the pipeline.
       const ret = onBatchComplete?.(c, total);
       if (ret && typeof (ret as Promise<void>).then === 'function') {
         await ret;
@@ -197,17 +187,6 @@ const processEventGroupsMock = vi.fn(
       // logs it, and the IIFE exits — same surface as a Vercel kill.
       throw new Error('SIMULATED_VERCEL_KILL');
     }
-    // Final partial-cache write with complete=true.
-    await cacheSetSpy(
-      'events:llm:v3:partial',
-      {
-        events: allEvents.slice(),
-        progress: `${total}/${total}`,
-        complete: true,
-        generatedAt: new Date().toISOString(),
-      },
-      9000,
-    );
     return {
       schemaVersion: 'v3' as const,
       events: allEvents,

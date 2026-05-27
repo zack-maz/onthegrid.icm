@@ -114,10 +114,14 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 **Active Redis keys (current-state registry):**
 
 - **`events:llm:v3`** — active terminal LLM-enriched cache; cron writer (sole); `/api/events` reader. Only key written by the cascade.
-- **`events:llm:v3:partial`** — observability-only incremental write during cron run; `LLMCachePayload` envelope; never served to clients.
 - **`events:llm-summary:v3`** — last-run summary metadata; `/api/events/llm-status` reader.
 - **`events:llm-dlq`** — SADD bounded set, 200 cap, 7d TTL; failed extractions with `reason: 'timeout_watchdog'` etc.; `lastError` capped 500 chars.
 - **`events:llm-process-ts`** — cooldown sentinel for cron extraction (15-min default; bypassed by `?force=true` or empty cache self-heal).
+- **`events:llm:v3:lineage:{eventId}` (Phase 27.4.3 D-13)** — HSET of per-event lineage record (prompt/response/parsed/coord/reasoningTrace/lineageHash); 7d TTL. Writer: `server/lib/llmLineage.ts:57` `appendLineage`. Reader: lineage drill-down (DevApiStatus) + `scripts/snapshot-v3-redis.ts`.
+- **`events:llm:v3:lineage-keys` (Phase 27.4.3 D-13)** — ZADD sorted-set index of lineage entries; 7d TTL; capped 500 entries (`LINEAGE_MAX_ENTRIES`). Writer: `server/lib/llmLineage.ts:78`. LRU eviction via `ZREMRANGEBYRANK`.
+- **`events:llm:v3:group-lineage:{hash}` (Phase 27.4.4 D-18)** — pre-filter cache for group-level lineage; 7d TTL. Reader: `server/lib/llmEventExtractor.v3.ts:529-587` (`processEventGroupsV3` pre-filter loop). Write side not yet implemented (Plan 02 Gate B follow-up — see `server/lib/llmLineage.ts:104` comment).
+- **`events:llm-pipeline-audit` (Phase 27.4.3 D-15)** — LPUSH + LTRIM bounded list (200 cap); 90d TTL. Writer: `server/lib/pipelineAudit.ts:33-35` `appendPipelineAudit`. Reader: `server/lib/pipelineAudit.ts:44` `listPipelineAudit`. Historical record of pipeline-version flips — no new writers expected post-Phase-29.
+- **`events:llm-cost-shadow:v3:{YYYY-MM-DD}`** — HSET daily cost roll-up (HINCRBY fields `tokensIn`, `tokensOut`, `usdMicrocents`); 90d TTL. Writer: `server/lib/freeClaudeRouter.ts:669` `accrueShadowCost`. Reader: dashboard via Upstash REST (no production reader in code). Pricing model: tokens_in × $0.20/M + tokens_out × $0.40/M; USD stored as integer microcents (×1e6) to avoid Redis float precision loss.
 - **`events:llm-eval-baseline:v3`** — `runEval()` resolver-only accuracy baseline; 90d TTL.
 - **`events:llm-eval-adversarial:v3`** — `runAdversarialEval()` prompt-injection robustness (`.planning/eval/adversarial-injections.json` fixtures); 90d TTL; folded into `/api/cron/health`.
 - **`events:gdelt`** — raw GDELT cache (15-min logical TTL); polling-layer writer; Pitfall 1 terminal fallback when v3 is empty.
@@ -126,12 +130,13 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 - **`sites:v3`** — Overpass static infrastructure (24h TTL).
 - **`water:facilities:v3`** — Overpass water facilities with Latin-label admission gate + desalination synthesis (24h TTL).
 - **`water:precip`** — Open-Meteo 30-day precipitation anomaly (6h TTL); `findNearestPrecip` 4° Manhattan cutoff.
-- **`news:gdelt`** + **`news:feed`** — GDELT DOC + RSS clustered news (15-min TTL); Jaccard 0.8 dedup, 7-day window.
-- **`markets:yahoo`** — Yahoo Finance commodity prices (60s TTL).
+- **`news:feed`** — clustered render-target cache (RSS + GDELT-DOC merged, Jaccard 0.8 dedup, 7-day window); 15-min TTL. Writer: `server/routes/news.ts:28` (`NEWS_FEED_KEY`). Reader: same file + `server/lib/healthSources.ts:40`.
+- **`news:gdelt`** — raw GDELT-DOC LLM-input cache; 15-min TTL. Writer: GDELT-DOC adapter (`server/adapters/gdelt-doc.ts`). Reader: `server/lib/llmEventExtractor.v3.ts:107` (NEWS BLOCK in prompt); `server/routes/events.ts:672` (Pitfall 1 fallback path).
+- **`markets:yahoo:{range}`** — Yahoo Finance commodity prices, one key per `range ∈ {1d, 5d, 1mo, ytd}` (4 keys total); 60s TTL. Writer/reader: `server/routes/markets.ts:26` (`cacheKey = \`markets:yahoo:${range}\``).
 - **`geocode:{lat},{lon}`** + **`geocode:fwd:constrained:v2:{hash}`** — Nominatim cache (30d logical / 90d hard), 1 req/s throttle, ME-viewbox-constrained forward geocode.
 - **`llm:tokens:{provider}:YYYY-MM-DD`** — daily token budget counter; 48h TTL.
 - **`llm:lastProgress` (Phase 28.2.7)** — Redis-backed write-through for `llmProgress` singleton so `probeLlmStatus()` survives Vercel Fluid Compute cold starts. Shape `{startedAt, completedAt}`. Write fires in `resetProgress()` always (D-01) and in `updateProgress()` only on terminal transitions (D-02). Reader at `server/routes/health.ts` falls back to in-memory singleton with `latest = redisLatest ?? memLatest`.
-- **`cron:lastTick:<name>` (Phase 28.2.7)** — 7d TTL (`CRON_LASTTICK_TTL_SEC` in `server/lib/healthSources.ts`). Writers in all 3 cron handlers; names `cron:lastTick:health` / `:warm` / `:refresh-events`. `:refresh-events` writes only AFTER `runRefreshExtraction` resolves (D-03 honest-failure semantics). Reader `probeCronTick` in `server/routes/health.ts:182`.
+- **`cron:lastTick:{name}` (Phase 28.2.7)** — 7d TTL (`CRON_LASTTICK_TTL_SEC` in `server/lib/healthSources.ts`). Writers in all 3 cron handlers; `name ∈ {health, warm, refresh-events}` — emitted as `cron:lastTick:health`, `cron:lastTick:warm`, `cron:lastTick:refresh-events`. `cron:lastTick:refresh-events` writes only AFTER `runRefreshExtraction` resolves (D-03 honest-failure semantics). Reader `probeCronTick` in `server/routes/health.ts:182`.
 - **`operator:audit-log` (Phase 28.2 W3)** — SADD bounded set, 500 cap, 30d TTL. Operator-action audit log (POST `/api/events/llm-replay` writes structured entry `{timestamp, bearerFingerprint, operation, args, result}`). Surfaced via `/api/operator-status` to the API Health tab Operator Actions block.
 - **`operator:replay-quota:{bearerFingerprint}:{YYYY-MM-DD}` (Phase 28.2 W3)** — INCR counter, 48h TTL. 50 replay calls / 24h per Bearer. At cap, replay returns 429 + `Retry-After`.
 - **`audit:connectivity:last-result` (Phase 28.2 W6)** — 7d TTL. Written by `.github/workflows/prod-connectivity-audit.yml` after each prod-audit run. Shape `{status, runId, timestamp, endpoints, durationMs, allTiersGreen?, tierStatus?}`. Reader `server/routes/audit-status.ts` (no auth gate; degrade-open). Surfaced as audit-result banner. JSON shape pinned by W-3 contract test.

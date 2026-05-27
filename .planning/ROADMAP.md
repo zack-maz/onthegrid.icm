@@ -108,7 +108,7 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 - [x] **Phase 32: Ghost Event URL Liveness, Dashboard & Prune** — Probe `sourceURL` liveness out-of-band, persist results to Redis with TTL, surface dead-URL counts in API Health dashboard, and let the operator prune dead-URL events behind the existing Bearer gate. (completed 2026-05-21; GHOST-01..05 all closed; 6 plans 32-01..32-06; 22 D-N decisions landed atomically; +63 tests; 2259 total passing.)
 - [x] **Phase 33: Actor Metadata Audit, Canonical Catalog & Eval Expansion** — Audit live `events:llm:v3` actor quality; commit canonical actor catalog; extend v3 prompt + schema with `actorConfidence`; extend ground-truth + adversarial fixtures; surface actor-quality counts in dashboard. (completed 2026-05-21; ACTOR-01..05 all closed; 7 plans 33-01..33-07; 28 atomic commits; +63 new tests; 2340 total passing; zero new npm deps; AUDIT-REPORT.md population pending operator UAT against staging Redis.)
 - [x] **Phase 34: LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)** — ✓ CLOSED 2026-05-23 as `cerebras-groq-deferred` (operator chose to skip provisioning free-tier accounts; no probe ran). Plans 34-01..04 SKIPPED; only Plan 34-05 close-out executed. ADR-0010 Phase 34 sub-block + `docs/architecture/llm-pipeline-reliability.md` "Multi-Provider Cascade (Phase 34)" section record the deferral rationale. Phase 31 Day-1 DLQ baseline (4 × `v3:timeout_watchdog`) remains a known failure mode under the single-provider cascade. Planning artifacts (CONTEXT/RESEARCH/5 PLANs) preserved in `.planning/phases/34-.../` as the ready-to-execute audit trail for any future provider-restoration phase.
-- [ ] **Phase 35: Internal Docs (JSDoc) + Redis Registry + Redis Optimization + Cleanup Sweep** — Bring LLM-pipeline JSDoc current; verify Redis key registry against actual writers/readers; produce key inventory artifact; classify load-bearing vs observability vs retire; right-size TTLs; measure pre/post command-budget delta. **Plus** retire `events:llm:v3:partial` (SIMPLIFY-02), audit + delete `freeClaudeRouter.ts` if orphaned (SIMPLIFY-05), and measure final `api/vercel-entry.js` bundle-size delta vs v1.4's 1.72 MB baseline (SIMPLIFY-07). _(DOCS-INT-01 CLAUDE.md trim moved to Phase 29 on 2026-05-09. SIMPLIFY-06 v1 archive folded into Phase 29's full deletion.)_
+- [x] **Phase 35: Internal Docs (JSDoc) + Redis Registry + Redis Optimization + Cleanup Sweep** — ✓ CLOSED 2026-05-27. Mechanical drift gate landed (`src/__tests__/lib/redis-registry.test.ts`, 39 assertions across 4 sub-suites). 32-key deep-dive inventory authored at `docs/architecture/redis-keys.md`. CLAUDE.md §Serverless Cache refreshed (4 add + 2 refine + 1 cron-parametric normalisation). `events:llm:v3:partial` retired across 10 surfaces (358 LOC removed; SIMPLIFY-02). `freeClaudeRouter.ts` documented alive (3 live production callers; SIMPLIFY-05). TTL audit: 32 keys reviewed, all right-sized (audit-only outcome per Phase 31 precedent). 7-module JSDoc audit complete (44 exports; 28 new one-liners + 16 verified). Bundle delta: +10,739 bytes (+0.60%; JSDoc additions outweigh deletions; negligible on 1.7MB). ADR-0010 Phase 35 sub-block appended. 17 atomic commits on `feature/35-internal-docs-jsdoc-redis-registry-redis-optimization-cleanu`. _(DOCS-INT-01 CLAUDE.md trim was moved to Phase 29 on 2026-05-09. SIMPLIFY-06 v1 archive folded into Phase 29's full deletion.)_
 - [ ] **Phase 36: Public Docs Sweep + OpenAPI Additions** — Update README, 10 architecture markdown files, 676-line SRE runbook, degradation contract for v1.4 + v1.5 surface; add 7 v1.4-introduced endpoints to the 1164-line OpenAPI 3.0.3 spec.
 - [ ] **Phase 37: ADR-0010 + Acceptance Gate Closeout** — Capture v1.5 LLM-pipeline decisions in a new ADR (ADR-0010 — the 0009 slot is taken by the existing Accepted two-key-split ADR); observe `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs; lock the milestone close.
 
@@ -257,23 +257,23 @@ Plans:
 7. **`server/lib/freeClaudeRouter.ts` audited** (SIMPLIFY-05). Either deleted (if zero live callers) along with its imports and tests, or kept with a top-of-file JSDoc block documenting the live callers and why it stays. No "is this still used?" ambiguity for future readers.
 8. **Bundle-size delta measured** (SIMPLIFY-07). `api/vercel-entry.js` size at Phase 35 close vs v1.4's 1.72 MB baseline is captured in the SUMMARY.md and folded into ADR-0010. Net reduction expected; stretch goal: drop below 1.5 MB. _(SIMPLIFY-06 v1 extractor archive folded into Phase 29's full deletion — this phase does not handle v1 anymore.)_
 
-**Plans:** 6 plans
+**Plans:** 5/6 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 35-01-PLAN.md — Registry inventory + drift-gate vitest + baseline measurements (D-01..D-04, D-05..D-08, D-14, D-19, D-20)
+- [x] 35-01-PLAN.md — Registry inventory + drift-gate vitest + baseline measurements (D-01..D-04, D-05..D-08, D-14, D-19, D-20)
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
-- [ ] 35-02-PLAN.md — Retire `events:llm:v3:partial` (SIMPLIFY-02 / D-12, D-13)
-- [ ] 35-03-PLAN.md — `freeClaudeRouter.ts` callers block (SIMPLIFY-05 / D-15, D-16)
+- [x] 35-02-PLAN.md — Retire `events:llm:v3:partial` (SIMPLIFY-02 / D-12, D-13)
+- [x] 35-03-PLAN.md — `freeClaudeRouter.ts` callers block (SIMPLIFY-05 / D-15, D-16)
 
 **Wave 3** _(blocked on Wave 2 completion)_
 
-- [ ] 35-04-PLAN.md — JSDoc audit of 7 LLM-pipeline modules (DOCS-INT-02 / D-09, D-10)
-- [ ] 35-05-PLAN.md — TTL right-sizing (REDIS-OPT-03 / D-17, D-18)
+- [x] 35-04-PLAN.md — JSDoc audit of 7 LLM-pipeline modules (DOCS-INT-02 / D-09, D-10)
+- [x] 35-05-PLAN.md — TTL right-sizing (REDIS-OPT-03 / D-17, D-18)
 
 **Wave 4** _(blocked on Wave 3 completion)_
 
@@ -316,7 +316,7 @@ Plans:
 | 32. Ghost Event URL Liveness, Dashboard & Prune                               | 6/6                  | Complete              | 2026-05-21 |
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 7/7                  | Complete              | 2026-05-21 |
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 1/5 (4 skipped)      | Closed (deferred)     | 2026-05-23 |
-| 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 0/6                  | Planned               | -          |
+| 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 5/6                  | In Progress           |            |
 | 36. Public Docs Sweep + OpenAPI Additions                                     | 0/0                  | Not started           | -          |
 | 37. ADR-0010 + Acceptance Gate Closeout                                       | 0/0                  | Not started           | -          |
 

@@ -1,4 +1,27 @@
 /**
+ * Free Claude Router — multi-provider cascade for LLM-backed extraction + geocoding.
+ *
+ * Live production callers (verified Phase 35 / 2026-05-27):
+ *   - server/lib/llmEventExtractor.v3.ts:40 — sole runtime extractor; calls
+ *     callLLM for each event-group batch.
+ *   - server/lib/llmResolver.ts:15 — 6-path geocode resolver; calls callLLM
+ *     for the nominatim-verified-2pass reranker only.
+ *   - server/adapters/llm-provider.ts:23 — bridge wrapper; re-exports callLLM
+ *     for legacy import paths (Phase 27.4.3 D-03 cascade replacement).
+ *
+ * Active cascade shape (Phase 34 close): NIM primary (qwen-235b instruct);
+ * OpenRouter dormant (skipOpenRouter: true at extractor sites per Phase 30.1);
+ * Cerebras + Groq deferred (Phase 34 close — see ADR-0010 Phase 34 sub-block).
+ *
+ * Test callers (NOT live production — listed for completeness):
+ *   - server/__tests__/lib/freeClaudeRouter.test.ts (canonical contract)
+ *   - server/__tests__/lib/freeClaudeRouter.retryAfterMs.test.ts
+ *   - server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts
+ *   - server/__tests__/lib/llmLineage-prefilter.test.ts
+ *   - server/__tests__/lib/llmResolver.test.ts
+ */
+
+/**
  * Vendored from https://github.com/Alishahryar1/free-claude-code
  * Pinned commit SHA: 40951c145ad29d6dfe450e83fd2b91fc19b9a27f
  * License: MIT (upstream LICENSE applies; see LICENSE-VENDORED.md if added)

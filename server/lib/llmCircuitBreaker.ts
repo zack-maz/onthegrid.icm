@@ -15,6 +15,7 @@
 // server/adapters/llm-provider.ts continues to use only 'cerebras' | 'groq';
 // v3 cascade in server/lib/freeClaudeRouter.ts uses 'nvidia_nim' | 'openrouter'.
 // All four share the same circuit-breaker primitive.
+/** Provider identifiers tracked by the shared circuit breaker (v1/v2 cascade + v3 cascade). */
 export type Provider = 'cerebras' | 'groq' | 'nvidia_nim' | 'openrouter';
 type Outcome = 'ok' | 'err';
 
@@ -34,6 +35,7 @@ const state: Record<Provider, BreakerState> = {
   openrouter: { outcomes: [], pausedUntil: null },
 };
 
+/** Record a call outcome in the provider's sliding 10-call window; trips a 5-min pause if error rate exceeds 30%. */
 export function record(provider: Provider, outcome: Outcome): void {
   const s = state[provider];
   s.outcomes.push(outcome);
@@ -48,6 +50,7 @@ export function record(provider: Provider, outcome: Outcome): void {
   }
 }
 
+/** True if the provider isn't currently paused (auto-recovers once the 5-min pause elapses). */
 export function isAvailable(provider: Provider): boolean {
   const s = state[provider];
   if (s.pausedUntil && Date.now() < s.pausedUntil) return false;
@@ -55,6 +58,7 @@ export function isAvailable(provider: Provider): boolean {
   return true;
 }
 
+/** Snapshot every provider's `'ok' | 'paused'` status for the operator dashboard. */
 export function getBreakerState(): Record<Provider, 'ok' | 'paused'> {
   return {
     cerebras: isAvailable('cerebras') ? 'ok' : 'paused',

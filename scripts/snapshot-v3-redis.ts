@@ -10,11 +10,14 @@
  *
  * Keys captured (per RESEARCH §6 + HANDOFF Task 11):
  *   1. events:llm:v3                          GET (terminal cache; ConflictEventEntity[] envelope)
- *   2. events:llm:v3:partial                  GET (per-batch partial — observability only)
- *   3. events:llm:v3:lineage:<eventId>        KEYS+HGETALL (per-event lineage HSETs)
- *   4. events:llm-pipeline-audit              LRANGE 0 -1 (auto-rollback audit log)
- *   5. events:llm-dlq                         SMEMBERS (bounded set of DLQ entries)
- *   6. events:llm-eval-baseline:v3:*          KEYS+GET (per-model eval baselines)
+ *   2. events:llm:v3:lineage:<eventId>        KEYS+HGETALL (per-event lineage HSETs)
+ *   3. events:llm-pipeline-audit              LRANGE 0 -1 (auto-rollback audit log)
+ *   4. events:llm-dlq                         SMEMBERS (bounded set of DLQ entries)
+ *   5. events:llm-eval-baseline:v3:*          KEYS+GET (per-model eval baselines)
+ *
+ * Phase 35 D-12 (SIMPLIFY-02): events:llm:v3:partial removed from this snapshot
+ * after the writer was retired. Existing snapshot JSON files in
+ * .planning/phases/27.4.4-* still contain the legacy field for historical record.
  *
  * Usage:
  *   npm run snapshot:v3 -- --label=<name> [--prod-confirm]
@@ -50,7 +53,6 @@ interface SnapshotPayload {
   cacheKeyPrefix: string;
   keys: {
     'events:llm:v3': unknown;
-    'events:llm:v3:partial': unknown;
     'events:llm:v3:lineage': Record<string, unknown>;
     'events:llm-pipeline-audit': unknown;
     'events:llm-dlq': unknown;
@@ -139,9 +141,8 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  const [terminal, partial, audit, dlq, lineage, baselines] = await Promise.all([
+  const [terminal, audit, dlq, lineage, baselines] = await Promise.all([
     safeGet('events:llm:v3'),
-    safeGet('events:llm:v3:partial'),
     safeLrange('events:llm-pipeline-audit'),
     safeSmembers('events:llm-dlq'),
     captureLineage(),
@@ -154,7 +155,6 @@ async function main(): Promise<void> {
     cacheKeyPrefix,
     keys: {
       'events:llm:v3': terminal,
-      'events:llm:v3:partial': partial,
       'events:llm:v3:lineage': lineage,
       'events:llm-pipeline-audit': audit,
       'events:llm-dlq': dlq,

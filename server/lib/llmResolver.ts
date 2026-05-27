@@ -12,10 +12,10 @@
 
 import { z } from 'zod';
 
-import { callLLM } from './freeClaudeRouter.js';
 import { forwardGeocodeConstrained } from '../adapters/nominatim.js';
 import { cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 
+import { callLLM } from './freeClaudeRouter.js';
 import {
   derivePrecision,
   type GeocodeProvenance,
@@ -70,6 +70,7 @@ function cacheKey(
   return `${GEOCODE_CACHE_PREFIX}${kind}:${ordered}`;
 }
 
+/** Per-event resolver inputs threaded through the 6 resolver paths — centroid + optional bellingcat hint + headline / summary hints. */
 export interface ResolveContext {
   centroidLat: number;
   centroidLng: number;
@@ -78,6 +79,7 @@ export interface ResolveContext {
   summary?: string;
 }
 
+/** Resolver output — final lat/lng + provenance + actionGeo distance check + Nominatim display name. */
 export interface ResolvedLocation {
   lat: number;
   lng: number;
@@ -86,6 +88,7 @@ export interface ResolvedLocation {
   displayName: string;
 }
 
+/** Great-circle distance between two (lat, lng) pairs in kilometres (Haversine). */
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -96,6 +99,7 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** Landmark substrings that route a hierarchy into Branch 2 (POI-amenity Nominatim path). */
 export const POI_KEYWORDS: readonly string[] = [
   'nuclear',
   'airbase',
@@ -120,6 +124,7 @@ export const POI_KEYWORDS: readonly string[] = [
   'substation',
 ] as const;
 
+/** True if `landmark` contains a POI_KEYWORDS substring (word-boundary match, case-insensitive). */
 export function isPoiLandmark(landmark: string | null): boolean {
   if (!landmark) return false;
   const lower = landmark.toLowerCase();
@@ -135,6 +140,7 @@ export function isPoiLandmark(landmark: string | null): boolean {
 // became dead code with that change. POI_KEYWORDS above retains its role as
 // the gate for routing landmarks into Branch 2.
 
+/** Loose case-insensitive substring match between landmark + snapshot label (returns false for landmarks < 3 chars). */
 export function fuzzyNameMatch(landmark: string, snapshotLabel: string): boolean {
   const a = landmark.trim().toLowerCase();
   const b = snapshotLabel.trim().toLowerCase();
@@ -515,6 +521,7 @@ function resolveViaActionGeoFallback(ctx: ResolveContext): SnapshotHit {
   };
 }
 
+/** 6-path geocode resolver — never returns a coord without provenance; routes through own-site-snapshot → POI-amenity → Nominatim direct → 2-pass verified → GDELT ActionGeo fallback → Bellingcat passthrough. */
 export async function resolveLocation(
   hierarchy: LocationHierarchyV2,
   ctx: ResolveContext,
