@@ -1,7 +1,7 @@
 ---
 phase: 36-public-docs-sweep-openapi-additions
 verified: 2026-05-29T22:00:00Z
-status: human_needed
+status: passed
 score: 11/11 must-haves verified
 overrides_applied: 0
 human_verification:
