@@ -317,7 +317,7 @@ Plans:
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 7/7                  | Complete              | 2026-05-21 |
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 1/5 (4 skipped)      | Closed (deferred)     | 2026-05-23 |
 | 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 5/6                  | In Progress           |            |
-| 36. Public Docs Sweep + OpenAPI Additions                                     | 0/0                  | Not started           | -          |
+| 36. Public Docs Sweep + OpenAPI Additions                                     | 4/6                  | In Progress           |            |
 | 37. ADR-0010 + Acceptance Gate Closeout                                       | 0/0                  | Not started           | -          |
 
 ### Parallelization Notes
