@@ -407,8 +407,9 @@ slower API responses, `/health` reports
 **Cause:**
 
 - Scraper or crawler traffic bypassing the public rate limiter
-  baseline (6 req/min per IP in `rateLimiters.public` —
-  see [`server/middleware/rateLimit.ts`](../server/middleware/rateLimit.ts)
+  baseline (60 req/min per IP in `rateLimiters.public`, raised
+  from 6 req/min in Phase 28.1 — see
+  [`server/middleware/rateLimit.ts`](../server/middleware/rateLimit.ts)
   lines 100-120).
 - Misconfigured polling cadence — a client polling every second
   instead of every 30 seconds would blow through the budget in
@@ -426,9 +427,10 @@ slower API responses, `/health` reports
 2. **Tighten the public rate limiter tier** — edit
    `rateLimiters.public` in
    [`server/middleware/rateLimit.ts`](../server/middleware/rateLimit.ts)
-   from 6 req/min to 3 req/min and redeploy. This only affects
-   public traffic; legitimate UI polling respects its own per-
-   endpoint limiters.
+   from 60 req/min down to (e.g.) 30 or 15 req/min and redeploy.
+   This only affects public traffic; legitimate UI polling respects
+   its own per-endpoint limiters, and a valid `DASHBOARD_PASSWORD`
+   Bearer bypasses this tier entirely.
 3. **Tighten the per-endpoint rate limiter** for the chatty route
    if scraper-driven. Each endpoint has a tuned ceiling; they can
    be dropped in an emergency.
@@ -442,10 +444,12 @@ slower API responses, `/health` reports
 - Per-endpoint rate limiters in
   [`server/middleware/rateLimit.ts`](../server/middleware/rateLimit.ts)
   (Phase 26.3 CLN-10) cap per-IP traffic per route.
-- Public baseline tier `rateLimiters.public` (Phase 26.4-04) at
-  6 req/min prefixed `ratelimit:public` runs _before_ per-endpoint
-  limiters for any `/api/*` request, protecting against scraper
-  abuse of the live demo URL.
+- Public baseline tier `rateLimiters.public` (Phase 26.4-04;
+  raised to 60 req/min in Phase 28.1) prefixed `ratelimit:public`
+  runs _before_ per-endpoint limiters for any `/api/*` request,
+  protecting against scraper abuse of the live demo URL. A valid
+  `DASHBOARD_PASSWORD` Bearer skips this tier (per-endpoint tiers
+  still apply).
 - `public/robots.txt` disallows `/api/*` and `/health` so
   well-behaved crawlers never touch the upstream APIs.
 - The in-memory fallback (failure mode 1) degrades gracefully

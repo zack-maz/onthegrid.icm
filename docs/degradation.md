@@ -232,8 +232,12 @@ timestamps that tick every second.
 limiter (see
 [`server/middleware/rateLimit.ts`](../server/middleware/rateLimit.ts)):
 
-1. `rateLimiters.public` baseline tier at 6 req/min per IP,
-   prefixed `ratelimit:public`, applied to every `/api/*` request.
+1. `rateLimiters.public` baseline tier at 60 req/min per IP
+   (raised from 6 req/min in Phase 28.1 — see commit context in
+   `server/middleware/rateLimit.ts`), prefixed `ratelimit:public`,
+   applied to every `/api/*` request. Skipped on a valid
+   `DASHBOARD_PASSWORD` Bearer via `timingSafeEqual` constant-time
+   compare (per-endpoint tiers below still apply).
 2. Per-endpoint limiter (`rateLimiters.flights`, `.events`, etc.)
    with tuned ceilings per route.
 
