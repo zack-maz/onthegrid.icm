@@ -19,6 +19,18 @@ works offline.
 - [`deployment.md`](./deployment.md) — Vercel functions, cron jobs, CDN cache
   headers, build pipeline, environment variables, failover posture.
 
+## Operator deep-dives
+
+- [`llm-pipeline-reliability.md`](./llm-pipeline-reliability.md) — Measured
+  throttle behavior + tuned defaults for the NIM cascade on Vercel Pro 800s.
+  Authoritative for the runtime cascade state (NIM-only as of Phase 34;
+  OpenRouter dormant per Phase 30.1; Cerebras + Groq deferred per Phase 34).
+  Authored Phase 30; appended Phase 30.1 + Phase 31 + Phase 34 sub-blocks.
+- [`redis-keys.md`](./redis-keys.md) — 32-key inventory with writers,
+  readers, TTLs, cardinality, and load-bearing/observability/retire
+  classification. Pinned by `src/__tests__/lib/redis-registry.test.ts` —
+  drift fails the next `vitest run`. Authored Phase 35.
+
 ## Ontology deep dive
 
 The [`ontology/`](./ontology/) subdirectory is for reviewers who want to see
