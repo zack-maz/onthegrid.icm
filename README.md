@@ -63,6 +63,7 @@ matrices, coverage details, and the honest tech-debt accounting.
 - [Engineering Deep Dive](#engineering-deep-dive)
 - [Environment Variables](#environment-variables)
 - [Testing](#testing)
+- [LLM Enrichment](#llm-enrichment)
 - [What I Learned / What I'd Do Differently](#what-i-learned--what-id-do-differently)
 - [License](#license)
 
@@ -507,6 +508,104 @@ npm run format:check
 ```bash
 npx tsx scripts/smoke-test.ts https://<your-prod-url>
 ```
+
+---
+
+## LLM Enrichment
+
+The conflict-event layer combines two streams: raw GDELT events (15-min
+refresh) and v3 LLM-enriched events (daily 04:00 UTC cron). The LLM pipeline
+is intentionally optional — when it's healthy, every event carries CAMEO
+classification plus a precise lat/lon from the 6-path resolver and a
+one-paragraph summary. When it's not, the map keeps rendering raw GDELT
+(CAMEO classification only); the [Pitfall 1 cache bridge contract in
+degradation.md](docs/degradation.md) documents this "map never goes blank"
+invariant.
+
+### v3 cron-driven extraction
+
+`/api/cron/refresh-events` (daily 04:00 UTC) is the sole production writer
+to the `events:llm:v3` Redis key. Anti-pattern #17 (cron-only writer
+discipline) keeps the pipeline crash-free under Vercel Fluid Compute — the
+pre-Phase-29 v2 fire-and-forget IIFE pattern was silently killed
+mid-extraction when the HTTP response was sent, partial-writing the v3
+cache and leaving the map in a half-enriched state. The v3 cron-only
+architecture prevents this class of incident; see [runbook §14 — Cron
+architecture lessons](docs/runbook.md#14-cron-architecture-lessons-phase-2826-fire-and-forget-iife-incident).
+`/api/events` is cache-only at the request path: it reads `events:llm:v3`
+when fresh, falls through to raw GDELT via the Pitfall 1 bridge otherwise,
+and never triggers a write.
+
+The active LLM provider is **NIM (qwen-235b instruct)**. The cascade
+construction in `server/lib/freeClaudeRouter.ts` declares a NIM → OpenRouter
+chain, but **OpenRouter is dormant at runtime** per the Phase 30.1
+sub-block of [ADR-0010](docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md) —
+the free-tier probe landed in the not-viable bucket (~90% rate-limited
+under the workload's per-batch concurrency). **Cerebras + Groq adapters are
+deferred** per the Phase 34 sub-block of the same ADR; the operator chose
+to skip provisioning at v1.5 close. Both providers' runtime paths are
+dormant-ready — restoration is a future-phase decision, not a regression.
+The [`docs/architecture/llm-pipeline-reliability.md`](docs/architecture/llm-pipeline-reliability.md)
+deep-dive captures the measured throttle window, NIM's ~40 req/min RPM
+ceiling, and the tuned `LLM_V3_CONCURRENCY` / `LLM_BATCH_SIZE` /
+`LLM_BATCH_TIMEOUT_MS` / `BACKOFF_MS` defaults (so this README doesn't
+duplicate numbers that drift).
+
+### 6-path resolver
+
+For each event, the resolver walks 6 paths in declared order until one
+returns a coordinate with provenance:
+
+1. **own-site-snapshot** — match against the existing infrastructure snapshot in `sites:v3`
+2. **poi-amenity-nominatim** — Nominatim search constrained to POI / amenity tags
+3. **nominatim-direct** — direct Nominatim forward geocode constrained to the ME viewbox
+4. **nominatim-verified-2pass** — two-pass verify of an ambiguous result
+5. **gdelt-actiongeo-fallback** — fall back to GDELT's ACTIONGEO coordinate
+6. **bellingcat-coord-passthrough** — Bellingcat-source coordinate passthrough
+
+The resolver never returns a coordinate without provenance — every event on
+the map carries a traceable lineage entry at `events:llm:v3:lineage:{eventId}`.
+Nominatim downstream is throttled at 1 req/s (their ToS) and aggressively
+cached at `geocode:fwd:constrained:v2:<hash>` (30-day logical TTL).
+
+### Production health verification
+
+Production health is verified by `.github/workflows/prod-connectivity-audit.yml`
+— a manually-triggered workflow (`workflow_dispatch`) that runs the tier audit
+against `https://otg-iran-monitor.vercel.app`, exercises every public endpoint
+plus every Bearer-gated operator endpoint, and writes the result envelope to
+the `audit:connectivity:last-result` Redis key (7-day TTL). The audit result
+is surfaced on the API Health dashboard tab and exposed via
+[`/api/audit-status`](server/openapi.yaml) (degrade-open; no auth gate so
+the dashboard banner renders even when Bearer is absent). The v1.5 acceptance
+gate is **3× consecutive `allTiersGreen=true`** runs — that's what unblocks
+the v1.6 milestone close.
+
+### API Health dashboard tab (Phase 28.2 W5)
+
+The DevApiStatus dashboard's five separate tabs (audit, operator-status,
+byBearer, advEval, pinTtl) were merged into a single **API Health** tab in
+Phase 28.2 W5. The unified tab aggregates `audit24h` (rolling 24-hour
+audit-result digest) + `byBearer` per-Bearer quota counters + `pinTtl`
+deep-link TTLs + `advEval` adversarial-eval drift + the operator-actions
+log into one Bearer-gated operator surface. The merge reduced operator
+cognitive load during incident response (one place to look) and simplified
+per-Bearer quota visibility against the 50/24h replay cap. Bearer-gated via
+`DASHBOARD_PASSWORD` with `timingSafeEqual` constant-time compare in the
+shared `dashboardAuth.ts` middleware.
+
+### Redis key registry
+
+All Redis state — the 30+ keys spanning the LLM pipeline, per-source caches,
+operator audit log, cron tick sentinels, and dashboard rate-quota counters —
+is documented in [`docs/architecture/redis-keys.md`](docs/architecture/redis-keys.md)
+(Phase 35 D-05 deep-dive). A drift gate at
+`src/__tests__/lib/redis-registry.test.ts` enforces parity between
+CLAUDE.md §Serverless Cache, the architecture deep-dive, and the codebase —
+adding an undocumented Redis key fails the next `vitest run`. Phase 36 ships
+a similar mechanical primitive for the OpenAPI spec
+(`server/__tests__/openapi/openapi-lint.test.ts`) so the public API
+contract is held to the same drift discipline.
 
 ---
 
