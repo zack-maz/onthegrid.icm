@@ -15,7 +15,7 @@ flowchart TD
     subgraph vercel[Vercel]
         edge[Edge CDN<br/>respects Cache-Control<br/>s-maxage headers]
         static[Static Vite bundle<br/>dist/*]
-        lambda[Serverless function<br/>server/vercel-entry.ts<br/>bundled to dist-server/vercel.cjs]
+        lambda[Serverless function<br/>api/vercel-entry.js<br/>tsup from server/vercel.ts<br/>Pro maxDuration 800s]
     end
 
     subgraph upstash[Upstash]
@@ -29,6 +29,7 @@ flowchart TD
     subgraph crons[Vercel Cron Scheduler]
         health[/api/cron/health/]
         warm[/api/cron/warm/]
+        refresh[/api/cron/refresh-events/]
     end
 
     user -->|HTTPS| edge
@@ -38,15 +39,21 @@ flowchart TD
     lambda --> external
 
     crons -->|daily 00:00 UTC| lambda
-    crons -->|every 12h| lambda
+    crons -->|daily 12:00 UTC| lambda
+    crons -->|daily 04:00 UTC| lambda
 ```
 
 - **Single serverless function.** `vercel.json` rewrites every
   `/api/*`, `/api/cron/*`, and `/health` path to
   `/api/vercel-entry`. This is a thin wrapper that calls the
   `createApp()` factory from
-  [`server/index.ts`](../../server/index.ts) and hands the resulting
+  [`server/app.ts`](../../server/app.ts) and hands the resulting
   Express app to `serverless-http`. One function, all routes.
+- **Vercel Pro `maxDuration: 800` (Phase 29 D-08).** `vercel.json`
+  pins `functions["api/vercel-entry.js"].maxDuration = 800` so the
+  daily LLM extraction cron has the wall-clock headroom it needs
+  (measured ~125s typical, ~10min worst-case during throttle).
+  Hobby tier's 60s ceiling was incompatible with the v3 cron run.
 - **Edge CDN first.** Every cached route emits a `Cache-Control`
   header with `s-maxage` and `stale-while-revalidate`, so a burst of
   identical requests never reaches the function. The lambda is a
@@ -65,11 +72,12 @@ Runs three steps in sequence:
 
 1. **`vite build`** — bundles the React app into `dist/` (hashed JS,
    CSS, assets).
-2. **`tsup server/vercel-entry.ts`** — bundles the server entrypoint
-   and every imported file (including adapters, routes, middleware)
-   into a single CommonJS file at `dist-server/vercel.cjs`. CommonJS
-   because Vercel's serverless runtime still expects it for the
-   legacy Node API, which is what `@vercel/node` uses.
+2. **`tsup server/vercel.ts`** — bundles the server entrypoint and
+   every imported file (including adapters, routes, middleware) into
+   a single output file at `api/vercel-entry.js`. The Vercel runtime
+   discovers `api/vercel-entry.js` directly via the
+   `functions["api/vercel-entry.js"]` config in `vercel.json` — no
+   separate stub layer.
 3. **`tsc -b`** — typechecks the server and app projects end-to-end.
    Fails the build on any type error; there is no `any` escape hatch
    tolerated (strict mode + `noUncheckedIndexedAccess` on the server).
@@ -77,9 +85,8 @@ Runs three steps in sequence:
 Output:
 
 - `dist/` — Vite-built SPA, uploaded as static assets.
-- `dist-server/vercel.cjs` — single-file serverless bundle.
-- `api/vercel-entry.js` — tiny stub that re-exports from
-  `dist-server/vercel.cjs` for the Vercel runtime to discover.
+- `api/vercel-entry.js` — single-file serverless bundle
+  (`maxDuration: 800` configured for the daily LLM cron).
 
 ## Cache strategy
 
@@ -123,29 +130,43 @@ flowchart LR
 
 ## Cron jobs
 
-Scheduled from `vercel.json`:
+Scheduled from `vercel.json` — Vercel Hobby/Pro tier caps at 3 cron
+entries; all three slots are in active use:
 
 ```json
 {
   "crons": [
     { "path": "/api/cron/health", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/warm", "schedule": "0 */12 * * *" }
+    { "path": "/api/cron/warm", "schedule": "0 12 * * *" },
+    { "path": "/api/cron/refresh-events", "schedule": "0 4 * * *" }
   ]
 }
 ```
 
 - **`/api/cron/health`** (daily at 00:00 UTC) — pings `/health`
-  internally, logs the degraded-vs-healthy state of every upstream.
-  Surfaces silent upstream outages before a user notices.
-- **`/api/cron/warm`** (every 12 hours) — pre-fetches the GDELT events
-  backfill, water facilities, and key sites so a cold lambda doesn't
-  block a user-facing request on a multi-second Overpass query.
-  This is especially important because Vercel lambdas get cold
-  quickly on low-traffic periods.
+  internally, logs the degraded-vs-healthy state of every upstream;
+  runs `runEval()` resolver-only accuracy baseline + adversarial-eval
+  drift detection. Surfaces silent upstream outages before a user
+  notices.
+- **`/api/cron/warm`** (daily at 12:00 UTC) — pre-fetches the
+  Overpass key sites + water facility queries so a cold lambda doesn't
+  block a user-facing request on a multi-second Overpass call. This
+  is especially important because Vercel lambdas get cold quickly on
+  low-traffic periods.
+- **`/api/cron/refresh-events`** (daily at 04:00 UTC, Phase 29 D-08
+  cron-only writer discipline) — sole writer of `events:llm:v3`.
+  Runs `runRefreshExtraction()` in
+  [`server/lib/llmExtractionPipeline.ts`](../../server/lib/llmExtractionPipeline.ts)
+  which invokes the v3 extractor against the latest GDELT window.
+  Cold-cache self-heal bypasses the 15-min cooldown when
+  `events:llm:v3` is empty. Operator force-trigger via
+  `?force=true` with valid Bearer (`DASHBOARD_PASSWORD`).
 
-Both cron endpoints are gated by a `user-agent: vercel-cron` check in
-production so they can't be hit from the public internet. In dev
-they're wide open, which is fine because nothing's listening.
+All three cron endpoints are gated by `CRON_SECRET` Bearer
+authentication in production (Vercel injects the header
+automatically on scheduled invocations). The operator force-trigger
+path on `/api/cron/refresh-events` accepts either `CRON_SECRET` or
+`DASHBOARD_PASSWORD` as the Bearer.
 
 ## Environment variables
 
