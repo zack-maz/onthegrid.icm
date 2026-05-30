@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep — 🚧 IN PROGRESS
-status: executing
-last_updated: "2026-05-30T05:35:00.000Z"
+status: ready_to_plan
+last_updated: 2026-05-30T08:18:35.775Z
 last_activity: 2026-05-30 -- Phase 36 closed (Public Docs Sweep + OpenAPI Additions); Phase 37 unblocked
 progress:
   total_phases: 15
@@ -11,6 +11,7 @@ progress:
   total_plans: 59
   completed_plans: 55
   percent: 53
+stopped_at: Phase 36 complete (6/6) — Phase 37 (ADR-0010 + Acceptance Gate Closeout) unblocked
 ---
 
 # Project State
@@ -25,8 +26,10 @@ See: .planning/PROJECT.md
 
 Phase: 37 (adr-0010-acceptance-gate-closeout) — UNBLOCKED, NOT STARTED
 Plan: 0 of TBD
-Status: Phase 36 closed 2026-05-30; ready for Phase 37 (milestone-close)
+Status: Phase 36 closed 2026-05-30; ready for Phase 37 (milestone-close gate per ROADMAP parallelization notes)
 Last activity: 2026-05-30 -- Phase 36 closed (Public Docs Sweep + OpenAPI Additions); Phase 37 unblocked
+
+Backlog items 999.1 / 999.2 / 999.3 / 999.5 remain parked — they are NOT the next sequenced phase. Per the ROADMAP, Phase 37 (ADR-0010 + LLM-RELI-07 acceptance gate observation) is the milestone-close gate by construction.
 
 Phase 36 close artifact: [`.planning/phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md`](phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md).
 
