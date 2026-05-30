@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep — 🚧 IN PROGRESS
 status: executing
-last_updated: "2026-05-30T04:36:56.411Z"
-last_activity: 2026-05-30 -- Phase 36 planning complete
+last_updated: "2026-05-30T04:55:33.575Z"
+last_activity: 2026-05-30 -- Phase 36 execution started
 progress:
   total_phases: 15
   completed_phases: 7
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 35 (internal-docs-jsdoc-redis-registry-redis-optimization-cleanu) — EXECUTING
+Phase: 36 (public-docs-sweep-openapi-additions) — EXECUTING
 Plan: 1 of 6
-Status: Ready to execute
-Last activity: 2026-05-30 -- Phase 36 planning complete
+Status: Executing Phase 36
+Last activity: 2026-05-30 -- Phase 36 execution started
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
