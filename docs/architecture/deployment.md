@@ -47,7 +47,7 @@ flowchart TD
   `/api/*`, `/api/cron/*`, and `/health` path to
   `/api/vercel-entry`. This is a thin wrapper that calls the
   `createApp()` factory from
-  [`server/app.ts`](../../server/app.ts) and hands the resulting
+  [`server/index.ts`](../../server/index.ts) and hands the resulting
   Express app to `serverless-http`. One function, all routes.
 - **Vercel Pro `maxDuration: 800` (Phase 29 D-08).** `vercel.json`
   pins `functions["api/vercel-entry.js"].maxDuration = 800` so the
