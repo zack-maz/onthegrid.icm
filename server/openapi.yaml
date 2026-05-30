@@ -55,7 +55,17 @@ tags:
   - name: Sources
     description: Runtime data source configuration status.
   - name: Health
-    description: Service health probes and cron endpoints.
+    description: Service health probes (unauthenticated, degrade-open).
+  - name: Operator
+    description: |
+      Operator-tier endpoints surfacing pipeline observability, audit logs,
+      and dev-only diff replays. Bearer-gated via `operatorBearer`
+      (DASHBOARD_PASSWORD) in production; dev bypasses auth.
+  - name: Cron
+    description: |
+      Vercel-cron scheduled endpoints (`/api/cron/*`). Bearer-gated via
+      `cronSecret` (CRON_SECRET) when configured; empty CRON_SECRET
+      preserves un-authed dev behavior. Hobby cap is 3 cron entries.
 
 paths:
   # ---------- Flights ----------
@@ -521,13 +531,314 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthReport'
 
+  # ---------- Operator (Phase 36 D-05) ----------
+  /api/audit-status:
+    get:
+      summary: Production-connectivity audit result (degrade-open).
+      description: |
+        Surfaces the latest result from `.github/workflows/prod-connectivity-audit.yml`.
+        Reads Redis key `audit:connectivity:last-result` (7d TTL).
+
+        **No auth gate** — operator-tier metadata only (no PII / secrets);
+        the existing per-endpoint global rate limit (60/min) protects
+        against abuse. See `server/routes/audit-status.ts` for the
+        degrade-open contract: Redis errors or parse failures return
+        `{status: 'absent'}` (HTTP 200), NEVER 500.
+
+        Sets `X-Audit-Stale: true` header when the run is older than 7 days.
+
+        Phase 28.2 W6 / D-05.
+      tags: [Operator]
+      responses:
+        '200':
+          description: Audit result envelope (degrade-open).
+          headers:
+            X-Audit-Stale:
+              schema:
+                type: string
+                enum: ['true']
+              description: Set when the audit run is older than 7 days.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pass, fail, absent]
+                  runId:
+                    type: string
+                    nullable: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  lastVerifiedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  endpoints:
+                    type: object
+                    additionalProperties:
+                      type: string
+                      enum: [pass, fail]
+                  durationMs:
+                    type: integer
+                    minimum: 0
+                    nullable: true
+                  allTiersGreen:
+                    type: boolean
+                    nullable: true
+                  tierStatus:
+                    type: object
+                    properties:
+                      critical:
+                        $ref: '#/components/schemas/AuditTierStatus'
+                      nonCritical:
+                        $ref: '#/components/schemas/AuditTierStatus'
+                      static:
+                        $ref: '#/components/schemas/AuditTierStatus'
+                      probeOnly:
+                        $ref: '#/components/schemas/AuditTierStatus'
+                      cron:
+                        $ref: '#/components/schemas/AuditTierStatus'
+
+  /api/operator-status:
+    get:
+      summary: Aggregated operator dashboard payload.
+      description: |
+        Bearer-gated aggregator for the merged DevApiStatus API Health tab
+        (Phase 28.2 W5). Aggregates rolling 24h audit-log counters,
+        per-Bearer quota breakdown, adversarial-eval result, dead-URL prune
+        block, and actor-quality observability into one operator surface.
+
+        Read-only — never writes to Redis. Per-block degrade-open: any
+        sub-block read failure logs a warning and returns null/empty for
+        that block; the route still emits 200.
+      tags: [Operator]
+      security:
+        - operatorBearer: []
+      responses:
+        '200':
+          description: Aggregated operator payload.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  audit24h:
+                    type: integer
+                    minimum: 0
+                    description: Operator-action count in the last 24h.
+                  byBearer:
+                    $ref: '#/components/schemas/ByBearerMap'
+                  advEval:
+                    type: object
+                    nullable: true
+                    description: 'Last adversarial-eval result (events:llm-eval-adversarial:v3 sidecar).'
+                  prune:
+                    type: object
+                    description: Dead-URL prune block (Phase 32 Plan 04).
+                    properties:
+                      deadUrlCount:
+                        type: integer
+                        minimum: 0
+                      last24hPrunes:
+                        type: integer
+                        minimum: 0
+                      deadUrlSample:
+                        type: array
+                        maxItems: 20
+                        items:
+                          type: object
+                          properties:
+                            eventId:
+                              type: string
+                            url:
+                              type: string
+                            status:
+                              type: string
+                              enum: [dead-host, '403', '404']
+                  actorQuality:
+                    type: object
+                    nullable: true
+                    description: Actor-quality observability (Phase 33 Plan 06 D-16).
+        '401':
+          description: Missing or invalid operator Bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: '`auth_not_configured` — DASHBOARD_PASSWORD empty in production.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/events/llm-status:
+    get:
+      summary: LLM v3 pipeline observability (read-only).
+      description: |
+        Bearer-gated read of the LLM v3 pipeline state. Surfaces the live
+        `llmProgress` singleton when active, or the Redis-backed last-run
+        summary (`events:llm-summary:v3`) when idle. Phase 27.4 / 28.2.7.
+
+        **Phase 29 D-02 framing-gap note** — the original Phase 36 plan
+        documented this endpoint as `/api/events/llm-pipeline` GET + POST.
+        Reality: the POST `/api/events/llm-pipeline` version-override route
+        was deleted in Phase 29 D-02 part A (no writer surface), and the
+        GET reader lives at `/api/events/llm-status`. The spec documents
+        the shipped path. See `server/middleware/dashboardAuth.ts:12-13`
+        for the deletion note and `server/routes/events.ts:345` for the
+        live handler.
+      tags: [Operator]
+      security:
+        - operatorBearer: []
+      responses:
+        '200':
+          description: Current pipeline state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmPipelineState'
+        '401':
+          description: Missing or invalid operator Bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: '`auth_not_configured` — DASHBOARD_PASSWORD empty in production.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/events/llm-replay/{groupKey}:
+    post:
+      summary: Recompute v3 enrichment for a single event group (dev-only diff, no cache write).
+      description: |
+        Bearer-gated. Reads existing v3 enrichment for the group, recomputes
+        via the cascade with the CURRENT prompt, returns `{old, new}` diff
+        WITHOUT writing to `events:llm:v3`. Phase 27.4.
+
+        **Per-Bearer quota:** 50 calls / 24h enforced via
+        `operator:replay-quota:{fingerprint}:{YYYY-MM-DD}` (48h TTL). At
+        cap, returns 429 with `Retry-After` header so a compromised Bearer
+        cannot drain the daily token budget within minutes
+        (T-28.2-03-02 mitigation).
+
+        **Audit:** every call appends a structured entry to
+        `operator:audit-log` (SADD bounded 500 / 30d TTL) — surfaced via
+        `/api/operator-status` to the API Health tab Operator Actions block.
+
+        **Pitfall 6 contract:** read-only vs the terminal LLM cache; any
+        `cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, ...)` call from this handler
+        would be a regression. The cron-driven extraction at
+        `/api/cron/refresh-events` is the sole writer (anti-pattern #17).
+      tags: [Operator]
+      security:
+        - operatorBearer: []
+      parameters:
+        - in: path
+          name: groupKey
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+          description: Event-group identifier (deterministic hash of CAMEO + actor + date).
+      responses:
+        '200':
+          description: Diff envelope (old vs newly-recomputed enrichment).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmReplayDiff'
+        '400':
+          description: '`invalid_group_key` — empty, non-string, or >200 chars.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid operator Bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: |
+            `not_found` (groupKey not in `events:llm:v3`),
+            `gdelt_cache_empty` (raw GDELT cache empty so group cannot be
+            reconstructed), or `group_gone` (groupKey no longer present in
+            raw GDELT). All three share this envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum: [not_found, gdelt_cache_empty, group_gone]
+        '429':
+          description: Per-Bearer quota exceeded (50/24h).
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until the per-Bearer quota window resets.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum: [replay_quota_exceeded]
+                  message:
+                    type: string
+                  resetsAt:
+                    type: string
+                    format: date-time
+        '500':
+          description: '`extract_failed` — processEventGroupsV3 threw.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum: [extract_failed]
+                  detail:
+                    type: string
+                    maxLength: 200
+        '503':
+          description: '`auth_not_configured` — DASHBOARD_PASSWORD empty in production.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ---------- Cron (Phase 36 D-05) ----------
   /api/cron/health:
     get:
-      summary: Cron health check
+      summary: Cron health check + eval-drift folded in.
       description: |
-        Detailed health probe for Vercel cron. Logs warnings for any source
-        whose cached data is older than 1 hour. Not rate-limited.
-      tags: [Health]
+        Detailed health probe for Vercel cron (schedule `0 0 * * *`). Pings
+        Redis, reports per-source cache freshness with a 1-hour warning
+        threshold, folds in the resolver-only accuracy eval
+        (`runEval()`) + the adversarial sub-eval (`runAdversarialEval()`)
+        per Phase 27.4.6 D-09 / Phase 28.2 Plan 03 B-2.
+
+        Writes `cron:lastTick:health` (7d TTL) on success.
+
+        **Verified accurate against `server/routes/cron-health.ts` as of
+        Phase 36.** Drift fix inline if surfaced — none surfaced.
+      tags: [Cron]
+      security:
+        - cronSecret: []
       responses:
         '200':
           description: Cron health payload.
@@ -535,16 +846,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CronHealthReport'
+        '401':
+          description: Missing or invalid CRON_SECRET Bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/cron/warm:
     get:
-      summary: Pre-warm Redis caches
+      summary: Pre-warm Redis caches for sites + water facilities.
       description: |
-        Pre-warms Redis caches for sites and water facilities. Called by
-        Vercel cron every 12 hours to keep end users off cold Overpass
-        fetches. Runs both fetches in parallel to fit the 60s function
-        timeout. Not rate-limited.
-      tags: [Health]
+        Pre-warms Redis caches for sites (`sites:v3`) and water facilities
+        (`water:facilities:v3`). Called by Vercel cron every 12 hours
+        (schedule `0 12 * * *`) to keep end users off cold Overpass fetches.
+        Runs both fetches in parallel to fit the 60s function timeout.
+
+        Returns `status: 'ok'` if both succeeded, `status: 'partial'` if at
+        least one fulfilled (per-source `ok: false` carries the error).
+
+        Writes `cron:lastTick:warm` (7d TTL) on partial-or-better.
+
+        **Verified accurate against `server/routes/cron-warm.ts` as of
+        Phase 36.** Drift fix inline if surfaced — none surfaced.
+      tags: [Cron]
+      security:
+        - cronSecret: []
       responses:
         '200':
           description: Warm result summary.
@@ -552,6 +879,108 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WarmResult'
+        '401':
+          description: Missing or invalid CRON_SECRET Bearer (when CRON_SECRET set).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/cron/refresh-events:
+    get:
+      summary: Daily LLM v3 extraction cron (4am UTC) + operator force-trigger.
+      description: |
+        **Sole production writer** to `events:llm:v3` (anti-pattern #17:
+        cron-only writer discipline). Vercel cron GETs this endpoint once per
+        day (schedule `0 4 * * *`). Calls `runRefreshExtraction()` in
+        `server/lib/llmExtractionPipeline.ts`.
+
+        **Auth — CRON_SECRET only.** When `CRON_SECRET` is non-empty, the
+        handler requires `Authorization: Bearer <CRON_SECRET>` via
+        constant-time compare. **Framing-gap note vs Phase 36 CONTEXT
+        D-06:** the original D-06 plan documented this endpoint as
+        accepting EITHER `cronSecret` OR `operatorBearer` (the
+        "force-trigger" path). Reality: the handler only validates
+        CRON_SECRET (`server/routes/refresh-events-cron.ts:46-55`); operators
+        force-triggering pass the same Bearer the cron runner uses. The
+        spec documents the shipped reality.
+
+        **`?force=true`** bypasses the 15-min cooldown sentinel
+        (`events:llm-process-ts`) and the cold-cache self-heal path. Use
+        cases: post-bug-fix re-extraction, post-cache-flush warm-up,
+        testing during deploys.
+
+        Writes `cron:lastTick:refresh-events` (7d TTL) AFTER
+        `runRefreshExtraction` resolves (D-03 honest-failure semantics —
+        a throw means the probe stays `unknown`, NOT `healthy`).
+
+        Vercel Pro 800s `maxDuration` accommodates the ~10-min extraction
+        run (Phase 29 D-08).
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      parameters:
+        - in: query
+          name: force
+          required: false
+          description: When `true`, bypass the 15-min cooldown sentinel.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: |
+            Extraction-run result. `{ok: true, durationMs, ...result}` —
+            result shape varies: `{status: 'ran', ...summary}` on dispatch,
+            `{status: 'skipped', reason: 'cooldown_active', ...}` on cooldown
+            skip. Vercel cron treats any 2xx as success.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, durationMs]
+                properties:
+                  ok:
+                    type: boolean
+                    enum: [true]
+                  durationMs:
+                    type: integer
+                    minimum: 0
+                  status:
+                    type: string
+                    description: |
+                      `'ran'` on extraction dispatch, `'skipped'` on
+                      cooldown-active skip, or other status values surfaced
+                      by `runRefreshExtraction`.
+        '401':
+          description: Missing or invalid CRON_SECRET Bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: |
+            `refresh_failed` — `runRefreshExtraction` threw (NIM throttle,
+            DLQ overflow, etc.). The Pitfall 1 cache bridge serves raw
+            GDELT during the failure window so the map never goes blank.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, error, durationMs]
+                properties:
+                  ok:
+                    type: boolean
+                    enum: [false]
+                  error:
+                    type: string
+                    enum: [refresh_failed]
+                  detail:
+                    type: string
+                    maxLength: 200
+                  durationMs:
+                    type: integer
+                    minimum: 0
 
 components:
   # ----------------------------------------------------------------
