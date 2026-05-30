@@ -570,6 +570,8 @@ multiple layers even during low-traffic periods.
 
 ## 10. LLM pipeline hung / `/api/events` returning 500
 
+> **HISTORICAL — Phase 27.4.1 era. The v2 extractor and its Redis keys (`events:llm:v2`, `events:llm:v2:partial`) were deleted in Phase 29 (see [ADR-0010](adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md)). The terminal cache is now `events:llm:v3` with no partial-progress sidecar (Phase 35 SIMPLIFY-02). For a live v3 incident, use [§13 NIM throttle handling](#13-nim-throttle-handling), [§14 Cron architecture lessons](#14-cron-architecture-lessons), and [§15 Force-trigger runbook](#15-force-trigger-runbook). The diagnosis + recovery commands below are preserved as a postmortem record only.**
+
 **Symptom:** `/api/events` returns HTTP 500 with `TypeError: events.map is not a function` or `llmCachedRef.data is not iterable`. Map either shows stale v1 data or goes blank depending on which cache path failed.
 
 **Root cause (Phase 27.4.1 era, fixed in `a5c8846` + `e26ceca`):** shape drift between the v2 extractor's partial writes and the terminal reader's expected `ConflictEventEntity[]`. The fix splits the two concerns across two Redis keys:
@@ -618,9 +620,11 @@ curl -s http://localhost:3001/api/events/llm-status | jq '.watchdogTimeoutCount'
 
 ### Tuning `LLM_BATCH_TIMEOUT_MS`
 
-Default 90000ms (90s) hard-kill with 60s soft-warn. Raise if Cerebras is
-consistently exceeding 90s under high-traffic conditions (check amber
-`⊘` soft-warn entries in DevApiStatus call log):
+> **v3-era default:** 120000ms (120s) hard-kill, single-tier (Phase 30 SIMPLIFY-03 retired the 60s soft-warn). The historical 90s + 60s framing below applies to the v2 extractor only.
+
+Default 120000ms (120s) hard-kill. Raise if NIM is consistently exceeding 120s under
+high-traffic conditions (check `routingTrace` `skipReason: "timeout_watchdog"` entries
+in the DLQ at `events:llm-dlq`):
 
 ```bash
 # .env — takes effect on next server restart (node --watch does not reload env)
