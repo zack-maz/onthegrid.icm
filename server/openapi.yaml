@@ -1233,18 +1233,22 @@ components:
           type: string
         type:
           type: string
+          description: |
+            Phase 27 5-member taxonomy enforced at runtime by
+            `server/schemas/cacheResponse.ts` Zod schema via `sendValidated()`
+            on `/api/events`. Mirrors `server/types.ts` `ConflictEventType`
+            and `docs/architecture/ontology/types.md`. The pre-Phase-27
+            CAMEO-derived 11-value union (`ground_combat`, `shelling`,
+            `bombing`, `assassination`, etc.) was retired with the v3 LLM
+            extractor (Phase 27.4) — consumers built against the older spec
+            should expect `on_ground` in place of `ground_combat` and any of
+            the deprecated values to never appear.
           enum:
             - airstrike
-            - ground_combat
-            - shelling
-            - bombing
-            - assassination
-            - abduction
-            - assault
-            - blockade
-            - ceasefire_violation
-            - mass_violence
-            - wmd
+            - on_ground
+            - explosion
+            - targeted
+            - other
         lat:
           type: number
           format: double
