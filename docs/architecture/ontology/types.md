@@ -123,10 +123,18 @@ Phase 27 replaced the original 11-member CAMEO-derived union with this
 simplified 5-type taxonomy. The GDELT adapter's `classifyByBaseCode`
 still maps raw CAMEO codes into these 5 buckets as a fallback, but the
 primary classification path is now LLM-based: grouped GDELT rows are
-sent through Cerebras/Groq, which returns a structured classification
-validated by Zod. See [`server/lib/llmEventExtractor.ts`](../../../server/lib/llmEventExtractor.ts)
-for the extraction logic and [`server/adapters/llm-provider.ts`](../../../server/adapters/llm-provider.ts)
-for the provider adapter.
+sent through the v3 extractor against **NVIDIA NIM** (qwen-235b
+instruct — the only active runtime provider as of Phase 34), which
+returns a structured classification validated by Zod. v1 and v2
+extractors were deleted Phase 29 (SIMPLIFY-04). See
+[`server/lib/llmEventExtractor.v3.ts`](../../../server/lib/llmEventExtractor.v3.ts)
+for the extraction logic and
+[`server/adapters/llm-provider.ts`](../../../server/adapters/llm-provider.ts)
+for the provider adapter (`server/lib/freeClaudeRouter.ts:341-363`
+constructs the declared NIM → OpenRouter cascade; OpenRouter dormant
+per Phase 30.1; Cerebras + Groq deferred per Phase 34 — see
+[`docs/architecture/llm-pipeline-reliability.md`](../llm-pipeline-reliability.md)
+§"Multi-Provider Cascade (Phase 34)").
 
 See [`server/types.ts#EntityType`](../../../server/types.ts) for the
 literal union definition.
