@@ -23,7 +23,7 @@ not aspirational operations advice.
 3. [Overpass API timeout](#3-overpass-api-timeout)
 4. [AISStream WebSocket disconnect mid-collect](#4-aisstream-websocket-disconnect-mid-collect)
 5. [Yahoo Finance throttling](#5-yahoo-finance-throttling)
-6. [Vercel function timeout (10-second limit)](#6-vercel-function-timeout-10-second-limit)
+6. [Vercel function timeout (300s default / 800s configured ceiling)](#6-vercel-function-timeout-10-second-limit)
 7. [Upstash command budget exhausted](#7-upstash-command-budget-exhausted)
 8. [CORS misconfiguration after deploy](#8-cors-misconfiguration-after-deploy)
 9. [Vercel cron job failure](#9-vercel-cron-job-failure)
@@ -348,61 +348,38 @@ prices.
 
 ---
 
-## 6. Vercel function timeout (10-second limit)
+<a id="6-vercel-function-timeout-10-second-limit"></a>
 
-**Symptom:** `504 Gateway Timeout` on specific endpoints, most
-commonly `/api/water`, `/api/sites`, or `/api/events` on first load
-after a deploy or a long idle period.
+## 6. Vercel function timeout (300s default / 800s configured ceiling)
+
+**Symptom:** `504 Gateway Timeout` on long-running routes. Most commonly `/api/cron/refresh-events` (which runs the v3 LLM extraction; expected to take ~10 minutes in the worst case under NIM throttle pressure). Less commonly on `/api/water`, `/api/sites`, or `/api/events` first-load after a deploy.
 
 **Detection:**
 
-- Vercel function logs show
-  `ERROR: Task timed out after 10.00 seconds` for the affected
-  route.
-- Vercel dashboard → Deployments → Functions tab shows the
-  affected function's p99 duration near 10 s.
-- Sentry or external monitor flags the 504.
+- Vercel function logs show `ERROR: Task timed out after 800.00 seconds` (or `300.00` if `maxDuration` is omitted from the function in `vercel.json`).
+- Vercel dashboard → Deployments → Functions tab shows the affected function's p99 duration approaching the configured `maxDuration`.
+- For `/api/cron/refresh-events` specifically: `events:llm-summary:v3` shows `completedAt` unset hours after `startedAt`; `cron:lastTick:refresh-events` not updated.
 
 **Cause:**
 
-- Cold-start latency + upstream API latency together exceeds the
-  10 s Vercel Hobby plan function timeout. Most common on routes
-  that make multiple upstream calls on cache miss (water fetches
-  Overpass + WRI + Open-Meteo; sites fetches Overpass) when the
-  entire cache chain is cold.
-- Less commonly: Upstash command budget exhausted, causing cache
-  writes to fail silently and every request to re-fetch upstream.
-- Less commonly still: a long-running upstream call that should
-  have been gated by a timeout wasn't — this was the resilience
-  gap that 26.4-03 closed for the cache layer via
-  `REDIS_OP_TIMEOUT_MS`.
+- Pre-Phase-29 Hobby plan baseline was a hard 10-second timeout (the framing this section retained until Phase 36 D-14). Phase 29 D-08 upgraded to Vercel Pro and set `vercel.json functions."api/vercel-entry.js".maxDuration: 800` to accommodate worst-case LLM extraction runs (~10 minutes).
+- Cold-start latency + upstream API latency together approaching the configured `maxDuration` on long-running paths. NIM throttle (Phase 30 / 34 measurements) is the dominant driver for `/api/cron/refresh-events`.
+- Less commonly: Upstash command budget exhausted causing cache writes to fail silently; every request re-fetches upstream and accumulates latency.
 
 **Remediation:**
 
-1. Retry the request. A warm cache should respond in under 1 s
-   on subsequent requests.
-2. Check if the cache was evicted (Upstash command budget
-   exhaustion wipes keys); see failure mode 7.
-3. Manually warm the cache via `/api/cron/warm` or by hitting each
-   cached route in turn via a script. The `vercel-cron` user
-   agent is allowed to trigger `refresh=true` in production.
-4. If the route consistently times out cold, consider lowering
-   the bbox size in the affected adapter to reduce upstream call
-   duration — but this is a design change, not an operational
-   fix.
+1. For data routes (`/api/water`, `/api/sites`, etc.): retry. A warm cache responds in under 1 s.
+2. For `/api/cron/refresh-events`: check `events:llm-summary:v3.lastError` for the failing provider (NIM circuit-breaker trip, OpenRouter dormancy, etc.). Cross-reference §13 NIM throttle handling.
+3. If `maxDuration` was hit on extraction: the 90s `withBatchWatchdog` hard-kill (`server/lib/llmExtractorWatchdog.ts`) should have caught it before the function timeout; if it didn't, the watchdog is bypassed — check `LLM_BATCH_TIMEOUT_MS` env override.
+4. Manually warm cache via `/api/cron/warm` (already a configured cron at 12:00 UTC); not required for incident response but accelerates recovery.
 
 **Prevention:**
 
-- Vercel cron (`vercel.json` `crons` array) runs `/api/cron/warm`
-  on a schedule that keeps the cache hot.
-- `Cache-Control: max-age=0, s-maxage=N` CDN headers on each
-  route serve most requests from Vercel Edge without ever hitting
-  the function, so cold-start latency only applies to cache-miss
-  requests that happen when the CDN cache also expired.
-- The 2000 ms `REDIS_OP_TIMEOUT_MS` wrapper in
-  [`server/cache/redis.ts`](../server/cache/redis.ts) caps hung
-  Redis calls at 2 s, leaving 8 s of headroom for the actual
-  route logic before the function timeout bites.
+- `vercel.json functions."api/vercel-entry.js".maxDuration: 800` (Phase 29 D-08) — locked in as part of the Vercel Pro upgrade. Do NOT reduce without a compelling reason; the extraction path needs it.
+- `Cache-Control: max-age=0, s-maxage=N` CDN headers serve most data-route requests from Vercel Edge without ever invoking the function.
+- 2000 ms `REDIS_OP_TIMEOUT_MS` wrapper in [`server/cache/redis.ts`](../server/cache/redis.ts) caps hung Redis calls — leaves headroom for actual route logic.
+- 90s `withBatchWatchdog` in [`server/lib/llmExtractorWatchdog.ts`](../server/lib/llmExtractorWatchdog.ts) hard-kills batch runs before they approach `maxDuration`; AbortController + generation counter prevents late-resolve cache clobber.
+- Per-route timeout discipline: each upstream adapter wraps fetch with a fail-fast timeout (Overpass, Open-Meteo, NIM all bounded).
 
 ---
 
