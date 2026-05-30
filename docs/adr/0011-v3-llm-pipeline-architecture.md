@@ -144,6 +144,44 @@ via module-level spacer. Redis cache at `geocode:fwd:constrained:<hash>`
 structured hierarchy plus deterministic geocoder is auditable in a way
 the LLM output alone is not.
 
+## Phase 36 Sub-block (appended 2026-05-29)
+
+**Context:** ADR-0011 documented the v3 pipeline as designed when v1 + v2 were
+deleted in Phase 29. Phases 30.1 + 34 then narrowed the runtime cascade further
+without re-authoring this ADR. Phase 36 is the public-docs sweep that brings
+README / runbook / degradation / architecture markdown + the OpenAPI spec
+into v1.5 reality; this sub-block updates ADR-0011 in the same lockstep so a
+reader of ADR-0011 alone gets the current shipped state.
+
+**Runtime cascade as shipped (post-Phase-34):**
+
+- **NIM** (qwen-235b instruct) — the only LLM provider invoked at runtime.
+  See [`docs/architecture/llm-pipeline-reliability.md`](../architecture/llm-pipeline-reliability.md)
+  §"Multi-Provider Cascade (Phase 34)" for the cascade-shape table.
+- **OpenRouter** — DORMANT per [ADR-0010 Phase 30.1 sub-block](0010-v1-5-llm-pipeline-narrowing-and-deletion.md#phase-301-sub-block-appended-2026-05-17).
+  `skipOpenRouter: true` at `server/lib/llmEventExtractor.v3.ts:622, 929`.
+  Free-tier probe landed in not-viable bucket; cascade construction at
+  `server/lib/freeClaudeRouter.ts:341-363` is unchanged and ready to fall
+  through if the dormancy decision is revisited.
+- **Cerebras + Groq** — DEFERRED per [ADR-0010 Phase 34 sub-block](0010-v1-5-llm-pipeline-narrowing-and-deletion.md#phase-34-sub-block-appended-2026-05-23).
+  Operator chose to skip provisioning; no adapter, no probe, no token-budget
+  counters. Restoration is a future-phase decision, not a regression.
+
+**Outcome:** The "v3 pipeline architecture" decision recorded in this ADR is
+REAFFIRMED — the architectural primitives (watchdog, DLQ, circuit breaker,
+token budget, 6-path resolver, parallel batches via concurrencyLimit,
+cron-only trigger) all remain load-bearing. What CHANGED is the provider
+set the architecture orchestrates at runtime: NIM-only at runtime as of
+Phase 34 close. The cascade-shape primitives are dormant-ready; no
+architectural rework is required to wake them.
+
+**Cross-references:**
+
+- [ADR-0010](0010-v1-5-llm-pipeline-narrowing-and-deletion.md) — narrowing decisions per phase.
+- [`docs/architecture/llm-pipeline-reliability.md`](../architecture/llm-pipeline-reliability.md) — current cascade-shape table.
+- [CLAUDE.md §LLM Event Pipeline](../../CLAUDE.md) — operator skim.
+- Phase 36 SUMMARY.md — full Phase 36 close-out context.
+
 ## Consequences
 
 ### Positive

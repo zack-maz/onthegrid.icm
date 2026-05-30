@@ -139,14 +139,14 @@ sequenceDiagram
 
 **Adapters:** [`server/adapters/gdelt.ts`](../../server/adapters/gdelt.ts),
 [`server/adapters/llm-provider.ts`](../../server/adapters/llm-provider.ts) (thin shim),
-[`server/lib/freeClaudeRouter.ts`](../../server/lib/freeClaudeRouter.ts) (NIM + OpenRouter cascade),
+[`server/lib/freeClaudeRouter.ts`](../../server/lib/freeClaudeRouter.ts) (cascade construction — declared NIM → OpenRouter; runtime NIM-only per Phase 30.1 + 34),
 [`server/adapters/nominatim.ts`](../../server/adapters/nominatim.ts)
-**Pipeline:** [`server/lib/llmEventExtractor.v3.ts`](../../server/lib/llmEventExtractor.v3.ts),
+**Pipeline:** [`server/lib/llmEventExtractor.v3.ts`](../../server/lib/llmEventExtractor.v3.ts) (sole extractor — v1/v2 deleted Phase 29),
 [`server/lib/llmExtractionPipeline.ts`](../../server/lib/llmExtractionPipeline.ts),
 [`server/lib/llmResolver.ts`](../../server/lib/llmResolver.ts) (6-path geocoding)
 **Read route:** [`server/routes/events.ts`](../../server/routes/events.ts) (cache-only — Phase 27.4.6 anti-pattern #17 forbids fire-and-forget LLM from this path)
-**Writer:** [`server/routes/cron-refresh-events.ts`](../../server/routes/cron-refresh-events.ts) (daily 4am UTC, Bearer-gated by Vercel — sole writer of `events:llm:v3`)
-**Cache keys:** `events:llm:v3` (terminal, LLM-enriched, sole reader), `events:gdelt` (raw GDELT fallback), `events:llm:v3:partial` (observability-only per-batch incremental writes)
+**Writer:** [`server/routes/refresh-events-cron.ts`](../../server/routes/refresh-events-cron.ts) (daily 4am UTC, Bearer-gated — sole writer of `events:llm:v3` per Phase 29 D-08 cron-only discipline)
+**Cache keys:** `events:llm:v3` (terminal, LLM-enriched, sole reader; only key written by the cascade), `events:gdelt` (raw GDELT fallback served via Pitfall 1 bridge); `events:llm:v3:partial` retired Phase 35 SIMPLIFY-02 (Hobby-era 300s mitigation; Pro 800s makes terminal writes reliable)
 **Cron cooldown key:** `events:llm-process-ts` (15 min cooldown on the cron writer — cold-cache self-heal bypasses when `events:llm:v3` is empty)
 **Backfill key:** `events:backfill-ts` (1 hour cooldown on GDELT raw backfill)
 **Polling cadence:** 15 min from the browser via
@@ -160,8 +160,8 @@ sequenceDiagram
     participant Cron as /api/cron/refresh-events
     participant Cache as Upstash Redis
     participant GDELT as GDELT v2 master list
-    participant NIM as NVIDIA NIM (qwen-235b instruct)
-    participant OR as OpenRouter (fallback)
+    participant NIM as NVIDIA NIM (qwen-235b instruct — only active provider runtime)
+    participant OR as OpenRouter (declared fallback; dormant per Phase 30.1)
     participant Nominatim as OSM Nominatim
 
     note over Browser,API: Read path — never writes events:llm:v3
@@ -202,21 +202,21 @@ sequenceDiagram
         alt Cooldown expired
             Cron->>Cron: runRefreshExtraction({triggeredBy:"cron"})
         else Cooldown active
-            Cron-->>Cron: 200 {skipped:"cooldown"} (no extraction)
+            Cron-->>Cron: 200 {dispatched:false, reason:"cooldown"} (no extraction)
         end
     end
     Cron->>GDELT: fetchEvents() [recent window]
     GDELT-->>Cron: rows
     Cron->>Cron: groupGdeltRows() — cluster by date + CAMEO root + 50km proximity
     Cron->>Cron: concurrencyLimit(LLM_V3_CONCURRENCY, default 12) FIFO queue
-    loop Per batch (BATCH_SIZE=2) — parallel up to limit
-        Cron->>Cron: withBatchWatchdog(90s hard / 60s soft)
+    loop Per batch (BATCH_SIZE=2 default; env-tunable per Phase 30 D-07) — parallel up to limit
+        Cron->>Cron: withBatchWatchdog(120s hard-kill, single-tier per Phase 30 SIMPLIFY-03)
         Cron->>NIM: callLLM (qwen-235b instruct, JSON schema)
         alt NIM available + within token budget
             NIM-->>Cron: structured location hierarchy + 5-type classification
         else NIM throttled / circuit breaker open
-            Cron->>OR: callLLM (OpenRouter fallback)
-            OR-->>Cron: structured response
+            note over Cron,OR: OpenRouter dormant per Phase 30.1 (skipOpenRouter:true at v3.ts:622,929);<br/>batches drop; /api/events serves raw GDELT via Pitfall 1 bridge.
+            Cron-->>Cron: DLQ batch with reason "skipped:breaker" or "timeout_watchdog"
         end
         Cron->>Cron: Zod safeParse — DLQ invalid entries
         loop Per extracted event
@@ -225,9 +225,8 @@ sequenceDiagram
             Cron->>Nominatim: forwardGeocodeConstrained() — ME viewbox, 1 req/s
             Nominatim-->>Cron: {lat, lng, provenance}
         end
-        Cron->>Cache: cacheSetSafe("events:llm:v3:partial", envelope) [observability]
-        Cron->>Cache: cacheSetSafe("events:llm:v3", entities[]) [terminal-key write]
     end
+    Cron->>Cache: mergeAndPersistLlmEntities() — single terminal write to events:llm:v3 at end-of-run (Phase 30 SIMPLIFY-01)
     Cron->>Cache: record events:llm-process-ts + cron:lastTick:refresh-events
 ```
 
@@ -250,22 +249,34 @@ sequenceDiagram
   with valid Bearer skips the 15-min cooldown. Use cases:
   post-bug-fix re-extraction, post-cache-flush warm-up, testing during
   deploys.
-- **Provider cascade (Phase 29 D-01).** `server/lib/freeClaudeRouter.ts`
-  tries NVIDIA NIM (`qwen-3-235b-a22b-instruct-2507`) first, then
-  OpenRouter as fallback. Cerebras and Groq factories were deleted in
-  Phase 29 Plan 03; their adapter source files are gone from the runtime
-  path. `isLLMConfigured()` returns true iff `NVIDIA_NIM_API_KEY` OR
-  `OPENROUTER_API_KEY` is set.
+- **Provider cascade (Phase 29 D-01 declaration → Phase 30.1 + 34 runtime
+  reality).** `server/lib/freeClaudeRouter.ts:341-363` constructs a
+  declared NIM → OpenRouter cascade. At runtime the cascade is
+  **NIM-only**: `skipOpenRouter: true` is hardcoded at
+  `server/lib/llmEventExtractor.v3.ts:622, 929` per Phase 30.1 (free-tier
+  probe landed in not-viable bucket, 27/30 rate_limited). Cerebras + Groq
+  were deleted Phase 29 Plan 03 (SIMPLIFY-04) and remain deferred per
+  Phase 34 (operator chose to skip free-tier provisioning; no adapter, no
+  probe). `isLLMConfigured()` returns true iff `NVIDIA_NIM_API_KEY` is
+  set; the LLM-optional architecture (ADR-0010 D-04) guarantees the map
+  never goes blank — raw GDELT serves via Pitfall 1 when no provider is
+  reachable. See [`llm-pipeline-reliability.md`](./llm-pipeline-reliability.md)
+  §"Multi-Provider Cascade (Phase 34)" for the cascade-shape table.
 - **Parallel batches (Phase 27.4.4).** `server/lib/concurrencyLimit.ts`
   FIFO queue. `LLM_V3_CONCURRENCY` env (default 12) drives ~26 req/min
   under NIM's 40/min ceiling. Set to `1` for fully sequential rollback.
-  `BATCH_SIZE=2` means each LLM call handles 2 event groups.
-- **Watchdog (Phase 27.4.1).** `withBatchWatchdog(batchFn, opts)` wraps
-  each per-batch promise with `Promise.race([batchCall, timeoutPromise])`
-  - AbortController + generation-counter late-resolve guard. Default 90s
-    hard-kill + 60s soft-warn. Timed-out batches DLQ each group with
-    `reason: 'timeout_watchdog'`; the loop continues to the next batch —
-    timeout on batch N does NOT abort the run.
+  `LLM_BATCH_SIZE` (Phase 30 D-07; default 2, env-tunable) means each
+  LLM call handles 2 event groups.
+- **Watchdog (Phase 27.4.1 → Phase 30 SIMPLIFY-03 single-tier).**
+  `withBatchWatchdog(batchFn, opts)` wraps each per-batch promise with
+  `Promise.race([batchCall, timeoutPromise])` + AbortController +
+  generation-counter late-resolve guard. **Single-tier hard-kill**
+  at `LLM_BATCH_TIMEOUT_MS` (default 120000ms post-Phase-30; was
+  90s pre-Phase-30 with 60s soft-warn). Soft-warn tier eliminated
+  Phase 30 SIMPLIFY-03 — Cerebras-era residue with no signal under
+  NIM. Timed-out batches DLQ each group with
+  `reason: 'timeout_watchdog'`; the loop continues to the next batch —
+  timeout on batch N does NOT abort the run.
 - **6-path resolver (Phase 27.4 Plan 05).** `server/lib/llmResolver.ts`
   `resolveLocation(hierarchy, ctx)` dispatches in order:
   `own-site-snapshot` → `poi-amenity-nominatim` → `nominatim-direct` →
@@ -273,17 +284,22 @@ sequenceDiagram
   `bellingcat-coord-passthrough`. Never returns a coord without
   provenance. 1-req/s Nominatim throttle. Redis cache at
   `geocode:fwd:constrained:<hash>` (30d logical TTL).
-- **Terminal-key writes (Phase 28.2.6 + ADR-0009).** Each batch writes
-  the full ConflictEventEntity[] to `events:llm:v3` as a terminal-shape
-  array. The observability envelope (`{events, progress, complete}`)
-  writes to `events:llm:v3:partial` only — readers never see envelope
-  shape on the terminal key. This split was hardened after the v2 incident
-  where a per-batch durability flush violated the `events.map is not a
-function` consumer contract (see ADR-0009).
+- **Terminal-key writes (Phase 28.2.6 + ADR-0009 → Phase 30 SIMPLIFY-01
+  end-of-run write → Phase 35 SIMPLIFY-02 partial-key retired).** The
+  v3 extractor performs a single `mergeAndPersistLlmEntities` call at
+  end-of-run that writes the full `ConflictEventEntity[]` to
+  `events:llm:v3` as a terminal-shape array. The per-batch
+  `events:llm:v3:partial` observability envelope was retired Phase 35
+  SIMPLIFY-02 — it was a Hobby-era 300s-budget mitigation that no
+  longer earned its keep under Vercel Pro's 800s ceiling. The
+  writer/reader-shape-isolation discipline preserved in ADR-0009
+  remains load-bearing: readers of the terminal key never see the
+  envelope shape (since the envelope no longer exists in production).
 - **Token budget (Phase 27.4).** Per-provider daily caps tracked in
-  `llm:tokens:{provider}:YYYY-MM-DD` (48h TTL): NIM 1M/day, OpenRouter
-  per-key. Soft 0.8 + hard 0.95 caps short-circuit the provider when
-  exceeded.
+  `llm:tokens:{provider}:YYYY-MM-DD` (48h TTL): NIM 1M/day. OpenRouter,
+  Cerebras, and Groq counters absent at runtime (OR dormant Phase 30.1;
+  Cerebras + Groq deferred Phase 34). Soft 0.8 + hard 0.95 caps
+  short-circuit the provider when exceeded.
 - **HTTP GDELT endpoint.** GDELT's master list is served over HTTP because
   their TLS certificate was problematic — the `GDELT_LASTUPDATE_URL`
   constant is explicitly `http://`. Known quirk, not a bug.

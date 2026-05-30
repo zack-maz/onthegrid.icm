@@ -163,6 +163,8 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
+_Last updated: 2026-05-30 — Phase 36 (Public Docs Sweep + OpenAPI Additions) complete: 6/6 plans, verification 11/11. README, 12 architecture markdown files (21 Mermaid blocks audited), runbook (§6 rewrite + §13-§16 SRE playbooks), degradation (Pitfall 1 contract + v3 → raw GDELT chain) brought into v1.4 + v1.5 reality. server/openapi.yaml: 14 → 19 endpoints; securitySchemes split (cronSecret + operatorBearer); 4 reusable component schemas added; ConflictEventEntity.type enum corrected 11-value pre-Phase-27 → canonical 5-value (airstrike, on_ground, explosion, targeted, other). New Redocly-driven `openapi-lint.test.ts` vitest drift gate ships as the structural primitive. Phase 37 (ADR-0010 + LLM-RELI-07 acceptance gate observation) is the milestone-close gate by construction — unblocks v1.6 promotion when 3× consecutive `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true`._
+
 _Last updated: 2026-05-11 — Phase 29 (LLM Provider Chain Narrowing + LLM-Optional Architecture + Vercel Pro Upgrade + CLAUDE.md Trim) complete: 13/13 plans, verification 8/8. Cascade narrowed to NIM + OpenRouter; v1+v2 extractors + operator override surface deleted; Vercel Pro `maxDuration: 800` locked; CLAUDE.md trimmed 73.3% to 5018 tokens; ADR-0010 stub captured. GitHub repo renamed `zack-maz/onthegrid.icm` → `zack-maz/otg-iran-monitor`._
 
 _Last updated: 2026-05-08 — milestone v1.5 LLM Reliability & Reveal Prep started (predecessor v1.4 GDELT Redo & Performance shipped same day; 18 phases; 999.5 load test deferred to v1.6 pending v1.5 acceptance gate of 3 consecutive `prod-connectivity-audit.yml` exit-0 runs)._

@@ -1,0 +1,34 @@
+# Phase 36 D-08 — Redocly lint config for the OpenAPI drift gate.
+#
+# The drift gate (server/__tests__/openapi/openapi-lint.test.ts) is designed
+# to fail CI on structural errors in `server/openapi.yaml`: missing $refs,
+# YAML syntax errors, missing required fields, unresolved security schemes.
+#
+# It is NOT designed to enforce stylistic conventions (operationId on every
+# endpoint, no localhost server URLs, 4XX response on every health endpoint).
+# Those are downgraded to `warn` so the test stays a true drift gate rather
+# than a style nag.
+#
+# Rules kept at `error` severity (drift-relevant):
+#   - All $ref / spec-syntax / schema-shape rules (recommended defaults).
+#
+# Rules downgraded to `warn` (pre-existing style debt; out of Phase 36 scope):
+#   - operation-operationId   — 14 endpoints missing operationId; covered in
+#                               a future "API hardening" phase.
+#   - operation-4xx-response  — health probes intentionally only declare 2xx
+#                               (they degrade-open and never propagate 4xx).
+#   - no-server-example.com   — the localhost dev URL is intentional for
+#                               local-dev clients; production URL is first.
+#   - security-defined        — public data endpoints (/api/flights et al.)
+#                               are unauthenticated by design (rate limited
+#                               instead); covered by `security: []` blocks
+#                               added in Phase 36 D-06.
+#                               Bearer-gated endpoints declare an explicit
+#                               security block; the rule stays informative.
+extends:
+  - recommended
+rules:
+  operation-operationId: warn
+  operation-4xx-response: warn
+  no-server-example.com: warn
+  security-defined: warn

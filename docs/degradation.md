@@ -68,6 +68,40 @@ false}`.** Consumed by Vercel cron and any external monitoring.
   — mocks `@upstash/redis` to throw on every call and asserts the
   contract above for all 8 cached routes.
 
+### Pitfall 1 contract — the "map never goes blank" invariant
+
+The v3 LLM pipeline is **optional**. When `events:llm:v3` is empty
+or stale, `/api/events` serves raw GDELT via the Pitfall 1 cache
+bridge in
+[`server/routes/events.ts`](../server/routes/events.ts) (reading
+the `events:gdelt` cache populated by the raw-GDELT adapter). The
+map never goes blank — only enrichment quality degrades from v3
+(CAMEO classification + LLM-resolved precise coordinates) to raw
+GDELT (CAMEO classification only, ACTIONGEO coordinates).
+
+This contract is **invariant** and proven by
+[`server/__tests__/resilience/redis-death.test.ts`](../server/__tests__/resilience/redis-death.test.ts).
+When the test kills the Upstash Redis connection mid-request, the
+system continues to serve raw GDELT events; the map renders with
+degraded enrichment but is never blank.
+
+**v1 and v2 LLM extractors were deleted in Phase 29** (see
+[ADR-0010](./adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md)).
+No fallback to a prior pipeline version exists in the codebase.
+The terminal fallback is raw GDELT — the same data source the LLM
+enriches when healthy. The full chain documented in this contract
+is:
+
+```text
+v3 (cron-driven extraction, daily 04:00 UTC) → raw GDELT (Pitfall 1 cache bridge terminal fallback)
+```
+
+Older planning artifacts (ROADMAP.md success criteria, etc.) may
+reference a legacy multi-version cascade framing that names v1
+and v2 as intermediate fallbacks — that wording predates Phase 29
+deletion and is preserved in planning text as historical brief.
+Public docs (this file) describe shipped reality.
+
 ---
 
 ## Data Source Layer: 8 upstream APIs
@@ -198,8 +232,12 @@ timestamps that tick every second.
 limiter (see
 [`server/middleware/rateLimit.ts`](../server/middleware/rateLimit.ts)):
 
-1. `rateLimiters.public` baseline tier at 6 req/min per IP,
-   prefixed `ratelimit:public`, applied to every `/api/*` request.
+1. `rateLimiters.public` baseline tier at 60 req/min per IP
+   (raised from 6 req/min in Phase 28.1 — see commit context in
+   `server/middleware/rateLimit.ts`), prefixed `ratelimit:public`,
+   applied to every `/api/*` request. Skipped on a valid
+   `DASHBOARD_PASSWORD` Bearer via `timingSafeEqual` constant-time
+   compare (per-endpoint tiers below still apply).
 2. Per-endpoint limiter (`rateLimiters.flights`, `.events`, etc.)
    with tuned ceilings per route.
 

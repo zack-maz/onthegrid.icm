@@ -65,21 +65,21 @@ These requirements turn the Vercel Pro upgrade and the v3-cascade-narrowing deci
 
 ### Documentation — Public (README + architecture + runbook + ADRs)
 
-- [ ] **DOCS-PUB-01**: `README.md` updated for the v1.4 surface — domain rename to `otg-iran-monitor.vercel.app`, v3 LLM pipeline, dashboard merge into the API Health tab, Bearer-bypass rate limiter, manual-trigger `prod-connectivity-audit.yml`. Hero GIF / layer screenshots regenerated if visibly stale.
-- [ ] **DOCS-PUB-02**: `docs/architecture/` (10 markdown files, 21 Mermaid diagrams) updated for v1.4 LLM pipeline shape. Data-flow diagrams reflect the v3 cron-driven extraction, Pitfall 1 cache bridge, 6-path resolver, and the post-1.5 narrowed NIM + OpenRouter cascade.
-- [ ] **DOCS-PUB-03**: `docs/runbook.md` (676 lines) gains v1.4 + v1.5 incidents — NIM throttle handling, cron architecture lessons (28.2.6 fire-and-forget IIFE diagnosis), force-trigger runbook (`?force=true`), prod-connectivity-audit retry path.
-- [ ] **DOCS-PUB-04**: New ADR (ADR-0010 — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot) documenting the v1.5 LLM-pipeline decisions: stay on v3, narrow active providers to NIM + OpenRouter, retire Cerebras + Groq from runtime cascade, LLM-optional architecture. Captures the rationale, trade-offs, and rollback plan.
-- [ ] **DOCS-PUB-05**: Degradation contract (`docs/degradation.md`) reflects the current Pitfall 1 cache bridge behavior. The v3 → v2 → v1 → raw GDELT fallback chain is documented as the explicit "map never goes blank" contract.
+- [x] **DOCS-PUB-01**: `README.md` updated for the v1.4 surface — domain rename to `otg-iran-monitor.vercel.app`, v3 LLM pipeline, dashboard merge into the API Health tab, Bearer-bypass rate limiter, manual-trigger `prod-connectivity-audit.yml`. Hero GIF / layer screenshots regenerated if visibly stale. **(Phase 36 close 2026-05-30: rate-limit drift fix at line 207; new ~99-line `## LLM Enrichment` section with 6 sub-blocks including Production health verification + API Health dashboard tab + Redis key registry; commits `61e8cba` + `9e2fe6b`.)**
+- [x] **DOCS-PUB-02**: `docs/architecture/` (10 markdown files, 21 Mermaid diagrams) updated for v1.4 LLM pipeline shape. Data-flow diagrams reflect the v3 cron-driven extraction, Pitfall 1 cache bridge, 6-path resolver, and the post-1.5 narrowed NIM + OpenRouter cascade. **(Phase 36 close 2026-05-30: actual is 12 markdown files / 21 Mermaid blocks — Plan 36-02 audited all 12 + 21; 7 files edited + 5 verified-clean; 3 Mermaid blocks edited + 18 verified-clean; ADR-0011 gained Phase 36 sub-block per D-21. See 36-SUMMARY.md framing-gap callout #2 for file-count + diagram-count reconciliation.)**
+- [x] **DOCS-PUB-03**: `docs/runbook.md` (676 lines) gains v1.4 + v1.5 incidents — NIM throttle handling, cron architecture lessons (28.2.6 fire-and-forget IIFE diagnosis), force-trigger runbook (`?force=true`), prod-connectivity-audit retry path. **(Phase 36 close 2026-05-30: §6 rewrite-in-place — Hobby 10s → Pro 800s — with old-anchor shim; §13-§16 SRE-template appendage covering all 4 incident playbooks; commits `0cef703` + `5ef53e1`.)**
+- [ ] **DOCS-PUB-04**: New ADR (ADR-0010 — `docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md` was committed 2026-04-24 and already occupies the 0009 slot) documenting the v1.5 LLM-pipeline decisions: stay on v3, narrow active providers to NIM + OpenRouter, retire Cerebras + Groq from runtime cascade, LLM-optional architecture. Captures the rationale, trade-offs, and rollback plan. **(Phase 37 territory — ADR-0010 milestone-close sub-block. Phase 36 closed without touching DOCS-PUB-04 per CONTEXT D-04 + plan-specific notes.)**
+- [x] **DOCS-PUB-05**: Degradation contract (`docs/degradation.md`) reflects the current Pitfall 1 cache bridge behavior. The v3 → v2 → v1 → raw GDELT fallback chain is documented as the explicit "map never goes blank" contract. **(Phase 36 close 2026-05-30: actual chain is v3 → raw GDELT — no v1, no v2 — per Phase 29 deletion. Plan 36-04 added Pitfall 1 sub-section under Cache Layer with explicit "map never goes blank" contract + redis-death.test.ts citation + ADR-0010 cross-link; commit `62c2bdb`. See 36-SUMMARY.md framing-gap callout #3 for chain reconciliation.)**
 
 ### Documentation — API (OpenAPI 3.0.3 spec)
 
-- [ ] **DOCS-API-01**: `/api/audit-status` (Phase 28.2 W6 sidecar reader) added to the OpenAPI spec — request shape, response schema (incl. the `allTiersGreen` + `tierStatus` fields added in Phase 28.2.5 D-04), auth posture (no Bearer required, degrade-open).
-- [ ] **DOCS-API-02**: `/api/operator-status` (Phase 28.2 W5 aggregator) added to the OpenAPI spec — Bearer-required, response shape covers `audit24h` + `byBearer` + `pinTtl` + `advEval`.
-- [ ] **DOCS-API-03**: `/api/events/llm-pipeline` (Phase 27.4 runtime override) added to the OpenAPI spec — POST with `{version: 'v1'|'v2'|'v3'|null}` body, GET to read current. Bearer-required in prod.
-- [ ] **DOCS-API-04**: `/api/events/llm-replay/:groupKey` (Phase 27.4 dev-only replay) added to the OpenAPI spec — explicitly marked dev-only via Pitfall 6 dual-gate. Returns `{old, new}` diff WITHOUT writing to cache.
-- [ ] **DOCS-API-05**: `/api/cron/refresh-events` (Phase 27.4.6 cron path) added to the OpenAPI spec — Bearer-required (CRON_SECRET in cron, DASHBOARD_PASSWORD operator force-trigger). `?force=true` query param documented.
-- [ ] **DOCS-API-06**: `/api/cron/health` (daily Redis ping + source freshness + eval-drift) added to the OpenAPI spec — CRON_SECRET-gated.
-- [ ] **DOCS-API-07**: `/api/cron/warm` (daily Overpass sites + water pre-warm) added to the OpenAPI spec — CRON_SECRET-gated.
+- [x] **DOCS-API-01**: `/api/audit-status` (Phase 28.2 W6 sidecar reader) added to the OpenAPI spec — request shape, response schema (incl. the `allTiersGreen` + `tierStatus` fields added in Phase 28.2.5 D-04), auth posture (no Bearer required, degrade-open). **(Phase 36 close 2026-05-30: Plan 36-05 commit `9e726ef`; `$ref`s `AuditTierStatus` reusable schema.)**
+- [x] **DOCS-API-02**: `/api/operator-status` (Phase 28.2 W5 aggregator) added to the OpenAPI spec — Bearer-required, response shape covers `audit24h` + `byBearer` + `pinTtl` + `advEval`. **(Phase 36 close 2026-05-30: Plan 36-05 commit `9e726ef`; operatorBearer secured; `$ref`s `ByBearerMap` reusable schema.)**
+- [x] **DOCS-API-03**: `/api/events/llm-pipeline` (Phase 27.4 runtime override) added to the OpenAPI spec — POST with `{version: 'v1'|'v2'|'v3'|null}` body, GET to read current. Bearer-required in prod. **(Phase 36 close 2026-05-30: documented as `/api/events/llm-status` per Phase 29 D-02 part A deletion of `/llm-pipeline` GET+POST. Plan 36-05 commit `9e726ef`; `$ref`s `LlmPipelineState` reusable schema. See 36-SUMMARY.md framing-gap callout #6.)**
+- [x] **DOCS-API-04**: `/api/events/llm-replay/:groupKey` (Phase 27.4 dev-only replay) added to the OpenAPI spec — explicitly marked dev-only via Pitfall 6 dual-gate. Returns `{old, new}` diff WITHOUT writing to cache. **(Phase 36 close 2026-05-30: Plan 36-05 commit `9e726ef`; operatorBearer secured; `$ref`s `LlmReplayDiff` reusable schema.)**
+- [x] **DOCS-API-05**: `/api/cron/refresh-events` (Phase 27.4.6 cron path) added to the OpenAPI spec — Bearer-required (CRON_SECRET in cron, DASHBOARD_PASSWORD operator force-trigger). `?force=true` query param documented. **(Phase 36 close 2026-05-30: documented as `cronSecret` only — refresh-events-cron.ts:46-55 validates CRON_SECRET only, not DASHBOARD_PASSWORD. Plan 36-05 commit `9e726ef`. See 36-SUMMARY.md framing-gap callout #6.)**
+- [x] **DOCS-API-06**: `/api/cron/health` (daily Redis ping + source freshness + eval-drift) added to the OpenAPI spec — CRON_SECRET-gated. **(Phase 36 close 2026-05-30: pre-existing entry verified + retagged from Health → Cron + cronSecret-secured + description expanded to cover runEval + runAdversarialEval folds. Plan 36-05 commit `9e726ef`.)**
+- [x] **DOCS-API-07**: `/api/cron/warm` (daily Overpass sites + water pre-warm) added to the OpenAPI spec — CRON_SECRET-gated. **(Phase 36 close 2026-05-30: pre-existing entry verified + retagged from Health → Cron + cronSecret-secured + description expanded to cover `cron:lastTick:warm` writer. Plan 36-05 commit `9e726ef`.)**
 
 ## v2 Requirements
 
@@ -128,55 +128,55 @@ Explicitly excluded from v1.5. Documented to prevent scope creep.
 
 Empty initially; populated by the roadmap agent during Step 10. Each requirement maps to exactly one phase.
 
-| Requirement  | Phase | Status                                                           |
-| ------------ | ----- | ---------------------------------------------------------------- |
-| LLM-RELI-01  | 29    | Complete                                                         |
-| LLM-RELI-02  | 30    | Complete                                                         |
-| LLM-RELI-03  | 30    | Complete                                                         |
-| LLM-RELI-04  | 30    | Complete                                                         |
-| LLM-RELI-05  | 29    | Complete                                                         |
-| LLM-RELI-06  | 31    | Validated single-day (caveat — Phase 31 closed early 2026-05-19) |
-| LLM-RELI-07  | 37    | Pending                                                          |
-| LLM-RELI-08  | 34    | Closed (cerebras-groq-deferred — operator chose to skip probe)   |
-| LLM-RELI-09  | 34    | Closed (cerebras-groq-deferred — no adapter restored)            |
-| LLM-RELI-10  | 34    | Closed (deferred — no per-provider eval infrastructure)          |
-| LLM-RELI-11  | 34    | Closed (deferred — DLQ baseline remains as known failure mode)   |
-| GHOST-01     | 32    | Complete                                                         |
-| GHOST-02     | 32    | Complete                                                         |
-| GHOST-03     | 32    | Complete                                                         |
-| GHOST-04     | 32    | Complete                                                         |
-| GHOST-05     | 32    | Complete                                                         |
-| ACTOR-01     | 33    | Pending                                                          |
-| ACTOR-02     | 33    | Pending                                                          |
-| ACTOR-03     | 33    | Pending                                                          |
-| ACTOR-04     | 33    | Complete                                                         |
-| ACTOR-05     | 33    | Pending                                                          |
-| DOCS-INT-01  | 29    | Complete                                                         |
-| DOCS-INT-02  | 35    | Complete (2026-05-27)                                            |
-| DOCS-INT-03  | 35    | Complete (2026-05-27)                                            |
-| REDIS-OPT-01 | 35    | Complete (2026-05-27)                                            |
-| REDIS-OPT-02 | 35    | Complete (2026-05-27)                                            |
-| REDIS-OPT-03 | 35    | Complete (2026-05-27)                                            |
-| REDIS-OPT-04 | 35    | Complete (2026-05-27)                                            |
-| SIMPLIFY-01  | 30    | Complete                                                         |
-| SIMPLIFY-02  | 35    | Complete (2026-05-27)                                            |
-| SIMPLIFY-03  | 30    | Complete                                                         |
-| SIMPLIFY-04  | 29    | Complete                                                         |
-| SIMPLIFY-05  | 35    | Complete (2026-05-27)                                            |
-| SIMPLIFY-06  | 29    | Complete                                                         |
-| SIMPLIFY-07  | 35    | Complete (2026-05-27)                                            |
-| DOCS-PUB-01  | 36    | Pending                                                          |
-| DOCS-PUB-02  | 36    | Pending                                                          |
-| DOCS-PUB-03  | 36    | Pending                                                          |
-| DOCS-PUB-04  | 37    | Pending                                                          |
-| DOCS-PUB-05  | 36    | Pending                                                          |
-| DOCS-API-01  | 36    | Pending                                                          |
-| DOCS-API-02  | 36    | Pending                                                          |
-| DOCS-API-03  | 36    | Pending                                                          |
-| DOCS-API-04  | 36    | Pending                                                          |
-| DOCS-API-05  | 36    | Pending                                                          |
-| DOCS-API-06  | 36    | Pending                                                          |
-| DOCS-API-07  | 36    | Pending                                                          |
+| Requirement  | Phase | Status                                                                                                                           |
+| ------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------- |
+| LLM-RELI-01  | 29    | Complete                                                                                                                         |
+| LLM-RELI-02  | 30    | Complete                                                                                                                         |
+| LLM-RELI-03  | 30    | Complete                                                                                                                         |
+| LLM-RELI-04  | 30    | Complete                                                                                                                         |
+| LLM-RELI-05  | 29    | Complete                                                                                                                         |
+| LLM-RELI-06  | 31    | Validated single-day (caveat — Phase 31 closed early 2026-05-19)                                                                 |
+| LLM-RELI-07  | 37    | Pending                                                                                                                          |
+| LLM-RELI-08  | 34    | Closed (cerebras-groq-deferred — operator chose to skip probe)                                                                   |
+| LLM-RELI-09  | 34    | Closed (cerebras-groq-deferred — no adapter restored)                                                                            |
+| LLM-RELI-10  | 34    | Closed (deferred — no per-provider eval infrastructure)                                                                          |
+| LLM-RELI-11  | 34    | Closed (deferred — DLQ baseline remains as known failure mode)                                                                   |
+| GHOST-01     | 32    | Complete                                                                                                                         |
+| GHOST-02     | 32    | Complete                                                                                                                         |
+| GHOST-03     | 32    | Complete                                                                                                                         |
+| GHOST-04     | 32    | Complete                                                                                                                         |
+| GHOST-05     | 32    | Complete                                                                                                                         |
+| ACTOR-01     | 33    | Pending                                                                                                                          |
+| ACTOR-02     | 33    | Pending                                                                                                                          |
+| ACTOR-03     | 33    | Pending                                                                                                                          |
+| ACTOR-04     | 33    | Complete                                                                                                                         |
+| ACTOR-05     | 33    | Pending                                                                                                                          |
+| DOCS-INT-01  | 29    | Complete                                                                                                                         |
+| DOCS-INT-02  | 35    | Complete (2026-05-27)                                                                                                            |
+| DOCS-INT-03  | 35    | Complete (2026-05-27)                                                                                                            |
+| REDIS-OPT-01 | 35    | Complete (2026-05-27)                                                                                                            |
+| REDIS-OPT-02 | 35    | Complete (2026-05-27)                                                                                                            |
+| REDIS-OPT-03 | 35    | Complete (2026-05-27)                                                                                                            |
+| REDIS-OPT-04 | 35    | Complete (2026-05-27)                                                                                                            |
+| SIMPLIFY-01  | 30    | Complete                                                                                                                         |
+| SIMPLIFY-02  | 35    | Complete (2026-05-27)                                                                                                            |
+| SIMPLIFY-03  | 30    | Complete                                                                                                                         |
+| SIMPLIFY-04  | 29    | Complete                                                                                                                         |
+| SIMPLIFY-05  | 35    | Complete (2026-05-27)                                                                                                            |
+| SIMPLIFY-06  | 29    | Complete                                                                                                                         |
+| SIMPLIFY-07  | 35    | Complete (2026-05-27)                                                                                                            |
+| DOCS-PUB-01  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
+| DOCS-PUB-02  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
+| DOCS-PUB-03  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
+| DOCS-PUB-04  | 37    | Pending                                                                                                                          |
+| DOCS-PUB-05  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
+| DOCS-API-01  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
+| DOCS-API-02  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
+| DOCS-API-03  | 36    | Complete (2026-05-30 — Phase 36 close; /llm-status not /llm-pipeline per Phase 29 D-02 part A — framing gap #6 in 36-SUMMARY.md) |
+| DOCS-API-04  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
+| DOCS-API-05  | 36    | Complete (2026-05-30 — Phase 36 close; cronSecret-only per refresh-events-cron.ts:46-55 — framing gap #6 in 36-SUMMARY.md)       |
+| DOCS-API-06  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
+| DOCS-API-07  | 36    | Complete (2026-05-30 — Phase 36 close)                                                                                           |
 
 **Coverage:**
 
@@ -188,4 +188,4 @@ Empty initially; populated by the roadmap agent during Step 10. Each requirement
 ---
 
 _Requirements defined: 2026-05-09_
-_Last updated: 2026-05-09 after roadmap creation — 36/36 requirements mapped to Phases 29–36._
+_Last updated: 2026-05-30 after Phase 36 close — DOCS-PUB-01/02/03/05 + DOCS-API-01..07 flipped to Complete; DOCS-PUB-04 deferred to Phase 37 (ADR-0010 milestone-close sub-block) per CONTEXT D-04._

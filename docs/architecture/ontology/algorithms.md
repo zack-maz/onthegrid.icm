@@ -393,13 +393,16 @@ is O(n) for n notifications and O(1) per item.
 
 ---
 
-## 9. LLM event extraction (Phase 27)
+## 9. LLM event extraction (Phase 27 → v3 narrowed Phase 29 / 30 / 30.1 / 34 / 35)
 
 **Files:**
 [`server/lib/eventGrouping.ts`](../../../server/lib/eventGrouping.ts),
-[`server/lib/llmEventExtractor.ts`](../../../server/lib/llmEventExtractor.ts)
+[`server/lib/llmEventExtractor.v3.ts`](../../../server/lib/llmEventExtractor.v3.ts) (sole extractor — v1/v2 deleted Phase 29 SIMPLIFY-04),
+[`server/lib/llmExtractionPipeline.ts`](../../../server/lib/llmExtractionPipeline.ts)
 **Supporting:**
 [`server/adapters/llm-provider.ts`](../../../server/adapters/llm-provider.ts),
+[`server/lib/freeClaudeRouter.ts`](../../../server/lib/freeClaudeRouter.ts) (declared cascade construction),
+[`server/lib/llmResolver.ts`](../../../server/lib/llmResolver.ts) (6-path geocoding resolver),
 [`server/adapters/nominatim.ts`](../../../server/adapters/nominatim.ts)
 **Purpose:** Transform raw GDELT CSV rows into structured, precisely
 geocoded conflict events with human-readable summaries.
@@ -415,43 +418,69 @@ geocoded conflict events with human-readable summaries.
    `groupGdeltRows()`: same SQLDATE + same CAMEO root code + within
    50 km geographic proximity. Each group represents a single
    real-world incident reported by multiple GDELT rows.
-2. **Batch LLM call.** Groups are batched (8 per call) and sent to
-   Cerebras (primary) or Groq (fallback) via the OpenAI SDK with a
-   `baseURL` swap. The prompt asks the LLM to classify each group
-   into one of the 5 `ConflictEventType` values and extract
-   structured data.
+2. **Batch LLM call.** Groups are batched (`LLM_BATCH_SIZE`, default 2
+   per Phase 30 D-07 env-tunable; previously 8 in v1) and dispatched
+   in parallel through `concurrencyLimit` (FIFO queue, default
+   `LLM_V3_CONCURRENCY=12`). Each call hits **NVIDIA NIM** (qwen-235b
+   instruct) — the sole active runtime provider as of Phase 34. The
+   prompt asks the LLM to classify each group into one of the 5
+   `ConflictEventType` values and extract structured data.
 3. **Zod validation.** The LLM response is parsed as JSON and
-   validated against a Zod schema. Invalid entries are silently
-   dropped; valid entries proceed.
-4. **Forward geocoding.** Location names extracted by the LLM are
-   geocoded via Nominatim's `/search` endpoint
-   (`forwardGeocode()` in `nominatim.ts`), respecting 1 req/s rate
-   limits. Results are Redis-cached for 30 days.
+   validated against a Zod schema. Invalid entries are DLQ'd to
+   `events:llm-dlq` (SADD bounded 200, 7d TTL); valid entries proceed.
+4. **6-path location resolver.** The LLM returns a structured location
+   hierarchy (not raw coords). `resolveLocation(hierarchy, ctx)`
+   dispatches through six paths in order: `own-site-snapshot` →
+   `poi-amenity-nominatim` → `nominatim-direct` →
+   `nominatim-verified-2pass` → `gdelt-actiongeo-fallback` →
+   `bellingcat-coord-passthrough`. Nominatim respects 1 req/s and
+   ME-viewbox constraints; results Redis-cached for 30 days at
+   `geocode:fwd:constrained:v2:<hash>`.
 5. **Enrichment.** Each validated event is merged back into the
    entity format with the new fields populated and
-   `llmProcessed: true` set.
+   `llmProcessed: true` set. The full batch result is held in memory
+   until the cron run completes, then written once to `events:llm:v3`
+   via `mergeAndPersistLlmEntities` (Phase 30 SIMPLIFY-01 terminal
+   end-of-run write).
 
 ### Decisions
 
-- **Cerebras primary, Groq fallback.** Cerebras offers 1M tokens/day
-  free with the `gpt-oss-120b` model; Groq offers 200K tokens/day
-  free. Both use OpenAI-compatible APIs, so the adapter is a single
-  file with a `baseURL` swap.
-- **8 groups per batch.** Empirically, larger batches hit context
-  limits on the free tiers. 8 keeps the prompt under ~4K tokens.
+- **NIM-only at runtime (Phase 30.1 + 34).** `freeClaudeRouter.ts`
+  constructs a declared NIM → OpenRouter cascade, but
+  `skipOpenRouter: true` at `llmEventExtractor.v3.ts:622, 929`
+  removes OpenRouter from the runtime path (Phase 30.1 — free-tier
+  probe landed in not-viable bucket, 27/30 rate_limited). Cerebras +
+  Groq were deleted Phase 29 SIMPLIFY-04 and remain deferred Phase
+  34 (operator chose to skip free-tier provisioning; no adapter, no
+  probe). See [`llm-pipeline-reliability.md`](../llm-pipeline-reliability.md)
+  §"Multi-Provider Cascade (Phase 34)" for the cascade-shape table.
+- **2 groups per batch (post Phase 30).** Phase 30 D-07 made
+  `LLM_BATCH_SIZE` env-tunable; default 2 because the eval-harness
+  fixture bundling bug (Phase 30 D-03) means the ±3pp regression
+  budget cannot be empirically validated for larger batches.
+  Operator can opt into 4 / 6 / 8 mid-incident without redeploy.
 - **Zod over manual parsing.** The LLM output is unpredictable.
   Zod's `safeParse` gives typed, validated output or a clean
-  rejection — no runtime surprises.
-- **15-minute cooldown.** LLM processing is triggered lazily on
-  `/api/events` cache miss, with a 15-minute cooldown
-  (`events:llm-process-ts` Redis key) to avoid hammering the free
-  tier on rapid cache invalidation.
-- **Graceful degradation.** If the LLM is down, unconfigured, or
-  returns garbage, the route falls back to raw GDELT events — the
-  same behavior as pre-Phase-27. The map never goes blank.
-- **Dual cache.** `events:llm` stores LLM-enriched events (preferred);
-  `events:gdelt` stores raw GDELT (fallback). The route checks
-  `events:llm` first.
+  rejection routed to the DLQ — no runtime surprises.
+- **Cron-only writer (Phase 29 anti-pattern #17).** LLM extraction
+  runs from `/api/cron/refresh-events` (daily 4am UTC, Bearer-gated)
+  ONLY. `/api/events` is cache-only — the Phase 27.4.6 anti-pattern
+  forbade re-introducing fire-and-forget extraction into the read
+  path after Vercel Fluid Compute silently killed v2's IIFE in
+  production. 15-min cooldown (`events:llm-process-ts`) is bypassed
+  by cold-cache self-heal when `events:llm:v3` is empty.
+- **Graceful degradation (Pitfall 1 cache bridge, ADR-0010 D-04).**
+  If NIM is down, the circuit breaker trips, the cron fails, or
+  `NVIDIA_NIM_API_KEY` is unset, `/api/events` serves raw GDELT via
+  the Pitfall 1 bridge in `server/routes/events.ts`. The map never
+  goes blank.
+- **Single terminal cache (`events:llm:v3`).** The v1/v2 keys
+  (`events:llm`, `events:llm:v2`) were deleted Phase 29 alongside
+  their extractors. The per-batch observability key
+  (`events:llm:v3:partial`) was retired Phase 35 SIMPLIFY-02 —
+  Hobby-era 300s mitigation that no longer earned its keep under
+  Vercel Pro's 800s ceiling. `events:gdelt` remains as the raw
+  fallback served by the Pitfall 1 bridge.
 
 ---
 
