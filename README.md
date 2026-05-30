@@ -203,7 +203,7 @@ Vercel Edge (CDN cache — s-maxage per endpoint)
     ▼
 Express createApp() (serverless function)
     │
-    ├── rateLimiters.public (6 req/min baseline)
+    ├── rateLimiters.public (60 req/min global tier)
     ├── rateLimiters.<endpoint> (per-endpoint ceilings)
     ├── cacheGetSafe() → Upstash Redis (CacheEntry<T>)
     │       │
@@ -365,12 +365,19 @@ These are the gaps that Phase 26.3 left open and Phase 26.4 closed:
    with dev-throw / prod-warn semantics. Wired into flights, events, water
    routes as proof-of-concept (3 of 14; the remaining 11 are a mechanical
    follow-up).
-4. **Live demo rate limit hardening (Phase 26.4-04)** —
-   `rateLimiters.public` baseline tier (6 req/min, prefix `ratelimit:public`)
+4. **Live demo rate limit hardening (Phase 26.4-04 → Phase 28.1 / 28.2 D-04)** —
+   `rateLimiters.public` global tier (60 req/min, prefix `ratelimit:public`)
    runs on every `/api/*` request before per-endpoint limiters, protecting
    the Redis command budget from scraper abuse once the demo URL is
-   published. `public/robots.txt` disallows `/api/*` and `/health` so
-   well-behaved crawlers never touch upstream APIs.
+   published. Was 6/min at Phase 26.4-04 land; raised to 60/min in Phase
+   28.1 after the dashboard's own ~9-hook cold-start burst (flights, ships,
+   events, news, markets, weather, water, waterPrecip, llmStatus) was
+   tripping the cap and rendering red connection dots. Phase 28.2 D-04
+   added Bearer bypass: a valid `DASHBOARD_PASSWORD` Bearer skips both the
+   global tier and the per-endpoint tiers (flights 120/min, ships 60/min,
+   events 20/min, etc.) via `timingSafeEqual` constant-time compare.
+   `public/robots.txt` disallows `/api/*` and `/health` so well-behaved
+   crawlers never touch upstream APIs.
 
 ### OpenAPI Contract
 
