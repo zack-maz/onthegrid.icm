@@ -23,13 +23,17 @@ not aspirational operations advice.
 3. [Overpass API timeout](#3-overpass-api-timeout)
 4. [AISStream WebSocket disconnect mid-collect](#4-aisstream-websocket-disconnect-mid-collect)
 5. [Yahoo Finance throttling](#5-yahoo-finance-throttling)
-6. [Vercel function timeout (10-second limit)](#6-vercel-function-timeout-10-second-limit)
+6. [Vercel function timeout (300s default / 800s configured ceiling)](#6-vercel-function-timeout-10-second-limit)
 7. [Upstash command budget exhausted](#7-upstash-command-budget-exhausted)
 8. [CORS misconfiguration after deploy](#8-cors-misconfiguration-after-deploy)
 9. [Vercel cron job failure](#9-vercel-cron-job-failure)
 10. [LLM pipeline hung / /api/events returning 500](#10-llm-pipeline-hung--apievents-returning-500)
 11. [LLM Pipeline Disabled / Keys Absent](#11-llm-pipeline-disabled--keys-absent)
 12. [Common log query patterns](#common-log-query-patterns)
+13. [NIM throttle handling](#13-nim-throttle-handling-429-burst--circuit-breaker-trip)
+14. [Cron architecture lessons](#14-cron-architecture-lessons-phase-2826-fire-and-forget-iife-incident)
+15. [Force-trigger /api/cron/refresh-events](#15-force-trigger-apicronrefresh-events-operator-only)
+16. [prod-connectivity-audit.yml retry path](#16-prod-connectivity-auditymyl-retry-path-workflow_dispatch)
 
 ---
 
@@ -348,61 +352,38 @@ prices.
 
 ---
 
-## 6. Vercel function timeout (10-second limit)
+<a id="6-vercel-function-timeout-10-second-limit"></a>
 
-**Symptom:** `504 Gateway Timeout` on specific endpoints, most
-commonly `/api/water`, `/api/sites`, or `/api/events` on first load
-after a deploy or a long idle period.
+## 6. Vercel function timeout (300s default / 800s configured ceiling)
+
+**Symptom:** `504 Gateway Timeout` on long-running routes. Most commonly `/api/cron/refresh-events` (which runs the v3 LLM extraction; expected to take ~10 minutes in the worst case under NIM throttle pressure). Less commonly on `/api/water`, `/api/sites`, or `/api/events` first-load after a deploy.
 
 **Detection:**
 
-- Vercel function logs show
-  `ERROR: Task timed out after 10.00 seconds` for the affected
-  route.
-- Vercel dashboard → Deployments → Functions tab shows the
-  affected function's p99 duration near 10 s.
-- Sentry or external monitor flags the 504.
+- Vercel function logs show `ERROR: Task timed out after 800.00 seconds` (or `300.00` if `maxDuration` is omitted from the function in `vercel.json`).
+- Vercel dashboard → Deployments → Functions tab shows the affected function's p99 duration approaching the configured `maxDuration`.
+- For `/api/cron/refresh-events` specifically: `events:llm-summary:v3` shows `completedAt` unset hours after `startedAt`; `cron:lastTick:refresh-events` not updated.
 
 **Cause:**
 
-- Cold-start latency + upstream API latency together exceeds the
-  10 s Vercel Hobby plan function timeout. Most common on routes
-  that make multiple upstream calls on cache miss (water fetches
-  Overpass + WRI + Open-Meteo; sites fetches Overpass) when the
-  entire cache chain is cold.
-- Less commonly: Upstash command budget exhausted, causing cache
-  writes to fail silently and every request to re-fetch upstream.
-- Less commonly still: a long-running upstream call that should
-  have been gated by a timeout wasn't — this was the resilience
-  gap that 26.4-03 closed for the cache layer via
-  `REDIS_OP_TIMEOUT_MS`.
+- Pre-Phase-29 Hobby plan baseline was a hard 10-second timeout (the framing this section retained until Phase 36 D-14). Phase 29 D-08 upgraded to Vercel Pro and set `vercel.json functions."api/vercel-entry.js".maxDuration: 800` to accommodate worst-case LLM extraction runs (~10 minutes).
+- Cold-start latency + upstream API latency together approaching the configured `maxDuration` on long-running paths. NIM throttle (Phase 30 / 34 measurements) is the dominant driver for `/api/cron/refresh-events`.
+- Less commonly: Upstash command budget exhausted causing cache writes to fail silently; every request re-fetches upstream and accumulates latency.
 
 **Remediation:**
 
-1. Retry the request. A warm cache should respond in under 1 s
-   on subsequent requests.
-2. Check if the cache was evicted (Upstash command budget
-   exhaustion wipes keys); see failure mode 7.
-3. Manually warm the cache via `/api/cron/warm` or by hitting each
-   cached route in turn via a script. The `vercel-cron` user
-   agent is allowed to trigger `refresh=true` in production.
-4. If the route consistently times out cold, consider lowering
-   the bbox size in the affected adapter to reduce upstream call
-   duration — but this is a design change, not an operational
-   fix.
+1. For data routes (`/api/water`, `/api/sites`, etc.): retry. A warm cache responds in under 1 s.
+2. For `/api/cron/refresh-events`: check `events:llm-summary:v3.lastError` for the failing provider (NIM circuit-breaker trip, OpenRouter dormancy, etc.). Cross-reference §13 NIM throttle handling.
+3. If `maxDuration` was hit on extraction: the 90s `withBatchWatchdog` hard-kill (`server/lib/llmExtractorWatchdog.ts`) should have caught it before the function timeout; if it didn't, the watchdog is bypassed — check `LLM_BATCH_TIMEOUT_MS` env override.
+4. Manually warm cache via `/api/cron/warm` (already a configured cron at 12:00 UTC); not required for incident response but accelerates recovery.
 
 **Prevention:**
 
-- Vercel cron (`vercel.json` `crons` array) runs `/api/cron/warm`
-  on a schedule that keeps the cache hot.
-- `Cache-Control: max-age=0, s-maxage=N` CDN headers on each
-  route serve most requests from Vercel Edge without ever hitting
-  the function, so cold-start latency only applies to cache-miss
-  requests that happen when the CDN cache also expired.
-- The 2000 ms `REDIS_OP_TIMEOUT_MS` wrapper in
-  [`server/cache/redis.ts`](../server/cache/redis.ts) caps hung
-  Redis calls at 2 s, leaving 8 s of headroom for the actual
-  route logic before the function timeout bites.
+- `vercel.json functions."api/vercel-entry.js".maxDuration: 800` (Phase 29 D-08) — locked in as part of the Vercel Pro upgrade. Do NOT reduce without a compelling reason; the extraction path needs it.
+- `Cache-Control: max-age=0, s-maxage=N` CDN headers serve most data-route requests from Vercel Edge without ever invoking the function.
+- 2000 ms `REDIS_OP_TIMEOUT_MS` wrapper in [`server/cache/redis.ts`](../server/cache/redis.ts) caps hung Redis calls — leaves headroom for actual route logic.
+- 90s `withBatchWatchdog` in [`server/lib/llmExtractorWatchdog.ts`](../server/lib/llmExtractorWatchdog.ts) hard-kills batch runs before they approach `maxDuration`; AbortController + generation counter prevents late-resolve cache clobber.
+- Per-route timeout discipline: each upstream adapter wraps fetch with a fail-fast timeout (Overpass, Open-Meteo, NIM all bounded).
 
 ---
 
@@ -880,6 +861,152 @@ again be a viable fallback — see
 §"Path to Re-Enable" for the cascade-restore steps. The probe
 spends ~15% of the 200/day OpenRouter free-tier daily cap;
 safe to re-run once per planning cycle.
+
+---
+
+## 13. NIM throttle handling (429 burst + circuit-breaker trip)
+
+**Symptom:** v3 LLM extraction runs failing with sustained 429s from NIM. `events:llm-dlq` accumulating entries with `reason: 'throttled'`. Map continues to render (raw GDELT via Pitfall 1 bridge), but new events lack v3 enrichment for the affected extraction window.
+
+**Detection:**
+
+- Pino logs with `module: 'llm/freeClaudeRouter'` and HTTP status `429` clusters within the daily 4:00 UTC extraction window.
+- `events:llm-eval-baseline:v3` accuracy drops at the next `/api/cron/health` run (eval-drift signal).
+- `server/lib/llmCircuitBreaker.ts` opens (sliding 10-call window, >30% error rate trips a 5-minute pause).
+- `/api/operator-status` `byBearer.replay24h` shows no operator force-triggers (so the throttle is from cron-only writes, not operator activity).
+
+**Cause:**
+
+- NIM ratelimits at ~40 requests/minute per token (Phase 30 measurement). The tuned `LLM_V3_CONCURRENCY=12` default targets ~26 req/min headroom under the cap, but batch bursts during retry can exceed the cap momentarily.
+- Per CONTEXT.md `<canonical_refs>`: see [`docs/architecture/llm-pipeline-reliability.md`](./architecture/llm-pipeline-reliability.md) §"Multi-Provider Cascade (Phase 34)" for the empirical numbers and Path B remediation framing.
+- OpenRouter cascade fallback would normally absorb the 429 burst, but OpenRouter is DORMANT per [ADR-0010 Phase 30.1 sub-block](./adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md). So NIM is the only path; throttle pressure has no relief valve.
+
+**Remediation:**
+
+1. Wait the 5-minute circuit-breaker cooldown. The watchdog will resume automatically on the next per-event invocation.
+2. If circuit-breaker fails to close after 15 minutes: check `llm:tokens:nim:YYYY-MM-DD` for the daily token-budget counter. If hard cap (`budgetState: 'hard'`) was hit, the cascade bypasses NIM for the rest of the UTC day — operator can wait until next-day reset OR force-trigger via §15 with a fresh window.
+3. Per Path B framing in [`llm-pipeline-reliability.md`](./architecture/llm-pipeline-reliability.md): if throttle is sustained > 1 hour, consider lowering `LLM_V3_CONCURRENCY` to 8 (env override) for the next deploy. Default is `12` for steady-state; `8` is a safer fallback under chronic throttle.
+4. To resume manually: `GET /api/cron/refresh-events?force=true` with operator Bearer (see §15). Bypasses cooldown + self-heal.
+
+**Prevention:**
+
+- Tuned `LLM_V3_CONCURRENCY`, `LLM_BATCH_SIZE`, `LLM_BATCH_TIMEOUT_MS`, `BACKOFF_MS` defaults — see [`docs/architecture/llm-pipeline-reliability.md`](./architecture/llm-pipeline-reliability.md) "Tuned defaults reference" for the measured numbers.
+- Circuit breaker (`server/lib/llmCircuitBreaker.ts`) — 5-min pause on >30% error rate in last 10 calls.
+- Token-budget cap (`server/lib/llmTokenBudget.ts`) — soft 0.8 / hard 0.95 with 48h TTL.
+- DLQ (`server/lib/llmDLQ.ts`) — bounded 200-entry / 7-day TTL captures failed extractions for retry triage.
+- Watchdog (`server/lib/llmExtractorWatchdog.ts`) — 90s hard-kill prevents one stuck batch from blocking the whole extraction run.
+- Pitfall 1 cache bridge (`server/routes/events.ts`) — terminal fallback to raw GDELT; map never goes blank during sustained throttle.
+- Open item: re-enabling OpenRouter as a runtime fallback (currently DORMANT per Phase 30.1) would absorb throttle bursts. Decision deferred per [ADR-0010 Phase 30.1](./adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md); revisit if Pitfall 1 raw-GDELT fallback proves insufficient for operator quality bar.
+
+---
+
+## 14. Cron architecture lessons (Phase 28.2.6 fire-and-forget IIFE incident)
+
+**Symptom:** Pre-Phase-29: `events:llm:v3` not updating between deploys. v3 extraction appeared to start (logs showed initialization) but never completed. `events:llm-summary:v3` had `startedAt` but no `completedAt`. Post-Phase-29: this failure mode is architecturally prevented (cron-only writer invariant).
+
+**Detection (historical):**
+
+- Vercel function logs showed v3 extraction initialization on `/api/events` requests, then no completion log.
+- `events:llm:v3` stale for >24 hours despite continuous `/api/events` traffic.
+- `events:llm-summary:v3.lastError` empty (no error was caught — the IIFE was killed silently).
+
+**Cause (historical Phase 28.2.6 diagnosis):**
+
+- Pre-Phase-29 v2 pattern triggered LLM extraction via a fire-and-forget IIFE from `/api/events` cache miss: `(async () => { await processEvents(); })();` with HTTP response sent immediately.
+- Vercel Fluid Compute SILENTLY KILLS function instances once the HTTP response is sent, even if async work is still in flight. The IIFE was being terminated mid-extraction with no error surfaced.
+- Documented in [ADR-0010 Phase 29 sub-block](./adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md). See also the Phase 28.2.6 phase folder under `.planning/milestones/v1.4-phases/` for the original incident diagnosis trail.
+
+**Remediation (architectural — Phase 29 removed this failure mode):**
+
+- v1 + v2 LLM extractors DELETED Phase 29 (Plans 04-06) per [ADR-0010](./adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md). No fire-and-forget IIFE path exists in the codebase.
+- v3 extraction moved to cron-only trigger (`/api/cron/refresh-events`, daily 4:00 UTC).
+- `/api/events` became cache-only — it serves `events:llm:v3` if present OR raw GDELT via Pitfall 1 bridge. It does NOT initiate extraction.
+
+**Prevention (the anti-pattern that protects the system):**
+
+- **Anti-pattern #17 (cron-only writer discipline):** ONLY `/api/cron/refresh-events` writes to `events:llm:v3`. Any new code that proposes writing to v3 production state from a non-cron path is reverted at code review. CLAUDE.md §LLM Event Pipeline names this invariant explicitly.
+- Cold-cache self-heal: `runRefreshExtraction()` checks `events:llm:v3` size; if empty, bypasses the 15-min `events:llm-process-ts` cooldown. Prevents the v3 cache from being permanently empty after a Redis flush.
+- Watchdog hard-kill (90s; see §13 + §10).
+- `cron:lastTick:refresh-events` Redis sentinel (Phase 28.2.7 D-03) is written ONLY AFTER `runRefreshExtraction` resolves — honest-failure semantics. If the cron path is rewired to fire-and-forget, the sentinel stops advancing and `probeCronTick` flags it.
+- **Regression detection:** if a new code path is added that writes to `events:llm:v3` outside the cron handler, the next `/api/cron/refresh-events` run will race-clobber it; symptoms look like flaky enrichment quality. Detect via: `git log -p server/routes/ server/lib/llmEvent*` greping for new `cacheSet*('events:llm:v3'` callsites outside `server/lib/llmExtractionPipeline.ts`.
+
+---
+
+## 15. Force-trigger `/api/cron/refresh-events` (operator-only)
+
+**Symptom:** Operator needs to refresh `events:llm:v3` outside the daily 4:00 UTC cron window — e.g., after a NIM throttle clearance, after a new event of operational interest landed in GDELT, or to verify a deploy fix.
+
+**Detection:** N/A — this is operator-initiated, not a failure mode.
+
+**Cause:** Operator decision. Common triggers:
+
+- Operator confirmed via §13 that NIM throttle has cleared and wants to backfill the missed window.
+- A high-significance event landed in GDELT during the gap between cron windows.
+- Post-deploy verification of an extraction-path fix.
+
+**Remediation (how to invoke):**
+
+1. **Required env:** Either `CRON_SECRET` (cron-path Bearer, used by Vercel's own cron runner) OR `DASHBOARD_PASSWORD` (operator-path Bearer). The endpoint accepts both — the cron runs use `CRON_SECRET`; the operator force-trigger path uses `DASHBOARD_PASSWORD`.
+2. **Invocation:** `curl -H "Authorization: Bearer $DASHBOARD_PASSWORD" "https://otg-iran-monitor.vercel.app/api/cron/refresh-events?force=true"`
+3. **What `force=true` bypasses:**
+   - The 15-minute `events:llm-process-ts` cooldown sentinel.
+   - The empty-cache self-heal logic (which the cron path already bypasses on cold cache).
+4. **What it does NOT bypass:**
+   - Circuit-breaker state (if open, the cascade still pauses NIM — see §13).
+   - Token-budget cap (if `budgetState: 'hard'`, the cascade still bypasses NIM for the rest of the UTC day).
+   - 50/24h per-Bearer replay quota (separate quota; force-trigger is rate-limited per `operator:replay-quota:{fingerprint}:{YYYY-MM-DD}`).
+5. **Expected response:** `{status: 'ran', startedAt: '...', completedAt: '...', summary: {...}}` or `{status: 'skipped', reason: 'cooldown_active'}` if Bearer-mismatch shielded the bypass.
+6. **Audit trail:** Operator force-trigger appends a row to `operator:audit-log` (500-entry bounded set, 30d TTL). Surfaced in the API Health dashboard tab Operator Actions block.
+
+**Prevention (when NOT to use force-trigger):**
+
+- Routine daily refresh — the 4:00 UTC cron handles this; force-trigger wastes a quota slot.
+- Suspected provider outage — first verify with §13; if NIM is truly down, force-triggering will just fail faster.
+- Testing extraction logic in production — use a dev/preview deploy + dev `DASHBOARD_PASSWORD` instead.
+
+---
+
+## 16. `prod-connectivity-audit.yml` retry path (workflow_dispatch)
+
+**Symptom:** `audit:connectivity:last-result` shows stale data (>24h old) OR `status: 'red'` OR `allTiersGreen: false` while the operator believes the system is actually healthy.
+
+**Detection:**
+
+- `/api/audit-status` returns `timestamp` more than 24 hours old.
+- The API Health dashboard tab (Phase 28.2 W5 merge) shows the audit-result banner in degraded state.
+- GitHub Actions tab for `otg-iran-monitor` shows the last `prod-connectivity-audit.yml` run as failed OR not run within the past 24 hours.
+
+**Cause:**
+
+- Scheduled GitHub Actions workflow `prod-connectivity-audit.yml` failed (transient network issue, GitHub Actions outage, expired GITHUB_TOKEN, etc.).
+- Manual workflow_dispatch trigger not run after a known transient failure.
+
+**Remediation:**
+
+1. Open the GitHub Actions tab for `otg-iran-monitor`.
+2. Select the `prod-connectivity-audit.yml` workflow.
+3. Click "Run workflow" → workflow_dispatch trigger with default inputs.
+4. Wait for completion (~2-5 minutes); confirm green run.
+5. Verify `/api/audit-status` now returns fresh timestamp + `status: 'green'`.
+6. **Expected payload shape** (the W-3 contract test pins this — see `server/__tests__/contract/audit-status-shape.test.ts`):
+
+   ```json
+   {
+     "status": "green",
+     "runId": "<gh-actions-run-id>",
+     "timestamp": "<ISO-8601>",
+     "endpoints": { "...": "..." },
+     "durationMs": 1234,
+     "allTiersGreen": true,
+     "tierStatus": { "<tier>": { "status": "green", "evidence": {}, "timestamp": "..." } }
+   }
+   ```
+
+**Prevention:**
+
+- v1.5 acceptance gate (LLM-RELI-07): **3× consecutive `allTiersGreen=true`** runs unblocks v1.6 milestone close (Phase 37 territory). See [ADR-0010](./adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md) for the acceptance-gate rationale.
+- Workflow runs on a schedule; manual workflow_dispatch is the operator-controlled retry path.
+- Audit-result endpoint (`/api/audit-status`) is degrade-open: no auth gate, returns `status: 'unknown'` if Redis is unreachable rather than failing closed. Prevents the audit surface from becoming an additional incident vector.
 
 ---
 
