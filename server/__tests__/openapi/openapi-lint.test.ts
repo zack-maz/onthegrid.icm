@@ -43,24 +43,31 @@ const REPO_ROOT = resolve(__dirname, '../../..');
 const SPEC = resolve(REPO_ROOT, 'server/openapi.yaml');
 
 describe('Phase 36 D-08 — OpenAPI spec drift gate', () => {
-  it('redocly lint exits 0 (no spec syntax errors, no broken $refs, no missing required fields)', () => {
-    const result = spawnSync('npx', ['@redocly/cli', 'lint', SPEC, '--format=stylish'], {
-      cwd: REPO_ROOT,
-      encoding: 'utf-8',
-      timeout: 60_000,
-    });
-    if (result.status !== 0) {
-      // Surface stdout + stderr on failure so the operator sees exactly
-      // which line / $ref / required-field is broken. Vitest displays
-      // console.error output on failed assertions.
+  // 30s vitest timeout absorbs cold-npx-resolution variance; standalone
+  // `redocly lint` is ~2s but the first vitest invocation can shell-out
+  // slower than vitest's 10s default and produce false failures (#36-05).
+  it(
+    'redocly lint exits 0 (no spec syntax errors, no broken $refs, no missing required fields)',
+    { timeout: 30_000 },
+    () => {
+      const result = spawnSync('npx', ['@redocly/cli', 'lint', SPEC, '--format=stylish'], {
+        cwd: REPO_ROOT,
+        encoding: 'utf-8',
+        timeout: 25_000,
+      });
+      if (result.status !== 0) {
+        // Surface stdout + stderr on failure so the operator sees exactly
+        // which line / $ref / required-field is broken. Vitest displays
+        // console.error output on failed assertions.
 
-      console.error('Redocly lint stdout:\n' + (result.stdout ?? ''));
+        console.error('Redocly lint stdout:\n' + (result.stdout ?? ''));
 
-      console.error('Redocly lint stderr:\n' + (result.stderr ?? ''));
-    }
-    expect(
-      result.status,
-      `Redocly lint failed:\n${result.stdout ?? ''}\n${result.stderr ?? ''}`,
-    ).toBe(0);
-  });
+        console.error('Redocly lint stderr:\n' + (result.stderr ?? ''));
+      }
+      expect(
+        result.status,
+        `Redocly lint failed:\n${result.stdout ?? ''}\n${result.stderr ?? ''}`,
+      ).toBe(0);
+    },
+  );
 });
