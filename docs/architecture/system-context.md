@@ -62,7 +62,7 @@ flowchart LR
     subgraph vercel[Vercel CDN + Serverless]
         cdn[Edge CDN<br/>Cache-Control s-maxage]
         spa[Vite SPA<br/>static assets]
-        api[Express API<br/>server/vercel-entry.ts]
+        api[Express API<br/>api/vercel-entry.js bundle<br/>tsup from server/vercel.ts]
     end
 
     subgraph upstash[Upstash]
@@ -128,13 +128,22 @@ s-maxage=<N>, stale-while-revalidate=<M>` header via the
   [`server/openapi.yaml`](../../server/openapi.yaml) for the documented
   ceilings.
 
-- **LLM enrichment pipeline (Phase 27).** The GDELT event pipeline now
-  includes an optional LLM enrichment path: raw GDELT rows are grouped,
-  sent through Cerebras/Groq for classification into a 5-type taxonomy
-  (`airstrike`, `on_ground`, `explosion`, `targeted`, `other`), validated
-  by Zod, and geocoded via Nominatim. The raw CAMEO classification tables
-  and city-centroid dispersion logic are retained as a graceful fallback
-  when the LLM is unavailable.
+- **LLM enrichment pipeline (Phase 27 → v3 narrowed Phase 29 / 30.1 / 34).**
+  The GDELT event pipeline includes an optional LLM enrichment path: raw GDELT
+  rows are grouped, sent through `server/lib/llmEventExtractor.v3.ts` for
+  classification into a 5-type taxonomy (`airstrike`, `on_ground`, `explosion`,
+  `targeted`, `other`), validated by Zod, and geocoded via the 6-path
+  Nominatim-backed resolver. The active runtime cascade is **NIM-only**
+  (qwen-235b instruct) — OpenRouter dormant per Phase 30.1 (free tier 90%
+  rate-limited; `skipOpenRouter: true` at `server/lib/llmEventExtractor.v3.ts:622, 929`);
+  Cerebras + Groq deferred per Phase 34 (operator chose to skip provisioning).
+  See [`docs/architecture/llm-pipeline-reliability.md`](./llm-pipeline-reliability.md)
+  §"Multi-Provider Cascade (Phase 34)" for the cascade-shape table and
+  [ADR-0010](../adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md) Phase
+  30.1 + 34 sub-blocks for rationale. The raw CAMEO classification tables and
+  city-centroid dispersion logic are retained as a graceful fallback via the
+  Pitfall 1 cache bridge (`/api/events` serves raw GDELT when `events:llm:v3`
+  is empty — the map never goes blank).
 
 ## Next steps
 
