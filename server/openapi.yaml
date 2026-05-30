@@ -930,15 +930,18 @@ paths:
       responses:
         '200':
           description: |
-            Extraction-run result. `{ok: true, durationMs, ...result}` —
-            result shape varies: `{status: 'ran', ...summary}` on dispatch,
-            `{status: 'skipped', reason: 'cooldown_active', ...}` on cooldown
-            skip. Vercel cron treats any 2xx as success.
+            Extraction-run result. Returned as `{ok: true, durationMs,
+            ...result}` where `result` is the `RunRefreshResult` returned
+            by `runRefreshExtraction()` in `server/lib/llmExtractionPipeline.ts`.
+            On dispatch: `{ok, durationMs, dispatched: true, schemaVersion: 'v3', coldCacheBypass?}`.
+            On guarded skip: `{ok, durationMs, dispatched: false, reason}` where
+            `reason ∈ {cooldown, llm_unconfigured, no_raw_events, pipeline_busy}`.
+            Vercel cron treats any 2xx as success.
           content:
             application/json:
               schema:
                 type: object
-                required: [ok, durationMs]
+                required: [ok, durationMs, dispatched]
                 properties:
                   ok:
                     type: boolean
@@ -946,12 +949,25 @@ paths:
                   durationMs:
                     type: integer
                     minimum: 0
-                  status:
+                    description: Wall-clock duration of the dispatch decision (not the extraction itself; extraction runs fire-and-forget after return).
+                  dispatched:
+                    type: boolean
+                    description: True when a fresh extraction was kicked off; false when one of the guarded-skip reasons applied.
+                  reason:
                     type: string
-                    description: |
-                      `'ran'` on extraction dispatch, `'skipped'` on
-                      cooldown-active skip, or other status values surfaced
-                      by `runRefreshExtraction`.
+                    enum:
+                      - cooldown
+                      - llm_unconfigured
+                      - no_raw_events
+                      - pipeline_busy
+                    description: Populated only when `dispatched=false`; one of the four guards in `runRefreshExtraction()`.
+                  coldCacheBypass:
+                    type: boolean
+                    description: True when the cold-cache self-heal (D-10) bypassed the cooldown sentinel so an empty `events:llm:v3` could self-heal without waiting 15 minutes.
+                  schemaVersion:
+                    type: string
+                    enum: [v3]
+                    description: Active pipeline schema at dispatch time; v3-only post-Phase-29.
         '401':
           description: Missing or invalid CRON_SECRET Bearer.
           content:

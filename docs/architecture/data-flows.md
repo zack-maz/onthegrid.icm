@@ -202,7 +202,7 @@ sequenceDiagram
         alt Cooldown expired
             Cron->>Cron: runRefreshExtraction({triggeredBy:"cron"})
         else Cooldown active
-            Cron-->>Cron: 200 {skipped:"cooldown"} (no extraction)
+            Cron-->>Cron: 200 {dispatched:false, reason:"cooldown"} (no extraction)
         end
     end
     Cron->>GDELT: fetchEvents() [recent window]
