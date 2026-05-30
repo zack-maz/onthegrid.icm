@@ -555,6 +555,39 @@ paths:
 
 components:
   # ----------------------------------------------------------------
+  # Security schemes (Phase 36 D-06)
+  # ----------------------------------------------------------------
+  # Two named Bearer schemes capture the machine-readable distinction
+  # between the cron-secret gate (CRON_SECRET) and the operator-dashboard
+  # gate (DASHBOARD_PASSWORD). README prose stays high-level; the spec
+  # carries the structural distinction.
+  securitySchemes:
+    cronSecret:
+      type: http
+      scheme: bearer
+      bearerFormat: Token
+      description: |
+        CRON_SECRET — Bearer used by Vercel cron invocations of `/api/cron/*`
+        paths. Constant-time compared via `timingSafeEqual` in the cron
+        handlers (`server/routes/cron-health.ts`, `server/routes/cron-warm.ts`,
+        `server/routes/refresh-events-cron.ts`). Empty CRON_SECRET preserves
+        un-authed dev behavior (matches the original cron-warm / cron-health
+        surface).
+    operatorBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Token
+      description: |
+        DASHBOARD_PASSWORD — Bearer used by operator endpoints
+        (`/api/operator-status`, `/api/events/llm-status`,
+        `/api/events/llm-replay/:groupKey`, `/api/events/prune-dead-urls`)
+        and for force-triggering `/api/cron/refresh-events?force=true` when
+        an operator wants to bypass the cooldown sentinel. Constant-time
+        compared via `timingSafeEqual` in `server/middleware/dashboardAuth.ts`
+        (Phase 26.3+). In production with empty DASHBOARD_PASSWORD the
+        middleware fail-closes with 503 `auth_not_configured`.
+
+  # ----------------------------------------------------------------
   # Shared response templates
   # ----------------------------------------------------------------
   responses:
@@ -1258,3 +1291,129 @@ components:
               type: string
         durationMs:
           type: integer
+
+    # ----------------------------------------------------------------
+    # Phase 36 D-07 — Reusable component schemas for new operator/cron
+    # endpoints (audit-status, operator-status, llm-status, llm-replay,
+    # refresh-events). Endpoint-unique shapes (e.g. llm-replay 404 envelope,
+    # refresh-events skipped-vs-ran variants) stay inline at the endpoint.
+    # ----------------------------------------------------------------
+
+    AuditTierStatus:
+      type: object
+      description: |
+        Tier-level audit status for `.github/workflows/prod-connectivity-audit.yml`
+        runs. Phase 28.2 W6 / D-05. One entry per tier (`critical`,
+        `nonCritical`, `static`, `probeOnly`, `cron`).
+      properties:
+        tier:
+          type: string
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy, unknown]
+        evidence:
+          type: object
+          description: Per-tier evidence payload — shape varies by tier.
+        timestamp:
+          type: string
+          format: date-time
+      required: [tier, status]
+
+    ByBearerMap:
+      type: array
+      description: |
+        Per-Bearer quota counters; one entry per bearerFingerprint
+        (8-char SHA-256 prefix). Phase 28.2 W3 / Phase 32 Plan 04 D-15.
+        Returned by `/api/operator-status` as the `byBearer` field.
+      items:
+        type: object
+        required: [bearerFingerprint, actions]
+        properties:
+          bearerFingerprint:
+            type: string
+            description: 8-char SHA-256 prefix of the operator's Bearer.
+          actions:
+            type: integer
+            minimum: 0
+            description: Total operator actions in the last 24h.
+          swaps:
+            type: integer
+            minimum: 0
+            description: |
+              Legacy `pipeline-swap` count. Phase 29 D-02 part A deleted the
+              POST `/api/events/llm-pipeline` writer; no new entries with
+              this tag are produced. Field retained until the 30d audit-log
+              TTL expires the last legacy entry.
+          replays:
+            type: integer
+            minimum: 0
+            description: '`/api/events/llm-replay/:groupKey` calls in the last 24h.'
+          prunes:
+            type: integer
+            minimum: 0
+            description: '`/api/events/prune-dead-urls` calls in the last 24h.'
+
+    LlmPipelineState:
+      type: object
+      description: |
+        LLM v3 pipeline observability surface returned by
+        `GET /api/events/llm-status`. Phase 27.4 / 28.2.7 / 29.
+
+        Phase 29 D-02 part A deleted the POST `/api/events/llm-pipeline`
+        version-override route. The remaining read surface lives at
+        `/api/events/llm-status`. Only the v3 cache exists
+        (`events:llm:v3`); the prior `activeVersion: 'v1'|'v2'|'v3'` field
+        collapses to a literal `'v3'`.
+
+        The shape carries the in-memory `llmProgress` singleton merged with
+        the Redis-backed last-run summary. Documented as `additionalProperties:
+        true` because the observability surface evolves frequently and the
+        gate's primary contract is the auth posture + 200/401 envelope.
+      additionalProperties: true
+      properties:
+        stage:
+          type: string
+          enum: [idle, fetching, extracting, persisting, done, error]
+        lastRun:
+          type: object
+          nullable: true
+          description: Last-run summary cached at `events:llm-summary:v3`.
+        schemaVersion:
+          type: integer
+        dlqCount:
+          type: integer
+        breakerState:
+          type: string
+          enum: [closed, open, half-open]
+        routingTrace:
+          type: array
+          items:
+            type: object
+        pipelineFlips:
+          type: array
+          items:
+            type: object
+
+    LlmReplayDiff:
+      type: object
+      description: |
+        Per-event-group LLM-replay diff returned by
+        `POST /api/events/llm-replay/{groupKey}`. Phase 27.4.
+
+        Read-only vs cache (T-27.4-08-05 / Pitfall 6): the handler MUST
+        NOT write back to `events:llm:v3`. Operators iterate on prompt
+        wording side-by-side without waiting for the full cron cycle.
+      properties:
+        old:
+          description: |
+            Existing v3 enrichment for groupKey (Redis HGET on the
+            `events:llm:v3` group). Shape matches `ConflictEventEntity`.
+          $ref: '#/components/schemas/ConflictEventEntity'
+        new:
+          type: object
+          nullable: true
+          description: |
+            Recomputed enrichment for the same groupKey, without
+            persisting. May be `null` if `processEventGroupsV3` produced
+            no event for this group.
+      required: [old, new]
