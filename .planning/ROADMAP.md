@@ -109,7 +109,7 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 - [x] **Phase 33: Actor Metadata Audit, Canonical Catalog & Eval Expansion** — Audit live `events:llm:v3` actor quality; commit canonical actor catalog; extend v3 prompt + schema with `actorConfidence`; extend ground-truth + adversarial fixtures; surface actor-quality counts in dashboard. (completed 2026-05-21; ACTOR-01..05 all closed; 7 plans 33-01..33-07; 28 atomic commits; +63 new tests; 2340 total passing; zero new npm deps; AUDIT-REPORT.md population pending operator UAT against staging Redis.)
 - [x] **Phase 34: LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)** — ✓ CLOSED 2026-05-23 as `cerebras-groq-deferred` (operator chose to skip provisioning free-tier accounts; no probe ran). Plans 34-01..04 SKIPPED; only Plan 34-05 close-out executed. ADR-0010 Phase 34 sub-block + `docs/architecture/llm-pipeline-reliability.md` "Multi-Provider Cascade (Phase 34)" section record the deferral rationale. Phase 31 Day-1 DLQ baseline (4 × `v3:timeout_watchdog`) remains a known failure mode under the single-provider cascade. Planning artifacts (CONTEXT/RESEARCH/5 PLANs) preserved in `.planning/phases/34-.../` as the ready-to-execute audit trail for any future provider-restoration phase.
 - [x] **Phase 35: Internal Docs (JSDoc) + Redis Registry + Redis Optimization + Cleanup Sweep** — ✓ CLOSED 2026-05-27. Mechanical drift gate landed (`src/__tests__/lib/redis-registry.test.ts`, 39 assertions across 4 sub-suites). 32-key deep-dive inventory authored at `docs/architecture/redis-keys.md`. CLAUDE.md §Serverless Cache refreshed (4 add + 2 refine + 1 cron-parametric normalisation). `events:llm:v3:partial` retired across 10 surfaces (358 LOC removed; SIMPLIFY-02). `freeClaudeRouter.ts` documented alive (3 live production callers; SIMPLIFY-05). TTL audit: 32 keys reviewed, all right-sized (audit-only outcome per Phase 31 precedent). 7-module JSDoc audit complete (44 exports; 28 new one-liners + 16 verified). Bundle delta: +10,739 bytes (+0.60%; JSDoc additions outweigh deletions; negligible on 1.7MB). ADR-0010 Phase 35 sub-block appended. 17 atomic commits on `feature/35-internal-docs-jsdoc-redis-registry-redis-optimization-cleanu`. _(DOCS-INT-01 CLAUDE.md trim was moved to Phase 29 on 2026-05-09. SIMPLIFY-06 v1 archive folded into Phase 29's full deletion.)_
-- [ ] **Phase 36: Public Docs Sweep + OpenAPI Additions** — Update README, 10 architecture markdown files, 676-line SRE runbook, degradation contract for v1.4 + v1.5 surface; add 7 v1.4-introduced endpoints to the 1164-line OpenAPI 3.0.3 spec.
+- [x] **Phase 36: Public Docs Sweep + OpenAPI Additions** — ✓ CLOSED 2026-05-30. README sweep (rate-limit drift + LLM Enrichment section); 12 architecture markdown files audited (7 edited / 5 verified-clean); 21 Mermaid blocks audited (3 edited / 18 verified-clean); ADR-0011 Phase 36 sub-block; runbook §6 rewrite + §13-§16 SRE-template appendage; degradation.md Pitfall 1 contract; OpenAPI 3.0.3 spec gained 5 new endpoints + 2 verified-clean entries + 4 reusable schemas + 2 named securitySchemes (cronSecret + operatorBearer); Redocly lint vitest + markdown-link-check script wired as mechanical drift gates. 26 atomic commits across 6 plans (3 waves). DOCS-PUB-04 (ADR-0010 milestone close) deferred to Phase 37.
 - [ ] **Phase 37: ADR-0010 + Acceptance Gate Closeout** — Capture v1.5 LLM-pipeline decisions in a new ADR (ADR-0010 — the 0009 slot is taken by the existing Accepted two-key-split ADR); observe `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs; lock the milestone close.
 
 ### Phase Details
@@ -291,7 +291,15 @@ Plans:
 3. `docs/runbook.md` gains v1.4 + v1.5 incident playbooks (NIM throttle handling, cron architecture lessons from 28.2.6 fire-and-forget IIFE diagnosis, force-trigger via `?force=true`, prod-connectivity-audit retry path).
 4. `docs/degradation.md` documents the explicit v3 → v2 → v1 → raw GDELT fallback chain as the "map never goes blank" Pitfall 1 cache-bridge contract.
 5. The OpenAPI 3.0.3 spec at `docs/api/openapi.yaml` (or equivalent path) gains complete entries for `/api/audit-status`, `/api/operator-status`, `/api/events/llm-pipeline`, `/api/events/llm-replay/:groupKey`, `/api/cron/refresh-events`, `/api/cron/health`, `/api/cron/warm` — request shape, response schema, auth posture, and (where applicable) `?force=true` query params all documented.
-   **Plans**: TBD
+   **Plans**: 6 plans
+   - [x] 36-01-PLAN.md — README sweep (D-17, D-18, D-19, D-20)
+   - [x] 36-02-PLAN.md — Architecture sweep + ADR-0011 sub-block (D-09, D-10, D-11, D-12, D-21)
+   - [x] 36-03-PLAN.md — Runbook update (D-13, D-14)
+   - [x] 36-04-PLAN.md — Degradation contract update (D-15, D-16)
+   - [x] 36-05-PLAN.md — OpenAPI additions + lint gate (D-05, D-06, D-07, D-08)
+   - [x] 36-06-PLAN.md — Phase close (D-22, D-23, D-24 + framing-gap callouts + ROADMAP/REQ/STATE flips)
+         **Status**: ✓ Complete (2026-05-30)
+         **Framing-gap note**: Per CONTEXT.md D-04, success criteria #1, #2, and #4 above retain historical-brief wording that predates shipped reality (NIM-only at runtime per Phase 30.1 + 34; 12 markdown files + 21 Mermaid diagrams actual; v3 → raw GDELT chain per Phase 29 deletion of v1+v2). See [`36-SUMMARY.md`](phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md) §Framing-Gap Callouts for the full reconciliation.
 
 ### Phase 37: ADR-0010 + Acceptance Gate Closeout
 
@@ -317,7 +325,7 @@ Plans:
 | 33. Actor Metadata Audit, Canonical Catalog & Eval Expansion                  | 7/7                  | Complete              | 2026-05-21 |
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 1/5 (4 skipped)      | Closed (deferred)     | 2026-05-23 |
 | 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 5/6                  | In Progress           |            |
-| 36. Public Docs Sweep + OpenAPI Additions                                     | 5/6                  | In Progress           |            |
+| 36. Public Docs Sweep + OpenAPI Additions                                     | 6/6                  | Complete              | 2026-05-30 |
 | 37. ADR-0010 + Acceptance Gate Closeout                                       | 0/0                  | Not started           | -          |
 
 ### Parallelization Notes
