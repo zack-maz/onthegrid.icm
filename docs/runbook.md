@@ -33,7 +33,7 @@ not aspirational operations advice.
 13. [NIM throttle handling](#13-nim-throttle-handling-429-burst--circuit-breaker-trip)
 14. [Cron architecture lessons](#14-cron-architecture-lessons-phase-2826-fire-and-forget-iife-incident)
 15. [Force-trigger /api/cron/refresh-events](#15-force-trigger-apicronrefresh-events-operator-only)
-16. [prod-connectivity-audit.yml retry path](#16-prod-connectivity-auditymyl-retry-path-workflow_dispatch)
+16. [prod-connectivity-audit.yml retry path](#16-prod-connectivity-audityml-retry-path-workflow_dispatch)
 
 ---
 
@@ -770,7 +770,7 @@ through the Pitfall 1 cache bridge.
   fails before the change ships.
 - **Related:** see "Pitfall 1 Cache Bridge" in the CLAUDE.md
   Serverless Cache registry for the bridge contract, and
-  [ADR-0010](./adr/ADR-0010-llm-pipeline-v1-5-decisions.md) for the
+  [ADR-0010](./adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md) for the
   architectural rationale behind the v1.5 cascade narrowing
   (Cerebras + Groq removed; NIM + OpenRouter only) plus the
   optional-LLM design.
