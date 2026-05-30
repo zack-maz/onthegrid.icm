@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep — 🚧 IN PROGRESS
 status: executing
-last_updated: "2026-05-30T04:55:33.575Z"
-last_activity: 2026-05-30 -- Phase 36 execution started
+last_updated: "2026-05-30T05:35:00.000Z"
+last_activity: 2026-05-30 -- Phase 36 closed (Public Docs Sweep + OpenAPI Additions); Phase 37 unblocked
 progress:
   total_phases: 15
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 59
-  completed_plans: 49
-  percent: 47
+  completed_plans: 55
+  percent: 53
 ---
 
 # Project State
@@ -23,10 +23,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 36 (public-docs-sweep-openapi-additions) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 36
-Last activity: 2026-05-30 -- Phase 36 execution started
+Phase: 37 (adr-0010-acceptance-gate-closeout) — UNBLOCKED, NOT STARTED
+Plan: 0 of TBD
+Status: Phase 36 closed 2026-05-30; ready for Phase 37 (milestone-close)
+Last activity: 2026-05-30 -- Phase 36 closed (Public Docs Sweep + OpenAPI Additions); Phase 37 unblocked
+
+Phase 36 close artifact: [`.planning/phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md`](phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md).
 
 Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
 
@@ -44,8 +46,8 @@ Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivi
 | 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
 | 34    | LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval) | LLM-RELI-08, LLM-RELI-09, LLM-RELI-10, LLM-RELI-11           | Not started |
 | 35    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
-| 36    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | Not started |
-| 37    | ADR-0010 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Not started |
+| 36    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | ✓ Complete 2026-05-30 (DOCS-PUB-04 → 37) |
+| 37    | ADR-0010 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Unblocked by Phase 36 close |
 
 **Sequencing:** 29 → 30 → 31 → 34 → 37 is the LLM-RELI spine (must run in order). Phases 32 (GHOST) and 33 (ACTOR) are independent of the spine and can run in parallel with 29/30/31. Phase 34 depends on Phase 33 (cascade integration must test all providers against the post-33 `actorConfidence` schema). Phase 35 lands after 29 + 34 close so its Redis-registry sweep inventories the new `llm:tokens:cerebras:*` / `llm:tokens:groq:*` keys. Phase 36 lands after 29/30/31/34 close so docs reflect shipped state. Phase 37 is the milestone-close gate by construction.
 
