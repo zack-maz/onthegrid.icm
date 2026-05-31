@@ -1,6 +1,7 @@
 # ADR-0010: v1.5 LLM pipeline narrowing and deletion
 
 **Status:** Accepted
+**Status:** Accepted (v1.5 closed 2026-05-31)
 **Date:** 2026-05-11
 **Deciders:** solo author
 
