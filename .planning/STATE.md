@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep — 🚧 IN PROGRESS
-status: ready_to_plan
-last_updated: 2026-05-30T08:18:35.775Z
-last_activity: 2026-05-30 -- Phase 36 closed (Public Docs Sweep + OpenAPI Additions); Phase 37 unblocked
+status: Phase 37 context gathered 2026-05-30 (19 decisions across 4 areas); 3 plans planned (37-01 ADR rewrite / 37-02 gate observation / 37-03 close); ready for /gsd:plan-phase 37
+last_updated: "2026-05-30T00:00:00.000Z"
+last_activity: 2026-05-30 -- Phase 37 CONTEXT.md committed (ee990e5); awaiting /gsd:plan-phase 37
 progress:
   total_phases: 15
   completed_phases: 8
   total_plans: 59
   completed_plans: 55
   percent: 53
-stopped_at: Phase 36 complete (6/6) — Phase 37 (ADR-0010 + Acceptance Gate Closeout) unblocked
 ---
 
 # Project State
@@ -24,10 +23,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 37 (adr-0010-acceptance-gate-closeout) — UNBLOCKED, NOT STARTED
-Plan: 0 of TBD
-Status: Phase 36 closed 2026-05-30; ready for Phase 37 (milestone-close gate per ROADMAP parallelization notes)
-Last activity: 2026-05-30 -- Phase 36 closed (Public Docs Sweep + OpenAPI Additions); Phase 37 unblocked
+Phase: 37 (adr-0010-acceptance-gate-closeout) — CONTEXT GATHERED, AWAITING PLAN
+Plan: 0 of 3 (planned slice: 37-01 ADR rewrite / 37-02 gate observation / 37-03 close)
+Status: Phase 37 CONTEXT.md committed ee990e5 with 19 decisions across ADR scope / gate protocol / plan decomposition / SUMMARY framing. Ready for /gsd:plan-phase 37.
+Last activity: 2026-05-30 -- Phase 37 context gathered (CONTEXT + DISCUSSION-LOG); commit ee990e5
+
+Resume file: [`.planning/phases/37-adr-0010-acceptance-gate-closeout/37-CONTEXT.md`](phases/37-adr-0010-acceptance-gate-closeout/37-CONTEXT.md).
 
 Backlog items 999.1 / 999.2 / 999.3 / 999.5 remain parked — they are NOT the next sequenced phase. Per the ROADMAP, Phase 37 (ADR-0010 + LLM-RELI-07 acceptance gate observation) is the milestone-close gate by construction.
 
