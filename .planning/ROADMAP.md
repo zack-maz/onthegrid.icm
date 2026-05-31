@@ -312,7 +312,13 @@ Plans:
 2. The operator runs `prod-connectivity-audit.yml` three separate times (workflow_dispatch, manual trigger) and each run exits 0 with `audit:connectivity:last-result.allTiersGreen === true` written to the Redis sidecar — no tier-red blips between runs.
 3. The 3-consecutive-green observation is captured in the milestone close artifact (e.g. workflow run URLs + sidecar payloads pasted into SUMMARY.md) so the gate is auditable.
 4. v1.6 promotion is unblocked — 999.5 (k6 1–300 VU sweep) can be pulled from backlog into v1.6 because the prerequisite tier-green stability has been mechanically proven.
-   **Plans**: TBD
+   **Plans**: 3 plans
+
+Plans:
+
+- [ ] 37-01-PLAN.md — ADR-0010 milestone-final rewrite + Phase 37 close sub-block (D-01..D-05 from CONTEXT)
+- [ ] 37-02-PLAN.md — Acceptance-gate observation: 3 consecutive prod-connectivity-audit.yml greens (D-06..D-09; operator out-of-band trigger × 3 + evidence capture)
+- [ ] 37-03-PLAN.md — Milestone close: CHANGELOG[v1.5] + 37-SUMMARY.md (rollup + framing-gaps + snapshot + promotion + decision table) + ROADMAP/REQUIREMENTS/STATE flips + 3-gate verification (D-10..D-19)
 
 ### Progress
 
@@ -326,7 +332,7 @@ Plans:
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 1/5 (4 skipped)      | Closed (deferred)     | 2026-05-23 |
 | 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 5/6                  | In Progress           |            |
 | 36. Public Docs Sweep + OpenAPI Additions                                     | 6/6                  | Complete              | 2026-05-30 |
-| 37. ADR-0010 + Acceptance Gate Closeout                                       | 0/0                  | Not started           | -          |
+| 37. ADR-0010 + Acceptance Gate Closeout                                       | 0/3                  | Planned               | -          |
 
 ### Parallelization Notes
 
