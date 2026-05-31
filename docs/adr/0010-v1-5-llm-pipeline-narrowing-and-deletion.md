@@ -126,58 +126,74 @@ Phase 35 closed the v1.5 documentation-and-cleanup track deferred while LLM-RELI
 
 **Architecture-level numbers:** [`docs/architecture/redis-keys.md`](../architecture/redis-keys.md) — the 32-key deep-dive inventory authored in plan 35-01 and pinned by the drift gate. Future Redis-key work edits CLAUDE.md + `redis-keys.md` in lockstep or the gate fails.
 
-<expand_at_36>
-
 ## Consequences
 
 ### Positive
 
-- Smaller bundle, fewer code paths.
-- Rollback path simplified: `git revert <Phase 29 range>`.
-- The active code path is obviously the active code path — no flag-gated
-  branches, no preserved-for-rollback modules to triage during incidents.
+- **Smaller code surface** (net direction). Bundle measurement at Phase 35 close: `api/vercel-entry.js` = **1,790,243 bytes** (vs 1,779,504 baseline). The +10,739 bytes (+0.60%) delta is JSDoc-additions-dominant — the SIMPLIFY-02 partial-key deletion stripped 358 LOC, but Plan 35-04's 28-module JSDoc audit added ~80 bytes per one-liner plus tombstone comments. Net intent (cleanup didn't regress) is satisfied; net code-path count is lower.
+- **Simpler rollback.** Recovery path is `git revert <Phase 29 deletion commit range>` — not flip a runtime flag, not redeploy with an env var, not toggle a feature flag in a Redis key. Single-mechanism reversion.
+- **Active-code-path-is-active-code-path clarity.** No flag-gated branches, no preserved-for-rollback modules to triage during incidents, no v2-vs-v3 racing in the events route. Operators reading `server/lib/llmEventExtractor.v3.ts` know it is THE extractor; operators reading `server/routes/events.ts` know the Pitfall 1 cache bridge is THE fallback.
+- **NIM-only honesty surfaces the DLQ baseline.** The Phase 31 Day-1 observation (`4 × v3:timeout_watchdog`) is a measured failure-mode baseline under single-provider NIM, not a number hidden behind a non-functional OpenRouter-fallback claim. Phase 34's `cerebras-groq-deferred` close-out accepts this baseline rather than expanding the provider surface to hide it.
 
 ### Negative
 
-- The Phase 27.4 D-26/D-40 deep-rollback lock is superseded. If a
-  v3-only defect surfaces that v1 or v2 would have masked, the recovery
-  path is git-revert the Phase 29 deletion range and redeploy — not
-  flip a runtime flag.
-- ADR-0009 (the two-key-split for partial vs terminal v2 reads) becomes
-  partially historical — the v2 keys it documents are deletion targets
-  here. The reasoning preserved in ADR-0009 stays load-bearing for the
-  v3 partial-key pattern (`events:llm:v3:partial`), which inherits the
-  same writer/reader-shape-isolation discipline.
+- **Phase 27.4 D-26/D-40 deep-rollback lock superseded.** If a v3-only defect surfaces that v1 or v2 would have masked, the recovery path is `git revert <Phase 29 deletion range>` and redeploy — not flip a runtime flag. The old deep-rollback safety is gone; in exchange the code surface is honest about which extractor is live.
+- **[ADR-0009](0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md) becomes partially historical.** The v2 partial-key + terminal-key split it documents pointed at `events:llm:v2:partial` / `events:llm:v2` — both deletion targets per Phase 29 D-02. The v3 partial-key pattern (`events:llm:v3:partial`) that initially inherited ADR-0009's writer/reader-shape-isolation discipline was itself **retired in Phase 35** (SIMPLIFY-02; see the [Phase 35 sub-block](#phase-35-sub-block-appended-2026-05-27) D-12 above). ADR-0009 now reads as "the lessons that informed v3" rather than "the contract live in production"; the writer/reader-shape-isolation principle remains a pattern reference for any future partial-progress observability that might re-emerge.
+- **Cron Hobby-300s class of failures eliminated, but NIM throttle remains the single point of failure** per the Phase 34 deferral. The Vercel Pro upgrade removed the `maxDuration` wall (Phase 29 D-08); the empirical free-tier rate-limit ceiling on NIM is now the binding constraint. Under hard throttle, NIM 429s → circuit breaker trips → batches drop to DLQ → `/api/events` falls through to raw GDELT via Pitfall 1. The Phase 34 follow-up candidates (paid provider tier, adaptive `retryAfterMs`-aware limiter, re-probed Cerebras/Groq) are documented but not landed in v1.5.
 
 ### Neutral
 
-- `shouldPauseNewEvents()` soft-cap pause becomes unreachable
-  post-narrowing (it gated v2-vs-v3 racing in the events route).
-  Documented as Phase 30 cleanup work.
+- **`shouldPauseNewEvents()` soft-cap pause unreachable post-narrowing.** It gated v2-vs-v3 racing in the events route; with v2 deleted (Phase 29 D-02) the pause condition can no longer fire. Documented as Phase 30 cleanup work; the function is still imported for the soft-cap-on-token-budget code path but the v2-racing branch is dead.
 
 ## Alternatives Considered
 
-- **Archive v1.ts + v2.ts to `attic/`** (original SIMPLIFY-06 plan).
-  Rejected per CONTEXT D-02: archived code creates the same triage
-  burden as preserved code — operators see the files, wonder if they
-  are still load-bearing, and the simplification gain evaporates. Git
-  history is the archive.
-- **Add `LLM_PIPELINE_ENABLED` env-var kill-switch.** Rejected per
-  D-05: "unset both `CEREBRAS_API_KEY` + `OPENROUTER_API_KEY`" is the
-  kill switch. A dedicated env var would duplicate that mechanism and
-  add a configuration surface to keep in sync.
+- **Archive `v1.ts` + `v2.ts` to `attic/`** (original SIMPLIFY-06 plan; Phase 29-era). Rejected per Phase 29 D-02: archived code creates the same triage burden as preserved code — operators see the files, wonder if they are still load-bearing, and the simplification gain evaporates. Git history is the archive; commit range `<filled in at PR merge time>` is the recovery handle.
+- **Add `LLM_PIPELINE_ENABLED` env-var kill-switch** (Phase 29-era). Rejected: "unset both `NVIDIA_NIM_API_KEY` and `OPENROUTER_API_KEY`" is already the kill switch — the LLM-optional architecture (Decision item 3) means absent credentials degrade cleanly to raw GDELT via Pitfall 1. A dedicated env var would duplicate that mechanism and add a configuration surface to keep in sync.
+- **Restore OpenRouter via free-tier** (Phase 30.1-era). Rejected per `scripts/probe-openrouter.ts` 2026-05-17 result: **27/30 rate_limited (90.0%)** against the v3 extractor payload shape. OpenRouter free-tier is not viable for batch extraction at v1.5 close. The cascade was declared NIM-only honest in the Phase 30.1 sub-block; CLAUDE.md §"LLM Event Pipeline" was amended in lockstep. Quarterly re-probe is the documented follow-up signal that would unlock a re-enable.
+- **Provision Cerebras / Groq free-tier accounts + run probe** (Phase 34-era). Rejected per operator deferral: the Phase 31 Day-1 DLQ baseline (`4 × v3:timeout_watchdog`) is accepted as a known failure mode under single-provider NIM rather than expanding the provider surface. Documented as `cerebras-groq-deferred` close-out in the [Phase 34 sub-block](#phase-34-sub-block-appended-2026-05-23). A future provider-restoration phase would write `scripts/probe-cerebras-groq.ts`, run it against fresh accounts, and re-introduce the adapters alongside `providerProvenance` + `EvalScore.byProvider` + the `cascade_exhausted` DLQ taxonomy.
 
 ## References
 
-- `.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-CONTEXT.md`
-  (D-01 through D-11)
-- Phase 27.4 D-26/D-40 lock (v1+v2 deep-rollback preservation —
-  superseded here)
-- ADR-0009 — Two-key split for LLM partial progress vs terminal reads
-  (partially superseded — v2 keys it documents are deletion targets in
-  Phase 29; the writer/reader-shape-isolation principle is preserved
-  in the v3 partial-key pattern)
-- Commit range: <filled in at PR merge time>
+**Phase context (the 9 v1.5 phase CONTEXT.md sources):**
+
+- [`.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-CONTEXT.md`](../../.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-CONTEXT.md)
+- [`.planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/30-CONTEXT.md`](../../.planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/30-CONTEXT.md)
+- [`.planning/phases/30.1-cascade-fallback-fix-re-enable-openrouter-or-document-single/30.1-CONTEXT.md`](../../.planning/phases/30.1-cascade-fallback-fix-re-enable-openrouter-or-document-single/30.1-CONTEXT.md)
+- [`.planning/phases/31-cron-stability-validation-7-day-watch/31-CONTEXT.md`](../../.planning/phases/31-cron-stability-validation-7-day-watch/31-CONTEXT.md)
+- [`.planning/phases/32-ghost-event-url-liveness-dashboard-prune/32-CONTEXT.md`](../../.planning/phases/32-ghost-event-url-liveness-dashboard-prune/32-CONTEXT.md)
+- [`.planning/phases/33-actor-metadata-audit-canonical-catalog-eval-expansion/33-CONTEXT.md`](../../.planning/phases/33-actor-metadata-audit-canonical-catalog-eval-expansion/33-CONTEXT.md)
+- [`.planning/phases/34-llm-router-fallback-re-integration-cerebras-groq-per-provide/34-CONTEXT.md`](../../.planning/phases/34-llm-router-fallback-re-integration-cerebras-groq-per-provide/34-CONTEXT.md)
+- [`.planning/phases/35-internal-docs-jsdoc-redis-registry-redis-optimization-cleanu/35-CONTEXT.md`](../../.planning/phases/35-internal-docs-jsdoc-redis-registry-redis-optimization-cleanu/35-CONTEXT.md)
+- [`.planning/phases/36-public-docs-sweep-openapi-additions/36-CONTEXT.md`](../../.planning/phases/36-public-docs-sweep-openapi-additions/36-CONTEXT.md)
+
+**Phase outcomes (the v1.5 phase SUMMARY.md sources):**
+
+- [`.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-SUMMARY.md`](../../.planning/phases/29-llm-provider-chain-narrowing-llm-optional-architecture-verce/29-SUMMARY.md)
+- [`.planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/30-SUMMARY.md`](../../.planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/30-SUMMARY.md)
+- [`.planning/phases/30.1-cascade-fallback-fix-re-enable-openrouter-or-document-single/30.1-SUMMARY.md`](../../.planning/phases/30.1-cascade-fallback-fix-re-enable-openrouter-or-document-single/30.1-SUMMARY.md)
+- [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](../../.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md)
+- [`.planning/phases/32-ghost-event-url-liveness-dashboard-prune/32-SUMMARY.md`](../../.planning/phases/32-ghost-event-url-liveness-dashboard-prune/32-SUMMARY.md)
+- [`.planning/phases/34-llm-router-fallback-re-integration-cerebras-groq-per-provide/34-SUMMARY.md`](../../.planning/phases/34-llm-router-fallback-re-integration-cerebras-groq-per-provide/34-SUMMARY.md)
+- [`.planning/phases/35-internal-docs-jsdoc-redis-registry-redis-optimization-cleanu/35-SUMMARY.md`](../../.planning/phases/35-internal-docs-jsdoc-redis-registry-redis-optimization-cleanu/35-SUMMARY.md)
+- [`.planning/phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md`](../../.planning/phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md)
+- Phase 37 SUMMARY: [`.planning/phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md`](../../.planning/phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md) (created by Plan 37-03)
+
+**Architecture cross-links:**
+
+- [`docs/architecture/llm-pipeline-reliability.md`](../architecture/llm-pipeline-reliability.md) — cumulative measurement story across Phases 30 / 30.1 / 34 (throttle window, tuned defaults, retired-mechanism rationale)
+- [`docs/architecture/redis-keys.md`](../architecture/redis-keys.md) — 32-key deep-dive inventory authored in Phase 35 plan 35-01; pinned by the [`redis-registry.test.ts`](../../src/__tests__/lib/redis-registry.test.ts) drift gate
+- [`docs/adr/0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md`](0009-two-key-split-for-llm-partial-progress-vs-terminal-reads.md) — partially historical (v2 keys it documents are deletion targets here; v3 partial-key pattern it inspired was retired in Phase 35)
+- [`docs/adr/0011-v3-llm-pipeline-architecture.md`](0011-v3-llm-pipeline-architecture.md) — parallel v3-architecture ADR; Phase 36 D-21 appended the Phase 36 sub-block reaffirming NIM-only runtime cascade
+- `CLAUDE.md` §"LLM Event Pipeline" + §"Serverless Cache" — operator-skim entry points for shipped reality
+
+**Code references:**
+
+- [`server/routes/events.ts`](../../server/routes/events.ts) — Pitfall 1 cache bridge implementation (the "map never goes blank" mechanical proof)
+- [`server/__tests__/resilience/redis-death.test.ts`](../../server/__tests__/resilience/redis-death.test.ts) — proves the chain works under Redis death
+
+**Phase 27.4 D-26/D-40 lock** (v1+v2 deep-rollback preservation — superseded here).
+
+**Commit range:** `<filled in at PR merge time>`.
 
 ---
 
