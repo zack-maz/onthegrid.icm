@@ -6,48 +6,27 @@
 
 ## Context
 
-The v1.5 milestone brief opened with the position that the active LLM cascade
-had drifted: 4 providers configured (Cerebras, Groq, NIM, OpenRouter) but
-only 2 actually used (NIM + OpenRouter via the v3 extractor's `freeClaudeRouter`
-path). The v1 + v2 extractor modules had been preserved per Phase 27.4 D-26/D-40
-as deep-rollback safety; ~2 weeks of stable v3 production (since Phase 27.4
-shipped 2026-04-21) plus the Pitfall 1 cache bridge (which provides
-"map-never-blank" independent of which extractor wrote the cache) made that
-preservation no longer earn its keep.
+The v1.5 milestone narrowed and simplified the structured LLM event-extraction pipeline that v1.4 shipped. Phase 29 opened the work as "narrow to NIM + OpenRouter and delete v1+v2"; Phases 30 / 30.1 / 34 then surfaced that runtime reality had moved further than the Phase-29 intent. This ADR body now describes the **milestone-final shipped state at v1.5 close** — the 5 historical v1.5 sub-blocks below (Phase 30 / 30.1 / 34 / 35 + this milestone-close Phase 37 sub-block) record the per-phase decision trail that produced it.
 
-Phase 29 (the first phase of the v1.5 milestone) opens the simplification
-sweep. Cascade-narrowing, v1+v2 deletion, the LLM-optional architecture
-proof, and a Vercel Pro upgrade all land in the same phase so subsequent
-v1.5 work tunes against a smaller, sharper code surface and the new 800s
-maxDuration ceiling.
+**Active cascade at v1.5 close — NIM-only at runtime.** `server/adapters/llm-provider.ts` exposes one provider in the production code path: NVIDIA NIM (`qwen-235b` instruct model). OpenRouter is **dormant** per the Phase 30.1 sub-block — the 2026-05-17 `scripts/probe-openrouter.ts` measurement landed at 27/30 rate_limited (90.0%), so the free tier was declared not viable for batch extraction and the existing `skipOpenRouter: true` hard-codes at `server/lib/llmEventExtractor.v3.ts:622, 929` (from Phase 27.4.4 Plan 02) remained in place. Cerebras + Groq are **deferred** per the Phase 34 sub-block — the operator chose to skip provisioning free-tier accounts and running `scripts/probe-cerebras-groq.ts`; the Phase 31 Day-1 DLQ baseline (4 × `v3:timeout_watchdog`) is accepted as a known failure mode under single-provider NIM rather than expanding the provider surface. The reliability primitives (circuit breaker, DLQ, token budget, watchdog) carried forward from Phase 27.4.6 still bound the cascade, but only NIM is actually called.
+
+**LLM-optional architecture, proven mechanically.** `/api/events` is **cache-only** (anti-pattern #17 invariant — no fire-and-forget on the request path). When `events:llm:v3` is populated, the route serves enriched events; when it is empty (LLM credentials unset, cron not yet run, or NIM throttled hard enough to flush the cache via watchdog timeouts), the Pitfall 1 cache bridge in `server/routes/events.ts` falls back to raw GDELT. **The map never goes blank.** The fallback path is exercised by `server/__tests__/resilience/redis-death.test.ts` (Redis death scenario) and by the Phase 29 LLM-optional integration test (all LLM credentials unset). v1+v2 extractor modules, their Redis cache keys (`events:llm`, `events:llm:v2`, `events:llm:v2:partial`, `events:llm-summary`, `events:llm-summary:v2`), and the pipeline-version toggle (`isPipelineV2`, `setPipelineOverride`, the `events:llm-pipeline-override` key + endpoint) were all **deleted** in Phase 29 (Plans 04-06). The Phase 35 `events:llm:v3:partial` retirement (SIMPLIFY-02) further collapsed the observability surface to a single terminal key (`events:llm:v3`).
+
+**Cron-driven pipeline shape on Vercel Pro.** The Vercel Pro upgrade landed in Phase 29 (`vercel.json functions.api/vercel-entry.js.maxDuration: 800`; Phase 29 D-08 lock). The daily `/api/cron/refresh-events` (`0 4 * * *` UTC) is now the **sole writer** of `events:llm:v3` — it calls `runRefreshExtraction()` in `server/lib/llmExtractionPipeline.ts`, which invokes the single extractor module `server/lib/llmEventExtractor.v3.ts`. The cron triad (`/api/cron/health`, `/api/cron/warm`, `/api/cron/refresh-events`) sits inside the 800s ceiling — the Hobby-300s class of cascade-timeout failures is eliminated. Cold-cache self-heal bypasses cooldown when `events:llm:v3` is empty; operator force-trigger via `GET /api/cron/refresh-events?force=true` with the Bearer.
+
+**How this state was reached.** The 5 historical v1.5 sub-blocks below capture HOW the milestone-final state was reached one phase at a time — Phase 30 (NIM throttle characterization + tuned defaults + SIMPLIFY-01/03 retirement), Phase 30.1 (OpenRouter dormancy declared honest), Phase 34 (Cerebras + Groq deferred), Phase 35 (Redis registry drift gate + partial-key retirement + 7-module JSDoc audit), and the Phase 37 close sub-block (this ADR rewrite + the LLM-RELI-07 3-consecutive-green acceptance-gate observation). Readers who want the canonical answer to "what did v1.5 ship?" read this body; readers who want the journey read the sub-blocks bottom-up.
 
 ## Decision
 
-1. **Narrow the active cascade.** Cerebras + Groq removed from
-   `server/adapters/llm-provider.ts` runtime path. Adapter source files
-   left importable for emergency-only reference; no production code path
-   references them.
+1. **NIM-only active cascade at runtime.** `server/adapters/llm-provider.ts` invokes NVIDIA NIM exclusively in the production code path (Phase 29 SIMPLIFY-04 deleted Cerebras + Groq from the runtime cascade; Phase 30.1 declared OpenRouter dormant pending re-validation; Phase 34 deferred Cerebras + Groq provisioning altogether). Per-event retry budget: 2 attempts × 1s/4s exponential backoff + ±250ms jitter, governed by the Phase 30 tuned defaults (`LLM_BATCH_TIMEOUT_MS=120000`, `RETRY_ATTEMPTS=3`, `BACKOFF_MS=[2000, 8000, 32000]`, `JITTER_MS=500`). Providers gated on circuit-breaker `isAvailable` + token-budget `budgetState !== 'hard'`. Synthetic `skipReason` entries appended to `callHistory` on bypass.
 
-2. **Delete v1 + v2 extractor modules.** `server/lib/llmEventExtractor.v1.ts`
-   and `server/lib/llmEventExtractor.v2.ts` deleted along with their
-   Redis cache keys (`events:llm`, `events:llm:v2`, `events:llm:v2:partial`,
-   `events:llm-summary`, `events:llm-summary:v2`), their pipeline-version
-   toggle (`isPipelineV2`, `setPipelineOverride`, the
-   `events:llm-pipeline-override` key + endpoint), and the Pitfall 1
-   bridge that read them. v3 is now the only extractor; the cache bridge
-   collapses to "serve `events:llm:v3` or raw GDELT."
+2. **v1 + v2 extractor modules and their observability surface deleted.** `server/lib/llmEventExtractor.v1.ts` and `server/lib/llmEventExtractor.v2.ts` removed along with their Redis cache keys (`events:llm`, `events:llm:v2`, `events:llm:v2:partial`, `events:llm-summary`, `events:llm-summary:v2`), the pipeline-version toggle (`isPipelineV2`, `setPipelineOverride`, the `events:llm-pipeline-override` key + endpoint), and the multi-version Pitfall 1 bridge that read them (Phase 29 D-02, Plans 04-06). v3 is now the **only** extractor; the cache bridge collapses to "serve `events:llm:v3` or raw GDELT." Phase 35 SIMPLIFY-02 further retired the `events:llm:v3:partial` observability key (358 LOC removed; writer + interface + 3 script consumers + 4 test files + CLAUDE.md bullet). Rollback path: `git revert <Phase 29 deletion commit range>` — not a runtime flag flip. The Phase 27.4 D-26/D-40 deep-rollback lock is superseded by this decision.
 
-3. **Prove the LLM-optional architecture.** A new integration test
-   exercises the `/api/events` path with all LLM credentials unset and
-   asserts the route serves the raw-GDELT fallback. The runbook is
-   extended with the unset-credentials recovery procedure so the
-   degrade-open posture is auditable, not just folkloric.
+3. **LLM-optional architecture proven.** `/api/events` is **cache-only** (anti-pattern #17 invariant); the Pitfall 1 cache bridge in `server/routes/events.ts` serves raw GDELT when `events:llm:v3` is empty so the map never goes blank. Phase 29 added an integration test that exercises `/api/events` with all LLM credentials unset and asserts the raw-GDELT fallback; `server/__tests__/resilience/redis-death.test.ts` proves the chain works under Redis death too. The runbook (`docs/runbook.md` §6 + §13-§16, rewritten in Phase 36) carries the unset-credentials recovery procedure and the NIM-throttle handling playbook so the degrade-open posture is auditable, not just folkloric.
 
-4. **Vercel Pro upgrade landed in the same phase** so subsequent v1.5
-   phases (30, 31) tune against the 800s maxDuration ceiling. The cron
-   triad (`/api/cron/health`, `/api/cron/warm`, `/api/cron/refresh-events`)
-   no longer sits at the 60s Hobby-tier wall, removing the cascade-timeout
-   class of failure from the cron-warm and refresh-events runs.
+4. **Vercel Pro upgrade for the 800s `maxDuration` ceiling.** Phase 29 D-08 committed the upgrade ($20/mo) and locked `vercel.json functions.api/vercel-entry.js.maxDuration: 800`. The Hobby-300s wall is no longer an active failure mode; the daily LLM cron runs at ~10-min wall-clock with ~85% headroom against the new ceiling (Phase 30 Run 2: 124,533ms inside 800,000ms). The 3-entry cron schedule (`/api/cron/health`, `/api/cron/warm`, `/api/cron/refresh-events`) stays within the Hobby cap that was the original cron schema (now inherited under Pro) — no new cron entries added in v1.5.
+
+5. **Cleanup, hygiene, and the milestone-close gate.** Phase 30 retired the Hobby-era SIMPLIFY-01 incremental Redis flush (~95% fewer SET calls per cron run) and the SIMPLIFY-03 watchdog soft-warn tier (single hard-kill at the tuned 120s). Phase 35 landed the Redis registry drift gate (`src/__tests__/lib/redis-registry.test.ts`; 39 assertions across 4 sub-suites; CLAUDE.md + `docs/architecture/redis-keys.md` + production code parity); the 32-key deep-dive inventory at `docs/architecture/redis-keys.md`; the `freeClaudeRouter` callers-block (SIMPLIFY-05); and the 7-module JSDoc audit (DOCS-INT-02). Phase 36 swept the public documentation surface (README, `docs/architecture/**/*.md`, runbook, ADR-0011, degradation contract) to match shipped reality and added two mechanical drift gates: Redocly OpenAPI lint (`server/__tests__/openapi/openapi-lint.test.ts`) and markdown-link-check (`npm run docs:lint`). Phase 37 (this milestone close) rewrites this ADR body to the milestone-final shipped state, appends the Phase 37 close sub-block as the 6th and final v1.5 sub-block, and observes `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs (LLM-RELI-07) — the acceptance gate that unblocks v1.6 promotion (999.5 load test first).
 
 ## Phase 30 Sub-block (appended 2026-05-17)
 
