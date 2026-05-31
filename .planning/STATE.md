@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: LLM Reliability & Reveal Prep — 🚧 IN PROGRESS
-status: executing
-last_updated: "2026-05-31T16:55:59.569Z"
-last_activity: 2026-05-31 -- Phase 37 execution started
+status: paused -- Phase 37 Wave 2 blocked by prod-connectivity-audit failure (LLM-RELI-07 cannot be observed; see 37-HANDOFF.md)
+last_updated: "2026-05-31T17:30:00.000Z"
+last_activity: 2026-05-31 -- Phase 37 Wave 1 complete (37-01 ADR rewrite merged); Wave 2 paused awaiting prod audit greens
 progress:
   total_phases: 15
   completed_phases: 8
   total_plans: 62
-  completed_plans: 55
-  percent: 53
+  completed_plans: 56
+  percent: 54
 ---
 
 # Project State
@@ -23,12 +23,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 37 (adr-0010-acceptance-gate-closeout) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 37
-Last activity: 2026-05-31 -- Phase 37 execution started
+Phase: 37 (adr-0010-acceptance-gate-closeout) — PAUSED (Wave 2 blocker)
+Plan: 1 of 3 complete (37-01 ADR rewrite merged on `feature/37-adr-0010-acceptance-gate-closeout`)
+Status: Paused — Wave 2 (37-02 acceptance gate observation) blocked because `prod-connectivity-audit.yml` has not landed a green run since 2026-05-08 (last 9 runs red; `/api/audit-status` returns `{"status":"absent"}`). LLM-RELI-07 cannot be observed until prod is restored to 3 consecutive greens.
+Last activity: 2026-05-31 -- Phase 37 Wave 1 merged (commit ff61b12); Wave 2 paused, 37-HANDOFF.md written
 
-Resume file: [`.planning/phases/37-adr-0010-acceptance-gate-closeout/37-CONTEXT.md`](phases/37-adr-0010-acceptance-gate-closeout/37-CONTEXT.md).
+Resume file: [`.planning/phases/37-adr-0010-acceptance-gate-closeout/37-HANDOFF.md`](phases/37-adr-0010-acceptance-gate-closeout/37-HANDOFF.md).
 
 Backlog items 999.1 / 999.2 / 999.3 / 999.5 remain parked — they are NOT the next sequenced phase. Per the ROADMAP, Phase 37 (ADR-0010 + LLM-RELI-07 acceptance gate observation) is the milestone-close gate by construction.
 
