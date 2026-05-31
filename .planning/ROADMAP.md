@@ -316,7 +316,7 @@ Plans:
 
 Plans:
 
-- [ ] 37-01-PLAN.md — ADR-0010 milestone-final rewrite + Phase 37 close sub-block (D-01..D-05 from CONTEXT)
+- [x] 37-01-PLAN.md — ADR-0010 milestone-final rewrite + Phase 37 close sub-block (D-01..D-05 from CONTEXT)
 - [ ] 37-02-PLAN.md — Acceptance-gate observation: 3 consecutive prod-connectivity-audit.yml greens (D-06..D-09; operator out-of-band trigger × 3 + evidence capture)
 - [ ] 37-03-PLAN.md — Milestone close: CHANGELOG[v1.5] + 37-SUMMARY.md (rollup + framing-gaps + snapshot + promotion + decision table) + ROADMAP/REQUIREMENTS/STATE flips + 3-gate verification (D-10..D-19)
 
@@ -332,7 +332,7 @@ Plans:
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 1/5 (4 skipped)      | Closed (deferred)     | 2026-05-23 |
 | 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 5/6                  | In Progress           |            |
 | 36. Public Docs Sweep + OpenAPI Additions                                     | 6/6                  | Complete              | 2026-05-30 |
-| 37. ADR-0010 + Acceptance Gate Closeout                                       | 0/3                  | Planned               | -          |
+| 37. ADR-0010 + Acceptance Gate Closeout                                       | 1/3                  | In Progress           |            |
 
 ### Parallelization Notes
 
