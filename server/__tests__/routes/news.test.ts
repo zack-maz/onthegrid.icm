@@ -292,13 +292,68 @@ describe('News Route (/api/news)', () => {
     expect(body.data).toHaveLength(1);
   });
 
-  it('GDELT failure with no cache returns 502 UPSTREAM_FAIL', async () => {
+  it('GDELT failure with RSS success returns 200 with RSS-only data + writes news:feed:rss-only sidecar (Phase 37 fix/news-feed-rss-fallback)', async () => {
+    // Phase 37 fix/news-feed-rss-fallback — the GDELT-DOC-optional contract.
+    // GDELT-DOC's IP-based 429 throttle is sticky for hours across the Vercel
+    // function pool; before this fix the route 502'd while RSS articles were
+    // flowing fine. After the fix: route serves RSS-only data on 200 AND
+    // writes the news:feed:rss-only sidecar key so the /api/health news
+    // probe can surface `degraded` (graceful degradation engaged) instead
+    // of `unknown` (broken) — needed for the audit D-03 non-critical-tier
+    // rule (`accepts healthy OR degraded but NOT unknown`).
+    // Use a high-confidence triple (Israel-strike-Iran) + BBC tier-1 source
+    // so the relevance score reliably clears the 0.7 threshold without
+    // depending on compromise-NLP's heuristic behavior for any given title.
+    const strongRssArticle: NewsArticle = makeArticle({
+      id: hashUrl('https://bbc.co.uk/news/rss-only-1'),
+      url: 'https://bbc.co.uk/news/rss-only-1',
+      title: 'Israel launches missile strike against Iran nuclear facility, casualties reported',
+      source: 'BBC',
+      sourceCountry: 'United Kingdom',
+      publishedAt: Date.now() - 600_000,
+    });
+    mockFetchGdeltArticles.mockRejectedValue(
+      new Error('GDELT DOC API returned 429: Too Many Requests'),
+    );
+    mockFetchAllRssFeeds.mockResolvedValue([strongRssArticle]);
+
+    const res = await fetch(`${baseUrl}/api/news`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.stale).toBe(false);
+    // Should still have at least the RSS article surviving the NLP filter.
+    expect(body.data.length).toBeGreaterThanOrEqual(1);
+    // Sidecar must be written (Phase 37 fallback-healthy witness for the probe).
+    expect(redisStore.has('news:feed:rss-only')).toBe(true);
+  });
+
+  it('GDELT failure with RSS empty returns 502 UPSTREAM_FAIL (preserve total-outage honesty)', async () => {
+    // Phase 37 fix/news-feed-rss-fallback contract: graceful degradation
+    // applies ONLY when at least one upstream produced articles. A true
+    // total outage (both feeds empty) must still surface as 502 so the
+    // probe's `unknown` correctly distinguishes "broken" from "degraded."
     mockFetchGdeltArticles.mockRejectedValue(new Error('GDELT DOC API down'));
+    mockFetchAllRssFeeds.mockResolvedValue([]);
 
     const res = await fetch(`${baseUrl}/api/news`);
     expect(res.status).toBe(502);
     const body = await res.json();
     expect(body.code).toBe('UPSTREAM_FAIL');
+    // Sidecar must NOT be written on total outage (would falsely signal degraded).
+    expect(redisStore.has('news:feed:rss-only')).toBe(false);
+  });
+
+  it('GDELT success does not write news:feed:rss-only sidecar (Phase 37 fix/news-feed-rss-fallback)', async () => {
+    // Sanity: sidecar is a `gdeltFailed && rssYielded` witness, NOT a
+    // general "news was fetched" signal. Healthy steady-state must NOT
+    // write it or the probe would misreport `degraded` while both
+    // upstreams are working.
+    mockFetchGdeltArticles.mockResolvedValue([gdeltArticle1]);
+    mockFetchAllRssFeeds.mockResolvedValue([rssArticle1]);
+
+    const res = await fetch(`${baseUrl}/api/news`);
+    expect(res.status).toBe(200);
+    expect(redisStore.has('news:feed:rss-only')).toBe(false);
   });
 
   it('RSS failure does not block response (best-effort)', async () => {

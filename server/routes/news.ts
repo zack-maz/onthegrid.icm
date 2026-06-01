@@ -27,6 +27,23 @@ const newsQuerySchema = z.object({
 /** Redis key for the merged news feed */
 const NEWS_FEED_KEY = 'news:feed';
 
+/**
+ * Phase 37 fix/news-feed-rss-fallback — sidecar freshness witness for the
+ * RSS-only fallback path. Mirrors the Phase 37 PR #32 pattern (where
+ * `events:gdelt` is the documented fallback signal for `events:llm:v3`).
+ *
+ * Written by this route ONLY when GDELT fetch failed AND RSS yielded ≥1
+ * article — i.e., the user-facing surface is gracefully degraded but not
+ * broken. The `/api/health` `news` probe reads this key as
+ * `fallbackHealthyKey` so the audit's D-03 rule sees `degraded` (intentional
+ * graceful degradation) instead of `unknown` (broken) when GDELT is
+ * IP-throttled but RSS is still flowing.
+ *
+ * The payload is a single timestamp (number) — only the cache envelope's
+ * `lastFresh` field matters; no consumer reads the value.
+ */
+const NEWS_RSS_ONLY_KEY = 'news:feed:rss-only';
+
 export const newsRouter = Router();
 
 newsRouter.get('/', validateQuery(newsQuerySchema), async (_req, res) => {
@@ -41,14 +58,33 @@ newsRouter.get('/', validateQuery(newsQuerySchema), async (_req, res) => {
   }
 
   try {
-    // 2. Fetch GDELT (required) + RSS (best-effort) concurrently
+    // 2. Fetch GDELT + RSS concurrently. Both are best-effort per the Phase
+    //    37 fix/news-feed-rss-fallback contract — GDELT's IP-based 429
+    //    throttle is sticky for hours on Vercel function pool IPs, and the
+    //    six-source RSS feed yields ~50-200 articles in steady state, so
+    //    degrading to RSS-only is a usefully-graceful fallback that the
+    //    prior "GDELT required" design discarded.
+    let gdeltFailed = false;
     const [gdeltArticles, rssArticles] = await Promise.all([
-      fetchGdeltArticles(),
+      fetchGdeltArticles().catch((err) => {
+        gdeltFailed = true;
+        log.warn({ err }, 'GDELT fetch failed (non-fatal, falling back to RSS-only)');
+        return [] as NewsArticle[];
+      }),
       fetchAllRssFeeds().catch((err) => {
         log.warn({ err }, 'RSS fetch failed (non-fatal)');
         return [] as NewsArticle[];
       }),
     ]);
+
+    // 2b. Total upstream outage — preserve the honest-failure semantics so
+    //     the /api/health news probe surfaces `unknown` (no fresh cache) +
+    //     the route returns 502 (no fresh OR stale data to serve). Mirrors
+    //     the Phase 37 PR #32 contract: "documented graceful degradation
+    //     reports degraded; true total outage reports unknown."
+    if (gdeltArticles.length === 0 && rssArticles.length === 0) {
+      throw new Error('both upstreams returned no articles');
+    }
 
     // 3. Combine all articles
     const allArticles = [...gdeltArticles, ...rssArticles];
@@ -80,9 +116,22 @@ newsRouter.get('/', validateQuery(newsQuerySchema), async (_req, res) => {
     // 8. Cache merged feed
     await cacheSetSafe(NEWS_FEED_KEY, clusters, NEWS_REDIS_TTL_SEC);
 
+    // 8b. RSS-only sidecar signal (Phase 37 fix/news-feed-rss-fallback).
+    //     Write the sidecar ONLY when GDELT failed but RSS produced data —
+    //     this is the precise "graceful degradation engaged" condition the
+    //     /api/health news probe needs to surface as `degraded` (not
+    //     `healthy`, which would hide the throttle, and not `unknown`,
+    //     which would fail the D-03 non-critical tier rule).
+    if (gdeltFailed && rssArticles.length > 0) {
+      await cacheSetSafe(NEWS_RSS_ONLY_KEY, Date.now(), NEWS_REDIS_TTL_SEC);
+    }
+
     const gdeltCount = gdeltArticles.length;
     const rssCount = rssArticles.length;
-    log.info({ gdeltCount, rssCount, clusterCount: clusters.length }, 'fetched and clustered news');
+    log.info(
+      { gdeltCount, rssCount, clusterCount: clusters.length, gdeltFailed },
+      'fetched and clustered news',
+    );
 
     // 9. Return response
     res.json({ data: clusters, stale: false, lastFresh: Date.now() });

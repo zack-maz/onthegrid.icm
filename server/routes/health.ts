@@ -45,6 +45,25 @@ export const healthRouter = Router();
 const PROBE_TIMEOUT_MS = 2_000;
 
 /**
+ * Phase 37 fix/news-feed-rss-fallback — sidecar freshness witness for the
+ * RSS-only news fallback path. Written by server/routes/news.ts ONLY when
+ * GDELT-DOC fetch failed AND `fetchAllRssFeeds()` yielded ≥1 article —
+ * i.e., the user-facing /api/news surface is gracefully degraded but not
+ * broken. The `news` probe below uses this key as `fallbackHealthyKey` so
+ * the audit's D-03 rule sees `degraded` (intentional graceful degradation)
+ * instead of `unknown` (broken) when GDELT-DOC is IP-throttled (its sticky
+ * 429 from all Vercel function-pool IPs blocks /api/news the same way
+ * "unset both LLM credentials" was unblocking /api/events under ADR-0010
+ * before PR #32 wired the LLM-optional fallback signal).
+ *
+ * Not registered in SOURCE_KEYS because sidecars are signals, not endpoints
+ * — they have no tier and no D-25 freshness threshold of their own; the
+ * `news` endpoint's threshold (30 min, FRESHNESS_THRESHOLDS_MS.news) is
+ * what gates whether the sidecar's `lastFresh` counts as "fallback active."
+ */
+const NEWS_RSS_ONLY_KEY = 'news:feed:rss-only';
+
+/**
  * Phase 37 fix/prod-audit-tier-regression — degraded sentinel for the
  * LLM-OPTIONAL fallback contract documented in ADR-0010.
  *
@@ -393,7 +412,19 @@ const PROBE_STRATEGIES: Record<string, ProbeStrategy> = {
     cacheKey: SOURCE_KEYS.llmEvents!,
     fallbackHealthyKey: SOURCE_KEYS.events!,
   },
-  news: { kind: 'cache', cacheKey: SOURCE_KEYS.news! },
+  // Phase 37 fix/news-feed-rss-fallback — GDELT-DOC-optional probe contract.
+  // Primary cache: news:feed (clustered render-target from GDELT-DOC + 6 RSS
+  // sources). Fallback-healthy signal: news:feed:rss-only (a timestamp-only
+  // sidecar written by server/routes/news.ts ONLY when GDELT failed but
+  // ≥1 RSS article was produced). When news:feed is cold but the sidecar
+  // is fresh, the probe reports `degraded` instead of `unknown` — the
+  // RSS-only fallback path is engaged and the route is degrading gracefully.
+  // Mirrors the llmEvents wiring just above (Phase 37 PR #32) byte-for-byte.
+  news: {
+    kind: 'cache',
+    cacheKey: SOURCE_KEYS.news!,
+    fallbackHealthyKey: NEWS_RSS_ONLY_KEY,
+  },
   markets: { kind: 'cache', cacheKey: SOURCE_KEYS.markets! },
   weather: { kind: 'cache', cacheKey: SOURCE_KEYS.weather! },
   sites: { kind: 'cache', cacheKey: SOURCE_KEYS.sites! },
