@@ -180,11 +180,15 @@ describe('SOURCE_KEYS llmEvents entry — DRIFT-5 (Phase 28.2.5 D-06)', () => {
     expect(FRESHNESS_THRESHOLDS_MS.llmEvents).toBe(26 * 60 * 60_000);
   });
 
-  it('classifies llmEvents as critical tier', () => {
-    // Per D-06 + Open Question 1 recommendation: stay at 'critical' (no
-    // 'critical-llm' sub-tier — would require Zod schema bump + buildSummary refactor).
-    // The Pitfall 1 cache-bridge to raw GDELT is the safety net; the gate's
-    // strict 'critical' read here flags fallback even when the raw events route is healthy.
-    expect(TIER_BY_ENDPOINT.llmEvents).toBe('critical');
+  it('classifies llmEvents as non-critical tier (Phase 37 — ADR-0010 LLM-optional)', () => {
+    // Phase 37 fix/prod-audit-tier-regression — demoted from 'critical' to
+    // 'non-critical'. Phase 28.2.5 D-06 promoted events:llm:v3 to gate-relevant
+    // when the LLM was mandatory; Phase 29 / ADR-0010 made the LLM OPTIONAL.
+    // The Pitfall 1 raw-GDELT bridge in server/routes/events.ts serves
+    // /api/events cleanly when v3 is empty, so an empty v3 is no longer a
+    // gate-blocking failure. Paired with the probe's degraded-on-fallback
+    // signal so the audit's D-03 rule (non-critical accepts healthy OR
+    // degraded) doesn't fail on intentional graceful degradation.
+    expect(TIER_BY_ENDPOINT.llmEvents).toBe('non-critical');
   });
 });

@@ -46,10 +46,14 @@ export const SOURCE_KEYS: Record<string, string> = {
   water: 'water:facilities:v3',
   // DRIFT-4: waterPrecip was in thresholds + tier but missing from SOURCE_KEYS — operator-reported in 28.2.5.
   waterPrecip: 'water:precip',
-  // DRIFT-5: events:llm:v3 promoted from observability-only to gate-relevant per 28.2.5 D-06.
-  // The cache-bridge fallback chain at events.ts:701-731 starts with v3; this entry gives
-  // the API Health tab a probe target for the top of the chain. Bridge to raw GDELT (key
-  // 'events') remains as Pitfall 1 safety net.
+  // Phase 37 (fix/prod-audit-tier-regression): `events:llm:v3` is the primary cache
+  // for LLM-enriched events. Per ADR-0010, the architecture is LLM-OPTIONAL: when v3
+  // is empty (LLM unconfigured, NIM throttled hard, or cron deferred), the route in
+  // server/routes/events.ts serves raw GDELT via the Pitfall 1 bridge. The map never
+  // goes blank. The probe in server/routes/health.ts mirrors this contract: a cold
+  // v3 + fresh raw-GDELT cache reports `degraded` (LLM-optional fallback active), not
+  // `unknown` (broken). See ADR-0010 "Out-of-scope carries forward" → "unset both LLM
+  // credentials is the kill switch" for the operator-side semantics.
   llmEvents: 'events:llm:v3',
 };
 
@@ -107,7 +111,13 @@ export const TIER_BY_ENDPOINT: Record<string, HealthTier> = {
   flights: 'critical', // D-26
   ships: 'critical', // D-26
   events: 'critical', // D-26
-  llmEvents: 'critical', // D-26 (28.2.5 D-06 — promotes events:llm:v3 to gate-relevant)
+  // Phase 37 fix/prod-audit-tier-regression: demoted from `critical` to `non-critical`.
+  // Phase 28.2.5 D-06 promoted `events:llm:v3` to gate-relevant when the LLM was
+  // mandatory. Phase 29 (ADR-0010) made the LLM OPTIONAL — the Pitfall 1 raw-GDELT
+  // bridge serves /api/events cleanly when v3 is empty, so `llmEvents: unknown` is
+  // no longer a gate-blocking failure. The probe pairs this demotion with a
+  // `degraded` signal when the LLM-optional fallback is active (see health.ts).
+  llmEvents: 'non-critical',
   markets: 'non-critical', // D-26
   news: 'non-critical', // D-26
   // DELTA-A2: /api/weather is a visualization layer, not core conflict data.
