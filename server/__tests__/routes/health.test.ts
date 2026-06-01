@@ -338,4 +338,51 @@ describe('GET /api/health (W2 extended)', () => {
     const body = healthResponseSchema.parse(getBody());
     expect(body.endpoints.llmStatus?.status).toBe('degraded');
   });
+
+  it('Test 11 (Phase 37 — fix/news-feed-rss-fallback): news is DEGRADED when news:feed is cold but news:feed:rss-only sidecar is fresh', async () => {
+    // Phase 37 fix/news-feed-rss-fallback — the GDELT-DOC-optional contract
+    // for the news subsystem. GDELT-DOC's IP-based 429 throttle is sticky
+    // for hours across Vercel function-pool IPs; when GDELT fails but the
+    // RSS-only fallback produces ≥1 article, server/routes/news.ts writes
+    // the news:feed:rss-only sidecar timestamp. This probe must surface
+    // `degraded` (graceful degradation engaged, audit D-03 non-critical
+    // tier rule passes) instead of `unknown` (broken, audit D-03 fails) —
+    // mirrors Test 9's llmEvents fallback wiring byte-for-byte.
+    const now = Date.now();
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'news:feed') return null;
+      if (key === 'news:feed:rss-only') {
+        return { data: now - 60_000, stale: false, lastFresh: now - 60_000 };
+      }
+      return null;
+    });
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    expect(body.endpoints.news?.status).toBe('degraded');
+    expect(body.endpoints.news?.lastErrorReason ?? '').toMatch(/fallback-active/);
+  });
+
+  it('Test 12 (Phase 37 — fix/news-feed-rss-fallback): news is UNKNOWN when BOTH news:feed AND news:feed:rss-only are cold', async () => {
+    // Phase 37 fix/news-feed-rss-fallback — total-outage honesty. When the
+    // primary news:feed cache AND the RSS-only sidecar are BOTH cold, the
+    // probe must report `unknown`, NOT `degraded` — this is the audit's
+    // honest-failure signal for a true upstream blackout (both GDELT and
+    // every RSS feed unreachable, or fresh-deploy cold cache).
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockImplementation(async (_key: string) => null);
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    expect(body.endpoints.news?.status).toBe('unknown');
+  });
 });
