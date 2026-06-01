@@ -234,7 +234,9 @@ describe('GET /api/health (W2 extended)', () => {
     expect(body.endpoints.waterPrecip?.tier).toBe('non-critical');
   });
 
-  it('Test 6 (Phase 28.2.5 D-06): endpoint llmEvents exists with critical tier + 26h threshold', async () => {
+  it('Test 6 (Phase 37 — ADR-0010 LLM-optional): endpoint llmEvents exists with non-critical tier + 26h threshold', async () => {
+    // Demoted from `critical` to `non-critical` in Phase 37 fix/prod-audit-tier-regression.
+    // The 26h threshold survives unchanged (matches cron triad cadence).
     mockPing.mockResolvedValue('PONG');
     mockCacheGetSafe.mockResolvedValue(null);
 
@@ -245,7 +247,7 @@ describe('GET /api/health (W2 extended)', () => {
 
     const body = healthResponseSchema.parse(getBody());
     expect(body.endpoints.llmEvents).toBeDefined();
-    expect(body.endpoints.llmEvents?.tier).toBe('critical');
+    expect(body.endpoints.llmEvents?.tier).toBe('non-critical');
     expect(body.endpoints.llmEvents?.freshnessThresholdMs).toBe(26 * 60 * 60_000);
   });
 
@@ -268,10 +270,10 @@ describe('GET /api/health (W2 extended)', () => {
     expect(body.endpoints.llmEvents?.status).toBe('healthy');
   });
 
-  it('Test 8 (Phase 28.2.5 D-06): llmEvents is unknown on cold cache (cache-bridge fallback active)', async () => {
-    // Operator signal — when v3 is cold, the route falls through to v2/v1/raw-GDELT
-    // per Pitfall 1. The /api/health gate calls this out via 'unknown' status,
-    // letting the operator force-trigger /api/cron/refresh-events?force=true.
+  it('Test 8 (Phase 37 — ADR-0010 LLM-optional): llmEvents is unknown when BOTH v3 AND raw GDELT are cold', async () => {
+    // Operator signal — both the enriched cache AND the Pitfall 1 raw-GDELT
+    // fallback are empty. The user-facing /api/events would return empty too,
+    // so this is a genuine degradation needing operator attention.
     mockPing.mockResolvedValue('PONG');
     mockCacheGetSafe.mockResolvedValue(null);
 
@@ -282,5 +284,58 @@ describe('GET /api/health (W2 extended)', () => {
 
     const body = healthResponseSchema.parse(getBody());
     expect(body.endpoints.llmEvents?.status).toBe('unknown');
+  });
+
+  it('Test 9 (Phase 37 — ADR-0010 LLM-optional): llmEvents is DEGRADED when v3 is cold but raw GDELT is fresh (Pitfall 1 bridge active)', async () => {
+    // Phase 37 fix/prod-audit-tier-regression — the LLM-optional contract.
+    // ADR-0010 documents "unset both LLM credentials" as a kill switch; the
+    // route then serves raw GDELT via the Pitfall 1 bridge. The audit's D-03
+    // rule (non-critical accepts healthy OR degraded but NOT unknown) needs
+    // this degraded signal to pass when the kill switch is engaged on
+    // purpose — otherwise an intentional, documented degradation would fail
+    // the prod-connectivity-audit acceptance gate.
+    const now = Date.now();
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') return null;
+      if (key === 'events:gdelt') {
+        return { data: [], stale: false, lastFresh: now - 60_000 };
+      }
+      return null;
+    });
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    expect(body.endpoints.llmEvents?.status).toBe('degraded');
+    expect(body.endpoints.llmEvents?.lastErrorReason ?? '').toMatch(/llm-optional/);
+  });
+
+  it('Test 10 (Phase 37 — ADR-0010 LLM-optional): llmStatus is DEGRADED when llm:lastProgress is empty but refresh-events cron is fresh', async () => {
+    // Companion to Test 9 for the llmStatus probe — when both Redis and the
+    // in-memory singleton report no completed extraction, the cron-tick
+    // freshness disambiguates between "pipeline broken" (unknown) and
+    // "kill switch engaged but cron is firing on schedule" (degraded).
+    const now = Date.now();
+    mockPing.mockResolvedValue('PONG');
+    // llm:lastProgress empty; cron:lastTick:refresh-events fresh.
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key === 'llm:lastProgress') return null;
+      if (key === 'cron:lastTick:refresh-events') {
+        return { data: now - 60_000, stale: false, lastFresh: now - 60_000 };
+      }
+      return null;
+    });
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    expect(body.endpoints.llmStatus?.status).toBe('degraded');
   });
 });
