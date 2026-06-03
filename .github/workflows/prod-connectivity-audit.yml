@@ -189,15 +189,14 @@ jobs:
               // windows by design. Treating cold as gate-blocking failed the
               // audit ~99% of the time and led to three rounds of probe-side
               // "degraded-on-fallback" patches (PR #32 llmEvents/llmStatus, PR
-              // #33 news) papering over a mismatch between the gate's
-              // assumptions and the system's actual cache architecture. The
+              // #33 news) papering over a mismatch between the audit gate
+              // assumptions and the cache architecture of this system. The
               // gate is a measurement tool; the system is the truth. If the
               // system serves users correctly via graceful degradation (and
               // the route layer returns 200), the gate should reflect that.
-              // Critical tier strictness preserved — the dashboard's load-
-              // bearing real-time surfaces (flights/ships/events that are now
-              // *critical*-tier, having been demoted from the original
-              // 4-critical set in PR #32) still gate the milestone close.
+              // Critical tier strictness preserved — the load-bearing
+              // real-time surfaces (flights/ships/events) still gate the
+              // milestone close, just under the new tier mapping from PR #32.
               //
               // CONTEXT.md scope deviation (acknowledged): Phase 37 originally
               // declared this workflow file out of scope. The 3-PR pattern is
