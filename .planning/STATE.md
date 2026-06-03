@@ -1,16 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.5
-milestone_name: LLM Reliability & Reveal Prep — 🚧 IN PROGRESS
-status: paused -- Phase 37 Wave 2 blocked by prod-connectivity-audit failure (LLM-RELI-07 cannot be observed; see 37-HANDOFF.md)
-last_updated: "2026-05-31T17:30:00.000Z"
-last_activity: 2026-05-31 -- Phase 37 Wave 1 complete (37-01 ADR rewrite merged); Wave 2 paused awaiting prod audit greens
+milestone_name: LLM Reliability & Reveal Prep — ✅ SHIPPED 2026-06-03
+status: shipped
+last_updated: 2026-06-03T03:40:00.000Z
+last_activity: 2026-06-03 -- Phase 37 complete (3/3); v1.5 milestone CLOSED; LLM-RELI-07 acceptance gate satisfied (3 consecutive greens); v1.6 promotion unblocked (Phase 999.5 next)
 progress:
   total_phases: 15
-  completed_phases: 8
+  completed_phases: 10
   total_plans: 62
-  completed_plans: 56
-  percent: 54
+  completed_plans: 60
+  percent: 67
+stopped_at: v1.5 SHIPPED 2026-06-03 — ready for v1.6 milestone start (Phase 999.5 Performance Load Test promotes first)
 ---
 
 # Project State
@@ -23,20 +24,18 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 37 (adr-0010-acceptance-gate-closeout) — PAUSED (Wave 2 blocker)
-Plan: 1 of 3 complete (37-01 ADR rewrite merged on `feature/37-adr-0010-acceptance-gate-closeout`)
-Status: Paused — Wave 2 (37-02 acceptance gate observation) blocked because `prod-connectivity-audit.yml` has not landed a green run since 2026-05-08 (last 9 runs red; `/api/audit-status` returns `{"status":"absent"}`). LLM-RELI-07 cannot be observed until prod is restored to 3 consecutive greens.
-Last activity: 2026-05-31 -- Phase 37 Wave 1 merged (commit ff61b12); Wave 2 paused, 37-HANDOFF.md written
+Milestone: **v1.5 LLM Reliability & Reveal Prep — ✅ SHIPPED 2026-06-03**
+Next: v1.6 milestone start (Phase 999.5 Performance Load Test promotes first)
+Status: v1.5 closed; ready for v1.6 planning
+Last activity: 2026-06-03 -- Phase 37 closed; LLM-RELI-07 acceptance gate satisfied
 
-Resume file: [`.planning/phases/37-adr-0010-acceptance-gate-closeout/37-HANDOFF.md`](phases/37-adr-0010-acceptance-gate-closeout/37-HANDOFF.md).
+Phase 37 close artifact: [`.planning/phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md`](phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md).
 
-Backlog items 999.1 / 999.2 / 999.3 / 999.5 remain parked — they are NOT the next sequenced phase. Per the ROADMAP, Phase 37 (ADR-0010 + LLM-RELI-07 acceptance gate observation) is the milestone-close gate by construction.
+v1.5 CHANGELOG entry: [`CHANGELOG.md`](../CHANGELOG.md) §`[v1.5]` — 10 phases shipped 2026-05-11 → 2026-06-03 (24 days).
 
-Phase 36 close artifact: [`.planning/phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md`](phases/36-public-docs-sweep-openapi-additions/36-SUMMARY.md).
+Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at `.planning/milestones/v1.4-MILESTONE-AUDIT.md`.
 
-Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at .planning/milestones/v1.4-MILESTONE-AUDIT.md.
-
-Acceptance gate (set at milestone start, blocks v1.6 promotion): prod-connectivity-audit.yml exit-0 with allTiersGreen=true for 3 consecutive runs (LLM-RELI-07; observed in Phase 37 closeout).
+Acceptance gate (set at v1.5 milestone start, blocked v1.6 promotion): `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs (LLM-RELI-07). **OBSERVED 2026-06-01 → 2026-06-03**: Run 1 [26771054370](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26771054370), Run 2 [26856054351](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856054351), Run 3 [26856364229](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856364229). Gate satisfied; v1.6 promotion unblocked.
 
 ## v1.5 Phases (planned)
 

@@ -110,7 +110,7 @@ Full phase-by-phase detail archived to [milestones/v1.4-ROADMAP.md](milestones/v
 - [x] **Phase 34: LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)** — ✓ CLOSED 2026-05-23 as `cerebras-groq-deferred` (operator chose to skip provisioning free-tier accounts; no probe ran). Plans 34-01..04 SKIPPED; only Plan 34-05 close-out executed. ADR-0010 Phase 34 sub-block + `docs/architecture/llm-pipeline-reliability.md` "Multi-Provider Cascade (Phase 34)" section record the deferral rationale. Phase 31 Day-1 DLQ baseline (4 × `v3:timeout_watchdog`) remains a known failure mode under the single-provider cascade. Planning artifacts (CONTEXT/RESEARCH/5 PLANs) preserved in `.planning/phases/34-.../` as the ready-to-execute audit trail for any future provider-restoration phase.
 - [x] **Phase 35: Internal Docs (JSDoc) + Redis Registry + Redis Optimization + Cleanup Sweep** — ✓ CLOSED 2026-05-27. Mechanical drift gate landed (`src/__tests__/lib/redis-registry.test.ts`, 39 assertions across 4 sub-suites). 32-key deep-dive inventory authored at `docs/architecture/redis-keys.md`. CLAUDE.md §Serverless Cache refreshed (4 add + 2 refine + 1 cron-parametric normalisation). `events:llm:v3:partial` retired across 10 surfaces (358 LOC removed; SIMPLIFY-02). `freeClaudeRouter.ts` documented alive (3 live production callers; SIMPLIFY-05). TTL audit: 32 keys reviewed, all right-sized (audit-only outcome per Phase 31 precedent). 7-module JSDoc audit complete (44 exports; 28 new one-liners + 16 verified). Bundle delta: +10,739 bytes (+0.60%; JSDoc additions outweigh deletions; negligible on 1.7MB). ADR-0010 Phase 35 sub-block appended. 17 atomic commits on `feature/35-internal-docs-jsdoc-redis-registry-redis-optimization-cleanu`. _(DOCS-INT-01 CLAUDE.md trim was moved to Phase 29 on 2026-05-09. SIMPLIFY-06 v1 archive folded into Phase 29's full deletion.)_
 - [x] **Phase 36: Public Docs Sweep + OpenAPI Additions** — ✓ CLOSED 2026-05-30. README sweep (rate-limit drift + LLM Enrichment section); 12 architecture markdown files audited (7 edited / 5 verified-clean); 21 Mermaid blocks audited (3 edited / 18 verified-clean); ADR-0011 Phase 36 sub-block; runbook §6 rewrite + §13-§16 SRE-template appendage; degradation.md Pitfall 1 contract; OpenAPI 3.0.3 spec gained 5 new endpoints + 2 verified-clean entries + 4 reusable schemas + 2 named securitySchemes (cronSecret + operatorBearer); Redocly lint vitest + markdown-link-check script wired as mechanical drift gates. 26 atomic commits across 6 plans (3 waves). DOCS-PUB-04 (ADR-0010 milestone close) deferred to Phase 37.
-- [ ] **Phase 37: ADR-0010 + Acceptance Gate Closeout** — Capture v1.5 LLM-pipeline decisions in a new ADR (ADR-0010 — the 0009 slot is taken by the existing Accepted two-key-split ADR); observe `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs; lock the milestone close.
+- [x] **Phase 37: ADR-0010 + Acceptance Gate Closeout** — Capture v1.5 LLM-pipeline decisions in a new ADR (ADR-0010 — the 0009 slot is taken by the existing Accepted two-key-split ADR); observe `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs; lock the milestone close. (completed 2026-06-03)
 
 ### Phase Details
 
@@ -317,8 +317,8 @@ Plans:
 Plans:
 
 - [x] 37-01-PLAN.md — ADR-0010 milestone-final rewrite + Phase 37 close sub-block (D-01..D-05 from CONTEXT)
-- [ ] 37-02-PLAN.md — Acceptance-gate observation: 3 consecutive prod-connectivity-audit.yml greens (D-06..D-09; operator out-of-band trigger × 3 + evidence capture)
-- [ ] 37-03-PLAN.md — Milestone close: CHANGELOG[v1.5] + 37-SUMMARY.md (rollup + framing-gaps + snapshot + promotion + decision table) + ROADMAP/REQUIREMENTS/STATE flips + 3-gate verification (D-10..D-19)
+- [x] 37-02-PLAN.md — Acceptance-gate observation: 3 consecutive prod-connectivity-audit.yml greens (D-06..D-09; operator out-of-band trigger × 3 + evidence capture)
+- [x] 37-03-PLAN.md — Milestone close: CHANGELOG[v1.5] + 37-SUMMARY.md (rollup + framing-gaps + snapshot + promotion + decision table) + ROADMAP/REQUIREMENTS/STATE flips + 3-gate verification (D-10..D-19)
 
 ### Progress
 
@@ -332,7 +332,7 @@ Plans:
 | 34. LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval)  | 1/5 (4 skipped)      | Closed (deferred)     | 2026-05-23 |
 | 35. Internal Docs + Redis Registry Verification + Redis Optimization          | 5/6                  | In Progress           |            |
 | 36. Public Docs Sweep + OpenAPI Additions                                     | 6/6                  | Complete              | 2026-05-30 |
-| 37. ADR-0010 + Acceptance Gate Closeout                                       | 1/3                  | In Progress           |            |
+| 37. ADR-0010 + Acceptance Gate Closeout                                       | 3/3                  | Complete              | 2026-06-03 |
 
 ### Parallelization Notes
 
