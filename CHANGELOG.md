@@ -2,6 +2,71 @@
 
 All notable changes to the Iran Monitor project.
 
+## [v1.5] — LLM Reliability & Reveal Prep — 2026-06-03
+
+**Span:** 2026-05-11 → 2026-06-03 (24 days, 10 phases shipped). Closing milestone for the v1.x line; v1.6 promotion unblocked at close.
+
+LLM pipeline narrowed and proven LLM-OPTIONAL: NIM at runtime, OpenRouter dormant, Cerebras + Groq deferred. The Pitfall 1 raw-GDELT cache bridge in `server/routes/events.ts` ships as the documented terminal fallback — when `events:llm:v3` is empty (LLM unconfigured, NIM throttled, or cron deferred), `/api/events` serves raw GDELT cleanly and the map never goes blank. ADR-0010 rewritten end-to-end to describe milestone-final shipped state. LLM-RELI-07 acceptance gate observed: 3 consecutive `prod-connectivity-audit.yml` exit-0 runs with `audit:connectivity:last-result.allTiersGreen === true`. Internal docs (JSDoc) + Redis-registry drift gate + public docs sweep + OpenAPI additions completed in lockstep. Vercel Pro upgrade ($20/mo, `maxDuration: 300 → 800`).
+
+### Headline deliverables
+
+- **LLM provider chain narrowing & LLM-Optional architecture (Phase 29):** Cascade narrowed to NIM + OpenRouter; v1 + v2 extractors deleted (Plans 04-06; ~6,400 LOC removed). `LLM_PIPELINE_V3=true` retired — v3 is the only extractor. LLM-optional contract proven via integration test (`/api/events` serves raw GDELT with all LLM credentials unset). Cerebras + Groq adapter dead-code purged. Vercel Pro upgrade. CLAUDE.md trimmed 73.3% to 5,018 tokens. Domain rename `irt-monitoring` → `otg-iran-monitor` finalized.
+- **NIM throttle characterization & cascade tuning (Phase 30 + 30.1):** Path B measurement run: `Retry-After` headers absent in 213 batches; defensive defaults anchored to `perBatchLatency.p95 = 33,263ms`. Committed `LLM_BATCH_TIMEOUT_MS = 120000` / `RETRY_ATTEMPTS = 3` / `BACKOFF_MS = [2000, 8000, 32000]` / `JITTER_MS = 500`. SIMPLIFY-01 incremental flush retired (~95% fewer Redis SETs / cron run, net -92 LOC). SIMPLIFY-03 watchdog soft-warn tier eliminated (-97 LOC). `docs/architecture/llm-pipeline-reliability.md` created as measurement home. Phase 30.1 honest cascade declaration: OpenRouter declared dormant (`scripts/probe-openrouter.ts` 27/30 = 90.0% rate_limited).
+- **Cron stability watch (Phase 31):** Day 1/7 watch passed; closed early per operator decision with caveat documented in 31-SUMMARY. The Day 1/7 caveat surfaced during Phase 37 acceptance-gate observation (slow-burn regression that the 7-day watch would have caught) — fix-pattern PRs landed in lockstep. Phase 31 reopening flagged as v1.6 candidate.
+- **Ghost-event URL liveness + dashboard + prune (Phase 32):** GHOST-01..05 closed. `events:url-liveness:{eventId}` per-event probe sidecar (`live` 7d / `dead` 24h / `unknown` 1h tiered TTL); `events:url-liveness-count` O(1) sidecar for dashboard polls; per-Bearer prune quota (50/24h, `operator:prune-quota:{fp}:{date}`). Schema test pinning JSON shape. Operator-status aggregator surfaces dead-URL counts.
+- **Actor metadata audit + canonical catalog + eval expansion (Phase 33):** ACTOR-01..05 closed. Canonical 200+ actor catalog with `actorConfidence` schema and inline LLM/manual citations. Eval expansion adds actor-resolution dimension.
+- **LLM Router Fallback Re-integration — DEFERRED (Phase 34):** Cerebras + Groq deferred per operator decision (`cerebras-groq-deferred` close-out). LLM-RELI-08..11 closed as Done with the deferral outcome. CLAUDE.md "Active providers" amended in lockstep. Phase 31 Day-1 DLQ baseline (`4 × v3:timeout_watchdog`) accepted as known failure mode.
+- **Internal docs + Redis registry verification + Redis optimization (Phase 35):** Redis-registry drift gate landed (`src/__tests__/lib/redis-registry.test.ts`; 39 assertions × 4 sub-suites; CLAUDE.md + `docs/architecture/redis-keys.md` + prod code parity). 32-key deep-dive inventory at `docs/architecture/redis-keys.md`. `events:llm:v3:partial` retired (SIMPLIFY-02; 358 LOC removed in single atomic commit). `freeClaudeRouter.ts` callers documented (SIMPLIFY-05). 7-module JSDoc audit (DOCS-INT-02). Bundle delta: +0.60% (JSDoc additions outweigh partial-key deletion).
+- **Public docs sweep + OpenAPI additions (Phase 36):** DOCS-PUB-01, 02, 03, 05 + DOCS-API-01..07 closed. OpenAPI spec for public surfaces (`/api/health`, `/api/audit-status`, `/api/events`, `/api/operator-status` + 13 more). External-facing README + PROJECT_SPEC + PROJECT_STATUS updates. DOCS-PUB-04 deferred to Phase 37 (ADR-0010 milestone-final rewrite).
+- **ADR-0010 milestone-final rewrite + acceptance-gate closeout (Phase 37):** DOCS-PUB-04 + LLM-RELI-07 closed. ADR-0010 body (Context / Decision / Consequences / Alternatives / References) rewritten to milestone-final shipped state. 6th and final v1.5 close sub-block appended with D-01..D-06 rows + v1.5 Milestone Close Rollup (6-arc retrospective inside the ADR). Status line gains second line `**Status:** Accepted (v1.5 closed 2026-06-03)`. 3 consecutive `prod-connectivity-audit.yml` exit-0 runs with `allTiersGreen=true` observed: Run 1 [26771054370](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26771054370) (2026-06-01T17:33Z), Run 2 [26856054351](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856054351) (2026-06-03T00:24Z), Run 3 [26856364229](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856364229) (2026-06-03T00:33Z) — span 31h crossing 2 cron ticks; Runs 2+3 compressed ~9 min apart per D-08 NOTE after the truth-table relaxation landed.
+
+### Acceptance-gate unblocker PRs (architectural mismatches surfaced during observation)
+
+The Phase 37 acceptance-gate observation window (2026-06-01 → 2026-06-03) revealed architectural mismatches between the Phase 28.2.5 D-09 strict tier-green gate and the system's actual LLM-optional + browser-polled cache architecture. 4 PRs landed on main to correct the gate:
+
+- **PR #32** (2026-06-01) — `llmEvents` demoted from critical → non-critical + LLM-optional `degraded-on-fallback` signal in `probeCacheKey` / `probeLlmStatus`. Aligns probe semantics with ADR-0010's LLM-optional contract.
+- **PR #33** (2026-06-01) — `news` GDELT-DOC adapter made best-effort + `news:feed:rss-only` sidecar (RSS sources serve when GDELT-DOC is IP-throttled; the route degrades cleanly instead of 502-ing).
+- **PR #34** (2026-06-03) — D-03 truth table relaxed for non-critical tier: now accepts `healthy | degraded | unknown`. Critical tier remains strict-`healthy`. Recognizes that browser-polled caches go cold during low-traffic windows by design.
+- **PR #35** (2026-06-03) — hotfix YAML/shell apostrophe quoting in PR #34's comment block.
+
+### Quantitative snapshot
+
+- vitest baseline: 2193 → ~2386 (+~193 new tests across phases 29-37 and unblocker PRs)
+- TypeScript errors: 0 → 0
+- Lint errors: 0 → 0
+- v1+v2 LLM extractor LOC: ~6,400 → 0 (deleted Phase 29)
+- `events:llm:v3:partial` LOC: 358 → 0 (deleted Phase 35 SIMPLIFY-02)
+- CLAUDE.md tokens: ~18,700 → 5,018 (73.3% reduction; Phase 29)
+- Vercel `maxDuration`: 300s → 800s (Phase 29 D-08; Pro upgrade)
+- Redis keys documented in `docs/architecture/redis-keys.md`: 0 → 32 (Phase 35)
+- ADR-0010 v1.5 sub-blocks: 0 → 6 (Phases 30, 30.1, 34, 35, 37 + condensed-Phase-29 lead-in)
+- Acceptance gate runs: 0 greens (2026-05-08 baseline; 9 reds in a row) → 3 consecutive greens (2026-06-03 close)
+- Architectural unblocker PRs landed during Phase 37 observation: 4 (#32, #33, #34, #35)
+
+### Migration notes (v1.4 → v1.5)
+
+- **LLM cascade:** NIM is the runtime extractor. OpenRouter is dormant pending re-validation. Cerebras + Groq are deferred (no adapter code in `main`). `LLM_PIPELINE_V3` env var retired — v3 is the only extractor.
+- **Operator kill switch:** Unsetting BOTH `NVIDIA_NIM_API_KEY` AND `OPENROUTER_API_KEY` is the documented kill switch per ADR-0010. `runRefreshExtraction()` short-circuits at `isLLMConfigured() → false`; the route degrades to raw GDELT via the Pitfall 1 bridge.
+- **Audit gate semantics:** The `prod-connectivity-audit.yml` D-03 truth table now accepts `unknown` for non-critical-tier endpoints (Phase 37 PR #34). Critical tier (flights / ships / events) remains strict-`healthy`. `llmEvents` and `llmStatus` are non-critical and report `degraded` (not `unknown`) when the LLM-optional fallback path is engaged.
+- **News route:** GDELT-DOC is best-effort. RSS sources serve when GDELT-DOC is rate-limiting prod (Phase 37 PR #33). New sidecar key `news:feed:rss-only` (15-min TTL) signals graceful degradation to the probe layer.
+- **Vercel Pro:** Project on Pro plan; `vercel.json maxDuration: 800` (Phase 29 D-08).
+- **Domain:** `otg-iran-monitor.vercel.app` remains canonical (no change from v1.4).
+
+### Deferred to v1.6+ (carried forward)
+
+- **Phase 999.5 (Performance load test, 1–300 VU k6 sweep):** PROMOTES to v1.6 as the first phase. The acceptance gate that gated promotion (LLM-RELI-07) closed at Phase 37 close.
+- **Phase 999.1 (rate-limiter public-global blocks operator):** Parked. Re-evaluate against v1.6 hardening priorities.
+- **Phase 999.2 (`api/vercel-entry.js` rebuild discipline):** Parked. Carried from v1.4.
+- **Phase 999.3 (Phase 27.4.6 cron first-tick verification):** Parked. Carried from v1.4.
+- **Phase 31 reopening:** Day 2-7 watch was the gap that let the Phase 37 acceptance-gate regression silently land. Consider 31.2 as a v1.6 entry.
+- **Open-Meteo cache-write policy (`server/routes/water.ts:358-360`):** the `if (precipData.length > 0)` guard intentionally avoids caching empty results; the cold cache that results contributed to Phase 37 audit failures. Consider a tighter cache-write policy + cron-warmer in v1.6.
+- **News route cron warmer:** `news:feed` is on-demand-only; consider `/api/cron/warm-news` (Vercel Pro cron quota likely supports it; CLAUDE.md "Hobby cap 3" line is stale).
+- **Probe-side `lastErrorReason` token rename:** `'llm-optional-fallback-active'` is reused verbatim for the news case in PR #33 (mechanical mirror). Could be renamed to `'fallback-active'` if precision matters. Trivial follow-up.
+- Telegram OSINT integration (carried from v1.3).
+- GDELT BigQuery adapter (carried from v1.3).
+- Satellite imagery overlay (carried from v1.2).
+- **Phase 27.3.3:** Romanization of non-Latin water-facility names (carried from v1.4).
+
 ## [v1.4] — GDELT Redo & Performance — 2026-05-08
 
 **Span:** 2026-04-09 → 2026-05-08 (29 days, 18 phases shipped, 1 deferred to backlog)
