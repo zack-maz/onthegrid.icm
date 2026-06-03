@@ -17,11 +17,11 @@ tags:
   - v1.5-shipped
 ---
 
-# Phase 37 SUMMARY — DRAFT (Plan 37-02 captured gate evidence; Plan 37-03 will complete)
+# Phase 37 SUMMARY — v1.5 LLM Reliability & Reveal Prep — Closed 2026-06-03
 
-The v1.5 LLM Reliability & Reveal Prep milestone is in close-out. Phase 37 is the closing phase: Plan 37-01 rewrote ADR-0010's body to the milestone-final shipped state and appended the 6th and final v1.5 sub-block (closed 2026-05-31); Plan 37-02 observed the LLM-RELI-07 acceptance gate — 3 consecutive `prod-connectivity-audit.yml` exit-0 runs with `audit:connectivity:last-result.allTiersGreen === true` — and captured the evidence triplets inline below; Plan 37-03 will append the per-phase rollup across all 10 v1.5 phases, framing-gap callouts, v1.5 quantitative snapshot, v1.6 promotion readiness statement, CHANGELOG[v1.5] entry, and tracking flips (ROADMAP / REQUIREMENTS / STATE) for Phase 37 + DOCS-PUB-04 + LLM-RELI-07.
+The v1.5 LLM Reliability & Reveal Prep milestone closed at Phase 37 close on 2026-06-03. Phase 37 is the closing phase: Plan 37-01 rewrote ADR-0010's body to the milestone-final shipped state and appended the 6th and final v1.5 sub-block (committed 2026-05-31); Plan 37-02 observed the LLM-RELI-07 acceptance gate — 3 consecutive `prod-connectivity-audit.yml` exit-0 runs with `audit:connectivity:last-result.allTiersGreen === true` — and captured the evidence triplets inline below; Plan 37-03 finalized ADR-0010 placeholder dates, wrote the CHANGELOG[v1.5] entry, and flipped ROADMAP / REQUIREMENTS / STATE tracking to v1.5-shipped.
 
-This draft lands a minimal frontmatter (`status: draft`) + this opener + the complete `## Acceptance Gate Observation (LLM-RELI-07)` section embedding the 3 evidence triplets per D-08. Plan 37-03 will rewrite the frontmatter (`status: draft` → final close date), expand the requirements_satisfied list to include DOCS-PUB-04, and append the remaining sections per CONTEXT.md D-14..D-19. The stable cross-link target the ADR-0010 Phase 37 close sub-block established at line 139 (`D-XX (LLM-RELI-07) row` → `37-SUMMARY.md#acceptance-gate-observation-llm-reli-07`) now resolves to a real anchor.
+This document is the milestone close artifact: §Acceptance Gate Observation embeds the 3 evidence triplets; §Per-phase rollup covers all 10 v1.5 phases; §Framing-gap callouts surfaces the 4 architectural unblocker PRs (#32, #33, #34, #35) that landed during the Phase 37 observation window; §v1.5 quantitative snapshot tabulates the v1.4 → v1.5 deltas; §v1.6 promotion readiness states the unblock + carry-forwards; §Closing decision table traces D-01..D-19 to final dispositions per the Phase 35 D-15 / Phase 36 D-25 convention; §3-gate verification block confirms all 3 must-haves PASS at close.
 
 ## Acceptance Gate Observation (LLM-RELI-07)
 
@@ -134,7 +134,7 @@ Per CONTEXT.md D-06..D-08 — 3 consecutive `prod-connectivity-audit.yml` exit-0
 
 **Streak status:** 3/3 consecutive greens observed; LLM-RELI-07 satisfied; v1.6 promotion unblocked.
 
-**Cross-link from ADR-0010 Phase 37 close sub-block:** [`D-XX (LLM-RELI-07) row`](../../../docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md#phase-37-close-sub-block) — placeholder landed by Plan 37-01 (line 139 of the ADR); Plan 37-03 will rewrite the `D-XX` placeholder with the final D-N row content + commit refs once the close-plan commit range is known.
+**Cross-link from ADR-0010 Phase 37 close sub-block:** [`D-06 (LLM-RELI-07) row`](../../../docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md#phase-37-close-sub-block) — placeholder landed by Plan 37-01 as `D-XX`; finalized by Plan 37-03 (commit `2c66be3`) to `D-06` with the 3 runId/timestamp triplets + 4 unblocker PR references inline in the ADR row itself.
 
 ### Architecture unblockers landed during observation
 
