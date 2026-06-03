@@ -1,5 +1,79 @@
 # Milestones
 
+## v1.5 LLM Reliability & Reveal Prep (Shipped: 2026-06-03)
+
+**Phases completed:** 10 (29, 30, 30.1, 31, 32, 33, 34, 35, 36, 37)
+**Plans:** 60 executed / 62 declared (2 SKIPPED in Phase 34 operator deferral; 30.1 ran 2/4 — 1 measurement plan + 1 matched-bucket plan; 31 ran 4/5 — Plan 31-04 early-closed at Day 1 / 7)
+**Commits:** 209 (`da21aa1..746c142`)
+**Span:** 2026-05-09 → 2026-06-03 (24 days)
+
+**Key accomplishments:**
+
+- Active runtime LLM cascade narrowed to NIM-only (OpenRouter declared dormant by probe). v1 + v2 extractor modules + `POST /api/events/llm-pipeline` override route + `events:llm-pipeline-override` Redis key + DevApiStatus Pin-to-v1/v2 buttons all deleted (~6,400 LOC). Rollback path is `git revert <Phase 29 commit range>`, not a Bearer-POST flip. Cerebras + Groq adapter dead-code purged from `server/adapters/llm-provider.ts` runtime path; `FreeProvider` union narrowed to `'nvidia_nim' | 'openrouter'`. Phase 29.
+- Vercel project upgraded to Pro ($20/mo) with `vercel.json` `maxDuration` bumped 300 → 800. LLM cron has 2.7× wall-clock headroom; tuning happens _against_ measured NIM throttle, not _around_ it. Phase 29.
+- LLM-optional architecture proven: with `NVIDIA_NIM_API_KEY` + `OPENROUTER_API_KEY` both unset, `/api/events` serves raw GDELT through the Pitfall 1 cache bridge; map never goes blank. Phase 29.
+- NIM throttle characterized empirically (`Retry-After` absent in 213 batches; `p95 = 33,263ms`). `LLM_BATCH_SIZE` / `LLM_V3_CONCURRENCY` / `callLLM` retry budget + exp-backoff base + jitter all tuned against measured throttle. Reliability doc published at `docs/architecture/llm-pipeline-reliability.md`. Phase 30.
+- Hobby-era workarounds retired: SIMPLIFY-01 incremental flush (Redis SET-call count drops measurably); SIMPLIFY-03 watchdog defaults relaxed against 800s ceiling. Phase 30.
+- Probe-driven cascade reality check (Phase 30.1): OpenRouter free-tier 27/30 = 90.0% rate_limited; cascade declared NIM-only honest; CLAUDE.md amended in lockstep. No code change — docs follow shipped reality.
+- 7-day cron stability watch closed early at Day 1 / 7 under operator decision (Day-1 natural cron PASS; eval 0.98 at all radii; 0 breaker trips). Snapshot harness operational. Slow-burn regression caveat documented; subsequently surfaced during Phase 37 acceptance-gate observation (23-day audit dormancy). Phase 31.
+- Ghost-event URL liveness shipped end-to-end: per-event probe sidecar `events:url-liveness:{eventId}` (Zod `.strict()` schema-pinned) + O(1) count sidecar `events:url-liveness-count` + polite-citizen contracts (`createLimit(8)` global concurrency, per-host 1 req/s throttle, ±200ms jitter, 10s timeout, 3-hop redirect cap, HEAD-then-GET-on-405, identifying User-Agent). Operator prune via `POST /api/events/prune-dead-urls` Bearer-gated + per-Bearer per-day quota 50/24h. Dashboard surface (count row + drill-down list capped at 20 + truncation row). Phase 32.
+- Actor metadata pipeline: canonical actor catalog at `server/data/actor-catalog.ts` (27 entries; 5-invariant contract test); v3 LLM extractor emits canonical names with raw CAMEO codes mapped through catalog before write; new `actorConfidence` field in `events:llm:v3` (high/medium/low). Eval harness extended with `actorMatchRate` alongside existing 5/20/100 km geocode thresholds; +3 adversarial actor-confusion injections. Dashboard `actorQuality` block surfaces 4 counters (null / raw-CAMEO / ambiguous-string / low-confidence) + drill-down sample. Phase 33.
+- Multi-provider router fallback deferred (Phase 34) as `cerebras-groq-deferred`. Empirical "no provider expansion right now" is itself a load-bearing outcome (mirrors Phase 30.1 `nim-only` precedent). Phase 31 Day-1 DLQ baseline (4 × `v3:timeout_watchdog`) remains a known failure mode under the single-provider cascade; mitigation paths catalogued in ADR-0010. Planning artifacts (CONTEXT + RESEARCH + 5 PLANs) preserved as the ready-to-execute audit trail.
+- Internal docs surface: 32-key Redis registry deep-dive at `docs/architecture/redis-keys.md` (writers + readers + TTL + value shape + business purpose + load-bearing/observability/retire classification per key). Mechanical drift gate at `src/__tests__/lib/redis-registry.test.ts` (39 assertions × 4 sub-suites). 7-module LLM-pipeline JSDoc audit (44 exports; 28 new one-liners + 16 verified). `events:llm:v3:partial` retired (SIMPLIFY-02 — 358 LOC across 10 surfaces). `freeClaudeRouter.ts` audited + documented alive (SIMPLIFY-05 — 3 live production callers). CLAUDE.md §Serverless Cache refreshed. Phase 35.
+- Public docs surface: README sweep (rate-limit drift fix + ~99-line `## LLM Enrichment` section). 12 architecture markdown files audited (7 edited + 5 verified-clean); 21 Mermaid blocks audited (3 edited + 18 verified-clean). Runbook §6 rewrite (Hobby 10s → Pro 800s) + §13-§16 SRE-template appendage for 4 incident playbooks (NIM throttle, cron architecture, force-trigger, prod-audit retry). Degradation contract Pitfall 1 sub-section under Cache Layer + ADR-0010 cross-link. OpenAPI 3.0.3 spec: 14 → 19 endpoints; securitySchemes split (`cronSecret` + `operatorBearer`); 4 reusable schemas added; `ConflictEventEntity.type` enum corrected 11-value pre-Phase-27 → canonical 5-value. Redocly vitest + markdown-link-check script wired as mechanical drift gates. Phase 36.
+- ADR-0010 milestone-final (Phase 37): body rewritten end-to-end with 6 v1.5 sub-blocks (Phase 29 context / Phase 30 / Phase 30.1 / Phase 34 / Phase 35 / Phase 37 close); status line `**Status:** Accepted (v1.5 closed 2026-06-03)`; v1.5 Milestone Close Rollup subsection; closing decision table mirrors Phase 35 D-15 / Phase 36 D-25 convention.
+- LLM-RELI-07 acceptance gate satisfied (Phase 37): 3 consecutive `prod-connectivity-audit.yml` exit-0 runs — Run 1 [26771054370](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26771054370) 2026-06-01 17:32 UTC · Run 2 [26856054351](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856054351) 2026-06-03 00:24 UTC · Run 3 [26856364229](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856364229) 2026-06-03 00:33 UTC. Cadence: Run 1 → Run 2 31h crossing 2 cron ticks; Runs 2 + 3 compressed ~9 min apart per D-08 NOTE allowance (smoke test after PR #34 landed). v1.6 promotion unblocked.
+- 4 architectural unblocker PRs landed during Phase 37 observation, correcting Phase 28.2.5 D-09 strict-tier-green gate vs ADR-0010 LLM-optional architecture mismatches — NOT gate-evasion patches: PR #32 (`llmEvents` demoted to non-critical + LLM-optional `degraded-on-fallback` signal in `probeCacheKey` / `probeLlmStatus`); PR #33 (`news` GDELT-DOC adapter made best-effort with RSS-only sidecar fallback signal); PR #34 (D-03 truth table relaxed for non-critical tier: accepts `healthy | degraded | unknown`; critical tier strict-`healthy` retained); PR #35 (YAML/shell apostrophe-quoting hotfix for PR #34's inline node script).
+
+**Quantitative snapshot:**
+
+- Test count (vitest, server + client): 2,193 → ~2,386 (+~193)
+- TypeScript errors (`tsc --noEmit`): 0 → 0
+- Lint errors: 0 → 0
+- v1 + v2 LLM extractor LOC: ~6,400 → 0 (Phase 29)
+- `events:llm:v3:partial` LOC: 358 → 0 (Phase 35 SIMPLIFY-02)
+- CLAUDE.md tokens: ~18,700 → 5,018 (Phase 29 DOCS-INT-01; −73.3%)
+- Vercel `maxDuration` (s): 300 → 800 (Phase 29 Pro upgrade)
+- Redis keys documented in `docs/architecture/redis-keys.md`: 0 → 32 (Phase 35)
+- ADR-0010 v1.5 sub-blocks: 0 → 6 (across milestone)
+- OpenAPI endpoints documented: 14 → 19 (Phase 36)
+- Active runtime LLM providers: 3 (Cerebras / Groq / NIM) → 1 (NIM; OpenRouter dormant)
+- `prod-connectivity-audit.yml` consecutive greens (LLM-RELI-07): 0 → 3 (gate closed)
+- Bundled `api/vercel-entry.js`: 1.72 MB → ~1.73 MB (+10,739 bytes; JSDoc adds outweigh SIMPLIFY-02 deletes; negligible on 1.7MB)
+
+**Known deferred items at close:** 26 (see STATE.md "Deferred Items" — 10 historical debug sessions from v0.9–v1.4 era, 11 legacy quick-task slugs from v1.1–v1.3, 3 phase-marker todos for now-shipped phases, 1 Phase 32 verification awaiting operator deploy-time confirmation [satisfied by Phase 37 acceptance gate observation], 1 Phase 30.1 CONTEXT-SEED open question [superseded by locked 30.1-CONTEXT.md]). None are v1.5 work-in-flight; all acknowledged + carried forward.
+
+**Milestone-level carry-forwards to v1.6:**
+
+- **Phase 999.5** (Performance Optimization + 1–300 VU k6 sweep) promotes from `.planning/phases/999.5-performance-load-test/` as v1.6's first phase
+- **Phase 31 reopening** — 7-day cron stability watch, this time finished
+- **Open-Meteo cache-write policy** — `server/routes/water.ts:358-360` empty-result skip caused Phase 37 audit failures; tighten cache-write policy + add cron warmer
+- **`news:feed` cron warmer** — Vercel Pro cron quota likely supports a 4th entry; CLAUDE.md "Hobby cap 3" framing is stale
+- **Probe-side `lastErrorReason` token rename** — `'llm-optional-fallback-active'` reused for news case in PR #33 (mechanical mirror); could rename to `'fallback-active'`
+- **Phase 999.1 / 999.2 / 999.3** — parked v1.4 carry-forwards; re-evaluate priorities at v1.6 start
+- **Phase 27.3.3** — romanization of non-Latin water-facility names (v1.3 → v1.4 → v1.5 carry-forward)
+- **Cerebras + Groq adapter source files** remain in `server/adapters/` (importable for emergency rollback) but no production code path imports them — flagged for v1.6 if no restoration phase is scheduled
+
+**Migration notes (v1.4 → v1.5):**
+
+- LLM provider chain: `cerebras → groq → nim` (Phase 27.4 cascade) is gone. Active runtime is NIM-only (`qwen-235b` instruct model). OpenRouter declared dormant by Phase 30.1 probe (90% free-tier rate-limited). Cerebras + Groq adapter source files remain importable but no production path uses them.
+- Pipeline override surface deleted: `POST /api/events/llm-pipeline` and the `events:llm-pipeline-override` Redis key are gone. DevApiStatus Pin-to-v1/v2 buttons removed. The v3-or-nothing posture is now mechanical, not a runtime switch. Rollback path: `git revert <Phase 29 commit range>`.
+- `events:llm:v3:partial` Redis key retired (Phase 35 SIMPLIFY-02). Any operator scripts that read it should be updated to read `events:llm:v3` directly.
+- `vercel.json`: `maxDuration` is now 800 (was 300). Requires Vercel Pro plan ($20/mo) on project `otg-iran-monitor`.
+- Acceptance-gate semantics: non-critical tier values `degraded` and `unknown` are accepted at the gate (per PR #34's truth-table relaxation). Critical tier remains strict-`healthy`.
+- LLM-RELI-07 has shipped. The promotion gate for v1.6 → Phase 999.5 is satisfied; no further audit-gate observation required at v1.6 start.
+
+**Archives:**
+
+- Roadmap: `milestones/v1.5-ROADMAP.md`
+- Requirements: `milestones/v1.5-REQUIREMENTS.md`
+- Phase artifacts: `milestones/v1.5-phases/`
+- Per-phase SUMMARY rollup with framing-gap callouts: `milestones/v1.5-phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md`
+- ADR-0010 (canonical decision record): `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md`
+- CHANGELOG entry: `CHANGELOG.md` §`[v1.5]`
+
+---
+
 ## v1.4 GDELT Redo & Performance (Shipped: 2026-05-08)
 
 **Phases completed:** 18 phases (12 in 27 family + 5 in 28 family + umbrellas), 1 deferred to backlog (999.5)

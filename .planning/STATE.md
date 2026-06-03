@@ -37,29 +37,44 @@ Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit
 
 Acceptance gate (set at v1.5 milestone start, blocked v1.6 promotion): `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs (LLM-RELI-07). **OBSERVED 2026-06-01 → 2026-06-03**: Run 1 [26771054370](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26771054370), Run 2 [26856054351](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856054351), Run 3 [26856364229](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856364229). Gate satisfied; v1.6 promotion unblocked.
 
-## v1.5 Phases (planned)
+## v1.5 Phases (SHIPPED 2026-06-03)
 
 | Phase | Name                                                                  | Requirements                                                  | Status      |
 | ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- | ----------- |
-| 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | Context gathered |
-| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | Waves 1-3 complete (4/7 plans) |
-| 30.1  | Cascade fallback fix — NIM-only declared honest                       | (gap closure from Phase 30 boundary review)                   | Shipped 2026-05-17 |
-| 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | Closed early 2026-05-19 (Day 1 / 7 PASS; caveat) |
-| 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | COMPLETE — Plans 32-01..32-06; GHOST-01..05 closed 2026-05-21 |
-| 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | Not started |
-| 34    | LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval) | LLM-RELI-08, LLM-RELI-09, LLM-RELI-10, LLM-RELI-11           | Not started |
-| 35    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | Not started |
-| 36    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | ✓ Complete 2026-05-30 (DOCS-PUB-04 → 37) |
-| 37    | ADR-0010 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | Unblocked by Phase 36 close |
+| 29    | LLM Provider Chain Narrowing & LLM-Optional Architecture & CLAUDE.md Trim | LLM-RELI-01, LLM-RELI-05, SIMPLIFY-04, SIMPLIFY-06, DOCS-INT-01 | ✅ Closed 2026-05-11 (13/13) |
+| 30    | NIM Throttle Characterization & Cascade Tuning                        | LLM-RELI-02, LLM-RELI-03, LLM-RELI-04, SIMPLIFY-01, SIMPLIFY-03 | ✅ Closed 2026-05-17 (7/7) |
+| 30.1  | Cascade fallback fix — NIM-only declared honest                       | (gap closure from Phase 30 boundary review)                   | ✅ Closed 2026-05-17 (2/4; 2 contingent SKIPS) |
+| 31    | Cron Stability Validation (7-day Watch)                               | LLM-RELI-06                                                   | ⚠️ Early-close 2026-05-19 (Day 1 / 7 PASS; caveat) |
+| 32    | Ghost Event URL Liveness, Dashboard & Prune                           | GHOST-01..05                                                  | ✅ Closed 2026-05-21 (6/6) |
+| 33    | Actor Metadata Audit, Canonical Catalog & Eval Expansion              | ACTOR-01..05                                                  | ✅ Closed 2026-05-21 (7/7) |
+| 34    | LLM Router Fallback Re-integration (Cerebras / Groq + Per-Provider Eval) | LLM-RELI-08, LLM-RELI-09, LLM-RELI-10, LLM-RELI-11           | ⚠️ Deferred 2026-05-23 (`cerebras-groq-deferred`; 1/5; 4 SKIPS) |
+| 35    | Internal Docs (JSDoc) + Redis Registry Verification + Redis Optimization | DOCS-INT-02, DOCS-INT-03, REDIS-OPT-01..04, SIMPLIFY-02, SIMPLIFY-05, SIMPLIFY-07 | ✅ Closed 2026-05-27 (6/6) |
+| 36    | Public Docs Sweep + OpenAPI Additions                                 | DOCS-PUB-01, 02, 03, 05, DOCS-API-01..07                      | ✅ Closed 2026-05-30 (6/6; DOCS-PUB-04 → 37) |
+| 37    | ADR-0010 + Acceptance Gate Closeout                                   | DOCS-PUB-04, LLM-RELI-07                                      | ✅ Closed 2026-06-03 (3/3; LLM-RELI-07 satisfied) |
 
-**Sequencing:** 29 → 30 → 31 → 34 → 37 is the LLM-RELI spine (must run in order). Phases 32 (GHOST) and 33 (ACTOR) are independent of the spine and can run in parallel with 29/30/31. Phase 34 depends on Phase 33 (cascade integration must test all providers against the post-33 `actorConfidence` schema). Phase 35 lands after 29 + 34 close so its Redis-registry sweep inventories the new `llm:tokens:cerebras:*` / `llm:tokens:groq:*` keys. Phase 36 lands after 29/30/31/34 close so docs reflect shipped state. Phase 37 is the milestone-close gate by construction.
+**Plans:** 60 executed / 62 declared. Conditional SKIPs: Phase 30.1 ran 2/4 (contingent on probe outcome); Phase 34 ran 1/5 (operator deferral); Phase 31 ran 4/5 (early-close).
 
-Backlog still parked (not in v1.5 unless they block reliability):
+**Acceptance gate (LLM-RELI-07):** ✅ SATISFIED 2026-06-03 — 3 consecutive `prod-connectivity-audit.yml` exit-0 runs with `audit:connectivity:last-result.allTiersGreen === true`: Run 1 [26771054370](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26771054370) · Run 2 [26856054351](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856054351) · Run 3 [26856364229](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856364229). v1.6 promotion unblocked. 4 architectural unblocker PRs landed during observation (PR #32 / #33 / #34 / #35) correcting Phase 28.2.5 D-09 strict-tier-green gate vs ADR-0010 LLM-optional architecture mismatches.
 
-- 999.1 rate-limiter-public-global-blocks-operator
-- 999.2 api-vercel-entry-rebuild-discipline
-- 999.3 phase-27-4-6-cron-first-tick-verification
-- 999.5 performance-load-test (promotes to v1.6 once acceptance gate is hit)
+**v1.5 archives:**
+
+- Roadmap: `milestones/v1.5-ROADMAP.md`
+- Requirements: `milestones/v1.5-REQUIREMENTS.md`
+- Phase artifacts: `milestones/v1.5-phases/`
+- Per-phase rollup with framing-gap callouts: `milestones/v1.5-phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md`
+- ADR-0010 canonical: `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md`
+- CHANGELOG: `CHANGELOG.md` §`[v1.5]`
+
+## v1.6 Carry-forwards
+
+- **Phase 999.5** Performance Optimization + 1-300 VU k6 sweep — promotes from `.planning/phases/999.5-performance-load-test/` as v1.6's first phase
+- **Phase 31 reopening** — 7-day cron stability watch, this time finished
+- **Open-Meteo cache-write policy** — `server/routes/water.ts:358-360` empty-result skip caused Phase 37 audit failures
+- **`news:feed` cron warmer** — Vercel Pro cron quota likely supports a 4th entry; CLAUDE.md "Hobby cap 3" framing is stale
+- **Probe-side `lastErrorReason` token rename** — `'llm-optional-fallback-active'` reused for news case in PR #33; could rename to `'fallback-active'`
+- **Phase 999.1 / 999.2 / 999.3** — parked v1.4 carry-forwards; re-evaluate priorities at v1.6 start
+- **Phase 27.3.3** — romanization of non-Latin water-facility names (v1.3 → v1.4 → v1.5 carry-forward)
+- **Cerebras + Groq adapter source-file removal** — if no v1.6 router-restoration phase is scheduled, the adapter source files in `server/adapters/` should be deleted
 
 Deferred to future milestone: 27.3.3 romanization of non-Latin water facility names.
 
@@ -309,18 +324,32 @@ None.
 
 ## Deferred Items
 
-Items acknowledged and deferred at v1.4 milestone close on 2026-05-08:
+Items acknowledged and deferred at v1.5 milestone close on 2026-06-03:
 
 | Category | Count | Notes |
 |----------|-------|-------|
-| Debug sessions | 10 | Historical breadcrumbs — all `diagnosed` / `root_cause_found` / `resolved-pending-user-verification`; root causes captured in commits or merged phases |
-| Quick tasks (legacy) | 11 | Pre-`/gsd-add-todo` slugs (TBV-*, M00-*, MN4-*, etc.) — superseded by phase work that landed |
-| Pending todos | 3 | `phase-27.4.2-ci-health` / `phase-27.4.3-deckgl-v9-type-drift` / `phase-27.4.5-llm-pipeline-observability` — all phases shipped except 27.4.5 (subsumed by 27.4 family observability work) |
-| UAT gaps (resolved) | 4 | 27.3.1, 27.3.2, 27.4, 27.4.2 — human-checked at the time of phase close |
-| UAT gaps (partial, post-deploy) | 2 | 28.2.6 (2 pending), 28.2.7 (4 pending) — operator-driven verification items that surface in `/gsd-progress` until manually checked via `/gsd-verify-work` |
-| Verification gaps (`human_needed`) | 6 | 27.3.1, 27.4, 27.4.2, 28.2, 28.2.6, 28.2.7 — expected status for phases with operator-driven post-deploy items; code-level verification PASSED in each |
+| Debug sessions (historical) | 10 | All dated 2026-03-14 through 2026-05-07 (v0.9–v1.4 era); `diagnosed` / `root_cause_found` / `resolved-pending-user-verification`; root causes captured in commits or merged phases |
+| Quick tasks (legacy) | 11 | Pre-`/gsd-add-todo` slugs from 2026-03 → 2026-04 (v1.1–v1.3 era; UI/threat-density/water polish) — superseded by phase work that landed |
+| Pending todos | 3 | `phase-27.4.2-ci-health` / `phase-27.4.3-deckgl-v9-type-drift` / `phase-27.4.5-llm-pipeline-observability` — all phases shipped except 27.4.5 which is operator-rejected at v1.5 start (BACKLOG-05 in archived REQUIREMENTS); existing 8-block DevApiStatus events tab covers diagnostic needs |
+| Verification gap | 1 | Phase 32 `human_needed` — deployment-only UAT items (natural cron tick + live Upstash audit-log SADD + real browser prune click) all satisfied by Phase 37 acceptance-gate observation evidence; rolling forward as historical breadcrumb |
+| Context-seed open questions | 1 | Phase 30.1 `CONTEXT-SEED.md` open questions — superseded by locked `30.1-CONTEXT.md` (probe-driven NIM-only outcome answered Q1 + Q2 mechanically) |
 
-Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the verifier's signal that some acceptance criteria require operator action against deployed prod. Marked here so they surface in `/gsd-audit-uat` and `/gsd-progress` until the operator confirms via `/gsd-verify-work`.
+**v1.5 phase-specific deferrals** (already documented in `milestones/v1.5-ROADMAP.md` and `milestones/v1.5-REQUIREMENTS.md`):
+
+| Phase | Item | Status |
+|-------|------|--------|
+| 31 | LLM-RELI-06 (7-day cron stability watch) | Validated single-day; Days 2-7 not pursued; reopening flagged for v1.6 |
+| 34 | LLM-RELI-08..11 (Cerebras + Groq router fallback) | Closed `cerebras-groq-deferred`; planning artifacts preserved as ready-to-execute audit trail |
+
+**v1.4 carry-forwards still acknowledged** (rolled forward from prior v1.4 close):
+
+| Category | Count | Notes |
+|----------|-------|-------|
+| UAT gaps (resolved) | 4 | 27.3.1, 27.3.2, 27.4, 27.4.2 — human-checked at the time of phase close |
+| UAT gaps (partial, post-deploy) | 2 | 28.2.6 (2 pending), 28.2.7 (4 pending) — operator-driven verification items |
+| Verification gaps (`human_needed`) | 6 | 27.3.1, 27.4, 27.4.2, 28.2, 28.2.6, 28.2.7 — code-level verification PASSED in each |
+
+Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the verifier's signal that some acceptance criteria require operator action against deployed prod. Phase 37 acceptance-gate observation evidence (3 consecutive `prod-connectivity-audit.yml` greens against live prod) satisfies the operator-action sentinel across the v1.4 + v1.5 verification surface.
 
 ## Blockers/Concerns
 
