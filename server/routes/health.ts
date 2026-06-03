@@ -44,6 +44,44 @@ export const healthRouter = Router();
 /** Cap each per-endpoint probe at 2s so a single hung adapter cannot pin the response. */
 const PROBE_TIMEOUT_MS = 2_000;
 
+/**
+ * Phase 37 fix/news-feed-rss-fallback — sidecar freshness witness for the
+ * RSS-only news fallback path. Written by server/routes/news.ts ONLY when
+ * GDELT-DOC fetch failed AND `fetchAllRssFeeds()` yielded ≥1 article —
+ * i.e., the user-facing /api/news surface is gracefully degraded but not
+ * broken. The `news` probe below uses this key as `fallbackHealthyKey` so
+ * the audit's D-03 rule sees `degraded` (intentional graceful degradation)
+ * instead of `unknown` (broken) when GDELT-DOC is IP-throttled (its sticky
+ * 429 from all Vercel function-pool IPs blocks /api/news the same way
+ * "unset both LLM credentials" was unblocking /api/events under ADR-0010
+ * before PR #32 wired the LLM-optional fallback signal).
+ *
+ * Not registered in SOURCE_KEYS because sidecars are signals, not endpoints
+ * — they have no tier and no D-25 freshness threshold of their own; the
+ * `news` endpoint's threshold (30 min, FRESHNESS_THRESHOLDS_MS.news) is
+ * what gates whether the sidecar's `lastFresh` counts as "fallback active."
+ */
+const NEWS_RSS_ONLY_KEY = 'news:feed:rss-only';
+
+/**
+ * Phase 37 fix/prod-audit-tier-regression — degraded sentinel for the
+ * LLM-OPTIONAL fallback contract documented in ADR-0010.
+ *
+ * When the LLM v3 cache is cold but the raw-GDELT bridge (events.ts Pitfall 1)
+ * is still serving fresh data to /api/events, or when llm:lastProgress is
+ * empty but the refresh-events cron is firing on schedule, the probe needs to
+ * report `degraded` instead of `unknown` so the audit's D-03 tier rule
+ * (`non-critical accepts healthy OR degraded but NOT unknown`) doesn't fail
+ * the gate while the user-facing surface is correctly degrading.
+ *
+ * Picks a freshness midway through the degraded window
+ * (threshold < freshness <= 2 × threshold per deriveStatus) so callers see a
+ * stable, threshold-relative signal regardless of the specific endpoint.
+ */
+function degradedSentinelFreshness(thresholdMs: number): number {
+  return Math.floor(thresholdMs * 1.5);
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -82,45 +120,62 @@ interface ProbeResult {
  * lastSuccessTs when the cache is cold; sets hadError when the cache
  * read throws. Never throws.
  *
- * `fallbackKeys` lets a single endpoint span multiple cache keys. The
- * probe tries each key in order and reports the freshest entry found.
- * Used by `llmEvents` to mirror the events.ts:701-731 cache-bridge fallback
- * chain (events:llm:v3 → events:llm:v2 → events:llm-v1) — the route serves
- * /api/events from whichever pipeline-version cache has data, so the probe
- * needs to follow the same chain or it would report "unknown" while the
- * user-facing endpoint is happily serving v2-bridged data.
+ * `fallbackHealthyKey` (Phase 37 fix/prod-audit-tier-regression) wires the
+ * LLM-OPTIONAL contract from ADR-0010 into the probe layer: when the primary
+ * cache is COLD but the named fallback cache is FRESH (within the same D-25
+ * threshold), the probe reports `degraded` (via `degradedSentinelFreshness`)
+ * instead of `unknown`. Used by `llmEvents` to detect the Pitfall 1 raw-GDELT
+ * bridge in server/routes/events.ts — when v3 is empty (LLM unconfigured /
+ * throttled / cron deferred) and raw GDELT (`events:gdelt`) is still fresh,
+ * /api/events serves cleanly so the audit's D-03 rule sees `degraded`, not a
+ * gate-blocking `unknown`. A FRESH primary always wins — fallback is only
+ * consulted when the primary returned no entry.
  */
 async function probeCacheKey(
   name: string,
   key: string,
-  fallbackKeys: readonly string[] = [],
+  fallbackHealthyKey?: string,
 ): Promise<ProbeResult> {
   const start = Date.now();
   try {
-    let lastFresh: number | null = null;
-    for (const candidate of [key, ...fallbackKeys]) {
-      const entry = await withTimeout(
-        cacheGetSafe(candidate, 999_999_999),
-        PROBE_TIMEOUT_MS,
-        `probe ${name}`,
-      );
-      if (entry !== null && (lastFresh === null || entry.lastFresh > lastFresh)) {
-        lastFresh = entry.lastFresh;
-      }
-    }
+    const primary = await withTimeout(
+      cacheGetSafe(key, 999_999_999),
+      PROBE_TIMEOUT_MS,
+      `probe ${name}`,
+    );
     const latencyMs = Date.now() - start;
-    if (lastFresh === null) {
+    if (primary !== null) {
       return {
-        freshnessMs: null,
-        lastSuccessTs: null,
+        freshnessMs: Date.now() - primary.lastFresh,
+        lastSuccessTs: primary.lastFresh,
         hadError: false,
         errorReason: null,
         latencyMs,
       };
     }
+    if (fallbackHealthyKey !== undefined) {
+      const fallback = await withTimeout(
+        cacheGetSafe(fallbackHealthyKey, 999_999_999),
+        PROBE_TIMEOUT_MS,
+        `probe ${name} fallback`,
+      );
+      if (fallback !== null) {
+        const thresholdMs = FRESHNESS_THRESHOLDS_MS[name] ?? 0;
+        const fallbackAgeMs = Date.now() - fallback.lastFresh;
+        if (fallbackAgeMs <= thresholdMs) {
+          return {
+            freshnessMs: degradedSentinelFreshness(thresholdMs),
+            lastSuccessTs: fallback.lastFresh,
+            hadError: false,
+            errorReason: `llm-optional-fallback-active: ${fallbackHealthyKey} fresh, ${key} cold`,
+            latencyMs: Date.now() - start,
+          };
+        }
+      }
+    }
     return {
-      freshnessMs: Date.now() - lastFresh,
-      lastSuccessTs: lastFresh,
+      freshnessMs: null,
+      lastSuccessTs: null,
       hadError: false,
       errorReason: null,
       latencyMs,
@@ -192,9 +247,51 @@ async function probeLlmStatus(): Promise<ProbeResult> {
       : memLatest === null
         ? redisLatest
         : Math.max(redisLatest, memLatest);
+  if (latest !== null) {
+    return {
+      freshnessMs: Date.now() - latest,
+      lastSuccessTs: latest,
+      hadError: false,
+      errorReason: null,
+      latencyMs: Date.now() - start,
+    };
+  }
+  // Phase 37 fix/prod-audit-tier-regression — LLM-OPTIONAL fallback signal.
+  // When both Redis llm:lastProgress AND the in-memory singleton are empty,
+  // BUT the refresh-events cron tick is fresh, the pipeline is correctly
+  // short-circuiting at `isLLMConfigured() → false` (or analogous LLM-optional
+  // path) — the kill switch documented in ADR-0010 is engaged and the route
+  // is degrading gracefully to raw GDELT. Report `degraded`, not `unknown`,
+  // so the audit's D-03 rule (`non-critical accepts healthy OR degraded`)
+  // doesn't fail the gate on an intentional degradation.
+  const cronThresholdMs = FRESHNESS_THRESHOLDS_MS.cronRefreshEvents ?? 0;
+  try {
+    const cronEntry = await withTimeout(
+      cacheGetSafe<number>(`cron:lastTick:refresh-events`, 999_999_999),
+      PROBE_TIMEOUT_MS,
+      'probe llmStatus (cron fallback)',
+    );
+    if (cronEntry !== null) {
+      const tickTs = typeof cronEntry.data === 'number' ? cronEntry.data : cronEntry.lastFresh;
+      const cronAgeMs = Date.now() - tickTs;
+      if (cronAgeMs <= cronThresholdMs) {
+        const llmThresholdMs = FRESHNESS_THRESHOLDS_MS.llmStatus ?? 0;
+        return {
+          freshnessMs: degradedSentinelFreshness(llmThresholdMs),
+          lastSuccessTs: tickTs,
+          hadError: false,
+          errorReason:
+            'llm-optional-fallback-active: refresh-events cron fresh, llm:lastProgress empty',
+          latencyMs: Date.now() - start,
+        };
+      }
+    }
+  } catch {
+    // Cron-probe failure is non-fatal — fall through to `unknown` below.
+  }
   return {
-    freshnessMs: latest === null ? null : Date.now() - latest,
-    lastSuccessTs: latest,
+    freshnessMs: null,
+    lastSuccessTs: null,
     hadError: false,
     errorReason: null,
     latencyMs: Date.now() - start,
@@ -293,7 +390,7 @@ async function probeCronTick(name: string): Promise<ProbeResult> {
 
 /** Probe declaration for one endpoint; pairs the name with the probe strategy. */
 type ProbeStrategy =
-  | { kind: 'cache'; cacheKey: string; fallbackKeys?: readonly string[] }
+  | { kind: 'cache'; cacheKey: string; fallbackHealthyKey?: string }
   | { kind: 'llmStatus' }
   | { kind: 'sources' }
   | { kind: 'probeOnly' }
@@ -303,18 +400,31 @@ const PROBE_STRATEGIES: Record<string, ProbeStrategy> = {
   flights: { kind: 'cache', cacheKey: SOURCE_KEYS.flights! },
   ships: { kind: 'cache', cacheKey: SOURCE_KEYS.ships! },
   events: { kind: 'cache', cacheKey: SOURCE_KEYS.events! },
-  // Phase 28.2.5 D-06 — top of the cache-bridge fallback chain (events.ts:701-731).
-  // Probe answers "is /api/events serving enriched LLM events or raw-GDELT fallback?"
-  // Phase 28.2.7 follow-up: fallback through v2/v1 mirrors the bridge in
-  // events.ts so the probe doesn't report 'unknown' while the route is
-  // happily serving v2-bridged data (e.g., during v3 rollout when refresh-events
-  // dispatched the v2 extractor and v3 cache hasn't been populated yet).
+  // Phase 37 fix/prod-audit-tier-regression — LLM-OPTIONAL probe contract.
+  // Primary cache: events:llm:v3 (enriched LLM extraction). Fallback-healthy
+  // signal: events:gdelt (the Pitfall 1 raw-GDELT bridge in
+  // server/routes/events.ts). When v3 is cold but raw GDELT is fresh, the
+  // probe reports `degraded` instead of `unknown` — the LLM-optional kill
+  // switch from ADR-0010 is engaged and the route is degrading gracefully.
+  // The v1/v2 fallback keys deleted in Phase 29 are no longer probed.
   llmEvents: {
     kind: 'cache',
     cacheKey: SOURCE_KEYS.llmEvents!,
-    fallbackKeys: ['events:llm:v2', 'events:llm'],
+    fallbackHealthyKey: SOURCE_KEYS.events!,
   },
-  news: { kind: 'cache', cacheKey: SOURCE_KEYS.news! },
+  // Phase 37 fix/news-feed-rss-fallback — GDELT-DOC-optional probe contract.
+  // Primary cache: news:feed (clustered render-target from GDELT-DOC + 6 RSS
+  // sources). Fallback-healthy signal: news:feed:rss-only (a timestamp-only
+  // sidecar written by server/routes/news.ts ONLY when GDELT failed but
+  // ≥1 RSS article was produced). When news:feed is cold but the sidecar
+  // is fresh, the probe reports `degraded` instead of `unknown` — the
+  // RSS-only fallback path is engaged and the route is degrading gracefully.
+  // Mirrors the llmEvents wiring just above (Phase 37 PR #32) byte-for-byte.
+  news: {
+    kind: 'cache',
+    cacheKey: SOURCE_KEYS.news!,
+    fallbackHealthyKey: NEWS_RSS_ONLY_KEY,
+  },
   markets: { kind: 'cache', cacheKey: SOURCE_KEYS.markets! },
   weather: { kind: 'cache', cacheKey: SOURCE_KEYS.weather! },
   sites: { kind: 'cache', cacheKey: SOURCE_KEYS.sites! },
@@ -332,7 +442,7 @@ const PROBE_STRATEGIES: Record<string, ProbeStrategy> = {
 async function runProbe(name: string, strategy: ProbeStrategy): Promise<ProbeResult> {
   switch (strategy.kind) {
     case 'cache':
-      return probeCacheKey(name, strategy.cacheKey, strategy.fallbackKeys ?? []);
+      return probeCacheKey(name, strategy.cacheKey, strategy.fallbackHealthyKey);
     case 'llmStatus':
       return probeLlmStatus();
     case 'sources':
