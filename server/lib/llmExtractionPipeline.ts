@@ -37,6 +37,7 @@ import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { saveDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 
+import { checkCorroboration } from './corroboration.js';
 import { dedupHighConfidence, groupGdeltRows } from './eventGrouping.js';
 import { runEval } from './llmEvalHarness.js';
 import {
@@ -47,6 +48,7 @@ import {
 import { llmProgress, resetProgress, updateProgress, buildSummary } from './llmProgress.js';
 import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js';
 import { logger } from './logger.js';
+import { computeCompositeScore } from './relevanceScorer.js';
 import { safeWaitUntil } from './safeWaitUntil.js';
 import { getHighestTier } from './sourceTiers.js';
 // Phase 32 Plan 32-03 Task 3 — cron post-step. After the existing
@@ -67,7 +69,7 @@ import {
   SWEEP_SAFETY_MARGIN_MS,
 } from './urlLiveness.js';
 
-import type { ConflictEventEntity } from '../types.js';
+import type { ConflictEventEntity, NewsCluster } from '../types.js';
 import type { GeocodeProvenance } from './llmSchema.js';
 
 const log = logger.child({ module: 'llm-extraction-pipeline' });
@@ -439,7 +441,20 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
         }
 
-        const llmEntities = enrichedV3ToEntities(geocodedEvents, prioritizedGroups);
+        // GDELT-MATCH-03/04 — read the OSINT clusters (`news:gdelt`) so the
+        // strict three-gate corroboration boost can be folded into each
+        // entity's additive compositeScore. Best-effort: a missing/failed read
+        // simply yields a tier+precision composite with zero corroboration —
+        // never blocks the write, never mutates the raw corpus (D-07).
+        let newsClusters: NewsCluster[] | undefined;
+        try {
+          const newsCache = await cacheGetSafe<NewsCluster[]>('news:gdelt', 0);
+          if (newsCache?.data) newsClusters = newsCache.data;
+        } catch {
+          /* best-effort — corroboration boost defaults to 0 */
+        }
+
+        const llmEntities = enrichedV3ToEntities(geocodedEvents, prioritizedGroups, newsClusters);
 
         // Phase 30 D-04 (SIMPLIFY-01) — sole / terminal write of the
         // canonical `events:llm:v3` key for this cron run. The Phase 28.2.6
@@ -543,6 +558,10 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
 export function enrichedV3ToEntities(
   geocoded: GeocodedEnrichedEventV3[],
   groups: Array<{ key: string; entities: ConflictEventEntity[]; sourceUrls: string[] }>,
+  // GDELT-MATCH-03/04 — optional OSINT clusters (`news:gdelt`) for the strict
+  // three-gate corroboration boost folded into compositeScore. Omitted callers
+  // (legacy / tests) get a tier+precision composite with zero corroboration.
+  newsClusters?: NewsCluster[],
 ): ConflictEventEntity[] {
   const groupMap = new Map<string, ConflictEventEntity[]>();
   const groupSourceUrls = new Map<string, string[]>();
@@ -570,6 +589,24 @@ export function enrichedV3ToEntities(
       enriched.displayName ||
       'unknown';
 
+    // GDELT-MATCH-04 — additive composite ranking signal. tier × corroboration
+    // × specificity. Corroboration boost is the strict three-gate result against
+    // the OSINT clusters (when provided). This is a NEW field on the enriched
+    // output entity; the raw GDELT corpus is untouched (D-07).
+    const candidate: ConflictEventEntity = {
+      ...template,
+      lat: enriched.resolvedLat,
+      lng: enriched.resolvedLng,
+      timestamp: template.timestamp,
+      data: { ...template.data, locationName: placeLabel, actors: enriched.actors },
+    };
+    const corroboration = newsClusters ? checkCorroboration(candidate, newsClusters) : { boost: 0 };
+    const compositeScore = computeCompositeScore({
+      tier: sourceTier ?? null,
+      corroborationBoost: corroboration.boost,
+      precision: enriched.precision,
+    });
+
     results.push({
       ...template,
       id: `llm-v3-${enriched.groupKey}`,
@@ -586,6 +623,7 @@ export function enrichedV3ToEntities(
         actors: enriched.actors,
         sourceCount: enriched.sourceCount,
         sourceTier,
+        compositeScore,
         casualties: {
           killed: enriched.casualties.killed ?? undefined,
           injured: enriched.casualties.injured ?? undefined,

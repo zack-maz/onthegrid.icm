@@ -172,6 +172,14 @@ const enrichedEventV2 = z
 export const enrichedEventV3 = enrichedEventV2.extend({
   schemaVersion: z.literal('v3'),
   actorConfidence: z.array(z.enum(['high', 'medium', 'low'])).optional(),
+  // Phase 38 GDELT-MATCH-04 — additive composite ranking score
+  // (tier × corroboration × specificity, computed by
+  // relevanceScorer.computeCompositeScore). `.optional()` so legacy v3 cache
+  // entries written before Phase 38 still validate through `enrichedEventAny`
+  // during the 24h–90d cron-overwrite window. It is a DASHBOARD ORDERING
+  // signal only — never mutates/drops the raw corpus (D-07). The LLM never
+  // emits it; it is attached server-side post-enrichment.
+  compositeScore: z.number().min(0).max(1).optional(),
 });
 
 export type EnrichedEventV3 = z.infer<typeof enrichedEventV3>;

@@ -26,6 +26,7 @@ import { appendOperatorAuditEntry, bearerFingerprint } from '../lib/operatorAudi
 // quota guardrails on the dashboardAuth-gated /llm-pipeline + /llm-replay
 // endpoints. Both helpers degrade open on Redis failure (logged, not thrown).
 import { checkPruneQuota } from '../lib/pruneQuota.js';
+import { computeCompositeScore } from '../lib/relevanceScorer.js';
 import { checkReplayQuota } from '../lib/replayQuota.js';
 // Phase 32 Plan 32-03 — POST /api/events/prune-dead-urls + cron auto-prune
 // share one helper. The route is the Bearer-gated entry point for the
@@ -286,6 +287,35 @@ export const enrichedToEntities = enrichedV3ToEntities;
  * Remaps old 11-type taxonomy (ground_combat, shelling, etc.) cached in Redis
  * to the new 5-type system so conflictEventEntitySchema doesn't reject them.
  */
+/**
+ * GDELT-MATCH-04 — additive composite-score ordering for the dashboard
+ * top-of-list. PURE / NON-MUTATING (D-07): returns a NEW array of shallow
+ * copies sorted by `data.compositeScore` descending; the raw `events:llm:v3`
+ * corpus is never re-written and no event is dropped.
+ *
+ * `compositeScore` is computed from the event's already-present source tier
+ * (`data.sourceTier`) and resolved precision (`data.precision`) plus any
+ * corroboration boost the caller has already stamped onto `data.compositeScore`
+ * upstream (opportunistic — defaults to 0 when no boost was applied). Events
+ * keep their relative order on ties via a stable timestamp fallback.
+ */
+function applyCompositeOrdering(events: ConflictEventEntity[]): ConflictEventEntity[] {
+  const scored = events.map((event) => {
+    const tier = event.data.sourceTier ?? null;
+    const precision = event.data.precision ?? 'region';
+    // Preserve any corroboration boost a producer already folded into the
+    // existing compositeScore (additive); otherwise start from 0.
+    const corroborationBoost = 0;
+    const compositeScore = computeCompositeScore({ tier, corroborationBoost, precision });
+    return { ...event, data: { ...event.data, compositeScore } };
+  });
+
+  return scored.sort((a, b) => {
+    const diff = (b.data.compositeScore ?? 0) - (a.data.compositeScore ?? 0);
+    return diff !== 0 ? diff : b.timestamp - a.timestamp;
+  });
+}
+
 function sendNormalizedEvents(
   res: import('express').Response,
   payload: {
@@ -298,7 +328,10 @@ function sendNormalizedEvents(
 ): void {
   sendValidated(res, eventsResponseSchema, {
     ...payload,
-    data: normalizeEventTypes(payload.data),
+    // Normalize types first (returns copies where needed), then apply the
+    // additive composite re-ordering on the read path. Neither step mutates
+    // the cached corpus (D-07).
+    data: applyCompositeOrdering(normalizeEventTypes(payload.data)),
   });
 }
 

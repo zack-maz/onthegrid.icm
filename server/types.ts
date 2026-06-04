@@ -84,6 +84,7 @@ export interface ConflictEventEntity extends MapEntityBase {
     durationMinutes?: number | null;
     reasoning?: string; // ≤200 char LLM rationale citing signals used
     geocodeDisplayName?: string; // Resolver's displayName (e.g. Nominatim full address)
+    compositeScore?: number; // Phase 38 GDELT-MATCH-04 — additive dashboard top-of-list ranking signal (tier × corroboration × specificity). Optional; never mutates the raw corpus (D-07).
   };
 }
 
