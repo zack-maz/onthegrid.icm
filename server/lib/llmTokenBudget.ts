@@ -47,8 +47,11 @@ export const DAILY_LIMITS: Record<Provider, number> = {
 };
 
 const TTL_48H_SEC = 172_800;
-const SOFT_CAP_RATIO = 0.8;
-const HARD_CAP_RATIO = 0.95;
+// Phase 39 Plan 03: exported so the `/api/operator-status` tokenBudget block
+// derives soft/hard thresholds from the same source of truth as `budgetState`
+// (no magic-number drift between the gate and the dashboard read shape).
+export const SOFT_CAP_RATIO = 0.8;
+export const HARD_CAP_RATIO = 0.95;
 
 /** Build the per-provider per-UTC-day token counter key `llm:tokens:{provider}:YYYY-MM-DD`. */
 export function todayKey(provider: Provider): string {

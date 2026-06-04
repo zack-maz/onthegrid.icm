@@ -25,6 +25,13 @@ import { Router, type Request, type Response } from 'express';
 import { cacheGetSafe, redis } from '../cache/redis.js';
 import { classifyEventActors } from '../lib/actorClassifier.js';
 import { LLM_EVENTS_KEY_ACTIVE } from '../lib/llmExtractionPipeline.js';
+import {
+  budgetState,
+  DAILY_LIMITS,
+  getDailyTokens,
+  HARD_CAP_RATIO,
+  SOFT_CAP_RATIO,
+} from '../lib/llmTokenBudget.js';
 import { logger } from '../lib/logger.js';
 import {
   isTerminalDead,
@@ -124,6 +131,39 @@ interface ActorQualityBlock {
     actorConfidence: ('high' | 'medium' | 'low')[];
     issue: 'null' | 'raw-cameo' | 'ambiguous' | 'low-confidence';
   }>;
+}
+
+// ============================================================================
+// Phase 39 Plan 03 — tokenBudget block (GA-4) shape + interface
+// ============================================================================
+
+/**
+ * tokenBudget block returned to the BudgetBlock dashboard consumer (Plan 39-05).
+ *
+ * GA-4 provider-keyed MAP shape (not flat) so a restored provider later adds a
+ * `providers` key without breaking the Zod `.strict()` contract pin. Per-provider
+ * `used`/`cap`/`soft`/`hard`/`state` mirror the `llmTokenBudget` source of truth;
+ * `costShadow` carries today's `events:llm-cost-shadow:v3:{date}` roll-up with USD
+ * derived from the integer-microcents accumulator (÷1e6).
+ *
+ * Degrade-open: any Redis throw inside the block leaves `tokenBudget: null` on a
+ * 200 response (mirrors the `actorQuality` precedent — T-39-03-D).
+ */
+interface TokenBudgetBlock {
+  providers: {
+    nvidia_nim: {
+      used: number;
+      cap: number;
+      soft: number;
+      hard: number;
+      state: 'ok' | 'soft' | 'hard';
+    };
+  };
+  costShadow: {
+    tokensIn: number;
+    tokensOut: number;
+    usd: number;
+  };
 }
 
 /**
@@ -483,7 +523,53 @@ operatorStatusRouter.get(
         // actorQuality stays null
       }
 
-      res.json({ audit24h, byBearer, advEval, prune, actorQuality });
+      // ===== Phase 39 Plan 03 — tokenBudget block (BUDGET-03/04) =====
+      //
+      // Degrade-open contract (T-39-03-D, mirrors actorQuality VERBATIM):
+      // any Redis throw inside this try leaves `tokenBudget = null` on a 200
+      // response — never bubbles to the outer 500 handler.
+      //
+      // GA-4 provider-keyed map shape, pinned by a Zod `.strict()` contract
+      // test (Task 2) so any dashboard read drift fails the build.
+      let tokenBudget: TokenBudgetBlock | null = null;
+      try {
+        // Open Q1 decision: read the dormant `llm:tokens:nvidia_nim:{date}`
+        // counter. In the v3 path `incrDailyTokens` is retired (Pitfall 2), so
+        // this reads 0 today — that is HONEST (NIM free-tier isn't metered into
+        // this counter). The live operator signal is `costShadow.usd` below; a
+        // restored provider that calls `incrDailyTokens` populates this same
+        // counter with zero contract change.
+        const used = await getDailyTokens('nvidia_nim');
+        const cap = DAILY_LIMITS.nvidia_nim;
+        const state = budgetState('nvidia_nim', used);
+        const soft = Math.round(cap * SOFT_CAP_RATIO);
+        const hard = Math.round(cap * HARD_CAP_RATIO);
+
+        // Cost-shadow daily roll-up — same UTC YYYY-MM-DD key format that
+        // `accrueShadowCost` writes (freeClaudeRouter.ts). usd is restored from
+        // the integer-microcents accumulator (÷1e6) to undo the float-precision
+        // storage trick.
+        const todayDate = new Date().toISOString().slice(0, 10);
+        const shadow = await redis.hgetall<Record<string, string | number>>(
+          `events:llm-cost-shadow:v3:${todayDate}`,
+        );
+        const tokensIn = Number(shadow?.tokensIn) || 0;
+        const tokensOut = Number(shadow?.tokensOut) || 0;
+        const usdMicrocents = Number(shadow?.usdMicrocents) || 0;
+        const usd = usdMicrocents / 1_000_000;
+
+        tokenBudget = {
+          providers: {
+            nvidia_nim: { used, cap, soft, hard, state },
+          },
+          costShadow: { tokensIn, tokensOut, usd },
+        };
+      } catch (err) {
+        log.warn({ err }, 'failed to compute tokenBudget block');
+        // tokenBudget stays null (degrade-open — T-39-03-D).
+      }
+
+      res.json({ audit24h, byBearer, advEval, prune, actorQuality, tokenBudget });
     } catch (err) {
       log.error({ err }, '/api/operator-status failed');
       res.status(500).json({ error: 'operator_status_failed' });
