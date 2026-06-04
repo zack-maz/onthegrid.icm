@@ -194,12 +194,12 @@ _10 REQ-IDs — by strand: BUDGET (4) · OBS-FLIGHT (6)._
 3. **SC39-3** Operator drills from a run list (newest first, colored outcome badge, batch progress bar, token spend bar, eval score) into per-call timing, provenance distribution, DLQ groups, and watchdog timeouts via the `FlightRecorderBlock`. Redis-backed `llm:calls:history` (LPUSH+LTRIM 500-entry cap, 30d TTL) and `llm:runs:history` (LPUSH+LTRIM 200-run cap, 30d TTL) replace in-memory `callHistory` lost on cold start. Cold-start hydration populates in-memory state from Redis LRANGE on first `/llm-status` or `/llm-history` request, surviving Vercel Fluid Compute warm-start gaps (mirrors Phase 28.2.7 `llm:lastProgress` write-through pattern). _(OBS-FLIGHT-01, OBS-FLIGHT-02, OBS-FLIGHT-04, OBS-FLIGHT-06)_
 4. **SC39-4** Bearer-gated `GET /api/events/llm-history` (operator-only; promoted from the original Phase 27.4.5 `NODE_ENV !== 'production'` gate to match `/api/operator-status` precedent) returns `{ runs: [...], calls: [...] }` with optional `?runId=X` and `?limit=N` query params. Every LLM call dispatched during a single `runRefreshExtraction` invocation carries its parent run's `runId` for back-correlation in the UI. _(OBS-FLIGHT-03, OBS-FLIGHT-05)_
 
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 
 **Wave 1** _(parallel — no file overlap)_
 
 - [x] 39-01-PLAN.md — Flight-recorder data layer: RunHistoryEntry/CallHistoryEntry types + runId field; llm:calls:history + llm:runs:history Redis modules; 3-surface registry registration (HARD gate) [OBS-FLIGHT-01, -02, -06]
-- [ ] 39-03-PLAN.md — tokenBudget degrade-open block on /api/operator-status + Zod .strict() contract test + exported ratio constants [BUDGET-03, -04]
+- [x] 39-03-PLAN.md — tokenBudget degrade-open block on /api/operator-status + Zod .strict() contract test + exported ratio constants [BUDGET-03, -04]
 
 **Wave 2** _(after 39-01)_
 
@@ -261,7 +261,7 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 | Phase | Name                                                                  | Plans Complete | Status      | Completed  |
 | ----- | --------------------------------------------------------------------- | -------------- | ----------- | ---------- |
 | 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
-| 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 1/5            | In Progress |            |
+| 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 2/5            | In Progress |            |
 | 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 0/TBD          | Not started | —          |
 | 41    | Public Reveal Polish                                                  | 0/TBD          | Not started | —          |
 

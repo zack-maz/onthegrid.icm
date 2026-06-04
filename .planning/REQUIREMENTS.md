@@ -72,8 +72,8 @@ Operator-locked priority #2 + absorbed Phase 27.4.5 (LLM observability flight re
 
 - [ ] **BUDGET-01**: `BudgetBlock` component added to `DevApiStatus.tsx` surfacing `llm:tokens:{provider}:YYYY-MM-DD` per-provider used-vs-cap with soft (0.8) and hard (0.95) threshold proximity bars. NIM is the only active provider post-v1.5; block renders single-provider but extensibility-shaped for any future restoration.
 - [ ] **BUDGET-02**: Cost-shadow accrual surface from `events:llm-cost-shadow:v3:{YYYY-MM-DD}` HSET fields (`tokensIn`, `tokensOut`, `usdMicrocents`). Today's running cost displayed with microcents → USD conversion. Trend bar/sparkline across the 90d retention window.
-- [ ] **BUDGET-03**: New `/api/operator-status` field `tokenBudget` (Bearer-gated read; degrade-open on Redis fail) mirroring the existing `actorQuality` block pattern. Returns per-provider current count + cap + soft/hard threshold + cost-shadow row.
-- [ ] **BUDGET-04**: Contract test pins `tokenBudget` field shape (Zod `.strict()`). Regression-locks the dashboard's read shape.
+- [x] **BUDGET-03**: New `/api/operator-status` field `tokenBudget` (Bearer-gated read; degrade-open on Redis fail) mirroring the existing `actorQuality` block pattern. Returns per-provider current count + cap + soft/hard threshold + cost-shadow row.
+- [x] **BUDGET-04**: Contract test pins `tokenBudget` field shape (Zod `.strict()`). Regression-locks the dashboard's read shape.
 
 #### OBS-FLIGHT — LLM flight recorder (Phase 27.4.5 absorbed; adapted to v3-only pipeline)
 
