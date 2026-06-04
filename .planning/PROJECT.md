@@ -145,6 +145,11 @@ For per-phase detail, see `.planning/milestones/v[X.Y]-ROADMAP.md`.
 - ✓ OpenAPI 3.0.3 spec extended 14 → 19 endpoints with split securitySchemes (`cronSecret` + `operatorBearer`) + 4 reusable schemas + Redocly drift gate — v1.5
 - ✓ LLM-RELI-07 acceptance gate satisfied (3 consecutive `prod-connectivity-audit.yml` greens 2026-06-01 → 2026-06-03) — v1.5
 - ✓ 4 architectural unblocker PRs (PR #32 / #33 / #34 / #35) correcting Phase 28.2.5 D-09 strict-tier-green gate vs ADR-0010 LLM-optional architecture mismatches — v1.5
+- ✓ Honest single-source health/audit signals (`cache-fallback-active:` vs `llm-optional-fallback-active:` probe tokens; degraded-not-unknown Open-Meteo precip sentinel; null-vs-0 `actorMatchRate`; degrade-open replay-quota 503) — v1.6 (Phase 38, LLM-FIX-01..06)
+- ✓ LLM-PURGE Phase 29 finishing pass (v1/v2 Zod schemas + `pipelineAudit` writer + `PipelineFlipsBlock` + Cerebras/Groq env+config + OpenRouter daily-cap dead writers deleted; zero dangling importers, typecheck-gated) — v1.6 (Phase 38, LLM-PURGE-01..09)
+- ✓ GDELT corpus quality: read-only corpus audit + high-confidence pre-enrichment dedup (actor+CAMEO+day+≤5km+Jaccard≥0.85, size-2 cohort targeted, 6–9 tail preserved) + generalized three-gate OSINT corroboration + additive tier×corroboration×specificity composite rescore (non-mutating dashboard re-order) — v1.6 (Phase 38, GDELT-MATCH-01..04)
+- ✓ Water-facility name romanization (`transliteration@2.6.1`, searchable-token bar) injected BEFORE the Latin-label admission gate; `nameLatin` surfaced with `nameOriginal` preserved across detail panel / WaterTooltip / search — v1.6 (Phase 38, WATER-LATIN-01..04)
+- ✓ Vercel Pro reconciliation: Fluid Compute compat verified on `createApp()` factory; Hobby-era docs-drift ("Hobby cap 3" / "10s" / "60s") purged across 5 surfaces; CLI 52→54.9.0; `vercel.ts` + Build Output API migrations deferred-with-rationale (D-09) — v1.6 (Phase 38, VERCEL-PRO-01..04)
 
 ### Active
 
@@ -233,4 +238,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-06-03 at v1.6 Production Hardening milestone start. 4 phases planned (38 LLM Pipeline + GDELT + Vercel Pro Cleanup; 39 Budget Dashboard; 40 UI Polish; 41 Public Reveal). Operator-locked priority order per `project-v1-6-priorities` memory: LLM fixes > budget visibility > UI polish > public reveal. Phase 999.5 stays in backlog (operator deferred promotion); Phase 999.6 retired (folded into 38 + 41). Numbering continues from v1.5 phase 37._
+_Last updated: 2026-06-04 — Phase 38 (LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup) complete: 6/6 plans, 27 requirements validated, 6/6 success criteria verified, code review resolved (CR-01 blocker + WR-01..04). Next: Phase 39 Budget Dashboard. 4 phases planned for v1.6 (38 ✓; 39 Budget Dashboard; 40 UI Polish; 41 Public Reveal). Operator-locked priority order per `project-v1-6-priorities` memory: LLM fixes > budget visibility > UI polish > public reveal. Phase 999.5 stays in backlog (operator deferred promotion); Phase 999.6 retired (folded into 38 + 41). Numbering continues from v1.5 phase 37._
