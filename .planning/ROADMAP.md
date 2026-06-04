@@ -168,10 +168,14 @@ Full phase-by-phase detail archived to [milestones/v1.5-ROADMAP.md](milestones/v
 7. **SC38-7** _(conditional — fires only if operator absorbs CRON-WATCH-01 at `/gsd:discuss-phase` 38)_ 7 consecutive days of `/api/cron/refresh-events` PASS — `events:llm:v3` healthy after each 04:00 UTC tick, eval ≥ 0.95 at all radii (5/20/100km), 0 breaker trips, DLQ growth bounded. _(CRON-WATCH-01)_
 
 **Plans:** 6 plans across 3 waves (strand-aligned per D-01):
+**Wave 1**
 
 - [ ] 38-01-PLAN.md — LLM-FIX strand (honest signals) + folded CI-green [wave 0]
 - [ ] 38-02-PLAN.md — LLM-PURGE strand (Phase 29 dead-code finishing pass) [wave 1, after 01]
 - [ ] 38-03-PLAN.md — GDELT-MATCH-01 corpus audit (hard gate for 06) [wave 1]
+
+**Wave 2** _(blocked on Wave 1 completion)_
+
 - [ ] 38-04-PLAN.md — WATER-LATIN strand (romanization, transliteration install) [wave 2, after 03]
 - [ ] 38-05-PLAN.md — VERCEL-PRO strand (Fluid Compute verify + docs-drift; PRO-01/02 deferred) [wave 2, after 02]
 - [ ] 38-06-PLAN.md — GDELT-MATCH 02/03/04 (dedup + corroboration + composite) [wave 2, after 02+03]
