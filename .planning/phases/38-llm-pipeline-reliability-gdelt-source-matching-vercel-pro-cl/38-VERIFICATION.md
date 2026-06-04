@@ -4,7 +4,7 @@ verified: 2026-06-04T08:00:00Z
 status: passed
 score: 6/6
 overrides_applied: 0
-re_verification: null
+re_verification: 2026-06-04T19:13:04Z
 gaps: []
 deferred: []
 human_verification: []
@@ -155,3 +155,29 @@ No gaps. All six success criteria are structurally verified in the codebase:
 
 _Verified: 2026-06-04T08:00:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## Re-Verification 2026-06-04T19:13:04Z
+
+Independent goal-backward re-run via `/gsd-verify-phase 38` at HEAD `9bea561` (only planning/docs commits landed since the initial verification at `05bf712` — no source change). **Status unchanged: passed (6/6).**
+
+| Check                         | Result                                                                                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Behavioral — full test suite  | ✅ `npx vitest run` → **2444 passed / 0 failed** / 19 skipped / 5 todo (192 files passed, 2 skipped), exit 0                                                                                          |
+| Typecheck                     | ✅ `npm run typecheck` PASS (type-coverage 97.66%, above 97 floor)                                                                                                                                    |
+| Observable truths (SC38-1..6) | ✅ 6/6 re-confirmed; SC38-7 correctly unfired (CRON-WATCH-01 deferred to v1.7 per 38-CONTEXT D-02)                                                                                                    |
+| Required artifacts            | ✅ 12/12 must-have artifacts exist + substantive (114–645 lines each)                                                                                                                                 |
+| Key-link wiring               | ✅ all wired: health `fallbackReasonToken`×2; pipeline→v3 direct import; overpass→romanize×13; composite score chain                                                                                  |
+| Requirements coverage         | ✅ 27/27 satisfied                                                                                                                                                                                    |
+| Decision coverage (#2492)     | ✅ 4/4 CONTEXT.md decisions honored (non-blocking gate)                                                                                                                                               |
+| Anti-pattern scan             | ✅ 0 blockers / 0 warnings across 16 phase-modified source files                                                                                                                                      |
+| Test-quality audit            | ✅ 0 disabled/skipped/`.only`/todo on the 16 requirement-linked test files; 0 circular patterns; value-level assertions present (corroboration 8, dedup 6, romanize 6, quota-chaos 16 status asserts) |
+| Human verification            | None — backend/infrastructure phase; the one user-facing surface (WATER-LATIN-04 `nameLatin` display + original-on-hover) is covered by RTL tests                                                     |
+
+**Tooling note:** `gsd query verify.artifacts`/`verify.key-links` returned false "File not found" for every artifact — the must_haves YAML stores paths as `path: 'foo'` and the handler passes the literal surrounding quotes to `fs.existsSync`. All paths verified directly with quotes stripped (`test -f`) and confirmed present + substantive. Not a phase gap.
+
+**Re-verification outcome:** No gaps, no human items, no deferred items beyond the already-recorded CRON-WATCH-01 (v1.7) and the `deferred-items.md` carry-forwards (WR-05/06/07 default-off prefilter path, IN-01..05 wire-shape). Phase 38 goal achieved.
+
+_Re-verified: 2026-06-04T19:13:04Z_
+_Verifier: Claude (gsd-verifier, re-run)_
