@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-04T17:05:00Z"
-last_activity: 2026-06-04 -- Completed 38-06-PLAN.md (GDELT-MATCH 02/03/04; high-confidence dedup pre-pass before enrichment, generalized three-gate OSINT corroboration with strict keyword gate, additive compositeScore re-orders dashboard non-destructively; full server suite 1340 tests + typecheck green)
+last_updated: "2026-06-04T17:38:21.969Z"
+last_activity: 2026-06-04
 progress:
   total_phases: 10
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
   completed_plans: 6
-  percent: 0
+  percent: 10
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 38 (llm-pipeline-reliability-gdelt-source-matching-vercel-pro-cl) — EXECUTING
-Plan: 38-02 + 38-03 complete (wave 1); 38-04 + 38-05 complete (wave 2, WATER-LATIN + VERCEL-PRO strands); 38-06 complete (wave 2, GDELT-MATCH 02/03/04 strand); other wave-1 plans + remaining wave 3 remain
+Phase: 39
+Plan: Not started
 Status: Ready to execute
-Last activity: 2026-06-04 -- Completed 38-06-PLAN.md (GDELT-MATCH-02/03/04 — SHIPPED dedupHighConfidence high-confidence pre-enrichment dedup [order-independent actor pair AND CAMEO root AND day-bucket AND ≤5km AND title Jaccard ≥0.85; thresholds sized off GDELT-MATCH-01 size-2 cohort; wired before groupGdeltRows; pure read-and-filter never writes events:gdelt — D-07]; SHIPPED corroboration.ts generalizing the Phase-22 Bellingcat three-gate to any news:gdelt OSINT source [±24h temporal AND 200km geo AND STRICT keyword gate — specific actor/place tokens minus a GENERIC_STOPWORDS set so same-city-same-day coincidences withhold; boost tier-weighted gold 0.25/silver 0.15/bronze 0.08/unknown 0.05]; SHIPPED computeCompositeScore [TIER_WEIGHT + PRECISION_WEIGHT + corroborationBoost clamped 0-1; unknown-tier floor 0.15 per audit 99.7%-unknown finding] + compositeScore .optional() on enrichedEventV3 + applyCompositeOrdering additive non-mutating dashboard re-order in events.ts read path. RED→GREEN for both strands; full server suite 1340 tests + typecheck PASS; D-07 grep gates [0 cache writes in eventGrouping/relevanceScorer] confirmed)
+Last activity: 2026-06-04
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
