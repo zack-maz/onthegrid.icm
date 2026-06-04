@@ -2953,7 +2953,7 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
 /**
  * Phase 27.4.3 Plan 04 — sibling of EventsFiltersSection, gated on
  * schemaVersion === 'v3' && import.meta.env.DEV by the parent render switch.
- * Renders the 8-block v3 observability stack per UI-SPEC §"Component
+ * Renders the 7-block v3 observability stack per UI-SPEC §"Component
  * Inventory" + §"Render switch".
  *
  * Block order (per UI-SPEC §"Section headers" lines 169-180):
@@ -2962,8 +2962,7 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
  *   3. Rate-Limit Headroom (D-12 §3)
  *   4. Schema-Strict Failure Rate (D-12 §4)
  *   5. Error Taxonomy (D-14)
- *   6. Pipeline Flips (D-15)
- *   7. v3 Cost Shadow (D-19)
+ *   6. v3 Cost Shadow (D-19)
  *   + Lineage drill-down (D-13) — rendered IN-PLACE inside DrillDownRow under
  *     the existing event-list block (DrillDownRow auto-detects v3 fields).
  *     No separate block here; that's the entire v3 lineage UX surface.
