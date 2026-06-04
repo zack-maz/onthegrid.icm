@@ -231,7 +231,23 @@ _5 REQ-IDs — UI-POLISH (5)._
 2. **SC40-2** Operator navigates the API Health tab through 3-4 grouped sections (down from ~13 stacked sub-blocks) with polished typography hierarchy, spacing system, color tokens (`colorBridge.ts` extended for any new semantic tokens), responsive layout for narrower viewports, and improved focus state / active-tab affordance / keyboard navigability. `agent-native-reviewer` parity verified — every UI action has an agent-callable equivalent (Bearer-gated endpoint or query param). Uses `frontend-design` skill conventions; no generic AI aesthetics. _(UI-POLISH-02, UI-POLISH-03, UI-POLISH-04)_
 3. **SC40-3** Each sub-block carries RTL component tests for its render contract (counts surface correctly under fresh / stale / degraded states); the consolidated layout shape is snapshot-locked so regressions surface as snapshot diffs. _(UI-POLISH-05)_
 
-**Plans:** TBD (created via `/gsd:plan-phase 40`; UI-SPEC.md generated via `/gsd:ui-phase 40` BEFORE `/gsd:plan-phase 40`)
+**Plans:** 4 plans (created 2026-06-04; UI-SPEC.md gated SC40-1 BEFORE planning)
+
+**Wave 1**
+
+- [ ] 40-01-PLAN.md — Foundation: 3 `--color-status-*` tokens (app.css + colorBridge + sentinel) + uiStore session-scoped collapse/drawer state [UI-POLISH-03]
+
+**Wave 2** _(after 40-01)_
+
+- [ ] 40-02-PLAN.md — Core restructure: DevApiStatusAllApisTab → hero + 4 collapsible groups + drawer + muted-placeholder degrade + status-token migration [UI-POLISH-01, -02, -03]
+
+**Wave 3** _(after 40-02 — same file, sequenced to avoid merge conflict)_
+
+- [ ] 40-03-PLAN.md — Tab-bar interaction affordances: focus-visible ring + 2px active indicator + roving keyboard nav + tabpanel roles + agent-native parity checkpoint [UI-POLISH-04]
+
+**Wave 4** _(after 40-02 + 40-03)_
+
+- [ ] 40-04-PLAN.md — Regression-lock: 8 RTL render-contract assertions + consolidated-layout snapshot [UI-POLISH-05]
 
 **UI hint**: yes
 
@@ -262,7 +278,7 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 | ----- | --------------------------------------------------------------------- | -------------- | ----------- | ---------- |
 | 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete    | 2026-06-04 |
-| 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 0/TBD          | Not started | —          |
+| 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 0/4            | Planned     | —          |
 | 41    | Public Reveal Polish                                                  | 0/TBD          | Not started | —          |
 
 ## Deferred Work
