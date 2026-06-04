@@ -22,7 +22,7 @@ Deliver a Bearer-gated operator visibility surface for the LLM enrichment pipeli
 
 ### Discussion outcome — operator delegated the HOW decisions
 
-- **D-01:** The operator reviewed the four identified gray areas and chose **"let research and planning decide for all."** Downstream agents (researcher, planner) OWN these decisions — do NOT re-ask the operator. Each is recorded below with options + tradeoffs + a recommended lean so planning starts with a prior, not a blank slate. Treat the leans as defaults to adopt unless research surfaces a reason against.
+- **D-01 [informational]:** The operator reviewed the four identified gray areas and chose **"let research and planning decide for all."** Downstream agents (researcher, planner) OWN these decisions — do NOT re-ask the operator. _(Process/governance note — not plan-implementable; tagged `[informational]` so the decision-coverage gate does not track it. The HOW choices it delegates are tracked individually via GA-1..GA-4 in plan notes.)_ Each is recorded below with options + tradeoffs + a recommended lean so planning starts with a prior, not a blank slate. Treat the leans as defaults to adopt unless research surfaces a reason against.
 
 ### Locked by REQUIREMENTS.md (not open — do not re-derive)
 
