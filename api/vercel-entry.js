@@ -401,9 +401,9 @@ var envSchema = z.object({
   AISSTREAM_API_KEY: z.string().default(""),
   ACLED_EMAIL: z.string().default(""),
   ACLED_PASSWORD: z.string().default(""),
-  // LLM provider API keys (Phase 27 — graceful degradation, empty string means unconfigured)
-  CEREBRAS_API_KEY: z.string().default(""),
-  GROQ_API_KEY: z.string().default(""),
+  // Phase 38 LLM-PURGE-06 — CEREBRAS_API_KEY / GROQ_API_KEY env vars deleted.
+  // The Cerebras + Groq providers were deferred (Phase 34) and never wired into
+  // the runtime NIM-only cascade; the keys had `.default('')` and zero readers.
   // Phase 27.4.3 (D-04, D-22): free-claude-code routing providers.
   // NVIDIA NIM is the v3 primary (40 req/min free tier, no documented
   // daily token cap). OpenRouter is the v3 fallback (~100-200 req/day per
@@ -561,12 +561,6 @@ var config = {
     email: env.ACLED_EMAIL,
     password: env.ACLED_PASSWORD
   },
-  cerebras: {
-    apiKey: env.CEREBRAS_API_KEY
-  },
-  groq: {
-    apiKey: env.GROQ_API_KEY
-  },
   newsRelevanceThreshold: env.NEWS_RELEVANCE_THRESHOLD,
   eventConfidenceThreshold: env.EVENT_CONFIDENCE_THRESHOLD,
   eventMinSources: env.EVENT_MIN_SOURCES,
@@ -634,10 +628,14 @@ var SOURCE_KEYS = {
   water: "water:facilities:v3",
   // DRIFT-4: waterPrecip was in thresholds + tier but missing from SOURCE_KEYS — operator-reported in 28.2.5.
   waterPrecip: "water:precip",
-  // DRIFT-5: events:llm:v3 promoted from observability-only to gate-relevant per 28.2.5 D-06.
-  // The cache-bridge fallback chain at events.ts:701-731 starts with v3; this entry gives
-  // the API Health tab a probe target for the top of the chain. Bridge to raw GDELT (key
-  // 'events') remains as Pitfall 1 safety net.
+  // Phase 37 (fix/prod-audit-tier-regression): `events:llm:v3` is the primary cache
+  // for LLM-enriched events. Per ADR-0010, the architecture is LLM-OPTIONAL: when v3
+  // is empty (LLM unconfigured, NIM throttled hard, or cron deferred), the route in
+  // server/routes/events.ts serves raw GDELT via the Pitfall 1 bridge. The map never
+  // goes blank. The probe in server/routes/health.ts mirrors this contract: a cold
+  // v3 + fresh raw-GDELT cache reports `degraded` (LLM-optional fallback active), not
+  // `unknown` (broken). See ADR-0010 "Out-of-scope carries forward" → "unset both LLM
+  // credentials is the kill switch" for the operator-side semantics.
   llmEvents: "events:llm:v3"
 };
 var CRON_LASTTICK_TTL_SEC = 7 * 24 * 60 * 60;
@@ -684,8 +682,13 @@ var TIER_BY_ENDPOINT = {
   // D-26
   events: "critical",
   // D-26
-  llmEvents: "critical",
-  // D-26 (28.2.5 D-06 — promotes events:llm:v3 to gate-relevant)
+  // Phase 37 fix/prod-audit-tier-regression: demoted from `critical` to `non-critical`.
+  // Phase 28.2.5 D-06 promoted `events:llm:v3` to gate-relevant when the LLM was
+  // mandatory. Phase 29 (ADR-0010) made the LLM OPTIONAL — the Pitfall 1 raw-GDELT
+  // bridge serves /api/events cleanly when v3 is empty, so `llmEvents: unknown` is
+  // no longer a gate-blocking failure. The probe pairs this demotion with a
+  // `degraded` signal when the LLM-optional fallback is active (see health.ts).
+  llmEvents: "non-critical",
   markets: "non-critical",
   // D-26
   news: "non-critical",
@@ -727,524 +730,6 @@ init_redis();
 import { readFileSync as readFileSync4, existsSync as existsSync4 } from "fs";
 import { resolve as resolve3, dirname as dirname3 } from "path";
 import { fileURLToPath as fileURLToPath3 } from "url";
-
-// server/lib/freeClaudeRouter.ts
-init_redis();
-import OpenAI from "openai";
-
-// server/lib/llmCircuitBreaker.ts
-var WINDOW_SIZE = 10;
-var ERROR_RATE_THRESHOLD = 0.3;
-var PAUSE_DURATION_MS = 5 * 6e4;
-var state = {
-  cerebras: { outcomes: [], pausedUntil: null },
-  groq: { outcomes: [], pausedUntil: null },
-  nvidia_nim: { outcomes: [], pausedUntil: null },
-  openrouter: { outcomes: [], pausedUntil: null }
-};
-function record(provider, outcome) {
-  const s = state[provider];
-  s.outcomes.push(outcome);
-  if (s.outcomes.length > WINDOW_SIZE) s.outcomes.shift();
-  if (s.outcomes.length === WINDOW_SIZE) {
-    const errs = s.outcomes.filter((o) => o === "err").length;
-    if (errs / WINDOW_SIZE > ERROR_RATE_THRESHOLD) {
-      s.pausedUntil = Date.now() + PAUSE_DURATION_MS;
-      s.outcomes = [];
-    }
-  }
-}
-function isAvailable(provider) {
-  const s = state[provider];
-  if (s.pausedUntil && Date.now() < s.pausedUntil) return false;
-  if (s.pausedUntil && Date.now() >= s.pausedUntil) s.pausedUntil = null;
-  return true;
-}
-
-// server/lib/llmProgress.ts
-init_redis();
-var INITIAL_PROGRESS = {
-  stage: "idle",
-  startedAt: null,
-  completedAt: null,
-  totalGroups: 0,
-  newGroups: 0,
-  totalBatches: 0,
-  completedBatches: 0,
-  totalGeocodes: 0,
-  completedGeocodes: 0,
-  enrichedCount: 0,
-  errorMessage: null,
-  durationMs: null,
-  schemaVersion: void 0,
-  callHistory: void 0,
-  tokenCounters: void 0,
-  dlqCount: void 0,
-  breakerState: void 0,
-  evalScore: void 0,
-  provenanceCounts: void 0,
-  suspectCount: void 0,
-  watchdogTimeoutCount: void 0,
-  // Phase 27.4.6 D-06 — provenance label cleared between runs so a previous
-  // 'cron' label doesn't survive into a manual run (and vice-versa).
-  lastTriggerSource: void 0,
-  // Phase 27.4.3 Plan 02a — v3 observability fields seeded undefined so
-  // resetProgress() clears stale data between runs (e.g., a lingering
-  // routingTrace from yesterday's v3 run would otherwise confuse today's
-  // dashboard if today only ran v2).
-  routingTrace: void 0,
-  latencyHistogram: void 0,
-  rateLimit: void 0,
-  schemaFailures: void 0,
-  errorTaxonomy: void 0,
-  costShadow: void 0,
-  recentEvents: void 0
-};
-var LLM_LASTPROGRESS_KEY = "llm:lastProgress";
-var LLM_LASTPROGRESS_TTL_SEC = 7 * 24 * 60 * 60;
-var llmProgress = { ...INITIAL_PROGRESS };
-function resetProgress() {
-  Object.assign(llmProgress, INITIAL_PROGRESS, {
-    startedAt: Date.now(),
-    stage: "grouping"
-  });
-  void cacheSetSafe(
-    LLM_LASTPROGRESS_KEY,
-    { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
-    LLM_LASTPROGRESS_TTL_SEC
-  );
-}
-function updateProgress(partial) {
-  Object.assign(llmProgress, partial);
-  if (partial.completedAt !== void 0) {
-    const isErrorTermination = partial.stage === "error" || llmProgress.stage === "error" || llmProgress.errorMessage !== null;
-    if (!isErrorTermination) {
-      void cacheSetSafe(
-        LLM_LASTPROGRESS_KEY,
-        { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
-        LLM_LASTPROGRESS_TTL_SEC
-      );
-    }
-  }
-}
-function buildSummary() {
-  return {
-    lastRun: llmProgress.completedAt ?? Date.now(),
-    groupCount: llmProgress.newGroups,
-    batchCount: llmProgress.completedBatches,
-    geocodeCount: llmProgress.completedGeocodes,
-    enrichedCount: llmProgress.enrichedCount,
-    durationMs: llmProgress.durationMs ?? 0,
-    error: llmProgress.errorMessage,
-    source: "pipeline",
-    schemaVersion: llmProgress.schemaVersion,
-    tokenCounters: llmProgress.tokenCounters,
-    dlqCount: llmProgress.dlqCount,
-    evalScore: llmProgress.evalScore,
-    provenanceCounts: llmProgress.provenanceCounts,
-    suspectCount: llmProgress.suspectCount,
-    watchdogTimeoutCount: llmProgress.watchdogTimeoutCount,
-    // Phase 27.4.3 Plan 02a — thread the new v3 observability fields into
-    // the persisted Redis summary so cold-start dashboard reads see the
-    // routing trace, latency histogram, rate-limit headroom, schema failures,
-    // error taxonomy, shadow cost, callHistory mirror, and recentEvents
-    // drill-down. callHistory is also persisted so the cold-start render
-    // matches the live render exactly.
-    callHistory: llmProgress.callHistory,
-    routingTrace: llmProgress.routingTrace,
-    latencyHistogram: llmProgress.latencyHistogram,
-    rateLimit: llmProgress.rateLimit,
-    schemaFailures: llmProgress.schemaFailures,
-    errorTaxonomy: llmProgress.errorTaxonomy,
-    costShadow: llmProgress.costShadow,
-    recentEvents: llmProgress.recentEvents
-  };
-}
-
-// server/lib/freeClaudeRouter.ts
-var NVIDIA_NIM_BASE = "https://integrate.api.nvidia.com/v1";
-var OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-var LLM_TIMEOUT_MS = 12e4;
-var RETRY_ATTEMPTS = 3;
-var BACKOFF_MS = [2e3, 8e3, 32e3];
-var JITTER_MS = 500;
-var NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? "qwen/qwen3.5-397b-a17b";
-var OPENROUTER_DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
-var OPENROUTER_DAILY_CAP = 200;
-var MAX_TOKENS_PER_MODEL = {
-  // Phase 27.4.4 Plan 02 dev-pass bump: 425 → 2048 after live dev /api/events?force=true
-  // showed ~89% truncation rate (50 v3:malformed DLQ in 7 batches) — the
-  // 20-event preflight characterization underestimated production hierarchy
-  // verbosity. 2048 keeps a 5× safety margin against the 4096 default.
-  "qwen/qwen3.5-397b-a17b": 2048,
-  "meta/llama-3.3-70b-instruct": 380,
-  // p99 315 + 20% buffer
-  "nvidia/nemotron-3-super-120b-a12b": 1240,
-  // p99 1031 + 20% buffer (verbose, schema-fails)
-  "z-ai/glm4.7": 1024
-  // conservative — no traceable records (NIM 400s)
-};
-var MAX_TOKENS_DEFAULT = 4096;
-var RollingWindow = class {
-  cap;
-  windowMs;
-  timestamps = [];
-  constructor(cap, windowMs) {
-    this.cap = cap;
-    this.windowMs = windowMs;
-  }
-  evict(now) {
-    this.timestamps = this.timestamps.filter((t) => now - t < this.windowMs);
-  }
-  canRequest() {
-    this.evict(Date.now());
-    return this.timestamps.length < this.cap;
-  }
-  consume() {
-    this.timestamps.push(Date.now());
-  }
-  headroom() {
-    this.evict(Date.now());
-    return { used: this.timestamps.length, cap: this.cap };
-  }
-};
-var nvidiaNimWindow = new RollingWindow(40, 6e4);
-var lastNimCallTs = 0;
-var PREWARM_COLD_THRESHOLD_MS = 6e4;
-function getNvidiaNimClient() {
-  if (!env.NVIDIA_NIM_API_KEY) return null;
-  return new OpenAI({
-    apiKey: env.NVIDIA_NIM_API_KEY,
-    baseURL: NVIDIA_NIM_BASE,
-    timeout: LLM_TIMEOUT_MS
-  });
-}
-function getOpenRouterClient() {
-  if (!env.OPENROUTER_API_KEY) return null;
-  return new OpenAI({
-    apiKey: env.OPENROUTER_API_KEY,
-    baseURL: OPENROUTER_BASE,
-    timeout: LLM_TIMEOUT_MS
-  });
-}
-function stripReasoningBlocks(raw, _reasoningContent) {
-  if (!raw) return raw;
-  let s = raw.replace(/<think>[\s\S]*?<\/think>/g, "");
-  s = s.replace(/^reasoning_content:[^\n]*\n/m, "");
-  return s.trim();
-}
-function classifyError(err) {
-  if (err instanceof Error) {
-    const m = err.message.toLowerCase();
-    if (m.includes("429") || m.includes("rate limit")) return "rate_limit";
-    if (m.includes("timeout") || m.includes("timed out")) return "timeout";
-    if (m.includes("enotfound") || m.includes("econnreset") || m.includes("eai_again"))
-      return "network";
-    if (/\b5\d\d\b/.test(m)) return "upstream_500";
-  }
-  return "other";
-}
-async function sleepWithJitter(base) {
-  const jitter = (Math.random() * 2 - 1) * JITTER_MS;
-  await new Promise((r) => setTimeout(r, Math.max(0, base + jitter)));
-}
-function todayKey() {
-  const d = /* @__PURE__ */ new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    d.getUTCDate()
-  ).padStart(2, "0")}`;
-}
-async function incrOpenRouterDaily() {
-  try {
-    const key = `llm:tokens:openrouter:${todayKey()}`;
-    const next = await redis.incr(key);
-    await redis.expire(key, 48 * 3600);
-    return typeof next === "number" ? next : 0;
-  } catch {
-    return 0;
-  }
-}
-async function getOpenRouterDaily() {
-  try {
-    const key = `llm:tokens:openrouter:${todayKey()}`;
-    const v = await redis.get(key);
-    return typeof v === "number" ? v : typeof v === "string" ? parseInt(v, 10) : 0;
-  } catch {
-    return 0;
-  }
-}
-async function callLLM(messages, _schemaText, opts = {}) {
-  const log38 = logger.child({ component: "freeClaudeRouter" });
-  const decisions = [];
-  const includeOpenRouter = !opts.skipOpenRouter;
-  const allProviders = [
-    {
-      name: "nvidia_nim",
-      model: opts.modelOverride ?? NVIDIA_NIM_DEFAULT_MODEL,
-      client: getNvidiaNimClient()
-    },
-    {
-      name: "openrouter",
-      model: OPENROUTER_DEFAULT_MODEL,
-      client: getOpenRouterClient()
-    }
-  ];
-  const providers = includeOpenRouter ? allProviders : allProviders.filter((p) => p.name !== "openrouter");
-  for (let idx = 0; idx < providers.length; idx++) {
-    const p = providers[idx];
-    if (!p) continue;
-    const isPrimary = idx === 0;
-    const prevName = idx > 0 ? providers[idx - 1]?.name : null;
-    const buildReason = (suffix) => isPrimary ? `skipped:${suffix}` : `fall_through:${prevName}_${suffix}`;
-    if (!p.client) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason("no_client"),
-        timestamp: Date.now()
-      });
-      continue;
-    }
-    if (!isAvailable(p.name)) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason("breaker"),
-        timestamp: Date.now()
-      });
-      continue;
-    }
-    if (p.name === "nvidia_nim" && !nvidiaNimWindow.canRequest()) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason("rate_limit_window"),
-        timestamp: Date.now()
-      });
-      continue;
-    }
-    if (p.name === "openrouter" && await getOpenRouterDaily() >= OPENROUTER_DAILY_CAP) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason("daily_cap"),
-        timestamp: Date.now()
-      });
-      continue;
-    }
-    decisions.push({
-      provider: p.name,
-      model: p.model,
-      reason: isPrimary ? "primary" : `fall_through:${prevName}_429`,
-      timestamp: Date.now()
-    });
-    let callFailed = false;
-    for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
-      const t0 = Date.now();
-      try {
-        if (p.name === "nvidia_nim") nvidiaNimWindow.consume();
-        if (p.name === "openrouter") await incrOpenRouterDaily();
-        const res = await p.client.chat.completions.create({
-          model: p.model,
-          messages,
-          response_format: { type: "json_object" },
-          // D-10: NO strict mode
-          temperature: 0,
-          max_tokens: MAX_TOKENS_PER_MODEL[p.model] ?? MAX_TOKENS_DEFAULT
-          // D-06
-        });
-        const latencyMs = Date.now() - t0;
-        recordLatency(p.name, latencyMs);
-        recordHeadroom(p.name);
-        const usage = res.usage;
-        const tokensIn = usage?.prompt_tokens ?? 0;
-        const tokensOut = usage?.completion_tokens ?? 0;
-        if (tokensIn > 0 || tokensOut > 0) {
-          await accrueShadowCost(tokensIn, tokensOut);
-        }
-        const raw = res.choices[0]?.message?.content ?? null;
-        const reasoningField = res.choices[0]?.message?.reasoning_content;
-        const content = stripReasoningBlocks(raw, reasoningField);
-        const finishReason = res.choices[0]?.finish_reason ?? null;
-        record(p.name, "ok");
-        if (p.name === "nvidia_nim") lastNimCallTs = Date.now();
-        return { content, routing: decisions, finishReason };
-      } catch (err) {
-        const latencyMs = Date.now() - t0;
-        recordLatency(p.name, latencyMs);
-        const bucket = classifyError(err);
-        recordErrorBucket(p.name, bucket);
-        let retryAfterMs = null;
-        if (bucket === "rate_limit" && err instanceof Error && "headers" in err) {
-          const headers = err.headers;
-          const raw = headers?.["retry-after"] ?? headers?.["Retry-After"];
-          if (raw) {
-            const parsed = parseFloat(raw);
-            if (Number.isFinite(parsed) && parsed > 0) retryAfterMs = parsed * 1e3;
-          }
-        }
-        const history = llmProgress.callHistory ?? [];
-        updateProgress({
-          callHistory: [
-            {
-              provider: p.name,
-              model: p.model,
-              tokensIn: 0,
-              tokensOut: 0,
-              durationMs: latencyMs,
-              ok: false,
-              batchSize: opts.batchSize ?? 0,
-              timestamp: Date.now(),
-              retryAfterMs
-            },
-            ...history
-          ].slice(0, 20)
-        });
-        log38.warn(
-          {
-            provider: p.name,
-            attempt,
-            bucket,
-            latencyMs,
-            retryAfterMs,
-            err: err instanceof Error ? err.message : String(err)
-          },
-          "router attempt failed"
-        );
-        if (bucket === "rate_limit" && attempt < RETRY_ATTEMPTS - 1) {
-          const base = BACKOFF_MS[attempt] ?? BACKOFF_MS[0] ?? 1e3;
-          await sleepWithJitter(base);
-          continue;
-        }
-        callFailed = true;
-        break;
-      }
-    }
-    if (callFailed) {
-      record(p.name, "err");
-    }
-  }
-  log38.warn("all free providers unavailable \u2014 returning null content");
-  return { content: null, routing: decisions };
-}
-var LATENCY_RING_CAP = 100;
-function quantile(sorted, q) {
-  if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q));
-  return sorted[idx] ?? 0;
-}
-function recordLatency(provider, latencyMs) {
-  const current = llmProgress.latencyHistogram ?? {
-    nvidia_nim: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] },
-    openrouter: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] }
-  };
-  const bucket = current[provider];
-  const samples = [...bucket.samples ?? [], latencyMs].slice(-LATENCY_RING_CAP);
-  const sorted = [...samples].sort((a, b) => a - b);
-  const next = {
-    ...current,
-    [provider]: {
-      p50: quantile(sorted, 0.5),
-      p95: quantile(sorted, 0.95),
-      p99: quantile(sorted, 0.99),
-      sparkline: samples.slice(-30),
-      // last 30 for the SVG sparkline
-      samples
-    }
-  };
-  updateProgress({ latencyHistogram: next });
-}
-function recordHeadroom(provider) {
-  const current = llmProgress.rateLimit ?? {
-    nvidia_nim: { used: 0, cap: 40, window: "minute", perModel: {} },
-    openrouter: { used: 0, cap: OPENROUTER_DAILY_CAP, window: "day", perModel: {} }
-  };
-  if (provider === "nvidia_nim") {
-    const h = nvidiaNimWindow.headroom();
-    current.nvidia_nim = { ...current.nvidia_nim, used: h.used, cap: h.cap };
-  } else {
-    getOpenRouterDaily().then((used) => {
-      const rl = llmProgress.rateLimit;
-      if (!rl) return;
-      updateProgress({
-        rateLimit: {
-          ...rl,
-          openrouter: { ...current.openrouter, used }
-        }
-      });
-    }).catch(() => {
-    });
-  }
-  updateProgress({ rateLimit: current });
-}
-function recordErrorBucket(provider, bucket) {
-  const current = llmProgress.errorTaxonomy ?? {
-    nvidia_nim: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 },
-    openrouter: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 }
-  };
-  const next = {
-    ...current,
-    [provider]: { ...current[provider], [bucket]: (current[provider][bucket] ?? 0) + 1 }
-  };
-  updateProgress({ errorTaxonomy: next });
-}
-async function accrueShadowCost(tokensIn, tokensOut) {
-  const usd = (tokensIn * 0.2 + tokensOut * 0.4) / 1e6;
-  const current = llmProgress.costShadow ?? { tokensIn: 0, tokensOut: 0, usd: 0 };
-  updateProgress({
-    costShadow: {
-      tokensIn: current.tokensIn + tokensIn,
-      tokensOut: current.tokensOut + tokensOut,
-      usd: current.usd + usd
-    }
-  });
-  try {
-    const key = `events:llm-cost-shadow:v3:${todayKey()}`;
-    await redis.hincrby(key, "tokensIn", tokensIn);
-    await redis.hincrby(key, "tokensOut", tokensOut);
-    await redis.hincrby(key, "usdMicrocents", Math.round(usd * 1e6));
-    await redis.expire(key, 90 * 24 * 3600);
-  } catch {
-  }
-}
-async function prewarmIfCold() {
-  const log38 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
-  const client = getNvidiaNimClient();
-  if (!client) {
-    updateProgress({ prewarmState: "unknown" });
-    return;
-  }
-  const now = Date.now();
-  const elapsed = lastNimCallTs > 0 ? now - lastNimCallTs : Number.POSITIVE_INFINITY;
-  if (elapsed <= PREWARM_COLD_THRESHOLD_MS) {
-    updateProgress({ prewarmState: "warm" });
-    return;
-  }
-  try {
-    await client.chat.completions.create({
-      model: NVIDIA_NIM_DEFAULT_MODEL,
-      messages: [{ role: "user", content: "ok" }],
-      max_tokens: 1,
-      temperature: 0
-    });
-    lastNimCallTs = Date.now();
-    updateProgress({
-      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
-      lastPrewarmTs: lastNimCallTs,
-      prewarmState: "cold-fired"
-    });
-  } catch (err) {
-    log38.warn(
-      { err: err instanceof Error ? err.message : String(err) },
-      "prewarmIfCold synthetic call failed (non-fatal)"
-    );
-    updateProgress({
-      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
-      lastPrewarmTs: Date.now(),
-      prewarmState: "cold-fired"
-    });
-  }
-}
 
 // server/adapters/llm-provider.ts
 function isLLMConfigured() {
@@ -1332,8 +817,181 @@ function loadDevWaterCache() {
 // server/lib/llmExtractionPipeline.ts
 init_redis();
 
-// server/lib/eventGrouping.ts
+// src/lib/geo.ts
+var R_KM = 6371;
 function haversineKm(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => deg * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// server/lib/sourceTiers.ts
+var TIER_1_DOMAINS = /* @__PURE__ */ new Set([
+  "reuters.com",
+  "apnews.com",
+  "afp.com",
+  "bellingcat.com",
+  "liveuamap.com"
+]);
+var TIER_2_DOMAINS = /* @__PURE__ */ new Set([
+  "bbc.co.uk",
+  "bbc.com",
+  "aljazeera.com",
+  "cnn.com",
+  "timesofisrael.com",
+  "middleeasteye.net",
+  "theguardian.com",
+  "nytimes.com",
+  "washingtonpost.com"
+]);
+var TIER_3_DOMAINS = /* @__PURE__ */ new Set(["tehrantimes.com", "irna.ir", "sana.sy", "presstv.ir"]);
+var TIER_1_NAMES = /* @__PURE__ */ new Set(["Reuters", "Associated Press", "AFP", "Bellingcat", "Liveuamap"]);
+var TIER_2_NAMES = /* @__PURE__ */ new Set([
+  "BBC",
+  "Al Jazeera",
+  "CNN",
+  "Times of Israel",
+  "Middle East Eye",
+  "Guardian",
+  "NYT",
+  "Washington Post"
+]);
+var TIER_3_NAMES = /* @__PURE__ */ new Set(["Tehran Times", "IRNA", "SANA", "Press TV"]);
+function extractDomain(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+function getSourceTier(source, domain) {
+  if (TIER_1_NAMES.has(source)) return 1;
+  if (TIER_2_NAMES.has(source)) return 2;
+  if (TIER_3_NAMES.has(source)) return 3;
+  if (domain) {
+    if (TIER_1_DOMAINS.has(domain)) return 1;
+    if (TIER_2_DOMAINS.has(domain)) return 2;
+    if (TIER_3_DOMAINS.has(domain)) return 3;
+  }
+  return null;
+}
+function getHighestTier(sourceUrls) {
+  let best = null;
+  for (const url of sourceUrls) {
+    const domain = extractDomain(url);
+    if (!domain) continue;
+    const tier = getSourceTier("", domain);
+    if (tier !== null) {
+      if (best === null || tier < best) {
+        best = tier;
+      }
+      if (best === 1) return 1;
+    }
+  }
+  return best;
+}
+
+// server/lib/corroboration.ts
+var CORROBORATION_TEMPORAL_WINDOW_MS = 24 * 60 * 60 * 1e3;
+var CORROBORATION_GEO_RADIUS_KM = 200;
+var CORROBORATION_MIN_KEYWORD_MATCHES = 2;
+var TIER_BOOST = {
+  1: 0.25,
+  // gold (wire services + OSINT)
+  2: 0.15,
+  // silver (major outlets)
+  3: 0.08
+  // bronze (regional/state media)
+};
+var UNKNOWN_TIER_BOOST = 0.05;
+var GENERIC_STOPWORDS = /* @__PURE__ */ new Set([
+  "iran",
+  "iranian",
+  "israel",
+  "israeli",
+  "us",
+  "usa",
+  "united",
+  "states",
+  "strike",
+  "strikes",
+  "attack",
+  "attacks",
+  "war",
+  "forces",
+  "military",
+  "conflict",
+  "reports",
+  "news",
+  "said",
+  "near",
+  "over",
+  "amid",
+  "after",
+  "the",
+  "and",
+  "for",
+  "with"
+]);
+function tokenize(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t.length >= 3);
+}
+function specificEventTokens(event) {
+  const sources = [];
+  if (event.data.actors && event.data.actors.length > 0) {
+    sources.push(...event.data.actors);
+  }
+  if (event.data.actor1) sources.push(event.data.actor1);
+  if (event.data.actor2) sources.push(event.data.actor2);
+  if (event.data.locationName) sources.push(event.data.locationName);
+  const tokens = /* @__PURE__ */ new Set();
+  for (const src of sources) {
+    for (const tok of tokenize(src)) {
+      if (!GENERIC_STOPWORDS.has(tok)) tokens.add(tok);
+    }
+  }
+  return tokens;
+}
+function checkCorroboration(event, clusters) {
+  const eventTokens = specificEventTokens(event);
+  if (eventTokens.size === 0) {
+    return { corroborated: false, boost: 0, tier: null };
+  }
+  let bestBoost = 0;
+  let bestTier = null;
+  let corroborated = false;
+  for (const cluster of clusters) {
+    for (const article of cluster.articles) {
+      if (Math.abs(article.publishedAt - event.timestamp) > CORROBORATION_TEMPORAL_WINDOW_MS) {
+        continue;
+      }
+      if (article.lat == null || article.lng == null) continue;
+      if (haversineKm(event.lat, event.lng, article.lat, article.lng) > CORROBORATION_GEO_RADIUS_KM) {
+        continue;
+      }
+      const titleTokens2 = new Set(tokenize(article.title));
+      let matches = 0;
+      for (const tok of eventTokens) {
+        if (titleTokens2.has(tok)) matches++;
+      }
+      if (matches < CORROBORATION_MIN_KEYWORD_MATCHES) continue;
+      const domain = article.domain ?? (article.url ? extractDomain(article.url) : "");
+      const tier = getSourceTier(article.source ?? "", domain || void 0);
+      const boost = tier !== null ? TIER_BOOST[tier] : UNKNOWN_TIER_BOOST;
+      corroborated = true;
+      if (boost > bestBoost) {
+        bestBoost = boost;
+        bestTier = tier;
+      }
+    }
+  }
+  return { corroborated, boost: bestBoost, tier: bestTier };
+}
+
+// server/lib/eventGrouping.ts
+function haversineKm2(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -1342,6 +1000,8 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 }
 var GROUP_RADIUS_KM = 50;
 var MS_PER_DAY = 864e5;
+var DEDUP_RADIUS_KM = 5;
+var DEDUP_TITLE_JACCARD = 0.85;
 function cameoRoot(cameoCode) {
   return cameoCode.slice(0, 2);
 }
@@ -1357,6 +1017,60 @@ function computeCentroid(entities) {
   }
   return { lat: latSum / entities.length, lng: lngSum / entities.length };
 }
+function actorPairKey(e) {
+  const a = (e.data.actor1 ?? "").trim().toLowerCase();
+  const b = (e.data.actor2 ?? "").trim().toLowerCase();
+  return [a, b].sort().join("|");
+}
+function titleTokens(e) {
+  const text = `${e.label ?? ""} ${e.data.notes ?? ""}`;
+  return new Set(
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter((t) => t.length > 0)
+  );
+}
+function jaccard(a, b) {
+  if (a.size === 0 && b.size === 0) return 1;
+  let intersection = 0;
+  for (const token of a) {
+    if (b.has(token)) intersection++;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+function dedupWeight(e) {
+  return (e.data.numMentions ?? 0) * 10 + (e.data.numSources ?? 0);
+}
+function dedupHighConfidence(entities) {
+  const ordered = [...entities].sort((a, b) => {
+    const w = dedupWeight(b) - dedupWeight(a);
+    return w !== 0 ? w : a.timestamp - b.timestamp;
+  });
+  const kept = [];
+  const keptTokens = [];
+  for (const entity of ordered) {
+    const entityDay = dayBucket(entity.timestamp);
+    const entityRoot = cameoRoot(entity.data.cameoCode);
+    const entityActors = actorPairKey(entity);
+    const tokens = titleTokens(entity);
+    let isDuplicate = false;
+    for (let i = 0; i < kept.length; i++) {
+      const candidate = kept[i];
+      if (dayBucket(candidate.timestamp) !== entityDay) continue;
+      if (cameoRoot(candidate.data.cameoCode) !== entityRoot) continue;
+      if (actorPairKey(candidate) !== entityActors) continue;
+      if (haversineKm2(candidate.lat, candidate.lng, entity.lat, entity.lng) > DEDUP_RADIUS_KM)
+        continue;
+      if (jaccard(keptTokens[i], tokens) < DEDUP_TITLE_JACCARD) continue;
+      isDuplicate = true;
+      break;
+    }
+    if (!isDuplicate) {
+      kept.push(entity);
+      keptTokens.push(tokens);
+    }
+  }
+  return kept;
+}
 function groupGdeltRows(entities) {
   const sorted = [...entities].sort((a, b) => a.timestamp - b.timestamp);
   const groups = [];
@@ -1368,7 +1082,7 @@ function groupGdeltRows(entities) {
       const groupDay = dayBucket(group.timestamp);
       if (groupDay !== entityDay) continue;
       if (cameoRoot(group.primaryCameo) !== entityRoot) continue;
-      if (haversineKm(group.centroidLat, group.centroidLng, entity.lat, entity.lng) > GROUP_RADIUS_KM)
+      if (haversineKm2(group.centroidLat, group.centroidLng, entity.lat, entity.lng) > GROUP_RADIUS_KM)
         continue;
       group.entities.push(entity);
       const centroid = computeCentroid(group.entities);
@@ -1663,16 +1377,6 @@ function createLimit(maxConcurrent) {
   };
 }
 
-// src/lib/geo.ts
-var R_KM = 6371;
-function haversineKm2(lat1, lng1, lat2, lng2) {
-  const toRad = (deg) => deg * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 // server/lib/geoValidation.ts
 var NON_ME_FULLNAME_COUNTRIES = /* @__PURE__ */ new Set([
   "United States",
@@ -1926,7 +1630,7 @@ function checkBellingcatCorroboration(event, articles) {
     const timeDiff = Math.abs(article.publishedAt - event.timestamp);
     if (timeDiff > BELLINGCAT_TEMPORAL_WINDOW_MS) continue;
     if (article.lat == null || article.lng == null) continue;
-    const distKm = haversineKm2(event.lat, event.lng, article.lat, article.lng);
+    const distKm = haversineKm(event.lat, event.lng, article.lat, article.lng);
     if (distKm > BELLINGCAT_GEO_RADIUS_KM) continue;
     const titleLower = article.title.toLowerCase();
     let keywordMatches = 0;
@@ -1939,6 +1643,485 @@ function checkBellingcatCorroboration(event, articles) {
     return { matched: true, article };
   }
   return { matched: false };
+}
+
+// server/lib/freeClaudeRouter.ts
+init_redis();
+import OpenAI from "openai";
+
+// server/lib/llmCircuitBreaker.ts
+var WINDOW_SIZE = 10;
+var ERROR_RATE_THRESHOLD = 0.3;
+var PAUSE_DURATION_MS = 5 * 6e4;
+var state = {
+  cerebras: { outcomes: [], pausedUntil: null },
+  groq: { outcomes: [], pausedUntil: null },
+  nvidia_nim: { outcomes: [], pausedUntil: null },
+  openrouter: { outcomes: [], pausedUntil: null }
+};
+function record(provider, outcome) {
+  const s = state[provider];
+  s.outcomes.push(outcome);
+  if (s.outcomes.length > WINDOW_SIZE) s.outcomes.shift();
+  if (s.outcomes.length === WINDOW_SIZE) {
+    const errs = s.outcomes.filter((o) => o === "err").length;
+    if (errs / WINDOW_SIZE > ERROR_RATE_THRESHOLD) {
+      s.pausedUntil = Date.now() + PAUSE_DURATION_MS;
+      s.outcomes = [];
+    }
+  }
+}
+function isAvailable(provider) {
+  const s = state[provider];
+  if (s.pausedUntil && Date.now() < s.pausedUntil) return false;
+  if (s.pausedUntil && Date.now() >= s.pausedUntil) s.pausedUntil = null;
+  return true;
+}
+
+// server/lib/llmProgress.ts
+init_redis();
+var INITIAL_PROGRESS = {
+  stage: "idle",
+  startedAt: null,
+  completedAt: null,
+  totalGroups: 0,
+  newGroups: 0,
+  totalBatches: 0,
+  completedBatches: 0,
+  totalGeocodes: 0,
+  completedGeocodes: 0,
+  enrichedCount: 0,
+  errorMessage: null,
+  durationMs: null,
+  schemaVersion: void 0,
+  callHistory: void 0,
+  tokenCounters: void 0,
+  dlqCount: void 0,
+  breakerState: void 0,
+  evalScore: void 0,
+  provenanceCounts: void 0,
+  suspectCount: void 0,
+  watchdogTimeoutCount: void 0,
+  // Phase 27.4.6 D-06 — provenance label cleared between runs so a previous
+  // 'cron' label doesn't survive into a manual run (and vice-versa).
+  lastTriggerSource: void 0,
+  // Phase 27.4.3 Plan 02a — v3 observability fields seeded undefined so
+  // resetProgress() clears stale data between runs (e.g., a lingering
+  // routingTrace from yesterday's v3 run would otherwise confuse today's
+  // dashboard if today only ran v2).
+  routingTrace: void 0,
+  latencyHistogram: void 0,
+  rateLimit: void 0,
+  schemaFailures: void 0,
+  errorTaxonomy: void 0,
+  costShadow: void 0,
+  recentEvents: void 0
+};
+var LLM_LASTPROGRESS_KEY = "llm:lastProgress";
+var LLM_LASTPROGRESS_TTL_SEC = 7 * 24 * 60 * 60;
+var llmProgress = { ...INITIAL_PROGRESS };
+function resetProgress() {
+  Object.assign(llmProgress, INITIAL_PROGRESS, {
+    startedAt: Date.now(),
+    stage: "grouping"
+  });
+  void cacheSetSafe(
+    LLM_LASTPROGRESS_KEY,
+    { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
+    LLM_LASTPROGRESS_TTL_SEC
+  );
+}
+function updateProgress(partial) {
+  Object.assign(llmProgress, partial);
+  if (partial.completedAt !== void 0) {
+    const isErrorTermination = partial.stage === "error" || llmProgress.stage === "error" || llmProgress.errorMessage !== null;
+    if (!isErrorTermination) {
+      void cacheSetSafe(
+        LLM_LASTPROGRESS_KEY,
+        { startedAt: llmProgress.startedAt, completedAt: llmProgress.completedAt },
+        LLM_LASTPROGRESS_TTL_SEC
+      );
+    }
+  }
+}
+function buildSummary() {
+  return {
+    lastRun: llmProgress.completedAt ?? Date.now(),
+    groupCount: llmProgress.newGroups,
+    batchCount: llmProgress.completedBatches,
+    geocodeCount: llmProgress.completedGeocodes,
+    enrichedCount: llmProgress.enrichedCount,
+    durationMs: llmProgress.durationMs ?? 0,
+    error: llmProgress.errorMessage,
+    source: "pipeline",
+    schemaVersion: llmProgress.schemaVersion,
+    tokenCounters: llmProgress.tokenCounters,
+    dlqCount: llmProgress.dlqCount,
+    evalScore: llmProgress.evalScore,
+    provenanceCounts: llmProgress.provenanceCounts,
+    suspectCount: llmProgress.suspectCount,
+    watchdogTimeoutCount: llmProgress.watchdogTimeoutCount,
+    // Phase 27.4.3 Plan 02a — thread the new v3 observability fields into
+    // the persisted Redis summary so cold-start dashboard reads see the
+    // routing trace, latency histogram, rate-limit headroom, schema failures,
+    // error taxonomy, shadow cost, callHistory mirror, and recentEvents
+    // drill-down. callHistory is also persisted so the cold-start render
+    // matches the live render exactly.
+    callHistory: llmProgress.callHistory,
+    routingTrace: llmProgress.routingTrace,
+    latencyHistogram: llmProgress.latencyHistogram,
+    rateLimit: llmProgress.rateLimit,
+    schemaFailures: llmProgress.schemaFailures,
+    errorTaxonomy: llmProgress.errorTaxonomy,
+    costShadow: llmProgress.costShadow,
+    recentEvents: llmProgress.recentEvents
+  };
+}
+
+// server/lib/freeClaudeRouter.ts
+var NVIDIA_NIM_BASE = "https://integrate.api.nvidia.com/v1";
+var OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+var LLM_TIMEOUT_MS = 12e4;
+var RETRY_ATTEMPTS = 3;
+var BACKOFF_MS = [2e3, 8e3, 32e3];
+var JITTER_MS = 500;
+var NVIDIA_NIM_DEFAULT_MODEL = process.env.V3_PRIMARY_MODEL ?? "qwen/qwen3.5-397b-a17b";
+var OPENROUTER_DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+var OPENROUTER_DAILY_CAP = 200;
+var MAX_TOKENS_PER_MODEL = {
+  // Phase 27.4.4 Plan 02 dev-pass bump: 425 → 2048 after live dev /api/events?force=true
+  // showed ~89% truncation rate (50 v3:malformed DLQ in 7 batches) — the
+  // 20-event preflight characterization underestimated production hierarchy
+  // verbosity. 2048 keeps a 5× safety margin against the 4096 default.
+  "qwen/qwen3.5-397b-a17b": 2048,
+  "meta/llama-3.3-70b-instruct": 380,
+  // p99 315 + 20% buffer
+  "nvidia/nemotron-3-super-120b-a12b": 1240,
+  // p99 1031 + 20% buffer (verbose, schema-fails)
+  "z-ai/glm4.7": 1024
+  // conservative — no traceable records (NIM 400s)
+};
+var MAX_TOKENS_DEFAULT = 4096;
+var RollingWindow = class {
+  cap;
+  windowMs;
+  timestamps = [];
+  constructor(cap, windowMs) {
+    this.cap = cap;
+    this.windowMs = windowMs;
+  }
+  evict(now) {
+    this.timestamps = this.timestamps.filter((t) => now - t < this.windowMs);
+  }
+  canRequest() {
+    this.evict(Date.now());
+    return this.timestamps.length < this.cap;
+  }
+  consume() {
+    this.timestamps.push(Date.now());
+  }
+  headroom() {
+    this.evict(Date.now());
+    return { used: this.timestamps.length, cap: this.cap };
+  }
+};
+var nvidiaNimWindow = new RollingWindow(40, 6e4);
+var lastNimCallTs = 0;
+var PREWARM_COLD_THRESHOLD_MS = 6e4;
+function getNvidiaNimClient() {
+  if (!env.NVIDIA_NIM_API_KEY) return null;
+  return new OpenAI({
+    apiKey: env.NVIDIA_NIM_API_KEY,
+    baseURL: NVIDIA_NIM_BASE,
+    timeout: LLM_TIMEOUT_MS
+  });
+}
+function getOpenRouterClient() {
+  if (!env.OPENROUTER_API_KEY) return null;
+  return new OpenAI({
+    apiKey: env.OPENROUTER_API_KEY,
+    baseURL: OPENROUTER_BASE,
+    timeout: LLM_TIMEOUT_MS
+  });
+}
+function stripReasoningBlocks(raw, _reasoningContent) {
+  if (!raw) return raw;
+  let s = raw.replace(/<think>[\s\S]*?<\/think>/g, "");
+  s = s.replace(/^reasoning_content:[^\n]*\n/m, "");
+  return s.trim();
+}
+function classifyError(err) {
+  if (err instanceof Error) {
+    const m = err.message.toLowerCase();
+    if (m.includes("429") || m.includes("rate limit")) return "rate_limit";
+    if (m.includes("timeout") || m.includes("timed out")) return "timeout";
+    if (m.includes("enotfound") || m.includes("econnreset") || m.includes("eai_again"))
+      return "network";
+    if (/\b5\d\d\b/.test(m)) return "upstream_500";
+  }
+  return "other";
+}
+async function sleepWithJitter(base) {
+  const jitter = (Math.random() * 2 - 1) * JITTER_MS;
+  await new Promise((r) => setTimeout(r, Math.max(0, base + jitter)));
+}
+function todayKey() {
+  const d = /* @__PURE__ */ new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    d.getUTCDate()
+  ).padStart(2, "0")}`;
+}
+async function callLLM(messages, _schemaText, opts = {}) {
+  const log38 = logger.child({ component: "freeClaudeRouter" });
+  const decisions = [];
+  const includeOpenRouter = !opts.skipOpenRouter;
+  const allProviders = [
+    {
+      name: "nvidia_nim",
+      model: opts.modelOverride ?? NVIDIA_NIM_DEFAULT_MODEL,
+      client: getNvidiaNimClient()
+    },
+    {
+      name: "openrouter",
+      model: OPENROUTER_DEFAULT_MODEL,
+      client: getOpenRouterClient()
+    }
+  ];
+  const providers = includeOpenRouter ? allProviders : allProviders.filter((p) => p.name !== "openrouter");
+  for (let idx = 0; idx < providers.length; idx++) {
+    const p = providers[idx];
+    if (!p) continue;
+    const isPrimary = idx === 0;
+    const prevName = idx > 0 ? providers[idx - 1]?.name : null;
+    const buildReason = (suffix) => isPrimary ? `skipped:${suffix}` : `fall_through:${prevName}_${suffix}`;
+    if (!p.client) {
+      decisions.push({
+        provider: p.name,
+        model: p.model,
+        reason: buildReason("no_client"),
+        timestamp: Date.now()
+      });
+      continue;
+    }
+    if (!isAvailable(p.name)) {
+      decisions.push({
+        provider: p.name,
+        model: p.model,
+        reason: buildReason("breaker"),
+        timestamp: Date.now()
+      });
+      continue;
+    }
+    if (p.name === "nvidia_nim" && !nvidiaNimWindow.canRequest()) {
+      decisions.push({
+        provider: p.name,
+        model: p.model,
+        reason: buildReason("rate_limit_window"),
+        timestamp: Date.now()
+      });
+      continue;
+    }
+    decisions.push({
+      provider: p.name,
+      model: p.model,
+      reason: isPrimary ? "primary" : `fall_through:${prevName}_429`,
+      timestamp: Date.now()
+    });
+    let callFailed = false;
+    for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+      const t0 = Date.now();
+      try {
+        if (p.name === "nvidia_nim") nvidiaNimWindow.consume();
+        const res = await p.client.chat.completions.create({
+          model: p.model,
+          messages,
+          response_format: { type: "json_object" },
+          // D-10: NO strict mode
+          temperature: 0,
+          max_tokens: MAX_TOKENS_PER_MODEL[p.model] ?? MAX_TOKENS_DEFAULT
+          // D-06
+        });
+        const latencyMs = Date.now() - t0;
+        recordLatency(p.name, latencyMs);
+        recordHeadroom(p.name);
+        const usage = res.usage;
+        const tokensIn = usage?.prompt_tokens ?? 0;
+        const tokensOut = usage?.completion_tokens ?? 0;
+        if (tokensIn > 0 || tokensOut > 0) {
+          await accrueShadowCost(tokensIn, tokensOut);
+        }
+        const raw = res.choices[0]?.message?.content ?? null;
+        const reasoningField = res.choices[0]?.message?.reasoning_content;
+        const content = stripReasoningBlocks(raw, reasoningField);
+        const finishReason = res.choices[0]?.finish_reason ?? null;
+        record(p.name, "ok");
+        if (p.name === "nvidia_nim") lastNimCallTs = Date.now();
+        return { content, routing: decisions, finishReason };
+      } catch (err) {
+        const latencyMs = Date.now() - t0;
+        recordLatency(p.name, latencyMs);
+        const bucket = classifyError(err);
+        recordErrorBucket(p.name, bucket);
+        let retryAfterMs = null;
+        if (bucket === "rate_limit" && err instanceof Error && "headers" in err) {
+          const headers = err.headers;
+          const raw = headers?.["retry-after"] ?? headers?.["Retry-After"];
+          if (raw) {
+            const parsed = parseFloat(raw);
+            if (Number.isFinite(parsed) && parsed > 0) retryAfterMs = parsed * 1e3;
+          }
+        }
+        const history = llmProgress.callHistory ?? [];
+        updateProgress({
+          callHistory: [
+            {
+              provider: p.name,
+              model: p.model,
+              tokensIn: 0,
+              tokensOut: 0,
+              durationMs: latencyMs,
+              ok: false,
+              batchSize: opts.batchSize ?? 0,
+              timestamp: Date.now(),
+              retryAfterMs
+            },
+            ...history
+          ].slice(0, 20)
+        });
+        log38.warn(
+          {
+            provider: p.name,
+            attempt,
+            bucket,
+            latencyMs,
+            retryAfterMs,
+            err: err instanceof Error ? err.message : String(err)
+          },
+          "router attempt failed"
+        );
+        if (bucket === "rate_limit" && attempt < RETRY_ATTEMPTS - 1) {
+          const base = BACKOFF_MS[attempt] ?? BACKOFF_MS[0] ?? 1e3;
+          await sleepWithJitter(base);
+          continue;
+        }
+        callFailed = true;
+        break;
+      }
+    }
+    if (callFailed) {
+      record(p.name, "err");
+    }
+  }
+  log38.warn("all free providers unavailable \u2014 returning null content");
+  return { content: null, routing: decisions };
+}
+var LATENCY_RING_CAP = 100;
+function quantile(sorted, q) {
+  if (sorted.length === 0) return 0;
+  const idx = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q));
+  return sorted[idx] ?? 0;
+}
+function recordLatency(provider, latencyMs) {
+  const current = llmProgress.latencyHistogram ?? {
+    nvidia_nim: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] },
+    openrouter: { p50: 0, p95: 0, p99: 0, sparkline: [], samples: [] }
+  };
+  const bucket = current[provider];
+  const samples = [...bucket.samples ?? [], latencyMs].slice(-LATENCY_RING_CAP);
+  const sorted = [...samples].sort((a, b) => a - b);
+  const next = {
+    ...current,
+    [provider]: {
+      p50: quantile(sorted, 0.5),
+      p95: quantile(sorted, 0.95),
+      p99: quantile(sorted, 0.99),
+      sparkline: samples.slice(-30),
+      // last 30 for the SVG sparkline
+      samples
+    }
+  };
+  updateProgress({ latencyHistogram: next });
+}
+function recordHeadroom(provider) {
+  const current = llmProgress.rateLimit ?? {
+    nvidia_nim: { used: 0, cap: 40, window: "minute", perModel: {} },
+    openrouter: { used: 0, cap: OPENROUTER_DAILY_CAP, window: "day", perModel: {} }
+  };
+  if (provider === "nvidia_nim") {
+    const h = nvidiaNimWindow.headroom();
+    current.nvidia_nim = { ...current.nvidia_nim, used: h.used, cap: h.cap };
+  } else {
+    current.openrouter = { ...current.openrouter, used: 0 };
+  }
+  updateProgress({ rateLimit: current });
+}
+function recordErrorBucket(provider, bucket) {
+  const current = llmProgress.errorTaxonomy ?? {
+    nvidia_nim: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 },
+    openrouter: { rate_limit: 0, timeout: 0, malformed_json: 0, schema_fail: 0, network: 0, upstream_500: 0, other: 0 }
+  };
+  const next = {
+    ...current,
+    [provider]: { ...current[provider], [bucket]: (current[provider][bucket] ?? 0) + 1 }
+  };
+  updateProgress({ errorTaxonomy: next });
+}
+async function accrueShadowCost(tokensIn, tokensOut) {
+  const usd = (tokensIn * 0.2 + tokensOut * 0.4) / 1e6;
+  const current = llmProgress.costShadow ?? { tokensIn: 0, tokensOut: 0, usd: 0 };
+  updateProgress({
+    costShadow: {
+      tokensIn: current.tokensIn + tokensIn,
+      tokensOut: current.tokensOut + tokensOut,
+      usd: current.usd + usd
+    }
+  });
+  try {
+    const key = `events:llm-cost-shadow:v3:${todayKey()}`;
+    await redis.hincrby(key, "tokensIn", tokensIn);
+    await redis.hincrby(key, "tokensOut", tokensOut);
+    await redis.hincrby(key, "usdMicrocents", Math.round(usd * 1e6));
+    await redis.expire(key, 90 * 24 * 3600);
+  } catch {
+  }
+}
+async function prewarmIfCold() {
+  const log38 = logger.child({ component: "freeClaudeRouter.prewarmIfCold" });
+  const client = getNvidiaNimClient();
+  if (!client) {
+    updateProgress({ prewarmState: "unknown" });
+    return;
+  }
+  const now = Date.now();
+  const elapsed = lastNimCallTs > 0 ? now - lastNimCallTs : Number.POSITIVE_INFINITY;
+  if (elapsed <= PREWARM_COLD_THRESHOLD_MS) {
+    updateProgress({ prewarmState: "warm" });
+    return;
+  }
+  try {
+    await client.chat.completions.create({
+      model: NVIDIA_NIM_DEFAULT_MODEL,
+      messages: [{ role: "user", content: "ok" }],
+      max_tokens: 1,
+      temperature: 0
+    });
+    lastNimCallTs = Date.now();
+    updateProgress({
+      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
+      lastPrewarmTs: lastNimCallTs,
+      prewarmState: "cold-fired"
+    });
+  } catch (err) {
+    log38.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "prewarmIfCold synthetic call failed (non-fatal)"
+    );
+    updateProgress({
+      prewarmCount: (llmProgress.prewarmCount ?? 0) + 1,
+      lastPrewarmTs: Date.now(),
+      prewarmState: "cold-fired"
+    });
+  }
 }
 
 // server/lib/llmDLQ.ts
@@ -2183,20 +2366,6 @@ var casualtiesSchema = z2.object({
   injured: z2.number().int().nullable(),
   unknown: z2.boolean()
 });
-var enrichedEventV1 = z2.object({
-  schemaVersion: z2.literal("v1"),
-  groupKey: z2.string(),
-  location: z2.object({
-    name: z2.string(),
-    precision: z2.enum(["exact", "neighborhood", "city", "region"])
-  }),
-  type: z2.enum(["airstrike", "on_ground", "explosion", "targeted", "other"]),
-  actors: z2.array(z2.string()),
-  severity: z2.enum(["critical", "high", "medium", "low"]),
-  summary: z2.string(),
-  casualties: casualtiesSchema,
-  sourceCount: z2.number().int()
-});
 var locationHierarchyV2 = z2.object({
   country: z2.string().min(1).nullable(),
   admin1: z2.string().min(1).nullable(),
@@ -2244,13 +2413,16 @@ var enrichedEventV2 = z2.object({
 }).strict();
 var enrichedEventV3 = enrichedEventV2.extend({
   schemaVersion: z2.literal("v3"),
-  actorConfidence: z2.array(z2.enum(["high", "medium", "low"])).optional()
+  actorConfidence: z2.array(z2.enum(["high", "medium", "low"])).optional(),
+  // Phase 38 GDELT-MATCH-04 — additive composite ranking score
+  // (tier × corroboration × specificity, computed by
+  // relevanceScorer.computeCompositeScore). `.optional()` so legacy v3 cache
+  // entries written before Phase 38 still validate through `enrichedEventAny`
+  // during the 24h–90d cron-overwrite window. It is a DASHBOARD ORDERING
+  // signal only — never mutates/drops the raw corpus (D-07). The LLM never
+  // emits it; it is attached server-side post-enrichment.
+  compositeScore: z2.number().min(0).max(1).optional()
 });
-var enrichedEventAny = z2.discriminatedUnion("schemaVersion", [
-  enrichedEventV1,
-  enrichedEventV2,
-  enrichedEventV3
-]);
 function derivePrecision(hierarchy) {
   if (hierarchy.landmark !== null) return "exact";
   if (hierarchy.neighborhood !== null) return "neighborhood";
@@ -2349,16 +2521,6 @@ var EVENT_EXTRACTION_SCHEMA_V3 = {
   required: ["events"],
   additionalProperties: false
 };
-var batchResponseV2 = z2.object({
-  events: z2.array(
-    z2.preprocess((v) => {
-      if (v && typeof v === "object" && !("schemaVersion" in v)) {
-        return { ...v, schemaVersion: "v2" };
-      }
-      return v;
-    }, enrichedEventV2)
-  )
-});
 var batchResponseV3 = z2.object({
   events: z2.array(
     z2.preprocess((v) => {
@@ -2913,72 +3075,6 @@ async function resolveLocation(hierarchy, ctx) {
   }
   const hit = resolveViaActionGeoFallback(ctx);
   return { ...hit, provenance: "gdelt-actiongeo-fallback", actionGeoDistanceKm: 0 };
-}
-
-// server/lib/sourceTiers.ts
-var TIER_1_DOMAINS = /* @__PURE__ */ new Set([
-  "reuters.com",
-  "apnews.com",
-  "afp.com",
-  "bellingcat.com",
-  "liveuamap.com"
-]);
-var TIER_2_DOMAINS = /* @__PURE__ */ new Set([
-  "bbc.co.uk",
-  "bbc.com",
-  "aljazeera.com",
-  "cnn.com",
-  "timesofisrael.com",
-  "middleeasteye.net",
-  "theguardian.com",
-  "nytimes.com",
-  "washingtonpost.com"
-]);
-var TIER_3_DOMAINS = /* @__PURE__ */ new Set(["tehrantimes.com", "irna.ir", "sana.sy", "presstv.ir"]);
-var TIER_1_NAMES = /* @__PURE__ */ new Set(["Reuters", "Associated Press", "AFP", "Bellingcat", "Liveuamap"]);
-var TIER_2_NAMES = /* @__PURE__ */ new Set([
-  "BBC",
-  "Al Jazeera",
-  "CNN",
-  "Times of Israel",
-  "Middle East Eye",
-  "Guardian",
-  "NYT",
-  "Washington Post"
-]);
-var TIER_3_NAMES = /* @__PURE__ */ new Set(["Tehran Times", "IRNA", "SANA", "Press TV"]);
-function extractDomain(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
-function getSourceTier(source, domain) {
-  if (TIER_1_NAMES.has(source)) return 1;
-  if (TIER_2_NAMES.has(source)) return 2;
-  if (TIER_3_NAMES.has(source)) return 3;
-  if (domain) {
-    if (TIER_1_DOMAINS.has(domain)) return 1;
-    if (TIER_2_DOMAINS.has(domain)) return 2;
-    if (TIER_3_DOMAINS.has(domain)) return 3;
-  }
-  return null;
-}
-function getHighestTier(sourceUrls) {
-  let best = null;
-  for (const url of sourceUrls) {
-    const domain = extractDomain(url);
-    if (!domain) continue;
-    const tier = getSourceTier("", domain);
-    if (tier !== null) {
-      if (best === null || tier < best) {
-        best = tier;
-      }
-      if (best === 1) return 1;
-    }
-  }
-  return best;
 }
 
 // server/lib/llmEventExtractor.v3.ts
@@ -3596,28 +3692,6 @@ async function geocodeEnrichedEventsV3(events, groupsByKey, matchedNewsByGroup, 
   return out;
 }
 
-// server/lib/llmEventExtractor.ts
-async function processEventGroups(groups, onBatchComplete) {
-  const run = await processEventGroupsV3(groups, onBatchComplete);
-  return {
-    schemaVersion: "v3",
-    events: run.events,
-    matchedNewsByGroup: run.matchedNewsByGroup,
-    bellingcatByGroup: run.bellingcatByGroup
-  };
-}
-async function geocodeEnrichedEvents(input, groups, onComplete) {
-  const groupsByKey = new Map(groups.map((g) => [g.key, g]));
-  const events = await geocodeEnrichedEventsV3(
-    input.events,
-    groupsByKey,
-    input.matchedNewsByGroup,
-    input.bellingcatByGroup,
-    onComplete
-  );
-  return { schemaVersion: "v3", events };
-}
-
 // server/lib/llmTokenBudget.ts
 init_redis();
 var log9 = logger.child({ module: "llm-token-budget" });
@@ -3692,6 +3766,200 @@ async function prioritizeBySeverity(groups) {
   const paused = await shouldPauseNewEvents();
   if (!paused) return groups;
   return groups.slice().sort((a, b) => computeSeverityScore(b) - computeSeverityScore(a) || b.timestamp - a.timestamp);
+}
+
+// server/lib/relevanceScorer.ts
+import nlp from "compromise";
+var SOURCE_RELIABILITY = {
+  // Tier 1 — major international (1.0)
+  "bbc.co.uk": 1,
+  "bbc.com": 1,
+  "reuters.com": 1,
+  "apnews.com": 1,
+  "afp.com": 1,
+  // By source name (RSS feeds)
+  BBC: 1,
+  Reuters: 1,
+  "Associated Press": 1,
+  // Tier 2 — regional quality (0.9-0.95)
+  "aljazeera.com": 0.95,
+  "timesofisrael.com": 0.9,
+  "middleeasteye.net": 0.9,
+  "haaretz.com": 0.9,
+  // By source name (RSS feeds)
+  "Al Jazeera": 0.95,
+  "Times of Israel": 0.9,
+  "Middle East Eye": 0.9,
+  // Tier 3 — state-affiliated/partisan (0.8)
+  "tehrantimes.com": 0.8,
+  "irna.ir": 0.8,
+  "presstv.ir": 0.8,
+  // By source name (RSS feeds)
+  "Tehran Times": 0.8
+};
+var CONFLICT_VERBS = /* @__PURE__ */ new Set([
+  "strike",
+  "kill",
+  "bomb",
+  "destroy",
+  "attack",
+  "shell",
+  "invade",
+  "launch",
+  "fire",
+  "shoot",
+  "target",
+  "hit",
+  "blast",
+  "detonate",
+  "intercept",
+  "deploy",
+  "seize",
+  "capture",
+  "raid",
+  "assassinate",
+  "wound",
+  "shatter",
+  "demolish",
+  "obliterate"
+]);
+var EXCLUSION_PATTERNS = [
+  // Existing (kept from newsFilter.ts)
+  "new year",
+  "firework",
+  "fireworks",
+  "celebration",
+  "celebrate",
+  "festival",
+  "holiday",
+  "parade",
+  "super bowl",
+  "world cup",
+  "box office",
+  "movie premiere",
+  "concert",
+  "cricket",
+  "basketball",
+  "football match",
+  "stock market",
+  "ipo",
+  "earnings report",
+  "fashion week",
+  // Historical/documentary
+  "world war ii",
+  "world war i",
+  "cold war era",
+  "documentary",
+  "museum",
+  "exhibition",
+  "anniversary of",
+  "memoir",
+  "autobiography",
+  // Entertainment
+  "video game",
+  "tv series",
+  "netflix",
+  "movie review",
+  "book review",
+  "album release",
+  "music video",
+  "award show",
+  "grammy",
+  "oscar",
+  "emmy",
+  "golden globe",
+  // Sports expanded
+  "olympics",
+  "soccer",
+  "tennis",
+  "rugby",
+  "baseball",
+  "hockey",
+  "wrestling",
+  "boxing match",
+  "marathon",
+  "tournament",
+  // Education/academic
+  "university study",
+  "research paper",
+  "academic",
+  "thesis",
+  "classroom",
+  "curriculum",
+  // Technology
+  "product launch",
+  "tech review",
+  "startup funding",
+  "app update",
+  "software release",
+  // Weather/natural
+  "weather forecast",
+  "earthquake",
+  "tornado",
+  "hurricane",
+  "flood warning",
+  "wildfire"
+];
+function getSourceReliability(source, domain) {
+  if (SOURCE_RELIABILITY[source] !== void 0) {
+    return SOURCE_RELIABILITY[source];
+  }
+  if (domain && SOURCE_RELIABILITY[domain] !== void 0) {
+    return SOURCE_RELIABILITY[domain];
+  }
+  return 0.6;
+}
+function computeRelevanceScore(input) {
+  const text = `${input.title} ${input.summary ?? ""}`.toLowerCase();
+  for (const pattern of EXCLUSION_PATTERNS) {
+    if (text.includes(pattern)) {
+      return 0;
+    }
+  }
+  let tripleScore = 0;
+  if (input.triple.actor) tripleScore += 0.12;
+  if (input.triple.action) tripleScore += 0.2;
+  if (input.triple.target) tripleScore += 0.13;
+  const doc = nlp(`${input.title} ${input.summary ?? ""}`);
+  const allVerbs = doc.verbs().out("array");
+  let conflictVerbCount = 0;
+  for (const verb of allVerbs) {
+    const root = nlp(verb).verbs().toInfinitive().out("text").toLowerCase();
+    if (CONFLICT_VERBS.has(root)) {
+      conflictVerbCount++;
+    } else {
+      const words = verb.toLowerCase().split(/\s+/);
+      for (const word of words) {
+        if (CONFLICT_VERBS.has(word)) {
+          conflictVerbCount++;
+          break;
+        }
+      }
+    }
+  }
+  const conflictVerbRatio = conflictVerbCount / Math.max(allVerbs.length, 1);
+  const negativityScore = conflictVerbRatio * 0.35;
+  const reliability = getSourceReliability(input.source, input.domain);
+  const sourceScore = reliability * 0.2;
+  return Math.min(1, tripleScore + negativityScore + sourceScore);
+}
+var TIER_WEIGHT = {
+  "1": 0.45,
+  "2": 0.35,
+  "3": 0.22,
+  unknown: 0.15
+};
+var PRECISION_WEIGHT = {
+  exact: 0.3,
+  neighborhood: 0.22,
+  city: 0.15,
+  region: 0.05
+};
+function computeCompositeScore(input) {
+  const tierWeight = input.tier === null ? TIER_WEIGHT.unknown : TIER_WEIGHT[String(input.tier)];
+  const precisionWeight = PRECISION_WEIGHT[input.precision];
+  const boost = Math.max(0, input.corroborationBoost);
+  return Math.min(1, tierWeight + precisionWeight + boost);
 }
 
 // server/lib/safeWaitUntil.ts
@@ -4170,7 +4438,8 @@ async function runRefreshExtraction(opts) {
       resetProgress();
       updateProgress({ schemaVersion: "v3", lastTriggerSource: opts.triggeredBy });
       try {
-        const groups = groupGdeltRows(merged);
+        const deduped = dedupHighConfidence(merged);
+        const groups = groupGdeltRows(deduped);
         updateProgress({ totalGroups: groups.length, stage: "grouping" });
         const cachedLlmKeys = /* @__PURE__ */ new Set();
         if (llmCachedRef?.data) {
@@ -4213,7 +4482,7 @@ async function runRefreshExtraction(opts) {
           stage: "llm-processing",
           totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize)
         });
-        const extractResult = await processEventGroups(
+        const extractResult = await processEventGroupsV3(
           prioritizedGroups,
           async (completed, total) => {
             updateProgress({ completedBatches: completed, totalBatches: total });
@@ -4238,21 +4507,19 @@ async function runRefreshExtraction(opts) {
           enrichedCount: extractResult.events.length,
           totalGeocodes: extractResult.events.length
         });
-        const geoResult = await geocodeEnrichedEvents(
-          {
-            schemaVersion: "v3",
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup
-          },
-          prioritizedGroups,
+        const groupsByKey = new Map(prioritizedGroups.map((g) => [g.key, g]));
+        const geocodedEvents = await geocodeEnrichedEventsV3(
+          extractResult.events,
+          groupsByKey,
+          extractResult.matchedNewsByGroup,
+          extractResult.bellingcatByGroup,
           (completed, total) => {
             updateProgress({ completedGeocodes: completed, totalGeocodes: total });
           }
         );
         const provenanceCounts = {};
         let suspectCount = 0;
-        for (const e of geoResult.events) {
+        for (const e of geocodedEvents) {
           provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
           if (e.suspect) suspectCount++;
         }
@@ -4263,7 +4530,13 @@ async function runRefreshExtraction(opts) {
         } catch (evalErr) {
           log13.warn({ err: evalErr }, "eval harness threw; continuing pipeline");
         }
-        const llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
+        let newsClusters;
+        try {
+          const newsCache = await cacheGetSafe("news:gdelt", 0);
+          if (newsCache?.data) newsClusters = newsCache.data;
+        } catch {
+        }
+        const llmEntities = enrichedV3ToEntities(geocodedEvents, prioritizedGroups, newsClusters);
         await mergeAndPersistLlmEntities(llmEntities, llmCachedRef, LLM_EVENTS_KEY_ACTIVE);
         updateProgress({
           stage: "done",
@@ -4322,7 +4595,7 @@ async function runRefreshExtraction(opts) {
     schemaVersion: "v3"
   };
 }
-function enrichedV3ToEntities(geocoded, groups) {
+function enrichedV3ToEntities(geocoded, groups, newsClusters) {
   const groupMap = /* @__PURE__ */ new Map();
   const groupSourceUrls = /* @__PURE__ */ new Map();
   for (const g of groups) {
@@ -4338,6 +4611,19 @@ function enrichedV3ToEntities(geocoded, groups) {
     const template = entities[0];
     if (!template) continue;
     const placeLabel = enriched.location.landmark || enriched.location.city || enriched.location.admin1 || enriched.location.country || enriched.displayName || "unknown";
+    const candidate = {
+      ...template,
+      lat: enriched.resolvedLat,
+      lng: enriched.resolvedLng,
+      timestamp: template.timestamp,
+      data: { ...template.data, locationName: placeLabel, actors: enriched.actors }
+    };
+    const corroboration = newsClusters ? checkCorroboration(candidate, newsClusters) : { boost: 0 };
+    const compositeScore = computeCompositeScore({
+      tier: sourceTier ?? null,
+      corroborationBoost: corroboration.boost,
+      precision: enriched.precision
+    });
     results.push({
       ...template,
       id: `llm-v3-${enriched.groupKey}`,
@@ -4354,6 +4640,7 @@ function enrichedV3ToEntities(geocoded, groups) {
         actors: enriched.actors,
         sourceCount: enriched.sourceCount,
         sourceTier,
+        compositeScore,
         casualties: {
           killed: enriched.casualties.killed ?? void 0,
           injured: enriched.casualties.injured ?? void 0,
@@ -4503,7 +4790,7 @@ async function runEval(opts = {}) {
   } catch (err) {
     log14.warn({ err }, "D-13 actorMatchRate computation failed; falling back to 0");
   }
-  const actorMatchRate = actorTotal === 0 ? 0 : actorMatched / actorTotal;
+  const actorMatchRate = actorTotal === 0 ? null : actorMatched / actorTotal;
   const score = {
     within5km: w5,
     within20km: w20,
@@ -81687,6 +81974,32 @@ function assignBasinStress(lat, lng) {
   };
 }
 
+// server/lib/romanize.ts
+import { transliterate } from "transliteration";
+function toTitleCase(str) {
+  return str.replace(/[_-]/g, " ").replace(/\s+/g, " ").trim().replace(/\b(\w)(\w*)/g, (_m, first, rest) => first.toUpperCase() + rest);
+}
+function cleanupArtifacts(raw) {
+  return raw.replace(/@/g, "a").toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function romanize(name, qualifier) {
+  const input = (name ?? "").trim();
+  if (!input) {
+    return fallbackToken(qualifier);
+  }
+  const raw = transliterate(input);
+  const cleaned = cleanupArtifacts(raw);
+  if (cleaned.replace(/[^a-z0-9]/gi, "").length < 2) {
+    return fallbackToken(qualifier);
+  }
+  return toTitleCase(cleaned);
+}
+function fallbackToken(qualifier) {
+  const q = (qualifier ?? "").trim();
+  if (q.length >= 2) return toTitleCase(q);
+  return "Facility";
+}
+
 // server/types.ts
 var FACILITY_TYPE_LABELS = {
   dam: "Dam",
@@ -81795,6 +82108,19 @@ function hasLatinLabel(tags) {
   if (isRealLatin(op)) return true;
   return false;
 }
+function applyRomanizedName(tags, facilityType) {
+  if (facilityType === "desalination") return { tags };
+  if (hasLatinLabel(tags)) return { tags };
+  const rawName = tags["name"]?.trim();
+  if (!rawName || isLatin(rawName)) return { tags };
+  const qualifier = FACILITY_TYPE_LABELS[facilityType];
+  const nameLatin = romanize(rawName, qualifier);
+  return {
+    tags: { ...tags, "name:en": nameLatin },
+    nameLatin,
+    nameOriginal: rawName
+  };
+}
 var EXCLUDED_COUNTRIES = /* @__PURE__ */ new Set(["Uzbekistan", "Tajikistan", "Kyrgyzstan", "Kazakhstan"]);
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371;
@@ -81896,7 +82222,7 @@ function buildQuery(nwr) {
 function isLatin(str) {
   return /^[\p{Script=Latin}\d\s\p{P}\p{S}]+$/u.test(str);
 }
-function toTitleCase(str) {
+function toTitleCase2(str) {
   return str.replace(/[_-]/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\b(\w)(\w*)/g, (_m, first, rest) => first + rest);
 }
 var DAM_IN_NAME_RE = /\bdam\s*$/i;
@@ -81918,10 +82244,10 @@ function classifyWaterType(tags) {
 }
 function extractLabel(tags, facilityType, lat, lng, nearestCity) {
   const en = tags["name:en"];
-  if (en && en.trim() && isLatin(en)) return toTitleCase(en);
+  if (en && en.trim() && isLatin(en)) return toTitleCase2(en);
   const raw = tags["name"] || "";
-  if (raw && isLatin(raw)) return toTitleCase(raw);
-  if (tags.operator && isLatin(tags.operator)) return toTitleCase(tags.operator);
+  if (raw && isLatin(raw)) return toTitleCase2(raw);
+  if (tags.operator && isLatin(tags.operator)) return toTitleCase2(tags.operator);
   if (facilityType === "desalination") {
     if (nearestCity) {
       return `Desalination Plant near ${nearestCity.name}`;
@@ -82019,11 +82345,12 @@ function normalizeWaterElement(el, stressLookup, rejections, byTypeBucket) {
   const lat = el.lat ?? el.center?.lat;
   const lon = el.lon ?? el.center?.lon;
   if (lat === void 0 || lon === void 0) return null;
+  const { tags, nameLatin, nameOriginal } = applyRomanizedName(el.tags, facilityType);
   const inPriority = isPriorityCountry(lat, lon);
-  const score = computeNotabilityScore(el.tags, facilityType, inPriority);
+  const score = computeNotabilityScore(tags, facilityType, inPriority);
   const nearestCity = findNearestCity(lat, lon);
   const decision = computeAdmissionDecision(
-    el.tags,
+    tags,
     lat,
     lon,
     facilityType,
@@ -82036,7 +82363,7 @@ function normalizeWaterElement(el, stressLookup, rejections, byTypeBucket) {
     if (byTypeBucket) byTypeBucket[decision.bucket]++;
     return null;
   }
-  const capacity = extractCapacityTags(el.tags);
+  const capacity = extractCapacityTags(tags);
   const linkedRiver = linkRiver(lat, lon);
   return {
     id: `water-${el.id}`,
@@ -82044,11 +82371,17 @@ function normalizeWaterElement(el, stressLookup, rejections, byTypeBucket) {
     facilityType,
     lat,
     lng: lon,
-    label: extractLabel(el.tags, facilityType, lat, lon, nearestCity),
-    operator: el.tags.operator && isLatin(el.tags.operator) ? toTitleCase(el.tags.operator) : void 0,
+    // extractLabel reads the (augmented) tags so the romanized name:en becomes
+    // the Latin display label for a previously non-Latin facility.
+    label: extractLabel(tags, facilityType, lat, lon, nearestCity),
+    operator: tags.operator && isLatin(tags.operator) ? toTitleCase2(tags.operator) : void 0,
     osmId: el.id,
     stress: stressLookup(lat, lon),
     notabilityScore: score,
+    // WATER-LATIN-03: surface the romanized token + preserved original (set
+    // only when applyRomanizedName fired on a non-Latin name).
+    ...nameLatin && { nameLatin },
+    ...nameOriginal && { nameOriginal },
     ...capacity && { capacity },
     ...nearestCity && { nearestCity },
     ...linkedRiver && { linkedRiver }
@@ -82281,7 +82614,7 @@ var QUERY = `
 );
 out center tags;
 `;
-function toTitleCase2(str) {
+function toTitleCase3(str) {
   return str.replace(/[_-]/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\b(\w)(\w*)/g, (_m, first, rest) => first + rest);
 }
 function isLatin2(str) {
@@ -82296,10 +82629,10 @@ var SITE_TYPE_LABELS = {
 };
 function extractLabel2(tags, siteType) {
   const en = tags["name:en"];
-  if (en && en.trim() && isLatin2(en)) return toTitleCase2(en);
+  if (en && en.trim() && isLatin2(en)) return toTitleCase3(en);
   const raw = tags["name"] || "";
-  if (raw && isLatin2(raw)) return toTitleCase2(raw);
-  if (tags.operator && isLatin2(tags.operator)) return toTitleCase2(tags.operator);
+  if (raw && isLatin2(raw)) return toTitleCase3(raw);
+  if (tags.operator && isLatin2(tags.operator)) return toTitleCase3(tags.operator);
   return SITE_TYPE_LABELS[siteType];
 }
 function classifySiteType(tags) {
@@ -82326,7 +82659,7 @@ function normalizeElement(el) {
     lat,
     lng: lon,
     label: extractLabel2(el.tags, siteType),
-    operator: el.tags.operator && isLatin2(el.tags.operator) ? toTitleCase2(el.tags.operator) : void 0,
+    operator: el.tags.operator && isLatin2(el.tags.operator) ? toTitleCase3(el.tags.operator) : void 0,
     wikidata: el.tags.wikidata || void 0,
     osmId: el.id
   };
@@ -82984,30 +83317,11 @@ function normalizeEventTypes(events) {
   });
 }
 
-// server/lib/pipelineAudit.ts
-init_redis();
-var PIPELINE_AUDIT_KEY = "events:llm-pipeline-audit";
-var PIPELINE_AUDIT_TTL_SEC = 90 * 24 * 3600;
-async function listPipelineAudit(limit) {
-  try {
-    const raw = await redis.lrange(PIPELINE_AUDIT_KEY, 0, limit - 1);
-    return raw.map((s) => {
-      try {
-        return JSON.parse(typeof s === "string" ? s : JSON.stringify(s));
-      } catch {
-        return null;
-      }
-    }).filter((e) => e !== null);
-  } catch {
-    return [];
-  }
-}
-
-// server/lib/replayQuota.ts
+// server/lib/pruneQuota.ts
 var CAP = 50;
-var QUOTA_KEY_PREFIX = "operator:replay-quota:";
+var QUOTA_KEY_PREFIX = "operator:prune-quota:";
 var QUOTA_TTL_SEC = 48 * 3600;
-async function checkReplayQuota(fingerprint) {
+async function checkPruneQuota(fingerprint) {
   const { redis: redis2 } = await Promise.resolve().then(() => (init_redis(), redis_exports));
   const now = /* @__PURE__ */ new Date();
   const ymd = now.toISOString().slice(0, 10);
@@ -83030,11 +83344,11 @@ async function checkReplayQuota(fingerprint) {
   };
 }
 
-// server/lib/pruneQuota.ts
+// server/lib/replayQuota.ts
 var CAP2 = 50;
-var QUOTA_KEY_PREFIX2 = "operator:prune-quota:";
+var QUOTA_KEY_PREFIX2 = "operator:replay-quota:";
 var QUOTA_TTL_SEC2 = 48 * 3600;
-async function checkPruneQuota(fingerprint) {
+async function checkReplayQuota(fingerprint) {
   const { redis: redis2 } = await Promise.resolve().then(() => (init_redis(), redis_exports));
   const now = /* @__PURE__ */ new Date();
   const ymd = now.toISOString().slice(0, 10);
@@ -83330,10 +83644,26 @@ async function recordLLMTimestamp() {
   } catch {
   }
 }
+function applyCompositeOrdering(events) {
+  const scored = events.map((event) => {
+    const tier = event.data.sourceTier ?? null;
+    const precision = event.data.precision ?? "region";
+    const corroborationBoost = 0;
+    const compositeScore = computeCompositeScore({ tier, corroborationBoost, precision });
+    return { ...event, data: { ...event.data, compositeScore } };
+  });
+  return scored.sort((a, b) => {
+    const diff = (b.data.compositeScore ?? 0) - (a.data.compositeScore ?? 0);
+    return diff !== 0 ? diff : b.timestamp - a.timestamp;
+  });
+}
 function sendNormalizedEvents(res, payload) {
   sendValidated(res, eventsResponseSchema, {
     ...payload,
-    data: normalizeEventTypes(payload.data)
+    // Normalize types first (returns copies where needed), then apply the
+    // additive composite re-ordering on the read path. Neither step mutates
+    // the cached corpus (D-07).
+    data: applyCompositeOrdering(normalizeEventTypes(payload.data))
   });
 }
 function toEntityArray(data) {
@@ -83345,11 +83675,10 @@ function coerceCachedEvents(cached) {
 var eventsRouter = Router6();
 eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
   const LLM_SUMMARY_KEY_ACTIVE2 = LLM_SUMMARY_KEY_ACTIVE_NAME;
-  const [dlqRecent, recentEvents, paused, pipelineFlips] = await Promise.all([
+  const [dlqRecent, recentEvents, paused] = await Promise.all([
     listDLQ(50).catch(() => []),
     loadRecentEnrichedEvents(50).catch(() => []),
-    shouldPauseNewEvents().catch(() => false),
-    listPipelineAudit(50).catch(() => [])
+    shouldPauseNewEvents().catch(() => false)
   ]);
   const common = {
     schemaVersion: llmProgress.schemaVersion,
@@ -83373,8 +83702,7 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
     rateLimit: llmProgress.rateLimit,
     schemaFailures: llmProgress.schemaFailures,
     errorTaxonomy: llmProgress.errorTaxonomy,
-    costShadow: llmProgress.costShadow,
-    pipelineFlips
+    costShadow: llmProgress.costShadow
   };
   if (llmProgress.stage !== "idle") {
     return res.json({ ...llmProgress, ...common });
@@ -83395,7 +83723,15 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
       return res.status(400).json({ error: "invalid_group_key" });
     }
     const fingerprint = bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? "");
-    const quota = await checkReplayQuota(fingerprint);
+    let quota;
+    try {
+      quota = await checkReplayQuota(fingerprint);
+    } catch (err) {
+      return res.status(503).json({
+        error: "replay_quota_unavailable",
+        detail: String(err).slice(0, 200)
+      });
+    }
     if (!quota.allowed) {
       res.set("Retry-After", String(quota.retryAfterSeconds));
       return res.status(429).json({
@@ -83919,6 +84255,10 @@ var healthResponseSchema = z9.object({
 var log26 = logger.child({ module: "health" });
 var healthRouter = Router9();
 var PROBE_TIMEOUT_MS2 = 2e3;
+var NEWS_RSS_ONLY_KEY = "news:feed:rss-only";
+function degradedSentinelFreshness(thresholdMs) {
+  return Math.floor(thresholdMs * 1.5);
+}
 function withTimeout2(promise, ms, label) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -83933,33 +84273,47 @@ function sanitizeError(err) {
   const masked = raw.replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]").replace(/api[_-]?key=[A-Za-z0-9._-]+/gi, "api_key=[REDACTED]").replace(/https:\/\/[^\s]*upstash\.io[^\s]*/g, "[upstash url redacted]");
   return masked.length > 200 ? masked.slice(0, 197) + "..." : masked;
 }
-async function probeCacheKey(name, key, fallbackKeys = []) {
+async function probeCacheKey(name, key, fallbackHealthyKey, fallbackReasonToken = "cache-fallback-active:") {
   const start = Date.now();
   try {
-    let lastFresh = null;
-    for (const candidate of [key, ...fallbackKeys]) {
-      const entry = await withTimeout2(
-        cacheGetSafe(candidate, 999999999),
-        PROBE_TIMEOUT_MS2,
-        `probe ${name}`
-      );
-      if (entry !== null && (lastFresh === null || entry.lastFresh > lastFresh)) {
-        lastFresh = entry.lastFresh;
-      }
-    }
+    const primary = await withTimeout2(
+      cacheGetSafe(key, 999999999),
+      PROBE_TIMEOUT_MS2,
+      `probe ${name}`
+    );
     const latencyMs = Date.now() - start;
-    if (lastFresh === null) {
+    if (primary !== null) {
       return {
-        freshnessMs: null,
-        lastSuccessTs: null,
+        freshnessMs: Date.now() - primary.lastFresh,
+        lastSuccessTs: primary.lastFresh,
         hadError: false,
         errorReason: null,
         latencyMs
       };
     }
+    if (fallbackHealthyKey !== void 0) {
+      const fallback = await withTimeout2(
+        cacheGetSafe(fallbackHealthyKey, 999999999),
+        PROBE_TIMEOUT_MS2,
+        `probe ${name} fallback`
+      );
+      if (fallback !== null) {
+        const thresholdMs = FRESHNESS_THRESHOLDS_MS[name] ?? 0;
+        const fallbackAgeMs = Date.now() - fallback.lastFresh;
+        if (fallbackAgeMs <= thresholdMs) {
+          return {
+            freshnessMs: degradedSentinelFreshness(thresholdMs),
+            lastSuccessTs: fallback.lastFresh,
+            hadError: false,
+            errorReason: `${fallbackReasonToken} ${fallbackHealthyKey} fresh, ${key} cold`,
+            latencyMs: Date.now() - start
+          };
+        }
+      }
+    }
     return {
-      freshnessMs: Date.now() - lastFresh,
-      lastSuccessTs: lastFresh,
+      freshnessMs: null,
+      lastSuccessTs: null,
       hadError: false,
       errorReason: null,
       latencyMs
@@ -83993,9 +84347,41 @@ async function probeLlmStatus() {
   }
   const memLatest = llmProgress.completedAt ?? llmProgress.startedAt ?? null;
   const latest = redisLatest === null ? memLatest : memLatest === null ? redisLatest : Math.max(redisLatest, memLatest);
+  if (latest !== null) {
+    return {
+      freshnessMs: Date.now() - latest,
+      lastSuccessTs: latest,
+      hadError: false,
+      errorReason: null,
+      latencyMs: Date.now() - start
+    };
+  }
+  const cronThresholdMs = FRESHNESS_THRESHOLDS_MS.cronRefreshEvents ?? 0;
+  try {
+    const cronEntry = await withTimeout2(
+      cacheGetSafe(`cron:lastTick:refresh-events`, 999999999),
+      PROBE_TIMEOUT_MS2,
+      "probe llmStatus (cron fallback)"
+    );
+    if (cronEntry !== null) {
+      const tickTs = typeof cronEntry.data === "number" ? cronEntry.data : cronEntry.lastFresh;
+      const cronAgeMs = Date.now() - tickTs;
+      if (cronAgeMs <= cronThresholdMs) {
+        const llmThresholdMs = FRESHNESS_THRESHOLDS_MS.llmStatus ?? 0;
+        return {
+          freshnessMs: degradedSentinelFreshness(llmThresholdMs),
+          lastSuccessTs: tickTs,
+          hadError: false,
+          errorReason: "llm-optional-fallback-active: refresh-events cron fresh, llm:lastProgress empty",
+          latencyMs: Date.now() - start
+        };
+      }
+    }
+  } catch {
+  }
   return {
-    freshnessMs: latest === null ? null : Date.now() - latest,
-    lastSuccessTs: latest,
+    freshnessMs: null,
+    lastSuccessTs: null,
     hadError: false,
     errorReason: null,
     latencyMs: Date.now() - start
@@ -84059,18 +84445,31 @@ var PROBE_STRATEGIES = {
   flights: { kind: "cache", cacheKey: SOURCE_KEYS.flights },
   ships: { kind: "cache", cacheKey: SOURCE_KEYS.ships },
   events: { kind: "cache", cacheKey: SOURCE_KEYS.events },
-  // Phase 28.2.5 D-06 — top of the cache-bridge fallback chain (events.ts:701-731).
-  // Probe answers "is /api/events serving enriched LLM events or raw-GDELT fallback?"
-  // Phase 28.2.7 follow-up: fallback through v2/v1 mirrors the bridge in
-  // events.ts so the probe doesn't report 'unknown' while the route is
-  // happily serving v2-bridged data (e.g., during v3 rollout when refresh-events
-  // dispatched the v2 extractor and v3 cache hasn't been populated yet).
+  // Phase 37 fix/prod-audit-tier-regression — LLM-OPTIONAL probe contract.
+  // Primary cache: events:llm:v3 (enriched LLM extraction). Fallback-healthy
+  // signal: events:gdelt (the Pitfall 1 raw-GDELT bridge in
+  // server/routes/events.ts). When v3 is cold but raw GDELT is fresh, the
+  // probe reports `degraded` instead of `unknown` — the LLM-optional kill
+  // switch from ADR-0010 is engaged and the route is degrading gracefully.
+  // The v1/v2 fallback keys deleted in Phase 29 are no longer probed.
   llmEvents: {
     kind: "cache",
     cacheKey: SOURCE_KEYS.llmEvents,
-    fallbackKeys: ["events:llm:v2", "events:llm"]
+    fallbackHealthyKey: SOURCE_KEYS.events
   },
-  news: { kind: "cache", cacheKey: SOURCE_KEYS.news },
+  // Phase 37 fix/news-feed-rss-fallback — GDELT-DOC-optional probe contract.
+  // Primary cache: news:feed (clustered render-target from GDELT-DOC + 6 RSS
+  // sources). Fallback-healthy signal: news:feed:rss-only (a timestamp-only
+  // sidecar written by server/routes/news.ts ONLY when GDELT failed but
+  // ≥1 RSS article was produced). When news:feed is cold but the sidecar
+  // is fresh, the probe reports `degraded` instead of `unknown` — the
+  // RSS-only fallback path is engaged and the route is degrading gracefully.
+  // Mirrors the llmEvents wiring just above (Phase 37 PR #32) byte-for-byte.
+  news: {
+    kind: "cache",
+    cacheKey: SOURCE_KEYS.news,
+    fallbackHealthyKey: NEWS_RSS_ONLY_KEY
+  },
   markets: { kind: "cache", cacheKey: SOURCE_KEYS.markets },
   weather: { kind: "cache", cacheKey: SOURCE_KEYS.weather },
   sites: { kind: "cache", cacheKey: SOURCE_KEYS.sites },
@@ -84087,7 +84486,12 @@ var PROBE_STRATEGIES = {
 async function runProbe(name, strategy) {
   switch (strategy.kind) {
     case "cache":
-      return probeCacheKey(name, strategy.cacheKey, strategy.fallbackKeys ?? []);
+      return probeCacheKey(
+        name,
+        strategy.cacheKey,
+        strategy.fallbackHealthyKey,
+        name === "llmEvents" ? "llm-optional-fallback-active:" : "cache-fallback-active:"
+      );
     case "llmStatus":
       return probeLlmStatus();
     case "sources":
@@ -84323,7 +84727,7 @@ import { createHash as createHash2 } from "crypto";
 function hashUrl(url) {
   return createHash2("sha256").update(url).digest("hex").slice(0, 16);
 }
-function tokenize(text) {
+function tokenize2(text) {
   return new Set(
     text.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter((t) => t.length > 0)
   );
@@ -84353,14 +84757,14 @@ function deduplicateAndCluster(articles) {
     if (!seed) continue;
     const group = [seed];
     clustered.add(i);
-    const tokensI = tokenize(seed.title);
+    const tokensI = tokenize2(seed.title);
     const canFuzzyI = tokensI.size >= NEWS_MIN_TOKENS_FOR_FUZZY;
     if (canFuzzyI) {
       for (let j = i + 1; j < unique.length; j++) {
         if (clustered.has(j)) continue;
         const candidate = unique[j];
         if (!candidate) continue;
-        const tokensJ = tokenize(candidate.title);
+        const tokensJ = tokenize2(candidate.title);
         const canFuzzyJ = tokensJ.size >= NEWS_MIN_TOKENS_FOR_FUZZY;
         if (!canFuzzyJ) continue;
         const timeDiff = Math.abs(seed.publishedAt - candidate.publishedAt);
@@ -84513,7 +84917,7 @@ async function fetchAllRssFeeds() {
 init_redis();
 
 // server/lib/nlpExtractor.ts
-import nlp from "compromise";
+import nlp2 from "compromise";
 function normalize(text) {
   if (!text) return null;
   const trimmed = text.replace(/\s+/g, " ").trim();
@@ -84521,7 +84925,7 @@ function normalize(text) {
 }
 function extractTriple(title, summary) {
   const text = summary ? `${title}. ${summary}` : title;
-  const doc = nlp(text);
+  const doc = nlp2(text);
   const patterns = [
     // Pattern A: "Iran launches missile strike on Israel"
     "[<actor>#ProperNoun+] [<action>#Verb+ #Noun*] (on|at|in|against|into) [<target>#ProperNoun+]",
@@ -84554,182 +84958,6 @@ function extractTriple(title, summary) {
   ];
   const target = normalize(targetCandidates[0]) ?? null;
   return { actor, action, target };
-}
-
-// server/lib/relevanceScorer.ts
-import nlp2 from "compromise";
-var SOURCE_RELIABILITY = {
-  // Tier 1 — major international (1.0)
-  "bbc.co.uk": 1,
-  "bbc.com": 1,
-  "reuters.com": 1,
-  "apnews.com": 1,
-  "afp.com": 1,
-  // By source name (RSS feeds)
-  BBC: 1,
-  Reuters: 1,
-  "Associated Press": 1,
-  // Tier 2 — regional quality (0.9-0.95)
-  "aljazeera.com": 0.95,
-  "timesofisrael.com": 0.9,
-  "middleeasteye.net": 0.9,
-  "haaretz.com": 0.9,
-  // By source name (RSS feeds)
-  "Al Jazeera": 0.95,
-  "Times of Israel": 0.9,
-  "Middle East Eye": 0.9,
-  // Tier 3 — state-affiliated/partisan (0.8)
-  "tehrantimes.com": 0.8,
-  "irna.ir": 0.8,
-  "presstv.ir": 0.8,
-  // By source name (RSS feeds)
-  "Tehran Times": 0.8
-};
-var CONFLICT_VERBS = /* @__PURE__ */ new Set([
-  "strike",
-  "kill",
-  "bomb",
-  "destroy",
-  "attack",
-  "shell",
-  "invade",
-  "launch",
-  "fire",
-  "shoot",
-  "target",
-  "hit",
-  "blast",
-  "detonate",
-  "intercept",
-  "deploy",
-  "seize",
-  "capture",
-  "raid",
-  "assassinate",
-  "wound",
-  "shatter",
-  "demolish",
-  "obliterate"
-]);
-var EXCLUSION_PATTERNS = [
-  // Existing (kept from newsFilter.ts)
-  "new year",
-  "firework",
-  "fireworks",
-  "celebration",
-  "celebrate",
-  "festival",
-  "holiday",
-  "parade",
-  "super bowl",
-  "world cup",
-  "box office",
-  "movie premiere",
-  "concert",
-  "cricket",
-  "basketball",
-  "football match",
-  "stock market",
-  "ipo",
-  "earnings report",
-  "fashion week",
-  // Historical/documentary
-  "world war ii",
-  "world war i",
-  "cold war era",
-  "documentary",
-  "museum",
-  "exhibition",
-  "anniversary of",
-  "memoir",
-  "autobiography",
-  // Entertainment
-  "video game",
-  "tv series",
-  "netflix",
-  "movie review",
-  "book review",
-  "album release",
-  "music video",
-  "award show",
-  "grammy",
-  "oscar",
-  "emmy",
-  "golden globe",
-  // Sports expanded
-  "olympics",
-  "soccer",
-  "tennis",
-  "rugby",
-  "baseball",
-  "hockey",
-  "wrestling",
-  "boxing match",
-  "marathon",
-  "tournament",
-  // Education/academic
-  "university study",
-  "research paper",
-  "academic",
-  "thesis",
-  "classroom",
-  "curriculum",
-  // Technology
-  "product launch",
-  "tech review",
-  "startup funding",
-  "app update",
-  "software release",
-  // Weather/natural
-  "weather forecast",
-  "earthquake",
-  "tornado",
-  "hurricane",
-  "flood warning",
-  "wildfire"
-];
-function getSourceReliability(source, domain) {
-  if (SOURCE_RELIABILITY[source] !== void 0) {
-    return SOURCE_RELIABILITY[source];
-  }
-  if (domain && SOURCE_RELIABILITY[domain] !== void 0) {
-    return SOURCE_RELIABILITY[domain];
-  }
-  return 0.6;
-}
-function computeRelevanceScore(input) {
-  const text = `${input.title} ${input.summary ?? ""}`.toLowerCase();
-  for (const pattern of EXCLUSION_PATTERNS) {
-    if (text.includes(pattern)) {
-      return 0;
-    }
-  }
-  let tripleScore = 0;
-  if (input.triple.actor) tripleScore += 0.12;
-  if (input.triple.action) tripleScore += 0.2;
-  if (input.triple.target) tripleScore += 0.13;
-  const doc = nlp2(`${input.title} ${input.summary ?? ""}`);
-  const allVerbs = doc.verbs().out("array");
-  let conflictVerbCount = 0;
-  for (const verb of allVerbs) {
-    const root = nlp2(verb).verbs().toInfinitive().out("text").toLowerCase();
-    if (CONFLICT_VERBS.has(root)) {
-      conflictVerbCount++;
-    } else {
-      const words = verb.toLowerCase().split(/\s+/);
-      for (const word of words) {
-        if (CONFLICT_VERBS.has(word)) {
-          conflictVerbCount++;
-          break;
-        }
-      }
-    }
-  }
-  const conflictVerbRatio = conflictVerbCount / Math.max(allVerbs.length, 1);
-  const negativityScore = conflictVerbRatio * 0.35;
-  const reliability = getSourceReliability(input.source, input.domain);
-  const sourceScore = reliability * 0.2;
-  return Math.min(1, tripleScore + negativityScore + sourceScore);
 }
 
 // server/lib/newsFilter.ts
@@ -84886,6 +85114,7 @@ var newsQuerySchema = z11.object({
   refresh: z11.enum(["true", "false"]).optional().transform((v) => v === "true")
 });
 var NEWS_FEED_KEY = "news:feed";
+var NEWS_RSS_ONLY_KEY2 = "news:feed:rss-only";
 var newsRouter = Router11();
 newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
   const { refresh: forceRefresh } = res.locals.validatedQuery;
@@ -84894,13 +85123,21 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
     return res.json(cached);
   }
   try {
+    let gdeltFailed = false;
     const [gdeltArticles, rssArticles] = await Promise.all([
-      fetchGdeltArticles(),
+      fetchGdeltArticles().catch((err) => {
+        gdeltFailed = true;
+        log30.warn({ err }, "GDELT fetch failed (non-fatal, falling back to RSS-only)");
+        return [];
+      }),
       fetchAllRssFeeds().catch((err) => {
         log30.warn({ err }, "RSS fetch failed (non-fatal)");
         return [];
       })
     ]);
+    if (gdeltArticles.length === 0 && rssArticles.length === 0) {
+      throw new Error("both upstreams returned no articles");
+    }
     const allArticles = [...gdeltArticles, ...rssArticles];
     const filtered = filterAndScoreArticles(allArticles);
     const articleMap = /* @__PURE__ */ new Map();
@@ -84919,9 +85156,15 @@ newsRouter.get("/", validateQuery(newsQuerySchema), async (_req, res) => {
     const cutoff = Date.now() - NEWS_SLIDING_WINDOW_MS;
     clusters = clusters.filter((c) => c.lastUpdated >= cutoff);
     await cacheSetSafe(NEWS_FEED_KEY, clusters, NEWS_REDIS_TTL_SEC);
+    if (gdeltFailed && rssArticles.length > 0) {
+      await cacheSetSafe(NEWS_RSS_ONLY_KEY2, Date.now(), NEWS_REDIS_TTL_SEC);
+    }
     const gdeltCount = gdeltArticles.length;
     const rssCount = rssArticles.length;
-    log30.info({ gdeltCount, rssCount, clusterCount: clusters.length }, "fetched and clustered news");
+    log30.info(
+      { gdeltCount, rssCount, clusterCount: clusters.length, gdeltFailed },
+      "fetched and clustered news"
+    );
     res.json({ data: clusters, stale: false, lastFresh: Date.now() });
   } catch (err) {
     log30.error({ err }, "upstream error");
@@ -85555,6 +85798,13 @@ var waterQuerySchema = z13.object({
 });
 var FACILITIES_KEY = "water:facilities:v3";
 var PRECIP_KEY = "water:precip";
+function isPrecipEmptySentinel(value) {
+  return typeof value === "object" && value !== null && value.failed === true && Array.isArray(value.data);
+}
+function normalizePrecipCache(cached) {
+  if (isPrecipEmptySentinel(cached)) return [];
+  return cached;
+}
 var waterRouter = Router17();
 waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
   log36.info("GET /api/water hit");
@@ -85658,9 +85908,17 @@ waterRouter.get("/", validateQuery(waterQuerySchema), async (req, res) => {
 });
 waterRouter.get("/precip", validateQuery(waterQuerySchema), async (_req, res) => {
   const { refresh: forceRefresh } = res.locals.validatedQuery;
-  const cachedPrecip = await cacheGetSafe(PRECIP_KEY, WATER_PRECIP_CACHE_TTL);
+  const cachedPrecip = await cacheGetSafe(
+    PRECIP_KEY,
+    WATER_PRECIP_CACHE_TTL
+  );
   if (cachedPrecip && !cachedPrecip.stale && !forceRefresh) {
-    return res.json(cachedPrecip);
+    const cachedData = normalizePrecipCache(cachedPrecip.data);
+    return res.json({
+      data: cachedData,
+      stale: cachedPrecip.stale,
+      lastFresh: cachedPrecip.lastFresh
+    });
   }
   try {
     let facilities = [];
@@ -85680,12 +85938,22 @@ waterRouter.get("/precip", validateQuery(waterQuerySchema), async (_req, res) =>
     const precipData = await fetchPrecipitation(locations);
     if (precipData.length > 0) {
       await cacheSetSafe(PRECIP_KEY, precipData, WATER_PRECIP_REDIS_TTL_SEC);
+    } else {
+      await cacheSetSafe(
+        PRECIP_KEY,
+        { data: [], failed: true, fetchedAt: Date.now() },
+        WATER_PRECIP_REDIS_TTL_SEC
+      );
     }
     res.json({ data: precipData, stale: false, lastFresh: Date.now() });
   } catch (err) {
     log36.error({ err }, "precipitation fetch error");
     if (cachedPrecip) {
-      res.json({ data: cachedPrecip.data, stale: true, lastFresh: cachedPrecip.lastFresh });
+      res.json({
+        data: normalizePrecipCache(cachedPrecip.data),
+        stale: true,
+        lastFresh: cachedPrecip.lastFresh
+      });
     } else {
       throw err;
     }
