@@ -148,14 +148,9 @@ Full phase-by-phase detail archived to [milestones/v1.5-ROADMAP.md](milestones/v
 
 **Depends on:** v1.5 close (all prerequisites merged to main).
 
-**Requirements (28 REQ-IDs; 27 required + 1 optional):**
+**Requirements:** LLM-FIX-01, LLM-FIX-02, LLM-FIX-03, LLM-FIX-04, LLM-FIX-05, LLM-FIX-06, LLM-PURGE-01, LLM-PURGE-02, LLM-PURGE-03, LLM-PURGE-04, LLM-PURGE-05, LLM-PURGE-06, LLM-PURGE-07, LLM-PURGE-08, LLM-PURGE-09, GDELT-MATCH-01, GDELT-MATCH-02, GDELT-MATCH-03, GDELT-MATCH-04, WATER-LATIN-01, WATER-LATIN-02, WATER-LATIN-03, WATER-LATIN-04, VERCEL-PRO-01, VERCEL-PRO-02, VERCEL-PRO-03, VERCEL-PRO-04
 
-- LLM-FIX-01, LLM-FIX-02, LLM-FIX-03, LLM-FIX-04, LLM-FIX-05, LLM-FIX-06
-- LLM-PURGE-01, LLM-PURGE-02, LLM-PURGE-03, LLM-PURGE-04, LLM-PURGE-05, LLM-PURGE-06, LLM-PURGE-07, LLM-PURGE-08, LLM-PURGE-09
-- GDELT-MATCH-01, GDELT-MATCH-02, GDELT-MATCH-03, GDELT-MATCH-04
-- WATER-LATIN-01, WATER-LATIN-02, WATER-LATIN-03, WATER-LATIN-04
-- VERCEL-PRO-01, VERCEL-PRO-02, VERCEL-PRO-03, VERCEL-PRO-04
-- CRON-WATCH-01 _(optional; absorbed-or-deferred decision locks at `/gsd:discuss-phase` 38)_
+_28 REQ-IDs total — 27 required (parsed above) by strand: LLM-FIX (6) · LLM-PURGE (9) · GDELT-MATCH (4) · WATER-LATIN (4) · VERCEL-PRO (4); + 1 optional **CRON-WATCH-01** (absorbed-or-deferred decision locked at `/gsd:discuss-phase` 38 → deferred to v1.7 per 38-CONTEXT D-02). CRON-WATCH-01 is intentionally excluded from the parsed `**Requirements:**` line so the requirements-coverage gates do not flag it as an uncovered gap._
 
 **Success Criteria** (what must be TRUE when this phase completes):
 
@@ -188,10 +183,9 @@ CRON-WATCH-01 DEFERRED to v1.7 (D-02) — SC38-7 stays unfired.
 
 **Depends on:** Phase 38 LLM-PURGE-06 (env-var cleanup) before BudgetBlock's per-provider extensibility hook lands cleanly. Interleavable with Phase 38.
 
-**Requirements (10 REQ-IDs):**
+**Requirements:** BUDGET-01, BUDGET-02, BUDGET-03, BUDGET-04, OBS-FLIGHT-01, OBS-FLIGHT-02, OBS-FLIGHT-03, OBS-FLIGHT-04, OBS-FLIGHT-05, OBS-FLIGHT-06
 
-- BUDGET-01, BUDGET-02, BUDGET-03, BUDGET-04
-- OBS-FLIGHT-01, OBS-FLIGHT-02, OBS-FLIGHT-03, OBS-FLIGHT-04, OBS-FLIGHT-05, OBS-FLIGHT-06
+_10 REQ-IDs — by strand: BUDGET (4) · OBS-FLIGHT (6)._
 
 **Success Criteria** (what must be TRUE when this phase completes):
 
@@ -210,9 +204,9 @@ CRON-WATCH-01 DEFERRED to v1.7 (D-02) — SC38-7 stays unfired.
 
 **Depends on:** Phase 39 component shapes locked (BudgetBlock + FlightRecorderBlock shipped or shape-frozen) before UI-POLISH-02 finalizes consolidated layout. UI-POLISH-01 (UI-SPEC.md design contract via `/gsd:ui-phase`) runs FIRST and gates downstream UI-POLISH-02..05 code work.
 
-**Requirements (5 REQ-IDs):**
+**Requirements:** UI-POLISH-01, UI-POLISH-02, UI-POLISH-03, UI-POLISH-04, UI-POLISH-05
 
-- UI-POLISH-01, UI-POLISH-02, UI-POLISH-03, UI-POLISH-04, UI-POLISH-05
+_5 REQ-IDs — UI-POLISH (5)._
 
 **Success Criteria** (what must be TRUE when this phase completes):
 
@@ -230,10 +224,9 @@ CRON-WATCH-01 DEFERRED to v1.7 (D-02) — SC38-7 stays unfired.
 
 **Depends on:** Phases 38 + 39 + 40 close so the `project-v1-6-cleanup-punchlist` and `project-v1-6-docs-drift` memories can be refreshed against post-phase-38/39/40 reality. REVEAL-SITE-01 coordinates with Phase 40 UI-POLISH-04 to avoid double-touching the dev shell.
 
-**Requirements (14 REQ-IDs):**
+**Requirements:** REVEAL-DOCS-01, REVEAL-DOCS-02, REVEAL-DOCS-03, REVEAL-DOCS-04, REVEAL-DOCS-05, REVEAL-DOCS-06, REVEAL-DOCS-07, REVEAL-DOCS-08, REVEAL-DOCS-09, REVEAL-DOCS-10, REVEAL-SITE-01, REVEAL-SITE-02, REVEAL-SITE-03, REVEAL-SITE-04
 
-- REVEAL-DOCS-01, REVEAL-DOCS-02, REVEAL-DOCS-03, REVEAL-DOCS-04, REVEAL-DOCS-05, REVEAL-DOCS-06, REVEAL-DOCS-07, REVEAL-DOCS-08, REVEAL-DOCS-09, REVEAL-DOCS-10
-- REVEAL-SITE-01, REVEAL-SITE-02, REVEAL-SITE-03, REVEAL-SITE-04
+_14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 
 **Success Criteria** (what must be TRUE when this phase completes):
 
