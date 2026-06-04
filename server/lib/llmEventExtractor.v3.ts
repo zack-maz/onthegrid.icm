@@ -1,18 +1,20 @@
 /**
- * Phase 27.4.3 v3 LLM Event Extractor (D-03).
+ * Phase 27.4.3 v3 LLM Event Extractor (D-03) — the sole runtime extractor.
  *
- * Mirrors v2 (server/lib/llmEventExtractor.v2.ts) with three changes:
- *   1. The llm-provider.ts cascade is replaced by freeClaudeRouter.callLLM.
- *   2. After each successfully validated batch, appendLineage() persists the
- *      prompt / response / parsed / coord / resolverPath / reasoningTrace /
- *      lineageHash to events:llm:v3:lineage:{eventId} (D-13, B-2).
- *   3. The recentEvents entry stamps reasoningTrace + lineageHash so Plan 04
- *      DrillDownRow can render them under TS strict mode.
+ * Provider path: NIM primary (qwen-235b instruct) with OpenRouter dormant
+ * (key-gated fallback; `skipOpenRouter: true` at the extractor sites per Phase
+ * 30.1), routed through freeClaudeRouter.callLLM. After each successfully
+ * validated batch, appendLineage() persists the prompt / response / parsed /
+ * coord / resolverPath / reasoningTrace / lineageHash to
+ * events:llm:v3:lineage:{eventId} (D-13, B-2). The recentEvents entry stamps
+ * reasoningTrace + lineageHash so the DrillDownRow renders them under TS strict.
  *
- * Cache keys bumped per D-04:
- *   events:llm:v2 → events:llm:v3
+ * Active cache key: events:llm:v3.
  *
- * v1/v2 extractors remain shipped untouched (rollback safety per D-21).
+ * Phase 38 LLM-PURGE-03 — the v1 + v2 extractor modules + the
+ * llmEventExtractor.ts re-export barrel were deleted (Phase 29 + Phase 38);
+ * llmExtractionPipeline.ts now imports processEventGroupsV3 + geocodeEnrichedEventsV3
+ * directly from this file. No rollback-safety v1/v2 modules remain.
  *
  * Phase 35 D-12 (SIMPLIFY-02): the partial-key envelope (`events:llm:v3:partial`)
  * is retired. Hobby-era 300s-budget mitigation; Pro 800s makes terminal-key writes

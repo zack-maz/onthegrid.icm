@@ -18,8 +18,9 @@
  *
  * Threat model: T-28.2-03-02 (DoS via daily token budget exhaustion).
  * 50 replays × ~2K input tokens = 100K tokens/day worst case = 10% of the
- * Cerebras free-tier 1M/day budget — well below blast-radius concern even
- * under full quota exhaustion.
+ * nvidia_nim: 1_000_000 tokens/day budget — well below blast-radius concern
+ * even under full quota exhaustion. (Phase 38 LLM-PURGE-06 re-anchored this
+ * to the active NIM budget from a now-deferred free-tier provider figure.)
  */
 
 /** AI-SPEC §6 cap. Hard-coded per CONTEXT D-09 (no new env-tunable surfaces). */

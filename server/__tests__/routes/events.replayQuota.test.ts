@@ -119,8 +119,6 @@ vi.mock('../../config.js', async (importOriginal) => {
     opensky: { clientId: 'test-id', clientSecret: 'test-secret' },
     aisstream: { apiKey: 'test-ais-key' },
     acled: { email: 'x@y.com', password: 'p' },
-    cerebras: { apiKey: '' },
-    groq: { apiKey: '' },
     newsRelevanceThreshold: 0.7,
     eventConfidenceThreshold: 0.35,
     eventMinSources: 2,

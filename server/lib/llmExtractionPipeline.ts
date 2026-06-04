@@ -6,10 +6,10 @@
  * cron-driven trigger phase shipped, the route is cache-only — every
  * code path that fires an extraction calls this helper instead.
  *
- * The function is fire-and-forget by design: the actual `processEventGroups`
- * + `geocodeEnrichedEvents` work is launched as a `void async () => {}` IIFE
+ * The function is fire-and-forget by design: the actual `processEventGroupsV3`
+ * + `geocodeEnrichedEventsV3` work is launched as a `void async () => {}` IIFE
  * so the caller's response cycle is not held open while the LLM pipeline runs
- * (~95 minutes worst-case at LLM_V3_CONCURRENCY=1).
+ * (~13 minutes typical; bounded by the Vercel Pro 800s `maxDuration` ceiling).
  *
  * Decisions tracked:
  *   - D-04: verbatim port of the prior fire-and-forget body — zero re-implementation.
@@ -27,6 +27,10 @@
  *   - `LLM_SUMMARY_KEY_ACTIVE` is now the literal `'events:llm-summary:v3'`.
  *   - `BATCH_SIZE_ACTIVE` is the v3 default (2; see llmEventExtractor.v3.ts).
  *   - The v1 + v2 entity adapters were deleted along with the extractor modules.
+ *
+ * Phase 38 LLM-PURGE-01 — the `llmEventExtractor.ts` v3-only re-export barrel
+ * was deleted; this module imports `processEventGroupsV3` +
+ * `geocodeEnrichedEventsV3` directly from `./llmEventExtractor.v3.js`.
  */
 
 import { isLLMConfigured } from '../adapters/llm-provider.js';
@@ -372,8 +376,8 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
             updateProgress({ completedBatches: completed, totalBatches: total });
             // Phase 30 D-04 (SIMPLIFY-01): incremental flush retired. Terminal
             // write at the mergeAndPersistLlmEntities call below is canonical.
-            // Partial-cache observability write stays in v3 extractor's
-            // writePartialCache (SIMPLIFY-02 / Phase 35).
+            // Phase 35 D-12 (SIMPLIFY-02): writePartialCache was deleted from the
+            // v3 extractor; there is no partial-cache write anywhere.
           },
         );
 

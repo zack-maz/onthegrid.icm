@@ -96,11 +96,11 @@ const LLM_SUMMARY_TTL_SEC = 86_400;
  * DevApiStatus DrillDownBlock. Matches RecentEnrichedEvent on the client
  * side (src/hooks/useLLMStatusPolling.ts).
  *
- * The v2 extractor's richer fields (full location hierarchy, weapon/target,
+ * The v3 extractor's richer fields (full location hierarchy, weapon/target,
  * confidence, reasoning, per-event token counts, geocode provenance) are
- * not yet persisted onto the cached ConflictEventEntity.data envelope —
+ * not all persisted onto the cached ConflictEventEntity.data envelope —
  * only locationName/summary/precision/sourceCount survive the
- * enrichedV2ToEntities projection. We therefore populate what we can and
+ * enrichedV3ToEntities projection. We therefore populate what we can and
  * null out the rest so the client renderer degrades gracefully; richer
  * per-event persistence is a follow-up (noted in the plan's pattern map).
  */

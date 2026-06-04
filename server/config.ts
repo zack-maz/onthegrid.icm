@@ -27,9 +27,9 @@ export const envSchema = z.object({
   AISSTREAM_API_KEY: z.string().default(''),
   ACLED_EMAIL: z.string().default(''),
   ACLED_PASSWORD: z.string().default(''),
-  // LLM provider API keys (Phase 27 — graceful degradation, empty string means unconfigured)
-  CEREBRAS_API_KEY: z.string().default(''),
-  GROQ_API_KEY: z.string().default(''),
+  // Phase 38 LLM-PURGE-06 — CEREBRAS_API_KEY / GROQ_API_KEY env vars deleted.
+  // The Cerebras + Groq providers were deferred (Phase 34) and never wired into
+  // the runtime NIM-only cascade; the keys had `.default('')` and zero readers.
 
   // Phase 27.4.3 (D-04, D-22): free-claude-code routing providers.
   // NVIDIA NIM is the v3 primary (40 req/min free tier, no documented
@@ -214,8 +214,6 @@ export interface AppConfig {
   opensky: { clientId: string; clientSecret: string };
   aisstream: { apiKey: string };
   acled: { email: string; password: string };
-  cerebras: { apiKey: string };
-  groq: { apiKey: string };
   newsRelevanceThreshold: number;
   eventConfidenceThreshold: number;
   eventMinSources: number;
@@ -237,12 +235,6 @@ export const config: AppConfig = {
   acled: {
     email: env.ACLED_EMAIL,
     password: env.ACLED_PASSWORD,
-  },
-  cerebras: {
-    apiKey: env.CEREBRAS_API_KEY,
-  },
-  groq: {
-    apiKey: env.GROQ_API_KEY,
   },
   newsRelevanceThreshold: env.NEWS_RELEVANCE_THRESHOLD,
   eventConfidenceThreshold: env.EVENT_CONFIDENCE_THRESHOLD,

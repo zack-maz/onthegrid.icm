@@ -1,13 +1,15 @@
 /**
  * Free Claude Router — multi-provider cascade for LLM-backed extraction + geocoding.
  *
- * Live production callers (verified Phase 35 / 2026-05-27):
- *   - server/lib/llmEventExtractor.v3.ts:40 — sole runtime extractor; calls
+ * Live production callers (verified Phase 38 / 2026-06-04):
+ *   - server/lib/llmEventExtractor.v3.ts — sole runtime extractor; calls
  *     callLLM for each event-group batch.
- *   - server/lib/llmResolver.ts:15 — 6-path geocode resolver; calls callLLM
+ *   - server/lib/llmResolver.ts — 6-path geocode resolver; calls callLLM
  *     for the nominatim-verified-2pass reranker only.
- *   - server/adapters/llm-provider.ts:23 — bridge wrapper; re-exports callLLM
- *     for legacy import paths (Phase 27.4.3 D-03 cascade replacement).
+ *
+ * Phase 38 LLM-PURGE-02 — the server/adapters/llm-provider.ts callLLM bridge
+ * wrapper was deleted; no module re-exports callLLM any more. Both live callers
+ * import it from here directly.
  *
  * Active cascade shape (Phase 34 close): NIM primary (qwen-235b instruct);
  * OpenRouter dormant (skipOpenRouter: true at extractor sites per Phase 30.1);
