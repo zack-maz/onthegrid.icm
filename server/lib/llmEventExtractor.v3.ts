@@ -630,6 +630,10 @@ export async function processEventGroupsV3(
                 // amplifies breaker errors and burns the retry budget. v2
                 // keeps OR for legacy rollback parity.
                 skipOpenRouter: true,
+                // Phase 39 OBS-FLIGHT-05 — thread the batch index so the
+                // call-history entry (success + failure paths in callLLM) can
+                // group this call to its batch within the run.
+                batchIndex,
               },
             );
             routing = result.routing;
@@ -952,6 +956,9 @@ async function splitBatchOnTimeout(
             batchSize: half.length,
             modelOverride: V3_BAKEOFF_MODEL,
             skipOpenRouter: true,
+            // Phase 39 OBS-FLIGHT-05 — thread batchIndex through the split-retry
+            // path too so adaptive-retry calls back-correlate to the same batch.
+            batchIndex,
           },
         );
         return r.content;

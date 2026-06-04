@@ -133,4 +133,28 @@ describe('llmCallHistory', () => {
     // List returns [] on failure.
     await expect(listCallHistory()).resolves.toEqual([]);
   });
+
+  // Phase 39 OBS-FLIGHT-05 (Plan 02) — back-correlation contract. Mirrors the
+  // freeClaudeRouter callHistory writer: a call entry synthesized while a run is
+  // active inherits llmProgress.runId, and the dual-write persists that runId in
+  // the JSON payload LPUSH'd to llm:calls:history so the flight recorder can
+  // group calls by their parent run.
+  it('back-correlates: a call entry built from llmProgress.runId carries it through the dual-write', async () => {
+    llmProgress.runId = 'run-back-correlate-xyz';
+
+    // Synthesize an entry exactly as the success-path writer in
+    // freeClaudeRouter.ts does (runId inherited from the singleton, batchIndex
+    // from the threaded opts).
+    const entry = makeEntry({ runId: llmProgress.runId ?? '', batchIndex: 3 });
+    expect(entry.runId).toBe('run-back-correlate-xyz');
+
+    await appendCallHistory(entry);
+
+    // The LPUSH'd JSON payload round-trips the runId + batchIndex.
+    const persisted = JSON.parse(lpushMock.mock.calls[0][1] as string) as CallHistoryEntry;
+    expect(persisted.runId).toBe('run-back-correlate-xyz');
+    expect(persisted.batchIndex).toBe(3);
+
+    llmProgress.runId = undefined; // restore for subsequent cases
+  });
 });
