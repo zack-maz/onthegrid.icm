@@ -109,9 +109,11 @@ describe('freeClaudeRouter — retryAfterMs Path A (header present)', () => {
       .mockRejectedValueOnce(new MockAPIError('429 rate limit', { 'retry-after': '1.5' }))
       .mockResolvedValueOnce({ choices: [{ message: { content: '{"ok":true}' } }] });
     await callLLM([{ role: 'user', content: 'hi' }], '{}');
-    // After the catch block fires on the first attempt, callHistory[0] is the
-    // freshly prepended 429 row (per RESEARCH insertion site shape).
-    const row = llmProgress.callHistory?.[0];
+    // Phase 39 OBS-FLIGHT-05: the success path now ALSO prepends a callHistory
+    // row, so the 429 failure row is no longer guaranteed to sit at index 0.
+    // Target the failure row by predicate (the only `ok:false` row this test
+    // produces) so the retryAfterMs assertion stays focused on the 429 catch.
+    const row = llmProgress.callHistory?.find((r) => !r.ok);
     expect(row).toBeDefined();
     expect(row?.retryAfterMs).toBe(1500);
     expect(row?.ok).toBe(false);
@@ -123,7 +125,7 @@ describe('freeClaudeRouter — retryAfterMs Path A (header present)', () => {
       .mockRejectedValueOnce(new MockAPIError('429 rate limit', { 'Retry-After': '2' }))
       .mockResolvedValueOnce({ choices: [{ message: { content: '{"ok":true}' } }] });
     await callLLM([{ role: 'user', content: 'hi' }], '{}');
-    const row = llmProgress.callHistory?.[0];
+    const row = llmProgress.callHistory?.find((r) => !r.ok);
     expect(row?.retryAfterMs).toBe(2000);
   });
 });
@@ -138,7 +140,7 @@ describe('freeClaudeRouter — retryAfterMs Path B (header absent / malformed)',
       .mockRejectedValueOnce(new MockAPIError('429 rate limit', {}))
       .mockResolvedValueOnce({ choices: [{ message: { content: '{"ok":true}' } }] });
     await callLLM([{ role: 'user', content: 'hi' }], '{}');
-    const row = llmProgress.callHistory?.[0];
+    const row = llmProgress.callHistory?.find((r) => !r.ok);
     expect(row).toBeDefined();
     expect(row?.retryAfterMs).toBeNull();
   });
@@ -148,7 +150,7 @@ describe('freeClaudeRouter — retryAfterMs Path B (header absent / malformed)',
       .mockRejectedValueOnce(new MockAPIError('429 rate limit', { 'retry-after': 'not-a-number' }))
       .mockResolvedValueOnce({ choices: [{ message: { content: '{"ok":true}' } }] });
     await callLLM([{ role: 'user', content: 'hi' }], '{}');
-    const row = llmProgress.callHistory?.[0];
+    const row = llmProgress.callHistory?.find((r) => !r.ok);
     expect(row?.retryAfterMs).toBeNull();
   });
 });

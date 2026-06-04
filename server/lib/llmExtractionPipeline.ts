@@ -45,7 +45,18 @@ import {
   geocodeEnrichedEventsV3,
   type GeocodedEnrichedEventV3,
 } from './llmEventExtractor.v3.js';
-import { llmProgress, resetProgress, updateProgress, buildSummary } from './llmProgress.js';
+import {
+  llmProgress,
+  resetProgress,
+  updateProgress,
+  buildSummary,
+  type RunHistoryEntry,
+} from './llmProgress.js';
+// Phase 39 OBS-FLIGHT-02 — durable per-run record at the run boundary. GA-2:
+// openRunRecord writes a 'running' record at run start (so a maxDuration-killed
+// run leaves an honest "run that died" trace, Pitfall 5); closeRunRecord
+// re-LPUSHes the terminal record at every run-exit branch. Degrade-open.
+import { openRunRecord, closeRunRecord } from './llmRunHistory.js';
 import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js';
 import { logger } from './logger.js';
 import { computeCompositeScore } from './relevanceScorer.js';
@@ -306,9 +317,52 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
   safeWaitUntil(
     (async () => {
       resetProgress(); // sets stage='grouping', startedAt=now
-      // Stamp schemaVersion + lastTriggerSource onto the freshly-reset
+
+      // Phase 39 OBS-FLIGHT-02 / -05 (GA-2) — generate the per-run id and stamp
+      // it on the singleton so every callHistory writer in freeClaudeRouter.ts
+      // inherits it onto each appended entry (call→run back-correlation).
+      // crypto.randomUUID is global in the pinned Node ≥20 runtime.
+      const runId = crypto.randomUUID();
+      const startedAt = new Date().toISOString();
+      // Stamp schemaVersion + lastTriggerSource + runId onto the freshly-reset
       // progress singleton (resetProgress() wipes optional fields).
-      updateProgress({ schemaVersion: 'v3', lastTriggerSource: opts.triggeredBy });
+      updateProgress({ schemaVersion: 'v3', lastTriggerSource: opts.triggeredBy, runId });
+
+      // GA-2 start-write: open the run record with outcome:'running' so a run
+      // killed by Vercel's maxDuration leaves a never-closed 'running' row — the
+      // "what happened to last night's 3am run that died?" signal (Pitfall 5).
+      // Degrade-open (openRunRecord try/caught internally; never throws).
+      await openRunRecord({ runId, startedAt });
+
+      // Mutable outcome witness — each terminal branch sets this, and the single
+      // close in the `finally` block re-LPUSHes the terminal record (Open Q3:
+      // prefer a finally close so a missed branch still closes the run). Defaults
+      // to 'error' so an unexpected throw past every branch still closes honestly.
+      let runOutcome: RunHistoryEntry['outcome'] = 'error';
+
+      // Snapshot the current llmProgress into a terminal RunHistoryEntry. v3/NIM
+      // single-provider per D-04; dlqDelta defaults to 0 (the singleton does not
+      // track a per-run DLQ delta — honest zero rather than a fabricated count).
+      const buildRunHistoryEntry = (outcome: RunHistoryEntry['outcome']): RunHistoryEntry => {
+        const totalBatches = llmProgress.totalBatches ?? 0;
+        const completedBatches = llmProgress.completedBatches ?? 0;
+        const cost = llmProgress.costShadow;
+        return {
+          runId,
+          startedAt,
+          completedAt: new Date().toISOString(),
+          outcome,
+          batchCount: totalBatches,
+          batchesCompleted: completedBatches,
+          batchesFailed: Math.max(0, totalBatches - completedBatches),
+          tokenSpend: { nvidia_nim: cost ? cost.tokensIn + cost.tokensOut : 0 },
+          evalScore: llmProgress.evalScore,
+          dlqDelta: 0,
+          watchdogTimeouts: llmProgress.watchdogTimeoutCount ?? 0,
+          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+          pipelineVersion: 'v3',
+        };
+      };
 
       try {
         // GDELT-MATCH-02 — high-confidence dedup pre-pass runs BEFORE the
@@ -337,6 +391,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
 
         if (newGroups.length === 0) {
           log.info('LLM: no new groups to process');
+          runOutcome = 'completed'; // GA-2 branch 1: no new groups → completed
           updateProgress({
             stage: 'done',
             completedAt: Date.now(),
@@ -355,6 +410,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         const paused = await shouldPauseNewEvents();
         if (paused) {
           log.info('LLM_PAUSED_SOFT_CAP');
+          runOutcome = 'budget_hit'; // GA-2 branch 2: soft-cap pause → budget_hit
           updateProgress({
             stage: 'done',
             completedAt: Date.now(),
@@ -392,6 +448,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
 
         if (!extractResult.events || extractResult.events.length === 0) {
           log.warn('LLM processing returned null — raw GDELT serving continues');
+          runOutcome = 'error'; // GA-2 branch 3: null extraction → error
           updateProgress({
             stage: 'error',
             errorMessage: 'LLM returned null for all batches',
@@ -462,6 +519,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         // onBatchComplete callback above) was retired here.
         await mergeAndPersistLlmEntities(llmEntities, llmCachedRef, LLM_EVENTS_KEY_ACTIVE);
 
+        runOutcome = 'completed'; // GA-2 branch 4: full success → completed
         updateProgress({
           stage: 'done',
           completedAt: Date.now(),
@@ -473,6 +531,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           /* best-effort */
         }
       } catch (llmErr) {
+        runOutcome = 'error'; // GA-2 branch 5: thrown error → error
         updateProgress({
           stage: 'error',
           errorMessage: llmErr instanceof Error ? llmErr.message : 'Unknown LLM error',
@@ -486,6 +545,14 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         }
         log.warn({ err: llmErr }, 'LLM background processing failed');
       } finally {
+        // Phase 39 OBS-FLIGHT-02 (GA-2 / Open Q3) — close the run record exactly
+        // once here, keyed off the `runOutcome` witness each terminal branch set.
+        // A finally close guarantees a missed branch still closes the run (the
+        // default 'error' outcome is the honest fallback). closeRunRecord
+        // re-LPUSHes the terminal record over the earlier 'running' one; the
+        // reader dedupes by runId head-first. Degrade-open (never throws).
+        await closeRunRecord(buildRunHistoryEntry(runOutcome));
+
         // Phase 32 Plan 32-03 Task 3 — cron post-step. Runs AFTER the
         // existing extraction work resolves (success OR error path) so
         // probe+prune cleanup happens regardless of whether LLM
