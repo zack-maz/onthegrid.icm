@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-04T06:52:00.000Z"
-last_activity: 2026-06-04 -- Completed 38-03-PLAN.md (GDELT-MATCH-01 corpus audit, wave 1 hard gate)
+last_updated: "2026-06-04T07:20:46.676Z"
+last_activity: 2026-06-04 -- Completed 38-02-PLAN.md (LLM-PURGE 01-09; v1/v2/shim/pipelineAudit/Cerebras-Groq/OpenRouter dead-code deletion; typecheck + full server suite green)
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 38 (llm-pipeline-reliability-gdelt-source-matching-vercel-pro-cl) — EXECUTING
-Plan: 38-03 complete (wave 1); other wave-1 plans + wave 2/3 remain
+Plan: 38-02 + 38-03 complete (wave 1); other wave-1 plans + wave 2/3 remain
 Status: Ready to execute
-Last activity: 2026-06-04 -- Completed 38-03-PLAN.md (GDELT-MATCH-01 corpus audit hard gate); audit instrument + baseline report committed
+Last activity: 2026-06-04 -- Completed 38-02-PLAN.md (LLM-PURGE-01..09 — deleted the extractor stub barrel + callLLM shim + v1/v2 Zod schemas + pipeline-flip audit chain + OpenRouter daily-cap dead writers + Cerebras/Groq env keys; narrowed shared modules to v3-only; rewrote false docstrings. typecheck PASS, server suite 108 files/1295 tests PASS, SC38-3 importer gates all 0)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -114,6 +114,10 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (38-02 LLM-PURGE-01) Pipeline calls processEventGroupsV3/geocodeEnrichedEventsV3 directly with the v3-native flat-array signature; the llmEventExtractor.ts tagged-wrapper barrel was deleted rather than inlined — one truth source, fewer moving parts
+- (38-02 LLM-PURGE-04, Pitfall 2) enrichedEventV2 survives as an UN-EXPORTED base const because enrichedEventV3 = enrichedEventV2.extend(); only the EXPORTED v1/v2 schemas + batchResponseV2 were deleted, and enrichedEventAny collapsed from a 3-arm discriminatedUnion to a single-arm v3 passthrough
+- (38-02 LLM-PURGE-08, D-04 Path A) OpenRouter stays a dormant key-gated cascade provider (ADR-0010 semantics); only the dead llm:tokens:openrouter daily-cap counter + cap-gate were removed. daily_cap left as a legacy skipReason union member
+- (38-02 LLM-PURGE-06) Cerebras/Groq env keys deleted from config + .env.example, but the Cerebras/Groq token-budget DAILY_LIMITS + circuit-breaker state are Phase-34 deferred-provider scaffolding (live structures) and were left in place per the triage rule
 - Source tier registry as standalone module (sourceTiers.ts) rather than extending relevanceScorer.ts — cleaner separation of classification vs scoring
 - Tier pre-filter runs before keyword/NLP scoring in filterAndScoreArticles — early exit saves NLP compute on unknown sources
 - Unknown sourceTier defaults to tier 2 (neutral 1.0x multiplier) in severity scoring — conservative default avoids penalizing events where source URL is missing

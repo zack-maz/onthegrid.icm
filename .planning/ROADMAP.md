@@ -162,11 +162,11 @@ _28 REQ-IDs total — 27 required (parsed above) by strand: LLM-FIX (6) · LLM-P
 6. **SC38-6** Production code and docs agree on Vercel Pro semantics — `vercel.json → vercel.ts` migration decision shipped or explicitly deferred with rationale; Build Output API decision for `api/vercel-entry.js` shipped or explicitly deferred (closes Phase 999.2 backlog if pursued); Fluid Compute compatibility on `createApp()` factory verified; every "Hobby cap 3", "10s timeout", "60s ceiling" claim across CLAUDE.md / deployment.md / runbook.md / degradation.md / reliability-doc removed; Vercel CLI bumped 52 → latest. _(VERCEL-PRO-01, VERCEL-PRO-02, VERCEL-PRO-03, VERCEL-PRO-04)_
 7. **SC38-7** _(conditional — fires only if operator absorbs CRON-WATCH-01 at `/gsd:discuss-phase` 38)_ 7 consecutive days of `/api/cron/refresh-events` PASS — `events:llm:v3` healthy after each 04:00 UTC tick, eval ≥ 0.95 at all radii (5/20/100km), 0 breaker trips, DLQ growth bounded. _(CRON-WATCH-01)_
 
-**Plans:** 1/6 plans executed
+**Plans:** 3/6 plans executed
 **Wave 1**
 
 - [x] 38-01-PLAN.md — LLM-FIX strand (honest signals) + folded CI-green [wave 0]
-- [ ] 38-02-PLAN.md — LLM-PURGE strand (Phase 29 dead-code finishing pass) [wave 1, after 01]
+- [x] 38-02-PLAN.md — LLM-PURGE strand (Phase 29 dead-code finishing pass) [wave 1, after 01]
 - [x] 38-03-PLAN.md — GDELT-MATCH-01 corpus audit (hard gate for 06) [wave 1]
 
 **Wave 2** _(blocked on Wave 1 completion)_
@@ -243,7 +243,7 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 
 | Phase | Name                                                                  | Plans Complete | Status      | Completed |
 | ----- | --------------------------------------------------------------------- | -------------- | ----------- | --------- |
-| 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 2/6            | In Progress |           |
+| 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 3/6            | In Progress |           |
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 0/TBD          | Not started | —         |
 | 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 0/TBD          | Not started | —         |
 | 41    | Public Reveal Polish                                                  | 0/TBD          | Not started | —         |
