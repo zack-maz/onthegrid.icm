@@ -13,6 +13,7 @@
 import express from 'express';
 import request from 'supertest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { z } from 'zod';
 
 // Mock redis BEFORE importing the route module.
 // Phase 29 D-02 part A — `ttl` reader removed; pinned override TTL probe
@@ -21,10 +22,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // over `events:url-liveness:*`) and `cacheGetSafe` (for per-event liveness
 // reads inside the SCAN loop). MEDIUM-01 plan-checker pin: `scan` mock
 // returns `[string | number, string[]]` matching `@upstash/redis ^1.37.0`.
+// Phase 39 Plan 03 — extended with `hgetall` for the tokenBudget block's
+// `events:llm-cost-shadow:v3:{date}` cost-shadow roll-up read.
 const mockRedis = {
   smembers: vi.fn(),
   get: vi.fn(),
   scan: vi.fn(),
+  hgetall: vi.fn(),
 };
 const mockCacheGetSafe = vi.fn();
 vi.mock('../../cache/redis.js', () => ({
@@ -834,5 +838,119 @@ describe('/api/operator-status — Phase 33 Plan 06 actorQuality block (D-16)', 
       (s) => s.eventId,
     );
     expect(sampleIds).not.toContain('high-only');
+  });
+});
+
+/**
+ * Phase 39 Plan 03 — `/api/operator-status` tokenBudget block (BUDGET-03/04).
+ *
+ * The aggregator surfaces per-provider token used/cap/soft/hard/state +
+ * today's cost-shadow USD so the BudgetBlock dashboard (Plan 39-05) renders
+ * the operator's live spend without an extra API call.
+ *
+ *   tokenBudget: {
+ *     providers: { nvidia_nim: { used, cap, soft, hard, state } };
+ *     costShadow: { tokensIn, tokensOut, usd };
+ *   } | null
+ *
+ * Tests pin:
+ *   - GA-4 shape via a Zod `.strict()` schema that REJECTS extra keys
+ *     (BUDGET-04 dashboard regression lock).
+ *   - microcents->USD conversion (30000 microcents → 0.03 USD).
+ *   - degrade-open on Redis throw → tokenBudget === null, route 200
+ *     (BUDGET-03, mirrors actorQuality T-39-03-D).
+ */
+describe('/api/operator-status — Phase 39 Plan 03 tokenBudget block (BUDGET-03/04)', () => {
+  const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+  const ORIGINAL_DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
+  // Zod `.strict()` schema mirroring the GA-4 provider-keyed map shape. Every
+  // object level is `.strict()` so an extra key anywhere makes `.parse` throw.
+  const providerSchema = z
+    .object({
+      used: z.number(),
+      cap: z.number(),
+      soft: z.number(),
+      hard: z.number(),
+      state: z.enum(['ok', 'soft', 'hard']),
+    })
+    .strict();
+  const tokenBudgetSchema = z
+    .object({
+      providers: z.object({ nvidia_nim: providerSchema }).strict(),
+      costShadow: z
+        .object({
+          tokensIn: z.number(),
+          tokensOut: z.number(),
+          usd: z.number(),
+        })
+        .strict(),
+    })
+    .strict();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Defaults: empty audit + SCAN, null sidecar reads, null cache.
+    mockRedis.smembers.mockResolvedValue([]);
+    mockRedis.scan.mockResolvedValue([0, []]);
+    mockRedis.get.mockResolvedValue(null);
+    mockCacheGetSafe.mockResolvedValue(null);
+    // Cost-shadow HSET fixture: 30000 microcents → 0.03 USD.
+    mockRedis.hgetall.mockResolvedValue({
+      tokensIn: 100,
+      tokensOut: 50,
+      usdMicrocents: 30000,
+    });
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+    process.env.DASHBOARD_PASSWORD = ORIGINAL_DASHBOARD_PASSWORD;
+  });
+
+  it('tokenBudget Zod .strict() pin: matches GA-4 shape AND rejects extra keys', async () => {
+    process.env.NODE_ENV = 'development';
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+    expect(res.body.tokenBudget).not.toBeNull();
+
+    // Happy path: the live shape parses cleanly under `.strict()`.
+    expect(() => tokenBudgetSchema.parse(res.body.tokenBudget)).not.toThrow();
+
+    // Conversion correctness: 30000 microcents / 1e6 === 0.03 USD.
+    expect(res.body.tokenBudget.costShadow.usd).toBe(0.03);
+    expect(res.body.tokenBudget.costShadow.tokensIn).toBe(100);
+    expect(res.body.tokenBudget.costShadow.tokensOut).toBe(50);
+
+    // Provider map: dormant v3 counter reads 0/1000000 (ok) — see Open Q1.
+    expect(res.body.tokenBudget.providers.nvidia_nim.used).toBe(0);
+    expect(res.body.tokenBudget.providers.nvidia_nim.cap).toBe(1_000_000);
+    expect(res.body.tokenBudget.providers.nvidia_nim.soft).toBe(800_000);
+    expect(res.body.tokenBudget.providers.nvidia_nim.hard).toBe(950_000);
+    expect(res.body.tokenBudget.providers.nvidia_nim.state).toBe('ok');
+
+    // BUDGET-04 regression lock: an extra key anywhere makes `.strict()` THROW.
+    const withExtraTop = { ...res.body.tokenBudget, leakedKey: 'oops' };
+    expect(() => tokenBudgetSchema.parse(withExtraTop)).toThrow();
+
+    const withExtraNested = {
+      ...res.body.tokenBudget,
+      costShadow: { ...res.body.tokenBudget.costShadow, leakedKey: 'oops' },
+    };
+    expect(() => tokenBudgetSchema.parse(withExtraNested)).toThrow();
+  });
+
+  it('tokenBudget degrade-open on Redis throw: null + route 200 (BUDGET-03)', async () => {
+    process.env.NODE_ENV = 'development';
+    // The cost-shadow hgetall read throws — block must degrade-open.
+    mockRedis.hgetall.mockRejectedValue(new Error('Redis death'));
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    // Per T-39-03-D: a Redis throw inside the block must not 500.
+    expect(res.status).toBe(200);
+    expect(res.body.tokenBudget).toBeNull();
   });
 });
