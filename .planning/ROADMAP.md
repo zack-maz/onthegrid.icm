@@ -191,3 +191,23 @@ Plans:
 Plans:
 
 - [ ] TBD (promote at v1.6 start with `/gsd:new-milestone`)
+
+### Phase 999.6: Portfolio Documentation Polish (BACKLOG, agentic-dev showcase)
+
+**Goal:** Round out the **agentic-development portfolio surface** for the v1.6 reveal — not commercial polish, first-portfolio-piece polish. Existing technical docs surface (564-line README + 11 ADRs + 12 architecture docs + 21 Mermaid diagrams + 676-line SRE runbook + degradation contract) is strong; Phase 36 covered it. This phase fills the **agentic-dev meta-story** + **navigation hub** + **glossary** + **transparency** gaps that Phase 36 didn't scope. Audience: portfolio visitors browsing GitHub for the first time, fellow agentic-dev practitioners, and operator self-onboarding on future return visits.
+**Captured:** 2026-06-03 (v1.5 close)
+**Depends on:** v1.5 closed. Independent of Phase 999.5; could ship in parallel. May coordinate with REVEAL-01/REVEAL-02 (public reveal polish) since audience overlaps.
+**Promotion gate:** None — portfolio polish, not engineering work. Promote at v1.6 start based on operator priority.
+**Source material in place:** `.planning/RETROSPECTIVE.md` (7 milestone retrospectives, primary source for meta-story + lessons), `.planning/MILESTONES.md` (primary source for journey arc), `.planning/milestones/v1.5-phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md` (Phase 37 framing-gap anecdote), `docs/adr/0005-phase-26-2-nlp-approach-scrapped.md` (honest-failure exhibit), `docs/adr/0010-…` (honest-deferral exhibit), `scripts/capture-hero.ts` (extension surface for layer screenshots), `README.md` (already portfolio-tuned; SHOWCASE cross-links).
+**Full scope + rationale + execution waves:** `.planning/phases/999.6-portfolio-documentation-polish/999.6-CONTEXT.md`
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD — 10 doc surfaces grouped in 3 waves (Wave 1 = highest-signal: BUILDING-WITH-CLAUDE-CODE.md + SHOWCASE.md + JOURNEY.md; Wave 2 = round-out: concepts.md + COSTS.md + operator-guide.md; Wave 3 = polish: screenshots + LESSONS.md + timeline.md + brainstorms cleanup); promote with `/gsd-review-backlog` when ready
+
+**Notes for future promotion:**
+
+- Wave 1 alone is ~80% of the portfolio-piece signal. Time-constrained operator can ship Wave 1 + skip rest until later milestone.
+- **BUILDING-WITH-CLAUDE-CODE.md is the single biggest move** for an agentic-dev portfolio piece — few projects document this. Worth the most care.
+- Pairs with the v1.6 cleanup-and-fix surface tracked in operator memory (`project_v1_6_cleanup_punchlist.md` + `project_v1_6_docs_drift.md`).
