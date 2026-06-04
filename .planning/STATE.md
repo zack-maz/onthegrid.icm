@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-04T16:48:00Z"
-last_activity: 2026-06-04 -- Completed 38-05-PLAN.md (VERCEL-PRO 01-04; recorded PRO-01/02 defer-with-rationale, verified Fluid Compute compat on createApp() + no-leak smoke assertion, repaired Hobby->Pro docs-drift across 5 surfaces, bumped Vercel CLI 52->54.9.0; vitest + typecheck green)
+last_updated: "2026-06-04T17:05:00Z"
+last_activity: 2026-06-04 -- Completed 38-06-PLAN.md (GDELT-MATCH 02/03/04; high-confidence dedup pre-pass before enrichment, generalized three-gate OSINT corroboration with strict keyword gate, additive compositeScore re-orders dashboard non-destructively; full server suite 1340 tests + typecheck green)
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 38 (llm-pipeline-reliability-gdelt-source-matching-vercel-pro-cl) — EXECUTING
-Plan: 38-02 + 38-03 complete (wave 1); 38-04 + 38-05 complete (wave 2, WATER-LATIN + VERCEL-PRO strands); other wave-1 plans + remaining wave 2/3 remain
+Plan: 38-02 + 38-03 complete (wave 1); 38-04 + 38-05 complete (wave 2, WATER-LATIN + VERCEL-PRO strands); 38-06 complete (wave 2, GDELT-MATCH 02/03/04 strand); other wave-1 plans + remaining wave 3 remain
 Status: Ready to execute
-Last activity: 2026-06-04 -- Completed 38-05-PLAN.md (VERCEL-PRO-01..04 — recorded PRO-01 [vercel.ts] + PRO-02 [Build Output API] as D-09 defer-with-rationale in deployment.md [net-zero / deploy-path-risk-mid-cleanup; Phase 999.2 stays open; revisit v1.7]; SHIPPED PRO-03 Fluid Compute compat verdict on the memoized createApp() factory [no per-request global mutation; Upstash REST = no shutdown handler; callHistory/llmProgress process-scoped + Phase 28.2.7 Redis write-through] + a no-cross-request-leak smoke assertion in vercel-entry.test.ts; SHIPPED PRO-04 Hobby->Pro docs-drift repair across CLAUDE.md + deployment.md + runbook.md + degradation.md + llm-pipeline-reliability.md [60s->Pro 800s, 3-cron Hobby cap->Pro 40-cron cap, 10s timeout->800s, NIM-primary header reconcile]; bumped dev-env Vercel CLI 52.0.0->54.9.0. vitest 4/4 PASS, typecheck PASS, PRO-04 stale-claim grep 0 live claims)
+Last activity: 2026-06-04 -- Completed 38-06-PLAN.md (GDELT-MATCH-02/03/04 — SHIPPED dedupHighConfidence high-confidence pre-enrichment dedup [order-independent actor pair AND CAMEO root AND day-bucket AND ≤5km AND title Jaccard ≥0.85; thresholds sized off GDELT-MATCH-01 size-2 cohort; wired before groupGdeltRows; pure read-and-filter never writes events:gdelt — D-07]; SHIPPED corroboration.ts generalizing the Phase-22 Bellingcat three-gate to any news:gdelt OSINT source [±24h temporal AND 200km geo AND STRICT keyword gate — specific actor/place tokens minus a GENERIC_STOPWORDS set so same-city-same-day coincidences withhold; boost tier-weighted gold 0.25/silver 0.15/bronze 0.08/unknown 0.05]; SHIPPED computeCompositeScore [TIER_WEIGHT + PRECISION_WEIGHT + corroborationBoost clamped 0-1; unknown-tier floor 0.15 per audit 99.7%-unknown finding] + compositeScore .optional() on enrichedEventV3 + applyCompositeOrdering additive non-mutating dashboard re-order in events.ts read path. RED→GREEN for both strands; full server suite 1340 tests + typecheck PASS; D-07 grep gates [0 cache writes in eventGrouping/relevanceScorer] confirmed)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
