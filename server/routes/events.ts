@@ -26,17 +26,17 @@ import { listPipelineAudit } from '../lib/pipelineAudit.js';
 // Phase 28.2 Plan 03 D-08 — operator-action audit log + per-Bearer replay
 // quota guardrails on the dashboardAuth-gated /llm-pipeline + /llm-replay
 // endpoints. Both helpers degrade open on Redis failure (logged, not thrown).
+import { checkPruneQuota } from '../lib/pruneQuota.js';
 import { checkReplayQuota } from '../lib/replayQuota.js';
 // Phase 32 Plan 32-03 — POST /api/events/prune-dead-urls + cron auto-prune
 // share one helper. The route is the Bearer-gated entry point for the
 // dashboard click (Plan 32-05) AND the cron post-step (Plan 32-03 Task 3,
 // which calls the helper DIRECTLY per RESEARCH A4 — no self-HTTP).
-import { checkPruneQuota } from '../lib/pruneQuota.js';
+import { extractDomain, getSourceTier } from '../lib/sourceTiers.js';
 import { pruneDeadUrlEvents } from '../lib/urlLiveness.js';
 // Phase 27.4.6 — entity adapters live with the cron-driven extraction
 // helper. The legacy `enrichedToEntities` alias re-exported from this file
 // pulls from there so existing import sites continue to type-check.
-import { extractDomain, getSourceTier } from '../lib/sourceTiers.js';
 import { dashboardAuth } from '../middleware/dashboardAuth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validateQuery } from '../middleware/validate.js';
@@ -458,7 +458,23 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     // cap, return 429 + Retry-After so a compromised Bearer cannot drain the
     // daily token budget within minutes (T-28.2-03-02 mitigation).
     const fingerprint = bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? '');
-    const quota = await checkReplayQuota(fingerprint);
+    // LLM-FIX-05 (Phase 38) — degrade-open on quota-counter death. checkReplayQuota
+    // issues a RAW `redis.incr` with NO enclosing try/catch in replayQuota.ts; if
+    // the counter is dead (Redis down / chaos) the throw previously bubbled to the
+    // Express error handler as an HTTP 500, leaking a stack trace through the
+    // operator boundary (T-38.01-02 / Pitfall 5 "right answer wrong reason"). Wrap
+    // the quota check so a dead counter degrades to a 503 (we KNOW we're broken),
+    // mirroring the prune endpoint's contract. The 429 short-circuit (quota
+    // exceeded) and a healthy allow both fall through unchanged.
+    let quota: Awaited<ReturnType<typeof checkReplayQuota>>;
+    try {
+      quota = await checkReplayQuota(fingerprint);
+    } catch (err) {
+      return res.status(503).json({
+        error: 'replay_quota_unavailable',
+        detail: String(err).slice(0, 200),
+      });
+    }
     if (!quota.allowed) {
       res.set('Retry-After', String(quota.retryAfterSeconds));
       return res.status(429).json({

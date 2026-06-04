@@ -348,12 +348,16 @@ describe('Events Route (Redis accumulator)', () => {
     mockGroupGdeltRows.mockClear();
     mockGroupGdeltRows.mockReturnValue([]);
     mockProcessEventGroups.mockClear();
-    // Phase 27.4 Plan 06 — barrel returns tagged union; default is v1 null
+    // Phase 27.4 Plan 06 — barrel returns tagged union; default is null
     // (no events) which the handler treats as "LLM returned null for all
     // batches" and falls back to raw GDELT.
-    mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v1', events: null });
+    // LLM-FIX-06 (Phase 38) — schemaVersion flipped v1→v3. The v1 pipeline was
+    // deleted in Phase 29; v3 is the only extant schema. The handler keys off
+    // `events: null` (not the schemaVersion literal) to fall back to raw GDELT,
+    // so the flip is forward-compatible with the post-purge v3 return shape.
+    mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v3', events: null });
     mockGeocodeEnrichedEvents.mockClear();
-    mockGeocodeEnrichedEvents.mockResolvedValue({ schemaVersion: 'v1', events: [] });
+    mockGeocodeEnrichedEvents.mockResolvedValue({ schemaVersion: 'v3', events: [] });
 
     // Phase 27.4 Plan 08 — reset eval harness + v2 extractor mocks.
     mockRunEval.mockClear();
@@ -830,7 +834,8 @@ describe('Events Route (Redis accumulator)', () => {
       ]);
       // LLM failed — barrel returns { schemaVersion, events: null } so the
       // handler takes the "LLM returned null for all batches" branch.
-      mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v1', events: null });
+      // LLM-FIX-06 (Phase 38) — schemaVersion flipped v1→v3 (v1 deleted Phase 29).
+      mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v3', events: null });
 
       const res = await fetch(`${baseUrl}/api/events`);
       const body = await res.json();
