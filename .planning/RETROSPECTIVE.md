@@ -191,13 +191,81 @@ _A living document updated after each milestone. Lessons feed forward into futur
 
 ---
 
+## Milestone: v1.5 — LLM Reliability & Reveal Prep
+
+**Shipped:** 2026-06-03
+**Phases:** 10 (29-37 incl. 30.1) | **Plans:** 60 executed / 62 declared | **Timeline:** 24 days
+
+### What Was Built
+
+- Active runtime LLM cascade narrowed to NIM-only (OpenRouter declared dormant by Phase 30.1 probe — 90% free-tier rate-limit failure). Cerebras + Groq purged from `server/adapters/llm-provider.ts` runtime path.
+- v1 + v2 extractor modules deleted entirely (~6,400 LOC). `POST /api/events/llm-pipeline` override route, `events:llm-pipeline-override` Redis key, `refreshPipelineOverride()` helper, `setPipelineOverride()`, DevApiStatus Pin-to-v1/v2 buttons — all gone. Rollback is `git revert <Phase 29 commit range>`, not a Bearer-POST flip.
+- Vercel project upgraded to Pro ($20/mo); `maxDuration: 300 → 800`. LLM cron gains 2.7× wall-clock headroom; Phase 30 tunes _against_ measured NIM throttle (Path B: `Retry-After` absent in 213 batches; `p95 = 33,263ms`).
+- LLM-optional architecture proven: `/api/events` serves raw GDELT through the Pitfall 1 cache bridge when keys absent; map never goes blank.
+- Hobby-era workarounds retired: SIMPLIFY-01 incremental flush; SIMPLIFY-02 `events:llm:v3:partial` observability key (-358 LOC); SIMPLIFY-03 watchdog defaults relaxed.
+- Ghost-event URL liveness shipped end-to-end (probe sidecar + O(1) count sidecar + Bearer-gated prune endpoint + cron auto-prune at `attemptCount >= 3` + dashboard drill-down). Polite-citizen contracts pinned (concurrency 8, per-host 1 req/s throttle, ±200ms jitter, 10s timeout, 3-hop redirect cap, HEAD-then-GET-on-405).
+- Actor metadata canonicalization (27-entry catalog + `actorConfidence` schema + extended `SYSTEM_PROMPT_V3` + eval `actorMatchRate` + adversarial actor-confusion injections + dashboard `actorQuality` block).
+- Internal docs: 32-key Redis registry deep-dive at `docs/architecture/redis-keys.md`; mechanical drift gate (39 assertions × 4 sub-suites); 7-module LLM-pipeline JSDoc audit. CLAUDE.md trimmed −73.3% (17,500 → 5,018 tokens).
+- Public docs: README sweep + `## LLM Enrichment` section; 12 architecture markdown files / 21 Mermaid diagrams audited; runbook §6 rewrite + §13-§16 SRE-template appendage; degradation Pitfall 1 contract; OpenAPI 3.0.3 14 → 19 endpoints with split `cronSecret` + `operatorBearer` securitySchemes + Redocly drift gate.
+- ADR-0010 milestone-final (body rewritten end-to-end; 6 v1.5 sub-blocks; v1.5 Milestone Close Rollup; closing decision table).
+- LLM-RELI-07 acceptance gate satisfied: 3 consecutive `prod-connectivity-audit.yml` greens (Run 1 `26771054370` · Run 2 `26856054351` · Run 3 `26856364229`). 4 architectural unblocker PRs (#32 / #33 / #34 / #35) landed during observation correcting Phase 28.2.5 D-09 strict-tier-green gate vs ADR-0010 LLM-optional architecture mismatches.
+
+### What Worked
+
+- **Probe-driven docs reconciliation** (Phase 30.1): Rather than re-enable a `skipOpenRouter: true` hardcode without evidence, the operator probed OpenRouter free-tier behavior (`scripts/probe-openrouter.ts`, 30 fires) and committed to NIM-only honestly when 90% came back rate-limited. The "no code change; docs follow shipped reality" outcome was the right shape.
+- **Deletion over deprecation** (Phase 29): The v1 + v2 extractor + override surface had been "deep-rollback safety" for 4 months. Deleting all of it — modules, route, Redis key, UI buttons — produced a clean v3-or-nothing posture. Rollback path is mechanical (`git revert`) instead of operational (Bearer-POST). Less code to read, less to maintain, fewer "is this still load-bearing?" interruptions.
+- **Conditional plan execution** (Phase 30.1): One probe plan + 3 contingent plans (right-scope / middle-bucket / minimum) keyed off the probe outcome. Only the matched-bucket plan ran; the other 2 were SKIPPED. Captured the decision-tree shape upfront, then executed only the branch evidence selected.
+- **Honest deferral close-out** (Phase 34): The `cerebras-groq-deferred` status mirrors Phase 30.1's `nim-only` precedent. Empirical "no provider expansion right now" is itself a load-bearing outcome. Planning artifacts (CONTEXT + RESEARCH + 5 PLANs) preserved as the ready-to-execute audit trail for any future provider-restoration phase. Documented in ADR-0010 sub-block, not as private notes.
+- **Mechanical drift gates** (Phase 35 + 36): Redis registry test (39 assertions × 4 sub-suites) + Redocly OpenAPI lint + markdown-link-check make doc/code drift fail loudly at vitest time, not at audit-discovery time months later. The cost of writing them was paid back in the same milestone (Phase 36 caught 3 broken Mermaid blocks the drift gate immediately surfaced).
+- **Phase 37 acceptance-gate observation as architectural audit**: The 23-day audit dormancy that blocked the gate wasn't a v3 reliability problem — it was a strict-tier-green-vs-LLM-optional-architecture mismatch in the gate semantics themselves. Letting the gate run uncovered the real architectural debt (which 4 PRs fixed) instead of just rubber-stamping it.
+- **Per-phase rollup in 37-SUMMARY.md**: The single-table 10-row rollup with framing-gap callouts gave the milestone-close artifact a self-contained narrative. Future readers don't need to chase 10 phase SUMMARY.md files to understand v1.5; they read one document.
+
+### What Was Inefficient
+
+- **Phase 31 closed early at Day 1 / 7** despite the requirement saying "≥7 consecutive days". The single-day PASS was captured, but the proper bar was never met. The slow-burn regression that should have been caught by Day 2-7 only surfaced 23 days later during Phase 37 acceptance-gate observation (and required 4 unblocker PRs). Early-close with caveat is honest documentation, but the operator-side decision to skip Days 2-7 cost rework time at the milestone-close gate.
+- **Phase 34 plan structure assumed probe would run**: 5 plans were written (probe → adapter → eval → DLQ → close). When the operator chose to skip provisioning Cerebras + Groq free-tier accounts, 4/5 plans SKIPPED and only the close-out ran. The plan investment was useful as the ready-to-execute audit trail but consumed planning time at probe + adapter design that wasn't load-bearing.
+- **`skipOpenRouter: true` hardcode lived since Phase 27.4.4 (~6 weeks)** without docs reconciliation. The architecture diagrams and CLAUDE.md were advertising a NIM → OpenRouter cascade that didn't exist at runtime. Phase 30.1 cleaned this up retroactively; ideally Phase 27.4.4 (or the boundary review immediately after) should have either reverted the hardcode or amended the docs in lockstep.
+- **OpenAPI lint gate landed late (Phase 36)** — the 14-endpoint OpenAPI 3.0.3 spec had been hand-authored in v1.3 and was carried forward 2 milestones before getting a structural drift gate. The `ConflictEventEntity.type` enum corrected from 11-value pre-Phase-27 → canonical 5-value was a long-standing doc lie; Redocly caught it on first run.
+- **Phase 37 observation window had to land 4 unblocker PRs**: PR #32 (`llmEvents` demoted to non-critical) was an ADR-0010 alignment that should have shipped _in_ Phase 29, not surfaced _during_ Phase 37 observation. The gate was designed in Phase 28.2.5 against a "critical[llmEvents]: healthy" assumption that Phase 29's LLM-optional decision invalidated. Catching this at v1.5-close gate cost ~3 days.
+- **`events:llm:v3:partial` lived 1 milestone past its Hobby-era usefulness** before Phase 35 retired it. Once the Pro upgrade lands in Phase 29, anything that was a "300s-budget workaround" should immediately enter the "schedule for deletion" queue.
+
+### Patterns Established
+
+- **Probe-before-commit for documentation reconciliation**: When code and docs disagree, write a probe script (`scripts/probe-openrouter.ts`-style) before deciding which side to change. Measurement beats opinion.
+- **Honest deferral close-out as a 1st-class outcome**: When a planned phase doesn't ship (probe didn't run, operator skipped, evidence didn't support), close it with a named status (`cerebras-groq-deferred`, `nim-only`) rather than carrying as "in progress". Document the rationale + preserve planning artifacts as the ready-to-execute audit trail.
+- **Mechanical drift gates over reviewer vigilance**: Drift gates that fail vitest beat checklists that ask reviewers to remember to check. Redis registry test, OpenAPI Redocly lint, markdown-link-check, byte-identity sentinels for domain constants — all examples that paid back within the same milestone.
+- **Per-phase rollup as milestone-close artifact**: The last phase's SUMMARY.md should contain the milestone-close rollup with framing-gap callouts, decision table, and quantitative snapshot. Don't make readers chase 10 phase SUMMARY.md files; consolidate.
+- **Deletion over deprecation when rollback is `git revert`-able**: If the rollback path is "revert this commit range", delete the code. Don't keep "deep rollback safety" modules importable; they accumulate is-this-still-used? interruptions.
+- **Conditional plan trees**: When a phase outcome branches on a probe/measurement result, write the contingent plans upfront and SKIP the unmatched branches. Captures the decision tree shape; gives reviewers visibility into what was _not_ shipped and why.
+- **CLAUDE.md current-state invariants only**: Phase-history bloat moves to archived `milestones/v[X.Y]-ROADMAP.md`. CLAUDE.md keeps Project Context, Conventions, Env Vars, Color Tokens, Map Patterns, Testing, Key Files, Data Model, Vercel Deployment, and the Redis key registry. Trim aggressively at every milestone close.
+
+### Key Lessons
+
+1. **Pre-existing "deep rollback safety" is technical debt, not safety.** If the rollback path is `git revert`, the code being preserved "for safety" is just dead code waiting to confuse the next reader. Delete it; trust git.
+2. **A 7-day stability watch needs to actually be 7 days.** Closing early under operator decision sacrifices the very signal the watch was designed to catch. The slow-burn regression that surfaced 23 days later in Phase 37 is the lesson here.
+3. **Architecture decisions cascade into audit-tier semantics.** Phase 29 made the LLM pipeline optional; Phase 28.2.5's strict-tier-green gate hadn't been reconciled with that decision. The gate-vs-architecture mismatch should be audited at the same phase that changes the architecture, not 1 milestone later under a different acceptance gate.
+4. **Probe-driven decisions produce honest docs.** Phase 30.1 probed OpenRouter (27/30 = 90% rate-limited) and committed to docs-only amendment. Phase 34 _didn't_ probe Cerebras/Groq (operator deferred) and closed honestly as `cerebras-groq-deferred` rather than declaring untested cascade restoration. Both are correct; neither lies.
+5. **Mechanical drift gates compound.** Each gate written in v1.5 (Redis registry, OpenAPI lint, markdown-link-check, redis-death chaos) is now load-bearing for v1.6+. The cost is paid once; the protection is forever (or until the gate itself drifts, which is why drift gates need drift gates — `*.test.ts` files).
+6. **Honest deferral preserves optionality.** Phase 34's deferral kept 5 plans, 1 RESEARCH, 1 CONTEXT, and the integration design intact at `.planning/milestones/v1.5-phases/34-.../`. If v1.7 wants to restore the cascade, the work is `git checkout` away. Closing as "not in scope" with no artifacts would have forced re-planning from zero.
+7. **Acceptance gates that don't observe shipped reality are worse than no gate.** Phase 28.2.5's gate was strict on a critical-tier endpoint (`llmEvents`) that Phase 29 made LLM-optional. A gate that flags correct shipped behavior as failures is documentation theater. PR #34's truth-table relaxation made the gate observable; the gate should have been written against the LLM-optional architecture from day one, not retrofitted at v1.5 close.
+
+### Cost Observations
+
+- 209 commits over 24 days
+- 10 phases / 60 plans executed / 62 declared (97% execution rate; 2 conditional SKIPs + 4 deferral SKIPs)
+- ~24 days wall-clock; ~8 days had a phase close commit landing (~3 days per phase average for closing phases; longer for Phase 33 + 35 which had Wave structure)
+- Cost-control deferrals (Phase 34 `cerebras-groq-deferred`, Phase 31 early-close) kept the milestone moving without false reliability claims; in both cases the "honest" path was the cheaper path
+
+---
+
 ## Cross-Milestone Trends
 
-| Metric  | v0.9   | v1.0   | v1.1   | v1.2    |
-| ------- | ------ | ------ | ------ | ------- |
-| Phases  | 13     | 2      | 8      | 7       |
-| Plans   | 25/28  | 6/6    | 22/22  | 19/19   |
-| Days    | 6      | 2      | 3      | 7       |
-| LOC     | 12,262 | 13,637 | 25,842 | ~30,000 |
-| Commits | 229    | 35     | 146    | 129     |
-| Tests   | —      | —      | 851    | 958     |
+| Metric  | v0.9   | v1.0   | v1.1   | v1.2    | v1.3   | v1.4    | v1.5     |
+| ------- | ------ | ------ | ------ | ------- | ------ | ------- | -------- |
+| Phases  | 13     | 2      | 8      | 7       | 11     | 18      | 10       |
+| Plans   | 25/28  | 6/6    | 22/22  | 19/19   | 36/36  | 60/60   | 60/62    |
+| Days    | 6      | 2      | 3      | 7       | 11     | 29      | 24       |
+| LOC     | 12,262 | 13,637 | 25,842 | ~30,000 | —      | —       | 92,501   |
+| Commits | 229    | 35     | 146    | 129     | —      | —       | 209      |
+| Tests   | —      | —      | 851    | 958     | ~1,700 | 2,193   | ~2,386   |
+| Bundle  | —      | —      | —      | —       | 1.2 MB | 1.72 MB | ~1.73 MB |
