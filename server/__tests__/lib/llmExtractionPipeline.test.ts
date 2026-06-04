@@ -107,6 +107,11 @@ vi.mock('../../lib/llmEvalHarness.js', () => ({
 const groupGdeltRowsMock = vi.fn();
 vi.mock('../../lib/eventGrouping.js', () => ({
   groupGdeltRows: groupGdeltRowsMock,
+  // GDELT-MATCH-02 — the pipeline now runs the high-confidence dedup pre-pass
+  // before grouping. Mock it as an identity pass-through so these diff-filter
+  // assertions still drive group keys through `groupGdeltRowsMock` unchanged
+  // (the dedup pass itself is unit-tested in eventGrouping.dedup.test.ts).
+  dedupHighConfidence: vi.fn((entities: unknown[]) => entities),
 }));
 
 const { llmProgressSingleton } = vi.hoisted(() => ({

@@ -37,7 +37,7 @@ import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { saveDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 
-import { groupGdeltRows } from './eventGrouping.js';
+import { dedupHighConfidence, groupGdeltRows } from './eventGrouping.js';
 import { runEval } from './llmEvalHarness.js';
 import {
   processEventGroupsV3,
@@ -309,7 +309,14 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
       updateProgress({ schemaVersion: 'v3', lastTriggerSource: opts.triggeredBy });
 
       try {
-        const groups = groupGdeltRows(merged);
+        // GDELT-MATCH-02 — high-confidence dedup pre-pass runs BEFORE the
+        // coarse 50km batch-grouping/enrichment. `dedupHighConfidence` is a
+        // PURE read-and-filter: it returns a new array and never mutates
+        // `merged` or the raw `events:gdelt` cache (D-07 non-destructive).
+        // Collapsing exact-duplicate mentions here means fewer redundant groups
+        // reach the LLM (saving tokens) without over-merging distinct events.
+        const deduped = dedupHighConfidence(merged);
+        const groups = groupGdeltRows(deduped);
         updateProgress({ totalGroups: groups.length, stage: 'grouping' });
 
         // Diff: only process groups whose key isn't already in the LLM cache.
