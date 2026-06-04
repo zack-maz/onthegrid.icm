@@ -25,14 +25,16 @@ Surface actionable, data-backed intelligence on the Iran conflict in real-time o
    - Phase 29 finishing pass — dead-code purge (`llmEventExtractor.ts` stub, v1/v2 Zod schemas, `pipelineAudit.ts` writer, `llm-provider.ts` shim, stale headers across v3 + events route, `freeClaudeRouter.ts` OpenRouter daily-cap counter, `CEREBRAS_API_KEY` + `GROQ_API_KEY` env vars, `replayQuota.ts` Cerebras-anchored threat model).
    - **Cerebras + Groq source-file removal** from `server/adapters/` — folds in here (no separate dead-code phase).
    - GDELT event-source matching improvements — Phase-22-style audit of current quality, better dedup of GDELT mentions, tighter coupling between GDELT-DOC clusters and events, source-tier-aware confidence rescore.
+   - **Water-facility name romanization** (Phase 27.3.3 carry-forward from v1.3 — now in scope) — ICU/transliteration pass on non-Latin facility names; preserve original `name` field, add `nameLatin`; Overpass adapter applies before the Latin-label admission gate.
    - **Vercel Pro cleanup-and-repair (Strand B from former 999.6)** — `vercel.json → vercel.ts` migration evaluation, Vercel Build Output API for `api/vercel-entry.js` artifact (closes Phase 999.2 if pursued), Fluid Compute compatibility verification on the Express factory, CLI bump 52→latest, Hobby→Pro docs-drift repair (CLAUDE.md:101, deployment.md:56/133, runbook.md:539-547, degradation.md:329, reliability-doc header).
    - **MAY include** Phase 31 reopening (7-day cron stability watch, finished properly this time) — operator-discretion at `/gsd-discuss-phase`.
    - **MAY include** the `docs sync` first-task bundle (drift bugs #1-7 + OpenAPI gap #16 + reliability-doc header inconsistency #20).
 
-2. **Phase 39 — Token Budget + Cost Dashboard Visibility** _(new feature)_
+2. **Phase 39 — Operator Visibility (Budget + Cost + LLM Flight Recorder)** _(new feature; absorbs Phase 27.4.5 LLM observability)_
    - `BudgetBlock` in `DevApiStatus.tsx` surfacing `llm:tokens:{provider}:YYYY-MM-DD` per-provider used vs cap, soft (0.8) / hard (0.95) threshold proximity, historical trend.
    - Cost-shadow accrual surface from `events:llm-cost-shadow:v3:{YYYY-MM-DD}` (HSET `tokensIn` / `tokensOut` / `usdMicrocents`).
-   - New `/api/operator-status` field, Bearer-gated read, mirroring the existing `actorQuality` block pattern.
+   - **LLM Flight Recorder (Phase 27.4.5 absorbed)** — Redis-backed call history ring buffer (`llm:calls:history`, 500-entry LTRIM, 30d TTL) replacing in-memory last-20 + per-run summary records (`llm:runs:history`, 200-run LTRIM) + `GET /api/events/llm-history` Bearer-gated endpoint + DevApiStatus FlightRecorderBlock with run drill-down + run ID threading through `runRefreshExtraction`. Cold-start hydration survives Vercel Fluid Compute warm-start gaps. Adapted to v3-only pipeline (original todo references v1/v2 — now obsolete).
+   - All three blocks surface via Bearer-gated `/api/operator-status` reads, mirroring the existing `actorQuality` block pattern.
 
 3. **Phase 40 — Dashboard UI/UX Polish + Subtab Consolidation** _(UI polish)_
    - Tab navigation, spacing, typography, color refinements on `DevApiStatus.tsx` (10+ accumulated sub-blocks through Phase 32/33/35).
@@ -56,13 +58,11 @@ Surface actionable, data-backed intelligence on the Iran conflict in real-time o
 - **Phase 999.5** — Performance Optimization + 1–300 VU k6 sweep stays in backlog at `.planning/phases/999.5-performance-load-test/`. Promotion gate (3 consecutive `prod-connectivity-audit.yml` greens) was mechanically satisfied in Phase 37; operator deferred promotion at v1.6 lock-in to prioritize reliability + UI work first.
 - **Phase 999.6** — RETIRED from backlog. Strand A (portfolio docs) folded into Phase 41. Strand B (Vercel Pro cleanup) folded into Phase 38.
 - **Phase 999.1 / 999.2 / 999.3** — parked v1.4 carry-forwards; re-evaluate at v1.7 or fold in if scope alignment surfaces during Phase 38 drafting.
-- **Phase 27.3.3 water-name romanization** — backlog.
 - **`news:feed` cron warmer** — folds into Phase 38 if scope allows; otherwise carries.
 
 **Out of scope for v1.6 (carry to v1.7 or later):**
 
 - v4 multi-provider router — operator-rejected at v1.5 start; would need a new milestone-start decision.
-- Phase 27.4.5 LLM observability flight recorder — operator-rejected; existing 8-block `DevApiStatus` events tab covers diagnostic needs.
 - "Phase 29 finishing pass" as a single bundled PR — broken across priority-aligned phases (Phase 38 absorbs the LLM-side dead code; Phase 41 absorbs the docs cleanup).
 - Standalone Cerebras + Groq removal phase — folded into Phase 38 dead-code pass.
 
@@ -161,7 +161,6 @@ Defined for v1.6 Production Hardening at `/gsd:new-milestone` 2026-06-03. Detail
 - Prediction/forecasting — unreliable without classified data
 - v4 multi-provider router — operator-rejected at v1.5 start; would need a new milestone-start decision to revisit
 - Cerebras + Groq as active LLM providers — purged from runtime cascade in v1.5; restoration would be its own phase
-- Phase 27.4.5 LLM observability flight recorder — operator-rejected; existing 8-block DevApiStatus events tab covers diagnostic needs
 
 ## Context
 
