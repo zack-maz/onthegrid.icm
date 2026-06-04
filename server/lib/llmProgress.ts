@@ -56,6 +56,18 @@ export interface LLMPipelineProgress {
   schemaVersion?: 'v1' | 'v2' | 'v3';
 
   /**
+   * Phase 39 OBS-FLIGHT-05 (D-02): the runId of the currently-executing
+   * `runRefreshExtraction` run. Generated once at the run boundary in
+   * `llmExtractionPipeline.ts` right after `resetProgress()` and stamped here
+   * so every `callHistory` writer in `freeClaudeRouter.ts` can inherit it onto
+   * each appended entry (call → run back-correlation). Optional + cleared on
+   * reset (INITIAL_PROGRESS seeds it `undefined`); re-stamped by Plan 02's run
+   * boundary. Never threaded through `withBatchWatchdog` (Pitfall 1 — that file
+   * is deliberately dependency-free).
+   */
+  runId?: string;
+
+  /**
    * D-19: last N=20 LLM calls (shift-append). Populated via updateProgress.
    *
    * `skipReason` marks synthetic entries for skipped attempts that never touched
@@ -458,6 +470,73 @@ export interface RecentEnrichedEvent {
   lineageHash?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 39 — LLM flight-recorder entry types (OBS-FLIGHT-01 / -02).
+//
+// These back the two new Redis-backed bounded lists (`llm:calls:history`,
+// `llm:runs:history`). They are DISTINCT from:
+//   - LLMPipelineProgress.callHistory (above) — the in-memory cap-20 ring; the
+//     Redis call-history entry adds `runId` + `batchIndex` for back-correlation.
+//   - LLMRunSummary (above) — the `/llm-status` last-run artifact persisted to
+//     `events:llm-summary:v3`. RunHistoryEntry is a NEW, leaner per-run history
+//     row; do NOT overload LLMRunSummary (RESEARCH correction).
+// ---------------------------------------------------------------------------
+
+/**
+ * OBS-FLIGHT-01 (D-02): a single call-history row persisted to
+ * `llm:calls:history`. Mirrors the in-memory `LLMPipelineProgress.callHistory`
+ * element fields PLUS `runId` (the run that issued the call) and `batchIndex`
+ * (the batch within that run) so the flight recorder can group calls by run.
+ */
+export interface CallHistoryEntry {
+  // Mirror of the in-memory callHistory element (same provider union as
+  // LLMPipelineProgress.callHistory so a Redis entry round-trips into the
+  // singleton on cold-start hydration without a type widen).
+  provider: 'cerebras' | 'groq' | 'nvidia_nim' | 'openrouter';
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  durationMs: number;
+  ok: boolean;
+  batchSize: number;
+  timestamp: number;
+  /** D-01 (Phase 30): NIM Retry-After header capture, ms. Null when header absent. */
+  retryAfterMs?: number | null;
+  // Phase 39 additions (D-02):
+  /** runId of the `runRefreshExtraction` run that issued this call. */
+  runId: string;
+  /** Zero-based batch index within the run; `-1` when the chain can't supply it. */
+  batchIndex: number;
+}
+
+/**
+ * OBS-FLIGHT-02: a per-run summary row persisted to `llm:runs:history`.
+ *
+ * GA-2 lifecycle: the record is opened at run START with `outcome: 'running'`
+ * and `completedAt: null`, then a terminal record is re-LPUSHed at run end.
+ * The reader dedupes by `runId` keeping the head (newest = terminal) occurrence,
+ * so a run killed by Vercel's `maxDuration` leaves only the `running` row — the
+ * "what happened to last night's 3am run that died?" signal (Pitfall 5).
+ *
+ * v3/NIM-adapted per D-04: `tokenSpend` is single-provider and `pipelineVersion`
+ * is the fixed literal `'v3'` (no cerebras/groq, no v1/v2).
+ */
+export interface RunHistoryEntry {
+  runId: string; // crypto.randomUUID() at run start
+  startedAt: string; // ISO8601
+  completedAt: string | null; // ISO8601; null while running
+  outcome: 'running' | 'completed' | 'watchdog_aborted' | 'breaker_paused' | 'budget_hit' | 'error';
+  batchCount: number;
+  batchesCompleted: number;
+  batchesFailed: number;
+  tokenSpend: { nvidia_nim: number }; // D-04 single provider
+  evalScore: LLMPipelineProgress['evalScore']; // reuse existing shape
+  dlqDelta: number;
+  watchdogTimeouts: number;
+  durationMs: number;
+  pipelineVersion: 'v3'; // D-04 fixed
+}
+
 /**
  * Initial state for the progress singleton.
  *
@@ -480,6 +559,10 @@ export const INITIAL_PROGRESS: Readonly<LLMPipelineProgress> = {
   errorMessage: null,
   durationMs: null,
   schemaVersion: undefined,
+  // Phase 39 OBS-FLIGHT-05 — cleared between runs so a stale runId from a
+  // previous run doesn't leak onto this run's callHistory entries before the
+  // run boundary re-stamps it.
+  runId: undefined,
   callHistory: undefined,
   tokenCounters: undefined,
   dlqCount: undefined,
