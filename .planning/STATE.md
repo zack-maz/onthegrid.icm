@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-04T20:55:42.905Z"
+last_updated: "2026-06-04T21:06:44.619Z"
 last_activity: 2026-06-04 -- Phase 39 execution started
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 11
-  completed_plans: 8
+  completed_plans: 9
   percent: 10
 ---
 
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 39 (operator-visibility-token-budget-cost-shadow-llm-flight-reco) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-06-04 -- Phase 39 execution started
 
@@ -430,8 +430,11 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 |-------|------|----------|-------|
 | Phase 38 P01 | 7min | 3 tasks | 15 files |
 | Phase 39 P01 | 5 min | 4 tasks | 7 files |
+| Phase 39 P02 | 21 min | 2 tasks | 5 files |
 
 ## Decisions
 
 - [Phase ?]: Phase 38 LLM-FIX: honest single-source health tokens (cache-fallback-active: default, llm-optional only for llmEvents)
 - [Phase ?]: Phase 38 LLM-FIX: actorMatchRate number|null — null=not-populated distinct from measured 0%; replay endpoint quota death now 503-not-500 (Pitfall 5 fix)
+- [Phase 39]: 39-02: runId generated once at run boundary + stamped on llmProgress; every call entry (success+failure) inherits it and dual-writes to llm:calls:history — call->run back-correlation for the flight recorder (OBS-FLIGHT-05)
+- [Phase 39]: 39-02: run record closed once in finally keyed off a runOutcome witness (Open Q3) — a missed branch still closes the run; default outcome 'error' is the honest fallback
