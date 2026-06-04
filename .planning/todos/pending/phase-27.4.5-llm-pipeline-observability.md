@@ -6,6 +6,10 @@ category: observability
 priority: medium
 blocking: false
 target_phase: 27.4.5
+resolves_phase: 39
+resolves_reqs:
+  [OBS-FLIGHT-01, OBS-FLIGHT-02, OBS-FLIGHT-03, OBS-FLIGHT-04, OBS-FLIGHT-05, OBS-FLIGHT-06]
+note: 27.4.5 scope absorbed into v1.6 Phase 39 at /gsd:new-milestone 2026-06-03. Original v1/v2 pipelineVersion references obsolete — adapted to v3-only per v1.5 close. Gate promoted from NODE_ENV check to Bearer-gated /api/operator-status precedent.
 ---
 
 # Phase 27.4.5 — LLM Pipeline Full History Observability
