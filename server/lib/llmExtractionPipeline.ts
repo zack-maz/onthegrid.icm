@@ -36,10 +36,10 @@ import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import { groupGdeltRows } from './eventGrouping.js';
 import { runEval } from './llmEvalHarness.js';
 import {
-  processEventGroups,
-  geocodeEnrichedEvents,
+  processEventGroupsV3,
+  geocodeEnrichedEventsV3,
   type GeocodedEnrichedEventV3,
-} from './llmEventExtractor.js';
+} from './llmEventExtractor.v3.js';
 import { llmProgress, resetProgress, updateProgress, buildSummary } from './llmProgress.js';
 import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js';
 import { logger } from './logger.js';
@@ -366,7 +366,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
         });
 
-        const extractResult = await processEventGroups(
+        const extractResult = await processEventGroupsV3(
           prioritizedGroups,
           async (completed, total) => {
             updateProgress({ completedBatches: completed, totalBatches: total });
@@ -399,21 +399,23 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           totalGeocodes: extractResult.events.length,
         });
 
-        const geoResult = await geocodeEnrichedEvents(
-          {
-            schemaVersion: 'v3',
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup,
-          },
-          prioritizedGroups,
+        // geocodeEnrichedEventsV3 takes the v3-native signature: a flat events
+        // array + a groupsByKey map + the per-group news/bellingcat maps
+        // threaded straight from the extractor run (no tagged-shape wrapper —
+        // the Phase 38 LLM-PURGE-01 stub barrel that wrapped this was deleted).
+        const groupsByKey = new Map(prioritizedGroups.map((g) => [g.key, g] as const));
+        const geocodedEvents = await geocodeEnrichedEventsV3(
+          extractResult.events,
+          groupsByKey,
+          extractResult.matchedNewsByGroup,
+          extractResult.bellingcatByGroup,
           (completed, total) => {
             updateProgress({ completedGeocodes: completed, totalGeocodes: total });
           },
         );
         const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
         let suspectCount = 0;
-        for (const e of geoResult.events) {
+        for (const e of geocodedEvents) {
           provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
           if (e.suspect) suspectCount++;
         }
@@ -426,7 +428,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
         }
 
-        const llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
+        const llmEntities = enrichedV3ToEntities(geocodedEvents, prioritizedGroups);
 
         // Phase 30 D-04 (SIMPLIFY-01) — sole / terminal write of the
         // canonical `events:llm:v3` key for this cron run. The Phase 28.2.6

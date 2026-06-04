@@ -1,19 +1,21 @@
 /**
  * Phase 27.4 LLM extraction schemas (D-01, D-11..D-14, D-22, D-23).
  *
- * This module is the SINGLE source of truth for v2 contract evolution. Two
- * Zod schemas (v1 + v2) live behind a discriminated union so the cache read
- * path tolerates mixed payloads during rollout (RESEARCH.md Pitfall 1).
+ * This module is the SINGLE source of truth for the v3 extraction contract.
+ * Phase 38 LLM-PURGE-04 collapsed the v1/v2/v3 discriminated union to a
+ * v3-only passthrough: the v1 + v2 EXPORTED schemas (and their batch
+ * envelopes) were deleted with the v1 + v2 extractors. `enrichedEventV2`
+ * survives as an UN-EXPORTED base const because `enrichedEventV3` is defined
+ * by `.extend()`-ing it (Pitfall 2).
  *
  * Invariants (load-bearing):
- *   - D-05: LLM NEVER emits lat/lng. The v2 location object is `.strict()`
+ *   - D-05: LLM NEVER emits lat/lng. The location object is `.strict()`
  *           so any surplus key including lat/lng/coordinates fails safeParse.
  *   - Pitfall 4: schemaVersion is attached server-side on cache write, never
- *           by the LLM. The `batchResponseV2` preprocess wrapper seeds it on
+ *           by the LLM. The `batchResponseV3` preprocess wrapper seeds it on
  *           read for safety.
  *   - Pitfall 5: precision is derived from the deepest non-null hierarchy
- *           field; it is NOT present on the LLM output surface (removed from
- *           v2 schema to resolve dual-source-of-truth).
+ *           field; it is NOT present on the LLM output surface.
  */
 
 import { z } from 'zod';
@@ -51,33 +53,12 @@ const casualtiesSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// v1 schema (FROZEN — mirrors server/lib/llmEventExtractor.ts enrichedEventSchema).
+// v2 base schema (D-01, D-05, D-11..D-14).
 //
-// Preserved so events:llm (v1 key) cached payloads still parse during the
-// D-40 rollback window. Plan 01 renames the extractor file to `.v1.ts`;
-// this schema is structurally identical plus a `schemaVersion: 'v1'`
-// discriminator literal used by `enrichedEventAny`.
-// ---------------------------------------------------------------------------
-
-export const enrichedEventV1 = z.object({
-  schemaVersion: z.literal('v1'),
-  groupKey: z.string(),
-  location: z.object({
-    name: z.string(),
-    precision: z.enum(['exact', 'neighborhood', 'city', 'region']),
-  }),
-  type: z.enum(['airstrike', 'on_ground', 'explosion', 'targeted', 'other']),
-  actors: z.array(z.string()),
-  severity: z.enum(['critical', 'high', 'medium', 'low']),
-  summary: z.string(),
-  casualties: casualtiesSchema,
-  sourceCount: z.number().int(),
-});
-
-export type EnrichedEventV1 = z.infer<typeof enrichedEventV1>;
-
-// ---------------------------------------------------------------------------
-// v2 schema (D-01, D-05, D-11..D-14).
+// Phase 38 LLM-PURGE-04: this is UN-EXPORTED. `enrichedEventV3` is defined by
+// `.extend()`-ing it (Pitfall 2), so the const must stay; the EXPORTED v2
+// schema + its `EnrichedEventV2` type were removed (no production importer —
+// only the deleted v2 extractor used it).
 //
 // The location hierarchy uses `.strict()` so ANY extra key (including
 // lat/lng/coordinates the LLM might hallucinate despite the system prompt)
@@ -103,7 +84,7 @@ export const locationHierarchyV2 = z
 
 export type LocationHierarchyV2 = z.infer<typeof locationHierarchyV2>;
 
-export const enrichedEventV2 = z
+const enrichedEventV2 = z
   .object({
     schemaVersion: z.literal('v2'),
     groupKey: z.string(),
@@ -147,8 +128,6 @@ export const enrichedEventV2 = z
     sourceCount: z.number().int(),
   })
   .strict();
-
-export type EnrichedEventV2 = z.infer<typeof enrichedEventV2>;
 
 // ---------------------------------------------------------------------------
 // v3 schema (Phase 27.4.3 D-10).
@@ -198,22 +177,16 @@ export const enrichedEventV3 = enrichedEventV2.extend({
 export type EnrichedEventV3 = z.infer<typeof enrichedEventV3>;
 
 // ---------------------------------------------------------------------------
-// Discriminated union for cache-read safety during rollout.
-//
-// Used on every `events:llm*` cache read so v1 + v2 + v3 payloads can coexist
-// during the D-24 flag-gated rollout. The discriminator field is
-// `schemaVersion` — typo-safe via Zod's `discriminatedUnion` (RESEARCH.md
-// Pitfall 4: centralize the literal in one place).
-//
-// Phase 27.4.3: v3 admitted alongside v1/v2. v1 retained for the D-40
-// rollback window; v2 retained as the current default (LLM_PIPELINE_V2=true).
+// Cache-read schema. Phase 38 LLM-PURGE-04 collapsed the former
+// `discriminatedUnion('schemaVersion', [v1, v2, v3])` to a single-arm v3
+// passthrough: the v1 + v2 extractors (and the events:llm / events:llm:v2
+// cache keys) were deleted in Phase 29, so only `schemaVersion: 'v3'` payloads
+// remain on the active `events:llm:v3` key. Kept as a named export so the v3
+// extractor's cache-read surface + the schema contract test reference one
+// canonical alias rather than `enrichedEventV3` directly.
 // ---------------------------------------------------------------------------
 
-export const enrichedEventAny = z.discriminatedUnion('schemaVersion', [
-  enrichedEventV1,
-  enrichedEventV2,
-  enrichedEventV3,
-]);
+export const enrichedEventAny = enrichedEventV3;
 
 export type EnrichedEventAny = z.infer<typeof enrichedEventAny>;
 
@@ -473,29 +446,6 @@ export const EVENT_EXTRACTION_SCHEMA_V3: Record<string, unknown> = {
   required: ['events'],
   additionalProperties: false,
 };
-
-// ---------------------------------------------------------------------------
-// Batch envelope — array of events. Schema-level (Zod) and JSON-Schema-level
-// (for the LLM wire format). Plan 06's v2 extractor uses `batchResponseV2`
-// for the full batch response parse.
-//
-// The `z.preprocess` wrapper seeds `schemaVersion: 'v2'` on each incoming
-// item so the LLM can omit the field (Pitfall 4) while the discriminated
-// union read path still sees a well-formed payload.
-// ---------------------------------------------------------------------------
-
-export const batchResponseV2 = z.object({
-  events: z.array(
-    z.preprocess((v: unknown) => {
-      if (v && typeof v === 'object' && !('schemaVersion' in v)) {
-        return { ...(v as object), schemaVersion: 'v2' as const };
-      }
-      return v;
-    }, enrichedEventV2),
-  ),
-});
-
-export type BatchResponseV2 = z.infer<typeof batchResponseV2>;
 
 // ---------------------------------------------------------------------------
 // v3 batch envelope — Phase 27.4.3 D-10.

@@ -46,7 +46,7 @@ const {
     matchedNewsByGroup: new Map(),
     bellingcatByGroup: new Map(),
   })),
-  mockGeocodeEnrichedEvents: vi.fn(async () => ({ events: [] })),
+  mockGeocodeEnrichedEvents: vi.fn(async () => []),
   mockBuildProbeCandidates: vi.fn(async () => [{ eventId: 'e1', url: 'https://example.com/a' }]),
   mockRunProbeSweep: vi.fn(async () => ({ probed: 1, skippedBudget: 0 })),
   mockPruneDeadUrlEvents: vi.fn(async () => ({ prunedCount: 0, prunedIds: [] as string[] })),
@@ -111,9 +111,12 @@ vi.mock('../../lib/eventGrouping.js', () => ({
   ]),
 }));
 
-vi.mock('../../lib/llmEventExtractor.js', () => ({
-  processEventGroups: (...args: unknown[]) => mockProcessEventGroups(...(args as [])),
-  geocodeEnrichedEvents: (...args: unknown[]) => mockGeocodeEnrichedEvents(...(args as [])),
+// Phase 38 LLM-PURGE-01 — the `llmEventExtractor.js` stub barrel was deleted;
+// the extraction pipeline now calls the v3 extractor directly. geocodeEnrichedEventsV3
+// returns a flat array (no tagged `{events}` wrapper).
+vi.mock('../../lib/llmEventExtractor.v3.js', () => ({
+  processEventGroupsV3: (...args: unknown[]) => mockProcessEventGroups(...(args as [])),
+  geocodeEnrichedEventsV3: (...args: unknown[]) => mockGeocodeEnrichedEvents(...(args as [])),
 }));
 
 vi.mock('../../lib/llmEvalHarness.js', () => ({

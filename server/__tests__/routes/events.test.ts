@@ -56,7 +56,6 @@ const mockBackfillEvents = vi.fn(async (): Promise<ConflictEventEntity[]> => [])
 // LLM pipeline mock functions
 const mockIsLLMConfigured = vi.fn((): boolean => false);
 const mockGroupGdeltRows = vi.fn(() => []);
-const mockProcessEventGroups = vi.fn(async () => null);
 const mockGeocodeEnrichedEvents = vi.fn(async () => []);
 
 // Phase 27.4 Plan 08 — runEval (eval harness) + processEventGroupsV3 (replay).
@@ -198,15 +197,14 @@ vi.mock('../../adapters/llm-provider.js', () => ({
 vi.mock('../../lib/eventGrouping.js', () => ({
   groupGdeltRows: (...args: unknown[]) => mockGroupGdeltRows(...(args as [])),
 }));
-vi.mock('../../lib/llmEventExtractor.js', () => ({
-  processEventGroups: (...args: unknown[]) => mockProcessEventGroups(...(args as [])),
-  geocodeEnrichedEvents: (...args: unknown[]) => mockGeocodeEnrichedEvents(...(args as [])),
-}));
-// Phase 29 D-02 part C — the v3 extractor is called directly by the /llm-replay
-// endpoint (v2 module + helper deleted); mock it so the replay tests assert
-// routing + response shape without dragging in the real LLM path.
+// Phase 38 LLM-PURGE-01 — the `llmEventExtractor.js` stub barrel was deleted;
+// both the /llm-replay endpoint AND the extraction pipeline now call the v3
+// extractor directly. Mock both v3 exports so the route tests assert routing +
+// response shape (and the fresh-cache "not called" guards) without dragging in
+// the real LLM path. geocodeEnrichedEventsV3 returns a flat array (no tagged shape).
 vi.mock('../../lib/llmEventExtractor.v3.js', () => ({
   processEventGroupsV3: (...args: unknown[]) => mockProcessEventGroupsV3(...(args as [])),
+  geocodeEnrichedEventsV3: (...args: unknown[]) => mockGeocodeEnrichedEvents(...(args as [])),
 }));
 // Phase 27.4 Plan 08 — runEval is called inside the v2 fire-and-forget
 // block. Mock it so tests can assert invocation without needing a real
@@ -347,19 +345,12 @@ describe('Events Route (Redis accumulator)', () => {
     mockIsLLMConfigured.mockReturnValue(false);
     mockGroupGdeltRows.mockClear();
     mockGroupGdeltRows.mockReturnValue([]);
-    mockProcessEventGroups.mockClear();
-    // Phase 27.4 Plan 06 — barrel returns tagged union; default is null
-    // (no events) which the handler treats as "LLM returned null for all
-    // batches" and falls back to raw GDELT.
-    // LLM-FIX-06 (Phase 38) — schemaVersion flipped v1→v3. The v1 pipeline was
-    // deleted in Phase 29; v3 is the only extant schema. The handler keys off
-    // `events: null` (not the schemaVersion literal) to fall back to raw GDELT,
-    // so the flip is forward-compatible with the post-purge v3 return shape.
-    mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v3', events: null });
     mockGeocodeEnrichedEvents.mockClear();
-    mockGeocodeEnrichedEvents.mockResolvedValue({ schemaVersion: 'v3', events: [] });
+    // Phase 38 LLM-PURGE-01 — geocodeEnrichedEventsV3 returns a flat array
+    // (the stub barrel's tagged `{schemaVersion,events}` wrapper was deleted).
+    mockGeocodeEnrichedEvents.mockResolvedValue([]);
 
-    // Phase 27.4 Plan 08 — reset eval harness + v2 extractor mocks.
+    // Phase 27.4 Plan 08 — reset eval harness + v3 extractor mocks.
     mockRunEval.mockClear();
     mockRunEval.mockResolvedValue({
       within5km: 0,
@@ -755,7 +746,7 @@ describe('Events Route (Redis accumulator)', () => {
       expect(body.data[0].data.llmProcessed).toBe(true);
       // Should NOT call fetchEvents or LLM pipeline
       expect(mockFetchEvents).not.toHaveBeenCalled();
-      expect(mockProcessEventGroups).not.toHaveBeenCalled();
+      expect(mockProcessEventGroupsV3).not.toHaveBeenCalled();
     });
 
     it('Phase 27.4.6: /api/events does NOT trigger LLM processing even with stale cache + elapsed cooldown (cache-only path)', async () => {
@@ -790,7 +781,7 @@ describe('Events Route (Redis accumulator)', () => {
       // goes blank.
       expect(body.data.length).toBeGreaterThanOrEqual(1);
       // CRITICAL: extractor + geocoder MUST NOT be invoked from the read path.
-      expect(mockProcessEventGroups).not.toHaveBeenCalled();
+      expect(mockProcessEventGroupsV3).not.toHaveBeenCalled();
       expect(mockGeocodeEnrichedEvents).not.toHaveBeenCalled();
     });
 
@@ -813,7 +804,7 @@ describe('Events Route (Redis accumulator)', () => {
       // Should serve the stale LLM cache
       expect(body.data.some((e: ConflictEventEntity) => e.data.llmProcessed === true)).toBe(true);
       // Should NOT trigger LLM processing
-      expect(mockProcessEventGroups).not.toHaveBeenCalled();
+      expect(mockProcessEventGroupsV3).not.toHaveBeenCalled();
     });
 
     it('falls back to raw GDELT when LLM processing fails (returns null)', async () => {
@@ -832,10 +823,14 @@ describe('Events Route (Redis accumulator)', () => {
           sourceUrls: [],
         },
       ]);
-      // LLM failed — barrel returns { schemaVersion, events: null } so the
-      // handler takes the "LLM returned null for all batches" branch.
-      // LLM-FIX-06 (Phase 38) — schemaVersion flipped v1→v3 (v1 deleted Phase 29).
-      mockProcessEventGroups.mockResolvedValue({ schemaVersion: 'v3', events: null });
+      // LLM failed — processEventGroupsV3 returns { events: null } so the
+      // pipeline takes the "LLM returned null for all batches" branch.
+      // Phase 38 LLM-PURGE-01 — v3-native shape (no schemaVersion wrapper).
+      mockProcessEventGroupsV3.mockResolvedValue({
+        events: null,
+        matchedNewsByGroup: new Map(),
+        bellingcatByGroup: new Map(),
+      });
 
       const res = await fetch(`${baseUrl}/api/events`);
       const body = await res.json();
@@ -857,7 +852,7 @@ describe('Events Route (Redis accumulator)', () => {
 
       expect(res.ok).toBe(true);
       expect(body.data).toHaveLength(1);
-      expect(mockProcessEventGroups).not.toHaveBeenCalled();
+      expect(mockProcessEventGroupsV3).not.toHaveBeenCalled();
       expect(mockGroupGdeltRows).not.toHaveBeenCalled();
     });
 
@@ -920,7 +915,7 @@ describe('Events Route (Redis accumulator)', () => {
       expect(res.ok).toBe(true);
       expect(body.data.length).toBeGreaterThanOrEqual(1);
       // CRITICAL: the route must NOT trigger extraction.
-      expect(mockProcessEventGroups).not.toHaveBeenCalled();
+      expect(mockProcessEventGroupsV3).not.toHaveBeenCalled();
     });
   });
 
@@ -1128,7 +1123,7 @@ describe('Events Route (Redis accumulator)', () => {
 
       const res = await fetch(`${baseUrl}/api/events`);
       expect(res.ok).toBe(true);
-      expect(mockProcessEventGroups).not.toHaveBeenCalled();
+      expect(mockProcessEventGroupsV3).not.toHaveBeenCalled();
       expect(mockGeocodeEnrichedEvents).not.toHaveBeenCalled();
     });
   });

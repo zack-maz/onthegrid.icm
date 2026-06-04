@@ -124,16 +124,15 @@ vi.mock('../../adapters/llm-provider.js', () => ({
 vi.mock('../../lib/eventGrouping.js', () => ({
   groupGdeltRows: vi.fn(() => []),
 }));
-vi.mock('../../lib/llmEventExtractor.js', () => ({
-  processEventGroups: vi.fn(async () => null),
-  geocodeEnrichedEvents: vi.fn(async () => []),
-}));
+// Phase 38 LLM-PURGE-01 — the `llmEventExtractor.js` stub barrel was deleted;
+// the extraction pipeline now calls the v3 extractor directly.
 vi.mock('../../lib/llmEventExtractor.v3.js', () => ({
   processEventGroupsV3: vi.fn(async () => ({
     events: [],
     matchedNewsByGroup: new Map(),
     bellingcatByGroup: new Map(),
   })),
+  geocodeEnrichedEventsV3: vi.fn(async () => []),
 }));
 vi.mock('../../lib/llmEvalHarness.js', () => ({
   runEval: vi.fn(async () => ({ within5km: 0, within20km: 0, within100km: 0, total: 0 })),

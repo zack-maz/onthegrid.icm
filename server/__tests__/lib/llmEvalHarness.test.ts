@@ -47,15 +47,20 @@ vi.mock('../../lib/llmExtractionPipeline.js', () => ({
   LLM_EVENTS_KEY_ACTIVE: 'events:llm:v3',
 }));
 
-// Mocked so Test 9 can assert the eval harness NEVER calls it (A6 / Pitfall 8).
+// Phase 38 LLM-PURGE-02 — the `callLLM` shim was removed from llm-provider.js
+// (no remaining live importers). The resolver (which the eval harness calls)
+// uses `freeClaudeRouter.callLLM` directly, so Test 9's "eval NEVER calls the
+// LLM" assertion targets the router's callLLM instead (A6 / Pitfall 8).
 vi.mock('../../adapters/llm-provider.js', () => ({
-  callLLM: vi.fn(),
   isLLMConfigured: vi.fn(() => false),
+}));
+vi.mock('../../lib/freeClaudeRouter.js', () => ({
+  callLLM: vi.fn(),
 }));
 
 // Imports AFTER mocks are registered.
-import { callLLM } from '../../adapters/llm-provider.js';
 import { cacheGetSafe, cacheSetSafe } from '../../cache/redis.js';
+import { callLLM } from '../../lib/freeClaudeRouter.js';
 import {
   loadGroundTruth,
   runEval,

@@ -2,7 +2,6 @@
 import { describe, it, expect } from 'vitest';
 
 import {
-  enrichedEventV2,
   enrichedEventV3,
   enrichedEventAny,
   derivePrecision,
@@ -15,12 +14,18 @@ import {
 } from '../../lib/llmSchema.js';
 
 // ---------------------------------------------------------------------------
-// Minimal valid v2 payload helper — keeps tests terse and avoids repetition.
+// Minimal valid v3 payload helper — keeps tests terse and avoids repetition.
+//
+// Phase 38 LLM-PURGE-04: the v1 + v2 EXPORTED schemas were deleted (only the
+// un-exported v2 base const survives as the `.extend()` base for v3). All
+// schema parse/reject coverage now runs against `enrichedEventV3` — v3 is
+// structurally v2 + `schemaVersion:'v3'` + optional `actorConfidence`, so the
+// D-05 strict-location + constraint invariants are exercised identically.
 // ---------------------------------------------------------------------------
 
-function validV2Payload(): Record<string, unknown> {
+function validPayload(): Record<string, unknown> {
   return {
-    schemaVersion: 'v2',
+    schemaVersion: 'v3',
     groupKey: 'grp-001',
     location: {
       country: 'Iran',
@@ -45,27 +50,27 @@ function validV2Payload(): Record<string, unknown> {
   };
 }
 
-describe('enrichedEventV2 parse acceptance', () => {
-  it('Test 1: accepts a minimal valid v2 payload (country-only, confidence=0.7, null nullables)', () => {
-    const payload = validV2Payload();
-    const result = enrichedEventV2.safeParse(payload);
+describe('enrichedEventV3 parse acceptance', () => {
+  it('Test 1: accepts a minimal valid v3 payload (country-only, confidence=0.7, null nullables)', () => {
+    const payload = validPayload();
+    const result = enrichedEventV3.safeParse(payload);
     expect(result.success).toBe(true);
   });
 
   it('Test 6: accepts a payload with weaponType=null and targetType=null (both nullable)', () => {
-    const payload = validV2Payload();
+    const payload = validPayload();
     payload.weaponType = null;
     payload.targetType = null;
-    const result = enrichedEventV2.safeParse(payload);
+    const result = enrichedEventV3.safeParse(payload);
     expect(result.success).toBe(true);
   });
 });
 
-describe('enrichedEventV2 parse rejection (D-05 + constraint enforcement)', () => {
+describe('enrichedEventV3 parse rejection (D-05 + constraint enforcement)', () => {
   it('Test 2: REJECTS a payload with a location.lat field (D-05 enforcement via .strict())', () => {
-    const payload = validV2Payload();
+    const payload = validPayload();
     (payload.location as Record<string, unknown>).lat = 35.6;
-    const result = enrichedEventV2.safeParse(payload);
+    const result = enrichedEventV3.safeParse(payload);
     expect(result.success).toBe(false);
     if (!result.success) {
       // At least one Zod issue must involve the `location` path (surplus key rejection).
@@ -75,21 +80,21 @@ describe('enrichedEventV2 parse rejection (D-05 + constraint enforcement)', () =
   });
 
   it('Test 3: REJECTS a payload where confidence=1.5 (out of [0,1])', () => {
-    const payload = validV2Payload();
+    const payload = validPayload();
     payload.confidence = 1.5;
-    const result = enrichedEventV2.safeParse(payload);
+    const result = enrichedEventV3.safeParse(payload);
     expect(result.success).toBe(false);
   });
 
   it('Test 4: TRUNCATES reasoning over 200 chars to 197 chars + ellipsis (post-debug 2026-04-21)', () => {
     // Post-debug: changed from reject-on-over-200 to transform+truncate
-    // because Cerebras qwen strips `maxLength` from the LLM wire schema,
-    // and chatty models routinely emit 200-400 char reasoning. Rejecting
-    // the whole batch for one over-long reasoning loses ALL events; silent
-    // truncation keeps the extraction-yield high while still bounding cache size.
-    const payload = validV2Payload();
+    // because qwen strips `maxLength` from the LLM wire schema, and chatty
+    // models routinely emit 200-400 char reasoning. Rejecting the whole batch
+    // for one over-long reasoning loses ALL events; silent truncation keeps
+    // the extraction-yield high while still bounding cache size.
+    const payload = validPayload();
     payload.reasoning = 'x'.repeat(400);
-    const result = enrichedEventV2.safeParse(payload);
+    const result = enrichedEventV3.safeParse(payload);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.reasoning.length).toBe(198); // 197 chars + ellipsis (1 code point)
@@ -97,76 +102,44 @@ describe('enrichedEventV2 parse rejection (D-05 + constraint enforcement)', () =
   });
 
   it('Test 4b: reasoning ≤200 chars passes through unchanged', () => {
-    const payload = validV2Payload();
+    const payload = validPayload();
     payload.reasoning = 'Event matched by date + actors + distance <50km from GDELT centroid.';
-    const result = enrichedEventV2.safeParse(payload);
+    const result = enrichedEventV3.safeParse(payload);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.reasoning).toBe(payload.reasoning);
   });
 
   it('Test 5: REJECTS a payload where weaponType="nuke" (not in enum)', () => {
-    const payload = validV2Payload();
+    const payload = validPayload();
     payload.weaponType = 'nuke';
-    const result = enrichedEventV2.safeParse(payload);
+    const result = enrichedEventV3.safeParse(payload);
     expect(result.success).toBe(false);
   });
 
   it('Test 7: REJECTS a payload where timeOfDay="25:00" (regex rejects 24:00+)', () => {
-    const payload = validV2Payload();
+    const payload = validPayload();
     payload.timeOfDay = '25:00';
-    const result = enrichedEventV2.safeParse(payload);
+    const result = enrichedEventV3.safeParse(payload);
     expect(result.success).toBe(false);
   });
 });
 
-describe('enrichedEventAny discriminator', () => {
-  function validV1Payload(): Record<string, unknown> {
-    return {
-      schemaVersion: 'v1',
-      groupKey: 'grp-legacy-001',
-      location: { name: 'Tehran', precision: 'city' },
-      type: 'airstrike',
-      actors: ['IRGC'],
-      severity: 'high',
-      summary: 'Legacy v1 shape.',
-      casualties: { killed: null, injured: null, unknown: true },
-      sourceCount: 2,
-    };
-  }
-
-  it('Test 8a: v1 payload with schemaVersion:"v1" parses as the v1 branch', () => {
-    const result = enrichedEventAny.safeParse(validV1Payload());
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.schemaVersion).toBe('v1');
-    }
-  });
-
-  it('Test 8b: v2 payload with schemaVersion:"v2" parses as the v2 branch', () => {
-    const result = enrichedEventAny.safeParse(validV2Payload());
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.schemaVersion).toBe('v2');
-    }
-  });
-
-  it('Test 8c: v3 payload with schemaVersion:"v3" parses as the v3 branch (Phase 27.4.3 D-10)', () => {
-    // Phase 27.4.3 widened the discriminated union to include the v3 branch
-    // (byte-identical to v2 except for the schemaVersion literal). v3 wire
-    // contract relaxes for NVIDIA NIM / OpenRouter — see llmSchema.ts.
-    const payload = validV2Payload();
-    payload.schemaVersion = 'v3';
-    const result = enrichedEventAny.safeParse(payload);
+describe('enrichedEventAny (v3-only passthrough — Phase 38 LLM-PURGE-04)', () => {
+  it('Test 8c: v3 payload with schemaVersion:"v3" parses', () => {
+    // Phase 38 collapsed the former discriminatedUnion(v1,v2,v3) to a single-arm
+    // v3 passthrough — only `events:llm:v3` payloads remain after the v1 + v2
+    // extractors + cache keys were deleted in Phase 29.
+    const result = enrichedEventAny.safeParse(validPayload());
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.schemaVersion).toBe('v3');
     }
   });
 
-  it('Test 8d: payload with schemaVersion:"v4" rejects (no matching discriminator)', () => {
-    const payload = validV2Payload();
-    payload.schemaVersion = 'v4';
+  it('Test 8d: payload with schemaVersion:"v2" rejects (v2 arm removed)', () => {
+    const payload = validPayload();
+    payload.schemaVersion = 'v2';
     const result = enrichedEventAny.safeParse(payload);
     expect(result.success).toBe(false);
   });

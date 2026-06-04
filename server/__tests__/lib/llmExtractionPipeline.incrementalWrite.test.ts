@@ -199,27 +199,38 @@ const processEventGroupsMock = vi.fn(
   },
 );
 
-const geocodeEnrichedEventsMock = vi.fn(async (input: any, _groups: any, onProgress?: any) => {
-  const events = input.events as Array<Record<string, unknown>>;
-  const out = events.map((e, i) => ({
-    ...e,
-    resolvedLat: 35.0 + i * 0.001,
-    resolvedLng: 50.0 + i * 0.001,
-    displayName: `Test Site ${(e as { groupKey: string }).groupKey}`,
-    geocodeProvenance: 'nominatim-direct' as const,
-    precision: 'city' as const,
-    suspect: false,
-    actionGeoDistanceKm: 0,
-  }));
-  if (typeof onProgress === 'function') {
-    onProgress(out.length, out.length);
-  }
-  return { schemaVersion: input.schemaVersion, events: out };
-});
+// Phase 38 LLM-PURGE-01 — pipeline now imports the v3 extractor directly
+// (the `llmEventExtractor.js` stub barrel was deleted). geocodeEnrichedEventsV3
+// takes the v3-native signature `(events, groupsByKey, matchedNewsByGroup,
+// bellingcatByGroup, onComplete)` and returns a flat array (no tagged shape).
+const geocodeEnrichedEventsMock = vi.fn(
+  async (
+    events: Array<Record<string, unknown>>,
+    _groupsByKey: any,
+    _matchedNews: any,
+    _bellingcat: any,
+    onProgress?: any,
+  ) => {
+    const out = events.map((e, i) => ({
+      ...e,
+      resolvedLat: 35.0 + i * 0.001,
+      resolvedLng: 50.0 + i * 0.001,
+      displayName: `Test Site ${(e as { groupKey: string }).groupKey}`,
+      geocodeProvenance: 'nominatim-direct' as const,
+      precision: 'city' as const,
+      suspect: false,
+      actionGeoDistanceKm: 0,
+    }));
+    if (typeof onProgress === 'function') {
+      onProgress(out.length, out.length);
+    }
+    return out;
+  },
+);
 
-vi.mock('../../lib/llmEventExtractor.js', () => ({
-  processEventGroups: processEventGroupsMock,
-  geocodeEnrichedEvents: geocodeEnrichedEventsMock,
+vi.mock('../../lib/llmEventExtractor.v3.js', () => ({
+  processEventGroupsV3: processEventGroupsMock,
+  geocodeEnrichedEventsV3: geocodeEnrichedEventsMock,
 }));
 
 // ---------------------------------------------------------------------------
