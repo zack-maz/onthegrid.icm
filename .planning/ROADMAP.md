@@ -192,22 +192,30 @@ Plans:
 
 - [ ] TBD (promote at v1.6 start with `/gsd:new-milestone`)
 
-### Phase 999.6: Portfolio Documentation Polish (BACKLOG, agentic-dev showcase)
+### Phase 999.6: Portfolio Documentation Polish + Vercel Pro Cleanup-and-Repair (BACKLOG)
 
-**Goal:** Round out the **agentic-development portfolio surface** for the v1.6 reveal — not commercial polish, first-portfolio-piece polish. Existing technical docs surface (564-line README + 11 ADRs + 12 architecture docs + 21 Mermaid diagrams + 676-line SRE runbook + degradation contract) is strong; Phase 36 covered it. This phase fills the **agentic-dev meta-story** + **navigation hub** + **glossary** + **transparency** gaps that Phase 36 didn't scope. Audience: portfolio visitors browsing GitHub for the first time, fellow agentic-dev practitioners, and operator self-onboarding on future return visits.
-**Captured:** 2026-06-03 (v1.5 close)
-**Depends on:** v1.5 closed. Independent of Phase 999.5; could ship in parallel. May coordinate with REVEAL-01/REVEAL-02 (public reveal polish) since audience overlaps.
-**Promotion gate:** None — portfolio polish, not engineering work. Promote at v1.6 start based on operator priority.
-**Source material in place:** `.planning/RETROSPECTIVE.md` (7 milestone retrospectives, primary source for meta-story + lessons), `.planning/MILESTONES.md` (primary source for journey arc), `.planning/milestones/v1.5-phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md` (Phase 37 framing-gap anecdote), `docs/adr/0005-phase-26-2-nlp-approach-scrapped.md` (honest-failure exhibit), `docs/adr/0010-…` (honest-deferral exhibit), `scripts/capture-hero.ts` (extension surface for layer screenshots), `README.md` (already portfolio-tuned; SHOWCASE cross-links).
-**Full scope + rationale + execution waves:** `.planning/phases/999.6-portfolio-documentation-polish/999.6-CONTEXT.md`
+**Goal:** Round out the **agentic-development portfolio surface** for the v1.6 reveal AND reconcile **Vercel Pro code + docs** that drifted between Phase 29 (the upgrade) and the surfaces it touches. Two coherent strands in one phase because both are operator-facing polish that Phase 36 didn't scope and both benefit from being audited against the v1.6 milestone-end state, not the v1.5-close state.
+
+**Strand A — Portfolio documentation polish (10 doc surfaces):** Phase 36 covered the technical docs surface (README + 11 ADRs + 12 architecture docs + 21 Mermaid diagrams + 676-line SRE runbook + degradation contract). This strand fills the agentic-dev meta-story + navigation hub + glossary + transparency gaps Phase 36 didn't scope. Audience: portfolio visitors, fellow agentic-dev practitioners, operator self-onboarding on future return visits.
+
+**Strand B — Vercel Pro cleanup-and-repair:** Phase 29 upgraded the project to Vercel Pro ($20/mo) and bumped `maxDuration: 300 → 800`, but many surfaces still claim Hobby-era semantics ("3 cron entries cap", "10s function timeout", "60s Hobby ceiling") OR don't take advantage of Pro features the project is now paying for. **Code:** evaluate `vercel.json` → `vercel.ts` migration (Vercel's now-recommended config format), Vercel Build Output API to drop the tracked `api/vercel-entry.js` artifact (closes Phase 999.2 backlog), `s-maxage` CDN headers on `/api/*` (overlaps with Phase 999.5 D-19 if it hasn't shipped), Fluid Compute defaults verification, Vercel CLI bump. **Docs:** reconcile every "Hobby" / "10s" / "60s" / "3-cron-cap" claim across CLAUDE.md, deployment.md, runbook.md, degradation.md, README.md, and `.github/workflows/`.
+
+**Captured:** 2026-06-03 (v1.5 close); Vercel Pro strand added 2026-06-03 same session.
+**Depends on:** v1.5 closed. Independent of Phase 999.5; could ship in parallel. May coordinate with REVEAL-01/REVEAL-02 (audience overlaps). **Phase 999.2** (api/vercel-entry.js build-artifact discipline) likely folds into Strand B as part of the Build Output API migration evaluation.
+**Promotion gate:** None — operator-facing polish, not engineering. Promote at v1.6 start based on operator priority.
+**Final-sweep requirement:** At promotion time, **re-run the v1.5-close 2nd-pass code + docs audit against the then-current main.** By 999.6 promotion the intervening v1.6 phases (38 LLM fixes / 39 budget dashboard / 40 UI polish / 41 GDELT matching / 999.5 load test) will have changed dashboards, env vars, Redis keys, CDN headers, Vercel surfaces. The `project_v1_6_cleanup_punchlist.md` + `project_v1_6_docs_drift.md` memories are v1.5-close snapshots; merge net-new findings into scope; drop captured-but-resolved items. Procedure documented in 999.6-CONTEXT.md §Final-sweep note.
+**Source material in place:** `.planning/RETROSPECTIVE.md` (meta-story + lessons), `.planning/MILESTONES.md` (journey arc), Phase 37 framing-gap callouts, ADR-0005 (honest-failure exhibit), ADR-0010 (honest-deferral exhibit + canonical Vercel Pro upgrade decision record), `scripts/capture-hero.ts` (extension surface), `README.md` (portfolio-tuned), plus `project_v1_6_docs_drift.md` memory (Vercel-Pro doc-drift specifics already enumerated).
+**Full scope + rationale + execution waves + Vercel Pro details + final-sweep procedure:** `.planning/phases/999.6-portfolio-documentation-polish/999.6-CONTEXT.md`
 **Plans:** 0 plans
 
 Plans:
 
-- [ ] TBD — 10 doc surfaces grouped in 3 waves (Wave 1 = highest-signal: BUILDING-WITH-CLAUDE-CODE.md + SHOWCASE.md + JOURNEY.md; Wave 2 = round-out: concepts.md + COSTS.md + operator-guide.md; Wave 3 = polish: screenshots + LESSONS.md + timeline.md + brainstorms cleanup); promote with `/gsd-review-backlog` when ready
+- [ ] TBD — 11 surfaces across 2 strands. **Strand A (3 waves):** Wave 1 = highest-signal (BUILDING-WITH-CLAUDE-CODE.md + SHOWCASE.md + JOURNEY.md); Wave 2 = round-out (concepts.md + COSTS.md + operator-guide.md); Wave 3 = polish (screenshots + LESSONS.md + timeline.md + brainstorms cleanup). **Strand B:** Vercel Pro cleanup-and-repair (vercel.json → vercel.ts evaluation / Build Output API for api/vercel-entry.js / Fluid Compute verification / s-maxage CDN headers / Vercel CLI bump + doc reconciliation across CLAUDE.md, deployment.md, runbook.md, degradation.md, README.md). Promote with `/gsd-review-backlog` when ready.
 
 **Notes for future promotion:**
 
-- Wave 1 alone is ~80% of the portfolio-piece signal. Time-constrained operator can ship Wave 1 + skip rest until later milestone.
+- Wave 1 of Strand A alone is ~80% of the portfolio-piece signal. Time-constrained operator can ship Wave 1 + Strand B + skip Waves 2/3 until a later milestone.
 - **BUILDING-WITH-CLAUDE-CODE.md is the single biggest move** for an agentic-dev portfolio piece — few projects document this. Worth the most care.
-- Pairs with the v1.6 cleanup-and-fix surface tracked in operator memory (`project_v1_6_cleanup_punchlist.md` + `project_v1_6_docs_drift.md`).
+- Strand B's `docs/COSTS.md` (Strand A Wave 2 item #5) is the canonical home for "Vercel Pro $20/mo as the only non-free cost" — write it during Strand A, verify the numbers + cite Pro features actually in use during Strand B.
+- **Mandatory final-sweep before any docs land:** re-audit code + docs against then-current main (not v1.5-close snapshot). Without it, 999.6 risks shipping a portfolio surface accurate at v1.5 close but stale at v1.6 close.
+- Pairs with the v1.6 cleanup-and-fix surface tracked in operator memory (`project_v1_6_cleanup_punchlist.md` + `project_v1_6_docs_drift.md` + `project_v1_6_priorities.md`).
