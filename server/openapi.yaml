@@ -1838,10 +1838,6 @@ components:
           type: array
           items:
             type: object
-        pipelineFlips:
-          type: array
-          items:
-            type: object
 
     LlmReplayDiff:
       type: object

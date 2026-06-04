@@ -22,7 +22,6 @@ import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
 // Phase 27.4.3 Plan 02b B-3 — pipeline-flip audit log; canonical home is lib
 // (routes is consumer, not provider). Cyclic-import fix in place.
 import { appendOperatorAuditEntry, bearerFingerprint } from '../lib/operatorAudit.js';
-import { listPipelineAudit } from '../lib/pipelineAudit.js';
 // Phase 28.2 Plan 03 D-08 — operator-action audit log + per-Bearer replay
 // quota guardrails on the dashboardAuth-gated /llm-pipeline + /llm-replay
 // endpoints. Both helpers degrade open on Redis failure (logged, not thrown).
@@ -355,17 +354,20 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
   //   * DLQ recent entries (D-30) — bounded at 50
   //   * Projected recent enriched events (B4 / D-18)
   //   * Soft-cap pause flag (B5 surface / D-33)
-  //   * Pipeline-flip audit log (B-3 / D-15) — 50 most recent entries
   //
   // Each is try/caught internally; a degraded signal returns [] or false
   // rather than throwing. The /llm-status endpoint is the single pane of
-  // glass ops relies on before the D-25 prod flip, so availability matters
-  // more than any single block being populated.
-  const [dlqRecent, recentEvents, paused, pipelineFlips] = await Promise.all([
+  // glass ops relies on, so availability matters more than any single block
+  // being populated.
+  //
+  // Phase 38 LLM-PURGE-05 (D-03 Path A) — the pipeline-flip audit log
+  // (listPipelineAudit) was deleted along with the v1/v2 pipeline-version flip
+  // machinery; the v3-only pipeline never flips, so the `pipelineFlips` wire
+  // field is gone.
+  const [dlqRecent, recentEvents, paused] = await Promise.all([
     listDLQ(50).catch(() => []),
     loadRecentEnrichedEvents(50).catch(() => []),
     shouldPauseNewEvents().catch(() => false),
-    listPipelineAudit(50).catch(() => []),
   ]);
 
   const common = {
@@ -391,7 +393,6 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     schemaFailures: llmProgress.schemaFailures,
     errorTaxonomy: llmProgress.errorTaxonomy,
     costShadow: llmProgress.costShadow,
-    pipelineFlips,
   };
 
   // If in-memory progress is active (not idle), return it merged with the

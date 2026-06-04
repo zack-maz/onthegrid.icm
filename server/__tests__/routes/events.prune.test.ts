@@ -161,10 +161,6 @@ vi.mock('../../lib/llmTokenBudget.js', () => ({
   DAILY_LIMITS: { cerebras: 1_000_000, groq: 200_000 } as const,
   todayKey: vi.fn((p: string) => `llm:tokens:${p}:d`),
 }));
-vi.mock('../../lib/pipelineAudit.js', () => ({
-  appendPipelineAudit: vi.fn(async () => {}),
-  listPipelineAudit: vi.fn(async () => []),
-}));
 vi.mock('../../adapters/overpass-water.js', () => ({
   fetchWaterFacilities: vi.fn(async () => []),
   FACILITY_TYPE_LABELS: { dam: 'Dam', reservoir: 'Reservoir' },

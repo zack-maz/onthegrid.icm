@@ -2833,59 +2833,6 @@ function ErrorTaxonomyBlock({ taxonomy }: { taxonomy?: LLMStatus['errorTaxonomy'
 }
 
 /**
- * Phase 27.4.3 D-15 — Pipeline Flips block. Analog: CallLogBlock + DlqBlock.
- * Each entry shows ISO timestamp, from→to version, trigger, operator,
- * optional reason. Auto-flip triggers (auto:eval_drop, auto:watchdog_recurrence)
- * are color-coded amber/red so on-call eyes are drawn to them.
- */
-function PipelineFlipsBlock({ flips }: { flips?: LLMStatus['pipelineFlips'] }) {
-  const rows = flips ?? [];
-  if (rows.length === 0) {
-    return (
-      <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
-          Pipeline Flips (last 200)
-        </div>
-        <div className="mt-1 text-[9px] text-white/40">No flips recorded.</div>
-      </div>
-    );
-  }
-  return (
-    <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
-        Pipeline Flips (last 200)
-      </div>
-      <div className="mt-1 max-h-32 overflow-y-auto">
-        {rows.slice(0, 50).map((f) => {
-          const iso = new Date(f.ts).toISOString();
-          const triggerClass =
-            f.trigger === 'auto:eval_drop'
-              ? 'text-amber-400'
-              : f.trigger === 'auto:watchdog_recurrence'
-                ? 'text-red-400'
-                : 'text-white/60';
-          return (
-            <div key={`${f.ts}-${f.from}-${f.to}`} className="text-[9px]">
-              <div className={`flex items-center gap-1 tabular-nums ${triggerClass}`}>
-                <span>[{iso}]</span>
-                <span>
-                  {f.from} → {f.to}
-                </span>
-                <span>·</span>
-                <span>{f.trigger}</span>
-                <span>·</span>
-                <span>{f.operator}</span>
-              </div>
-              {f.reason ? <div className="text-[9px] italic text-white/50">{f.reason}</div> : null}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/**
  * Phase 27.4.3 D-19 — Cost Shadow block. Analog: EvalScoreBlock.
  * Shows what the v3 run would cost at Anthropic Sonnet rates if the
  * pipeline were on the paid path; tagline reaffirms that free-claude-code
@@ -3041,7 +2988,6 @@ function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
         callHistory={llmStatus.callHistory}
       />
       <ErrorTaxonomyBlock taxonomy={llmStatus.errorTaxonomy} />
-      <PipelineFlipsBlock flips={llmStatus.pipelineFlips} />
       <CostShadowBlock cost={llmStatus.costShadow} />
       {/* Phase 27.4.4 — A9 atomic dev cells. Each renders an "—" placeholder
           for any field that is undefined / null so a v2 fallback or a fresh

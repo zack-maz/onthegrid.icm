@@ -96,10 +96,6 @@ vi.mock('../../lib/freeClaudeRouter.js', () => ({
   prewarmIfCold: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../lib/pipelineAudit.js', () => ({
-  appendPipelineAudit: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('../../config.js', () => ({
   env: mockEnv,
 }));

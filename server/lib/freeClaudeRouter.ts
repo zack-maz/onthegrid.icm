@@ -297,7 +297,15 @@ async function sleepWithJitter(base: number): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// OpenRouter daily counter (mirrors llmTokenBudget.todayKey shape)
+// UTC day key (YYYY-MM-DD) — used by the cost-shadow daily roll-up.
+//
+// Phase 38 LLM-PURGE-08 (D-04 Path A) — the OpenRouter daily-cap Redis counter
+// (incrOpenRouterDaily writer + getOpenRouterDaily reader, on the
+// `llm:tokens:openrouter:YYYY-MM-DD` key) was removed. OpenRouter stays a
+// dormant key-gated provider in the cascade (client is null without
+// OPENROUTER_API_KEY — ADR-0010 "dormant, could wake if key set" semantics);
+// only the dead daily-cap accounting is gone. The legacy
+// `llm:tokens:openrouter:YYYY-MM-DD` key drains on its 48h TTL.
 // ---------------------------------------------------------------------------
 
 function todayKey(): string {
@@ -305,27 +313,6 @@ function todayKey(): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
     d.getUTCDate(),
   ).padStart(2, '0')}`;
-}
-
-async function incrOpenRouterDaily(): Promise<number> {
-  try {
-    const key = `llm:tokens:openrouter:${todayKey()}`;
-    const next = await redis.incr(key);
-    await redis.expire(key, 48 * 3600);
-    return typeof next === 'number' ? next : 0;
-  } catch {
-    return 0;
-  }
-}
-
-async function getOpenRouterDaily(): Promise<number> {
-  try {
-    const key = `llm:tokens:openrouter:${todayKey()}`;
-    const v = await redis.get<number | string | null>(key);
-    return typeof v === 'number' ? v : typeof v === 'string' ? parseInt(v, 10) : 0;
-  } catch {
-    return 0;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -392,7 +379,9 @@ export async function callLLM(
     const prevName = idx > 0 ? providers[idx - 1]?.name : null;
     /**
      * Build the routing reason for the *current* provider when it is BYPASSED
-     * by a gate (no_client / breaker / rate_limit_window / daily_cap).
+     * by a gate (no_client / breaker / rate_limit_window). Phase 38 LLM-PURGE-08
+     * removed the OpenRouter daily-cap gate; `daily_cap` survives only as a
+     * legacy skipReason union member.
      *   - For the primary, encode the bypass cause as `skipped:<suffix>` so
      *     observability sees why we never even attempted it (otherwise primary
      *     bypass would be indistinguishable from a normal primary attempt).
@@ -429,16 +418,6 @@ export async function callLLM(
       });
       continue;
     }
-    if (p.name === 'openrouter' && (await getOpenRouterDaily()) >= OPENROUTER_DAILY_CAP) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason('daily_cap'),
-        timestamp: Date.now(),
-      });
-      continue;
-    }
-
     decisions.push({
       provider: p.name,
       model: p.model,
@@ -461,7 +440,6 @@ export async function callLLM(
       const t0 = Date.now();
       try {
         if (p.name === 'nvidia_nim') nvidiaNimWindow.consume();
-        if (p.name === 'openrouter') await incrOpenRouterDaily();
 
         const res = await p.client.chat.completions.create({
           model: p.model,
@@ -640,23 +618,10 @@ function recordHeadroom(provider: FreeProvider): void {
     const h = nvidiaNimWindow.headroom();
     current.nvidia_nim = { ...current.nvidia_nim, used: h.used, cap: h.cap };
   } else {
-    // openrouter — read the daily counter without re-incrementing
-    // (incrOpenRouterDaily already incremented above; we just snapshot).
-    // Use a non-blocking fire-and-forget read.
-    getOpenRouterDaily()
-      .then((used) => {
-        const rl = llmProgress.rateLimit;
-        if (!rl) return;
-        updateProgress({
-          rateLimit: {
-            ...rl,
-            openrouter: { ...current.openrouter, used },
-          },
-        });
-      })
-      .catch(() => {
-        // observability-only — swallow errors silently
-      });
+    // openrouter — Phase 38 LLM-PURGE-08: the daily-cap counter was removed,
+    // so there is no per-day `used` to snapshot. OpenRouter is dormant
+    // (key-gated); report `used: 0` against the static cap for the headroom UI.
+    current.openrouter = { ...current.openrouter, used: 0 };
   }
   updateProgress({ rateLimit: current });
 }

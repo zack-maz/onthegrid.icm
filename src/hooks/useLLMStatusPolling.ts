@@ -113,14 +113,9 @@ export interface LLMRunSummary {
     >
   >;
 
-  pipelineFlips?: Array<{
-    ts: number;
-    from: 'v1' | 'v2' | 'v3';
-    to: 'v1' | 'v2' | 'v3';
-    trigger: string;
-    operator: string;
-    reason?: string;
-  }>;
+  // Phase 38 LLM-PURGE-05 (D-03 Path A) — the `pipelineFlips` field was removed
+  // from the wire contract; the v3-only pipeline never flips, and the
+  // pipeline-flip audit log was deleted server-side.
 
   costShadow?: { tokensIn: number; tokensOut: number; usd: number };
 
@@ -305,14 +300,8 @@ export interface LLMStatus {
     >
   >;
 
-  pipelineFlips?: Array<{
-    ts: number;
-    from: 'v1' | 'v2' | 'v3';
-    to: 'v1' | 'v2' | 'v3';
-    trigger: string;
-    operator: string;
-    reason?: string;
-  }>;
+  // Phase 38 LLM-PURGE-05 (D-03 Path A) — `pipelineFlips` removed from the wire
+  // contract; the v3-only pipeline never flips.
 
   costShadow?: { tokensIn: number; tokensOut: number; usd: number };
 

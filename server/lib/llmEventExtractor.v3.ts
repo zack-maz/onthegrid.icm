@@ -71,12 +71,13 @@ import type { RecentEnrichedEvent } from './llmProgress.js';
 import type { LocationHierarchyV2, EnrichedEventV3, GeocodeProvenance } from './llmSchema.js';
 
 // Phase 29 D-02 part A — Plan 05 D-17 auto-rollback ladder (v3 -> v2)
-// removed. With the operator pin-pipeline surface deleted (Plan 04) and
-// v1+v2 extractor modules being deleted in Plan 05/06, the v3->v2 rollback
-// path is no longer reachable. The watchdog-recurrence + eval-drop triggers
-// + the appendPipelineAudit calls inside them are gone. The cross-worker
-// audit log (listPipelineAudit reader in events.ts /llm-status) still
-// surfaces any historical entries written before this phase.
+// removed. With the operator pin-pipeline surface deleted (Plan 04) and the
+// v1+v2 extractor modules deleted in Plan 05/06, the v3->v2 rollback path is
+// no longer reachable; the watchdog-recurrence + eval-drop triggers are gone.
+// Phase 38 LLM-PURGE-05 (D-03 Path A) — the pipeline-flip audit log
+// (appendPipelineAudit writer + listPipelineAudit reader + the events.ts
+// /llm-status surface) was fully deleted. The legacy `events:llm-pipeline-audit`
+// Redis key drains on its 90d TTL — no migration.
 
 const log = logger.child({ module: 'llm-extractor-v3' });
 
