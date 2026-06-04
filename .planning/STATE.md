@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-04T06:44:37.244Z"
-last_activity: 2026-06-04 -- Phase 38 execution started
+last_updated: "2026-06-04T06:52:00.000Z"
+last_activity: 2026-06-04 -- Completed 38-03-PLAN.md (GDELT-MATCH-01 corpus audit, wave 1 hard gate)
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 6
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 38 (llm-pipeline-reliability-gdelt-source-matching-vercel-pro-cl) — EXECUTING
-Plan: 2 of 6
+Plan: 38-03 complete (wave 1); other wave-1 plans + wave 2/3 remain
 Status: Ready to execute
-Last activity: 2026-06-04 -- Phase 38 execution started
+Last activity: 2026-06-04 -- Completed 38-03-PLAN.md (GDELT-MATCH-01 corpus audit hard gate); audit instrument + baseline report committed
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -327,6 +327,8 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 32 close: Per-event Redis key `events:url-liveness:{eventId}` (probe results, tiered TTL via `ttlSecForStatus`) + sidecar count `events:url-liveness-count` (O(1) dashboard polls, Pitfall 3 mitigation). Sidecar maintained jointly by Plan 32-02 `persistLiveness` (INCR on live→dead) and Plan 32-03 `pruneDeadUrlEvents` (DECRBY on prune). Underflow floors at 0 via the lone permitted raw `redis.set(KEY, 0)` call documented in CLAUDE.md.
 - Phase 32 close: Cron auto-prune gated on `attemptCount >= 3` consecutive ticks (D-12); manual prune has no gate (operator owns the call). Primary URL is `data.source` (NOT `data.sourceUrls[0]`) for both raw GDELT and LLM v3 entities (D-05 / RESEARCH A1 — `enrichedV3ToEntities` spreads `template.data` and never writes a `sourceUrls[]` field; v3 inherits `data.source` identically to raw GDELT).
 - Phase 32 close: `attemptCount` semantics = monotonic-with-reset-on-live-or-unknown (RESEARCH A2 / D-12). Pure-monotonic accumulation would conflate dead→live→dead with three-in-a-row-dead and falsely trigger the cron auto-prune gate. The monotonic-with-reset rule makes "≥3 consecutive terminal-dead ticks" a one-line check inside `persistLiveness`.
+- Phase 38 Plan 03 (GDELT-MATCH-01): `scripts/audit-gdelt-corpus.ts` is a READ-ONLY corpus audit (D-07 non-destructive) — pure functions (bucketByTier/detectOrphans/detectDuplicateClusters/buildAuditReport) exported for unit testing with a `import.meta.url` direct-run guard so vitest imports never trigger Redis I/O. Orphan detection uses a conservative 3-gate match (temporal ±2d AND geo ≤50km AND ≥1 shared keyword token); duplicate-cluster sizing reuses `groupGdeltRows` and is explicitly labeled coarse batch-grouping NOT true dedup (Pitfall 6 — plan 02 adds the tighter pre-pass). (38-03)
+- Phase 38 Plan 03 audit baseline: live `events:llm:v3` + `news:gdelt` were ABSENT in dev Redis at audit time, so the committed baseline (`gdelt-corpus-audit.json`) was sized from the dev raw `events:gdelt` corpus (688 events): 99.7% unknown source tier (expected for raw pre-LLM data), 134 duplicate-source clusters / 364 events (53% collapse) with a size-2-dominant histogram (81 of 134). Orphan rate is an unusable artifact (100% — `news:gdelt` empty). Plan 06 must RE-RUN `npm run audit:gdelt` against a warm `events:llm:v3` + `news:gdelt` for real tier/orphan distributions; the duplicate-cluster histogram is actionable now (start MATCH-02 Jaccard at 0.85 / geo gate at 5km, target the size-2 cohort, preserve the size 6–9 tail). (38-03)
 
 ## Pending Todos
 
