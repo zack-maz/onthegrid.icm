@@ -26,6 +26,7 @@
     "analyze:llm-run": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/analyze-llm-run.ts",
     "eval:detail": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/eval-detail.ts",
     "snapshot:v3": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/snapshot-v3-redis.ts",
+    "audit:gdelt": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/audit-gdelt-corpus.ts",
     "watch:snapshot": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/snapshot-cron-watch.ts",
     "bakeoff": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/bakeoff-v3-direct.ts",
     "bakeoff:preflight": "npm run bakeoff -- --models=qwen/qwen3.5-397b-a17b,meta/llama-3.3-70b-instruct,nvidia/nemotron-3-super-120b-a12b,z-ai/glm4.7 --limit=20 --mode=characterize",
