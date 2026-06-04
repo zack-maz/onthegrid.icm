@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
+import { BudgetBlock, type TokenBudgetBlock } from '@/components/ui/BudgetBlock';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
@@ -928,6 +929,12 @@ function DevApiStatusAllApisTab({
         issue: 'null' | 'raw-cameo' | 'ambiguous' | 'low-confidence';
       }>;
     } | null;
+    // Phase 39 Plan 03/05 (BUDGET-01/02) — token-budget proximity + today's
+    // cost-shadow USD. GA-4 provider-keyed map mirrored from the Plan-03 server
+    // shape (server/routes/operator-status.ts TokenBudgetBlock). `null` (or
+    // absent) when the server has not shipped Plan 03 or the Redis read threw
+    // (degrade-open) — BudgetBlock's render gate hides the block in that case.
+    tokenBudget?: TokenBudgetBlock | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
   // Phase 32 Plan 05 MEDIUM-03 — `fetchOpStatus` hoisted out of the
@@ -1732,6 +1739,11 @@ function DevApiStatusAllApisTab({
             Actor quality: no data
           </div>
         )}
+
+        {/* Phase 39 Plan 05 (BUDGET-01/02) — token-budget proximity bars +
+            today's cost-shadow USD. Sources the already-polled `tokenBudget`
+            field (no new fetch). Degrade-open: the block self-hides on null. */}
+        <BudgetBlock tokenBudget={opStatus?.tokenBudget ?? null} />
 
         {/* Phase 32 Plan 05 — 429 prune-quota alert. Mirrors the existing
             replay-quota-alert above. px-2 py-1 spacing — multiples of 4. */}
