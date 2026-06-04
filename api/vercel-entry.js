@@ -1060,6 +1060,7 @@ function dedupHighConfidence(entities) {
       if (actorPairKey(candidate) !== entityActors) continue;
       if (haversineKm2(candidate.lat, candidate.lng, entity.lat, entity.lng) > DEDUP_RADIUS_KM)
         continue;
+      if (keptTokens[i].size === 0 && tokens.size === 0) continue;
       if (jaccard(keptTokens[i], tokens) < DEDUP_TITLE_JACCARD) continue;
       isDuplicate = true;
       break;
@@ -4735,7 +4736,10 @@ async function runEval(opts = {}) {
       within20km: 0,
       within100km: 0,
       total: 0,
-      actorMatchRate: 0
+      // Phase 38 WR-02 — null (not 0) when the ground-truth fixture is absent,
+      // so "not populated" reads honestly distinct from a real 0% actor match.
+      // Consistent with LLM-FIX-03 (EvalScore.actorMatchRate is number | null).
+      actorMatchRate: null
     };
     updateProgress({ evalScore: zero });
     return zero;
@@ -83354,9 +83358,7 @@ async function checkReplayQuota(fingerprint) {
   const ymd = now.toISOString().slice(0, 10);
   const key = `${QUOTA_KEY_PREFIX2}${fingerprint}:${ymd}`;
   const used = await redis2.incr(key);
-  if (used === 1) {
-    await redis2.expire(key, QUOTA_TTL_SEC2);
-  }
+  await redis2.expire(key, QUOTA_TTL_SEC2);
   const next = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0)
   );
@@ -83369,6 +83371,13 @@ async function checkReplayQuota(fingerprint) {
     resetsAt,
     retryAfterSeconds
   };
+}
+
+// server/lib/sanitizeError.ts
+function sanitizeError(err) {
+  const raw = err instanceof Error ? err.message : String(err);
+  const masked = raw.replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]").replace(/api[_-]?key=[A-Za-z0-9._-]+/gi, "api_key=[REDACTED]").replace(/https:\/\/[^\s]*upstash\.io[^\s]*/g, "[upstash url redacted]");
+  return masked.length > 200 ? masked.slice(0, 197) + "..." : masked;
 }
 
 // server/middleware/validate.ts
@@ -83646,10 +83655,12 @@ async function recordLLMTimestamp() {
 }
 function applyCompositeOrdering(events) {
   const scored = events.map((event) => {
+    if (typeof event.data.compositeScore === "number") {
+      return event;
+    }
     const tier = event.data.sourceTier ?? null;
     const precision = event.data.precision ?? "region";
-    const corroborationBoost = 0;
-    const compositeScore = computeCompositeScore({ tier, corroborationBoost, precision });
+    const compositeScore = computeCompositeScore({ tier, corroborationBoost: 0, precision });
     return { ...event, data: { ...event.data, compositeScore } };
   });
   return scored.sort((a, b) => {
@@ -83729,7 +83740,7 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
     } catch (err) {
       return res.status(503).json({
         error: "replay_quota_unavailable",
-        detail: String(err).slice(0, 200)
+        detail: sanitizeError(err)
       });
     }
     if (!quota.allowed) {
@@ -83766,7 +83777,7 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
     } catch (err) {
       return res.status(500).json({
         error: "extract_failed",
-        detail: String(err).slice(0, 200)
+        detail: sanitizeError(err)
       });
     }
   });
@@ -83790,7 +83801,7 @@ eventsRouter.get("/llm-status", dashboardAuth, async (_req, res) => {
     } catch (err) {
       return res.status(503).json({
         error: "prune_failed",
-        detail: String(err).slice(0, 200)
+        detail: sanitizeError(err)
       });
     }
   });
@@ -84267,11 +84278,6 @@ function withTimeout2(promise, ms, label) {
   return Promise.race([promise, timeout]).finally(() => {
     if (timer) clearTimeout(timer);
   });
-}
-function sanitizeError(err) {
-  const raw = err instanceof Error ? err.message : String(err);
-  const masked = raw.replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]").replace(/api[_-]?key=[A-Za-z0-9._-]+/gi, "api_key=[REDACTED]").replace(/https:\/\/[^\s]*upstash\.io[^\s]*/g, "[upstash url redacted]");
-  return masked.length > 200 ? masked.slice(0, 197) + "..." : masked;
 }
 async function probeCacheKey(name, key, fallbackHealthyKey, fallbackReasonToken = "cache-fallback-active:") {
   const start = Date.now();

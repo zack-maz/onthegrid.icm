@@ -34,7 +34,8 @@ findings:
   warning: 7
   info: 5
   total: 13
-status: issues_found
+status: resolved
+resolution: 'CR-01 + WR-01/02/03/04 fixed in 05bf712; WR-05/06/07 + IN-01..05 deferred (see deferred-items.md)'
 ---
 
 # Phase 38: Code Review Report
@@ -43,6 +44,18 @@ status: issues_found
 **Depth:** standard
 **Files Reviewed:** 25
 **Status:** issues_found
+
+## Resolution (post-review)
+
+Fixed in commit `05bf712` (full suite 2444 passed / 0 failed, typecheck + lint green):
+
+- **CR-01** — `applyCompositeOrdering` now preserves the producer-stored `compositeScore` (corroboration boost intact); only synthesizes for cold/legacy bridge entries.
+- **WR-01** — extracted `sanitizeError` to `server/lib/sanitizeError.ts` and routed the three Bearer-gated operator error tails through it.
+- **WR-02** — `runEval` no-ground-truth path returns `actorMatchRate: null`.
+- **WR-03** — `dedupHighConfidence` treats empty-vs-empty token sets as non-duplicate.
+- **WR-04** — `checkReplayQuota` re-asserts the TTL on every call (self-heals a failed first EXPIRE).
+
+Deferred (see `deferred-items.md`): **WR-05/06/07** (default-off `V3_LINEAGE_PREFILTER` group-context, pre-existing from Phase 27.4.4) and **IN-01..05** (wire-contract / observability nits scoped out of this phase).
 
 ## Summary
 
