@@ -157,5 +157,18 @@ None - no external service configuration required. The run + call records write 
 
 ---
 
+## Gap Closure note (SC39-3 — WR-01/WR-04)
+
+The run-record accounting shipped here was later corrected for honesty in the SC39-3 gap-closure pass
+(commit `4fc85e1`): `buildRunHistoryEntry` no longer derives `batchesFailed` from
+`totalBatches - completedBatches` (structurally ~0 because `finishBatch()` ticks on every terminal
+branch) and no longer hardcodes `dlqDelta: 0`. It now reads the new `llmProgress.failedBatches` tally
+(incremented only on genuine-failure branches in `llmEventExtractor.v3.ts`) and computes `dlqDelta`
+from a `countDLQ()` SCARD open/close snapshot. The same commit adds the missing
+`updateProgress({ evalScore })` write-back (WR-04). See `39-05-SUMMARY.md` § "Gap Closure (SC39-3)"
+for full detail.
+
+---
+
 _Phase: 39-operator-visibility-token-budget-cost-shadow-llm-flight-reco_
 _Completed: 2026-06-04_

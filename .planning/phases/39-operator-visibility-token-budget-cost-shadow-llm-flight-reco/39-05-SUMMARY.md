@@ -165,5 +165,82 @@ None — no env vars, no external service config. Both blocks ride the existing 
 
 ---
 
+## Gap Closure (SC39-3 — WR-01/04/05)
+
+The phase verifier (39-VERIFICATION.md) and code review (39-REVIEW.md) flagged three
+correctness/honesty defects in the LLM flight recorder. Operator chose FIX NOW. All three
+repaired with atomic commits + tests; `npx tsc -b` exit 0, server tier 1369 passed, UI tier 72 passed.
+
+### WR-01 — Run outcome badge was dishonest (failed runs painted SUCCESS/green)
+
+Root cause: `finishBatch()` in `server/lib/llmEventExtractor.v3.ts` ticked the completed-batch
+counter on EVERY terminal branch (success AND failure), so the run record derived
+`batchesFailed = totalBatches - completedBatches ≈ 0`, and `dlqDelta` was hardcoded `0`
+(`llmExtractionPipeline.ts`). The FlightRecorder `outcomeBand()` 'partial' (yellow) band was
+therefore dead code.
+
+Fix:
+
+- `server/lib/llmProgress.ts` — new optional `LLMPipelineProgress.failedBatches` (cleared on reset
+  in `INITIAL_PROGRESS`).
+- `server/lib/llmEventExtractor.v3.ts` — `recordFailedBatch()` (added beside `finishBatch`) ticks
+  `llmProgress.failedBatches` ONLY on genuine-failure terminal branches: watchdog null content,
+  JSON.parse failure, Zod schema-fail, and an adaptive split that yielded zero events. The success
+  branch never calls it. `finishBatch()` still drives the success+failure progress cadence.
+- `server/lib/llmExtractionPipeline.ts` — `buildRunHistoryEntry` (now async) sets
+  `batchesFailed` from `llmProgress.failedBatches` and `batchesCompleted` as the true success count
+  (`totalBatches - failedBatches`). `dlqDelta` is computed from a `countDLQ()` (SCARD) snapshot at
+  run open vs. close (`max(0, close - open)`); the bounded-set undercount caveat is documented at
+  the open snapshot.
+- `src/components/ui/FlightRecorderBlock.tsx` — badge TEXT is now keyed off the derived band via
+  `outcomeLabel(run)` so a completed-but-partial run reads `PARTIAL` (yellow), not `SUCCESS`.
+
+### WR-04 — Eval score never written back
+
+`runEval()`'s result in `runRefreshExtraction` was only logged, so the run record's `evalScore`
+was effectively always `undefined`.
+
+Fix (`server/lib/llmExtractionPipeline.ts`): capture the result and `updateProgress({ evalScore })`
+right after `runEval()` resolves, so `buildRunHistoryEntry` snapshots THIS run's real eval shape
+(`{ within5km, within20km, within100km, total, actorMatchRate }` per `server/lib/llmEvalHarness.ts`).
+Defensive re-stamp — no longer depends solely on `runEval`'s internal `updateProgress`.
+
+### WR-05 — Client read a non-existent `evalScore.score` field
+
+The client `normalizeEvalScore` read `evalScore.score`, absent from the server shape, so the eval
+pill never rendered.
+
+Fix (`src/components/ui/FlightRecorderBlock.tsx`): added the real `ServerEvalScore` type and rewrote
+`normalizeEvalScore` to return `within20km / total` (the deploy-gate radius). The pill renders
+`eval {pct}% @20km` with a tooltip; degrade-open hides the pill on absent/zero total (never crashes).
+Eval color thresholds unchanged (green ≥0.95 / yellow ≥0.80 / red below).
+
+### Tests added (would have caught all three)
+
+- `server/__tests__/lib/llmEventExtractor.v3-adaptive.test.ts` — 4 new cases: failedBatches
+  increments on watchdog-null / schema-fail / JSON-parse-fail; stays undefined on success.
+- `server/__tests__/lib/llmExtractionPipeline.flightRecorder.test.ts` (new) — 4 cases: fully-failed
+  run → `batchesFailed>0` + `outcome:'error'` + real `dlqDelta`; partial run; clean run; and the
+  closed run record carries the real eval shape (WR-04).
+- `src/components/ui/__tests__/FlightRecorderBlock.test.tsx` (new) — 10 cases: eval pill renders
+  `within20km/total` (green/yellow thresholds + degrade-open), and outcome bands fire correctly
+  (SUCCESS/PARTIAL/dlq-only-PARTIAL/ERROR/RUNNING) + degrade-open.
+
+### Commits
+
+- `4fc85e1` fix(39): honest batchesFailed + dlqDelta + eval write-back in run record (WR-01, WR-04)
+- `da4e42c` fix(39): align FlightRecorder eval pill + outcome badge to real wire shape (WR-05)
+
+WR-01 and WR-04 are co-located in `llmExtractionPipeline.ts` (same run-record close path + same
+pipeline test), so they share one server commit.
+
+### Verification output
+
+- `npx tsc -b` → exit 0
+- `npx vitest run server/` → 116 files, 1369 passed
+- `npx vitest run src/components/ui/` → 9 files, 72 passed
+
+---
+
 _Phase: 39-operator-visibility-token-budget-cost-shadow-llm-flight-reco_
 _Completed: 2026-06-04_
