@@ -492,8 +492,11 @@ describe('runEval — actorMatchRate (D-13)', () => {
     expect((score as { actorMatchRate: number }).actorMatchRate).toBe(1);
   });
 
-  it('returns 0 actorMatchRate when no ground-truth events carry expectedActor1', async () => {
-    // Override mock to return GT event WITHOUT expectedActor1.
+  it('returns null actorMatchRate when no ground-truth events carry expectedActor1', async () => {
+    // LLM-FIX-03 / D-06 (Phase 38) — flipped from 0 to null. With no GT event
+    // carrying expectedActor1, actorTotal === 0 and the metric is not
+    // applicable: it must report `null` ("not populated"), not `0` ("0% actor
+    // accuracy"), so the audit surface does not misread an unpopulated metric.
     mockReadFileSync.mockReturnValue(
       JSON.stringify({
         version: 1,
@@ -509,7 +512,7 @@ describe('runEval — actorMatchRate (D-13)', () => {
 
     const score = await runEval();
 
-    expect((score as { actorMatchRate: number }).actorMatchRate).toBe(0);
+    expect((score as { actorMatchRate: number | null }).actorMatchRate).toBeNull();
   });
 
   it('persists actorMatchRate as part of the baseline score in Redis', async () => {
@@ -531,14 +534,17 @@ describe('runEval — actorMatchRate (D-13)', () => {
     expect(payload.actorMatchRate).toBe(1);
   });
 
-  it('degrades open on Redis live-cache read failure — actorMatchRate falls back to 0', async () => {
+  it('degrades open on Redis live-cache read failure — actorMatchRate is null', async () => {
     // Simulate a Redis hiccup on the second-pass live cache read.
     vi.mocked(cacheGetSafe).mockRejectedValue(new Error('redis unreachable'));
 
     const score = await runEval();
 
-    // Resolver-only / geocode buckets still scored; actorMatchRate falls back
-    // to 0 without throwing.
-    expect((score as { actorMatchRate: number }).actorMatchRate).toBe(0);
+    // LLM-FIX-03 / D-06 (Phase 38) — flipped from 0 to null. The throw fires
+    // on the first cacheGetSafe before any ground-truth iteration, so
+    // actorTotal stays 0 → the metric is reported as null ("not populated"),
+    // honestly distinct from a real 0% match. Resolver-only / geocode buckets
+    // are still scored; the harness never throws.
+    expect((score as { actorMatchRate: number | null }).actorMatchRate).toBeNull();
   });
 });

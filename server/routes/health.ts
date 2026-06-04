@@ -135,6 +135,14 @@ async function probeCacheKey(
   name: string,
   key: string,
   fallbackHealthyKey?: string,
+  // LLM-FIX-01 (Phase 38) — per-probe fallback-reason token. Defaults to the
+  // generic `cache-fallback-active:` so every cache probe emits an honest
+  // single-source reason. Only the `llmEvents` probe overrides this with
+  // `llm-optional-fallback-active:` (the LLM-specific ADR-0010 kill-switch
+  // signal). Previously this helper hard-coded the LLM token, so the `news`
+  // probe leaked an LLM-flavored reason — the loose `/fallback-active/` test
+  // assertion masked the drift.
+  fallbackReasonToken = 'cache-fallback-active:',
 ): Promise<ProbeResult> {
   const start = Date.now();
   try {
@@ -167,7 +175,7 @@ async function probeCacheKey(
             freshnessMs: degradedSentinelFreshness(thresholdMs),
             lastSuccessTs: fallback.lastFresh,
             hadError: false,
-            errorReason: `llm-optional-fallback-active: ${fallbackHealthyKey} fresh, ${key} cold`,
+            errorReason: `${fallbackReasonToken} ${fallbackHealthyKey} fresh, ${key} cold`,
             latencyMs: Date.now() - start,
           };
         }
@@ -442,7 +450,17 @@ const PROBE_STRATEGIES: Record<string, ProbeStrategy> = {
 async function runProbe(name: string, strategy: ProbeStrategy): Promise<ProbeResult> {
   switch (strategy.kind) {
     case 'cache':
-      return probeCacheKey(name, strategy.cacheKey, strategy.fallbackHealthyKey);
+      // LLM-FIX-01 (Phase 38) — honest single-source fallback reason. The
+      // llmEvents probe keeps the LLM-specific `llm-optional-fallback-active:`
+      // token (its fallback is the ADR-0010 raw-GDELT kill-switch bridge); all
+      // other cache probes (including `news`) emit the generic
+      // `cache-fallback-active:` default.
+      return probeCacheKey(
+        name,
+        strategy.cacheKey,
+        strategy.fallbackHealthyKey,
+        name === 'llmEvents' ? 'llm-optional-fallback-active:' : 'cache-fallback-active:',
+      );
     case 'llmStatus':
       return probeLlmStatus();
     case 'sources':

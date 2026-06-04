@@ -733,5 +733,58 @@ describe('Water Routes (/api/water)', () => {
       expect(body.data).toHaveLength(1);
       expect(mockFetchPrecipitation).not.toHaveBeenCalled();
     });
+
+    it('LLM-FIX-02 (D-05): writes a fresh failed sentinel on total Open-Meteo batch failure', async () => {
+      // Cache the facilities so the precip handler reaches the fetch path,
+      // then force fetchPrecipitation to return [] (all batches failed).
+      // The route must write a distinguishable, FRESH sentinel envelope
+      // `{ data: [], failed: true, fetchedAt }` to water:precip so the audit
+      // tier reads degraded-not-unknown — not skip the write (which left the
+      // key cold = unknown). The HTTP response still serves empty data.
+      redisStore.set('water:facilities:v3', {
+        data: { facilities: [sampleFacility], filterStats: emptyStats },
+        fetchedAt: Date.now(),
+      });
+      mockFetchPrecipitation.mockResolvedValue([]);
+
+      const before = Date.now();
+      const res = await fetch(`${baseUrl}/api/water/precip`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toEqual([]);
+
+      // Assert the sentinel was written to water:precip with a fresh
+      // fetchedAt and the failed: true flag.
+      const sentinelCall = _mockCacheSet.mock.calls.find(
+        (call) => call[0] === 'water:precip' && (call[1] as { failed?: boolean })?.failed === true,
+      );
+      expect(sentinelCall).toBeDefined();
+      const sentinelPayload = sentinelCall![1] as {
+        data: unknown[];
+        failed: boolean;
+        fetchedAt: number;
+      };
+      expect(sentinelPayload.data).toEqual([]);
+      expect(sentinelPayload.failed).toBe(true);
+      expect(sentinelPayload.fetchedAt).toBeGreaterThanOrEqual(before);
+    });
+
+    it('LLM-FIX-02 (D-05): tolerates a cached failed sentinel without throwing', async () => {
+      // A degraded sentinel sitting in cache must normalize to empty data,
+      // NOT leak the { failed: true } envelope to the client and NOT 500.
+      redisStore.set('water:precip', {
+        data: { data: [], failed: true, fetchedAt: Date.now() },
+        fetchedAt: Date.now(),
+      });
+
+      const res = await fetch(`${baseUrl}/api/water/precip`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data).toEqual([]);
+      expect(body.data.failed).toBeUndefined();
+      expect(mockFetchPrecipitation).not.toHaveBeenCalled();
+    });
   });
 });

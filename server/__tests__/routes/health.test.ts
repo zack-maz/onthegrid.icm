@@ -365,7 +365,11 @@ describe('GET /api/health (W2 extended)', () => {
 
     const body = healthResponseSchema.parse(getBody());
     expect(body.endpoints.news?.status).toBe('degraded');
-    expect(body.endpoints.news?.lastErrorReason ?? '').toMatch(/fallback-active/);
+    // LLM-FIX-01 (Phase 38) — tightened from /fallback-active/ to
+    // /cache-fallback-active/. The loose pattern passed accidentally because
+    // the shared probeCacheKey hard-coded the LLM token; the news probe now
+    // emits the generic cache-fallback-active: reason (honest single-source).
+    expect(body.endpoints.news?.lastErrorReason ?? '').toMatch(/cache-fallback-active/);
   });
 
   it('Test 12 (Phase 37 — fix/news-feed-rss-fallback): news is UNKNOWN when BOTH news:feed AND news:feed:rss-only are cold', async () => {

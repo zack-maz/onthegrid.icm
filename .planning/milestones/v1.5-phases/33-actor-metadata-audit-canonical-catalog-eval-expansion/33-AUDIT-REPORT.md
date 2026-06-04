@@ -24,6 +24,22 @@
 | (c) ambiguous           | static deny-list (`soldiers`, `forces`, `militants`, `troops`, `fighters`, `the army`, `gunmen`, `attackers`, `rebels`, `insurgents`, `militia`) | TBD   | TBD        |
 | (d) source-disagreement | NOT auto-detected — see spot-check section below                                                                                                 | —     | —          |
 
+## Actor-accuracy eval block (`actorMatchRate`)
+
+**Status: NOT YET POPULATED.** The eval harness `actorMatchRate` metric
+(`server/lib/llmEvalHarness.ts` `runEval()`, resolver-only second-pass over
+`events:llm:v3`) currently reports **`null`** — not `0`. This is the honest
+"metric not applicable / not populated" signal (LLM-FIX-03 / Phase 38 D-06),
+NOT a measured 0% actor-attribution accuracy.
+
+Populating it requires a STAGING RUN: `run-audit.ts` against staging Redis
+to surface bucket-a/b/c actor findings, followed by the
+`expectedActor1` / `expectedActor2` ground-truth backfill (Plan 33-05 target
+of ≥30 of 50 events) into `.planning/eval/ground-truth-events.json`. Until
+that backfill lands, `actorTotal === 0` in the harness and `actorMatchRate`
+stays `null` by design — the audit surface must read this as "not yet
+measured," never as "0% accurate." **Deferred to the v1.7 backlog.**
+
 ## Bucket (a) — null/empty actors
 
 _TBD — populated by `run-audit.ts` against staging Redis._

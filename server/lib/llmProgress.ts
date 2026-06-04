@@ -120,7 +120,9 @@ export interface LLMPipelineProgress {
     within20km: number;
     within100km: number;
     total: number;
-    actorMatchRate?: number;
+    // LLM-FIX-03 / D-06 (Phase 38) — widened to `number | null`. `null` means
+    // "not populated" (no ground-truth actors), honestly distinct from 0%.
+    actorMatchRate?: number | null;
   };
 
   /** D-22 aggregate: counts per resolver provenance path for DevApiStatus pie. */
@@ -293,7 +295,9 @@ export interface LLMRunSummary {
     within20km: number;
     within100km: number;
     total: number;
-    actorMatchRate?: number;
+    // LLM-FIX-03 / D-06 (Phase 38) — widened to `number | null`. `null` means
+    // "not populated" (no ground-truth actors), honestly distinct from 0%.
+    actorMatchRate?: number | null;
   };
   provenanceCounts?: Partial<Record<GeocodeProvenance, number>>;
   suspectCount?: number;

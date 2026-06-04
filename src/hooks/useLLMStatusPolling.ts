@@ -32,7 +32,9 @@ export interface LLMRunSummary {
     within20km: number;
     within100km: number;
     total: number;
-    actorMatchRate?: number;
+    // LLM-FIX-03 / D-06 (Phase 38) — widened to `number | null`. `null` =
+    // "not populated" (no ground-truth actors), distinct from a real 0%.
+    actorMatchRate?: number | null;
   };
   provenanceCounts?: Record<string, number>;
   suspectCount?: number;
@@ -239,7 +241,9 @@ export interface LLMStatus {
     within20km: number;
     within100km: number;
     total: number;
-    actorMatchRate?: number;
+    // LLM-FIX-03 / D-06 (Phase 38) — widened to `number | null`. `null` =
+    // "not populated" (no ground-truth actors), distinct from a real 0%.
+    actorMatchRate?: number | null;
   };
   provenanceCounts?: Record<string, number>;
   suspectCount?: number;
