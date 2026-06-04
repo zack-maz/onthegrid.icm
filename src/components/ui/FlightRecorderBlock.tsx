@@ -44,6 +44,22 @@ type RunOutcome =
   | 'budget_hit'
   | 'error';
 
+/**
+ * Server eval shape (Phase 39 WR-05). Mirrors the resolver-accuracy harness
+ * output `server/lib/llmEvalHarness.ts EvalScore` / `LLMPipelineProgress['evalScore']`:
+ * cumulative accuracy buckets at 5/20/100 km plus the ground-truth `total`.
+ * There is NO `.score` key — the prior client type (`{ score?: number }`) was a
+ * fiction that never matched the wire contract, so the eval pill never rendered.
+ * `number | null` legacy members are tolerated for forward/backward compat.
+ */
+interface ServerEvalScore {
+  within5km: number;
+  within20km: number;
+  within100km: number;
+  total: number;
+  actorMatchRate?: number | null;
+}
+
 interface RunHistoryEntry {
   runId: string;
   startedAt: string;
@@ -53,7 +69,7 @@ interface RunHistoryEntry {
   batchesCompleted: number;
   batchesFailed: number;
   tokenSpend: { nvidia_nim: number };
-  evalScore?: { score?: number } | number | null;
+  evalScore?: ServerEvalScore | number | null;
   dlqDelta: number;
   watchdogTimeouts: number;
   durationMs: number;
@@ -108,6 +124,19 @@ const OUTCOME_LABEL: Record<RunOutcome, string> = {
   error: 'ERROR',
 };
 
+/**
+ * Phase 39 WR-01 — badge TEXT keyed off the derived band, not the raw outcome.
+ * A `completed` run with failed batches / DLQ growth resolves to the `partial`
+ * band (yellow) — its badge must read `PARTIAL`, not `SUCCESS` (UI-SPEC §B run
+ * outcome labels). The server `RunOutcome` union has no `partial` member (it is
+ * a client-derived classification), so the label can only come from the band.
+ */
+function outcomeLabel(run: RunHistoryEntry): string {
+  const band = outcomeBand(run);
+  if (band === 'partial') return 'PARTIAL';
+  return OUTCOME_LABEL[run.outcome];
+}
+
 const OUTCOME_BAR_FILL: Record<OutcomeBand, string> = {
   running: 'bg-accent-blue',
   success: 'bg-accent-green',
@@ -127,10 +156,23 @@ function relativeAge(iso: string): string {
   return `${Math.round(ms / 86_400_000)}d ago`;
 }
 
+/**
+ * Phase 39 WR-05 — primary accuracy metric for the eval pill, aligned to the
+ * REAL server eval shape. The harness's primary deploy-gate radius is 20 km
+ * (CLAUDE.md eval-gate `within20km / total >= 0.8`), so we render that ratio as
+ * a 0..1 fraction. Degrade-open: a missing object, a zero/absent total, or a
+ * pre-existing bare-number score all collapse to null → the pill hides (never
+ * a crash, never a fabricated value).
+ */
 function normalizeEvalScore(evalScore: RunHistoryEntry['evalScore']): number | null {
   if (evalScore == null) return null;
-  if (typeof evalScore === 'number') return evalScore;
-  if (typeof evalScore.score === 'number') return evalScore.score;
+  // Legacy / forward-compat: a bare numeric score is already a fraction.
+  if (typeof evalScore === 'number') return Number.isFinite(evalScore) ? evalScore : null;
+  // Real server shape: cumulative accuracy at 20 km over the ground-truth total.
+  if (typeof evalScore.within20km === 'number' && typeof evalScore.total === 'number') {
+    if (evalScore.total <= 0) return null; // no ground-truth → "not populated"
+    return evalScore.within20km / evalScore.total;
+  }
   return null;
 }
 
@@ -235,7 +277,7 @@ export function FlightRecorderBlock() {
                   <span
                     className={`shrink-0 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${OUTCOME_PILL_CLASS[band]}`}
                   >
-                    {OUTCOME_LABEL[run.outcome]}
+                    {outcomeLabel(run)}
                   </span>
                   <span className="shrink-0 font-mono text-[10px] text-white/60">
                     {run.runId.slice(0, 8)}
@@ -261,8 +303,9 @@ export function FlightRecorderBlock() {
                     <span
                       className={`shrink-0 text-[8px] tabular-nums ${evalScoreClass(score)}`}
                       data-testid={`flight-recorder-eval-${run.runId}`}
+                      title="Resolver accuracy within 20km of ground truth"
                     >
-                      eval {score.toFixed(2)}
+                      eval {(score * 100).toFixed(0)}% @20km
                     </span>
                   )}
                 </div>
