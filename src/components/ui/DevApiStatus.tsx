@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
 import { BudgetBlock, type TokenBudgetBlock } from '@/components/ui/BudgetBlock';
+import { FlightRecorderBlock } from '@/components/ui/FlightRecorderBlock';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
@@ -1756,6 +1757,12 @@ function DevApiStatusAllApisTab({
           </div>
         )}
       </section>
+
+      {/* Phase 39 Plan 05 (OBS-FLIGHT-04) — LLM flight recorder. Top-level
+          section with its own Bearer fetch of /api/events/llm-history (Plan 04),
+          run-list → call-list → call-detail drill-down; degrade-open hides on
+          non-200. */}
+      <FlightRecorderBlock />
 
       {/* Phase 29 Plan 08 D-02 part D — confirm modal removed. The
           pipeline-version pin UI surface is gone now that the underlying
