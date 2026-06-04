@@ -138,7 +138,7 @@ Full phase-by-phase detail archived to [milestones/v1.5-ROADMAP.md](milestones/v
 ### Phases summary (planned)
 
 - [x] **Phase 38: LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup** — bug-fix punch-list (LLM-FIX) + dead-code purge incl. Cerebras+Groq adapter removal (LLM-PURGE) + GDELT corpus quality (GDELT-MATCH) + water-facility romanization (WATER-LATIN) + Vercel Pro docs+code repair (VERCEL-PRO) + optional 7-day cron-stability reopen (CRON-WATCH). (completed 2026-06-04)
-- [ ] **Phase 39: Operator Visibility — Budget + Cost + LLM Flight Recorder** — `BudgetBlock` (per-provider tokens vs cap, soft/hard thresholds), cost-shadow accrual surface, Phase-27.4.5 absorbed LLM flight recorder (Redis-backed call+run history, Bearer-gated `/api/events/llm-history`, cold-start hydration).
+- [x] **Phase 39: Operator Visibility — Budget + Cost + LLM Flight Recorder** — `BudgetBlock` (per-provider tokens vs cap, soft/hard thresholds), cost-shadow accrual surface, Phase-27.4.5 absorbed LLM flight recorder (Redis-backed call+run history, Bearer-gated `/api/events/llm-history`, cold-start hydration). (completed 2026-06-04)
 - [ ] **Phase 40: Dashboard UI/UX Polish + Subtab Consolidation** — UI-SPEC.md design contract precedes code (`/gsd:ui-phase`); ~13-sub-block stack consolidated into 3-4 grouped sections; typography/spacing/color polish; RTL contract tests regression-lock the consolidated layout.
 - [ ] **Phase 41: Public Reveal Polish** — portfolio docs (`BUILDING-WITH-CLAUDE-CODE.md`, `SHOWCASE.md`, `JOURNEY.md`, `concepts.md`, `COSTS.md`, `operator-guide.md`, `LESSONS.md`, brainstorms cleanup), `npm run capture:layers` reproducible screenshots, REVEAL-SITE landing-page polish + demo flows + social-share + custom-domain decision, final-sweep audit against then-current main.
 
@@ -194,7 +194,7 @@ _10 REQ-IDs — by strand: BUDGET (4) · OBS-FLIGHT (6)._
 3. **SC39-3** Operator drills from a run list (newest first, colored outcome badge, batch progress bar, token spend bar, eval score) into per-call timing, provenance distribution, DLQ groups, and watchdog timeouts via the `FlightRecorderBlock`. Redis-backed `llm:calls:history` (LPUSH+LTRIM 500-entry cap, 30d TTL) and `llm:runs:history` (LPUSH+LTRIM 200-run cap, 30d TTL) replace in-memory `callHistory` lost on cold start. Cold-start hydration populates in-memory state from Redis LRANGE on first `/llm-status` or `/llm-history` request, surviving Vercel Fluid Compute warm-start gaps (mirrors Phase 28.2.7 `llm:lastProgress` write-through pattern). _(OBS-FLIGHT-01, OBS-FLIGHT-02, OBS-FLIGHT-04, OBS-FLIGHT-06)_
 4. **SC39-4** Bearer-gated `GET /api/events/llm-history` (operator-only; promoted from the original Phase 27.4.5 `NODE_ENV !== 'production'` gate to match `/api/operator-status` precedent) returns `{ runs: [...], calls: [...] }` with optional `?runId=X` and `?limit=N` query params. Every LLM call dispatched during a single `runRefreshExtraction` invocation carries its parent run's `runId` for back-correlation in the UI. _(OBS-FLIGHT-03, OBS-FLIGHT-05)_
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 **Wave 1** _(parallel — no file overlap)_
 
@@ -211,7 +211,7 @@ _10 REQ-IDs — by strand: BUDGET (4) · OBS-FLIGHT (6)._
 
 **Wave 4** _(after 39-03 + 39-04)_
 
-- [ ] 39-05-PLAN.md — BudgetBlock + FlightRecorderBlock components mounted in DevApiStatus (functional baseline per GA-1; GA-3 90d sparkline deferred to Phase 40) [BUDGET-01, -02, OBS-FLIGHT-04]
+- [x] 39-05-PLAN.md — BudgetBlock + FlightRecorderBlock components mounted in DevApiStatus (functional baseline per GA-1; GA-3 90d sparkline deferred to Phase 40) [BUDGET-01, -02, OBS-FLIGHT-04]
 
 **UI hint**: yes
 
@@ -261,7 +261,7 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 | Phase | Name                                                                  | Plans Complete | Status      | Completed  |
 | ----- | --------------------------------------------------------------------- | -------------- | ----------- | ---------- |
 | 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
-| 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 4/5            | In Progress |            |
+| 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete    | 2026-06-04 |
 | 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 0/TBD          | Not started | —          |
 | 41    | Public Reveal Polish                                                  | 0/TBD          | Not started | —          |
 

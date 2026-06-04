@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
-status: executing
-last_updated: "2026-06-04T21:13:02.108Z"
+status: verifying
+last_updated: "2026-06-04T21:21:24.535Z"
 last_activity: 2026-06-04 -- Phase 39 execution started
 progress:
   total_phases: 10
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 11
-  completed_plans: 10
-  percent: 10
+  completed_plans: 11
+  percent: 20
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md
 
 Phase: 39 (operator-visibility-token-budget-cost-shadow-llm-flight-reco) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-04 -- Phase 39 execution started
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
@@ -432,6 +432,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 39 P01 | 5 min | 4 tasks | 7 files |
 | Phase 39 P02 | 21 min | 2 tasks | 5 files |
 | Phase 39 P04 | 8 min | 2 tasks | 2 files |
+| Phase 39 P05 | 5 min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -439,3 +440,5 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: Phase 38 LLM-FIX: actorMatchRate number|null — null=not-populated distinct from measured 0%; replay endpoint quota death now 503-not-500 (Pitfall 5 fix)
 - [Phase 39]: 39-02: runId generated once at run boundary + stamped on llmProgress; every call entry (success+failure) inherits it and dual-writes to llm:calls:history — call->run back-correlation for the flight recorder (OBS-FLIGHT-05)
 - [Phase 39]: 39-02: run record closed once in finally keyed off a runOutcome witness (Open Q3) — a missed branch still closes the run; default outcome 'error' is the honest fallback
+- [Phase 39]: BudgetBlock sources the already-polled tokenBudget field (no new fetch); FlightRecorderBlock owns its Bearer fetch of /llm-history — GA-3 no Redis fan-out for cost; Plan-04 /llm-history is the single FlightRecorder read surface (39-05)
+- [Phase 39]: FlightRecorder Level 3 renders the full CallHistoryEntry record as copyable JSON (call ring carries telemetry, not raw prompt/response text) — GA-1 baseline: operator CAN read a single call's record; richer prompt surface defers to Phase 40 (39-05)
