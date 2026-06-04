@@ -1,6 +1,7 @@
 import riversData from '../../src/data/rivers.json' with { type: 'json' };
 import { assignBasinStress } from '../lib/basinLookup.js';
 import { logger } from '../lib/logger.js';
+import { romanize } from '../lib/romanize.js';
 import {
   FACILITY_TYPE_LABELS,
   type WaterFacility,
@@ -215,6 +216,52 @@ export function hasLatinLabel(tags: Record<string, string>): boolean {
   const op = tags['operator']?.trim();
   if (isRealLatin(op)) return true;
   return false;
+}
+
+/**
+ * WATER-LATIN-03 (Phase 38): romanize a non-Latin OSM `name` into a synthetic
+ * Latin token and inject it as `name:en` so `hasLatinLabel` admits the facility.
+ *
+ * Fires ONLY when the element ALREADY fails `hasLatinLabel` AND it carries a
+ * non-empty non-Latin `name` AND no Latin `name:en` exists. This positions the
+ * romanization BEFORE the admission gate (the helper is called at the top of
+ * `normalizeWaterElement`, before `computeAdmissionDecision`).
+ *
+ * Returns the (possibly augmented) tags plus the romanized + original strings.
+ * When no romanization is warranted it returns the tags unchanged with
+ * `nameLatin`/`nameOriginal` undefined — so Latin-named and desalination
+ * facilities are untouched (desal is gate-exempt; do NOT double-process it).
+ *
+ * GENERIC_OSM_NAME_RE landmine: the romanized token is injected as `name:en`,
+ * which `hasLatinLabel` STILL screens through `isRealLatin` (i.e. the generic
+ * filter). A romanized bare "سد" → "Sd" does not match the English-word generic
+ * regex, so it admits (acceptable per RESEARCH); a facility whose romanized name
+ * collapsed to a generic English word would still be filtered.
+ */
+export function applyRomanizedName(
+  tags: Record<string, string>,
+  facilityType: WaterFacilityType,
+): { tags: Record<string, string>; nameLatin?: string; nameOriginal?: string } {
+  // Desalination bypasses the Latin-label gate (D-03) — never double-process it.
+  if (facilityType === 'desalination') return { tags };
+  // Already Latin-admissible — nothing to romanize.
+  if (hasLatinLabel(tags)) return { tags };
+
+  const rawName = tags['name']?.trim();
+  // Only romanize when there IS a non-Latin name to work from.
+  if (!rawName || isLatin(rawName)) return { tags };
+
+  // Build a qualifier for romanize()'s <2-char fallback so the synthetic token
+  // still admits (e.g. "Dam"); operator (if Latin) gives extra signal.
+  const qualifier = FACILITY_TYPE_LABELS[facilityType];
+  const nameLatin = romanize(rawName, qualifier);
+
+  // Inject as name:en so hasLatinLabel admits via the isRealLatin generic screen.
+  return {
+    tags: { ...tags, 'name:en': nameLatin },
+    nameLatin,
+    nameOriginal: rawName,
+  };
 }
 
 /** Countries to fully exclude */
@@ -897,12 +944,19 @@ export function normalizeWaterElement(
   const lon = el.lon ?? el.center?.lon;
   if (lat === undefined || lon === undefined) return null;
 
+  // WATER-LATIN-03: romanize a non-Latin name into a synthetic Latin `name:en`
+  // BEFORE the admission gate so legitimate Arabic/Persian/Hebrew infrastructure
+  // stops being dropped by hasLatinLabel. `tags` below is the (possibly
+  // augmented) bag used by the gate, scoring, and label extraction; the original
+  // non-Latin name is preserved in `nameOriginal` for hover/sub-label display.
+  const { tags, nameLatin, nameOriginal } = applyRomanizedName(el.tags, facilityType);
+
   const inPriority = isPriorityCountry(lat, lon);
-  const score = computeNotabilityScore(el.tags, facilityType, inPriority);
+  const score = computeNotabilityScore(tags, facilityType, inPriority);
   const nearestCity = findNearestCity(lat, lon);
 
   const decision = computeAdmissionDecision(
-    el.tags,
+    tags,
     lat,
     lon,
     facilityType,
@@ -916,7 +970,7 @@ export function normalizeWaterElement(
     return null;
   }
 
-  const capacity = extractCapacityTags(el.tags);
+  const capacity = extractCapacityTags(tags);
   const linkedRiver = linkRiver(lat, lon);
 
   return {
@@ -925,12 +979,17 @@ export function normalizeWaterElement(
     facilityType,
     lat,
     lng: lon,
-    label: extractLabel(el.tags, facilityType, lat, lon, nearestCity),
-    operator:
-      el.tags.operator && isLatin(el.tags.operator) ? toTitleCase(el.tags.operator) : undefined,
+    // extractLabel reads the (augmented) tags so the romanized name:en becomes
+    // the Latin display label for a previously non-Latin facility.
+    label: extractLabel(tags, facilityType, lat, lon, nearestCity),
+    operator: tags.operator && isLatin(tags.operator) ? toTitleCase(tags.operator) : undefined,
     osmId: el.id,
     stress: stressLookup(lat, lon),
     notabilityScore: score,
+    // WATER-LATIN-03: surface the romanized token + preserved original (set
+    // only when applyRomanizedName fired on a non-Latin name).
+    ...(nameLatin && { nameLatin }),
+    ...(nameOriginal && { nameOriginal }),
     ...(capacity && { capacity }),
     ...(nearestCity && { nearestCity }),
     ...(linkedRiver && { linkedRiver }),

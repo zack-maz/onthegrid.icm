@@ -38,7 +38,19 @@ export function WaterTooltip({ facility, isAttacked }: WaterTooltipProps): React
 
   return (
     <div className="space-y-1 text-xs">
-      <div className="font-semibold text-white">{getWaterFacilityDisplayName(facility)}</div>
+      {/* WATER-LATIN-04: romanized display name (searchable token) with the
+          preserved original on hover + as a sub-label when non-Latin. */}
+      <div
+        className="font-semibold text-white"
+        title={facility.nameOriginal ? `${facility.nameOriginal} (original)` : undefined}
+      >
+        {getWaterFacilityDisplayName(facility)}
+      </div>
+      {facility.nameOriginal && (
+        <div className="text-[10px] text-zinc-500" dir="auto" lang="und">
+          {facility.nameOriginal}
+        </div>
+      )}
       <div className="text-zinc-400">{WATER_TYPE_LABELS[facility.facilityType]}</div>
       <div className="flex items-center gap-1.5">
         <span

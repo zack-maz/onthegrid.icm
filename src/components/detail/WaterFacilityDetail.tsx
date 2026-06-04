@@ -113,6 +113,21 @@ export function WaterFacilityDetail({ facility }: WaterFacilityDetailProps) {
       <h3 className="text-[10px] uppercase tracking-wider text-text-muted mb-1 mt-0">
         Facility Info
       </h3>
+      {/* WATER-LATIN-04: show the (romanized when non-Latin) display name with
+          the preserved original on hover + as a sub-label. */}
+      <div className="px-3 py-1">
+        <span
+          className="text-text-primary"
+          title={facility.nameOriginal ? `${facility.nameOriginal} (original)` : undefined}
+        >
+          {getWaterFacilityDisplayName(facility)}
+        </span>
+        {facility.nameOriginal && (
+          <span className="block text-[10px] text-text-muted" dir="auto" lang="und">
+            {facility.nameOriginal}
+          </span>
+        )}
+      </div>
       <DetailValue label="Type" value={typeLabel} />
       <DetailValue label="Operator" value={facility.operator || 'Unknown'} />
       {shouldRenderDashboard() && <DetailValue label="OSM ID" value={String(facility.osmId)} />}

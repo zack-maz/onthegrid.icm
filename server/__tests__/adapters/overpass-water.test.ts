@@ -14,6 +14,8 @@ import {
   linkRiver,
   computeNotabilityScore,
   computeAdmissionDecision,
+  applyRomanizedName,
+  hasLatinLabel,
   RIVER_BBOXES,
 } from '../../adapters/overpass-water.js';
 import { fetchWaterFacilities, nearestCountryName } from '../../adapters/overpass-water.js';
@@ -2204,5 +2206,108 @@ describe('Phase 27.3.1 Plan 10 — G1 + G2 gap closure', () => {
       // And Turkey is absent from byCountry admits.
       expect(stats.byCountry.Turkey).toBeUndefined();
     });
+  });
+});
+
+// ---------- WATER-LATIN-03: romanize before the Latin-label gate ----------
+describe('applyRomanizedName + romanize-before-gate (WATER-LATIN-03)', () => {
+  const mockStress: WaterStressIndicators = {
+    bws_raw: 3.5,
+    bws_score: 3.5,
+    bws_label: 'High',
+    drr_score: 2.0,
+    gtd_score: 1.5,
+    sev_score: 2.5,
+    iav_score: 3.0,
+    compositeHealth: 0.3,
+  };
+  const stressLookup = () => mockStress;
+
+  // Iraq (priority country) coords so the 2-of-3 compound gate clears with
+  // isNotable (wikidata) + inPriority.
+  const IRAQ_LAT = 33.2;
+  const IRAQ_LON = 43.7;
+
+  it('applyRomanizedName injects a synthetic Latin name:en for a non-Latin name', () => {
+    const tags = { waterway: 'dam', name: 'سد الموصل' }; // Arabic — Mosul Dam
+    const out = applyRomanizedName(tags, 'dam');
+    expect(out.nameLatin).toBeTruthy();
+    expect(out.nameOriginal).toBe('سد الموصل');
+    // The injected name:en makes hasLatinLabel admit.
+    expect(hasLatinLabel(out.tags)).toBe(true);
+    expect(out.tags['name:en']).toBe(out.nameLatin);
+  });
+
+  it('applyRomanizedName leaves a Latin-named facility untouched', () => {
+    const tags = { waterway: 'dam', name: 'Mosul Dam' };
+    const out = applyRomanizedName(tags, 'dam');
+    expect(out.nameLatin).toBeUndefined();
+    expect(out.nameOriginal).toBeUndefined();
+    expect(out.tags).toBe(tags); // same reference — no augmentation
+  });
+
+  it('applyRomanizedName does NOT double-process desalination (gate-exempt)', () => {
+    const tags = { man_made: 'water_works', desalination: 'yes', name: 'محطة تحلية' };
+    const out = applyRomanizedName(tags, 'desalination');
+    expect(out.nameLatin).toBeUndefined();
+    expect(out.tags).toBe(tags);
+  });
+
+  it('an Arabic-only-named facility now ADMITS past the gate with nameLatin set + original preserved', () => {
+    const el = {
+      type: 'node' as const,
+      id: 700001,
+      lat: IRAQ_LAT,
+      lon: IRAQ_LON,
+      tags: { waterway: 'dam', name: 'سد الموصل', wikidata: 'Q123' },
+    };
+    const result = normalizeWaterElement(el, stressLookup);
+    expect(result).not.toBeNull();
+    expect(result!.nameLatin).toBeTruthy();
+    expect(result!.nameOriginal).toBe('سد الموصل');
+    // Latin display label derived from the romanized name:en (passes the same
+    // isLatin guard the admission gate uses; no non-Latin script leaks through).
+    expect(/^[\p{Script=Latin}\d\s\p{P}\p{S}]+$/u.test(result!.label)).toBe(true);
+    expect(result!.label.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a Persian-only-named facility admits with a searchable Latin token', () => {
+    const el = {
+      type: 'node' as const,
+      id: 700002,
+      lat: IRAQ_LAT,
+      lon: IRAQ_LON,
+      tags: { waterway: 'dam', name: 'سد کرج', wikidata: 'Q456' },
+    };
+    const result = normalizeWaterElement(el, stressLookup);
+    expect(result).not.toBeNull();
+    expect(result!.nameLatin).toBeTruthy();
+    expect(result!.nameOriginal).toBe('سد کرج');
+  });
+
+  it('a romanized bare generic is still rejected as generic (GENERIC_OSM_NAME_RE preserved)', () => {
+    // A facility whose ONLY name is a bare generic English word must remain
+    // filtered. romanize of Arabic "سد" → "Sd" does not match the English
+    // generic regex (acceptable per RESEARCH), but a literal "Dam" name does.
+    const el = {
+      type: 'node' as const,
+      id: 700003,
+      lat: IRAQ_LAT,
+      lon: IRAQ_LON,
+      tags: { waterway: 'dam', name: 'Dam', wikidata: 'Q789' },
+    };
+    // hasLatinLabel rejects the bare generic — no romanization saves it.
+    expect(hasLatinLabel(el.tags)).toBe(false);
+    const result = normalizeWaterElement(el, stressLookup);
+    expect(result).toBeNull();
+  });
+
+  it('preserves the original name field on the element (does not mutate el.tags)', () => {
+    const tags = { waterway: 'dam', name: 'سد الموصل', wikidata: 'Q123' };
+    const el = { type: 'node' as const, id: 700004, lat: IRAQ_LAT, lon: IRAQ_LON, tags };
+    normalizeWaterElement(el, stressLookup);
+    // el.tags untouched — romanization works on a copy.
+    expect(el.tags.name).toBe('سد الموصل');
+    expect(el.tags['name:en']).toBeUndefined();
   });
 });

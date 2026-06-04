@@ -48,6 +48,10 @@ export function getSearchableFields(entity: SearchableEntity): string[] {
     if (e.label) fields.push(e.label.toLowerCase());
     if (e.facilityType) fields.push(e.facilityType.toLowerCase());
     if (e.operator) fields.push(e.operator.toLowerCase());
+    // WATER-LATIN-04: index the romanized token + the original non-Latin name
+    // so operators can match either the searchable Latin form or the original.
+    if (e.nameLatin) fields.push(e.nameLatin.toLowerCase());
+    if (e.nameOriginal) fields.push(e.nameOriginal.toLowerCase());
   } else {
     // ConflictEventEntity (all other types are conflict event types)
     const e = entity as ConflictEventEntity;
@@ -70,7 +74,7 @@ function getFieldNames(entity: SearchableEntity): string[] {
   } else if (entity.type === 'site') {
     return ['name', 'siteType', 'operator'];
   } else if (entity.type === 'water') {
-    return ['name', 'facilityType', 'operator'];
+    return ['name', 'facilityType', 'operator', 'nameLatin', 'nameOriginal'];
   } else {
     return ['label', 'type', 'actor1', 'actor2', 'location'];
   }
