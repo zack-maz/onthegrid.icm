@@ -53,7 +53,9 @@ flowchart TD
   pins `functions["api/vercel-entry.js"].maxDuration = 800` so the
   daily LLM extraction cron has the wall-clock headroom it needs
   (measured ~125s typical, ~10min worst-case during throttle).
-  Hobby tier's 60s ceiling was incompatible with the v3 cron run.
+  The 800s ceiling is well within Pro's `maxDuration` headroom; the
+  Fluid-Compute-era default function timeout is 300s, which the v3
+  cron run can exceed, so the explicit 800s override is required.
 - **Edge CDN first.** Every cached route emits a `Cache-Control`
   header with `s-maxage` and `stale-while-revalidate`, so a burst of
   identical requests never reaches the function. The lambda is a
@@ -77,7 +79,10 @@ Runs three steps in sequence:
    a single output file at `api/vercel-entry.js`. The Vercel runtime
    discovers `api/vercel-entry.js` directly via the
    `functions["api/vercel-entry.js"]` config in `vercel.json` — no
-   separate stub layer.
+   separate stub layer. (The Build Output API was evaluated as PRO-02
+   and **deferred** — see [Vercel Pro configuration
+   decisions](#vercel-pro-configuration-decisions). The `vercel.ts`
+   config migration was likewise evaluated as PRO-01 and deferred.)
 3. **`tsc -b`** — typechecks the server and app projects end-to-end.
    Fails the build on any type error; there is no `any` escape hatch
    tolerated (strict mode + `noUncheckedIndexedAccess` on the server).
@@ -130,8 +135,9 @@ flowchart LR
 
 ## Cron jobs
 
-Scheduled from `vercel.json` — Vercel Hobby/Pro tier caps at 3 cron
-entries; all three slots are in active use:
+Scheduled from `vercel.json` — Vercel Pro allows up to 40 cron
+entries; the project uses 3 by choice (well under the cap), all in
+active use:
 
 ```json
 {
