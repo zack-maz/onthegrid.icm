@@ -172,7 +172,7 @@ _28 REQ-IDs total — 27 required (parsed above) by strand: LLM-FIX (6) · LLM-P
 **Wave 2** _(blocked on Wave 1 completion)_
 
 - [x] 38-04-PLAN.md — WATER-LATIN strand (romanization, transliteration install) [wave 2, after 03] ✅ WATER-LATIN-01..04 (transliteration@2.6.1 + romanize-before-gate + nameLatin/nameOriginal + consumer surfaces)
-- [ ] 38-05-PLAN.md — VERCEL-PRO strand (Fluid Compute verify + docs-drift; PRO-01/02 deferred) [wave 2, after 02]
+- [x] 38-05-PLAN.md — VERCEL-PRO strand (Fluid Compute verify + docs-drift; PRO-01/02 deferred) [wave 2, after 02] ✅ VERCEL-PRO-01..04 (recorded PRO-01/02 defer-with-rationale; verified Fluid Compute compat on createApp() + no-leak smoke; repaired Hobby→Pro docs-drift across 5 surfaces; bumped Vercel CLI 52→54.9.0)
 - [ ] 38-06-PLAN.md — GDELT-MATCH 02/03/04 (dedup + corroboration + composite) [wave 2, after 02+03]
 
 CRON-WATCH-01 DEFERRED to v1.7 (D-02) — SC38-7 stays unfired.

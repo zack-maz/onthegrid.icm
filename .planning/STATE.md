@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-04T16:38:15Z"
-last_activity: 2026-06-04 -- Completed 38-04-PLAN.md (WATER-LATIN 01-04; transliteration@2.6.1 + romanize wrapper, romanize-before-gate adapter injection, nameLatin/nameOriginal fields + consumer surfaces; typecheck + plan-gate suite green)
+last_updated: "2026-06-04T16:48:00Z"
+last_activity: 2026-06-04 -- Completed 38-05-PLAN.md (VERCEL-PRO 01-04; recorded PRO-01/02 defer-with-rationale, verified Fluid Compute compat on createApp() + no-leak smoke assertion, repaired Hobby->Pro docs-drift across 5 surfaces, bumped Vercel CLI 52->54.9.0; vitest + typecheck green)
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 38 (llm-pipeline-reliability-gdelt-source-matching-vercel-pro-cl) — EXECUTING
-Plan: 38-02 + 38-03 complete (wave 1); 38-04 complete (wave 2, WATER-LATIN strand); other wave-1 plans + remaining wave 2/3 remain
+Plan: 38-02 + 38-03 complete (wave 1); 38-04 + 38-05 complete (wave 2, WATER-LATIN + VERCEL-PRO strands); other wave-1 plans + remaining wave 2/3 remain
 Status: Ready to execute
-Last activity: 2026-06-04 -- Completed 38-04-PLAN.md (WATER-LATIN-01..04 — installed transliteration@2.6.1 [pinned, legitimacy-gated]; built server/lib/romanize.ts wrapper + artifact-cleanup pass [RESET D-08 bar to searchable Latin token, skipped ICU]; scripts/audit-water-names.ts + audit:water; applyRomanizedName injects synthetic name:en BEFORE the Latin-label admission gate so Arabic/Persian/Hebrew facilities admit; added optional nameLatin/nameOriginal to WaterFacility; detail panel + WaterTooltip + search now surface nameLatin with original-on-hover. typecheck PASS, plan-gate suite 117 files/1453 tests PASS)
+Last activity: 2026-06-04 -- Completed 38-05-PLAN.md (VERCEL-PRO-01..04 — recorded PRO-01 [vercel.ts] + PRO-02 [Build Output API] as D-09 defer-with-rationale in deployment.md [net-zero / deploy-path-risk-mid-cleanup; Phase 999.2 stays open; revisit v1.7]; SHIPPED PRO-03 Fluid Compute compat verdict on the memoized createApp() factory [no per-request global mutation; Upstash REST = no shutdown handler; callHistory/llmProgress process-scoped + Phase 28.2.7 Redis write-through] + a no-cross-request-leak smoke assertion in vercel-entry.test.ts; SHIPPED PRO-04 Hobby->Pro docs-drift repair across CLAUDE.md + deployment.md + runbook.md + degradation.md + llm-pipeline-reliability.md [60s->Pro 800s, 3-cron Hobby cap->Pro 40-cron cap, 10s timeout->800s, NIM-primary header reconcile]; bumped dev-env Vercel CLI 52.0.0->54.9.0. vitest 4/4 PASS, typecheck PASS, PRO-04 stale-claim grep 0 live claims)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -114,6 +114,10 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (38-05 PRO-01, D-09) DEFER vercel.json → vercel.ts: vercel.json is purely declarative (crons/rewrites/functions, NO headers block, no drift handlers), so the migration is net-zero simplification while adding @vercel/config + a build step + deploy-path risk mid-cleanup. Recorded in deployment.md; revisit v1.7. The recorded defer-with-rationale is what satisfies SC38-6 for PRO-01.
+- (38-05 PRO-02, D-09) DEFER Build Output API for api/vercel-entry.js: a fundamental deploy-path change that risks the 800s maxDuration, the includeFiles eval-fixture copy, and the rewrite map simultaneously — wrong risk/reward mid-cleanup. Phase 999.2 stays open; revisit v1.7.
+- (38-05 PRO-03) Fluid Compute compat verdict: COMPATIBLE, no code changes. Memoized createApp() reuse is correct (no per-request global state); no graceful-shutdown handler needed (Upstash REST = no connections to drain); callHistory/llmProgress singletons are process-scoped, cron-written (single writer), with Phase 28.2.7 Redis write-through — no cross-request leak. Guarded by a 2-sequential + 4-concurrent /health smoke assertion in vercel-entry.test.ts.
+- (38-05 PRO-04) llm-pipeline-reliability.md header reconciled to NIM-primary / OpenRouter-dormant (consistent with the body's :134 NIM-only declaration) rather than the stale "NIM + OpenRouter cascade" header framing; Hobby/10s/60s/3-cron claims across 5 surfaces repaired to Pro 800s / 40-cron / Fluid-Compute-default semantics; dev-env Vercel CLI bumped 52.0.0 → 54.9.0 (global, not a package.json dependency).
 - (38-04 WATER-LATIN-02, D-08) Library-evaluation outcome: KEEP transliteration@2.6.1, SKIP ICU. The reset acceptance bar (machine-searchable Latin token that admits the facility) is met by transliteration + an artifact-cleanup pass; ICU shares the same abjad vowel-less ceiling at native-binary serverless cost for zero quality win
 - (38-04 WATER-LATIN-02) romanize() artifact-cleanup overrides applied: ة (`@`)→`a`; uppercase emphatic artifacts ص/ط/ح/ض/ظ/غ/ق lowercased en masse via toLowerCase then re-title-cased; separator-run collapse; <2-char fallback to qualifier or "Facility". No per-letter overrides beyond these were needed — the pass clears the searchable-token bar for every RESEARCH sample
 - (38-04 WATER-LATIN-03) applyRomanizedName injects the romanized string as a synthetic name:en on a COPY of tags BEFORE computeAdmissionDecision; el.tags is never mutated, original preserved in nameOriginal, desalination + already-Latin facilities early-return untouched, GENERIC_OSM_NAME_RE filter intact
