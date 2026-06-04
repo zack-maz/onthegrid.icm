@@ -162,7 +162,7 @@ _28 REQ-IDs total — 27 required (parsed above) by strand: LLM-FIX (6) · LLM-P
 6. **SC38-6** Production code and docs agree on Vercel Pro semantics — `vercel.json → vercel.ts` migration decision shipped or explicitly deferred with rationale; Build Output API decision for `api/vercel-entry.js` shipped or explicitly deferred (closes Phase 999.2 backlog if pursued); Fluid Compute compatibility on `createApp()` factory verified; every "Hobby cap 3", "10s timeout", "60s ceiling" claim across CLAUDE.md / deployment.md / runbook.md / degradation.md / reliability-doc removed; Vercel CLI bumped 52 → latest. _(VERCEL-PRO-01, VERCEL-PRO-02, VERCEL-PRO-03, VERCEL-PRO-04)_
 7. **SC38-7** _(conditional — fires only if operator absorbs CRON-WATCH-01 at `/gsd:discuss-phase` 38)_ 7 consecutive days of `/api/cron/refresh-events` PASS — `events:llm:v3` healthy after each 04:00 UTC tick, eval ≥ 0.95 at all radii (5/20/100km), 0 breaker trips, DLQ growth bounded. _(CRON-WATCH-01)_
 
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 **Wave 1**
 
 - [x] 38-01-PLAN.md — LLM-FIX strand (honest signals) + folded CI-green [wave 0]
@@ -171,7 +171,7 @@ _28 REQ-IDs total — 27 required (parsed above) by strand: LLM-FIX (6) · LLM-P
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
-- [ ] 38-04-PLAN.md — WATER-LATIN strand (romanization, transliteration install) [wave 2, after 03]
+- [x] 38-04-PLAN.md — WATER-LATIN strand (romanization, transliteration install) [wave 2, after 03] ✅ WATER-LATIN-01..04 (transliteration@2.6.1 + romanize-before-gate + nameLatin/nameOriginal + consumer surfaces)
 - [ ] 38-05-PLAN.md — VERCEL-PRO strand (Fluid Compute verify + docs-drift; PRO-01/02 deferred) [wave 2, after 02]
 - [ ] 38-06-PLAN.md — GDELT-MATCH 02/03/04 (dedup + corroboration + composite) [wave 2, after 02+03]
 

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-04T07:20:46.676Z"
-last_activity: 2026-06-04 -- Completed 38-02-PLAN.md (LLM-PURGE 01-09; v1/v2/shim/pipelineAudit/Cerebras-Groq/OpenRouter dead-code deletion; typecheck + full server suite green)
+last_updated: "2026-06-04T16:38:15Z"
+last_activity: 2026-06-04 -- Completed 38-04-PLAN.md (WATER-LATIN 01-04; transliteration@2.6.1 + romanize wrapper, romanize-before-gate adapter injection, nameLatin/nameOriginal fields + consumer surfaces; typecheck + plan-gate suite green)
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 38 (llm-pipeline-reliability-gdelt-source-matching-vercel-pro-cl) — EXECUTING
-Plan: 38-02 + 38-03 complete (wave 1); other wave-1 plans + wave 2/3 remain
+Plan: 38-02 + 38-03 complete (wave 1); 38-04 complete (wave 2, WATER-LATIN strand); other wave-1 plans + remaining wave 2/3 remain
 Status: Ready to execute
-Last activity: 2026-06-04 -- Completed 38-02-PLAN.md (LLM-PURGE-01..09 — deleted the extractor stub barrel + callLLM shim + v1/v2 Zod schemas + pipeline-flip audit chain + OpenRouter daily-cap dead writers + Cerebras/Groq env keys; narrowed shared modules to v3-only; rewrote false docstrings. typecheck PASS, server suite 108 files/1295 tests PASS, SC38-3 importer gates all 0)
+Last activity: 2026-06-04 -- Completed 38-04-PLAN.md (WATER-LATIN-01..04 — installed transliteration@2.6.1 [pinned, legitimacy-gated]; built server/lib/romanize.ts wrapper + artifact-cleanup pass [RESET D-08 bar to searchable Latin token, skipped ICU]; scripts/audit-water-names.ts + audit:water; applyRomanizedName injects synthetic name:en BEFORE the Latin-label admission gate so Arabic/Persian/Hebrew facilities admit; added optional nameLatin/nameOriginal to WaterFacility; detail panel + WaterTooltip + search now surface nameLatin with original-on-hover. typecheck PASS, plan-gate suite 117 files/1453 tests PASS)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -114,6 +114,11 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (38-04 WATER-LATIN-02, D-08) Library-evaluation outcome: KEEP transliteration@2.6.1, SKIP ICU. The reset acceptance bar (machine-searchable Latin token that admits the facility) is met by transliteration + an artifact-cleanup pass; ICU shares the same abjad vowel-less ceiling at native-binary serverless cost for zero quality win
+- (38-04 WATER-LATIN-02) romanize() artifact-cleanup overrides applied: ة (`@`)→`a`; uppercase emphatic artifacts ص/ط/ح/ض/ظ/غ/ق lowercased en masse via toLowerCase then re-title-cased; separator-run collapse; <2-char fallback to qualifier or "Facility". No per-letter overrides beyond these were needed — the pass clears the searchable-token bar for every RESEARCH sample
+- (38-04 WATER-LATIN-03) applyRomanizedName injects the romanized string as a synthetic name:en on a COPY of tags BEFORE computeAdmissionDecision; el.tags is never mutated, original preserved in nameOriginal, desalination + already-Latin facilities early-return untouched, GENERIC_OSM_NAME_RE filter intact
+- (38-04 WATER-LATIN-04) The real water tooltip surface is WaterTooltip (WaterOverlay.tsx), NOT EntityTooltip.tsx (whose MapEntity|SiteEntity union excludes water); updated WaterTooltip + WaterFacilityDetail + searchUtils, left EntityTooltip unchanged
+- (38-04) nameLatin/nameOriginal added OPTIONAL to WaterFacility so the live 24h-TTL water:facilities:v3 cache self-heals on next Overpass fetch (pre-Phase-38 entries without the fields still validate)
 - (38-02 LLM-PURGE-01) Pipeline calls processEventGroupsV3/geocodeEnrichedEventsV3 directly with the v3-native flat-array signature; the llmEventExtractor.ts tagged-wrapper barrel was deleted rather than inlined — one truth source, fewer moving parts
 - (38-02 LLM-PURGE-04, Pitfall 2) enrichedEventV2 survives as an UN-EXPORTED base const because enrichedEventV3 = enrichedEventV2.extend(); only the EXPORTED v1/v2 schemas + batchResponseV2 were deleted, and enrichedEventAny collapsed from a 3-arm discriminatedUnion to a single-arm v3 passthrough
 - (38-02 LLM-PURGE-08, D-04 Path A) OpenRouter stays a dormant key-gated cascade provider (ADR-0010 semantics); only the dead llm:tokens:openrouter daily-cap counter + cap-gate were removed. daily_cap left as a legacy skipReason union member

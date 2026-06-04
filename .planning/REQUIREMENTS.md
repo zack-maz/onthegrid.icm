@@ -46,10 +46,10 @@ Operator-locked priority #1. Merged track per operator decision 2026-06-03: LLM-
 
 #### WATER-LATIN — water-facility name romanization (Phase 27.3.3 carry-forward, v1.3 → v1.6)
 
-- [ ] **WATER-LATIN-01**: Audit current state of non-Latin water-facility names in `water:facilities:v3` cache. Quantify: total facilities, count with non-Latin names, count blocked by current Latin-label admission gate, samples per script (Arabic, Persian, Hebrew, etc.).
-- [ ] **WATER-LATIN-02**: Romanization rules per script. Implement ICU transliteration (or equivalent library — evaluate `transliteration`, `unidecode`, `arabic-transliterate`) for the major scripts present. Output preserves the original name plus a Latin alternate.
-- [ ] **WATER-LATIN-03**: Update Overpass water adapter (`server/adapters/overpass-water.ts`) to apply romanization at fetch time, BEFORE the Latin-label admission gate. Gate accepts the romanized version. Preserve original `name` field; add `nameLatin` field.
-- [ ] **WATER-LATIN-04**: Update consumer surfaces (water layer detail panel, search bar, proximity alerts) to display `nameLatin` when set, with the original name available on hover or as a sub-label.
+- [x] **WATER-LATIN-01**: Audit current state of non-Latin water-facility names in `water:facilities:v3` cache. Quantify: total facilities, count with non-Latin names, count blocked by current Latin-label admission gate, samples per script (Arabic, Persian, Hebrew, etc.). _(38-04: `scripts/audit-water-names.ts` + `npm run audit:water` — READ-ONLY per-script gate-rejection bucketing.)_
+- [x] **WATER-LATIN-02**: Romanization rules per script. Implement ICU transliteration (or equivalent library — evaluate `transliteration`, `unidecode`, `arabic-transliterate`) for the major scripts present. Output preserves the original name plus a Latin alternate. _(38-04: D-08 evaluation kept `transliteration@2.6.1`, RESET bar to searchable Latin token, SKIPPED ICU; `server/lib/romanize.ts` wrapper + artifact-cleanup pass.)_
+- [x] **WATER-LATIN-03**: Update Overpass water adapter (`server/adapters/overpass-water.ts`) to apply romanization at fetch time, BEFORE the Latin-label admission gate. Gate accepts the romanized version. Preserve original `name` field; add `nameLatin` field. _(38-04: `applyRomanizedName` injects synthetic `name:en` before `computeAdmissionDecision`; added optional `nameLatin` + `nameOriginal` to `WaterFacility`.)_
+- [x] **WATER-LATIN-04**: Update consumer surfaces (water layer detail panel, search bar, proximity alerts) to display `nameLatin` when set, with the original name available on hover or as a sub-label. _(38-04: WaterFacilityDetail + WaterTooltip show romanized name with original-on-hover/sub-label; searchUtils indexes nameLatin + nameOriginal.)_
 
 #### VERCEL-PRO — Vercel Pro cleanup-and-repair (Strand B from former 999.6)
 
