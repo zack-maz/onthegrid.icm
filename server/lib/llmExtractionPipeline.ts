@@ -39,6 +39,7 @@ import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 
 import { checkCorroboration } from './corroboration.js';
 import { dedupHighConfidence, groupGdeltRows } from './eventGrouping.js';
+import { countDLQ } from './llmDLQ.js';
 import { runEval } from './llmEvalHarness.js';
 import {
   processEventGroupsV3,
@@ -334,6 +335,21 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
       // Degrade-open (openRunRecord try/caught internally; never throws).
       await openRunRecord({ runId, startedAt });
 
+      // Phase 39 SC39-3 (WR-01) — DLQ size snapshot at run OPEN. dlqDelta in the
+      // closed run record is computed as max(0, close - open) so the FlightRecorder
+      // can surface how many groups this run pushed to the dead-letter queue
+      // (the prior hardcoded `dlqDelta: 0` made the 'partial' band dead code).
+      //
+      // CAVEAT (bounded-set): `events:llm-dlq` is a 200-entry / 7d-TTL bounded
+      // set (server/lib/llmDLQ.ts). When the set is at its cap, new enqueues
+      // LRU-evict the oldest, so SCARD(close) - SCARD(open) UNDERCOUNTS the true
+      // run delta in a saturated DLQ. The max(0, …) floor also masks a delta
+      // that goes negative because TTL expiry or eviction outpaced this run's
+      // enqueues. This is an honest lower bound on DLQ growth, not an exact
+      // per-run enqueue count — acceptable for the operator decision-support
+      // signal (a non-zero delta truthfully indicates failures occurred).
+      const dlqSizeAtOpen = await countDLQ();
+
       // Mutable outcome witness — each terminal branch sets this, and the single
       // close in the `finally` block re-LPUSHes the terminal record (Open Q3:
       // prefer a finally close so a missed branch still closes the run). Defaults
@@ -341,23 +357,46 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
       let runOutcome: RunHistoryEntry['outcome'] = 'error';
 
       // Snapshot the current llmProgress into a terminal RunHistoryEntry. v3/NIM
-      // single-provider per D-04; dlqDelta defaults to 0 (the singleton does not
-      // track a per-run DLQ delta — honest zero rather than a fabricated count).
-      const buildRunHistoryEntry = (outcome: RunHistoryEntry['outcome']): RunHistoryEntry => {
+      // single-provider per D-04.
+      //
+      // Phase 39 SC39-3 (WR-01) — honest failure accounting:
+      //   - `batchesFailed` comes from the v3 extractor's per-run failure tally
+      //     (llmProgress.failedBatches), which counts ONLY genuine-failure
+      //     terminal branches. The prior `totalBatches - completedBatches`
+      //     derivation was structurally ~0 because finishBatch() ticks
+      //     completedBatches on EVERY terminal branch (success AND failure).
+      //   - `batchesCompleted` is now the true SUCCESS count (total - failed) so
+      //     the FlightRecorder's `{done}/{total} groups` reads honestly and the
+      //     'partial'/'failed' outcome bands can fire.
+      //   - `dlqDelta` is the real DLQ growth across the run (close - open,
+      //     floored at 0) — see the bounded-set caveat at the open snapshot.
+      const buildRunHistoryEntry = async (
+        outcome: RunHistoryEntry['outcome'],
+      ): Promise<RunHistoryEntry> => {
         const totalBatches = llmProgress.totalBatches ?? 0;
-        const completedBatches = llmProgress.completedBatches ?? 0;
+        const failedBatches = Math.min(totalBatches, llmProgress.failedBatches ?? 0);
+        const succeededBatches = Math.max(0, totalBatches - failedBatches);
         const cost = llmProgress.costShadow;
+        let dlqDelta = 0;
+        try {
+          const dlqSizeAtClose = await countDLQ();
+          dlqDelta = Math.max(0, dlqSizeAtClose - dlqSizeAtOpen);
+        } catch {
+          // Degrade-open — a Redis hiccup on the close snapshot yields an honest
+          // 0 delta rather than failing the run-record close.
+          dlqDelta = 0;
+        }
         return {
           runId,
           startedAt,
           completedAt: new Date().toISOString(),
           outcome,
           batchCount: totalBatches,
-          batchesCompleted: completedBatches,
-          batchesFailed: Math.max(0, totalBatches - completedBatches),
+          batchesCompleted: succeededBatches,
+          batchesFailed: failedBatches,
           tokenSpend: { nvidia_nim: cost ? cost.tokensIn + cost.tokensOut : 0 },
           evalScore: llmProgress.evalScore,
-          dlqDelta: 0,
+          dlqDelta,
           watchdogTimeouts: llmProgress.watchdogTimeoutCount ?? 0,
           durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
           pipelineVersion: 'v3',
@@ -491,8 +530,19 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         }
         updateProgress({ provenanceCounts, suspectCount });
 
+        // Phase 39 SC39-3 (WR-04) — capture the eval result and stamp it onto
+        // the live progress singleton so `buildRunHistoryEntry` snapshots THIS
+        // run's actual score into the run record (and the FlightRecorder eval
+        // pill renders a real value). `runEval()` already calls
+        // updateProgress({ evalScore }) internally, but we re-stamp explicitly
+        // here so the run-record write does not depend on that side effect — a
+        // future refactor of runEval that drops the internal write would
+        // otherwise silently blank the eval pill again. The shape is the real
+        // harness shape (`{ within5km, within20km, within100km, total,
+        // actorMatchRate }`); the client renders within20km/total (WR-05).
         try {
           const evalScore = await runEval();
+          updateProgress({ evalScore });
           log.info({ evalScore, schemaVersion: 'v3' }, 'eval harness completed');
         } catch (evalErr) {
           log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
@@ -551,7 +601,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         // default 'error' outcome is the honest fallback). closeRunRecord
         // re-LPUSHes the terminal record over the earlier 'running' one; the
         // reader dedupes by runId head-first. Degrade-open (never throws).
-        await closeRunRecord(buildRunHistoryEntry(runOutcome));
+        await closeRunRecord(await buildRunHistoryEntry(runOutcome));
 
         // Phase 32 Plan 32-03 Task 3 — cron post-step. Runs AFTER the
         // existing extraction work resolves (success OR error path) so

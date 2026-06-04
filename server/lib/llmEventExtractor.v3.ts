@@ -578,6 +578,18 @@ export async function processEventGroupsV3(
     await onBatchComplete?.(c, totalBatches);
   };
 
+  // Phase 39 SC39-3 (WR-01) — honest per-run failure accounting. `finishBatch`
+  // ticks on EVERY terminal branch (success AND failure) so the progress
+  // cadence is monotonic; this separate tally counts ONLY genuine-failure
+  // terminal branches (watchdog null content, JSON.parse fail, Zod fail, or an
+  // adaptive split that yielded zero events). Surfaced into llmProgress.failedBatches
+  // so the run record's batchesFailed is honest and the FlightRecorder's
+  // 'partial'/'failed' outcome bands can actually fire. Synchronous R-M-W is
+  // race-safe under JS single-threading (same contract as the other counters).
+  const recordFailedBatch = (): void => {
+    updateProgress({ failedBatches: (llmProgress.failedBatches ?? 0) + 1 });
+  };
+
   const tasks: Promise<void>[] = [];
   for (let i = 0; i < groupsToProcess.length; i += BATCH_SIZE) {
     const batch = groupsToProcess.slice(i, i + BATCH_SIZE);
@@ -712,12 +724,16 @@ export async function processEventGroupsV3(
             const splitEvents = await splitBatchOnTimeout(contexts, batchIndex);
             results.push(...splitEvents);
             if (splitEvents.length > 0) allFailed = false;
+            // WR-01 — a split that recovered zero events is a failed batch; a
+            // split that recovered at least one half counts as a success.
+            if (splitEvents.length === 0) recordFailedBatch();
             await finishBatch();
             return;
           }
           // Either freeClaudeCallLLM returned null OR the watchdog fired. Both
           // paths already logged / DLQ'd / updated telemetry; just return.
           log.warn({ batchIndex }, 'v3 batch yielded no content (null or watchdog timeout)');
+          recordFailedBatch(); // WR-01 — null/timeout terminal branch is a failure
           await finishBatch();
           return;
         }
@@ -760,6 +776,7 @@ export async function processEventGroupsV3(
           sf[primary].total += 1;
           sf[primary].malformedJson += 1;
           updateProgress({ schemaFailures: sf });
+          recordFailedBatch(); // WR-01 — JSON.parse failure terminal branch is a failure
           await finishBatch();
           return;
         }
@@ -787,6 +804,7 @@ export async function processEventGroupsV3(
           sf[primary].total += 1;
           sf[primary].missingField += 1;
           updateProgress({ schemaFailures: sf });
+          recordFailedBatch(); // WR-01 — Zod schema-fail terminal branch is a failure
           await finishBatch();
           return;
         }

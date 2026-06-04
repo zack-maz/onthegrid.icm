@@ -34,6 +34,21 @@ export interface LLMPipelineProgress {
   totalBatches: number;
   completedBatches: number;
 
+  /**
+   * Phase 39 SC39-3 (WR-01): count of batches that reached a terminal FAILURE
+   * branch this run (watchdog timeout → null content, JSON.parse failure,
+   * Zod schema failure, or an adaptive split that produced zero events).
+   *
+   * Distinct from `completedBatches`, which `finishBatch()` increments on EVERY
+   * terminal branch (success AND failure) to drive the `onBatchComplete`
+   * progress cadence. Before this field, `batchesFailed` in the run record was
+   * derived as `totalBatches - completedBatches` and was therefore structurally
+   * ~0 — a run where every batch failed still painted SUCCESS/green. The v3
+   * extractor now increments this counter on each genuine failure branch so the
+   * run record can report an honest failure tally. Optional + cleared on reset.
+   */
+  failedBatches?: number;
+
   // Geocoding stage
   totalGeocodes: number;
   completedGeocodes: number;
@@ -553,6 +568,9 @@ export const INITIAL_PROGRESS: Readonly<LLMPipelineProgress> = {
   newGroups: 0,
   totalBatches: 0,
   completedBatches: 0,
+  // Phase 39 SC39-3 (WR-01) — cleared between runs so a stale failure tally
+  // from yesterday's run doesn't poison today's honest outcome accounting.
+  failedBatches: undefined,
   totalGeocodes: 0,
   completedGeocodes: 0,
   enrichedCount: 0,
