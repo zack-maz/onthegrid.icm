@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: LLM Reliability & Reveal Prep — ✅ SHIPPED 2026-06-03
-status: shipped
-last_updated: 2026-06-03T03:40:00.000Z
-last_activity: 2026-06-03 -- Phase 37 complete (3/3); v1.5 milestone CLOSED; LLM-RELI-07 acceptance gate satisfied (3 consecutive greens); v1.6 promotion unblocked (Phase 999.5 next)
+milestone: v1.6
+milestone_name: Production Hardening
+status: planning
+last_updated: "2026-06-04T03:59:26.909Z"
+last_activity: 2026-06-04
 progress:
-  total_phases: 15
-  completed_phases: 10
-  total_plans: 62
-  completed_plans: 60
-  percent: 67
-stopped_at: v1.5 SHIPPED 2026-06-03 — ready for v1.6 milestone start (Phase 999.5 Performance Load Test promotes first)
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -24,18 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Milestone: **v1.5 LLM Reliability & Reveal Prep — ✅ SHIPPED 2026-06-03**
-Next: v1.6 milestone start (Phase 999.5 Performance Load Test promotes first)
-Status: v1.5 closed; ready for v1.6 planning
-Last activity: 2026-06-03 -- Phase 37 closed; LLM-RELI-07 acceptance gate satisfied
-
-Phase 37 close artifact: [`.planning/phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md`](phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md).
-
-v1.5 CHANGELOG entry: [`CHANGELOG.md`](../CHANGELOG.md) §`[v1.5]` — 10 phases shipped 2026-05-11 → 2026-06-03 (24 days).
-
-Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at `.planning/milestones/v1.4-MILESTONE-AUDIT.md`.
-
-Acceptance gate (set at v1.5 milestone start, blocked v1.6 promotion): `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs (LLM-RELI-07). **OBSERVED 2026-06-01 → 2026-06-03**: Run 1 [26771054370](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26771054370), Run 2 [26856054351](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856054351), Run 3 [26856364229](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856364229). Gate satisfied; v1.6 promotion unblocked.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-04 — Milestone v1.6 started
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 

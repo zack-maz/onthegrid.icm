@@ -14,25 +14,57 @@ Surface actionable, data-backed intelligence on the Iran conflict in real-time o
 
 **v1.5 milestone archives:** `.planning/milestones/v1.5-ROADMAP.md` · `.planning/milestones/v1.5-REQUIREMENTS.md` · `.planning/milestones/v1.5-phases/` · `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` · `CHANGELOG.md` §`[v1.5]`.
 
-## Next Milestone Goals: v1.6 (planning)
+## Current Milestone: v1.6 Production Hardening
 
-**Primary deliverable:** Phase 999.5 (Performance Optimization + 1–300 VU k6 sweep) promotes from `.planning/phases/999.5-performance-load-test/` as v1.6's first phase. LLM-RELI-07 acceptance gate is satisfied — the prerequisite tier-green stability has been mechanically proven.
+**Goal:** Fix the LLM-pipeline reliability gaps surfaced at v1.5 close, tighten GDELT event-source matching, give the operator dashboard a budget/cost surface and a polish pass, then ship the public-reveal portfolio surface.
 
-**Likely tracks (to be locked at `/gsd:new-milestone`):**
+**Target features (operator-locked priority order, 2026-06-03):**
 
-1. **999.5 Performance Load Test** — k6 1–300 VU sweep per 28-CONTEXT.md D-15..D-21. PASS/FAIL bar: p95<500ms hot endpoints, p99<1500ms, error<1%, no 5xx spikes, cache-hit>90%. Performance optimization layer per D-19 (s-maxage CDN headers).
-2. **Phase 31 reopening** — 7-day cron stability watch, this time finished. Slow-burn regression caveat from v1.5 Phase 31 close should not repeat.
-3. **Public reveal polish** — REVEAL-01 + REVEAL-02 (landing-page polish, demo flows, social-share assets; public domain decision).
-4. **Phase 999.4 cron route hydrates pipeline override** — 1-line `await refreshPipelineOverride()` fix in `server/routes/refresh-events-cron.ts`. Was load-bearing during v1.4 deploy.
-5. **Open-Meteo cache-write policy** — `server/routes/water.ts:358-360` empty-result skip caused Phase 37 audit failures; tighten cache-write policy + add cron warmer.
-6. **`news:feed` cron warmer** — Vercel Pro cron quota likely supports a 4th entry.
-7. **Cerebras + Groq adapter source-file removal** — if no v1.6 router-restoration phase is scheduled, the adapter source files in `server/adapters/` should be deleted (they remain importable for emergency rollback today).
+1. **Phase 38 — LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup** _(merged track; operator decision: assess LLM + GDELT quality together)_
+   - LLM bugs surfaced at v1.5 close: `lastErrorReason` token split (`server/routes/health.ts:170`), Open-Meteo cache-write policy (`server/routes/water.ts:359`), `events.test.ts` v1→v3 mock drift, chaos-mock coverage gap for raw `redis.incr/sadd/scan/zadd/hset/hincrby/lpush`, `33-AUDIT-REPORT.md` stub causing silent `actorMatchRate: 0`.
+   - Phase 29 finishing pass — dead-code purge (`llmEventExtractor.ts` stub, v1/v2 Zod schemas, `pipelineAudit.ts` writer, `llm-provider.ts` shim, stale headers across v3 + events route, `freeClaudeRouter.ts` OpenRouter daily-cap counter, `CEREBRAS_API_KEY` + `GROQ_API_KEY` env vars, `replayQuota.ts` Cerebras-anchored threat model).
+   - **Cerebras + Groq source-file removal** from `server/adapters/` — folds in here (no separate dead-code phase).
+   - GDELT event-source matching improvements — Phase-22-style audit of current quality, better dedup of GDELT mentions, tighter coupling between GDELT-DOC clusters and events, source-tier-aware confidence rescore.
+   - **Vercel Pro cleanup-and-repair (Strand B from former 999.6)** — `vercel.json → vercel.ts` migration evaluation, Vercel Build Output API for `api/vercel-entry.js` artifact (closes Phase 999.2 if pursued), Fluid Compute compatibility verification on the Express factory, CLI bump 52→latest, Hobby→Pro docs-drift repair (CLAUDE.md:101, deployment.md:56/133, runbook.md:539-547, degradation.md:329, reliability-doc header).
+   - **MAY include** Phase 31 reopening (7-day cron stability watch, finished properly this time) — operator-discretion at `/gsd-discuss-phase`.
+   - **MAY include** the `docs sync` first-task bundle (drift bugs #1-7 + OpenAPI gap #16 + reliability-doc header inconsistency #20).
+
+2. **Phase 39 — Token Budget + Cost Dashboard Visibility** _(new feature)_
+   - `BudgetBlock` in `DevApiStatus.tsx` surfacing `llm:tokens:{provider}:YYYY-MM-DD` per-provider used vs cap, soft (0.8) / hard (0.95) threshold proximity, historical trend.
+   - Cost-shadow accrual surface from `events:llm-cost-shadow:v3:{YYYY-MM-DD}` (HSET `tokensIn` / `tokensOut` / `usdMicrocents`).
+   - New `/api/operator-status` field, Bearer-gated read, mirroring the existing `actorQuality` block pattern.
+
+3. **Phase 40 — Dashboard UI/UX Polish + Subtab Consolidation** _(UI polish)_
+   - Tab navigation, spacing, typography, color refinements on `DevApiStatus.tsx` (10+ accumulated sub-blocks through Phase 32/33/35).
+   - Sub-block consolidation (tier summary, per-endpoint quality, retry, fetch sparkline, eval scoreblock, operator actions, advEval, actorQuality, dead-URL count + drill-down, pin TTL, byBearer).
+   - Produces UI-SPEC.md via `gsd-ui-phase` before `gsd-plan-phase`.
+   - `frontend-design` skill drives the polish pass.
+
+4. **Phase 41 — Public Reveal Polish** _(final phase; absorbs former 999.6 Strand A)_
+   - Portfolio-docs deliverables: `docs/BUILDING-WITH-CLAUDE-CODE.md` (the agentic-dev meta-story), `docs/SHOWCASE.md` (guided tour hub), `docs/JOURNEY.md` (product arc narrative + Mermaid gantt), `docs/concepts.md` (~30-term glossary), `docs/COSTS.md` (transparency: Vercel Pro $20/mo + Claude Code dev cost honest accounting), `docs/operator-guide.md` (visitor how-to), `docs/LESSONS.md` (distilled retrospective), `docs/timeline.md` (or fold into JOURNEY).
+   - `public/screenshots/` extension — ~10 layer-by-layer screenshots; `npm run capture:layers` for reproducibility.
+   - Brainstorms cleanup — `docs/brainstorms/` + `docs/superpowers/` consolidation/cross-link/archive decision.
+   - REVEAL-01 + REVEAL-02 user-facing reveal work — landing-page polish, demo flows, social-share assets, custom-domain decision.
+   - **Final-sweep requirement (from former 999.6 CONTEXT):** re-run the v1.5-close 2nd-pass code + docs audit against then-current main before any docs land — by Phase 41 promotion, Phase 38/39/40 will have moved things and the `project-v1-6-cleanup-punchlist` + `project-v1-6-docs-drift` memories will be partially stale. Merge net-new findings into Phase 41 scope; drop captured-but-resolved items.
+
+**Phase numbering:** continues from v1.5 (last phase 37) → v1.6 starts at Phase 38.
+
+**Parallelization hint:** Phase 38 + 39 can interleave (both touch LLM surfaces); 40 + 41 are independent of each other and of the LLM track once the dashboard data shape is settled.
+
+**Deferred to backlog or later milestones:**
+
+- **Phase 999.5** — Performance Optimization + 1–300 VU k6 sweep stays in backlog at `.planning/phases/999.5-performance-load-test/`. Promotion gate (3 consecutive `prod-connectivity-audit.yml` greens) was mechanically satisfied in Phase 37; operator deferred promotion at v1.6 lock-in to prioritize reliability + UI work first.
+- **Phase 999.6** — RETIRED from backlog. Strand A (portfolio docs) folded into Phase 41. Strand B (Vercel Pro cleanup) folded into Phase 38.
+- **Phase 999.1 / 999.2 / 999.3** — parked v1.4 carry-forwards; re-evaluate at v1.7 or fold in if scope alignment surfaces during Phase 38 drafting.
+- **Phase 27.3.3 water-name romanization** — backlog.
+- **`news:feed` cron warmer** — folds into Phase 38 if scope allows; otherwise carries.
 
 **Out of scope for v1.6 (carry to v1.7 or later):**
 
 - v4 multi-provider router — operator-rejected at v1.5 start; would need a new milestone-start decision.
-- 27.3.3 water-name romanization — backlog.
-- Phase 27.4.5 LLM observability flight recorder — operator-rejected; existing 8-block DevApiStatus events tab covers diagnostic needs.
+- Phase 27.4.5 LLM observability flight recorder — operator-rejected; existing 8-block `DevApiStatus` events tab covers diagnostic needs.
+- "Phase 29 finishing pass" as a single bundled PR — broken across priority-aligned phases (Phase 38 absorbs the LLM-side dead code; Phase 41 absorbs the docs cleanup).
+- Standalone Cerebras + Groq removal phase — folded into Phase 38 dead-code pass.
 
 <details>
 <summary>v1.0–v1.5 milestone history (archived)</summary>
@@ -116,7 +148,7 @@ For per-phase detail, see `.planning/milestones/v[X.Y]-ROADMAP.md`.
 
 ### Active
 
-To be defined at `/gsd:new-milestone` for v1.6. Likely tracks listed under "Next Milestone Goals" above.
+Defined for v1.6 Production Hardening at `/gsd:new-milestone` 2026-06-03. Detailed REQ-IDs grouped by category live in `.planning/REQUIREMENTS.md` (LLM-PIPE, BUDGET, UI, REVEAL). Roadmap mapping at `.planning/ROADMAP.md`.
 
 ### Out of Scope
 
@@ -202,4 +234,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-06-03 after v1.5 LLM Reliability & Reveal Prep milestone close. 10 phases (29-37 incl. 30.1). 60 plans executed. 47/47 v1.5 requirements closed (43 Complete · 1 validated single-day with caveat · 4 cerebras-groq-deferred). LLM-RELI-07 acceptance gate satisfied (3 consecutive `prod-connectivity-audit.yml` greens). ADR-0010 milestone-final. v1.6 promotion unblocked (Phase 999.5 Performance Load Test promotes first)._
+_Last updated: 2026-06-03 at v1.6 Production Hardening milestone start. 4 phases planned (38 LLM Pipeline + GDELT + Vercel Pro Cleanup; 39 Budget Dashboard; 40 UI Polish; 41 Public Reveal). Operator-locked priority order per `project-v1-6-priorities` memory: LLM fixes > budget visibility > UI polish > public reveal. Phase 999.5 stays in backlog (operator deferred promotion); Phase 999.6 retired (folded into 38 + 41). Numbering continues from v1.5 phase 37._
