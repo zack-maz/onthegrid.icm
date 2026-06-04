@@ -167,7 +167,16 @@ Full phase-by-phase detail archived to [milestones/v1.5-ROADMAP.md](milestones/v
 6. **SC38-6** Production code and docs agree on Vercel Pro semantics — `vercel.json → vercel.ts` migration decision shipped or explicitly deferred with rationale; Build Output API decision for `api/vercel-entry.js` shipped or explicitly deferred (closes Phase 999.2 backlog if pursued); Fluid Compute compatibility on `createApp()` factory verified; every "Hobby cap 3", "10s timeout", "60s ceiling" claim across CLAUDE.md / deployment.md / runbook.md / degradation.md / reliability-doc removed; Vercel CLI bumped 52 → latest. _(VERCEL-PRO-01, VERCEL-PRO-02, VERCEL-PRO-03, VERCEL-PRO-04)_
 7. **SC38-7** _(conditional — fires only if operator absorbs CRON-WATCH-01 at `/gsd:discuss-phase` 38)_ 7 consecutive days of `/api/cron/refresh-events` PASS — `events:llm:v3` healthy after each 04:00 UTC tick, eval ≥ 0.95 at all radii (5/20/100km), 0 breaker trips, DLQ growth bounded. _(CRON-WATCH-01)_
 
-**Plans:** TBD (created via `/gsd:plan-phase 38`)
+**Plans:** 6 plans across 3 waves (strand-aligned per D-01):
+
+- [ ] 38-01-PLAN.md — LLM-FIX strand (honest signals) + folded CI-green [wave 0]
+- [ ] 38-02-PLAN.md — LLM-PURGE strand (Phase 29 dead-code finishing pass) [wave 1, after 01]
+- [ ] 38-03-PLAN.md — GDELT-MATCH-01 corpus audit (hard gate for 06) [wave 1]
+- [ ] 38-04-PLAN.md — WATER-LATIN strand (romanization, transliteration install) [wave 2, after 03]
+- [ ] 38-05-PLAN.md — VERCEL-PRO strand (Fluid Compute verify + docs-drift; PRO-01/02 deferred) [wave 2, after 02]
+- [ ] 38-06-PLAN.md — GDELT-MATCH 02/03/04 (dedup + corroboration + composite) [wave 2, after 02+03]
+
+CRON-WATCH-01 DEFERRED to v1.7 (D-02) — SC38-7 stays unfired.
 
 ### Phase 39: Operator Visibility — Token Budget + Cost-Shadow + LLM Flight Recorder
 
@@ -237,7 +246,7 @@ Full phase-by-phase detail archived to [milestones/v1.5-ROADMAP.md](milestones/v
 
 | Phase | Name                                                                  | Plans Complete | Status      | Completed |
 | ----- | --------------------------------------------------------------------- | -------------- | ----------- | --------- |
-| 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 0/TBD          | Not started | —         |
+| 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 0/6            | Planned     | —         |
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 0/TBD          | Not started | —         |
 | 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 0/TBD          | Not started | —         |
 | 41    | Public Reveal Polish                                                  | 0/TBD          | Not started | —         |
