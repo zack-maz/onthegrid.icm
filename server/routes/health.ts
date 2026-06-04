@@ -15,6 +15,7 @@ import {
 } from '../lib/healthSources.js';
 import { llmProgress, LLM_LASTPROGRESS_KEY } from '../lib/llmProgress.js';
 import { logger } from '../lib/logger.js';
+import { sanitizeError } from '../lib/sanitizeError.js';
 
 const log = logger.child({ module: 'health' });
 
@@ -90,21 +91,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   return Promise.race([promise, timeout]).finally(() => {
     if (timer) clearTimeout(timer);
   });
-}
-
-/**
- * Sanitize an error message before publishing on the wire (T-28.1-W2-01).
- * Strips Bearer tokens, query-string api keys, Upstash REST URLs, and
- * truncates to 200 chars. Mirrors the project's redaction posture
- * established by `server/lib/logger.ts`.
- */
-function sanitizeError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  const masked = raw
-    .replace(/Bearer\s+[A-Za-z0-9._-]+/g, 'Bearer [REDACTED]')
-    .replace(/api[_-]?key=[A-Za-z0-9._-]+/gi, 'api_key=[REDACTED]')
-    .replace(/https:\/\/[^\s]*upstash\.io[^\s]*/g, '[upstash url redacted]');
-  return masked.length > 200 ? masked.slice(0, 197) + '...' : masked;
 }
 
 interface ProbeResult {

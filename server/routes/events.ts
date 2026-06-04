@@ -28,6 +28,7 @@ import { appendOperatorAuditEntry, bearerFingerprint } from '../lib/operatorAudi
 import { checkPruneQuota } from '../lib/pruneQuota.js';
 import { computeCompositeScore } from '../lib/relevanceScorer.js';
 import { checkReplayQuota } from '../lib/replayQuota.js';
+import { sanitizeError } from '../lib/sanitizeError.js';
 // Phase 32 Plan 32-03 — POST /api/events/prune-dead-urls + cron auto-prune
 // share one helper. The route is the Bearer-gated entry point for the
 // dashboard click (Plan 32-05) AND the cron post-step (Plan 32-03 Task 3,
@@ -293,20 +294,26 @@ export const enrichedToEntities = enrichedV3ToEntities;
  * copies sorted by `data.compositeScore` descending; the raw `events:llm:v3`
  * corpus is never re-written and no event is dropped.
  *
- * `compositeScore` is computed from the event's already-present source tier
- * (`data.sourceTier`) and resolved precision (`data.precision`) plus any
- * corroboration boost the caller has already stamped onto `data.compositeScore`
- * upstream (opportunistic — defaults to 0 when no boost was applied). Events
- * keep their relative order on ties via a stable timestamp fallback.
+ * The v3 producer (`enrichedV3ToEntities`) already folds source tier +
+ * precision + the strict three-gate OSINT corroboration boost (GDELT-MATCH-03)
+ * into `data.compositeScore`. This read path PRESERVES that stored score
+ * verbatim — recomputing it here would have to pass `corroborationBoost: 0`
+ * (the news clusters aren't in scope on the read path) and would silently
+ * discard the corroboration signal the ordering exists to surface (Phase 38
+ * CR-01). Only cold/legacy entries that never passed through the producer
+ * (e.g. the raw-GDELT Pitfall-1 bridge) lack a stored score; those get a
+ * tier+precision-only score synthesized here so they still sort sensibly.
+ * Events keep their relative order on ties via a stable timestamp fallback.
  */
 function applyCompositeOrdering(events: ConflictEventEntity[]): ConflictEventEntity[] {
   const scored = events.map((event) => {
+    if (typeof event.data.compositeScore === 'number') {
+      // Producer already folded tier + precision + corroboration — keep it.
+      return event;
+    }
     const tier = event.data.sourceTier ?? null;
     const precision = event.data.precision ?? 'region';
-    // Preserve any corroboration boost a producer already folded into the
-    // existing compositeScore (additive); otherwise start from 0.
-    const corroborationBoost = 0;
-    const compositeScore = computeCompositeScore({ tier, corroborationBoost, precision });
+    const compositeScore = computeCompositeScore({ tier, corroborationBoost: 0, precision });
     return { ...event, data: { ...event.data, compositeScore } };
   });
 
@@ -506,7 +513,7 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     } catch (err) {
       return res.status(503).json({
         error: 'replay_quota_unavailable',
-        detail: String(err).slice(0, 200),
+        detail: sanitizeError(err),
       });
     }
     if (!quota.allowed) {
@@ -559,7 +566,7 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     } catch (err) {
       return res.status(500).json({
         error: 'extract_failed',
-        detail: String(err).slice(0, 200),
+        detail: sanitizeError(err),
       });
     }
   });
@@ -629,7 +636,7 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
       // internally so it won't propagate.
       return res.status(503).json({
         error: 'prune_failed',
-        detail: String(err).slice(0, 200),
+        detail: sanitizeError(err),
       });
     }
   });

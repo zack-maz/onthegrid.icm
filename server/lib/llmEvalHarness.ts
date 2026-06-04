@@ -290,7 +290,10 @@ export async function runEval(opts: { model?: string } = {}): Promise<EvalScore>
       within20km: 0,
       within100km: 0,
       total: 0,
-      actorMatchRate: 0,
+      // Phase 38 WR-02 — null (not 0) when the ground-truth fixture is absent,
+      // so "not populated" reads honestly distinct from a real 0% actor match.
+      // Consistent with LLM-FIX-03 (EvalScore.actorMatchRate is number | null).
+      actorMatchRate: null,
     };
     // Still emit the zero score so DevApiStatus clears any stale value from a
     // previous run with a valid ground-truth file.

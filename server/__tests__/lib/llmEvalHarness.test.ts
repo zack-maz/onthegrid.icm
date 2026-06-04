@@ -385,15 +385,15 @@ describe('runEval with no ground-truth available', () => {
 
     const score = await runEval();
 
-    // Phase 33 D-13: zero shape now carries actorMatchRate=0 alongside the
-    // geocode buckets. The interface remains additive (existing buckets
-    // unchanged) so pre-33 readers ignore the new field.
+    // Phase 38 WR-02: with no ground-truth fixture, actorMatchRate is null
+    // (not 0) so "not populated" reads honestly distinct from a real 0% actor
+    // match (consistent with LLM-FIX-03; EvalScore.actorMatchRate is number | null).
     expect(score).toEqual({
       within5km: 0,
       within20km: 0,
       within100km: 0,
       total: 0,
-      actorMatchRate: 0,
+      actorMatchRate: null,
     });
     // resolver never called when ground-truth is absent.
     expect(vi.mocked(resolveLocation)).not.toHaveBeenCalled();
@@ -405,7 +405,7 @@ describe('runEval with no ground-truth available', () => {
           within20km: 0,
           within100km: 0,
           total: 0,
-          actorMatchRate: 0,
+          actorMatchRate: null,
         },
       }),
     );

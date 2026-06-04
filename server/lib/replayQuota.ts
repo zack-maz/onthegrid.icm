@@ -8,8 +8,10 @@
  *
  * Implementation mirrors server/lib/llmTokenBudget.ts INCR-with-TTL pattern:
  *   - INCR `operator:replay-quota:{fingerprint}:{YYYY-MM-DD}` on every call
- *   - When INCR returns 1 (first call of the day), EXPIRE the key to 48h
- *     so the UI gets a 24h lookback window even after rollover
+ *   - EXPIRE the key to 48h on every call (idempotent TTL refresh) so the UI
+ *     gets a 24h lookback window even after rollover AND a counter whose first
+ *     EXPIRE failed during a Redis flap self-heals instead of leaking a
+ *     TTL-less key forever (Phase 38 WR-04)
  *   - Compare returned counter to the hard-coded cap (NOT env-tunable per
  *     CONTEXT D-09 "no new env-tunable surfaces")
  *
@@ -29,7 +31,8 @@ const CAP = 50;
 /** Redis key namespace for the per-day per-Bearer counter. */
 const QUOTA_KEY_PREFIX = 'operator:replay-quota:';
 
-/** TTL applied on the first INCR of each new day's key. */
+/** TTL (re)applied on every INCR so a counter whose first EXPIRE failed during
+ *  a Redis flap self-heals instead of leaking TTL-less (Phase 38 WR-04). */
 const QUOTA_TTL_SEC = 48 * 3600;
 
 /** Result of a single quota probe. */
@@ -66,10 +69,12 @@ export async function checkReplayQuota(fingerprint: string): Promise<ReplayQuota
   const key = `${QUOTA_KEY_PREFIX}${fingerprint}:${ymd}`;
 
   const used = await redis.incr(key);
-  if (used === 1) {
-    // First call of the day — set the 48h sliding TTL.
-    await redis.expire(key, QUOTA_TTL_SEC);
-  }
+  // WR-04: incr + expire are two non-atomic round trips. If a prior call's
+  // expire threw (Redis flap), the YMD-scoped counter would persist with NO
+  // TTL — a permanent key leak that burns quota slots forever. Re-assert the
+  // TTL on every call: it is idempotent (the key rolls over daily anyway) and
+  // self-heals a window whose first EXPIRE never landed.
+  await redis.expire(key, QUOTA_TTL_SEC);
 
   // Compute next UTC midnight using UTC components (not local time).
   const next = new Date(

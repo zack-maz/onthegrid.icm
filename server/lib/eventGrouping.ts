@@ -143,6 +143,11 @@ export function dedupHighConfidence(entities: ConflictEventEntity[]): ConflictEv
       if (actorPairKey(candidate) !== entityActors) continue;
       if (haversineKm(candidate.lat, candidate.lng, entity.lat, entity.lng) > DEDUP_RADIUS_KM)
         continue;
+      // WR-03: jaccard(∅, ∅) === 1, so two rows whose title+notes yield empty
+      // token sets would pass the similarity gate on zero textual evidence and
+      // over-collapse. Treat empty-vs-empty as NOT a duplicate — prefer
+      // under-collapsing (D-07 / Pitfall 6).
+      if (keptTokens[i]!.size === 0 && tokens.size === 0) continue;
       if (jaccard(keptTokens[i]!, tokens) < DEDUP_TITLE_JACCARD) continue;
 
       // All gates passed — this is a high-confidence duplicate of an already
