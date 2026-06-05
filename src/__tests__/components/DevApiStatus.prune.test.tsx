@@ -229,6 +229,10 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     useUIStore.setState({
       isDevApiStatusOpen: false,
       activeDevApiStatusTab: 'apiHealth',
+      // Phase 40 — reset the session-scoped drawer/collapse view-state so a
+      // prior test's drawer-open / group-collapse does not leak into the next.
+      isOperatorDrawerOpen: false,
+      devApiGroupCollapsed: {},
     });
     useLayerStore.setState({ activeLayers: new Set(['water']) });
     useFilterStore.setState({ showSites: true });
@@ -256,6 +260,12 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     opStatusPayload = makeOpStatus({ deadUrlCount: 3 });
     openAndSelectApiHealthTab();
     render(<DevApiStatus />);
+    // Phase 40 (D-02a) — the Prune button relocated into the default-closed
+    // operator-controls drawer. Open it before asserting the button renders.
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
     await waitFor(() => {
       expect(screen.getByTestId('prune-dead-urls-trigger')).toBeInTheDocument();
     });
@@ -282,6 +292,11 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     opStatusPayload = makeOpStatus({ deadUrlCount: 3 });
     openAndSelectApiHealthTab();
     render(<DevApiStatus />);
+    // Phase 40 (D-02a) — open the operator-controls drawer to reach the button.
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
     await waitFor(() => {
       expect(screen.getByTestId('prune-dead-urls-trigger')).toBeInTheDocument();
     });
@@ -314,6 +329,11 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     };
     openAndSelectApiHealthTab();
     render(<DevApiStatus />);
+    // Phase 40 (D-02a) — open the operator-controls drawer to reach the button.
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
     await waitFor(() => {
       expect(screen.getByTestId('prune-dead-urls-trigger')).toBeInTheDocument();
     });
@@ -333,6 +353,11 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     pruneResponse = { status: 200, body: { prunedCount: 3, prunedIds: ['a', 'b', 'c'] } };
     openAndSelectApiHealthTab();
     render(<DevApiStatus />);
+    // Phase 40 (D-02a) — open the operator-controls drawer to reach the button.
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
     await waitFor(() => {
       expect(screen.getByTestId('prune-dead-urls-trigger')).toBeInTheDocument();
     });

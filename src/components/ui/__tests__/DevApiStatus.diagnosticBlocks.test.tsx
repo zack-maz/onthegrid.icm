@@ -161,10 +161,11 @@ describe('DevApiStatus diagnostic blocks (Phase 28.2 W5 Plan 05 Tasks 3-6)', () 
       // Expect at least 3 dots; each must use a CSS var, not hex literal.
       expect(dots.length).toBeGreaterThanOrEqual(3);
       const styles = Array.from(dots).map((d) => (d as HTMLElement).getAttribute('style') ?? '');
-      // At least one dot uses var(--color-site-healthy)
-      expect(styles.some((s) => s.includes('var(--color-site-healthy)'))).toBe(true);
-      expect(styles.some((s) => s.includes('var(--color-site-attacked)'))).toBe(true);
-      expect(styles.some((s) => s.includes('var(--color-event-airstrike)'))).toBe(true);
+      // Phase 40 Task 2 — tier-banner dots migrated to the operator-console
+      // --color-status-* namespace (byte-identical hex; zero visual change).
+      expect(styles.some((s) => s.includes('var(--color-status-healthy)'))).toBe(true);
+      expect(styles.some((s) => s.includes('var(--color-status-degraded)'))).toBe(true);
+      expect(styles.some((s) => s.includes('var(--color-status-warning)'))).toBe(true);
     });
 
     it('Test 3: spacing classes are multiples of 4', () => {
@@ -439,8 +440,10 @@ describe('DevApiStatus diagnostic blocks (Phase 28.2 W5 Plan 05 Tasks 3-6)', () 
       const last7Styles = Array.from(dots)
         .slice(3)
         .map((d) => (d as HTMLElement).getAttribute('style') ?? '');
-      const greens = last7Styles.filter((s) => s.includes('--color-site-healthy')).length;
-      const reds = last7Styles.filter((s) => s.includes('--color-event-airstrike')).length;
+      // Phase 40 Task 2 — sparkline dots migrated to the --color-status-*
+      // namespace (ok → status-healthy, fail → status-degraded).
+      const greens = last7Styles.filter((s) => s.includes('--color-status-healthy')).length;
+      const reds = last7Styles.filter((s) => s.includes('--color-status-degraded')).length;
       expect(greens).toBe(5);
       expect(reds).toBe(2);
     });
@@ -478,7 +481,8 @@ describe('DevApiStatus diagnostic blocks (Phase 28.2 W5 Plan 05 Tasks 3-6)', () 
       expect(dots.length).toBe(10);
       // Newest 10 = entries 5..14. Entries 5..14 have ok=true (i>=5 in seed).
       const styles = Array.from(dots).map((d) => (d as HTMLElement).getAttribute('style') ?? '');
-      const greens = styles.filter((s) => s.includes('--color-site-healthy')).length;
+      // Phase 40 Task 2 — sparkline ok-dot migrated to --color-status-healthy.
+      const greens = styles.filter((s) => s.includes('--color-status-healthy')).length;
       // Items 5..14: ok=true => 10 greens
       expect(greens).toBe(10);
     });
