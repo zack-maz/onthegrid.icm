@@ -428,4 +428,47 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     });
     expect(screen.queryByTestId('dead-url-list')).toBeNull();
   });
+
+  // ==========================================================================
+  // Phase 40 Plan 04 — Regression-Lock assertion 5 (drawer default-closed).
+  // The destructive Replay + Prune buttons live in a default-closed operator-
+  // controls drawer (D-02a). Until the operator opens the drawer, neither the
+  // drawer container NOR its buttons are in the document — while the read-only
+  // dead-URL count STAYS visible in Group 4. Opening the drawer reveals both
+  // buttons. This regression-locks the security-adjacent "destructive controls
+  // are not screenshot-default-visible" contract.
+  // ==========================================================================
+  it('Assertion 5: drawer + Replay/Prune buttons absent by default; read-only dead-URL count present; open reveals both buttons', async () => {
+    opStatusPayload = makeOpStatus({ deadUrlCount: 3 });
+    openAndSelectApiHealthTab();
+    render(<DevApiStatus />);
+    // Read-only count is in Group 4 from first paint after the fetch resolves.
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+
+    // Default-closed: the drawer container and BOTH destructive triggers are
+    // NOT in the document (conditional render, not merely hidden).
+    expect(screen.queryByTestId('operator-drawer')).toBeNull();
+    expect(screen.queryByTestId('replay-test-trigger')).toBeNull();
+    expect(screen.queryByTestId('prune-dead-urls-trigger')).toBeNull();
+    // The trigger affordance + the read-only count ARE present.
+    expect(screen.getByTestId('operator-drawer-trigger')).toBeInTheDocument();
+    expect(screen.getByTestId('operator-drawer-trigger').getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    expect(screen.getByTestId('dead-url-count').textContent).toMatch(/Dead URL events: 3/);
+
+    // Open the drawer ⇒ container + both destructive buttons appear inside it.
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
+    await waitFor(() => {
+      expect(screen.getByTestId('operator-drawer')).toBeInTheDocument();
+    });
+    const drawer = screen.getByTestId('operator-drawer');
+    expect(drawer.querySelector('[data-testid="replay-test-trigger"]')).not.toBeNull();
+    expect(drawer.querySelector('[data-testid="prune-dead-urls-trigger"]')).not.toBeNull();
+    expect(screen.getByTestId('operator-drawer-trigger').getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+  });
 });
