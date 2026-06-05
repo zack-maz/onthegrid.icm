@@ -260,22 +260,44 @@ function TabButton({
   onClick,
   indicator,
   testid,
+  id,
   children,
 }: {
   active: boolean;
   onClick: () => void;
   indicator?: 'red';
   testid: string;
+  /**
+   * Phase 40-03 (D-04) — stable element id so the matching panel container can
+   * point at this tab via `aria-labelledby` (WAI-ARIA tablist/tabpanel link).
+   */
+  id?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       role="tab"
+      id={id}
       aria-selected={active}
       data-testid={testid}
       onClick={onClick}
-      className={`flex items-center gap-1 rounded-md px-3 py-1 text-[10px] font-medium transition-colors ${
-        active ? 'bg-white/10 text-white' : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+      // Phase 40-03 (D-04) — roving tabindex: only the active tab is in the
+      // natural Tab order; arrow keys move focus among the others (handled by
+      // the tablist onKeyDown). Inactive tabs are tabindex=-1.
+      tabIndex={active ? 0 : -1}
+      // Phase 40-03 (D-04 / D-04b lockdown): chrome (px-3 py-1 / rounded-md /
+      // active bg-white/10 text-white / font) is UNCHANGED — Phase 41
+      // REVEAL-SITE-01 owns the visual reveal. The additions below are
+      // INTERACTION AFFORDANCES ONLY:
+      //   • focus-visible:* — keyboard-only focus ring (no ring on mouse click)
+      //   • when active: border-b-2 border-accent-blue — a 2px accent-blue
+      //     bottom indicator that stays readable in a greyscale screenshot.
+      //     PHASE 41: preserve this active-indicator affordance through the
+      //     chrome restyle.
+      className={`flex items-center gap-1 rounded-md px-3 py-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black ${
+        active
+          ? 'border-b-2 border-accent-blue bg-white/10 text-white'
+          : 'border-b-2 border-transparent text-white/50 hover:bg-white/5 hover:text-white/80'
       }`}
     >
       {children}
@@ -1709,7 +1731,7 @@ function DevApiStatusAllApisTab({
                                       e.stopPropagation();
                                       handleRefreshNow(ep.name);
                                     }}
-                                    className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+                                    className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
                                     data-testid={`api-health-retry-${ep.name}`}
                                   >
                                     {refreshing.has(ep.name) ? 'Refreshing...' : 'Refresh now'}
