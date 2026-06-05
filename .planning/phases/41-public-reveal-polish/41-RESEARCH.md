@@ -545,16 +545,19 @@ Per D-08 (all 14 ship, wave-structured) + D-10 (audit Wave-0 blocking):
 | A5  | A static og-card.png is preferable to the hero GIF for previews                                                           | OG mechanics            | Low — well-established crawler behavior (GIFs show frame 1, size caps).                                                                                            |
 | A6  | `markdown-link-check` (docs:lint) resolves local `public/...` relative paths post-move                                    | Screenshot mechanics    | Medium — verify after the move; if it only checks `docs/`, extend the lint glob or accept manual link verification.                                                |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `useShouldRenderDashboard()` open DevApiStatus in local dev without a Bearer?** (A3)
    - What we know: prod gates it behind a localStorage dashboard-auth key; dev historically used `import.meta.env.DEV`.
    - What's unclear: whether the Phase 27.4.4/28.2 refactor kept the dev-open path.
    - Recommendation: the executor reads `src/lib/dashboardAuth.ts` `useShouldRenderDashboard`; if dev isn't auto-open, the `capture:layers` API-Health shots must `page.addInitScript` a localStorage auth key before navigating.
+   - **RESOLVED (during planning):** `src/lib/dashboardAuth.ts` `useShouldRenderDashboard` returns `import.meta.env.DEV || hasDashboardKey()` — DevApiStatus is dev-open in local dev, so `capture:layers` needs NO localStorage auth injection for the API-Health shots. (Resolved inline by Plan 04 Task 1, which reads `dashboardAuth.ts` and relies on the dev-open path.)
 
 2. **Exact 5-7 tour steps + copy + which `data-tour` nodes** — Claude's discretion (CONTEXT). Recommendation: StatusDropdown → LayerTogglesSlot → a live event/DetailPanelSlot → threat-density legend → API Health tab. Planner/executor finalize.
+   - **RESOLVED: delegated to Claude's Discretion per CONTEXT.** Plan 06 Task 3a finalizes the 5-7 step list, copy, and `data-tour` selector set; no operator input required.
 
 3. **og-card.png composition** — capture a branded frame vs. compose a card. Recommendation: capture the all-layers Hormuz frame via `capture:layers` with a title overlay, simplest path; Claude's discretion.
+   - **RESOLVED: delegated to Claude's Discretion per CONTEXT.** Plan 04 produces `og-card.png` (1200×630) via the simplest viable path; no operator input required.
 
 ## Environment Availability
 
