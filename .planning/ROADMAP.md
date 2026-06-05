@@ -268,7 +268,16 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 3. **SC41-3** Glossary (`concepts.md` ~30 terms: Pitfall 1, LLM-optional, tier-green gate, polite-citizen, ghost event, canonical actor catalog, mechanical drift gate, degrade-open, 6-path resolver, honest deferral, probe-before-commit, flight recorder, …) + cost transparency (`COSTS.md`) + visitor operator-guide (`operator-guide.md` clone+run, force-trigger cron, prune dead URLs, read `/api/operator-status`, run eval, capture hero GIF) + distilled lessons (`LESSONS.md` pulled from `.planning/RETROSPECTIVE.md`) + brainstorms/superpowers cleanup ship as portfolio-readable docs. `public/screenshots/` extended with ~10 layer-by-layer captures (each viz layer + API Health + threat-density clusters + actor-quality drill-down + ghost-event prune flow + FlightRecorderBlock drill-down); `npm run capture:layers` reproduces them. _(REVEAL-DOCS-04, REVEAL-DOCS-05, REVEAL-DOCS-06, REVEAL-DOCS-07, REVEAL-DOCS-08, REVEAL-DOCS-09)_
 4. **SC41-4** User-facing reveal surface polished: landing-page hero/layout/copy refined (dashboard-is-landing-page vs separate-landing decision precedes the polish; coordinates with Phase 40 UI-POLISH-04); demo flows shipped (guided tour overlays, scripted walkthroughs, or `?demo=true` query param); social-share assets shipped (OG image/card, Twitter card, favicon refresh) verified across LinkedIn / Twitter / direct share previews; custom-domain decision made (stay on `otg-iran-monitor.vercel.app` or migrate). _(REVEAL-SITE-01, REVEAL-SITE-02, REVEAL-SITE-03, REVEAL-SITE-04)_
 
-**Plans:** TBD (created via `/gsd:plan-phase 41`)
+**Plans:** 6 plans in 5 waves
+
+Plans:
+
+- [ ] 41-01-PLAN.md — Wave 0 (BLOCKING): D-10 final-sweep audit (parallel subagents) + 7 Wave-0 Vitest stubs
+- [ ] 41-02-PLAN.md — Wave 1: docs core — BUILDING-WITH-CLAUDE-CODE.md + SHOWCASE.md + JOURNEY.md + README hero link
+- [ ] 41-03-PLAN.md — Wave 2: round-out docs — concepts.md + COSTS.md + operator-guide.md
+- [ ] 41-04-PLAN.md — Wave 3: screenshot consolidation (D-06) + capture:layers + og-card.png
+- [ ] 41-05-PLAN.md — Wave 3: LESSONS.md + brainstorms cross-link as receipts (D-07)
+- [ ] 41-06-PLAN.md — Wave 4: REVEAL-SITE — IntroOverlay + GuidedTour + TourTrigger + OG tags + domain decision
 
 **UI hint**: yes
 
