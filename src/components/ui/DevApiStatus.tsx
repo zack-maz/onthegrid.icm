@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
@@ -696,6 +696,75 @@ export function DevApiStatus() {
     if (activeTab === 'sites' && !showSitesTab) setTab('apiHealth');
   }, [activeTab, showSitesTab, setTab]);
 
+  // Phase 40-03 (D-04) — roving-tabindex keyboard navigation over the tablist.
+  // Manual-activation pattern (WAI-ARIA tablist): Arrow/Home/End move FOCUS
+  // only; Enter/Space activate the focused tab. The visible tab set is dynamic
+  // (showApiHealthTab / showWaterTab / showSitesTab / showEventsTab), so we
+  // operate over the currently-rendered `[role="tab"]` elements scoped to the
+  // tablist rather than a hard-coded id list.
+  const tablistRef = useRef<HTMLDivElement>(null);
+
+  // Map a tab element's testid → the uiStore tab key consumed by setTab.
+  const TAB_TESTID_TO_KEY: Record<string, 'apiHealth' | 'water' | 'sites' | 'events'> = useMemo(
+    () => ({
+      'tab-api-health': 'apiHealth',
+      'tab-water': 'water',
+      'tab-sites': 'sites',
+      'tab-events': 'events',
+    }),
+    [],
+  );
+
+  const handleTablistKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const list = tablistRef.current;
+      if (!list) return;
+      const tabs = Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+      if (tabs.length === 0) return;
+
+      // The focused tab (the roving tabindex=0 one), else the active tab as a
+      // fallback when focus has not yet landed inside the tablist.
+      const currentIndex = Math.max(
+        0,
+        tabs.findIndex((t) => t === document.activeElement),
+      );
+
+      const focusAt = (idx: number) => {
+        e.preventDefault();
+        tabs[idx]?.focus();
+      };
+
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'ArrowDown':
+          focusAt((currentIndex + 1) % tabs.length); // wrap at end
+          break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+          focusAt((currentIndex - 1 + tabs.length) % tabs.length); // wrap at start
+          break;
+        case 'Home':
+          focusAt(0);
+          break;
+        case 'End':
+          focusAt(tabs.length - 1);
+          break;
+        case 'Enter':
+        case ' ': // Space
+        case 'Spacebar': {
+          e.preventDefault();
+          const testid = tabs[currentIndex]?.getAttribute('data-testid') ?? '';
+          const key = TAB_TESTID_TO_KEY[testid];
+          if (key) setTab(key);
+          break;
+        }
+        default:
+          break; // Tab falls through — roving tabindex moves focus into the panel
+      }
+    },
+    [TAB_TESTID_TO_KEY, setTab],
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -727,17 +796,25 @@ export function DevApiStatus() {
             API Status
           </h2>
 
-          <div className="flex items-center gap-1" role="tablist">
+          <div
+            className="flex items-center gap-1"
+            role="tablist"
+            ref={tablistRef}
+            onKeyDown={handleTablistKeyDown}
+          >
             {/* Phase 28.2 W5 D-22/D-27 — merged API Health tab in first
                 position. Indicator combines polling-store issue signal
                 (formerly Overview) with critical-unhealthy signal (formerly
-                All APIs) — both matter on the merged surface. */}
+                All APIs) — both matter on the merged surface.
+                Phase 40-03 (D-04): each tab carries a stable `id` so its
+                panel container can reference it via `aria-labelledby`. */}
             {showApiHealthTab && (
               <TabButton
                 active={activeTab === 'apiHealth'}
                 onClick={() => setTab('apiHealth')}
                 indicator={hasIssue || hasCriticalUnhealthy ? 'red' : undefined}
                 testid="tab-api-health"
+                id="tab-api-health"
               >
                 API Health
               </TabButton>
@@ -747,6 +824,7 @@ export function DevApiStatus() {
                 active={activeTab === 'water'}
                 onClick={() => setTab('water')}
                 testid="tab-water"
+                id="tab-water"
               >
                 Water
               </TabButton>
@@ -756,6 +834,7 @@ export function DevApiStatus() {
                 active={activeTab === 'sites'}
                 onClick={() => setTab('sites')}
                 testid="tab-sites"
+                id="tab-sites"
               >
                 Sites
               </TabButton>
@@ -765,6 +844,7 @@ export function DevApiStatus() {
                 active={activeTab === 'events'}
                 onClick={() => setTab('events')}
                 testid="tab-events"
+                id="tab-events"
               >
                 Events
               </TabButton>
@@ -799,30 +879,47 @@ export function DevApiStatus() {
             populated byCountry tables + Overpass Health + per-type rejection
             buckets all fit without overflowing the viewport */}
         <div className="flex-1 overflow-y-auto px-4 py-3">
+          {/* Phase 40-03 (D-04) — each active panel is a role="tabpanel"
+              labelled by its owning tab's id (WAI-ARIA tablist/tabpanel link).
+              Within the API Health panel, the group-header collapse buttons +
+              drawer controls stay in normal DOM tab order (no roving), so Tab
+              walks them top-to-bottom after exiting the tablist. */}
           {activeTab === 'apiHealth' && showApiHealthTab && (
-            <DevApiStatusAllApisTab
-              health={aggregateHealth}
-              loading={healthLoading}
-              error={healthError}
-              llmStatus={llmStatus}
-            />
+            <div role="tabpanel" aria-labelledby="tab-api-health">
+              <DevApiStatusAllApisTab
+                health={aggregateHealth}
+                loading={healthLoading}
+                error={healthError}
+                llmStatus={llmStatus}
+              />
+            </div>
           )}
-          {activeTab === 'water' && showWaterTab && <WaterFiltersSection />}
-          {activeTab === 'sites' && showSitesTab && <SitesFiltersSection />}
-          {activeTab === 'events' &&
-            showEventsTab &&
-            // Phase 27.4.6 — V3 is the default body when schemaVersion is
-            // unknown (cold start, post-deploy before first cron tick). V2
-            // remains the explicit override; the V1 case drops out via the
-            // shouldRenderDashboard() outer gate since V1 is no longer a
-            // valid runtime pipeline. Prior version-routed switch hid the
-            // body entirely when schemaVersion was undefined, leaving the
-            // tab button visible with an empty body.
-            (llmStatus?.schemaVersion === 'v2' ? (
-              <EventsFiltersSection llmStatus={llmStatus} />
-            ) : (
-              <EventsFiltersSectionV3 llmStatus={llmStatus} />
-            ))}
+          {activeTab === 'water' && showWaterTab && (
+            <div role="tabpanel" aria-labelledby="tab-water">
+              <WaterFiltersSection />
+            </div>
+          )}
+          {activeTab === 'sites' && showSitesTab && (
+            <div role="tabpanel" aria-labelledby="tab-sites">
+              <SitesFiltersSection />
+            </div>
+          )}
+          {activeTab === 'events' && showEventsTab && (
+            <div role="tabpanel" aria-labelledby="tab-events">
+              {/* Phase 27.4.6 — V3 is the default body when schemaVersion is
+                  unknown (cold start, post-deploy before first cron tick). V2
+                  remains the explicit override; the V1 case drops out via the
+                  shouldRenderDashboard() outer gate since V1 is no longer a
+                  valid runtime pipeline. Prior version-routed switch hid the
+                  body entirely when schemaVersion was undefined, leaving the
+                  tab button visible with an empty body. */}
+              {llmStatus?.schemaVersion === 'v2' ? (
+                <EventsFiltersSection llmStatus={llmStatus} />
+              ) : (
+                <EventsFiltersSectionV3 llmStatus={llmStatus} />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
