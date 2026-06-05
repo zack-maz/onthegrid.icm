@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-05T00:09:03.711Z"
-last_activity: 2026-06-05 -- Phase 40 execution started
+last_updated: "2026-06-05T00:30:26.041Z"
+last_activity: 2026-06-04 -- Completed 40-01-PLAN.md (status color tokens + uiStore collapse/drawer foundation)
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 20
 ---
 
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 40 (dashboard-ui-ux-polish-subtab-consolidation) — EXECUTING
-Plan: 2 of 4
-Status: Executing Phase 40
+Plan: 3 of 4
+Status: Ready to execute
 Last activity: 2026-06-04 -- Completed 40-01-PLAN.md (status color tokens + uiStore collapse/drawer foundation)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
@@ -434,6 +434,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 39 P04 | 8 min | 2 tasks | 2 files |
 | Phase 39 P05 | 5 min | 2 tasks | 4 files |
 | Phase 40 P01 | 6 min | 2 tasks | 5 files |
+| Phase 40 P02 | 18min | 3 tasks | 8 files |
 
 ## Decisions
 
@@ -445,3 +446,5 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase 39]: FlightRecorder Level 3 renders the full CallHistoryEntry record as copyable JSON (call ring carries telemetry, not raw prompt/response text) — GA-1 baseline: operator CAN read a single call's record; richer prompt surface defers to Phase 40 (39-05)
 - [Phase 40]: 40-01: status colors declared as hex (NOT OKLCH), byte-identical to the map tokens they replace, so colorBridge's hex parser roundtrips and the migration off borrowed map tokens is zero-visual-change (UI-POLISH-03 foundation)
 - [Phase 40]: 40-01: status-token colorBridge re-exports are hex-only (no readCssRGB tuple) — no deck.gl consumer; collapse/drawer view-state is session-scoped (no localStorage, mirrors the DevApiStatus modal slice), drawer default closed per D-02a
+- [Phase ?]: (40-02) DevApiStatusAllApisTab restructured into hero + 4 collapsible groups + default-closed operator-controls drawer; Replay/Prune buttons relocated into the drawer, read-only counters stay in Group 4 (D-01/D-02a)
+- [Phase ?]: (40-02) Tier-banner/sparkline/hero status dots migrated to --color-status-* namespace (byte-identical hex, zero visual change); BudgetBlock/FlightRecorderBlock/actor-quality self-hides converted to canonical muted-placeholder degrade (D-06)
