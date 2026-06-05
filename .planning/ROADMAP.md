@@ -231,7 +231,7 @@ _5 REQ-IDs — UI-POLISH (5)._
 2. **SC40-2** Operator navigates the API Health tab through 3-4 grouped sections (down from ~13 stacked sub-blocks) with polished typography hierarchy, spacing system, color tokens (`colorBridge.ts` extended for any new semantic tokens), responsive layout for narrower viewports, and improved focus state / active-tab affordance / keyboard navigability. `agent-native-reviewer` parity verified — every UI action has an agent-callable equivalent (Bearer-gated endpoint or query param). Uses `frontend-design` skill conventions; no generic AI aesthetics. _(UI-POLISH-02, UI-POLISH-03, UI-POLISH-04)_
 3. **SC40-3** Each sub-block carries RTL component tests for its render contract (counts surface correctly under fresh / stale / degraded states); the consolidated layout shape is snapshot-locked so regressions surface as snapshot diffs. _(UI-POLISH-05)_
 
-**Plans:** 4 plans (created 2026-06-04; UI-SPEC.md gated SC40-1 BEFORE planning)
+**Plans:** 1/4 plans executed
 
 **Wave 1**
 
@@ -278,7 +278,7 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 | ----- | --------------------------------------------------------------------- | -------------- | ----------- | ---------- |
 | 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete    | 2026-06-04 |
-| 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 0/4            | Planned     | —          |
+| 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 1/4            | In Progress |            |
 | 41    | Public Reveal Polish                                                  | 0/TBD          | Not started | —          |
 
 ## Deferred Work
