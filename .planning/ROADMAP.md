@@ -269,14 +269,23 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 4. **SC41-4** User-facing reveal surface polished: landing-page hero/layout/copy refined (dashboard-is-landing-page vs separate-landing decision precedes the polish; coordinates with Phase 40 UI-POLISH-04); demo flows shipped (guided tour overlays, scripted walkthroughs, or `?demo=true` query param); social-share assets shipped (OG image/card, Twitter card, favicon refresh) verified across LinkedIn / Twitter / direct share previews; custom-domain decision made (stay on `otg-iran-monitor.vercel.app` or migrate). _(REVEAL-SITE-01, REVEAL-SITE-02, REVEAL-SITE-03, REVEAL-SITE-04)_
 
 **Plans:** 6 plans in 5 waves
-
 Plans:
+**Wave 1**
 
 - [ ] 41-01-PLAN.md — Wave 0 (BLOCKING): D-10 final-sweep audit (parallel subagents) + 7 Wave-0 Vitest stubs
 - [ ] 41-02-PLAN.md — Wave 1: docs core — BUILDING-WITH-CLAUDE-CODE.md + SHOWCASE.md + JOURNEY.md + README hero link
+
+**Wave 2** _(blocked on Wave 1 completion)_
+
 - [ ] 41-03-PLAN.md — Wave 2: round-out docs — concepts.md + COSTS.md + operator-guide.md
+
+**Wave 3** _(blocked on Wave 2 completion)_
+
 - [ ] 41-04-PLAN.md — Wave 3: screenshot consolidation (D-06) + capture:layers + og-card.png
 - [ ] 41-05-PLAN.md — Wave 3: LESSONS.md + brainstorms cross-link as receipts (D-07)
+
+**Wave 4** _(blocked on Wave 3 completion)_
+
 - [ ] 41-06-PLAN.md — Wave 4: REVEAL-SITE — IntroOverlay + GuidedTour + TourTrigger + OG tags + domain decision
 
 **UI hint**: yes
