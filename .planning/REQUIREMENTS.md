@@ -96,7 +96,7 @@ Operator-locked priority #3. Drives the API Health tab from "many accumulated su
 - [x] **UI-POLISH-02**: Sub-block consolidation pass on `DevApiStatus.tsx`. Current accumulated sub-blocks through Phase 28.2 + 32 + 33 + 35 + (incoming) 39: tier summary, per-endpoint quality, retry, fetch sparkline, eval scoreblock, operator actions, advEval, actorQuality, dead-URL count + drill-down, pin TTL, byBearer, **BudgetBlock**, **FlightRecorderBlock**. Group into 3-4 navigable sections per UI-SPEC; collapse redundant rows; redirect rarely-used controls into a sub-tab or drawer.
 - [ ] **UI-POLISH-03**: Visual polish pass. Typography hierarchy, spacing system, color tokens (extend `colorBridge.ts` for any new semantic tokens), responsive layout for narrower viewports. Use `frontend-design` skill conventions; no generic AI aesthetics.
 - [x] **UI-POLISH-04**: Tab navigation refinement. Current `API Health` lives among other tabs in the dev shell; improve focus state, active-tab affordance, keyboard navigability. Verify `agent-native-reviewer` parity — every UI action must have an agent-callable equivalent (Bearer-gated endpoint or query param).
-- [ ] **UI-POLISH-05**: Regression-lock the post-polish dashboard. RTL component tests for each sub-block's render contract (counts surface correctly under fresh / stale / degraded states). Snapshot tests for the consolidated layout shape.
+- [x] **UI-POLISH-05**: Regression-lock the post-polish dashboard. RTL component tests for each sub-block's render contract (counts surface correctly under fresh / stale / degraded states). Snapshot tests for the consolidated layout shape.
 
 ---
 

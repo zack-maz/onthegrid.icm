@@ -139,7 +139,7 @@ Full phase-by-phase detail archived to [milestones/v1.5-ROADMAP.md](milestones/v
 
 - [x] **Phase 38: LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup** — bug-fix punch-list (LLM-FIX) + dead-code purge incl. Cerebras+Groq adapter removal (LLM-PURGE) + GDELT corpus quality (GDELT-MATCH) + water-facility romanization (WATER-LATIN) + Vercel Pro docs+code repair (VERCEL-PRO) + optional 7-day cron-stability reopen (CRON-WATCH). (completed 2026-06-04)
 - [x] **Phase 39: Operator Visibility — Budget + Cost + LLM Flight Recorder** — `BudgetBlock` (per-provider tokens vs cap, soft/hard thresholds), cost-shadow accrual surface, Phase-27.4.5 absorbed LLM flight recorder (Redis-backed call+run history, Bearer-gated `/api/events/llm-history`, cold-start hydration). (completed 2026-06-04)
-- [ ] **Phase 40: Dashboard UI/UX Polish + Subtab Consolidation** — UI-SPEC.md design contract precedes code (`/gsd:ui-phase`); ~13-sub-block stack consolidated into 3-4 grouped sections; typography/spacing/color polish; RTL contract tests regression-lock the consolidated layout.
+- [x] **Phase 40: Dashboard UI/UX Polish + Subtab Consolidation** — UI-SPEC.md design contract precedes code (`/gsd:ui-phase`); ~13-sub-block stack consolidated into 3-4 grouped sections; typography/spacing/color polish; RTL contract tests regression-lock the consolidated layout. (completed 2026-06-05)
 - [ ] **Phase 41: Public Reveal Polish** — portfolio docs (`BUILDING-WITH-CLAUDE-CODE.md`, `SHOWCASE.md`, `JOURNEY.md`, `concepts.md`, `COSTS.md`, `operator-guide.md`, `LESSONS.md`, brainstorms cleanup), `npm run capture:layers` reproducible screenshots, REVEAL-SITE landing-page polish + demo flows + social-share + custom-domain decision, final-sweep audit against then-current main.
 
 ### Phase 38: LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup
@@ -231,7 +231,7 @@ _5 REQ-IDs — UI-POLISH (5)._
 2. **SC40-2** Operator navigates the API Health tab through 3-4 grouped sections (down from ~13 stacked sub-blocks) with polished typography hierarchy, spacing system, color tokens (`colorBridge.ts` extended for any new semantic tokens), responsive layout for narrower viewports, and improved focus state / active-tab affordance / keyboard navigability. `agent-native-reviewer` parity verified — every UI action has an agent-callable equivalent (Bearer-gated endpoint or query param). Uses `frontend-design` skill conventions; no generic AI aesthetics. _(UI-POLISH-02, UI-POLISH-03, UI-POLISH-04)_
 3. **SC40-3** Each sub-block carries RTL component tests for its render contract (counts surface correctly under fresh / stale / degraded states); the consolidated layout shape is snapshot-locked so regressions surface as snapshot diffs. _(UI-POLISH-05)_
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 **Wave 1**
 
@@ -247,7 +247,7 @@ _5 REQ-IDs — UI-POLISH (5)._
 
 **Wave 4** _(after 40-02 + 40-03)_
 
-- [ ] 40-04-PLAN.md — Regression-lock: 8 RTL render-contract assertions + consolidated-layout snapshot [UI-POLISH-05]
+- [x] 40-04-PLAN.md — Regression-lock: 8 RTL render-contract assertions + consolidated-layout snapshot [UI-POLISH-05]
 
 **UI hint**: yes
 
@@ -278,7 +278,7 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 | ----- | --------------------------------------------------------------------- | -------------- | ----------- | ---------- |
 | 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete    | 2026-06-04 |
-| 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 3/4            | In Progress |            |
+| 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 4/4            | Complete    | 2026-06-05 |
 | 41    | Public Reveal Polish                                                  | 0/TBD          | Not started | —          |
 
 ## Deferred Work

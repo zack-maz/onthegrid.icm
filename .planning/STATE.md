@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
-status: executing
-last_updated: "2026-06-05T03:25:00.000Z"
-last_activity: 2026-06-04 -- Completed 40-03-PLAN.md (tab-bar interaction affordances + agent-native parity PASS)
+status: verifying
+last_updated: "2026-06-05T03:33:25.261Z"
+last_activity: "2026-06-04 -- Completed 40-04-PLAN.md (regression-lock contract: 8 UI-SPEC §Regression-Lock assertions across 6 existing DevApiStatus test files + 1 consolidated-layout snapshot; UI-POLISH-05; Phase 40 complete 4/4)"
 progress:
   total_phases: 10
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 15
   completed_plans: 15
-  percent: 20
+  percent: 30
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 40 (dashboard-ui-ux-polish-subtab-consolidation) — EXECUTING
+Phase: 40 (dashboard-ui-ux-polish-subtab-consolidation) — COMPLETE (ready for verification)
 Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-06-04 -- Completed 40-03-PLAN.md (tab-bar interaction affordances: focus-visible ring + 2px active indicator + roving-tabindex keyboard nav + tabpanel roles; agent-native parity PASS)
+Status: Phase complete — ready for verification
+Last activity: 2026-06-04 -- Completed 40-04-PLAN.md (regression-lock contract: 8 UI-SPEC §Regression-Lock render-contract assertions coded as RTL/snapshot tests across the 6 existing DevApiStatus test files + 1 new consolidated-layout snapshot of the fully-populated DevApiStatusAllApisTab; UI-POLISH-05 complete; Phase 40 done 4/4)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -435,6 +435,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 39 P05 | 5 min | 2 tasks | 4 files |
 | Phase 40 P01 | 6 min | 2 tasks | 5 files |
 | Phase 40 P02 | 18min | 3 tasks | 8 files |
+| Phase 40 P40-04 | 12min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -448,3 +449,4 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase 40]: 40-01: status-token colorBridge re-exports are hex-only (no readCssRGB tuple) — no deck.gl consumer; collapse/drawer view-state is session-scoped (no localStorage, mirrors the DevApiStatus modal slice), drawer default closed per D-02a
 - [Phase ?]: (40-02) DevApiStatusAllApisTab restructured into hero + 4 collapsible groups + default-closed operator-controls drawer; Replay/Prune buttons relocated into the drawer, read-only counters stay in Group 4 (D-01/D-02a)
 - [Phase ?]: (40-02) Tier-banner/sparkline/hero status dots migrated to --color-status-* namespace (byte-identical hex, zero visual change); BudgetBlock/FlightRecorderBlock/actor-quality self-hides converted to canonical muted-placeholder degrade (D-06)
+- [Phase ?]: (40-04 UI-POLISH-05) 8 UI-SPEC Regression-Lock assertions coded as RTL/snapshot tests across the 6 existing DevApiStatus test files (extended, not replaced) + 1 new consolidated-layout snapshot; assertion 5 (drawer default-closed) doubles as a security-adjacent guard
