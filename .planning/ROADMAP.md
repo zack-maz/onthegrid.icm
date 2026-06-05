@@ -235,7 +235,7 @@ _5 REQ-IDs — UI-POLISH (5)._
 
 **Wave 1**
 
-- [ ] 40-01-PLAN.md — Foundation: 3 `--color-status-*` tokens (app.css + colorBridge + sentinel) + uiStore session-scoped collapse/drawer state [UI-POLISH-03]
+- [x] 40-01-PLAN.md — Foundation: 3 `--color-status-*` tokens (app.css + colorBridge + sentinel) + uiStore session-scoped collapse/drawer state [UI-POLISH-03]
 
 **Wave 2** _(after 40-01)_
 
