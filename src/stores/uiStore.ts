@@ -39,6 +39,21 @@ export const useUIStore = create<UIState>()((set, get) => ({
   openDevApiStatus: () => set({ isDevApiStatusOpen: true }),
   closeDevApiStatus: () => set({ isDevApiStatusOpen: false }),
   setDevApiStatusTab: (tab) => set({ activeDevApiStatusTab: tab }),
+  // Phase 40 — API Health tab restructure view-state. SESSION-SCOPED: do NOT
+  // route through readBool/localStorage (mirror the modal slice above, NOT the
+  // isMarketsCollapsed persistence branch below). Default {} ⇒ all groups
+  // expanded (D-01); drawer default closed (D-02a).
+  devApiGroupCollapsed: {},
+  isOperatorDrawerOpen: false,
+  toggleDevApiGroup: (slug) =>
+    set((s) => ({
+      devApiGroupCollapsed: {
+        ...s.devApiGroupCollapsed,
+        [slug]: !s.devApiGroupCollapsed[slug],
+      },
+    })),
+  toggleOperatorDrawer: () => set((s) => ({ isOperatorDrawerOpen: !s.isOperatorDrawerOpen })),
+  setOperatorDrawerOpen: (open) => set({ isOperatorDrawerOpen: open }),
   // Phase 27.4.4 Plan 02 — dashboard auth modal state (session-scoped;
   // matches DevApiStatus modal pattern — modal visibility never persists
   // across reloads, only the auth key itself does).
