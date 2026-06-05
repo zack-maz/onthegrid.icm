@@ -58,20 +58,28 @@ const BAND_FILL_CLASS: Record<'ok' | 'soft' | 'hard', string> = {
 };
 
 export function BudgetBlock({ tokenBudget }: { tokenBudget: TokenBudgetBlock | null }) {
-  // Degrade-open render gate — mirrors `opStatus?.actorQuality != null` (:1681).
-  if (tokenBudget == null) return null;
+  // Phase 40 (D-06) — honest degraded render. Self-hide `return null` replaced
+  // by the canonical muted placeholder so the Budget & Cost group shell always
+  // has a body. Degrade-open semantics unchanged (no throw, route stays 200).
+  if (tokenBudget == null) {
+    return (
+      <div className="text-[10px] italic text-white/30" data-testid="budget-block-placeholder">
+        — no data (no budget data)
+      </div>
+    );
+  }
 
   const providerEntries = Object.entries(tokenBudget.providers);
 
   return (
-    <div className="mt-2 border-t border-white/10 pt-2" data-testid="budget-block">
+    <div data-testid="budget-block">
       <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
         TOKEN BUDGET
       </div>
 
       {providerEntries.length === 0 ? (
-        <div className="mt-1 text-[10px] text-white/30" data-testid="budget-empty">
-          No provider budget data yet
+        <div className="mt-1 text-[10px] italic text-white/30" data-testid="budget-empty">
+          — no data (no provider budget data yet)
         </div>
       ) : (
         <div className="mt-1 flex flex-col gap-1">

@@ -348,8 +348,12 @@ describe('DevApiStatus — Phase 33 Actor Quality sub-block (D-17)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('actor-quality-empty')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('actor-quality-empty').textContent).toMatch(
-      /Actor quality:\s*no data/,
+    // Phase 40 Task 3 (D-06) — actor-quality empty unified onto the canonical
+    // muted-placeholder pattern. The `actor-quality-empty` wrapper is kept; the
+    // inner `actor-quality-placeholder` carries the `— no data (reason)` copy.
+    expect(screen.getByTestId('actor-quality-placeholder')).toBeInTheDocument();
+    expect(screen.getByTestId('actor-quality-placeholder').textContent).toMatch(
+      /—\s*no data \(no actor data\)/,
     );
     expect(screen.queryByTestId('actor-quality-row')).toBeNull();
   });

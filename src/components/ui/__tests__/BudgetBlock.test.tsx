@@ -33,10 +33,14 @@ function makeBudget(overrides: Partial<TokenBudgetBlock> = {}): TokenBudgetBlock
 }
 
 describe('BudgetBlock', () => {
-  it('renders nothing when tokenBudget is null (degrade-open gate)', () => {
-    const { container } = render(<BudgetBlock tokenBudget={null} />);
+  it('renders the muted placeholder when tokenBudget is null (D-06 honest render)', () => {
+    // Phase 40 Task 3 — self-hide `return null` replaced by the canonical
+    // muted placeholder so the Budget & Cost group shell always has a body.
+    render(<BudgetBlock tokenBudget={null} />);
     expect(screen.queryByText('TOKEN BUDGET')).toBeNull();
-    expect(container.firstChild).toBeNull();
+    const placeholder = screen.getByTestId('budget-block-placeholder');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder.textContent).toMatch(/—\s*no data \(no budget data\)/);
   });
 
   it('renders the section header + provider row when present', () => {
@@ -112,6 +116,9 @@ describe('BudgetBlock', () => {
     empty.providers = {};
     render(<BudgetBlock tokenBudget={empty} />);
     expect(screen.getByText('TOKEN BUDGET')).not.toBeNull();
-    expect(screen.getByText('No provider budget data yet')).not.toBeNull();
+    // Phase 40 Task 3 — provider-empty row re-toned to the canonical muted copy.
+    expect(screen.getByTestId('budget-empty').textContent).toMatch(
+      /—\s*no data \(no provider budget data yet\)/,
+    );
   });
 });

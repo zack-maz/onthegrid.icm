@@ -182,15 +182,21 @@ describe('FlightRecorderBlock — outcome bands (WR-01)', () => {
 });
 
 describe('FlightRecorderBlock — degrade-open', () => {
-  it('renders nothing on a non-200 history response', async () => {
+  it('renders the muted placeholder on a non-200 history response (D-06 honest render)', async () => {
     globalThis.fetch = vi.fn(async () => ({
       ok: false,
       json: async () => ({}),
     })) as unknown as typeof fetch;
     const { container } = render(<FlightRecorderBlock />);
-    // Block stays hidden (data === null) — give the effect a tick to settle.
+    // Phase 40 Task 3 — self-hide `return null` replaced by the canonical
+    // muted placeholder so the LLM Pipeline group shell always has a body.
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="flight-recorder"]')).toBeNull();
+      expect(container.querySelector('[data-testid="flight-recorder-placeholder"]')).not.toBeNull();
     });
+    // The fully-rendered recorder section is NOT mounted in the null-data case.
+    expect(container.querySelector('[data-testid="flight-recorder"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="flight-recorder-placeholder"]')?.textContent,
+    ).toMatch(/—\s*no data \(/);
   });
 });

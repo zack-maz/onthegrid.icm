@@ -237,13 +237,24 @@ export function FlightRecorderBlock() {
     return { provenance: Array.from(provenance.entries()), dlqGroups, timeouts };
   }, [selectedCalls]);
 
-  // Degrade-open: no data → block hides entirely (UI-SPEC degraded-state table).
-  if (data == null) return null;
+  // Phase 40 (D-06) — honest degraded render. Self-hide `return null` replaced
+  // by the canonical muted placeholder so the LLM Pipeline group shell always
+  // has a body. Degrade-open semantics unchanged (no throw, route stays 200).
+  if (data == null) {
+    return (
+      <div
+        className="mt-2 text-[10px] italic text-white/30"
+        data-testid="flight-recorder-placeholder"
+      >
+        — no data (no runs recorded / recorder unreachable)
+      </div>
+    );
+  }
 
   const runs = data.runs;
 
   return (
-    <section className="mt-4 px-3 py-2 text-xs" data-testid="flight-recorder">
+    <section className="mt-2 text-xs" data-testid="flight-recorder">
       <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
         FLIGHT RECORDER
       </div>
@@ -251,8 +262,8 @@ export function FlightRecorderBlock() {
       {/* L1 — RUNS (newest-first) */}
       <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">RUNS</div>
       {runs.length === 0 ? (
-        <div className="mt-1 text-[10px] text-white/30" data-testid="flight-recorder-empty">
-          No runs recorded yet
+        <div className="mt-1 text-[10px] italic text-white/30" data-testid="flight-recorder-empty">
+          — no data (no runs recorded yet)
         </div>
       ) : (
         <div className="mt-1 flex flex-col gap-1">
