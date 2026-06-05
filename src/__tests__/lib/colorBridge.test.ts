@@ -75,6 +75,9 @@ describe('colorBridge', () => {
       'COLOR_EVENT_OTHER_HEX',
       'COLOR_SITE_HEALTHY_HEX',
       'COLOR_SITE_ATTACKED_HEX',
+      'COLOR_STATUS_HEALTHY_HEX',
+      'COLOR_STATUS_DEGRADED_HEX',
+      'COLOR_STATUS_WARNING_HEX',
       'COLOR_FACTION_US_ALIGNED_HEX',
       'COLOR_FACTION_IRAN_ALIGNED_HEX',
       'COLOR_FACTION_NEUTRAL_HEX',
@@ -203,6 +206,20 @@ describe('colorBridge', () => {
       // GeoJSON layer, not via FACTION_COLORS. Bridge exports it for any
       // future consumer.
       expect(bridge.COLOR_FACTION_DISPUTED_HEX).toBe('#f59e0b');
+    });
+
+    it('status healthy hex is #22c55e (Phase 40 D-13; operator-console status namespace)', () => {
+      // Byte-identical to --color-site-healthy; this token names STATUS, not a site
+      // entity. Sentinel locks the literal so the API Health hero header never drifts.
+      expect(bridge.COLOR_STATUS_HEALTHY_HEX).toBe('#22c55e');
+    });
+
+    it('status degraded hex is #f97316 (Phase 40 D-13)', () => {
+      expect(bridge.COLOR_STATUS_DEGRADED_HEX).toBe('#f97316');
+    });
+
+    it('status warning hex is #eab308 (Phase 40 D-13)', () => {
+      expect(bridge.COLOR_STATUS_WARNING_HEX).toBe('#eab308');
     });
 
     it('ethnic kurdish hex matches ETHNIC_GROUPS.kurdish.color', () => {
