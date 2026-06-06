@@ -45,7 +45,7 @@
  *   npm run capture:layers           # ~10 live-data layer/feature PNGs + og-card.png
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -117,7 +117,11 @@ async function checkPrereqs(mode: Mode): Promise<void> {
 
   for (const bin of ['ffmpeg', 'gifski']) {
     try {
-      execSync(`command -v ${bin}`, { stdio: 'ignore' });
+      // `command -v` is a bash builtin; run it under an explicit bash shell so
+      // the prereq check uses the same shell semantics as the GIF-stitch step
+      // (WR-05). `bin` is a fixed literal here, not user input, but pass it as
+      // an argv element rather than interpolating into a shell string.
+      execFileSync('command', ['-v', bin], { shell: '/bin/bash', stdio: 'ignore' });
     } catch {
       die(`${bin} not found on PATH. Install with: brew install ${bin}`);
     }
@@ -381,11 +385,33 @@ async function captureHeroGif(): Promise<void> {
 
   mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
+  // WR-05: build the frame list in JS and pass each path as an argv element so
+  // gifski never sees an unquoted shell glob. This is robust to repo checkout
+  // paths containing spaces or glob metacharacters. Frames are named
+  // `frame-NNNN.png` (zero-padded), so a lexical sort is also the frame order.
+  const framePaths = readdirSync(frameDir)
+    .filter((f) => f.startsWith('frame-') && f.endsWith('.png'))
+    .sort()
+    .map((f) => join(frameDir, f));
+
   const stitch = (fps: number, width: number, quality: number): void => {
     // gifski accepts PNG files directly and handles lanczos scaling via --width.
-    // No intermediate ffmpeg step needed for PNG → GIF.
-    const cmd = `gifski -o "${HERO_GIF}" --fps ${fps} --width ${width} --quality ${quality} ${frameDir}/frame-*.png`;
-    execSync(cmd, { shell: '/bin/bash', stdio: 'inherit' });
+    // No intermediate ffmpeg step needed for PNG → GIF. No shell — argv only.
+    execFileSync(
+      'gifski',
+      [
+        '-o',
+        HERO_GIF,
+        '--fps',
+        String(fps),
+        '--width',
+        String(width),
+        '--quality',
+        String(quality),
+        ...framePaths,
+      ],
+      { stdio: 'inherit' },
+    );
   };
 
   stitch(TARGET_FPS, 1280, 85);
