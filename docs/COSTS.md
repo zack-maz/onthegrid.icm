@@ -80,6 +80,13 @@ domain:
 This keeps the total cost of the live demo at exactly the $20/month Vercel Pro
 line — no hidden domain or DNS line items.
 
+> **Reveal-strand confirmation (Phase 41 Plan 06):** REVEAL-SITE-04 is satisfied
+> by this recorded "stay on `otg-iran-monitor.vercel.app`" decision itself — there
+> is no domain to buy or configure. The social-share assets (`index.html` OG /
+> Twitter tags) therefore use the `vercel.app` origin for their absolute
+> `og:url` / `og:image` URLs, with the share card served at
+> `https://otg-iran-monitor.vercel.app/screenshots/og-card.png`.
+
 ---
 
 ## The bottom line

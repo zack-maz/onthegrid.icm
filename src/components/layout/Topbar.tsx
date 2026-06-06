@@ -174,6 +174,7 @@ function DevApiStatusTriggerInner() {
   return (
     <button
       data-testid="dev-api-status-trigger"
+      data-tour="api-health"
       onClick={onTriggerClick}
       className="rounded-md px-2 py-1 font-mono text-[10px] transition-colors hover:bg-white/5"
       style={{ color: hasIssue ? '#ef4444' : 'rgba(255,255,255,0.4)' }}

@@ -115,6 +115,7 @@ export function DetailPanelSlot() {
   return (
     <div
       data-testid="detail-panel-slot"
+      data-tour="detail"
       className={`absolute right-0 z-[var(--z-panel)]
                   w-[var(--width-detail-panel)] transform transition-transform
                   duration-300 ease-in-out

@@ -380,8 +380,10 @@ export function Sidebar() {
 
           <div className="border-t border-border" />
 
-          {/* Layers section */}
-          <div ref={layersRef}>
+          {/* Layers section — data-tour="layers" target (Phase 41 Plan 06,
+            REVEAL-SITE-02). LayerTogglesSlot's own wrapper is not mounted in
+            AppShell; the live layers panel is this Sidebar accordion section. */}
+          <div ref={layersRef} data-tour="layers">
             <SidebarSection
               id="layers"
               title="Layers"
