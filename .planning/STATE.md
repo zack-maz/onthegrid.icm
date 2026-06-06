@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-05T17:29:00Z"
-last_activity: 2026-06-05 -- Phase 41 Plan 05 complete (LESSONS.md distilled retrospective + BUILDING receipts vision-to-shipped callout, D-07)
+last_updated: "2026-06-06T00:47:23.806Z"
+last_activity: 2026-06-05 -- Phase 41 Plan 04 complete (screenshot consolidation to public/screenshots/ + capture:layers tooling + og-card.png + README currency pass, REVEAL-DOCS-07)
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 21
-  completed_plans: 20
-  percent: 33
+  completed_plans: 21
+  percent: 30
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 41 (public-reveal-polish) — EXECUTING
-Plan: Wave 3 (Plans 01–03 + 05 complete; Plan 04 parallel in Wave 3)
-Status: Plan 05 complete; Wave 3 Plan 04 then Wave 4 Plan 06 remain
-Last activity: 2026-06-05 -- Phase 41 Plan 05 complete (LESSONS.md distilled retrospective + BUILDING receipts vision-to-shipped callout, D-07)
+Plan: Wave 3 complete (Plans 01–05 done); Wave 4 Plan 06 remains
+Status: Plan 04 complete (screenshots consolidated + capture:layers + og-card.png); only Wave 4 Plan 06 (OG/Twitter meta + guided tour) remains
+Last activity: 2026-06-05 -- Phase 41 Plan 04 complete (screenshot consolidation to public/screenshots/ + capture:layers tooling + og-card.png + README currency pass, REVEAL-DOCS-07)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
