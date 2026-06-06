@@ -70,7 +70,7 @@ why drift gates get their own `*.test.ts` drift gates.
 
 The self-imposed limits that keep the live demo a good neighbor to free upstream
 APIs and to crawlers: the 1-req/s Nominatim throttle, the per-endpoint and global
-rate limiters in [`rateLimiter.ts`](../server/middleware/rateLimiter.ts), the
+rate limiters in [`rateLimit.ts`](../server/middleware/rateLimit.ts), the
 `robots.txt` disallow of `/api/`, and the on-demand (not persistent) AISStream
 WebSocket. The system stays inside every free tier's good graces.
 

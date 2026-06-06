@@ -67,13 +67,13 @@ a function`. Split observability (`events:llm:v2:partial`) from
   shape contract.
 - **ADR-0010 — v1.5 LLM pipeline narrowing and deletion.** Phase 29
   retires the v1 + v2 extractors and narrows the provider cascade to
-  the 2 actually-used providers (NIM + OpenRouter). Phase 27.4
-  D-26/D-40 deep-rollback lock superseded; new rollback path is
-  `git revert <Phase 29 range>`. LLM-optional architecture proved by
-  integration test + runbook procedure. Vercel Pro upgrade landed in
-  the same phase so subsequent v1.5 phases tune against the 800s
-  maxDuration ceiling. Stub — Phase 37 will expand the milestone-close
-  rationale at the `<expand_at_36>` marker.
+  NIM-only at runtime; OpenRouter remains a dormant, key-gated cascade
+  provider. Phase 27.4 D-26/D-40 deep-rollback lock superseded; new
+  rollback path is `git revert <Phase 29 range>`. LLM-optional
+  architecture proved by integration test + runbook procedure. Vercel
+  Pro upgrade landed in the same phase so subsequent v1.5 phases tune
+  against the 800s maxDuration ceiling. Fully rewritten in Phase 37 with
+  the milestone-close rationale (6 sub-blocks); no longer a stub.
 - **ADR-0011 — v3 LLM pipeline architecture.** The positive description
   of the pipeline that remains after ADR-0010's deletions. Six load-
   bearing design properties: (1) cron-only writer, (2) cold-cache
@@ -129,6 +129,6 @@ do not.
 ---
 
 _These ADRs document decisions made during the Iran Monitor
-project (phases 13 through 26.4). They are written in retrospect for
+project (phases 13 through 41). They are written in retrospect for
 phases that predate this directory; new decisions from 26.4 onward
 should get ADRs at the time the decision is made._

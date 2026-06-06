@@ -1,6 +1,6 @@
 # ADR-0009: Two-key split for LLM partial progress vs terminal reads
 
-**Status:** Accepted
+**Status:** Accepted (largely historical — the v3 `events:llm:v3:partial` flush this split protected was retired in Phase 35 SIMPLIFY-02; see ADR-0010 Phase 35 D-12 and ADR-0011 §3 amendment)
 **Date:** 2026-04-24
 **Deciders:** solo author
 

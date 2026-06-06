@@ -1,4 +1,4 @@
-# LLM Pipeline Reliability (v1.5)
+# LLM Pipeline Reliability (v1.5–v1.6)
 
 > Measured throttle behavior + tuned defaults for the NIM-primary pipeline (Pro 800s `maxDuration`). OpenRouter is a dormant, key-gated fallback per Phase 30.1 — at runtime the pipeline is NIM-only; see the "NIM-only" sub-block below (consistent with the line-6 cascade-shape note). Numbers in this doc come from `run-1-throttle-snapshot.json` and `run-2-throttle-snapshot.json` in `.planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/`.
 
