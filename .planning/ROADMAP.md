@@ -277,7 +277,7 @@ Plans:
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
-- [ ] 41-03-PLAN.md — Wave 2: round-out docs — concepts.md + COSTS.md + operator-guide.md
+- [x] 41-03-PLAN.md — Wave 2: round-out docs — concepts.md + COSTS.md + operator-guide.md (+ audit-carried docs sweep)
 
 **Wave 3** _(blocked on Wave 2 completion)_
 
@@ -297,7 +297,7 @@ Plans:
 | 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete    | 2026-06-04 |
 | 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 4/4            | Complete    | 2026-06-05 |
-| 41    | Public Reveal Polish                                                  | 2/6            | In Progress |            |
+| 41    | Public Reveal Polish                                                  | 3/6            | In Progress |            |
 
 ## Deferred Work
 
