@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-06T00:24:05Z"
-last_activity: 2026-06-06 -- Phase 41 Plan 03 complete (concepts/COSTS/operator-guide + audit-carried docs sweep)
+last_updated: "2026-06-05T17:29:00Z"
+last_activity: 2026-06-05 -- Phase 41 Plan 05 complete (LESSONS.md distilled retrospective + BUILDING receipts vision-to-shipped callout, D-07)
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
   percent: 33
 ---
 
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 41 (public-reveal-polish) — EXECUTING
-Plan: 4 of 6 (Plans 01–03 complete)
-Status: Ready to execute Plan 04
-Last activity: 2026-06-06 -- Phase 41 Plan 03 complete (concepts/COSTS/operator-guide + audit-carried docs sweep)
+Plan: Wave 3 (Plans 01–03 + 05 complete; Plan 04 parallel in Wave 3)
+Status: Plan 05 complete; Wave 3 Plan 04 then Wave 4 Plan 06 remain
+Last activity: 2026-06-05 -- Phase 41 Plan 05 complete (LESSONS.md distilled retrospective + BUILDING receipts vision-to-shipped callout, D-07)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -114,6 +114,7 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (41-05, D-07/D-11) Wave-3 distilled lessons + brainstorms receipts shipped (SC41-3 lessons+brainstorms portion): docs/LESSONS.md authored as a 1-page first-person distillation of RETROSPECTIVE.md surfacing the 5 named lessons (probe-before-commit, honest deferral, mechanical drift gates compound, deletion over deprecation, architecture decisions cascade into audit-tier semantics — Phase 37); cross-links BUILDING + SHOWCASE. BUILDING §7 Historical receipts (cross-links already in place from Plan 02) gained the load-bearing vision-to-shipped inline callout: origin brainstorm's day-one "numbers over narratives" thesis (held) vs its plumbing assumptions (ACLED→GDELT Phase 8.1, WebSocket→recursive setTimeout at v1.0 serverless). D-07 honored — nothing moved/deleted/archived. README localhost dead-links left untouched (pre-existing, out of scope); LESSONS.md links lint clean in isolation.
 - (41-03) Wave-2 round-out docs shipped (SC41-3 concepts+COSTS+operator-guide portion): concepts.md (38 terms), COSTS.md (Vercel Pro $20/mo sole paid line + D-09 stay-on-vercel.app rationale + RETROSPECTIVE-cited dev cost), operator-guide.md (6-workflow visitor how-to distinct from runbook, `<your-bearer>` placeholder only). Audit-carried Wave-2 docs sweep applied: ADR #1/2/3/4/21/23, .env.example #6 (LLM_PIPELINE_V2/V3 removed) + #7-ACLED (marked historical, kept blank assignments so check:env drift gate stays satisfied — Rule 3), OpenAPI #16 (prune-dead-urls path) + NN-3 (llm-history path), reliability-doc NN-4 title. redocly lint valid; all 3 new docs link-check clean; fixed CLAUDE.md-inherited dead link rateLimiter.ts→rateLimit.ts.
 - (41-01, D-10) Wave-0 final-sweep audit complete (SC41-1 satisfied): re-ran the v1.5-close 2nd-pass code+docs audit against current main. Phase 38 (LLM-FIX + LLM-PURGE) resolved the ENTIRE code-side punch-list (all 3 BUGS + all dead-code); the residual v1.6 cleanup is now a pure DOCS sweep. 4 net-new docs findings (README/CHANGELOG missing Phase 38/39/40 features; OpenAPI llm-history + reliability-doc title gaps) routed to Phase 41 docs waves 2-3 in 41-AUDIT.md §D. Both operator memories refreshed (resolved dropped, net-new added, still-open carried). News-warmer (punch-list #15) DEFERRED to v1.7 (operability nicety, not a reveal REQ-ID). Cerebras/Groq test fixtures RESOLVED-BY-REFRAME (LLM-PURGE-06 keeps them as deferred-provider scaffolding).
 - (41-01) 7 Wave-0 red Vitest stubs on disk pinning REVEAL-SITE store slice + overlays + tour-selector existence + OG tags + capture:layers contract (RED until Plans 04/06; tsc clean). `@ts-expect-error`-glued unresolved imports wrapped in import/order disable blocks so the lint-staged sorter cannot detach the suppression.
