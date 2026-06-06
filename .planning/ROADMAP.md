@@ -268,12 +268,12 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 3. **SC41-3** Glossary (`concepts.md` ~30 terms: Pitfall 1, LLM-optional, tier-green gate, polite-citizen, ghost event, canonical actor catalog, mechanical drift gate, degrade-open, 6-path resolver, honest deferral, probe-before-commit, flight recorder, …) + cost transparency (`COSTS.md`) + visitor operator-guide (`operator-guide.md` clone+run, force-trigger cron, prune dead URLs, read `/api/operator-status`, run eval, capture hero GIF) + distilled lessons (`LESSONS.md` pulled from `.planning/RETROSPECTIVE.md`) + brainstorms/superpowers cleanup ship as portfolio-readable docs. `public/screenshots/` extended with ~10 layer-by-layer captures (each viz layer + API Health + threat-density clusters + actor-quality drill-down + ghost-event prune flow + FlightRecorderBlock drill-down); `npm run capture:layers` reproduces them. _(REVEAL-DOCS-04, REVEAL-DOCS-05, REVEAL-DOCS-06, REVEAL-DOCS-07, REVEAL-DOCS-08, REVEAL-DOCS-09)_
 4. **SC41-4** User-facing reveal surface polished: landing-page hero/layout/copy refined (dashboard-is-landing-page vs separate-landing decision precedes the polish; coordinates with Phase 40 UI-POLISH-04); demo flows shipped (guided tour overlays, scripted walkthroughs, or `?demo=true` query param); social-share assets shipped (OG image/card, Twitter card, favicon refresh) verified across LinkedIn / Twitter / direct share previews; custom-domain decision made (stay on `otg-iran-monitor.vercel.app` or migrate). _(REVEAL-SITE-01, REVEAL-SITE-02, REVEAL-SITE-03, REVEAL-SITE-04)_
 
-**Plans:** 6 plans in 5 waves
+**Plans:** 2/6 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 41-01-PLAN.md — Wave 0 (BLOCKING): D-10 final-sweep audit (parallel subagents) + 7 Wave-0 Vitest stubs
-- [ ] 41-02-PLAN.md — Wave 1: docs core — BUILDING-WITH-CLAUDE-CODE.md + SHOWCASE.md + JOURNEY.md + README hero link
+- [x] 41-01-PLAN.md — Wave 0 (BLOCKING): D-10 final-sweep audit (parallel subagents) + 7 Wave-0 Vitest stubs
+- [x] 41-02-PLAN.md — Wave 1: docs core — BUILDING-WITH-CLAUDE-CODE.md + SHOWCASE.md + JOURNEY.md + README hero link
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
@@ -297,7 +297,7 @@ Plans:
 | 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete    | 2026-06-04 |
 | 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 4/4            | Complete    | 2026-06-05 |
-| 41    | Public Reveal Polish                                                  | 1/6            | In progress | —          |
+| 41    | Public Reveal Polish                                                  | 2/6            | In Progress |            |
 
 ## Deferred Work
 

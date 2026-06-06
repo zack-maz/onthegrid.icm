@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-06T00:00:35Z"
+last_updated: "2026-06-06T00:15:33.112Z"
 last_activity: 2026-06-05 -- Phase 41 Plan 01 complete (Wave-0 audit gate + 7 red test stubs)
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 21
-  completed_plans: 16
-  percent: 32
+  completed_plans: 17
+  percent: 30
 ---
 
 # Project State
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 41 (public-reveal-polish) — EXECUTING
-Plan: 2 of 6 (Plan 01 complete)
-Status: Executing Phase 41 — Wave-0 gate cleared
+Plan: 3 of 6 (Plan 01 complete)
+Status: Ready to execute
 Last activity: 2026-06-05 -- Phase 41 Plan 01 complete (Wave-0 audit gate + 7 red test stubs)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
@@ -438,6 +438,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 40 P01 | 6 min | 2 tasks | 5 files |
 | Phase 40 P02 | 18min | 3 tasks | 8 files |
 | Phase 40 P40-04 | 12min | 3 tasks | 7 files |
+| Phase 41 P02 | 22m | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -452,3 +453,4 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: (40-02) DevApiStatusAllApisTab restructured into hero + 4 collapsible groups + default-closed operator-controls drawer; Replay/Prune buttons relocated into the drawer, read-only counters stay in Group 4 (D-01/D-02a)
 - [Phase ?]: (40-02) Tier-banner/sparkline/hero status dots migrated to --color-status-* namespace (byte-identical hex, zero visual change); BudgetBlock/FlightRecorderBlock/actor-quality self-hides converted to canonical muted-placeholder degrade (D-06)
 - [Phase ?]: (40-04 UI-POLISH-05) 8 UI-SPEC Regression-Lock assertions coded as RTL/snapshot tests across the 6 existing DevApiStatus test files (extended, not replaced) + 1 new consolidated-layout snapshot; assertion 5 (drawer default-closed) doubles as a security-adjacent guard
+- [Phase 41]: Phase 41 Wave 1 docs core shipped: BUILDING-WITH-CLAUDE-CODE.md (first-person agentic meta-story), JOURNEY.md (product arc + Mermaid gantt), SHOWCASE.md (1-page guided-tour hub) + README hero link — SC41-2 satisfied (1-click to meta-story/product-arc/decisions)
