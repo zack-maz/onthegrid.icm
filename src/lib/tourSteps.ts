@@ -11,16 +11,29 @@
  *     class selector (Pitfall 5) and NEVER an in-canvas WebGL entity (Pitfall 1;
  *     Deck.gl entities are pixels in the map <canvas>, not DOM nodes).
  *   - every selector resolves to exactly one present DOM node in the rendered
- *     AppShell. The matching data-tour attributes are wired onto the HUD chrome
- *     in Task 3b (StatusDropdown / LayerTogglesSlot / DetailPanelSlot /
- *     map-container / DevApiStatus trigger).
+ *     AppShell. The matching data-tour attributes are wired onto the HUD chrome:
+ *       - `data-tour="status"`        -> StatusDropdown trigger (Topbar).
+ *       - `data-tour="layers"`        -> the Sidebar accordion "Layers" section
+ *                                        (Sidebar.tsx; LayerTogglesSlot's own
+ *                                        wrapper is not mounted in AppShell).
+ *       - `data-tour="map"`           -> the top-level map container div
+ *                                        (AppShell.tsx).
+ *       - `data-tour="detail"`        -> the right-side detail panel slot
+ *                                        (DetailPanelSlot.tsx).
+ *       - `data-tour="api-health"`    -> the DevApiStatus / API Health trigger.
  *
- * driver.js's Step shape is `{ element, popover: { title, description } }`. We
- * keep our own structural type so this module carries no driver.js import (the
- * library is only loaded inside GuidedTour, behind the isTourOpen gate).
+ * driver.js's Step shape is `{ element, popover, onHighlightStarted?, ... }`.
+ * `TourStep` extends driver.js's `DriveStep` so steps can carry per-step hooks
+ * (WR-01: open the panels that are hidden/off-screen by default so the spotlight
+ * lands on real, on-screen chrome). GuidedTour.tsx passes these straight to
+ * driver.js. The driver.js import here is type-only — the runtime library is
+ * still loaded exclusively inside GuidedTour, behind the isTourOpen gate.
  */
+import { useUIStore } from '@/stores/uiStore';
 
-export interface TourStep {
+import type { DriveStep } from 'driver.js';
+
+export interface TourStep extends DriveStep {
   /** A stable `[data-tour="..."]` selector resolving to one HUD DOM node. */
   element: string;
   popover: {
@@ -45,9 +58,18 @@ export const tourSteps: TourStep[] = [
       description:
         'Toggle the data layers here — geographic terrain, climate, water health, threat density, political factions and ethnic distribution. Each renders against live data; flip them on to recompose the map.',
     },
+    // WR-01: the Layers panel lives inside the sidebar, which is closed by
+    // default (-translate-x-full opacity-0). Open the Layers section so the
+    // spotlight lands on on-screen chrome instead of an off-viewport region.
+    onHighlightStarted: () => {
+      const ui = useUIStore.getState();
+      if (ui.activeSidebarSection !== 'layers' || !ui.isSidebarOpen) {
+        ui.openSidebarSection('layers');
+      }
+    },
   },
   {
-    element: '[data-tour="threat-density"]',
+    element: '[data-tour="map"]',
     popover: {
       title: 'The map itself',
       description:
@@ -60,6 +82,13 @@ export const tourSteps: TourStep[] = [
       title: 'Detail panel',
       description:
         'Click any entity or threat cluster and this panel slides in with the full record — coordinates, provenance, LLM-enriched event context and a copyable lat/long.',
+    },
+    // WR-01: the detail panel is translate-x-full (off the right edge) when
+    // closed, which is the default. Open it so the spotlight has a visible
+    // target. (It shows an empty "Select an entity" prompt — that is the
+    // panel chrome being demonstrated.)
+    onHighlightStarted: () => {
+      useUIStore.getState().openDetailPanel();
     },
   },
   {

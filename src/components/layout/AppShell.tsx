@@ -69,7 +69,7 @@ export function AppShell() {
         {/* Map container - fills viewport below topbar */}
         <div
           data-testid="map-container"
-          data-tour="threat-density"
+          data-tour="map"
           className="absolute inset-0 z-[var(--z-map)]"
           style={{ top: 'var(--height-topbar)' }}
         >
