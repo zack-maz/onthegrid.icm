@@ -16,9 +16,15 @@
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-import { IntroOverlay } from '@/components/reveal/IntroOverlay';
 import { useUIStore } from '@/stores/uiStore';
-// @ts-expect-error — Plan 06 creates this module; RED until implementation lands.
+
+/* eslint-disable import/order */
+// Plan 06 creates this module; RED until implementation lands. The
+// @ts-expect-error suppresses the unresolved-module type error so tsc stays
+// green while the runtime import failure keeps this test file RED.
+// @ts-expect-error — module does not exist until Plan 06 implements it.
+import { IntroOverlay } from '@/components/reveal/IntroOverlay';
+/* eslint-enable import/order */
 
 describe('IntroOverlay (REVEAL-SITE-01)', () => {
   beforeEach(() => {

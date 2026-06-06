@@ -13,9 +13,13 @@
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-import { TourTrigger } from '@/components/reveal/TourTrigger';
 import { useUIStore } from '@/stores/uiStore';
-// @ts-expect-error — Plan 06 creates this module; RED until implementation lands.
+
+/* eslint-disable import/order */
+// Plan 06 creates this module; RED until implementation lands.
+// @ts-expect-error — module does not exist until Plan 06 implements it.
+import { TourTrigger } from '@/components/reveal/TourTrigger';
+/* eslint-enable import/order */
 
 describe('TourTrigger (REVEAL-SITE-02)', () => {
   beforeEach(() => {
