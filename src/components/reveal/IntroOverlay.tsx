@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 import { useUIStore } from '@/stores/uiStore';
 
 /**
@@ -12,6 +14,13 @@ import { useUIStore } from '@/stores/uiStore';
  *   - "Explore the map" -> setIntroSeen(true) (dismiss; persists to localStorage).
  *   - "Start the tour"  -> setIntroSeen(true) + openTour() (dismiss + launch tour).
  *
+ * Accessibility (WR-03): the panel is a real dialog — role="dialog"
+ * aria-modal="true" aria-labelledby. Focus is moved to the primary action on
+ * mount and trapped within the dialog while open (Tab/Shift+Tab cycle the two
+ * buttons). Escape dismissal is owned by the centralized useEscapeKeyHandler
+ * priority stack (Priority 0) so it can't fall through to a lower-priority
+ * chrome action behind the backdrop.
+ *
  * Colors via colorBridge semantic utilities (border-border / bg-surface-overlay /
  * text-* / bg-black/60), z-index via the --z-modal CSS-var token — NO inline hex,
  * NO raw z-40 (CLAUDE.md D-13 + z-index scale).
@@ -21,7 +30,41 @@ export function IntroOverlay() {
   const setIntroSeen = useUIStore((s) => s.setIntroSeen);
   const openTour = useUIStore((s) => s.openTour);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  const primaryButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Move focus to the primary action on mount so keyboard/AT users start
+  // inside the dialog (WR-03).
+  useEffect(() => {
+    if (introSeen) return;
+    primaryButtonRef.current?.focus();
+  }, [introSeen]);
+
   if (introSeen) return null;
+
+  // Focus trap: keep Tab/Shift+Tab cycling within the dialog's focusable
+  // controls while the modal is open (WR-03).
+  const onKeyDownTrap = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab') return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusable = panel.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey) {
+      if (active === first || !panel.contains(active)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else if (active === last || !panel.contains(active)) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   return (
     <div
@@ -32,8 +75,18 @@ export function IntroOverlay() {
         if (e.target === e.currentTarget) setIntroSeen(true);
       }}
     >
-      <div className="w-[440px] max-w-[90vw] rounded-lg border border-border bg-surface-overlay p-6 shadow-xl">
-        <h2 className="mb-2 text-base font-semibold tracking-wide text-text-primary">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="intro-title"
+        onKeyDown={onKeyDownTrap}
+        className="w-[440px] max-w-[90vw] rounded-lg border border-border bg-surface-overlay p-6 shadow-xl"
+      >
+        <h2
+          id="intro-title"
+          className="mb-2 text-base font-semibold tracking-wide text-text-primary"
+        >
           Iran Monitor
         </h2>
         <p className="mb-2 text-sm text-text-secondary">
@@ -52,6 +105,7 @@ export function IntroOverlay() {
             Explore the map
           </button>
           <button
+            ref={primaryButtonRef}
             type="button"
             onClick={() => {
               setIntroSeen(true);

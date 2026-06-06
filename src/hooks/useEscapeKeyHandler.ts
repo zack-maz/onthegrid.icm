@@ -8,6 +8,9 @@ import { useUIStore } from '@/stores/uiStore';
 
 /**
  * Centralized Escape key handler with priority stack:
+ * 0. First-visit intro overlay open -> dismiss it (WR-03: a blocking modal must
+ *    own the top of the priority stack so Escape can't fall through to a
+ *    lower-priority action — e.g. reset camera — underneath the still-open overlay)
  * 1. Search modal open -> close search modal
  * 2. Search filter active -> clear search filter
  * 3. Notification dropdown open -> close dropdown
@@ -24,6 +27,14 @@ export function useEscapeKeyHandler() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
+
+      // Priority 0: Dismiss the first-visit intro overlay. It is a full-screen
+      // blocking modal (z-modal); while it is up, Escape must dismiss IT and not
+      // fire any chrome action behind the backdrop (WR-03).
+      if (!useUIStore.getState().isIntroSeen) {
+        useUIStore.getState().setIntroSeen(true);
+        return;
+      }
 
       // Priority 1: Close search modal
       if (useSearchStore.getState().isSearchModalOpen) {
