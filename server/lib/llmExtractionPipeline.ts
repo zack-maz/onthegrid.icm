@@ -105,13 +105,31 @@ const LLM_PROCESS_KEY = 'events:llm-process-ts';
 const LLM_COOLDOWN_MS = 900_000;
 
 /**
- * Hard Redis TTL for LLM caches (2.5h, 10x logical).
+ * Hard Redis TTL for the `events:llm-process-ts` cooldown sentinel (2.5h).
  *
- * Phase 32 Plan 32-03 exports this so `pruneDeadUrlEvents`'s
- * cacheSetSafe write-back uses the same TTL the cron writer uses —
- * the splice-back must not silently re-TTL the v3 cache.
+ * Bounds how long the cooldown stamp lives; the cooldown *duration* itself is
+ * the separate LLM_COOLDOWN_MS (15 min). NOT used for the terminal
+ * `events:llm:v3` enrichment cache — that uses LLM_TERMINAL_TTL_SEC below.
  */
 export const LLM_REDIS_TTL_SEC = 9000;
+
+/**
+ * Hard Redis TTL for the terminal `events:llm:v3` enrichment cache (48h).
+ *
+ * MUST exceed the daily 04:00 UTC refresh-events cron interval (24h) so the
+ * enriched cache survives the full inter-cron window. The old 2.5h
+ * LLM_REDIS_TTL_SEC was a Hobby-era "10x the 15-min logical TTL" sizing —
+ * far shorter than the once-daily cron cadence — which left `events:llm:v3`
+ * empty for ~21.5h of every day, so `/api/events` fell through to the
+ * raw-GDELT Pitfall-1 bridge and events rendered unenriched most of the day.
+ * 48h gives one full day of margin: a single missed/failed cron run still
+ * serves the prior day's enriched cache.
+ *
+ * Used by BOTH the cron terminal write (`mergeAndPersistLlmEntities`) AND the
+ * `pruneDeadUrlEvents` splice-back (urlLiveness.ts) so a prune never silently
+ * re-TTLs the v3 cache back down to the short cooldown TTL.
+ */
+export const LLM_TERMINAL_TTL_SEC = 172_800;
 
 /** 24-hour TTL for LLM run summary (retained across runs). */
 const LLM_SUMMARY_TTL_SEC = 86_400;
@@ -161,7 +179,7 @@ async function mergeAndPersistLlmEntities(
   }
   for (const e of newlyEnriched) llmMergeMap.set(e.id, e);
   const llmMerged = Array.from(llmMergeMap.values());
-  await cacheSetSafe(key, llmMerged, LLM_REDIS_TTL_SEC);
+  await cacheSetSafe(key, llmMerged, LLM_TERMINAL_TTL_SEC);
   saveDevLLMCacheV2(llmMerged);
   log.info(
     { count: newlyEnriched.length, total: llmMerged.length },

@@ -10,7 +10,7 @@
  *       {operation:'prune-dead-urls', args:{trigger, prunedCount, prunedIds},
  *        result:'ok'}
  *   - RESEARCH A8 — cron trigger writes bearerFingerprint:'cron:refresh-events'
- *   - LLM cache splice → cacheSetSafe(events:llm:v3, spliced, LLM_REDIS_TTL_SEC)
+ *   - LLM cache splice → cacheSetSafe(events:llm:v3, spliced, LLM_TERMINAL_TTL_SEC)
  *   - bulk redis.del(events:url-liveness:{B,E,...}) for the pruned set
  *   - sidecar count DECR by prunedCount (Pitfall 3 paired with persistLiveness INCR)
  *
@@ -272,8 +272,9 @@ describe('Phase 32 D-12/D-13/D-14 — pruneDeadUrlEvents', () => {
     const remainingIds = (spliced as Array<{ id: string }>).map((e) => e.id).sort();
     expect(remainingIds).toEqual(['A', 'C', 'D']);
 
-    // TTL must be the LLM cache TTL (9000s — Plan 32-03 imports the constant).
-    expect(ttl).toBe(9000);
+    // TTL must be the terminal v3 cache TTL (48h) so a prune never re-TTLs
+    // events:llm:v3 down to the short cooldown-sentinel TTL.
+    expect(ttl).toBe(172_800);
   });
 
   it('redis.del invoked with the pruned url-liveness keys', async () => {
