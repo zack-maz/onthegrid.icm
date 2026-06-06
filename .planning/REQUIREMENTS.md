@@ -119,10 +119,10 @@ Operator-locked priority "final phase" per 2026-06-03 milestone-start decision. 
 
 #### REVEAL-SITE — public-reveal user-facing
 
-- [ ] **REVEAL-SITE-01**: Landing-page polish — refine the top-of-page hero, layout, copy. Decision on whether the dashboard IS the landing page or a separate landing page precedes the polish. Coordinates with Phase 40 (UI-POLISH-04 tab navigation) to avoid double-touching the dev shell.
-- [ ] **REVEAL-SITE-02**: Demo flows — guided tour overlays or scripted walkthroughs surfacing the multi-layer + LLM-enrichment story for first-time visitors. Could be a Storybook-style walkthrough, an interactive onboarding overlay, or a `?demo=true` query param triggering a scripted state.
-- [ ] **REVEAL-SITE-03**: Social-share assets — Open Graph image/card, Twitter card, favicon refresh if needed. Hero GIF can be the OG image source. Verify rendering across LinkedIn / Twitter / direct share previews.
-- [ ] **REVEAL-SITE-04**: Custom-domain decision — stay on `otg-iran-monitor.vercel.app` or migrate to a custom domain. Vercel domain configuration if migrating; DNS handoff coordination.
+- [x] **REVEAL-SITE-01**: Landing-page polish — refine the top-of-page hero, layout, copy. Decision on whether the dashboard IS the landing page or a separate landing page precedes the polish. Coordinates with Phase 40 (UI-POLISH-04 tab navigation) to avoid double-touching the dev shell. _(✓ Plan 41-06: first-visit dismissible IntroOverlay framing the dashboard-as-landing-surface, D-01; gated on uiStore isIntroSeen persisted to localStorage iran-monitor.intro-seen.)_
+- [x] **REVEAL-SITE-02**: Demo flows — guided tour overlays or scripted walkthroughs surfacing the multi-layer + LLM-enrichment story for first-time visitors. Could be a Storybook-style walkthrough, an interactive onboarding overlay, or a `?demo=true` query param triggering a scripted state. _(✓ Plan 41-06: re-openable driver.js GuidedTour spotlighting HUD chrome via stable data-tour selectors + persistent TourTrigger affordance, D-03. End-of-phase manual spotlight-geometry verify pending.)_
+- [x] **REVEAL-SITE-03**: Social-share assets — Open Graph image/card, Twitter card, favicon refresh if needed. Hero GIF can be the OG image source. Verify rendering across LinkedIn / Twitter / direct share previews. _(✓ Plan 41-06: static OG/Twitter/description meta in index.html, absolute vercel.app URLs, og:image=/screenshots/og-card.png 1200x630. End-of-phase crawler-preview verify pending.)_
+- [x] **REVEAL-SITE-04**: Custom-domain decision — stay on `otg-iran-monitor.vercel.app` or migrate to a custom domain. Vercel domain configuration if migrating; DNS handoff coordination. _(✓ Plan 41-06: decision = stay on otg-iran-monitor.vercel.app, D-09; recorded in docs/COSTS.md "Why no custom domain" + reveal-strand confirmation note. Satisfied by the decision itself.)_
 
 ---
 

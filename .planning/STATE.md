@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-06T00:47:23.806Z"
-last_activity: 2026-06-05 -- Phase 41 Plan 04 complete (screenshot consolidation to public/screenshots/ + capture:layers tooling + og-card.png + README currency pass, REVEAL-DOCS-07)
+last_updated: "2026-06-06T01:25:30Z"
+last_activity: 2026-06-05 -- Phase 41 Plan 06 complete (REVEAL-SITE strand: IntroOverlay + driver.js GuidedTour + TourTrigger + index.html OG/Twitter meta + REVEAL-SITE-04 stay-on-vercel.app; all 5 remaining Wave-0 stubs green; REVEAL-SITE-01..04). Phase 41 all 6 plans done — pending end-of-phase human-verify (tour geometry + OG card)
 progress:
   total_phases: 10
   completed_phases: 3
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 41 (public-reveal-polish) — EXECUTING
-Plan: Wave 3 complete (Plans 01–05 done); Wave 4 Plan 06 remains
-Status: Plan 04 complete (screenshots consolidated + capture:layers + og-card.png); only Wave 4 Plan 06 (OG/Twitter meta + guided tour) remains
-Last activity: 2026-06-05 -- Phase 41 Plan 04 complete (screenshot consolidation to public/screenshots/ + capture:layers tooling + og-card.png + README currency pass, REVEAL-DOCS-07)
+Phase: 41 (public-reveal-polish) — EXECUTING (all 6 plans done; end-of-phase human-verify pending)
+Plan: Wave 4 Plan 06 complete — all of 41-01..41-06 executed
+Status: Plan 06 complete (REVEAL-SITE strand: IntroOverlay + driver.js GuidedTour + persistent TourTrigger + index.html OG/Twitter meta + REVEAL-SITE-04 stay-on-vercel.app). driver.js@1.4.0 legitimacy-verified + installed. All 5 remaining Wave-0 stubs green (20/20); npm run build passes. Pending: end-of-phase manual tour-geometry + OG-card crawler verification (Task 5 checkpoint:human-verify, deferred per human_verify_mode=end-of-phase)
+Last activity: 2026-06-05 -- Phase 41 Plan 06 complete (REVEAL-SITE strand, REVEAL-SITE-01..04)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
