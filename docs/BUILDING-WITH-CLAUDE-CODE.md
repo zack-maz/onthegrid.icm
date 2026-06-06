@@ -689,6 +689,19 @@ brainstorms, design specs, the works — here are the receipts.
   the v0.9 MVP shipped. This is where the whole thing started: one question about
   what's actually happening around the Strait of Hormuz, quantitatively.
 
+> **Vision → shipped.** The origin brainstorm fixed the core value on day one —
+> _"prioritizes concrete, mathematical data — counts, timelines, movement vectors,
+> force posture — over qualitative news."_ That "numbers over narratives" thesis
+> survived every milestone unchanged; it's still the project's one-liner today.
+> The data sources, though, did not survive contact with reality: the brainstorm's
+> "Public APIs only" table specced **ACLED** for conflict events and a persistent
+> **WebSocket** for ~5s flight refresh. ACLED was built in Phase 8 then immediately
+> replaced by **GDELT** (free, no-auth, 15-min) in Phase 8.1, and the WebSocket
+> polling model gave way to tab-visibility-aware recursive `setTimeout` once the
+> serverless deploy (v1.0) made persistent connections untenable. The vision was
+> right; the plumbing got rebuilt at least twice. That gap between the day-one
+> thesis and the shipped plumbing is exactly what these receipts exist to show.
+
 ### Early design plans (superpowers/plans)
 
 The structured plans that fed the v1.0 -> v1.1 intelligence-layer build:
