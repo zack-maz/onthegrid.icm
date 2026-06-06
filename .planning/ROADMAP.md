@@ -297,7 +297,7 @@ Plans:
 | 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete    | 2026-06-04 |
 | 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 4/4            | Complete    | 2026-06-05 |
-| 41    | Public Reveal Polish                                                  | 0/TBD          | Not started | —          |
+| 41    | Public Reveal Polish                                                  | 1/6            | In progress | —          |
 
 ## Deferred Work
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
 status: executing
-last_updated: "2026-06-05T19:23:09.375Z"
-last_activity: 2026-06-05 -- Phase 41 planning complete
+last_updated: "2026-06-06T00:00:35Z"
+last_activity: 2026-06-05 -- Phase 41 Plan 01 complete (Wave-0 audit gate + 7 red test stubs)
 progress:
   total_phases: 10
   completed_phases: 3
-  total_plans: 15
-  completed_plans: 15
-  percent: 30
+  total_plans: 21
+  completed_plans: 16
+  percent: 32
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 41
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-05 -- Phase 41 planning complete
+Phase: 41 (public-reveal-polish) — EXECUTING
+Plan: 2 of 6 (Plan 01 complete)
+Status: Executing Phase 41 — Wave-0 gate cleared
+Last activity: 2026-06-05 -- Phase 41 Plan 01 complete (Wave-0 audit gate + 7 red test stubs)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -114,6 +114,8 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (41-01, D-10) Wave-0 final-sweep audit complete (SC41-1 satisfied): re-ran the v1.5-close 2nd-pass code+docs audit against current main. Phase 38 (LLM-FIX + LLM-PURGE) resolved the ENTIRE code-side punch-list (all 3 BUGS + all dead-code); the residual v1.6 cleanup is now a pure DOCS sweep. 4 net-new docs findings (README/CHANGELOG missing Phase 38/39/40 features; OpenAPI llm-history + reliability-doc title gaps) routed to Phase 41 docs waves 2-3 in 41-AUDIT.md §D. Both operator memories refreshed (resolved dropped, net-new added, still-open carried). News-warmer (punch-list #15) DEFERRED to v1.7 (operability nicety, not a reveal REQ-ID). Cerebras/Groq test fixtures RESOLVED-BY-REFRAME (LLM-PURGE-06 keeps them as deferred-provider scaffolding).
+- (41-01) 7 Wave-0 red Vitest stubs on disk pinning REVEAL-SITE store slice + overlays + tour-selector existence + OG tags + capture:layers contract (RED until Plans 04/06; tsc clean). `@ts-expect-error`-glued unresolved imports wrapped in import/order disable blocks so the lint-staged sorter cannot detach the suppression.
 - (38-05 PRO-01, D-09) DEFER vercel.json → vercel.ts: vercel.json is purely declarative (crons/rewrites/functions, NO headers block, no drift handlers), so the migration is net-zero simplification while adding @vercel/config + a build step + deploy-path risk mid-cleanup. Recorded in deployment.md; revisit v1.7. The recorded defer-with-rationale is what satisfies SC38-6 for PRO-01.
 - (38-05 PRO-02, D-09) DEFER Build Output API for api/vercel-entry.js: a fundamental deploy-path change that risks the 800s maxDuration, the includeFiles eval-fixture copy, and the rewrite map simultaneously — wrong risk/reward mid-cleanup. Phase 999.2 stays open; revisit v1.7.
 - (38-05 PRO-03) Fluid Compute compat verdict: COMPATIBLE, no code changes. Memoized createApp() reuse is correct (no per-request global state); no graceful-shutdown handler needed (Upstash REST = no connections to drain); callHistory/llmProgress singletons are process-scoped, cron-written (single writer), with Phase 28.2.7 Redis write-through — no cross-request leak. Guarded by a 2-sequential + 4-concurrent /health smoke assertion in vercel-entry.test.ts.
