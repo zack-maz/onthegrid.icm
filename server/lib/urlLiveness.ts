@@ -35,19 +35,22 @@
 import { z } from 'zod';
 
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
+
 import { createLimit } from './concurrencyLimit.js';
-// Phase 32 Plan 32-03 — reuse the canonical v3 cache key + LLM Redis TTL
-// from llmExtractionPipeline so the prune splice writer shares ONE truth
-// source with the cron writer. Hand-rolling the literal 'events:llm:v3'
-// or the 9000s TTL here is the exact drift class CLAUDE.md §"Serverless
-// Cache" warns against. The plan-checker MEDIUM-01 note (Upstash SCAN
+// Phase 32 Plan 32-03 — reuse the canonical v3 cache key + terminal v3 cache
+// TTL from llmExtractionPipeline so the prune splice writer shares ONE truth
+// source with the cron writer. Hand-rolling the literal 'events:llm:v3' or the
+// 48h LLM_TERMINAL_TTL_SEC here is the exact drift class CLAUDE.md §"Serverless
+// Cache" warns against. The prune splice MUST use the terminal TTL (not the
+// short cooldown sentinel) so it never silently re-TTLs v3 down. The
+// plan-checker MEDIUM-01 note (Upstash SCAN
 // signature) is honored inline at the SCAN call below — the cast to
 // `Promise<[string | number, string[]]>` matches @upstash/redis ^1.37.0
 // and the pinning pattern Plan 04's buildDeadUrlSample uses for its
 // SCAN iteration.
-import { LLM_EVENTS_KEY_ACTIVE, LLM_REDIS_TTL_SEC } from './llmExtractionPipeline.js';
-import { appendOperatorAuditEntry } from './operatorAudit.js';
+import { LLM_EVENTS_KEY_ACTIVE, LLM_TERMINAL_TTL_SEC } from './llmExtractionPipeline.js';
 import { logger } from './logger.js';
+import { appendOperatorAuditEntry } from './operatorAudit.js';
 
 // ============================================================================
 // Redis key namespace constants
@@ -834,7 +837,9 @@ export async function pruneDeadUrlEvents(opts: {
   // 4. Splice prunedIds out of the v3 events[] array, write back.
   const prunedSet = new Set(prunedIds);
   const spliced = events.filter((e) => !prunedSet.has(e.id));
-  await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, spliced, LLM_REDIS_TTL_SEC);
+  // Terminal v3 TTL (48h, > cron interval) — a prune must NOT re-TTL the
+  // enriched cache back down to the short cooldown sentinel TTL.
+  await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, spliced, LLM_TERMINAL_TTL_SEC);
 
   // 5. Bulk DEL the url-liveness keys.
   const keysToDelete = prunedIds.map((id) => `${URL_LIVENESS_KEY_PREFIX}${id}`);

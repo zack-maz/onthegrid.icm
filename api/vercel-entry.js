@@ -4486,7 +4486,7 @@ async function pruneDeadUrlEvents(opts) {
   }
   const prunedSet = new Set(prunedIds);
   const spliced = events.filter((e) => !prunedSet.has(e.id));
-  await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, spliced, LLM_REDIS_TTL_SEC);
+  await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, spliced, LLM_TERMINAL_TTL_SEC);
   const keysToDelete = prunedIds.map((id) => `${URL_LIVENESS_KEY_PREFIX}${id}`);
   await redis.del(...keysToDelete);
   try {
@@ -4521,6 +4521,7 @@ var LLM_SUMMARY_KEY_ACTIVE = "events:llm-summary:v3";
 var LLM_PROCESS_KEY = "events:llm-process-ts";
 var LLM_COOLDOWN_MS = 9e5;
 var LLM_REDIS_TTL_SEC = 9e3;
+var LLM_TERMINAL_TTL_SEC = 172800;
 var LLM_SUMMARY_TTL_SEC = 86400;
 var BATCH_SIZE_ACTIVE = 2;
 async function mergeAndPersistLlmEntities(newlyEnriched, llmCachedRef, key) {
@@ -4530,7 +4531,7 @@ async function mergeAndPersistLlmEntities(newlyEnriched, llmCachedRef, key) {
   }
   for (const e of newlyEnriched) llmMergeMap.set(e.id, e);
   const llmMerged = Array.from(llmMergeMap.values());
-  await cacheSetSafe(key, llmMerged, LLM_REDIS_TTL_SEC);
+  await cacheSetSafe(key, llmMerged, LLM_TERMINAL_TTL_SEC);
   saveDevLLMCacheV2(llmMerged);
   log15.info(
     { count: newlyEnriched.length, total: llmMerged.length },
@@ -84022,7 +84023,7 @@ eventsRouter.get("/", validateQuery(eventsQuerySchema), async (_req, res) => {
   if (!llmCached?.data) {
     const devData = loadDevLLMCacheV2();
     if (devData) {
-      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE2, devData, LLM_REDIS_TTL_SEC2);
+      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE2, devData, LLM_TERMINAL_TTL_SEC);
       const geocoded = devData.filter(
         (e) => e.data.precision && e.data.precision !== "region"
       ).length;
