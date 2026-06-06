@@ -10,7 +10,7 @@ import { groupGdeltRows } from '../lib/eventGrouping.js';
 import { extractBellingcatGeo } from '../lib/eventScoring.js';
 import { listDLQ } from '../lib/llmDLQ.js';
 import { processEventGroupsV3 } from '../lib/llmEventExtractor.v3.js';
-import { enrichedV3ToEntities } from '../lib/llmExtractionPipeline.js';
+import { enrichedV3ToEntities, LLM_TERMINAL_TTL_SEC } from '../lib/llmExtractionPipeline.js';
 import { llmProgress } from '../lib/llmProgress.js';
 import { shouldPauseNewEvents } from '../lib/llmTokenBudget.js';
 import { logger } from '../lib/logger.js';
@@ -26,17 +26,17 @@ import { listPipelineAudit } from '../lib/pipelineAudit.js';
 // Phase 28.2 Plan 03 D-08 — operator-action audit log + per-Bearer replay
 // quota guardrails on the dashboardAuth-gated /llm-pipeline + /llm-replay
 // endpoints. Both helpers degrade open on Redis failure (logged, not thrown).
+import { checkPruneQuota } from '../lib/pruneQuota.js';
 import { checkReplayQuota } from '../lib/replayQuota.js';
 // Phase 32 Plan 32-03 — POST /api/events/prune-dead-urls + cron auto-prune
 // share one helper. The route is the Bearer-gated entry point for the
 // dashboard click (Plan 32-05) AND the cron post-step (Plan 32-03 Task 3,
 // which calls the helper DIRECTLY per RESEARCH A4 — no self-HTTP).
-import { checkPruneQuota } from '../lib/pruneQuota.js';
+import { extractDomain, getSourceTier } from '../lib/sourceTiers.js';
 import { pruneDeadUrlEvents } from '../lib/urlLiveness.js';
 // Phase 27.4.6 — entity adapters live with the cron-driven extraction
 // helper. The legacy `enrichedToEntities` alias re-exported from this file
 // pulls from there so existing import sites continue to type-check.
-import { extractDomain, getSourceTier } from '../lib/sourceTiers.js';
 import { dashboardAuth } from '../middleware/dashboardAuth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validateQuery } from '../middleware/validate.js';
@@ -625,8 +625,10 @@ eventsRouter.get('/', validateQuery(eventsQuerySchema), async (_req, res) => {
   if (!llmCached?.data) {
     const devData = loadDevLLMCacheV2<ConflictEventEntity[]>();
     if (devData) {
-      // Seed Redis from file so subsequent requests are fast
-      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, devData, LLM_REDIS_TTL_SEC);
+      // Seed Redis from file so subsequent requests are fast. Use the terminal
+      // v3 TTL (48h) — this seeds the same `events:llm:v3` key the cron writes,
+      // so it must not land the short cooldown-sentinel TTL.
+      await cacheSetSafe(LLM_EVENTS_KEY_ACTIVE, devData, LLM_TERMINAL_TTL_SEC);
       // Write synthetic summary so LLM Pipeline section shows "loaded from file cache"
       const geocoded = devData.filter(
         (e) => e.data.precision && e.data.precision !== 'region',
