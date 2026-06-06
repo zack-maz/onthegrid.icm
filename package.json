@@ -19,6 +19,7 @@
     "knip": "knip",
     "check:env": "tsx scripts/check-env-example.ts",
     "capture:hero": "tsx scripts/capture-hero.ts",
+    "capture:layers": "tsx scripts/capture-hero.ts --layers",
     "refresh:water": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/refresh-water-facilities.ts",
     "refresh:sites": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/refresh-sites.ts",
     "eval:replay": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx/esm scripts/eval-replay.ts",
@@ -35,7 +36,7 @@
     "type-coverage": "type-coverage",
     "preview": "vite preview",
     "openapi:lint": "redocly lint server/openapi.yaml --format=stylish",
-    "docs:lint": "markdown-link-check --quiet README.md && find docs -name '*.md' -not -path '*/brainstorms/*' -not -path '*/superpowers/*' -print0 | xargs -0 -n1 markdown-link-check --quiet",
+    "docs:lint": "markdown-link-check --quiet --config .markdown-link-check.json README.md && find docs -name '*.md' -not -path '*/brainstorms/*' -not -path '*/superpowers/*' -print0 | xargs -0 -n1 markdown-link-check --quiet --config .markdown-link-check.json",
     "prepare": "husky"
   },
   "typeCoverage": {
