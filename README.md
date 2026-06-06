@@ -16,6 +16,8 @@ Hormuz right now, quantitatively?_
 
 **Live demo:** [otg-iran-monitor.vercel.app](https://otg-iran-monitor.vercel.app)
 
+**Portfolio tour:** [docs/SHOWCASE.md](docs/SHOWCASE.md) — a 1-page guided tour through the decisions, architecture, and the agentic-dev meta-story.
+
 > Please be gentle. This is a single-user Redis budget (Upstash free tier, ~92%
 > of the monthly command ceiling already in use). The live demo is protected by
 > a 60 req/min per-IP global rate-limit tier on top of per-endpoint limiters —
