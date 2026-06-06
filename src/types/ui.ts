@@ -125,6 +125,14 @@ export interface UIState {
   isDashboardAuthOpen: boolean;
   openDashboardAuth: () => void;
   closeDashboardAuth: () => void;
+  // Phase 41 Plan 06 (REVEAL-SITE-01/02) — reveal slice. isIntroSeen is
+  // PERSISTED (localStorage iran-monitor.intro-seen, mirrors isMarketsCollapsed);
+  // isTourOpen is SESSION-SCOPED (no localStorage, mirrors isDashboardAuthOpen).
+  isIntroSeen: boolean;
+  isTourOpen: boolean;
+  setIntroSeen: (seen: boolean) => void;
+  openTour: () => void;
+  closeTour: () => void;
   openDetailPanel: () => void;
   closeDetailPanel: () => void;
   toggleStatus: () => void;

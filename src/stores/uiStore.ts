@@ -60,6 +60,21 @@ export const useUIStore = create<UIState>()((set, get) => ({
   isDashboardAuthOpen: false,
   openDashboardAuth: () => set({ isDashboardAuthOpen: true }),
   closeDashboardAuth: () => set({ isDashboardAuthOpen: false }),
+  // Phase 41 Plan 06 (REVEAL-SITE-01/02) — reveal slice. isIntroSeen is
+  // PERSISTED via the readBool + write-through idiom (mirror toggleMarkets);
+  // isTourOpen is SESSION-SCOPED (no localStorage, mirror isDashboardAuthOpen).
+  isIntroSeen: readBool('iran-monitor.intro-seen', false),
+  isTourOpen: false,
+  setIntroSeen: (seen) => {
+    set({ isIntroSeen: seen });
+    try {
+      localStorage.setItem('iran-monitor.intro-seen', String(seen));
+    } catch {
+      /* */
+    }
+  },
+  openTour: () => set({ isTourOpen: true }),
+  closeTour: () => set({ isTourOpen: false }),
   openDetailPanel: () => set({ isDetailPanelOpen: true }),
   closeDetailPanel: () => set({ isDetailPanelOpen: false }),
   toggleStatus: () => set((s) => ({ isStatusCollapsed: !s.isStatusCollapsed })),
