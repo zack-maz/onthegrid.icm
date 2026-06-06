@@ -33,13 +33,13 @@ Hormuz right now, quantitatively?_
 [![CI](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/codeql.yml/badge.svg)](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/codeql.yml)
 [![Coverage](https://codecov.io/gh/zack-maz/otg-iran-monitor/branch/main/graph/badge.svg)](https://codecov.io/gh/zack-maz/otg-iran-monitor)
-![Tests](https://img.shields.io/badge/tests-2380%20passing-success)
+![Tests](https://img.shields.io/badge/tests-2543%20passing-success)
 ![Type Coverage](https://img.shields.io/badge/type--coverage-97%25-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
 ![Node](https://img.shields.io/badge/node-22.x-green)
 [![API Spec](https://img.shields.io/badge/API-OpenAPI%203.0-orange)](server/openapi.yaml)
 
-**2380 passing tests across 188 files.** TypeScript strict mode with
+**2543 passing tests across 208 files.** TypeScript strict mode with
 `noUncheckedIndexedAccess` on the server tsconfig. Type coverage gated at 97%
 in CI (ratchet floor, 99% aspirational). Pino structured logging with secret
 redaction proven by a write-stream sink test. Graceful degradation against
@@ -150,7 +150,7 @@ npm run dev
 **Run tests:**
 
 ```bash
-npx vitest run              # full suite (2380 tests across 188 files)
+npx vitest run              # full suite (2543 tests across 208 files)
 npx vitest run src/         # frontend only
 npx vitest run server/      # server only
 npx vitest run --coverage   # with coverage report
@@ -296,10 +296,10 @@ sample, this is the part worth reading carefully.
 
 | Metric              | Value                                             |
 | ------------------- | ------------------------------------------------- |
-| Total tests         | **2380 passing** (19 skipped, 5 todo)             |
-| Test files          | 188                                               |
-| Frontend tests      | ~870                                              |
-| Server tests        | ~400                                              |
+| Total tests         | **2543 passing** (19 skipped, 5 todo)             |
+| Test files          | 208                                               |
+| Frontend tests      | ~1170                                             |
+| Server tests        | ~1369                                             |
 | Duration (cold)     | ~38 s (vitest forks pool)                         |
 | Coverage (baseline) | lines 66 / funcs 69 / branches 53 / statements 65 |
 | Type coverage       | **97.05%** (7977 / 8219 typed)                    |
@@ -506,7 +506,7 @@ lives in [`server/config.ts`](server/config.ts); drift is checked by
 ## Testing
 
 ```bash
-# Full suite (2380 tests)
+# Full suite (2543 tests)
 npx vitest run
 
 # With coverage report (lcov + HTML)
@@ -758,4 +758,4 @@ terms of service.
 
 ---
 
-_Phase 26.4-04 — Portfolio presentation pass. Last updated 2026-04-08._
+_Phase 41 — Public reveal polish. Last updated 2026-06-05._
