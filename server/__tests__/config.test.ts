@@ -151,4 +151,61 @@ describe('server/config.ts', () => {
     expect(config.eventExcludedCameo).toBeInstanceOf(Array);
     expect(config.bellingcatCorroborationBoost).toBeTypeOf('number');
   });
+
+  // Production guard — recurrence defense for the llm-events-not-enriched-prod
+  // incident (2026-06-06): prod had CACHE_KEY_PREFIX=dev: set, routing every
+  // prod cache write into the dev: namespace while readers used bare keys, so
+  // events:llm:v3 looked empty and /api/events served raw GDELT for 31 days.
+  // The contract (CACHE_KEY_PREFIX comment, L160) is "production never sets
+  // this"; this guard makes violating it a loud fail-fast at startup instead of
+  // a silent multi-week degradation. Keyed on VERCEL_ENV (production only) so
+  // preview/dev can still isolate keys.
+  describe('CACHE_KEY_PREFIX production guard (D — recurrence defense)', () => {
+    const base = {
+      UPSTASH_REDIS_REST_URL: 'https://fake-redis.upstash.io',
+      UPSTASH_REDIS_REST_TOKEN: 'fake-token-123',
+    };
+
+    it('rejects a non-empty CACHE_KEY_PREFIX when VERCEL_ENV=production', async () => {
+      const { envSchema } = await import('../config.js');
+      const result = envSchema.safeParse({
+        ...base,
+        VERCEL_ENV: 'production',
+        CACHE_KEY_PREFIX: 'dev:',
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.some((i) => i.path.includes('CACHE_KEY_PREFIX'))).toBe(true);
+      }
+    });
+
+    it('rejects the exact incident value "dev: " (trailing space) in production', async () => {
+      const { envSchema } = await import('../config.js');
+      const result = envSchema.safeParse({
+        ...base,
+        VERCEL_ENV: 'production',
+        CACHE_KEY_PREFIX: 'dev: ',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('allows an empty CACHE_KEY_PREFIX in production (the correct prod config)', async () => {
+      const { envSchema } = await import('../config.js');
+      expect(
+        envSchema.safeParse({ ...base, VERCEL_ENV: 'production', CACHE_KEY_PREFIX: '' }).success,
+      ).toBe(true);
+      // Unset → default '' → also valid in production.
+      expect(envSchema.safeParse({ ...base, VERCEL_ENV: 'production' }).success).toBe(true);
+    });
+
+    it('allows CACHE_KEY_PREFIX in preview and local dev (non-prod key isolation)', async () => {
+      const { envSchema } = await import('../config.js');
+      // Vercel preview deploys.
+      expect(
+        envSchema.safeParse({ ...base, VERCEL_ENV: 'preview', CACHE_KEY_PREFIX: 'dev:' }).success,
+      ).toBe(true);
+      // Local dev (VERCEL_ENV unset) — the intended use of the prefix.
+      expect(envSchema.safeParse({ ...base, CACHE_KEY_PREFIX: 'dev:' }).success).toBe(true);
+    });
+  });
 });

@@ -392,6 +392,11 @@ var envSchema = z.object({
   // Optional with defaults
   PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  // Vercel runtime environment ('production' | 'preview' | 'development'),
+  // injected by Vercel; unset locally and in CI. Read by the CACHE_KEY_PREFIX
+  // production guard (superRefine below). z.string() (not enum) so an
+  // unexpected value never rejects the whole config over this advisory field.
+  VERCEL_ENV: z.string().optional(),
   CORS_ORIGIN: z.string().default("*"),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
   // Optional API keys (graceful degradation — empty string means unconfigured)
@@ -534,6 +539,14 @@ var envSchema = z.object({
   ),
   BELLINGCAT_CORROBORATION_BOOST: z.coerce.number().min(0).max(1).default(0.2),
   NEWS_RELEVANCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7)
+}).superRefine((val, ctx) => {
+  if (val.VERCEL_ENV === "production" && val.CACHE_KEY_PREFIX.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["CACHE_KEY_PREFIX"],
+      message: `CACHE_KEY_PREFIX must be empty in production (got ${JSON.stringify(val.CACHE_KEY_PREFIX)}). A non-empty prefix routes every prod cache write into a prefixed namespace while readers use bare keys \u2014 silently breaking events:llm:v3 and the live cache. Delete CACHE_KEY_PREFIX from the production Vercel env; it is for local/preview only.`
+    });
+  }
 });
 function parseEnv() {
   const isTest2 = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
