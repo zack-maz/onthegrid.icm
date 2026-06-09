@@ -338,7 +338,14 @@ Plans:
 2. The facilities layer no longer drops entries — spatial dedup never collapses distinct named facilities, and the Latin-label admission gate stays as-tight (the Phase 27.3.1 G1 "Dam near X" regression remains fixed, not loosened).
 3. The fix is visible in production data — if the persisted shape or behavior changed, `water:facilities:v3` is bumped (v3→v4) and `src/data/water-facilities.json` cold-start snapshot is regenerated and committed.
 4. The `waterFilterStats` test suite is updated in lockstep — rejection-bucket deltas pin the fix and a fixture for the previously-dropped OSM element fails on regression.
-   **Plans**: TBD
+
+**Plans:** 3 plans
+
+Plans:
+
+- [ ] 42-01-PLAN.md — Telemetry-first diagnosis (42-DIAGNOSIS.md) + RED spatialDedup test scaffold [wave 1; checkpoint]
+- [ ] 42-02-PLAN.md — Name-aware + deterministic spatialDedup fix + D-14 regression fixture + stats lockstep [wave 2, after 01]
+- [ ] 42-03-PLAN.md — water:facilities:v3→v4 lockstep (10 surfaces) + snapshot regen + contract docs [wave 3, after 02]
 
 ### Phase 43: Ghost Link Prune Correctness
 
