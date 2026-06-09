@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Production Hardening — 🚧 ACTIVE
-status: Awaiting next milestone
-last_updated: "2026-06-09T19:28:48.757Z"
-last_activity: 2026-06-09 — Milestone v1.6 completed and archived
+milestone: v2.0
+milestone_name: Final Hardening
+status: planning
+last_updated: "2026-06-09T19:46:48.768Z"
+last_activity: 2026-06-09
 progress:
-  total_phases: 10
-  completed_phases: 4
-  total_plans: 21
-  completed_plans: 21
-  percent: 40
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v1.6 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-09 — Milestone v1.6 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-09 — Milestone v2.0 started
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 

@@ -16,9 +16,20 @@ Surface actionable, data-backed intelligence on the Iran conflict in real-time o
 
 **v1.5 milestone archives:** `.planning/milestones/v1.5-ROADMAP.md` · `.planning/milestones/v1.5-REQUIREMENTS.md` · `.planning/milestones/v1.5-phases/` · `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` · `CHANGELOG.md` §`[v1.5]`.
 
-## Next Milestone: v1.7 (planning)
+## Current Milestone: v2.0 Final Hardening
 
-Carry-forwards locked at v1.6 close (2026-06-09): performance load test (Phase 999.5 — k6 1–300 VU sweep + ~100 concurrent users), rate-limiter public-global operator block (999.1), cron first-tick verification (999.3), CRON-WATCH-01 7-day cron stability watch, and Nyquist coverage backfill for Phases 39/40. Operator's v1.7 punch-list also includes: water filter dropping values, event ghost-links + missing LLM detail in the events subtab, general hardening, and a docs cleanup pass. Run `/gsd-new-milestone` to formalize.
+**Goal:** Close out the production punch-list — fix the remaining data-quality bugs (water filter, ghost links), make the API-Health dashboard readable, prove ~100-concurrent-user capacity, and finish hardening + docs.
+
+**Target features (operator-locked priority order):**
+
+1. Water filter fix — facilities layer intermittently drops entries (admission gate / Latin-label gate / desalination synthesis path)
+2. Event ghost links + events subtab — dead links slipping past URL-liveness prune; API-Health events subtab missing LLM pipeline details
+3. Dashboard subtab cleanup — water/events/sites subtabs unreadable (dense layout, raw data dumps, weak contrast/typography); redesign for readability while keeping the off-the-grid military aesthetic (Claude's design recommendations accepted within existing style)
+4. ~100 concurrent-user load test — k6 1–300 VU sweep (carry-forward Phase 999.5)
+5. General hardening — rate-limiter public-global operator block (999.1), cron first-tick verification (999.3), CRON-WATCH-01 7-day cron stability watch, Nyquist coverage backfill for Phases 39/40
+6. Docs cleanup pass after the above lands
+
+**Key context:** Cleanup items become their own phases, not one bundled finishing-pass (per v1.6 priority-lock precedent). Versioned v2.0 by operator decision at milestone start (2026-06-09).
 
 <details>
 <summary>v1.0–v1.6 milestone history (archived)</summary>
@@ -109,7 +120,7 @@ For per-phase detail, see `.planning/milestones/v[X.Y]-ROADMAP.md`.
 
 ### Active
 
-Defined for v1.6 Production Hardening at `/gsd:new-milestone` 2026-06-03. Detailed REQ-IDs grouped by category live in `.planning/REQUIREMENTS.md` (LLM-PIPE, BUDGET, UI, REVEAL). Roadmap mapping at `.planning/ROADMAP.md`.
+Being defined for v2.0 Final Hardening at `/gsd-new-milestone` 2026-06-09. Detailed REQ-IDs grouped by category will live in `.planning/REQUIREMENTS.md`. Roadmap mapping at `.planning/ROADMAP.md`.
 
 ### Out of Scope
 
@@ -194,4 +205,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-06-09 after v1.6 Production Hardening milestone close. All 4 phases (38–41) shipped + verified (41 human-verified on live prod); milestone audit PASSED (56/56 required reqs, cross-phase integration verified); shipped to production via PR #40 (deploy 32017ef) and tagged v1.6. Archives at `.planning/milestones/v1.6-*`. Next: `/gsd-new-milestone` for v1.7 (load test / ghost links / water filter / hardening / docs — see "Next Milestone" above)._
+_Last updated: 2026-06-09 at v2.0 Final Hardening milestone start. Six target features locked in operator priority order (water filter / ghost links + events subtab / dashboard subtab cleanup / ~100-user load test / general hardening / docs cleanup). v1.6 archives at `.planning/milestones/v1.6-*`._
