@@ -10,64 +10,18 @@ Surface actionable, data-backed intelligence on the Iran conflict in real-time o
 
 ## Current State
 
-**Shipped through v1.5 LLM Reliability & Reveal Prep (2026-06-03).** 10 phases (29–37 incl. 30.1), 60 plans executed, 209 commits, 24-day span. The LLM enrichment pipeline is production-stable on v3 with a NIM-only active cascade (OpenRouter declared dormant after probe-driven evidence of 90% free-tier rate-limit failure). The map is proven LLM-optional — when `NVIDIA_NIM_API_KEY` is absent, `/api/events` serves raw GDELT through the Pitfall 1 cache bridge and the map never goes blank. Ghost-event URL liveness ships as a Bearer-gated operator surface (probe sidecar + count sidecar + prune endpoint + dashboard drill-down). Actor metadata enrichment ships with a canonical 27-entry catalog and per-event `actorConfidence`. All three documentation surfaces (internal CLAUDE.md / Redis registry / JSDoc; public README / architecture / runbook / degradation; API OpenAPI 3.0.3) are current. ADR-0010 captures the milestone-final shipped state. LLM-RELI-07 acceptance gate satisfied (3 consecutive `prod-connectivity-audit.yml` greens), unblocking v1.6 promotion.
+**Shipped through v1.6 Production Hardening (2026-06-09).** 4 phases (38–41), 56/56 required requirements satisfied (1 optional CRON-WATCH-01 deferred to v1.7). Shipped to production via PR #40 (deploy `32017ef`). Six honest-signal LLM bug fixes + GDELT source matching; water-facility name romanization (`nameLatin`) through the Overpass Latin-label gate; safe Vercel Pro cleanup (risky vercel.ts/Build-Output migrations explicitly deferred per D-09); operator visibility — token-budget + cost-shadow surface and a Redis-backed LLM flight recorder (call-history + run-history rings surviving Fluid Compute cold starts); dashboard UI polish + API-Health subtab consolidation with WAI-ARIA tablist; and the public-reveal portfolio surface (first-visit IntroOverlay, re-openable driver.js GuidedTour, OG/Twitter share card, BUILDING-WITH-CLAUDE-CODE / SHOWCASE / JOURNEY / concepts / COSTS / operator-guide / LESSONS docs). Milestone audit PASSED; cross-phase integration verified; Phase 41 human-verified on live prod (intro/tour/OG/secrets).
+
+**v1.6 milestone archives:** `.planning/milestones/v1.6-ROADMAP.md` · `.planning/milestones/v1.6-REQUIREMENTS.md` · `.planning/milestones/v1.6-MILESTONE-AUDIT.md` · `.planning/milestones/v1.6-phases/` · `CHANGELOG.md` §`[v1.6]`.
 
 **v1.5 milestone archives:** `.planning/milestones/v1.5-ROADMAP.md` · `.planning/milestones/v1.5-REQUIREMENTS.md` · `.planning/milestones/v1.5-phases/` · `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` · `CHANGELOG.md` §`[v1.5]`.
 
-## Current Milestone: v1.6 Production Hardening
+## Next Milestone: v1.7 (planning)
 
-**Goal:** Fix the LLM-pipeline reliability gaps surfaced at v1.5 close, tighten GDELT event-source matching, give the operator dashboard a budget/cost surface and a polish pass, then ship the public-reveal portfolio surface.
-
-**Target features (operator-locked priority order, 2026-06-03):**
-
-1. **Phase 38 — LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup** _(merged track; operator decision: assess LLM + GDELT quality together)_
-   - LLM bugs surfaced at v1.5 close: `lastErrorReason` token split (`server/routes/health.ts:170`), Open-Meteo cache-write policy (`server/routes/water.ts:359`), `events.test.ts` v1→v3 mock drift, chaos-mock coverage gap for raw `redis.incr/sadd/scan/zadd/hset/hincrby/lpush`, `33-AUDIT-REPORT.md` stub causing silent `actorMatchRate: 0`.
-   - Phase 29 finishing pass — dead-code purge (`llmEventExtractor.ts` stub, v1/v2 Zod schemas, `pipelineAudit.ts` writer, `llm-provider.ts` shim, stale headers across v3 + events route, `freeClaudeRouter.ts` OpenRouter daily-cap counter, `CEREBRAS_API_KEY` + `GROQ_API_KEY` env vars, `replayQuota.ts` Cerebras-anchored threat model).
-   - **Cerebras + Groq source-file removal** from `server/adapters/` — folds in here (no separate dead-code phase).
-   - GDELT event-source matching improvements — Phase-22-style audit of current quality, better dedup of GDELT mentions, tighter coupling between GDELT-DOC clusters and events, source-tier-aware confidence rescore.
-   - **Water-facility name romanization** (Phase 27.3.3 carry-forward from v1.3 — now in scope) — ICU/transliteration pass on non-Latin facility names; preserve original `name` field, add `nameLatin`; Overpass adapter applies before the Latin-label admission gate.
-   - **Vercel Pro cleanup-and-repair (Strand B from former 999.6)** — `vercel.json → vercel.ts` migration evaluation, Vercel Build Output API for `api/vercel-entry.js` artifact (closes Phase 999.2 if pursued), Fluid Compute compatibility verification on the Express factory, CLI bump 52→latest, Hobby→Pro docs-drift repair (CLAUDE.md:101, deployment.md:56/133, runbook.md:539-547, degradation.md:329, reliability-doc header).
-   - **MAY include** Phase 31 reopening (7-day cron stability watch, finished properly this time) — operator-discretion at `/gsd-discuss-phase`.
-   - **MAY include** the `docs sync` first-task bundle (drift bugs #1-7 + OpenAPI gap #16 + reliability-doc header inconsistency #20).
-
-2. **Phase 39 — Operator Visibility (Budget + Cost + LLM Flight Recorder)** _(new feature; absorbs Phase 27.4.5 LLM observability)_
-   - `BudgetBlock` in `DevApiStatus.tsx` surfacing `llm:tokens:{provider}:YYYY-MM-DD` per-provider used vs cap, soft (0.8) / hard (0.95) threshold proximity, historical trend.
-   - Cost-shadow accrual surface from `events:llm-cost-shadow:v3:{YYYY-MM-DD}` (HSET `tokensIn` / `tokensOut` / `usdMicrocents`).
-   - **LLM Flight Recorder (Phase 27.4.5 absorbed)** — Redis-backed call history ring buffer (`llm:calls:history`, 500-entry LTRIM, 30d TTL) replacing in-memory last-20 + per-run summary records (`llm:runs:history`, 200-run LTRIM) + `GET /api/events/llm-history` Bearer-gated endpoint + DevApiStatus FlightRecorderBlock with run drill-down + run ID threading through `runRefreshExtraction`. Cold-start hydration survives Vercel Fluid Compute warm-start gaps. Adapted to v3-only pipeline (original todo references v1/v2 — now obsolete).
-   - All three blocks surface via Bearer-gated `/api/operator-status` reads, mirroring the existing `actorQuality` block pattern.
-
-3. **Phase 40 — Dashboard UI/UX Polish + Subtab Consolidation** _(UI polish)_
-   - Tab navigation, spacing, typography, color refinements on `DevApiStatus.tsx` (10+ accumulated sub-blocks through Phase 32/33/35).
-   - Sub-block consolidation (tier summary, per-endpoint quality, retry, fetch sparkline, eval scoreblock, operator actions, advEval, actorQuality, dead-URL count + drill-down, pin TTL, byBearer).
-   - Produces UI-SPEC.md via `gsd-ui-phase` before `gsd-plan-phase`.
-   - `frontend-design` skill drives the polish pass.
-
-4. **Phase 41 — Public Reveal Polish** _(final phase; absorbs former 999.6 Strand A)_
-   - Portfolio-docs deliverables: `docs/BUILDING-WITH-CLAUDE-CODE.md` (the agentic-dev meta-story), `docs/SHOWCASE.md` (guided tour hub), `docs/JOURNEY.md` (product arc narrative + Mermaid gantt), `docs/concepts.md` (~30-term glossary), `docs/COSTS.md` (transparency: Vercel Pro $20/mo + Claude Code dev cost honest accounting), `docs/operator-guide.md` (visitor how-to), `docs/LESSONS.md` (distilled retrospective), `docs/timeline.md` (or fold into JOURNEY).
-   - `public/screenshots/` extension — ~10 layer-by-layer screenshots; `npm run capture:layers` for reproducibility.
-   - Brainstorms cleanup — `docs/brainstorms/` + `docs/superpowers/` consolidation/cross-link/archive decision.
-   - REVEAL-01 + REVEAL-02 user-facing reveal work — landing-page polish, demo flows, social-share assets, custom-domain decision.
-   - **Final-sweep requirement (from former 999.6 CONTEXT):** re-run the v1.5-close 2nd-pass code + docs audit against then-current main before any docs land — by Phase 41 promotion, Phase 38/39/40 will have moved things and the `project-v1-6-cleanup-punchlist` + `project-v1-6-docs-drift` memories will be partially stale. Merge net-new findings into Phase 41 scope; drop captured-but-resolved items.
-
-**Phase numbering:** continues from v1.5 (last phase 37) → v1.6 starts at Phase 38.
-
-**Parallelization hint:** Phase 38 + 39 can interleave (both touch LLM surfaces); 40 + 41 are independent of each other and of the LLM track once the dashboard data shape is settled.
-
-**Deferred to backlog or later milestones:**
-
-- **Phase 999.5** — Performance Optimization + 1–300 VU k6 sweep stays in backlog at `.planning/phases/999.5-performance-load-test/`. Promotion gate (3 consecutive `prod-connectivity-audit.yml` greens) was mechanically satisfied in Phase 37; operator deferred promotion at v1.6 lock-in to prioritize reliability + UI work first.
-- **Phase 999.6** — RETIRED from backlog. Strand A (portfolio docs) folded into Phase 41. Strand B (Vercel Pro cleanup) folded into Phase 38.
-- **Phase 999.1 / 999.2 / 999.3** — parked v1.4 carry-forwards; re-evaluate at v1.7 or fold in if scope alignment surfaces during Phase 38 drafting.
-- **`news:feed` cron warmer** — folds into Phase 38 if scope allows; otherwise carries.
-
-**Out of scope for v1.6 (carry to v1.7 or later):**
-
-- v4 multi-provider router — operator-rejected at v1.5 start; would need a new milestone-start decision.
-- "Phase 29 finishing pass" as a single bundled PR — broken across priority-aligned phases (Phase 38 absorbs the LLM-side dead code; Phase 41 absorbs the docs cleanup).
-- Standalone Cerebras + Groq removal phase — folded into Phase 38 dead-code pass.
+Carry-forwards locked at v1.6 close (2026-06-09): performance load test (Phase 999.5 — k6 1–300 VU sweep + ~100 concurrent users), rate-limiter public-global operator block (999.1), cron first-tick verification (999.3), CRON-WATCH-01 7-day cron stability watch, and Nyquist coverage backfill for Phases 39/40. Operator's v1.7 punch-list also includes: water filter dropping values, event ghost-links + missing LLM detail in the events subtab, general hardening, and a docs cleanup pass. Run `/gsd-new-milestone` to formalize.
 
 <details>
-<summary>v1.0–v1.5 milestone history (archived)</summary>
+<summary>v1.0–v1.6 milestone history (archived)</summary>
 
 - ✅ **v0.9 MVP** (Phases 1-12 + 8.1) — 2026-03-19. 2.5D map foundation, multi-source flights, AIS ships, GDELT v2 conflict events, smart filters, analytics counters.
 - ✅ **v1.0 Deployment** (Phases 13-14) — 2026-03-20. Upstash Redis cache, AISStream on-demand, GDELT backfill, Vercel serverless.
@@ -76,6 +30,7 @@ Surface actionable, data-backed intelligence on the Iran conflict in real-time o
 - ✅ **v1.3 Data Quality & Layers** (Phases 22-26.4) — 2026-04-09. Threat density heatmap with click-through clusters, Bellingcat OSINT, political + ethnic + water-stress layers, pino logger, OpenAPI 3.0.3, README hero, 8 ADRs, SRE runbook.
 - ✅ **v1.4 GDELT Redo & Performance** (Phases 27-28.2.7) — 2026-05-08. Structured LLM extraction (Cerebras → Groq → NIM v3 with parallel concurrency limiter), 6-path geocode resolver, daily eval harness, cron-driven pipeline, cleanup sweep (0 TS errors), domain rename to `otg-iran-monitor.vercel.app`, unified API Health dashboard, audit workflow.
 - ✅ **v1.5 LLM Reliability & Reveal Prep** (Phases 29-37) — 2026-06-03. NIM-only cascade (OpenRouter declared dormant), v1+v2 extractor deletion, Vercel Pro upgrade (800s maxDuration), LLM-optional proven, ghost-event URL liveness, actor metadata canonicalization, Redis registry drift gate, public docs sweep, OpenAPI extension, ADR-0010 milestone-final, LLM-RELI-07 acceptance gate.
+- ✅ **v1.6 Production Hardening** (Phases 38-41) — 2026-06-09. Six honest-signal LLM bug fixes + GDELT source matching, water-facility romanization (`nameLatin`), safe Vercel Pro cleanup (risky migrations deferred), operator token-budget + cost-shadow surface, Redis-backed LLM flight recorder (call + run history surviving Fluid Compute cold starts), dashboard UI polish + API-Health subtab consolidation, public-reveal portfolio surface (IntroOverlay + driver.js GuidedTour + OG card + 7 portfolio docs). Shipped via PR #40 (deploy 32017ef); Phase 41 human-verified on live prod.
 
 For per-phase detail, see `.planning/milestones/v[X.Y]-ROADMAP.md`.
 
@@ -239,4 +194,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-06-04 — Phase 40 (Dashboard UI/UX Polish + Subtab Consolidation) complete: 4/4 plans, 5 requirements validated (UI-POLISH-01..05), 3/3 success criteria verified. The API Health tab (`DevApiStatusAllApisTab`) went from ~13 stacked sub-blocks to a read-only hero header + 4 collapsible groups (`group-${slug}` endpoint-health/llm-pipeline/budget-cost/operator-actions) + an operator-controls drawer (Replay/Prune relocated, default-closed); 3 `--color-status-*` tokens added through the D-13 colorBridge single-source pipeline; tab-bar affordances (focus-visible ring, 2px accent active indicator, roving-tabindex keyboard nav, tabpanel ARIA); BudgetBlock/FlightRecorderBlock converted to muted-placeholder degrade. Agent-native parity verified PASS (executor static pass + `agent-native-reviewer`, operator-approved in-session). 8 RTL render-contract assertions + consolidated-layout snapshot regression-lock it. Code review (0 critical, 6 warning, 5 info; the 2 load-bearing warnings out of scope — WR-01 spec-mandated byte-identical color rename with zero visual change, WR-05 sparkline name-mismatch predates Phase 28.2; 4 introduced warnings WR-02/03/04/06 deferred to an optional `--fix` pass). Full suite 2511 passing, tsc -b clean. Next: Phase 41 Public Reveal Polish (REVEAL-DOCS-01..10, REVEAL-SITE-01..04). v1.6 progress: 38 ✓; 39 ✓; 40 ✓; 41 pending. Operator-locked priority order per `project-v1-6-priorities` memory: LLM fixes > budget visibility > UI polish > public reveal. Phase 999.5 stays in backlog (operator deferred promotion). Numbering continues from v1.5 phase 37._
+_Last updated: 2026-06-09 after v1.6 Production Hardening milestone close. All 4 phases (38–41) shipped + verified (41 human-verified on live prod); milestone audit PASSED (56/56 required reqs, cross-phase integration verified); shipped to production via PR #40 (deploy 32017ef) and tagged v1.6. Archives at `.planning/milestones/v1.6-*`. Next: `/gsd-new-milestone` for v1.7 (load test / ghost links / water filter / hardening / docs — see "Next Milestone" above)._

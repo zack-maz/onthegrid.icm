@@ -258,6 +258,42 @@ _A living document updated after each milestone. Lessons feed forward into futur
 
 ---
 
+## Milestone: v1.6 — Production Hardening
+
+**Shipped:** 2026-06-09
+**Phases:** 4 (38–41) | **Plans:** 21 | **Tasks:** ~43
+
+### What Was Built
+
+Six honest-signal LLM bug fixes + GDELT source matching (Phase 38); water-facility name romanization (`nameLatin`) through the Overpass Latin-label gate; safe Vercel Pro cleanup with the two risky migrations (vercel.ts config, Build Output API) explicitly deferred per D-09; operator visibility — token-budget + cost-shadow surface and a Redis-backed LLM flight recorder (`llm:calls:history` / `llm:runs:history` rings surviving Fluid Compute cold starts, Phase 39); dashboard UI polish + API-Health subtab consolidation with WAI-ARIA tablist (Phase 40); and the public-reveal portfolio surface — first-visit IntroOverlay, re-openable driver.js GuidedTour, OG/Twitter share card, and 7 portfolio docs (Phase 41).
+
+### What Worked
+
+- **Ship-then-verify on the portfolio surface.** Merging v1.6 to prod first, then Playwright-verifying Phase 41's 4 human checks on the live public URL (the preview deploy was Vercel-auth-gated and unreachable by crawlers) — verification against the real artifact, with rollback available.
+- **Honest deferral over false completeness.** Risky Vercel migrations deferred with written rationale (D-09) rather than rushed; CRON-WATCH-01 left optional; Nyquist gaps surfaced not papered over.
+- **Single-source-of-truth types** (`CallHistoryEntry`/`RunHistoryEntry` in `llmProgress.ts`) meant the 39→40 flight-recorder wiring had zero shape drift at integration-check time.
+
+### What Was Inefficient
+
+- The v1.6 branch sat ~145 commits ahead of main, unmerged and un-deployed, across a multi-day pause — the entire milestone shipped in one late merge rather than incrementally, so prod was a full milestone behind during development.
+- Nyquist validation lagged: Phase 39 partial, Phase 40 missing VALIDATION.md — functional verification passed but the formal coverage record was skipped under time pressure.
+
+### Patterns Established
+
+- **Live-prod human-verify with Playwright + curl** as the close-out gate for UI/portfolio phases whose criteria can't be checked in jsdom (spotlight geometry, localStorage persistence, crawler assets, secret-leak inspection).
+- **driver.js `onHighlightStarted` panel-open hooks** for tours that must spotlight default-hidden chrome.
+
+### Key Lessons
+
+- Don't let a milestone branch drift far from main — ship phases to prod as they verify, not in one terminal merge.
+- A CSS slide-in animation will desync a driver.js spotlight cutout unless you `driver.refresh()` after the transition settles (step-4 tour cosmetic, deferred).
+
+### Cost Observations
+
+- Close-out session ran on Opus 4.8; integration check delegated to Sonnet; verification was Playwright-driven against live prod (no model cost for the browser work itself).
+
+---
+
 ## Cross-Milestone Trends
 
 | Metric  | v0.9   | v1.0   | v1.1   | v1.2    | v1.3   | v1.4    | v1.5     |

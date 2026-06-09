@@ -1,5 +1,34 @@
 # Milestones
 
+## v1.6 Production Hardening (Shipped: 2026-06-09)
+
+**Phases completed:** 9 phases, 21 plans, 43 tasks
+
+**Key accomplishments:**
+
+- Six honest-signal bug fixes that make every health probe, audit tier, and eval metric mean what it says — plus a dedicated quota-chaos test that exposed (and a route fix that closed) a real Pitfall-5 HTTP-500 leak on the replay endpoint, with the full suite green and npm audit clean.
+- 1. [Rule 3 - Blocking] `.env.example` consistency for deleted env keys
+- 1. [Rule 3 - Blocking] Live `events:llm:v3` + `news:gdelt` absent in dev Redis
+- Non-Latin water-facility names (Arabic/Persian/Hebrew) now romanize into a searchable Latin token injected BEFORE the Overpass Latin-label admission gate, so legitimate infrastructure stops being dropped — surfaced via `nameLatin` with the original preserved and shown on hover/sub-label across detail panel, tooltip, and search.
+- Shipped the safe Vercel Pro work (Fluid Compute compat verification + 5-surface Hobby→Pro docs-drift repair + CLI bump 52→54.9.0) and recorded explicit defer-with-rationale for the two risky migrations (vercel.ts config + Build Output API) per D-09 — closing SC38-6 without touching the production deploy path mid-cleanup.
+- 1. [Rule 3 - Blocking] New `dedupHighConfidence` export broke 4 pipeline test mocks
+- Two Redis-backed bounded-list modules (`llm:calls:history` 500/30d, `llm:runs:history` 200/30d) with degrade-open write/read/hydration helpers, new CallHistoryEntry/RunHistoryEntry types + a runId field on llmProgress, and three-surface drift-gate registration of both keys.
+- Threads a per-run `crypto.randomUUID()` runId through the v3 extraction pipeline so every LLM call back-correlates to its parent run, opens a crash-surviving `running` run record at the run boundary and closes a terminal record at all 5 exit branches (GA-2), adds the previously-missing SUCCESS-path callHistory writer, and dual-writes every call entry (success + failure) to `llm:calls:history`.
+- Bearer-gated, degrade-open `tokenBudget` field on `GET /api/operator-status` carrying per-provider used/cap/soft/hard/state + today's cost-shadow USD (microcents->USD), pinned by a Zod `.strict()` contract test that fails the build on any shape drift.
+- A Bearer-gated `GET /api/events/llm-history` endpoint returning `{ runs, calls }` from the Phase-39 flight-recorder Redis rings — with a `?limit` clamp to the LTRIM cap (500), an in-memory `?runId` back-correlation `.filter()`, and cold-start hydration hooks wired onto both `/llm-history` and the existing `/llm-status` so the in-memory singleton repopulates after a Vercel Fluid Compute cold start on whichever operator endpoint is hit first.
+- Two operator-facing render blocks mounted in the DevApiStatus API Health tab: `BudgetBlock` (per-provider used/cap proximity bars band-colored by state with soft 80% + hard 95% ticks, plus today's cost-shadow USD to 4dp, sourced from the already-polled `tokenBudget` field — no new fetch) and a functional `FlightRecorderBlock` (newest-first run list -> runId-filtered call list -> single-call detail drill-down, fetched from the Bearer-gated `/api/events/llm-history`). Both degrade-open (self-hide) and use accent + white/N tokens only.
+- 1. [Rule 3 - Blocking] `relativeTime` symbol collision
+- WAI-ARIA tablist affordances on the dev-shell tab bar — focus-visible accent-blue ring, 2px greyscale-readable active-tab indicator, roving-tabindex keyboard nav (arrow-wrap focus-only, Home/End, Enter/Space activate), and role=tabpanel/aria-labelledby on all 4 panels — added purely additively under the D-04b chrome lockdown, with agent-native parity confirmed PASS.
+- 1. [Rule 1 - Test assertion bug] `\b4\b` word-boundary mismatch on hero dead-URL value
+- Re-ran the D-10 final-sweep code+docs audit against current `main` (post-Phase-38/39/40), proving the **entire code-side punch-list is resolved** and the residual v1.6 cleanup is now a pure docs sweep; refreshed both operator memories and pinned 7 RED Vitest stubs for the REVEAL-SITE store slice, overlays, tour-selector existence, OG tags, and capture:layers contract before Plans 04 + 06 implement.
+- Authored the three anchor portfolio docs — a ~606-line first-person agentic-dev meta-story (BUILDING-WITH-CLAUDE-CODE.md), a product-arc narrative with a 7-milestone GitHub-native Mermaid gantt (JOURNEY.md), and a flat 1-page guided-tour hub with a 7-stop 1-click path (SHOWCASE.md) — plus a README hero link, satisfying SC41-2 (visitor reaches meta-story, product-arc, and ADR-0005/0010 decisions in 1 click each) with every metric sourced from RETROSPECTIVE/MILESTONES and zero invented figures.
+- Task 1 — `docs/concepts.md`
+- Consolidated all screenshots under `public/screenshots/`, added a reproducible `npm run capture:layers` mode that regenerated ~10 live-data PNGs + a 1200x630 og-card.png against the running dev server, and repointed every README/SHOWCASE image ref while applying the carried README-currency fixes.
+- Authored a 1-page first-person LESSONS.md distilling the five named v1.5 key lessons, and added a vision-to-shipped inline callout to the BUILDING doc's receipts section connecting the day-one brainstorm thesis to the plumbing that got rebuilt twice — completing the SC41-3 lessons + brainstorms portion with D-07 honored (cross-link, nothing deleted).
+- First-visit IntroOverlay + re-openable driver.js GuidedTour spotlighting HUD chrome via stable data-tour selectors, plus static 1200x630 OG/Twitter share-card meta in index.html — all five remaining Wave-0 red stubs now green.
+
+---
+
 ## v1.5 LLM Reliability & Reveal Prep (Shipped: 2026-06-03)
 
 **Phases completed:** 10 (29, 30, 30.1, 31, 32, 33, 34, 35, 36, 37)

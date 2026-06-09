@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Production Hardening — 🚧 ACTIVE
-status: verifying
-last_updated: "2026-06-09T19:18:31.861Z"
-last_activity: 2026-06-09
+status: Awaiting next milestone
+last_updated: "2026-06-09T19:28:48.757Z"
+last_activity: 2026-06-09 — Milestone v1.6 completed and archived
 progress:
   total_phases: 10
   completed_phases: 4
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Plan 06 complete (REVEAL-SITE strand: IntroOverlay + driver.js GuidedTour + persistent TourTrigger + index.html OG/Twitter meta + REVEAL-SITE-04 stay-on-vercel.app). driver.js@1.4.0 legitimacy-verified + installed. All 5 remaining Wave-0 stubs green (20/20); npm run build passes. Pending: end-of-phase manual tour-geometry + OG-card crawler verification (Task 5 checkpoint:human-verify, deferred per human_verify_mode=end-of-phase)
-Last activity: 2026-06-09
+Phase: Milestone v1.6 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-09 — Milestone v1.6 completed and archived
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -353,6 +353,18 @@ None.
 
 ## Deferred Items
 
+Items acknowledged and deferred at **v1.6 milestone close on 2026-06-09** (20 total — all v1.0–v1.5-era stale artifacts; none are v1.6 work):
+
+| Category | Count | Notes |
+|----------|-------|-------|
+| Debug sessions (historical) | 10 | `27-uat-round2-issues`, `date-range-filter-broken`, `env-file-not-found`, `event-feed-zero-events`, `llmstatus-unknown-prod`, `phase27-events-invisible`, `reservoirs-missing-after-05`, `river-color-visibility`, `server-eager-config-crash`, `water-facility-icons-missing` — all 2026-03-14 → 2026-05-07; `diagnosed`/`root_cause_found`/`resolved-pending-user-verification`; root causes captured in merged phases |
+| Quick tasks (legacy) | 8 | Pre-`/gsd-add-todo` slugs (CLN-01..13 requirement entries; 5-wiring-gaps; events-counter update; 4× threat-density cluster scaling; 2× Open-Meteo precip surfacing) — 2026-04 era; superseded by phase work that landed |
+| Pending todos | 2 | `phase-27.4.2-ci-health` (CI red→green — main is green) / `phase-27.4.3-deckgl-v9-type-drift` — both phases shipped per prior STATE note |
+
+These were carried from the v1.5 close and re-acknowledged at v1.6 close; revisit at v1.7 milestone-start if any remain relevant.
+
+---
+
 Items acknowledged and deferred at v1.5 milestone close on 2026-06-03:
 
 | Category | Count | Notes |
@@ -456,3 +468,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: (40-02) Tier-banner/sparkline/hero status dots migrated to --color-status-* namespace (byte-identical hex, zero visual change); BudgetBlock/FlightRecorderBlock/actor-quality self-hides converted to canonical muted-placeholder degrade (D-06)
 - [Phase ?]: (40-04 UI-POLISH-05) 8 UI-SPEC Regression-Lock assertions coded as RTL/snapshot tests across the 6 existing DevApiStatus test files (extended, not replaced) + 1 new consolidated-layout snapshot; assertion 5 (drawer default-closed) doubles as a security-adjacent guard
 - [Phase 41]: Phase 41 Wave 1 docs core shipped: BUILDING-WITH-CLAUDE-CODE.md (first-person agentic meta-story), JOURNEY.md (product arc + Mermaid gantt), SHOWCASE.md (1-page guided-tour hub) + README hero link — SC41-2 satisfied (1-click to meta-story/product-arc/decisions)
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
