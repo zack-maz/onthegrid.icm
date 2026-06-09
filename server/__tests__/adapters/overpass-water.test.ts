@@ -19,8 +19,16 @@ import {
   RIVER_BBOXES,
 } from '../../adapters/overpass-water.js';
 import { fetchWaterFacilities, nearestCountryName } from '../../adapters/overpass-water.js';
+// Phase 42 Plan 01 Task 2 — RED scaffold: `spatialDedup` is the not-yet-built pure
+// function (Plan 02 extracts it from the inline dedup loop at overpass-water.ts:1202-1212).
+// The import resolves to `undefined` until Plan 02 exports it, so every spatialDedup test
+// below is RED. @ts-expect-error suppresses the unresolved-export typecheck error per the
+// repo's Wave-0 red-stub convention.
 
-import type { WaterStressIndicators } from '../../types.js';
+// @ts-expect-error spatialDedup is not yet exported (Plan 02 builds it — RED scaffold)
+import { spatialDedup } from '../../adapters/overpass-water.js';
+
+import type { WaterFacility, WaterStressIndicators } from '../../types.js';
 
 describe('classifyWaterType', () => {
   it('returns "dam" for waterway=dam', () => {
@@ -2310,4 +2318,102 @@ describe('applyRomanizedName + romanize-before-gate (WATER-LATIN-03)', () => {
     expect(el.tags.name).toBe('سد الموصل');
     expect(el.tags['name:en']).toBeUndefined();
   });
+});
+
+// ---------- Phase 42 Plan 01 Task 2 — RED spatial-dedup behavior scaffold ----------
+//
+// Pins the not-yet-built `spatialDedup(facilities) => { kept; collapsed }` contract
+// (WATER-FILTER-02 + D-04/D-05/D-07/D-08). RED now: `spatialDedup` is not yet exported
+// (Plan 02 extracts it from the inline loop at overpass-water.ts:1202-1212). Fixtures are
+// FIXED in-memory WaterFacility[] fed directly to the function — NO Overpass mocking
+// (RESEARCH Pitfall 3). Determinism (case d) is proven against a fixed corpus, never via
+// two live runs (Pitfall 2). The diagnosed real dropped pair (Sd Wdy Rbg / Rabigh Dam,
+// 42-DIAGNOSIS.md) is the case (e) regression pin, filled in Plan 02.
+describe('spatialDedup', () => {
+  const stress: WaterStressIndicators = {
+    bws_raw: 3.5,
+    bws_score: 3.5,
+    bws_label: 'High',
+    drr_score: 2.0,
+    gtd_score: 1.5,
+    sev_score: 2.5,
+    iav_score: 3.0,
+    compositeHealth: 0.5,
+  };
+
+  /** Build a minimal valid WaterFacility fixture (overrides win). */
+  function facility(over: Partial<WaterFacility> & { osmId: number }): WaterFacility {
+    return {
+      id: `water-${over.osmId}`,
+      type: 'water',
+      facilityType: 'dam',
+      lat: 22.0,
+      lng: 39.0,
+      label: 'Default Dam',
+      osmId: over.osmId,
+      stress,
+      notabilityScore: 50,
+      ...over,
+    };
+  }
+
+  // (a) distinct NAMED pair of the same facilityType within 50m → BOTH admit.
+  // WATER-FILTER-02 core: distinct named facilities NEVER collapse (D-04).
+  it('(a) distinct named pair within 50m of same type → both admit', () => {
+    const corpus = [
+      facility({ osmId: 1, label: 'Rabigh Dam', lat: 22.8215284, lng: 39.3763353 }),
+      facility({ osmId: 2, label: 'Wadi Dam', lat: 22.8215266, lng: 39.3761299 }),
+    ];
+    const { kept, collapsed } = spatialDedup(corpus);
+    expect(kept.length).toBe(2);
+    expect(collapsed).toBe(0);
+  });
+
+  // (b) SAME-name pair of the same facilityType within 50m → collapses to one.
+  it('(b) same-name pair within 50m of same type → collapses to one', () => {
+    const corpus = [
+      facility({ osmId: 1, label: 'Mosul Dam', lat: 36.63, lng: 42.82, notabilityScore: 70 }),
+      facility({ osmId: 2, label: 'Mosul Dam', lat: 36.63, lng: 42.8202, notabilityScore: 40 }),
+    ];
+    const { kept, collapsed } = spatialDedup(corpus);
+    expect(kept.length).toBe(1);
+    expect(collapsed).toBe(1);
+  });
+
+  // (c) one side has an empty/whitespace-only label within 50m same type → collapses.
+  // D-04 "one side unnamed".
+  it('(c) unnamed-side pair within 50m of same type → collapses', () => {
+    const corpus = [
+      facility({ osmId: 1, label: 'Karkheh Dam', lat: 32.0, lng: 48.0, notabilityScore: 80 }),
+      facility({ osmId: 2, label: '   ', lat: 32.0, lng: 48.0002, notabilityScore: 30 }),
+    ];
+    const { kept, collapsed } = spatialDedup(corpus);
+    expect(kept.length).toBe(1);
+    expect(collapsed).toBe(1);
+  });
+
+  // (d) determinism — shuffle the same fixture and assert identical kept-ID set AND order.
+  // D-08, proven against a FIXED in-memory corpus per Pitfall 2 (NOT two live runs).
+  it('(d) deterministic kept set + order over shuffled corpus', () => {
+    const base = [
+      facility({ osmId: 10, label: 'Alpha Dam', lat: 30.0, lng: 50.0, notabilityScore: 60 }),
+      facility({ osmId: 11, label: 'Beta Dam', lat: 31.0, lng: 51.0, notabilityScore: 90 }),
+      facility({ osmId: 12, label: 'Gamma Dam', lat: 32.0, lng: 52.0, notabilityScore: 75 }),
+      // same-name collision with osmId 11 → only one survives; deterministic survivor
+      // must be the higher-score / lower-osmId one regardless of input order.
+      facility({ osmId: 13, label: 'Beta Dam', lat: 31.0, lng: 51.0002, notabilityScore: 40 }),
+    ];
+    const orderA = spatialDedup([...base]);
+    const orderB = spatialDedup([base[3], base[1], base[2], base[0]]);
+    const orderC = spatialDedup([base[2], base[0], base[3], base[1]]);
+
+    const ids = (r: { kept: WaterFacility[] }) => r.kept.map((f) => f.id);
+    // identical kept-ID SET and identical ORDER across all shuffles (D-08).
+    expect(ids(orderA)).toEqual(ids(orderB));
+    expect(ids(orderB)).toEqual(ids(orderC));
+  });
+
+  // (e) regression pin on the REAL previously-dropped OSM pair from 42-DIAGNOSIS.md —
+  // filled in Plan 02 (Sd Wdy Rbg / Rabigh Dam must BOTH admit post-fix, kept.length === 2).
+  it.todo('(e) regression: real previously-dropped OSM pair from 42-DIAGNOSIS.md both admit');
 });
