@@ -1,479 +1,254 @@
-# Architecture Patterns: v1.1 Intelligence Layer Integration
+# Architecture Research
 
-**Domain:** Real-time intelligence dashboard -- new data pipelines + UI panels
-**Researched:** 2026-03-19
-**Confidence:** HIGH (direct codebase analysis + approved design spec)
+**Domain:** v2.0 Final Hardening — integration mapping for 6 features bolted onto a shipped React 19 SPA + Express 5 (single Vercel function) + Upstash Redis app
+**Researched:** 2026-06-09
+**Confidence:** HIGH (read against the actual shipped codebase; all integration points cite real files + line ranges)
 
-## Scope
+> This is a **subsequent-milestone** architecture doc. It does NOT redesign the system — the architecture is fixed and shipped through v1.6. The job here is to map each v2.0 feature onto the **existing** module graph: what is touched, what is net-new, where data flow changes, and the dependency-honoring build order.
 
-This document covers how the five v1.1 features integrate with the existing Express adapter/route + Zustand store + polling hook + Deck.gl layer architecture. It identifies every new component, every modified file, and the dependency-driven build order. The validated v0.9/v1.0 architecture is unchanged -- all new features follow the established patterns.
-
----
-
-## Existing Architecture (Reference)
+## Standard Architecture (Existing — Fixed)
 
 ```
-[Upstream API] -> server/adapters/*.ts -> server/routes/*.ts -> Upstash Redis
-                                                                     |
-                                                             /api/{resource}
-                                                                     |
-                                                      src/stores/*Store.ts (Zustand 5)
-                                                                     |
-                                                     src/hooks/use*Polling.ts
-                                                                     |
-                                                    src/hooks/useEntityLayers.ts -> Deck.gl layers
-                                                                     |
-                                                      BaseMap.tsx / AppShell.tsx
+┌──────────────────────────────────────────────────────────────────────┐
+│  BROWSER (React 19 SPA, Vite 6, Zustand 5, Deck.gl 9, MapLibre 5)     │
+│  ┌────────────────┐  ┌──────────────────────┐  ┌──────────────────┐   │
+│  │ Map + Layers   │  │ DevApiStatus (3538L) │  │ Detail / Tooltip │   │
+│  │ WaterOverlay   │  │  WAI-ARIA tablist:   │  │ WaterFacility    │   │
+│  │ Precision ring │  │  apiHealth/water/    │  │ Detail, Entity   │   │
+│  └───────┬────────┘  │  sites/events        │  │ Tooltip          │   │
+│          │           └──────────┬───────────┘  └──────────────────┘   │
+│  Zustand stores: waterStore, flightStore, newsStore, siteStore, …     │
+└──────────┼──────────────────────┼─────────────────────────────────────┘
+           │  fetch /api/*         │  fetch /api/operator-status (Bearer)
+┌──────────┴──────────────────────┴─────────────────────────────────────┐
+│  EXPRESS 5 (createApp() → tsup bundle → api/vercel-entry.js)           │
+│  Vercel Pro · Fluid Compute · maxDuration 800                          │
+│  ┌──────────────────────────────────────────────────────────────┐     │
+│  │ Global pre-filter: rateLimiters.public (60/min, Bearer bypass)│     │
+│  │ Per-endpoint tiers: flights 120 / events 20 / water 10 …      │     │
+│  └──────────────────────────────────────────────────────────────┘     │
+│  routes/: flights ships events news markets sites water health         │
+│           operator-status (Bearer aggregator) · cron-* (3 handlers)    │
+│  lib/:  urlLiveness (probe sweep + prune) · overpass-water · llm-*      │
+│         healthSources (cron lastTick) · pruneQuota · operatorAudit      │
+└──────────┬─────────────────────────────────────────────────────────────┘
+           │  REST (@upstash/redis)
+┌──────────┴─────────────────────────────────────────────────────────────┐
+│  UPSTASH REDIS — water:facilities:v3 · events:llm:v3 ·                  │
+│  events:url-liveness:{id} + …-count sidecar · cron:lastTick:{name} ·    │
+│  llm:calls:history · llm:runs:history · ratelimit:public / :prod        │
+└─────────────────────────────────────────────────────────────────────────┘
+           ▲  daily crons (Vercel): /cron/health 0:00 · /cron/warm 12:00 · /cron/refresh-events 4:00
 ```
 
-Each data domain (flights, ships, events) is fully independent: own adapter, own route, own store, own polling hook, own layer(s). This isolation is the project's greatest architectural strength and the pattern all new features must follow.
+### Component Responsibilities (touched by v2.0)
 
-**Current stores (6):** mapStore, uiStore, flightStore, shipStore, eventStore, filterStore
-**Current routes (4):** /api/flights, /api/ships, /api/events, /api/sources
-**Current hooks (6):** useFlightPolling, useShipPolling, useEventPolling, useEntityLayers, useFilteredEntities, useSelectedEntity
-**Current adapters (7):** opensky, adsb-exchange, adsb-lol, adsb-v2-normalize, aisstream, gdelt, acled
+| Component           | File                                                           | What it owns                                                                                                                             |
+| ------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Water pipeline      | `server/adapters/overpass-water.ts`                            | Overpass fetch → `applyRomanizedName` → `computeAdmissionDecision` → spatial dedup → stats; emits `WaterFacility[]` + `WaterFilterStats` |
+| Water route         | `server/routes/water.ts`                                       | 3-tier serve: Redis → dev file cache → committed snapshot (`src/data/water-facilities.json`); Overpass only on explicit refresh          |
+| URL liveness        | `server/lib/urlLiveness.ts`                                    | `probeUrl` → `persistLiveness` (attemptCount monotonic-with-reset) → `runProbeSweep` → `pruneDeadUrlEvents`; sidecar count               |
+| Operator aggregator | `server/routes/operator-status.ts`                             | Bearer-gated read-only; `prune` / `actorQuality` / `tokenBudget` / `advEval` blocks; `buildDeadUrlSample`                                |
+| Dashboard           | `src/components/ui/DevApiStatus.tsx` (3538 L)                  | All 4 subtabs + ~30 sub-blocks inlined in ONE file; `WaterFiltersSection`, `SitesFiltersSection`, `EventsFiltersSectionV3`               |
+| Rate limiter        | `server/middleware/rateLimit.ts`                               | `createRateLimiter` factory; `rateLimiters.public` global + per-endpoint; D-04 Bearer bypass (global + per-endpoint)                     |
+| Cron handlers       | `server/routes/{cron-health,cron-warm,refresh-events-cron}.ts` | each writes `cron:lastTick:{name}` AFTER body succeeds (honest-failure)                                                                  |
+| Load harness        | `scripts/load-test.js`                                         | v1.2 (Phase 21.3) scenario-split shape, capped 100 VU                                                                                    |
 
----
+## Per-Feature Integration Map
 
-## v1.1 Architecture Extension
+### Feature 1 — Water filter dropping entries (priority 1)
 
-```
-                        v1.1 Additions
-                        ==============
+**What touches existing modules (no new components):**
 
-Overpass API -----> /api/sites --------> Redis(24h) -----> siteStore -------> IconLayer (map)
-(OSM infra)         overpass.ts                            useSitePolling     + SiteDetail (panel)
-                                                                              + LayerTogglesSlot
+- `server/adapters/overpass-water.ts` — the suspect surface is the admission + dedup chain, all in this one file:
+  - `applyRomanizedName` (L241) → `computeAdmissionDecision` (L842) → spatial dedup (L1202–1212).
+  - **Spatial dedup is the prime suspect.** It is O(n²) `deduped.some(... haversine < 0.05km ...)` keyed on `facilityType` only. Two genuinely-distinct facilities within 50m of the same type collapse to one. The romanization change (v1.6 WATER-LATIN-03) increased admits, raising dedup-collision probability — a plausible "intermittently drops entries" mechanism.
+  - **Second suspect: `GENERIC_OSM_NAME_RE` interaction with romanization** (L207, L241–265). A romanized non-Latin name that collapses to a bare generic English word is still filtered by `hasLatinLabel`'s `isRealLatin`. "Intermittent" because it depends on the specific Arabic/Persian source string.
+- `WaterFilterStats` (already instrumented — `byTypeRejections`, `byCountry`, `rejections.duplicate`) is the diagnostic surface: the `duplicate` bucket count vs raw/kept delta tells you whether dedup is the culprit.
 
-GDELT DOC API --+
-BBC ME RSS -----+-> /api/news ---------> Redis(15min) ---> newsStore -------> [no direct UI]
-AJ RSS ---------+   news.ts                                useNewsPolling     consumed by P17
+**Data flow change:** none structural — this is a correctness fix inside the existing normalize→dedup path. If the fix is "dedup should not collapse distinct named facilities," the change is the dedup predicate (add a name/osmId distinctness guard), not a new pipeline stage.
 
-eventStore -----+
-newsStore ------+-> /api/notifications -> (computed) -----> notificationStore -> Bell + Drawer
-siteStore ------+   notifications.ts                        + proximityAlerts    NotificationCard
-(+ haversine)                                               (client-side)
+**New:** at most a targeted vitest fixture proving the previously-dropped entry now survives. No new module.
 
-Yahoo Finance ----> /api/markets ------> Redis(60s) -----> marketStore ------> MarketsPanelSlot
-(v8 chart API)      yahoo-finance.ts                        useMarketPolling    SparklineChart
+**Regenerate path:** `scripts/refresh-water-facilities.ts` re-runs the pipeline and rewrites `src/data/water-facilities.json` snapshot. The fix must be validated by regenerating the snapshot, not just unit tests (the prod cold-start tier reads the snapshot).
 
-All stores -------> searchStore -------> (client-side) --> SearchBarSlot
-(fuse.js index)                                             results dropdown
-```
+### Feature 2 — Event ghost links + events subtab (priority 2)
 
----
+Two **independent** sub-features under one phase:
 
-## New vs. Modified: Complete File Map
+**2a. Ghost-link prune gaps** — touches `server/lib/urlLiveness.ts`:
 
-### New Files (by phase)
+- **Gap A (events with no `data.source`):** `buildProbeCandidates` (L599–604) silently skips events whose `data.source` is empty/missing — they are never probed, never get a liveness key, never become prune candidates. A ghost event with a null source URL is invisible to the whole pipeline. If "dead links slipping past prune" includes source-less events, the fix is here.
+- **Gap B (cron attemptCount≥3 gate):** `pruneDeadUrlEvents` cron trigger (L817) requires `attemptCount >= 3`. With a daily sweep, a dead URL needs ≥3 days of consecutive dead probes before unattended prune. The monotonic-**reset** semantics (any `unknown` resets to 0) mean a flaky host that intermittently returns 5xx (`unknown`) never accumulates 3. Plausible "slipping past" mechanism — fix may be widening the probe cadence (more than 1 sweep/day) or relaxing the reset rule for repeated dead-then-unknown patterns.
+- **Gap C (SCAN-only prune scope):** `pruneDeadUrlEvents` only prunes events that have a `events:url-liveness:*` key (L790–820). Events in `events:llm:v3` with no liveness key are never evaluated — ties back to Gap A.
 
-| Phase | File                                                | Purpose                                                            |
-| ----- | --------------------------------------------------- | ------------------------------------------------------------------ |
-| 15    | `server/adapters/overpass.ts`                       | Overpass QL fetch + whitelist filter + normalize to SiteEntity[]   |
-| 15    | `server/routes/sites.ts`                            | Cache-first route for site data (24h TTL)                          |
-| 15    | `src/stores/siteStore.ts`                           | Zustand store: sites[], connectionStatus                           |
-| 15    | `src/hooks/useSitePolling.ts`                       | 24h recursive setTimeout, conditional tab-resume                   |
-| 15    | `src/components/detail/SiteDetail.tsx`              | Detail panel content for type='site'                               |
-| 16    | `server/adapters/news.ts`                           | GDELT DOC + BBC RSS + AJ RSS fetch, merge, dedup, noise filter     |
-| 16    | `server/routes/news.ts`                             | Cache-first route for news (15min TTL)                             |
-| 16    | `src/stores/newsStore.ts`                           | Zustand store: items[], connectionStatus                           |
-| 16    | `src/hooks/useNewsPolling.ts`                       | 15min recursive setTimeout                                         |
-| 17    | `server/routes/notifications.ts`                    | Score events from Redis cache, return top 10                       |
-| 17    | `src/stores/notificationStore.ts`                   | Server-scored events + client-side proximity alerts + unread count |
-| 17    | `src/components/layout/NotificationDrawer.tsx`      | 360px right slide-out drawer                                       |
-| 17    | `src/components/notifications/NotificationCard.tsx` | Individual notification card with news links                       |
-| 18    | `server/adapters/yahoo-finance.ts`                  | Fetch 5 symbols from v8/finance/chart, normalize to MarketQuote[]  |
-| 18    | `server/routes/markets.ts`                          | Cache-first route for market quotes (60s TTL)                      |
-| 18    | `src/stores/marketStore.ts`                         | Zustand store: quotes[], connectionStatus                          |
-| 18    | `src/hooks/useMarketPolling.ts`                     | 60s recursive setTimeout (hourly when markets closed)              |
-| 18    | `src/components/layout/MarketsPanelSlot.tsx`        | Bottom-left collapsible OverlayPanel, 5 ticker rows                |
-| 18    | `src/components/markets/SparklineChart.tsx`         | 20-line SVG polyline component                                     |
-| 19    | `src/stores/searchStore.ts`                         | Zustand store: query, results, isOpen                              |
-| 19    | `src/components/layout/SearchBarSlot.tsx`           | Top-center floating input + results dropdown                       |
+**2b. Events subtab missing LLM detail** — touches `src/components/ui/DevApiStatus.tsx`:
 
-### Modified Files (by phase)
+- **The rich blocks already exist but are not wired into V3.** `EventsFiltersSectionV3` (L3414–3445) renders only RoutingTrace / Latency / RateLimit / SchemaStrict / ErrorTaxonomy / CostShadow + 3 atomic cells + DrillDown. The v2 `EventsFiltersSection` (L3331) additionally mounts `WaterfallBlock`, `HistogramsBlock`, `CallLogBlock`, `BudgetBarsBlock`, `EvalScoreBlock`, `DlqBlock`, `SuspectBlock` — all of which are **already implemented functions in the same file** (L2529–2992).
+- v1.6 shipped the Redis-backed flight recorder (`llm:calls:history`, `llm:runs:history`) + `FlightRecorderBlock.tsx` + `BudgetBlock.tsx`. The data exists; the V3 events subtab just doesn't surface it.
 
-| Phase | File                                         | Changes                                                                                   |
-| ----- | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 15    | `server/types.ts`                            | Add `SiteType`, `SiteEntity`, `'site'` to `EntityType`, `SiteEntity` to `MapEntity` union |
-| 15    | `src/types/entities.ts`                      | Re-export `SiteEntity`, `SiteType`                                                        |
-| 15    | `src/types/ui.ts`                            | Add 7 site toggle fields to `LayerToggles`, defaults to `LAYER_TOGGLE_DEFAULTS`           |
-| 15    | `server/index.ts`                            | Register `/api/sites` route                                                               |
-| 15    | `src/stores/uiStore.ts`                      | Add 7 site toggle booleans + actions, persist to localStorage                             |
-| 15    | `src/hooks/useSelectedEntity.ts`             | Add siteStore search in entity lookup chain                                               |
-| 15    | `src/hooks/useEntityLayers.ts`               | Add site IconLayer (6 icons, 3500m sizing), reduce event icon sizing                      |
-| 15    | `src/components/layout/LayerTogglesSlot.tsx` | Add Key Sites master toggle + 6 indented sub-toggles                                      |
-| 15    | `src/components/layout/AppShell.tsx`         | Wire `useSitePolling()`                                                                   |
-| 15    | `src/components/layout/DetailPanelSlot.tsx`  | Add `SiteDetail` type-switch case, extend helper functions                                |
-| 16    | `server/index.ts`                            | Register `/api/news` route                                                                |
-| 16    | `src/components/layout/AppShell.tsx`         | Wire `useNewsPolling()`                                                                   |
-| 17    | `server/index.ts`                            | Register `/api/notifications` route                                                       |
-| 17    | `src/stores/filterStore.ts`                  | Add `DEFAULT_EVENT_WINDOW_MS` module constant                                             |
-| 17    | `src/stores/uiStore.ts`                      | Add `isNotificationDrawerOpen`, open/close actions                                        |
-| 17    | `src/hooks/useFilteredEntities.ts`           | Apply 24h soft lower bound when `dateStart === null`                                      |
-| 17    | `src/components/layout/AppShell.tsx`         | Mount NotificationDrawer, add bell icon, set offset CSS var                               |
-| 17    | `src/components/layout/DetailPanelSlot.tsx`  | Respect `--notification-drawer-offset` for panel coexistence                              |
-| 17    | `src/styles/app.css`                         | Add `--width-notification-drawer`, `--z-notification-bell`                                |
-| 18    | `server/index.ts`                            | Register `/api/markets` route                                                             |
-| 18    | `src/stores/uiStore.ts`                      | Add `isMarketsCollapsed`, `toggleMarkets`                                                 |
-| 18    | `src/components/layout/AppShell.tsx`         | Wire `useMarketPolling()`, mount MarketsPanelSlot                                         |
-| 19    | `src/components/layout/AppShell.tsx`         | Mount SearchBarSlot                                                                       |
-| 19    | `src/stores/filterStore.ts`                  | Remove `minute` from `STEP_MS` record                                                     |
-| 19    | `src/components/filter/DateRangeFilter.tsx`  | Remove Min granularity button                                                             |
-| 19    | `src/components/layout/FilterPanelSlot.tsx`  | Add Reset All button, grouped sections                                                    |
-| 19    | `src/components/layout/LayerTogglesSlot.tsx` | Add scrollable/max-height for overflow                                                    |
-| 19    | `src/components/ui/StatusPanel.tsx`          | Add FeedLine entries for sites, news, markets                                             |
+**Data flow change:** 2b is purely presentational — mount existing blocks in `EventsFiltersSectionV3` and feed them `llmStatus.*` fields already present on `LLMStatus` (callHistory, dlqRecent, evalScore, etc.). No server change. 2a is a server-side reachability fix in `urlLiveness.ts`.
 
----
+**New:** possibly extract the V3 events blocks into their own component during 2b (overlaps with Feature 3). No new server module for 2a.
 
-## Component Boundaries
+### Feature 3 — Dashboard subtab readability redesign (priority 3)
 
-| Component                          | Responsibility                                                                                | Communicates With                                                                              |
-| ---------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `server/adapters/overpass.ts`      | Fetch + parse OSM data via Overpass QL, whitelist filter, normalize to SiteEntity[]           | `server/routes/sites.ts`                                                                       |
-| `server/adapters/news.ts`          | Fetch GDELT DOC JSON + parse BBC/AJ RSS XML (via fast-xml-parser), merge, dedup, noise filter | `server/routes/news.ts`                                                                        |
-| `server/adapters/yahoo-finance.ts` | Fetch 5 symbols from Yahoo Finance v8 chart endpoint, normalize to MarketQuote[]              | `server/routes/markets.ts`                                                                     |
-| `server/routes/notifications.ts`   | Read events + news from Redis, score events by severity, match headlines, return top 10       | Redis (`events:gdelt`, `news:feed` keys directly)                                              |
-| `siteStore`                        | Site entity array + connection status                                                         | useSitePolling, useEntityLayers, useSelectedEntity, notificationStore (proximity), searchStore |
-| `newsStore`                        | News item array + connection status                                                           | useNewsPolling, notificationStore (headline matching)                                          |
-| `notificationStore`                | Server-scored events + client-side proximity alerts + unread count                            | Reads from newsStore, siteStore, flightStore, shipStore                                        |
-| `marketStore`                      | Market quotes array + connection status                                                       | useMarketPolling, MarketsPanelSlot                                                             |
-| `searchStore`                      | Query string + results + focus state                                                          | Reads from all entity stores (flightStore, shipStore, eventStore, siteStore)                   |
-| `NotificationDrawer`               | 360px right-side drawer, notification cards with news headline links                          | notificationStore, uiStore                                                                     |
-| `MarketsPanelSlot`                 | Bottom-left collapsible panel, 5 ticker rows with sparklines                                  | marketStore                                                                                    |
-| `SearchBarSlot`                    | Top-center floating input, fuzzy search dropdown, fly-to-entity on select                     | searchStore, uiStore, mapStore                                                                 |
+**Touches:** `src/components/ui/DevApiStatus.tsx` — a **3538-line monolith** with ~30 inlined sub-components and 4 subtabs (`apiHealth`/`water`/`sites`/`events`). The WAI-ARIA tablist (L801 `role="tablist"`, L887+ `role="tabpanel"`, `TabButton` L258) is the structural skeleton and is **kept** — the redesign is layout/typography/contrast within it, plus component extraction for maintainability.
 
----
+**Recommended structural change:** extract the three dense panels into dedicated files:
 
-## Critical Integration Details
+- `src/components/ui/dashboard/WaterSubtab.tsx` (from `WaterFiltersSection` L2209)
+- `src/components/ui/dashboard/SitesSubtab.tsx` (from `SitesFiltersSection` L2383)
+- `src/components/ui/dashboard/EventsSubtab.tsx` (from `EventsFiltersSectionV3` + the wired-in v1.6 blocks)
 
-### 1. Type System Extension (Phase 15)
+This is net-new files but **moved, not new logic** — extraction de-risks the redesign (snapshot tests at `DevApiStatusConsolidatedLayout.snapshot.test.tsx` pin current render; update them as the redesign lands).
 
-`SiteEntity` is the only new entity added to the `MapEntity` discriminated union. This ripples through:
+**Data flow change:** none. Pure presentation. Reads the same Zustand stores (`useWaterStore`) + `/api/operator-status` + `/api/health` already consumed.
 
-```typescript
-// server/types.ts -- changes
-export type SiteType = 'nuclear' | 'oil_refinery' | 'naval_base' | 'airbase' | 'dam' | 'port';
+**Style constraint:** keep the off-the-grid military aesthetic. Color tokens are governed by the D-13 single-source-of-truth (`src/styles/app.css` `@theme` + `colorBridge.ts`) — the redesign must pull from existing tokens, not add inline hex (CLAUDE.md §Color Tokens; byte-identity sentinel test enforces it).
 
-export interface SiteEntity extends MapEntityBase {
-  type: 'site';
-  data: {
-    siteType: SiteType;
-    osmId: string;
-    osmUrl: string;
-    operator?: string;
-  };
-}
+**Hard dependency:** redesign should follow Feature 2b — extracting/restyling the events subtab while simultaneously adding the missing LLM blocks is one coherent pass. Doing 3 before 2b means re-touching the same file twice.
 
-export type EntityType = 'flight' | 'ship' | 'site' | ConflictEventType; // 'site' added
-export type MapEntity = FlightEntity | ShipEntity | SiteEntity | ConflictEventEntity; // SiteEntity added
-```
+### Feature 4 — ~100 concurrent-user load test (priority 4)
 
-**Downstream impact of MapEntity change:**
+**Touches `scripts/load-test.js` + a new CI workflow + (prerequisite) every `/api/*` route handler.**
 
-- `useSelectedEntity.ts` -- must search siteStore (code change)
-- `useEntityLayers.ts` -- must handle site icon mapping (code change)
-- `entityPassesFilters` -- no change needed (sites bypass filter pipeline)
-- `DetailPanelSlot` -- must add SiteDetail type-switch case (code change)
-- `getDotColor`, `getTypeLabel`, `getEntityName` in DetailPanelSlot -- must add site cases
-- `BaseMap.tsx` tooltip gating -- no change (sites are always visible when toggled on)
+**Critical finding — D-19 edge cache was never implemented.** The 999.5 plan (`999.5-CONTEXT.md` D-19) calls for `s-maxage` Cache-Control headers on `/api/*` so Vercel CDN absorbs reads at 300 VU. `grep` confirms **zero `Cache-Control`/`s-maxage`/`setHeader` calls in `server/routes/`**. The D-17 PASS bar includes "cache hit ratio > 90% (non-negotiable)" — without the edge layer, every VU read hits Express→Redis and the cache-hit bar is unreachable. **The edge-cache header layer (D-19) is a hard prerequisite of the load test, not an optional optimization.**
 
-**NewsItem and MarketQuote are NOT part of MapEntity.** They are separate types with no geographic coordinates and no map rendering. They live in their own stores and never flow through the entity pipeline.
+- **New `s-maxage` headers** on flights (5s) / ships (30s) / markets (60s) / events,news (900s) / sites,water (86400s) per the D-19 table. Layer sits ABOVE Redis (never replaces it; Pitfall 1 cache-bridge must still function).
+- **Restructure `scripts/load-test.js`** from the current scenario-split / 100-VU-capped shape (`RAMP_STAGES` tops out at 100) to the D-20 per-VU full-browser-loop at the 50→300 VU discrete sweep (D-16).
+- **New `.github/workflows/load-test.yml`** (D-15) — manual `workflow_dispatch`, NOT a cron (already at 3 Vercel crons; GH runner is not a cron slot). Must NOT trigger production cron paths.
 
-### 2. useSelectedEntity Extension (Phase 15)
+**Data flow change:** adds the CDN edge tier in front of `/api/*`. BASE_URL already points at `otg-iran-monitor.vercel.app`.
 
-```typescript
-// Current: searches 3 stores
-const found = flights.find(...) ?? ships.find(...) ?? events.find(...) ?? null;
+**Hard dependency:** load test must run against the **final hardened surface** — i.e. AFTER Features 1, 2, 3, 5 land, so the numbers reflect the shipped app. Edge-cache headers (within this phase) land before the k6 restructure.
 
-// After Phase 15: searches 4 stores
-const sites = useSiteStore((s) => s.sites);
-const found = flights.find(...) ?? ships.find(...) ?? events.find(...) ?? sites.find(...) ?? null;
-```
+### Feature 5 — General hardening (priority 5)
 
-The useMemo dependency array adds `sites`. This is the only change to this hook.
+Four sub-items, each touching existing modules; mostly **verification + test backfill, not net-new behavior:**
 
-### 3. useFilteredEntities -- Sites Are Excluded (Phase 15)
+| Sub-item                               | Touches                                                                                                   | Nature                                                                                                                                                                                                                                                  |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 999.1 rate-limiter operator block      | `server/middleware/rateLimit.ts`                                                                          | **Already folded in** via D-04 (L53–93): Bearer bypass now covers global `public` tier AND per-endpoint tiers. v2.0 work = verify + test the bypass, confirm no anonymous burst escape. Phase dir is empty `.gitkeep`.                                  |
+| 999.3 cron first-tick verification     | `server/routes/{cron-health,cron-warm,refresh-events-cron}.ts`, `server/routes/health.ts` `probeCronTick` | `cron:lastTick:{name}` writers exist with honest-failure timing (write AFTER body succeeds — refresh-events L74). Verification = prove each cron's FIRST post-deploy tick writes its lastTick and `probeCronTick` reads it. Phase dir empty `.gitkeep`. |
+| CRON-WATCH-01 7-day cron watch         | `server/routes/cron-health.ts` + audit artifact                                                           | The deferred v1.6 item (Phase 31 closed early at Day 1/7). Operational watch, not code — capture 7 consecutive green `prod-connectivity-audit.yml` runs / eval-drift checks.                                                                            |
+| Nyquist coverage backfill Phases 39/40 | `server/__tests__/`, `src/components/ui/__tests__/`                                                       | Test-only backfill for v1.6 Phase 39 (operator visibility) + Phase 40 (dashboard polish) — sampling-cadence regression coverage. No production change.                                                                                                  |
 
-Sites are static infrastructure. They have no speed, altitude, country, or meaningful timestamp. They must NOT flow through `entityPassesFilters` because:
+**Data flow change:** none. This is the "prove it works + cover the gaps" phase.
 
-- All filter predicates would pass-through (wasteful computation)
-- Sites should remain visible regardless of filter state (they are reference points)
+### Feature 6 — Docs cleanup (priority 6)
 
-Sites get visibility control only through toggle gating in `useEntityLayers`.
+**Touches:** `README.md`, `CLAUDE.md`, `docs/architecture/*`, `docs/adr/*`, `docs/runbook.md`, `docs/architecture/redis-keys.md` (32-key registry + mechanical drift gate), OpenAPI 3.0.3 spec. **No code.** Must run LAST so docs describe the shipped v2.0 surface (new edge-cache layer, restructured load harness, wired events subtab, water fix).
 
-### 4. 24h Event Default (Phase 17)
-
-This is the most delicate cross-cutting change. The existing `filterStore` treats any non-null `dateStart` as "custom range mode" which hides flights and ships. The 24h default must NOT trigger this side-effect.
-
-**Solution:** Module-level constant, not a store field.
-
-```typescript
-// src/stores/filterStore.ts
-export const DEFAULT_EVENT_WINDOW_MS = 86_400_000; // 24h
-
-// src/hooks/useFilteredEntities.ts -- event filtering changes
-import { DEFAULT_EVENT_WINDOW_MS } from '@/stores/filterStore';
-
-const events = useMemo(() => {
-  // When dateStart is null (no user-set range), apply 24h default window
-  // When dateStart is set (custom range mode), use user's value
-  const effectiveStart = filters.dateStart ?? Date.now() - DEFAULT_EVENT_WINDOW_MS;
-  return rawEvents.filter((e) => {
-    if (e.timestamp < effectiveStart) return false;
-    if (filters.dateEnd !== null && e.timestamp > filters.dateEnd) return false;
-    return entityPassesFilters(e, filters);
-  });
-}, [rawEvents, filters]);
-```
-
-Key properties:
-
-- `filterStore.dateStart` stays `null` at init -- no custom-range suppression
-- Flights and ships are completely unaffected
-- `clearAll()` resets user filters only; the constant is immune
-- The notification drawer's 24h scope is consistent with this default
-
-### 5. Panel Coexistence (Phase 17)
-
-Three panels can be open simultaneously on the right side. The stacking strategy:
+## Recommended Build Order (dependency-honoring)
 
 ```
-                    Map
-|                                          |
-|                                          | <-- NotificationDrawer (360px, z-panel)
-|                                          |     slides from right edge
-|                              |           |
-|                              | <---------| <-- DetailPanel (360px, z-panel)
-|                              |           |     translates left when drawer open
+Phase A (F1)  Water filter fix ──────────────┐  independent; regenerate snapshot
+                                              │
+Phase B (F2a) Ghost-link prune gaps ─────────┤  server-only; independent of F2b/F3
+                                              │
+Phase C (F2b) Events subtab LLM detail ──────┼──┐  wires existing blocks; feeds F3
+                                              │  │
+Phase D (F3)  Dashboard readability redesign ─┘  ◀┘  MUST follow F2b (same file/subtab)
+                                              │
+Phase E (F5)  Hardening (999.1/999.3/watch/Nyquist) ◀ verification; before load test
+                                              │
+Phase F (F4)  Load test  ◀──────────────────────────  edge-cache headers FIRST, then
+                          k6 restructure; runs against A–E hardened surface
+                                              │
+Phase G (F6)  Docs cleanup  ◀───────────────────────  LAST; describes shipped v2.0
 ```
 
-Implementation via CSS custom property:
+**Ordering rationale:**
 
-```typescript
-// AppShell.tsx
-const isDrawerOpen = useUIStore((s) => s.isNotificationDrawerOpen);
-// Set CSS custom property on root or pass as inline style
-style={{ '--notification-drawer-offset': isDrawerOpen ? '360px' : '0px' }}
+- **F1 (water) first** — operator priority 1, fully independent, no UI/server coupling. Regenerate snapshot before anything reads it.
+- **F2a (prune) before F2b (subtab)?** They're independent (server vs client). Either order; grouping under one "ghost links + events subtab" phase per PROJECT.md is fine, but **F2b must precede F3** because F2b adds blocks to `EventsFiltersSectionV3` and F3 restyles/extracts that same subtab — doing F3 first means touching the file twice.
+- **F3 (redesign) before F4 (load test)** — the redesign changes `/api/operator-status` poll consumers; load-test against the final surface.
+- **F5 (hardening) before F4 (load test)** — the load test's D-18 metrics (429 count validating Bearer bypass; cold-start frequency validating cron warm) directly exercise the 999.1/999.3 hardening; verify those first so a load-test failure isn't ambiguous.
+- **F4 (load test) penultimate** — must run against the fully hardened surface (D-17 PASS bar is the milestone gate). Edge-cache headers (D-19) land at the START of F4 since the cache-hit bar depends on them.
+- **F6 (docs) last** — per v1.6 precedent; docs describe shipped reality.
 
-// DetailPanelSlot.tsx
-className={`... right-[var(--notification-drawer-offset)] ...`}
-// replaces current `right-0`
-```
+## Anti-Patterns (specific to this codebase)
 
-**Escape key LIFO:** Track open order. First Escape closes the most recently opened panel (notification drawer or detail panel).
+### Anti-Pattern 1: Re-introducing fire-and-forget LLM extraction
 
-**Filter panel shift:** FilterPanelSlot already shifts when detail panel is open (via `right-[calc(var(--width-detail-panel)+1rem)]`). It must now account for both panels:
+**What people do:** make `/api/events` trigger extraction on read.
+**Why wrong:** CLAUDE.md anti-pattern #17. `/api/events` is cache-only; the daily cron is the sole writer. Pitfall 1 bridge keeps the map populated.
+**Do this instead:** leave the read path cache-only; extraction stays cron-driven.
 
-```
-right = (detailOpen ? 360px : 0) + (drawerOpen ? 360px : 0) + 1rem
-```
+### Anti-Pattern 2: Edge cache replacing Redis
 
-### 6. Fly-To (Phase 19)
+**What people do:** add `s-maxage` and treat the CDN as the cache of record.
+**Why wrong:** D-19 explicitly: edge layer lives ABOVE Redis, never replaces it. The Pitfall 1 cache-bridge fallback must still function.
+**Do this instead:** add `Cache-Control` headers as a read-absorption layer; Redis remains canonical.
 
-Search result selection needs to trigger a map camera transition. The recommended approach:
+### Anti-Pattern 3: Inline hex in the dashboard redesign
 
-```typescript
-// mapStore.ts -- add pending fly-to state
-interface MapState {
-  // ... existing fields
-  pendingFlyTo: { lng: number; lat: number; zoom: number } | null;
-  flyToEntity: (lat: number, lng: number) => void;
-  clearPendingFlyTo: () => void;
-}
+**What people do:** hand-pick colors while restyling subtabs.
+**Why wrong:** breaks the D-13 single-source-of-truth; the byte-identity sentinel test (`colorBridge.test.ts`) fails.
+**Do this instead:** pull every color from the `@theme` block via `colorBridge` / Tailwind utilities.
 
-// BaseMap.tsx -- consume pending fly-to
-const pendingFlyTo = useMapStore((s) => s.pendingFlyTo);
-const clearPendingFlyTo = useMapStore((s) => s.clearPendingFlyTo);
+### Anti-Pattern 4: New env-tunable surfaces in hardening
 
-useEffect(() => {
-  if (pendingFlyTo && mapRef.current) {
-    mapRef.current.flyTo({ center: [pendingFlyTo.lng, pendingFlyTo.lat], zoom: pendingFlyTo.zoom });
-    clearPendingFlyTo();
-  }
-}, [pendingFlyTo, clearPendingFlyTo]);
-```
+**What people do:** add `VITE_PROBE_*` / new tuning knobs while fixing prune gaps.
+**Why wrong:** 999.3/Phase 32 CONTEXT: "no new env-tunable surfaces" — probe constants are domain knobs, not operator levers. D-11 keeps domain-definitional constants out of env.
+**Do this instead:** change the constant in-module; promote to env only in a dedicated decimal phase if a real incident demands it.
 
-This avoids fighting with Deck.gl's viewport management by using the imperative `map.flyTo()` API through a ref.
+### Anti-Pattern 5: Re-TTLing v3 cache down on prune
 
-### 7. StatusPanel Extension (Phase 19)
+**What people do:** write the spliced `events:llm:v3` back with the short cooldown TTL.
+**Why wrong:** `pruneDeadUrlEvents` must use `LLM_TERMINAL_TTL_SEC` (L842), not the cooldown sentinel, or the enriched cache silently expires early.
+**Do this instead:** any v3 write from prune uses the terminal TTL.
 
-StatusPanel currently shows 3 FeedLines (flights, ships, events). After v1.1 it should show 6:
+## Integration Points
 
-```typescript
-<FeedLine status={flightStatus} count={visibleFlights} label="flights" />
-<FeedLine status={shipStatus} count={visibleShips} label="ships" />
-<FeedLine status={eventStatus} count={visibleEvents} label="events" />
-<FeedLine status={siteStatus} count={siteCount} label="sites" />      // NEW
-<FeedLine status={newsStatus} count={newsCount} label="news" />       // NEW
-<FeedLine status={marketStatus} count={quoteCount} label="markets" /> // NEW
-```
+### Internal Boundaries
 
----
+| Boundary                                               | Communication                                                | v2.0 consideration                                                           |
+| ------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `urlLiveness.ts` ↔ `events:llm:v3`                     | reads `data.source` per event                                | F2a: source-less events are invisible — the prune gap lives at this boundary |
+| `operator-status.ts` ↔ `urlLiveness` sidecar           | O(1) `events:url-liveness-count` + `buildDeadUrlSample` SCAN | F2/F3: dashboard reads count + sample; degrade-open contract must hold       |
+| `DevApiStatus.tsx` ↔ `LLMStatus` shape                 | `llmStatus.*` fields (callHistory, dlqRecent, evalScore)     | F2b: blocks consume fields already on the type — no server change            |
+| `overpass-water.ts` ↔ `water:facilities:v3` / snapshot | route serves Redis→devcache→snapshot                         | F1: fix must regenerate the snapshot, not just pass unit tests               |
+| `rateLimit.ts` ↔ Bearer                                | `timingSafeEqual` bypass, global + per-endpoint              | F5/F4: D-18 429-count metric validates the bypass under load                 |
+| route handlers ↔ Vercel CDN                            | **new** `Cache-Control` headers                              | F4: net-new edge tier; D-19 prerequisite                                     |
 
-## Cache TTLs (New Routes)
+### External Services
 
-| Route                | Redis Key        | Logical TTL        | Redis Hard TTL | Rationale                                     |
-| -------------------- | ---------------- | ------------------ | -------------- | --------------------------------------------- |
-| `/api/sites`         | `sites:osm`      | 24h (86,400,000ms) | 10d (864,000s) | OSM data changes rarely                       |
-| `/api/news`          | `news:feed`      | 15min (900,000ms)  | 2.5h (9,000s)  | Matches event poll interval                   |
-| `/api/markets`       | `markets:quotes` | 60s (60,000ms)     | 10min (600s)   | Real-time price sensitivity                   |
-| `/api/notifications` | None             | N/A                | N/A            | Computed per request from event + news caches |
+| Service        | Pattern                                                  | v2.0 gotcha                                                   |
+| -------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
+| Overpass API   | POST query, primary+fallback mirror, 90s timeout         | F1: only on explicit refresh; snapshot tier serves cold-start |
+| Upstash Redis  | REST `@upstash/redis`; SCAN cursor is `string \| number` | F2a/F4: prune SCAN + operator-status SCAN share the cast pin  |
+| Vercel CDN     | `s-maxage` edge cache                                    | F4: NEW; absorbs reads at 300 VU above Redis                  |
+| GitHub Actions | k6 runner, manual dispatch                               | F4: not a cron slot; must not trigger prod cron paths         |
 
----
+## Scaling Considerations
 
-## Patterns to Follow
+The load test (F4) IS the scaling validation. Realistic targets per 999.5 D-17:
 
-### Pattern 1: Cache-First Route
+| Scale                     | Behavior                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------- |
+| ~100 VU (operator target) | edge cache absorbs reads; Redis only on miss + cron warm; p95<500ms expected     |
+| 300 VU (PASS bar)         | cache-hit >90% non-negotiable; ~81 RPS; validates Upstash + s-maxage absorb load |
+| >300 VU                   | explicitly deferred (exploratory 500-VU breakpoint run, not in PASS bar)         |
 
-Every new server route replicates the established cache-first pattern from `server/routes/flights.ts`:
-
-```typescript
-const cached = await cacheGet<T[]>(KEY, LOGICAL_TTL_MS);
-if (cached && !cached.stale) return res.json(cached);
-try {
-  const fresh = await fetchUpstream();
-  await cacheSet(KEY, fresh, REDIS_TTL_SEC);
-  res.json({ data: fresh, stale: false, lastFresh: Date.now() });
-} catch (err) {
-  if (cached)
-    res.json(cached); // stale fallback
-  else throw err; // Express 5 error handler
-}
-```
-
-### Pattern 2: Curried Zustand Store
-
-All new stores use `create<T>()()` for type inference. Each store has `connectionStatus`, `lastFetchAt`, and atomic setters matching the `CacheResponse<T>` shape.
-
-### Pattern 3: Recursive setTimeout Polling
-
-All new polling hooks use `setTimeout` (not `setInterval`) with cancelled flag, tab visibility pause/resume, and `setLoading()` before initial fetch.
-
-### Pattern 4: OverlayPanel Widget
-
-MarketsPanel reuses the collapsible `OverlayPanel` pattern from CountersSlot and LayerTogglesSlot with header toggle button.
-
----
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Sites in Filter Pipeline
-
-**What:** Running sites through `entityPassesFilters` in `useFilteredEntities`.
-**Why bad:** Sites are static reference points with no filterable attributes. They should remain visible regardless of speed/altitude/country/date filters.
-**Instead:** Toggle-only visibility in `useEntityLayers`.
-
-### Anti-Pattern 2: News as MapEntity
-
-**What:** Adding `NewsItem` to the `MapEntity` discriminated union.
-**Why bad:** News has no coordinates. It pollutes every entity-iterating function.
-**Instead:** Separate type in separate store, consumed only by notificationStore.
-
-### Anti-Pattern 3: Server-Side Proximity Alerts
-
-**What:** Computing proximity on the server.
-**Why bad:** Server caches positions with varying staleness. Client has the freshest data from all polling hooks. Proximity depends on the exact moment of comparison.
-**Instead:** Client-side haversine in notificationStore against current store data.
-
-### Anti-Pattern 4: Charting Library for Sparklines
-
-**What:** Adding recharts/Victory for 5 tiny sparkline charts.
-**Why bad:** 50-200KB for something that needs a single SVG `<polyline>`.
-**Instead:** 20-line `SparklineChart` component using raw SVG.
-
-### Anti-Pattern 5: Re-Scoring Server Events Client-Side
-
-**What:** Receiving raw events and re-applying severity scoring on the client.
-**Why bad:** Duplicates logic, creates divergence risk, wastes CPU.
-**Instead:** Server returns pre-scored, pre-sorted top 10. Client displays as-is.
-
-### Anti-Pattern 6: Full-Text Search Library
-
-**What:** Using MiniSearch, Lunr, or ElasticSearch for entity search.
-**Why bad:** Overkill for ~5K entities with 2-3 searchable fields. These engines require document indexing infrastructure.
-**Instead:** fuse.js with weighted keys. Rebuild index from store arrays on change.
-
----
-
-## Build Order (Dependency-Driven)
-
-```
-Phase 15: Key Sites Overlay          <-- independent, no deps on other new features
-    |
-Phase 16: News Feed                  <-- independent, no deps on sites
-    |
-    v
-Phase 17: Notification Center        <-- depends on Phase 15 (sites for proximity)
-    |                                     AND Phase 16 (news for headline matching)
-    |
-Phase 18: Oil Markets Tracker        <-- independent of 15-17, but ordered after
-    |                                     notification center so panel layout is settled
-    |
-Phase 19: Search, Filter & UI Cleanup  <-- depends on all stores existing (15-18)
-    |                                       for cross-store search + layout audit
-    |
-Phase 20: Production Review           <-- depends on all above
-```
-
-**Why this order:**
-
-1. **Sites first (15):** Extends the type system (MapEntity union) -- the only structural type change in v1.1. Phase 17 needs siteStore for proximity alerts. Gives a visible, testable map feature early.
-
-2. **News second (16):** Independent pipeline with no UI in this phase. Quick to build (1 adapter, 1 route, 1 store, 1 hook). Creates the store Phase 17 needs for headline matching.
-
-3. **Notifications third (17):** Most complex feature. Depends on both sites (proximity) and news (headlines). Also introduces the 24h event default -- a cross-cutting change best landed in one focused phase. Panel coexistence CSS is established here.
-
-4. **Markets fourth (18):** Fully isolated. No interaction with entity stores, layers, or other panels. Could be built any time, but placing it after notifications means the panel layout patterns are already proven.
-
-5. **Search/cleanup last (19):** Cross-store search needs all entity stores. UI cleanup should audit the final state of all panels, z-indices, spacing. Removing Min granularity and adding Reset All are safe cleanup changes.
-
-6. **Deploy sync (20):** Verification-only. Must be last.
-
-**Parallelism note:** Phases 15 and 16 have zero code dependencies on each other and could be built in parallel by two developers. However, the project's sequential phase-per-branch workflow makes sequential execution cleaner.
-
----
-
-## Scalability Considerations
-
-| Concern                 | Current (~100s of entities)   | At 10K entities            | At 100K entities       |
-| ----------------------- | ----------------------------- | -------------------------- | ---------------------- |
-| Entity search (fuse.js) | O(n) fuzzy match, instant     | ~50ms (fine)               | Consider web worker    |
-| Proximity alerts        | O(flights \* sites), trivial  | O(10K \* 100) = ~50ms      | Spatial index needed   |
-| Notification scoring    | Top 10 from ~200 events       | Server caps at 10, fast    | No change needed       |
-| Deck.gl layers          | 9 layers after sites added    | Deck.gl handles this well  | Millions of points OK  |
-| Zustand re-renders      | Per-selector pattern, minimal | No degradation             | No degradation         |
-| Redis cache reads       | ~7 keys per request cycle     | Same keys, larger payloads | Redis handles natively |
-
-None of these thresholds are expected to be reached. The monitoring area is a fixed geographic region, and entity counts are bounded by data source limits.
-
----
-
-## Store Count Summary
-
-| Store             | Phase  | Purpose                                       | Cross-Store Reads                                   |
-| ----------------- | ------ | --------------------------------------------- | --------------------------------------------------- |
-| mapStore          | v0.9   | Map loaded state, cursor, pending fly-to      | None                                                |
-| uiStore           | v0.9   | Panel state, toggles, selection/hover         | None                                                |
-| flightStore       | v0.9   | Flight entities, connection status            | None                                                |
-| shipStore         | v0.9   | Ship entities, connection status              | None                                                |
-| eventStore        | v0.9   | Event entities, connection status             | None                                                |
-| filterStore       | v0.9   | All filter state, date range, proximity       | Reads uiStore (for toggle save/restore)             |
-| siteStore         | **15** | Site entities, connection status              | None                                                |
-| newsStore         | **16** | News items, connection status                 | None                                                |
-| notificationStore | **17** | Scored events, proximity alerts, unread count | Reads siteStore, flightStore, shipStore, newsStore  |
-| marketStore       | **18** | Market quotes, connection status              | None                                                |
-| searchStore       | **19** | Search query, results, focus state            | Reads flightStore, shipStore, eventStore, siteStore |
-
-**Total after v1.1:** 11 stores (6 existing + 5 new)
-
----
+**First bottleneck without edge cache:** every VU read cascades Express→Redis; cache-hit bar fails. Fix = D-19 headers (the F4 prerequisite).
+**Second bottleneck:** Vercel function cold-start frequency at ramp — validated by the warm cron + D-18 cold-start metric.
 
 ## Sources
 
-- Direct codebase analysis of all existing stores, routes, adapters, hooks, and components (HIGH confidence)
-- [Overpass API - OpenStreetMap Wiki](https://wiki.openstreetmap.org/wiki/Overpass_API)
-- [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/)
-- [Yahoo Finance API Guide](https://algotrading101.com/learn/yahoo-finance-api-guide/)
-- [Fuse.js Documentation](https://www.fusejs.io/)
-- Approved design spec: `docs/superpowers/specs/2026-03-19-intelligence-layer-design.md`
+- `server/adapters/overpass-water.ts` (water pipeline, dedup L1202) — HIGH
+- `server/lib/urlLiveness.ts` (probe/prune, candidate skip L599, attemptCount gate L817) — HIGH
+- `server/routes/operator-status.ts` (aggregator blocks, SCAN sample) — HIGH
+- `src/components/ui/DevApiStatus.tsx` (subtab structure, EventsFiltersSectionV3 L3414 vs v2 L3331) — HIGH
+- `server/middleware/rateLimit.ts` (D-04 Bearer bypass L53–93) — HIGH
+- `server/routes/refresh-events-cron.ts` + `cron-*.ts` (lastTick writers) — HIGH
+- `scripts/load-test.js` (v1.2 100-VU scenario-split shape) — HIGH
+- `.planning/phases/999.5-performance-load-test/999.5-CONTEXT.md` (D-15..D-21 load-test + D-19 edge cache) — HIGH
+- `.planning/PROJECT.md` (operator-locked v2.0 priority order) — HIGH
+- `grep` confirming zero `s-maxage`/`Cache-Control` in `server/routes/` (D-19 unimplemented) — HIGH
+
+---
+
+_Architecture research for: v2.0 Final Hardening (subsequent-milestone integration mapping)_
+_Researched: 2026-06-09_

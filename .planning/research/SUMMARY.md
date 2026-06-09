@@ -1,203 +1,208 @@
 # Project Research Summary
 
-**Project:** Iran Conflict Monitor v1.1 Intelligence Layer
-**Domain:** OSINT real-time intelligence dashboard -- infrastructure overlay, news feed, notification center, oil markets tracker, global search
-**Researched:** 2026-03-19
+**Project:** otg-iran-monitor — v2.0 Final Hardening
+**Domain:** Production hardening of a shipped real-time OSINT conflict-monitoring dashboard (React 19 SPA + Express 5 on Vercel Pro/Fluid Compute + Upstash Redis)
+**Researched:** 2026-06-09
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The v1.1 Intelligence Layer extends the validated v0.9/v1.0 OSINT monitoring dashboard with five features that transform it from a passive data display into an active intelligence tool. The existing architecture -- Express adapter/route pipelines feeding Zustand stores via recursive setTimeout polling, rendered through Deck.gl layers on a MapLibre basemap -- is sound and extensible. All five new features (key sites overlay, multi-source news feed, severity-scored notification center, oil markets tracker, global search bar) follow the established patterns exactly. Only two new npm dependencies are needed: `fast-xml-parser` for RSS parsing and `fuse.js` for fuzzy search, both zero-dependency and serverless-safe, adding a combined 116KB to the project.
+v2.0 Final Hardening is a subsequent-milestone pass on an already-shipped, production-verified application. All six features — water admission-gate fix, ghost-link prune correction, dashboard subtab redesign, ~100-user load test, general hardening, and docs cleanup — decompose entirely onto existing modules with zero new runtime or dev dependencies. The strongest research signal is a negative one: do not add libraries, do not redesign the system architecture, do not re-engineer what already works. Every feature maps to debugging, wiring, styling, or verification of code the project already owns.
 
-The recommended approach is a strict dependency-driven build order: sites first (extends the MapEntity type system, enables proximity alerts), news second (infrastructure for notification matching, no UI), notification center third (the highest-value feature -- severity scoring plus proximity alerts plus news-event correlation), oil markets fourth (fully independent, follows proven patterns), and search/filter cleanup last (needs all stores to exist). This order is not arbitrary -- Phase 17 (notifications) depends on both Phase 15 (site positions for proximity) and Phase 16 (news items for headline matching). The critical path is 15 -> 16 -> 17, with Phase 18 parallelizable alongside 16.
+The recommended approach is dependency-honoring sequential execution: fix the water pipeline first (operator priority 1, fully independent), then correct ghost-link prune and wire the missing events-subtab LLM blocks, then restyle the three dense subtabs, then verify hardening primitives (cron, rate limiter, coverage), then run the load test against the fully hardened surface, and finally reconcile prose docs. This ordering is driven by hard data-dependency — the events subtab redesign must follow the LLM block wiring (same file), the load test must follow the edge-cache header layer (D-19, currently unimplemented and confirmed by grep), and docs must follow all code changes so drift-gate tests stay green per-PR.
 
-The primary risks are: Overpass API timeouts on the large Middle East bounding box (mitigate by splitting queries per site type with staggered execution), Yahoo Finance unofficial endpoint instability (mitigate with provider interface pattern and graceful degradation), panel stacking/Escape key conflicts between the notification drawer and detail panel (mitigate with a centralized LIFO panel manager in uiStore), and the subtle `DEFAULT_EVENT_WINDOW_MS` constant that must be a module constant, never a store field, to avoid breaking the existing custom-range behavior. All four are well-understood with clear prevention strategies documented in the research.
+The top risks are procedural rather than technical: (1) diagnosing the water drop at the wrong pipeline stage — fix must be telemetry-driven, citing a specific rejection bucket before any code change; (2) tightening the ghost-link prune and accidentally mass-deleting live (bot-blocked) events; (3) the 7-day cron watch becoming a milestone blocker by repeating the v1.5 Phase 31 early-close failure mode; (4) cache writebacks using wrong TTL constants, silently degrading enriched-cache lifetime; and (5) letting "docs cleanup" silently cover contract surfaces (Redis-key registry, OpenAPI spec, env-example) that are mechanically enforced by CI gates and must be kept green per-PR throughout.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack (React 19, TypeScript ~5.9.3, Vite 6, Zustand 5, Deck.gl 9, MapLibre GL 5, Tailwind CSS 4, Express 5, Upstash Redis) is unchanged. Two new production dependencies are needed:
+Zero new dependencies. The full v2.0 feature set runs on: k6 v1.7.0 (load generation), @playwright/test ^1.58.2 (browser validation under load), Tailwind CSS v4 (subtab redesign via existing `@theme` tokens), transliteration 2.6.1 exact-pinned (water romanization — do not swap), vitest ^4.1.0 + @vitest/coverage-v8 (coverage backfill), and the existing pino/Zod/@upstash/redis primitives. The k6 OSS + Playwright split is the correct 2026 pattern for this serverless/Fluid-Compute target; Grafana Cloud k6 is only warranted above ~1k VUs. All debugging tooling (`scripts/audit-water-names.ts`, `scripts/load-test.js`, `scripts/load-test.spec.ts`) is already present.
 
-**New dependencies:**
+**Core technologies (all pre-existing — no change):**
 
-- **fast-xml-parser ^5.5.6**: Parse BBC and Al Jazeera RSS XML -- zero dependencies, 104KB, pure JS, serverless-safe, TypeScript types included
-- **fuse.js ^7.1.0**: Client-side fuzzy search across all entity stores -- zero dependencies, 12KB, weighted multi-key search for ranking callsigns higher than location strings
-
-**No dependency needed for:**
-
-- Overpass API (direct fetch, same pattern as GDELT adapter)
-- Yahoo Finance v8 chart endpoint (direct fetch with User-Agent header)
-- GDELT DOC 2.0 API (returns JSON natively)
-- Haversine distance (10-line inline function)
-- SVG sparklines (20-line React component using `<polyline>`)
-- Severity scoring (pure `Math.log()` formula)
-
-**Key risk:** Yahoo Finance v8 chart API is unofficial (MEDIUM confidence). Graceful degradation (empty array on failure) is the required mitigation. The endpoint has been stable for years and does not require crumb authentication unlike the v7 quote endpoint that Yahoo locked down in April 2024.
+- k6 v1.7.0: backend load generation (1–300 VU ramp, `ramping-vus` stable since k6 v1.0 May 2025)
+- @playwright/test ^1.58.2: browser-side functional + Core Web Vitals validation under load
+- Tailwind CSS v4 + `@theme` CSS custom props: subtab typography/alignment/grouping redesign
+- transliteration 2.6.1 (exact pin): water `nameLatin` romanization — byte-identity-gated, never swap mid-milestone
+- vitest + @vitest/coverage-v8: Nyquist coverage backfill for Phases 39/40 surfaces
+- Node 22.x global `fetch`: URL-liveness probe (no HTTP-client dep needed)
 
 ### Expected Features
 
-**Must have (table stakes):**
+**Must have (closes v2.0):**
 
-- Key infrastructure sites overlay (nuclear, military, oil, ports, dams, airbases) with per-type toggles and click-to-inspect
-- Multi-source news feed (GDELT DOC + BBC RSS + Al Jazeera RSS) with conflict keyword filtering and URL deduplication
-- Notification center with bell icon, unread badge, severity-scored event ranking, and 24h rolling window
-- Oil markets tracker (Brent, WTI, XLE, USO, XOM) with 5-day sparklines and market-closed awareness
-- Global search bar with Cmd+K shortcut, fuzzy matching across all entity types, grouped results, and fly-to-entity
+- Water filter fix — admission gate / Latin-label / desal-synthesis drop diagnosed via telemetry, patched at the identified rejection bucket, verified by snapshot regeneration
+- Soft-404 detection + prune correctness — body heuristic on 200 responses; `unknown` bucket excluded from cron-prune; `attemptCount >= 3` gate retained; 403 kept distinct from 404
+- Events subtab pipeline detail — wire existing blocks (`WaterfallBlock`, `BudgetBarsBlock`, `DlqBlock`, `EvalScoreBlock`, `FlightRecorderBlock`) into `EventsFiltersSectionV3` (data already in Redis; presentational mount only)
+- 3-subtab readability pass — tabular-nums, right-aligned numerics, visual grouping, progressive disclosure on water/events/sites subtabs; off-the-grid aesthetic preserved; ARIA contract frozen
+- ~100-VU load test with CI-failing SLO thresholds — edge-cache headers (D-19, currently unimplemented) are a hard prerequisite; p95/error-rate assertions per endpoint must fail CI on regression
+- Cron first-tick verification (999.3) + CRON-WATCH-01 7-day watch — non-blocking, auto-reported from existing `cron:lastTick:{name}` keys
+- Rate-limiter operator block (999.1) — surface tier config + 429 state; Bearer bypass already wired at D-04
+- Phases 39/40 coverage backfill — degrade-open fault paths especially
+- Docs cleanup — prose only; contract surfaces (Redis-key registry, OpenAPI, .env.example) stay green throughout all prior phases
 
-**Should have (differentiators):**
+**Should have (elevates to operationally excellent):**
 
-- Proximity alerts (flight/ship within 50km of key site) with cooldown deduplication
-- News-event correlation per notification card (temporal + geographic/keyword matching)
-- Oil-conflict visual correlation (co-locate markets and events; user draws conclusions)
-- Logarithmic severity scoring that compresses the long tail of media coverage
+- Soft-404 evidence/confidence string in the subtab (shows WHY a link was flagged)
+- Per-endpoint SLO table from k6 `handleSummary` — actionable markdown/JSON output
+- Dead-link-count / cron-freshness sparkline — trend catches slow-burn regression better than point-in-time
 
-**Defer to v1.2+:**
+**Defer (out of v2.0 scope):**
 
-- AI-generated situation briefs (Claude API)
-- Historical replay / event timeline
-- Trajectory arcs / flight path rendering
-- Desktop push notifications
-- Mobile-responsive layout
-- Configurable severity weights
+- Stress/capacity-ceiling test at 3x+ peak VU
+- Status-page "all systems" rollup badge
+- External cron-monitor SaaS (Healthchecks.io / Dead Man's Snitch) — anti-feature for single-operator tool
+- Push/email/desktop alerting on cron miss
 
 ### Architecture Approach
 
-All five features replicate the established pipeline: upstream API -> server adapter -> Express route -> Redis cache -> Zustand store -> polling hook -> UI component/Deck.gl layer. The project grows from 6 stores to 11, from 4 API routes to 8, and from 3 polling hooks to 6. The only structural type change is adding `SiteEntity` to the `MapEntity` discriminated union -- news items and market quotes are separate types that never flow through the entity pipeline. The notification center is the only cross-store consumer, reading from siteStore, newsStore, flightStore, and shipStore for proximity and headline matching.
+The architecture is fixed and shipped through v1.6. v2.0 work is integration mapping onto the existing module graph — no redesign. The system is: React 19 SPA (Zustand stores -> fetch `/api/*`) -> Express 5 single Vercel function (rate limiter -> route handlers -> lib/) -> Upstash Redis (REST client, 32-key registry, mechanical drift gate). A new edge-cache layer (`Cache-Control: s-maxage` headers on all `/api/*` read routes) is the only net-new architectural addition, sitting ABOVE Redis as a read-absorption tier, never replacing it.
 
-**Major components:**
+**Major components touched by v2.0:**
 
-1. **Overpass adapter + siteStore** -- static infrastructure sites (24h cache), new IconLayer with 6 site-type icons
-2. **News adapter + newsStore** -- merged GDELT DOC + RSS articles (15min cache), no standalone UI, consumed by notifications
-3. **Notification route + notificationStore** -- server-side severity scoring, client-side proximity alerts, drawer panel with news-matched cards
-4. **Yahoo Finance adapter + marketStore** -- 5 oil/energy symbols (60s cache), collapsible bottom-left panel with sparklines
-5. **searchStore + SearchBarSlot** -- fuse.js fuzzy search across all entity stores, fly-to-entity on result click
+1. `server/adapters/overpass-water.ts` — 8-stage water admission pipeline; spatial dedup (O(n²), keyed on facilityType only, 50m threshold) and GENERIC_OSM_NAME_RE/romanization interaction are prime suspects for the drop bug
+2. `server/lib/urlLiveness.ts` — URL probe sweep + prune; three identified gaps: source-less events never probed (Gap A), monotonic-reset semantics on `unknown` blocking 3-consecutive-tick accumulation (Gap B), SCAN-only prune scope misses no-key events (Gap C)
+3. `src/components/ui/DevApiStatus.tsx` — 3538-line monolith; WAI-ARIA tablist with roving-tabindex; all rich v1.6 LLM blocks already implemented (L2529–2992) but not wired into `EventsFiltersSectionV3` (L3414); recommended extraction to child components without changing DOM contract
+4. `scripts/load-test.js` — restructure from current 100-VU-capped shape to D-20 per-VU full-browser-loop, 50->300 VU discrete sweep; add `.github/workflows/load-test.yml` (manual dispatch, not cron)
+5. Route handlers (all `/api/*`) — add `Cache-Control: s-maxage=N` headers per D-19 TTL table; confirmed zero such headers currently exist in `server/routes/`
 
 ### Critical Pitfalls
 
-1. **Overpass API timeout on large bounding box** -- Split into 6 separate queries (one per site type) with 2s delays, use 48h hard cache TTL so a failed refresh still serves yesterday's data, add fallback to `overpass.kumi.systems`
-2. **Yahoo Finance endpoint instability** -- Design with a `MarketDataProvider` interface for swappability, validate response shape before normalizing, return empty array (not error) on failure
-3. **Panel stacking and Escape key conflicts** -- Implement centralized panel manager in uiStore with `panelStack: string[]` for LIFO Escape routing, define `--z-drawer: 25` in CSS custom property scale, use `--notification-drawer-offset` CSS variable for detail panel positioning
-4. **DEFAULT_EVENT_WINDOW_MS breaking custom range** -- Must be a module-level constant in filterStore.ts, never set in any `set()` call, consumed only in useFilteredEntities as a filter predicate for events when `dateStart === null`
-5. **useSelectedEntity missing site entities** -- Add siteStore as fourth store in the search chain with `sites` in the useMemo dependency array; write a regression test that selecting a site returns `isLost: false`
-6. **Six polling hooks causing visibility resume stampede** -- Stagger resume fetches with random 0-2s delays, skip low-frequency sources (sites, markets when closed) on tab resume
+1. **Fixing the wrong stage of the water admission pipeline** — run `npm run refresh:water` and read the `byTypeRejections` telemetry bucket that ate the missing facilities BEFORE touching code. A fix that doesn't cite a specific bucket (`duplicate`, `no_resolved_name`, `not_notable`, etc.) is wrong-stage.
+
+2. **Water cache key not bumped on shape change** — ANY change to `WaterFacility` or `WaterFilterStats` shape MUST bump `FACILITIES_KEY` (v3->v4). Degrade-open fallback makes this invisible for up to 24h in prod.
+
+3. **Ghost-link prune tightening deletes live events** — `403` (bot-blocking) is the highest false-positive risk; do NOT add `403`/`unknown`/`410`/`429` to the cron-prune terminal-dead set. Fix probe precision (soft-404 heuristic, source-less event coverage), not prune aggressiveness.
+
+4. **Dashboard redesign breaking the ARIA contract** — tab ids and `aria-labelledby` partners must remain byte-stable. Scope-lock to styling/typography within the existing DOM contract; extract sub-panels without restructuring roles or ids.
+
+5. **7-day cron watch stalling the milestone (Phase 31 repeat)** — CRON-WATCH-01 must be structured as async non-blocking, auto-reporting from `cron:lastTick:{name}` freshness. Early-close criteria must be a logged decision, not a silent repetition of the v1.5 Phase 31 Day-1 close.
+
+6. **Docs/code drift gates failing mid-milestone** — Redis-key registry (`redis-registry.test.ts`), OpenAPI (Redocly lint), and `.env.example` (`check:env`) are mechanically enforced CI gates. Any PR adding/bumping a Redis key MUST update both `CLAUDE.md §Serverless Cache` AND `docs/architecture/redis-keys.md` in the same PR.
+
+7. **Cache writebacks using wrong TTL constants** — any new writer to `events:llm:v3` must use `LLM_TERMINAL_TTL_SEC`; any writer to `water:facilities:v3` must use `WATER_REDIS_TTL_SEC`. Literal TTL numbers silently re-TTL enriched caches down; map falls to raw-GDELT fallback ~24h post-deploy.
+
+8. **Load-testing prod without Bearer/cost guardrails** — the 60/min global rate limiter means an unauthenticated k6 sweep measures the limiter, not capacity. Use a preview deployment + separate Upstash DB; snapshot command count pre/post; never include cron/force/operator endpoints in VU mix.
 
 ## Implications for Roadmap
 
-### Phase 15: Key Sites Overlay
+Based on combined research, the dependency-honoring build order is clear and matches the operator-locked priority from PROJECT.md:
 
-**Rationale:** Must come first -- it is the only phase that extends the MapEntity type system, which is a structural change that ripples through useSelectedEntity, useEntityLayers, DetailPanelSlot, and all switch statements. Phase 17 depends on siteStore for proximity alerts.
-**Delivers:** 6 site types on the map with per-type toggles, click-to-inspect detail panel, 24h cached Overpass data
-**Addresses:** Key infrastructure overlay (table stakes), toggle panel structure
-**Avoids:** Overpass timeout (#1) via split queries; useSelectedEntity gap (#5) via explicit siteStore wiring; switch statement gaps (#13) via dedicated site IconLayer; toggle overflow (#7) via overflow-y-auto stopgap
-**Stack:** No new dependencies (direct fetch to Overpass API)
+### Phase A: Water Filter Fix (Feature 1)
 
-### Phase 16: News Feed
+**Rationale:** Operator priority 1; fully independent of all other features; no UI or server coupling. Must complete before water-subtab redesign so the redesign shows correct facility counts.
+**Delivers:** Telemetry-diagnosed rejection-bucket fix; `WaterFacility` shape change if needed with FACILITIES_KEY bump (v4); regenerated and committed `src/data/water-facilities.json` snapshot; regression fixture pinning the previously-dropped OSM element.
+**Addresses:** Water filter table-stakes (P1).
+**Avoids:** Pitfall 1 (wrong-stage diagnosis), Pitfall 2 (cache key not bumped), Pitfall 7 (drift gates — schema test + redis-keys.md update if shape changes).
+**Research flag:** Standard pattern. No additional research phase needed.
 
-**Rationale:** Independent of Phase 15 (no code dependencies), but must precede Phase 17 (notification center needs newsStore for headline matching). Quick to build -- 1 adapter, 1 route, 1 store, 1 hook, zero UI.
-**Delivers:** Server-side news pipeline merging GDELT DOC + BBC RSS + Al Jazeera RSS, deduplication, conflict keyword filtering
-**Addresses:** Multi-source news feed (table stakes)
-**Avoids:** RSS parsing fragility (#8) via per-feed try/catch and independent failure handling; GDELT stemming noise (#9) via theme: filters and pre-dedup noise filtering
-**Stack:** fast-xml-parser (new dependency)
+### Phase B: Ghost Link Prune Gaps (Feature 2a)
 
-### Phase 17: Notification Center
+**Rationale:** Server-only, independent of dashboard redesign. Probe precision fix (soft-404 heuristic, Gap A/B/C) must precede UI surfaces displaying dead-link state.
+**Delivers:** Corrected `urlLiveness.ts` probe coverage for source-less events (Gap A); relaxed monotonic-reset rule for repeated dead-then-unknown patterns (Gap B); expanded SCAN scope for no-key events (Gap C); soft-404 body heuristic on 200 responses; `unknown` excluded from cron-prune; 403 kept distinct from 404; prunedIds sample audit gate built into phase success criteria.
+**Avoids:** Pitfall 3 (false-positive prune), Pitfall 8 (TTL constants on any v3 writeback).
+**Research flag:** No additional research needed — gaps identified with line-level precision.
 
-**Rationale:** The highest-value feature in v1.1 -- transforms the dashboard from passive display to active intelligence. Depends on both Phase 15 (site positions for proximity alerts) and Phase 16 (news items for headline matching). Also introduces the 24h event default, a cross-cutting change best landed in one focused phase.
-**Delivers:** Bell icon with unread badge, severity-scored notification drawer, proximity alerts (50km threshold), news-event correlation per card, 24h rolling event window default
-**Addresses:** Notification center (table stakes), proximity alerts (differentiator), news-event correlation (differentiator)
-**Avoids:** Panel stacking conflicts (#3) via centralized LIFO panel manager; DEFAULT_EVENT_WINDOW_MS regression (#4) via module constant pattern; proximity alert spam (#10) via per-entity cooldown and cluster grouping; news matching false positives (#14) via requiring both location AND keyword overlap
-**Stack:** No new dependencies (haversine is inline, scoring is Math.log)
+### Phase C: Events Subtab LLM Detail (Feature 2b)
 
-### Phase 18: Oil Markets Tracker
+**Rationale:** All data exists in Redis and all blocks exist in `DevApiStatus.tsx` — pure wiring pass. Must precede Feature 3 (dashboard redesign) because F3 will extract and restyle the same subtab; wiring before restyling avoids touching the 3538-line file twice.
+**Delivers:** `EventsFiltersSectionV3` wired with `WaterfallBlock`, `BudgetBarsBlock`, `DlqBlock`, `EvalScoreBlock`, `FlightRecorderBlock`; DLQ depth, breaker state, eval baseline/drift, run-history all visible; no server changes.
+**Avoids:** Pitfall 4 (ARIA contract — data wiring, not DOM restructure).
+**Research flag:** No additional research needed — specific line references confirmed.
 
-**Rationale:** Fully independent of Phases 15-17 -- no interaction with entity stores, layers, or other panels. Placed after notifications so panel layout patterns are proven. Follows the established store/polling/panel pattern exactly.
-**Delivers:** 5 oil/energy ticker rows with price, % change, 5-day sparklines, market-closed state, collapsible bottom-left panel
-**Addresses:** Oil markets tracker (table stakes), oil-conflict visual correlation (differentiator)
-**Avoids:** Yahoo Finance instability (#2) via provider interface pattern and strict response validation; polling stampede (#6) via staggered resume; Redis budget (#12) via mget() for batch symbol reads; sparkline NaN (#15) via null filtering before SVG generation
-**Stack:** No new dependencies (direct fetch, inline SVG sparkline)
+### Phase D: Dashboard Subtab Readability Redesign (Feature 3)
 
-### Phase 19: Search, Filter & UI Cleanup
+**Rationale:** Must follow Phase C (same file, same subtab). Purely presentational: tabular-nums, right-aligned numerics, grouping, progressive disclosure, component extraction without DOM contract change.
+**Delivers:** Readable water/events/sites subtabs with off-the-grid aesthetic preserved; extracted `WaterSubtab.tsx` / `SitesSubtab.tsx` / `EventsSubtab.tsx`; tab ids and aria-labelledby byte-stable; every block degrade-open; snapshot diffs reviewed deliberately.
+**Addresses:** 3-subtab readability table-stakes (P1); dashboard clarity differentiator.
+**Avoids:** Pitfall 4 (ARIA breakage); Anti-Pattern 3 (no inline hex — all colors from `@theme`/colorBridge).
+**Research flag:** No additional research needed.
 
-**Rationale:** Cross-store search needs all entity stores to exist (Phases 15-18). UI cleanup (toggle overflow redesign, filter panel grouping, z-index audit) should assess the final state of all panels. This is the polish phase.
-**Delivers:** Global search bar with Cmd+K, fuzzy matching across all types, fly-to-entity; filter panel redesign with grouped sections and Reset All; scrollable/collapsible layer toggles; minute granularity removal; StatusPanel extended to 6 feed lines
-**Addresses:** Global search (table stakes), filter improvements (table stakes)
-**Avoids:** Search index rebuild overhead (#11) via per-type Fuse instances and debounced rebuilds; Cmd+K conflicts (#17) via preventDefault and / as fallback; AppShell god component (#18) via PollingProvider extraction
-**Stack:** fuse.js (new dependency)
+### Phase E: General Hardening (Feature 5)
 
-### Phase 20: Production Review
+**Rationale:** Must precede the load test. D-18 load-test metrics (429 count, cold-start frequency) directly exercise 999.1/999.3 hardening; verify those first so a load-test failure is unambiguous.
+**Delivers:** 999.1 rate-limiter operator block verified + tested; 999.3 cron first-tick post-deploy verification; CRON-WATCH-01 7-day watch structured as non-blocking async with auto-reporting from `cron:lastTick:{name}`; Nyquist coverage backfill for Phases 39/40 degrade-open paths.
+**Avoids:** Pitfall 6 (7-day watch stalls milestone — explicit logged early-close criteria citing Phase 31 precedent); Anti-Pattern 4 (no new env-tunable surfaces).
+**Research flag:** Explicit CRON-WATCH-01 non-blocking structure decision required at phase-start.
 
-**Rationale:** Verification-only, must be last. Full E2E test matrix covering all panel combinations, Vercel deployment validation, git tag v1.1.
-**Delivers:** Production-ready v1.1 deployment
-**Addresses:** All integration pitfalls surface in production testing
-**Avoids:** Redis budget exhaustion (#12) via command audit; all accumulated integration edge cases
+### Phase F: ~100-User Load Test (Feature 4)
+
+**Rationale:** Must run against the fully hardened surface (Phases A–E complete). Edge-cache `s-maxage` headers (D-19, currently unimplemented) must land at the START of this phase — hard prerequisite for the >90% cache-hit PASS bar at 300 VU.
+**Delivers:** `Cache-Control: s-maxage=N` headers on all `/api/*` read routes per D-19 TTL table; restructured `scripts/load-test.js` (50->300 VU discrete sweep, per-VU full-browser-loop); `.github/workflows/load-test.yml` (manual dispatch, NOT a cron slot); CI-failing SLO thresholds; p95/p99/error-rate report per endpoint; separate `rate_limited` metric distinct from `http_req_failed`.
+**Addresses:** ~100-VU SLO validation (P1); codified SLO thresholds; cold-start measurement.
+**Avoids:** Pitfall 5 (wrong target/cost blowout/limiter confusion); Anti-Pattern 2 (edge cache above Redis, not replacing it).
+**Research flag:** D-19 per-endpoint `s-maxage` values should be confirmed against `999.5-CONTEXT.md` at phase-start. Preview deployment + separate Upstash DB provisioning must be locked before starting.
+
+### Phase G: Docs Cleanup (Feature 6)
+
+**Rationale:** Last, per v1.6 precedent. Contract surfaces (Redis registry, OpenAPI, .env.example) have been kept green throughout Phases A–F; this phase handles prose only.
+**Delivers:** Reconciled CLAUDE.md §Serverless Cache + `docs/architecture/redis-keys.md` prose; updated runbook + ADR narrative; OpenAPI spec prose alignment; README reflecting shipped v2.0 surface.
+**Avoids:** Pitfall 7 (drift gates — already green from prior phases; verify once more before close).
+**Research flag:** No research needed. Standard documentation pass.
 
 ### Phase Ordering Rationale
 
-- **Dependency-driven:** The critical path is 15 -> 16 -> 17. Notification center cannot be built without sites (proximity) and news (matching).
-- **Type system first:** Phase 15 is the only phase that modifies the MapEntity discriminated union. Every subsequent phase benefits from the type system being settled.
-- **Infrastructure before UI:** Phase 16 creates a data pipeline with no UI, keeping scope tight and testable. The UI consumers come in Phase 17.
-- **Independent features are ordered, not blocked:** Phase 18 has zero code dependencies on 15-17 and could theoretically be built in any order, but placing it after notifications means panel layout and CSS offset patterns are proven.
-- **Polish last:** Phase 19 audits the final layout and wires up cross-store search. Doing cleanup before all features exist means rework.
+- F1 before F3: water subtab redesign on wrong facility counts guarantees rework
+- F2b before F3: both touch the same 3538-line `DevApiStatus.tsx` file; wiring before restyling avoids a second pass
+- F5 before F4: D-18 load-test metrics (429 count, cold-start frequency) validate the 999.1/999.3 hardening; verify first to disambiguate load-test failures
+- D-19 edge-cache headers inside F4 at phase start: they are the enabling prerequisite for the cache-hit PASS bar, not a separate feature
+- F6 last: drift-gated contract surfaces kept green in every code phase; F6 is prose only
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
+Needs deeper research during planning:
 
-- **Phase 17:** Notification center is the most complex phase (severity scoring formula tuning, panel coexistence CSS, proximity alert deduplication logic, 24h event window integration). Needs phase-level research for the panel manager pattern and proximity clustering algorithm.
-- **Phase 18:** Yahoo Finance endpoint behavior needs validation at implementation time -- test from Vercel's IP range to confirm the v8 chart endpoint is accessible from serverless functions without crumb auth.
+- **Phase F (load test):** Confirm D-19 per-endpoint `s-maxage` values against `999.5-CONTEXT.md` table before implementation. Lock preview deployment + separate Upstash DB strategy before phase-start.
 
-Phases with standard patterns (skip research-phase):
+Standard patterns (no research phase needed):
 
-- **Phase 15:** Overpass API is well-documented (10+ year stability), and the adapter/store/layer pattern is identical to existing event handling. Split-query mitigation is straightforward.
-- **Phase 16:** RSS parsing with fast-xml-parser is a solved problem. GDELT DOC API is from the same project already used for events. No novel patterns.
-- **Phase 19:** fuse.js has comprehensive documentation. Search bar, filter grouping, and scrollable panels are standard UI patterns.
-- **Phase 20:** Verification only, no research needed.
+- **Phase A** (water fix): telemetry-driven diagnosis within existing module
+- **Phase B** (ghost-link prune): gaps identified at line-level precision
+- **Phase C** (events subtab wiring): block functions at known line ranges, pure mount
+- **Phase D** (dashboard redesign): component structure mapped, CSS-only
+- **Phase E** (hardening): primitives fully documented; only non-obvious decision is CRON-WATCH-01 non-blocking structure
+- **Phase G** (docs): prose reconciliation
 
 ## Confidence Assessment
 
-| Area         | Confidence | Notes                                                                                                                                                                                                         |
-| ------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stack        | HIGH       | Only 2 new deps, both zero-dependency, well-established. Existing stack unchanged. Only Yahoo Finance (MEDIUM) as an unofficial API introduces uncertainty.                                                   |
-| Features     | HIGH       | Feature set derived from approved design spec + competitor analysis (World Monitor). Clear table stakes / differentiator / anti-feature classification.                                                       |
-| Architecture | HIGH       | Direct codebase analysis confirms all new features replicate existing adapter->route->store->hook->layer pattern. 5 new stores, 4 new routes, no structural changes beyond SiteEntity in MapEntity union.     |
-| Pitfalls     | HIGH       | 18 pitfalls identified across 6 phases with concrete prevention strategies. Critical pitfalls (Overpass timeout, Yahoo instability, panel conflicts, event window regression) have multiple mitigations each. |
+| Area         | Confidence | Notes                                                                                                                                                |
+| ------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stack        | HIGH       | Direct toolchain probe; package.json read; no new deps validated against actual repo                                                                 |
+| Features     | MEDIUM     | Well-established SRE conventions + internal grounding; external sources are MEDIUM, project-internal grounding is HIGH                               |
+| Architecture | HIGH       | Read against actual shipped codebase with file + line citations; D-19 unimplemented confirmed by grep; EventsFiltersSectionV3 gap confirmed at L3414 |
+| Pitfalls     | HIGH       | Grounded in actual source files with specific line numbers, confirmed bugs, and historical failure modes (v1.5 Phase 31 precedent)                   |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Yahoo Finance accessibility from Vercel IPs:** The v8 chart endpoint works from development machines, but Vercel serverless function IPs may be blocked by Yahoo's automated traffic detection. Test during Phase 18 implementation; if blocked, fall back to `yahoo-finance2` npm package or Alpha Vantage free tier.
-- **Overpass query execution time for the Middle East bbox:** The split-query-by-site-type mitigation is theoretically sound but has not been tested against the actual bbox. Execution time per query type needs measurement during Phase 15 to calibrate the stagger delay and timeout values.
-- **Redis command budget headroom:** Current estimate is 461K/month out of 500K (8% headroom). Actual usage depends on flight source polling frequency (adsb.lol at 30s vs OpenSky at 5s vs ADS-B Exchange at 260s). Monitor during Phase 18 when the 6th polling source is added; upgrade to pay-as-you-go ($0.2/100K) if needed.
-- **Proximity alert cluster grouping algorithm:** The 10km cluster radius and per-entity 30-minute cooldown are reasonable defaults but may need tuning based on actual site density in the Persian Gulf. Accept as a tuning exercise during Phase 17, not a design gap.
-- **News-event matching quality:** The temporal (2h) + geographic/keyword overlap criteria will produce some false positives. Start with requiring BOTH location AND keyword overlap (not OR) and limit to 1 match per card. Expand to 3 matches only after validating quality in production.
+- **D-19 edge-cache TTL values:** Per-endpoint `s-maxage` values specified in `999.5-CONTEXT.md` D-19 table; confirm at Phase F phase-start against current route handler shapes.
+- **Soft-404 heuristic markers and thresholds:** Research recommends body heuristic (title markers, redirect-to-home, near-empty content) but specific markers are not pre-determined. Scope at Phase B phase-start to avoid headless-browser scope creep.
+- **Preview deployment infrastructure:** Phase F requires a preview deployment + separate Upstash DB. Whether this needs provisioning is an operational question to resolve before Phase F starts.
+- **CRON-WATCH-01 early-close criteria format:** Define the logged-decision format and scheduled-follow-up mechanism at Phase E phase-start to prevent a silent Phase 31 repeat.
 
 ## Sources
 
 ### Primary (HIGH confidence)
 
-- Direct codebase analysis of all existing stores, routes, adapters, hooks, and components
-- [Overpass API - OpenStreetMap Wiki](https://wiki.openstreetmap.org/wiki/Overpass_API)
-- [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/)
-- [fast-xml-parser GitHub](https://github.com/NaturalIntelligence/fast-xml-parser)
-- [Fuse.js Official Documentation](https://www.fusejs.io/)
-- [Upstash Redis Pricing](https://upstash.com/docs/redis/overall/pricing)
-- Approved design spec: `docs/superpowers/specs/2026-03-19-intelligence-layer-design.md`
+- Direct source-code reads: `server/adapters/overpass-water.ts`, `server/lib/urlLiveness.ts`, `server/routes/operator-status.ts`, `src/components/ui/DevApiStatus.tsx`, `server/middleware/rateLimit.ts`, `server/routes/refresh-events-cron.ts`, `scripts/load-test.js`, `src/__tests__/lib/redis-registry.test.ts`, `package.json`
+- `.planning/phases/999.5-performance-load-test/999.5-CONTEXT.md` (D-15..D-21 load-test + D-19 edge cache spec)
+- `.planning/PROJECT.md` (operator-locked v2.0 priority order)
+- `CLAUDE.md` (conventions, cache key registry, anti-patterns)
+- grep confirming zero `s-maxage`/`Cache-Control` in `server/routes/` (D-19 unimplemented confirmed)
+- v1.5 Phase 31 early-close + Phase 37 slow-burn-regression history (Pitfall 6 grounding)
 
 ### Secondary (MEDIUM confidence)
 
-- [Yahoo Finance API Guide - AlgoTrading101](https://algotrading101.com/learn/yahoo-finance-api-guide/) -- v8 chart endpoint stability
-- [yahoo-finance2 Crumb Issue #764](https://github.com/gadicc/yahoo-finance2/issues/764) -- crumb auth problems
-- [Overpass API timeout for large queries](https://github.com/drolbr/Overpass-API/issues/389) -- bbox size constraints
-- [World Monitor OSINT dashboard](https://github.com/MrB4nz4i/worldmonitor-osint) -- competitor feature analysis
-- [Carbon Design System: Notification Pattern](https://carbondesignsystem.com/patterns/notification-pattern/) -- severity tiering
-
-### Tertiary (LOW confidence)
-
-- Yahoo Finance v8 chart endpoint long-term stability -- unofficial API with no SLA; needs runtime validation
-- Proximity alert cluster grouping thresholds (10km radius, 30min cooldown) -- reasonable defaults, needs production tuning
+- Grafana k6 GitHub releases + k6.io (k6 v1.0 maturity, `ramping-vus` semver-stable)
+- Firecrawl glossary / USPTO patent (soft-404 >25% of dead links)
+- k6 thresholds/SLO + load-test type guides (OneUptime, Kodziak, ARDURA)
+- Vercel Production Checklist + Rate Limiting docs
+- Healthchecks.io / Sentry Crons docs (cron monitoring conventions — cited to inform the in-app alternative)
+- Dashboard design / data-table UX references (tabular-nums, right-align numerics, progressive disclosure)
 
 ---
 
-_Research completed: 2026-03-19_
+_Research completed: 2026-06-09_
 _Ready for roadmap: yes_
