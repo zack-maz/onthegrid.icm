@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Final Hardening
 status: planning
-last_updated: "2026-06-09T19:46:48.768Z"
+last_updated: "2026-06-09T20:11:11Z"
 last_activity: 2026-06-09
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -23,10 +23,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-09 — Milestone v2.0 started
+Phase: 42 of 49 (Water Filter Fix) — first v2.0 phase
+Plan: — (none yet; ready to plan)
+Status: Ready to plan
+Last activity: 2026-06-09 — v2.0 roadmap created (8 phases, 42-49); all 28 requirements mapped
+
+Progress: [░░░░░░░░░░] 0% (0/8 phases)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -87,6 +89,29 @@ Last activity: 2026-06-09 — Milestone v2.0 started
 | **Phase 27.4.5** LLM observability flight recorder | **Absorbed into Phase 39 OBS-FLIGHT-01..06.** Operator reversed prior "out-of-scope" status at v1.6 lock-in; adapted to v3-only pipeline. |
 | **Cerebras + Groq adapter source-file removal** | **Absorbed into Phase 38 LLM-PURGE-07.** No v1.6 router-restoration scheduled; source files delete; rollback path is `git revert <Phase 29 commit range>`. |
 | **Phase 999.6** Portfolio Documentation Polish + Vercel Pro Cleanup | **RETIRED from backlog.** Strand A (10 portfolio docs) → Phase 41 REVEAL-DOCS-01..10. Strand B (Vercel Pro cleanup-and-repair) → Phase 38 VERCEL-PRO-01..04. |
+
+## v2.0 Phases (planned)
+
+Roadmap created 2026-06-09. Numbering continues from v1.6 Phase 41 → Phase 42. Granularity `fine` (8 phases). Operator-locked priority order, research-reconciled sequencing (hardening before load test so its metrics validate the hardening and the 7-day cron watch runs in parallel; load remediation is its own phase immediately after the load test; docs last).
+
+| Phase | Name | Requirements | Status |
+| ----- | ---- | ------------ | ------ |
+| 42 | Water Filter Fix | WATER-FILTER-01..04 | 📋 Planned |
+| 43 | Ghost Link Prune Correctness | GHOST-06..10 | 📋 Planned |
+| 44 | Events Subtab Pipeline Detail | EVENTS-TAB-01..02 | 📋 Planned |
+| 45 | Dashboard Subtab Readability Redesign | DASH-READ-01..05 | 📋 Planned |
+| 46 | General Hardening + Cron Watch Start | HARD-01, HARD-02, CRON-WATCH-01, HARD-03 | 📋 Planned |
+| 47 | ~100-User Load Test | LOAD-01..04 | 📋 Planned |
+| 48 | Load Remediation | LOAD-FIX-01..02 | 📋 Planned |
+| 49 | Docs Cleanup | DOCS-CLEAN-01..02 | 📋 Planned |
+
+**Coverage:** 28 REQ-IDs across 8 phases. Every REQ-ID maps to exactly one phase. No orphans, no duplicates. Full REQ → phase → success-criterion mapping at [`.planning/REQUIREMENTS.md` §Traceability](REQUIREMENTS.md#traceability); per-phase success criteria at [`.planning/ROADMAP.md` §Milestone v2.0](ROADMAP.md#milestone-v20-final-hardening--in-progress-started-2026-06-09).
+
+**Plans:** TBD per phase (created via `/gsd:plan-phase <N>`).
+
+**Non-blocking:** CRON-WATCH-01 (Phase 46) is a 7-day auto-reported observation that MUST NOT gate milestone close — structured to avoid the v1.5 Phase 31 early-close repeat (logged early-close decision, not a silent Day-1 close).
+
+**Execution order + dependencies:** 42 (independent; precedes water-subtab redesign) → 43 (server-only) → 44 (wires LLM blocks into `EventsFiltersSectionV3` before restyle) → 45 (restyle same file; ARIA contract frozen) → 46 (hardening BEFORE load test; starts the cron watch) → 47 (load test against hardened surface; D-19 edge-cache headers land at phase start) → 48 (remediate Phase 47 SLO failures; conditional-scope) → 49 (prose docs; drift gates kept green throughout 42–48).
 
 ## v1.3 Phases
 

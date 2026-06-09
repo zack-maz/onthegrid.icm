@@ -10,6 +10,7 @@
 - ✅ **v1.4 GDELT Redo & Performance** -- Phases 27-28.2.7 (shipped 2026-05-08); load-test phase deferred to backlog (999.5) — [archive](milestones/v1.4-ROADMAP.md), [audit](milestones/v1.4-MILESTONE-AUDIT.md)
 - ✅ **v1.5 LLM Reliability & Reveal Prep** -- Phases 29-37 (shipped 2026-06-03); 10 phases (incl. 30.1); 60/62 plans executed; 47/47 requirements closed; LLM-RELI-07 acceptance gate satisfied (3 consecutive `prod-connectivity-audit.yml` greens); v1.6 promotion unblocked — [archive](milestones/v1.5-ROADMAP.md), [requirements](milestones/v1.5-REQUIREMENTS.md)
 - ✅ **v1.6 Production Hardening** -- Phases 38-41 (shipped 2026-06-09); 56/56 required requirements (1 optional CRON-WATCH-01 deferred to v1.7); milestone audit PASSED, cross-phase integration verified, Phase 41 human-verified on live prod; shipped to production via PR #40 (deploy 32017ef) — [archive](milestones/v1.6-ROADMAP.md), [requirements](milestones/v1.6-REQUIREMENTS.md), [audit](milestones/v1.6-MILESTONE-AUDIT.md). Backlog (999.x) deferred to v1.7.
+- 🚧 **v2.0 Final Hardening** -- Phases 42-49 (in progress; started 2026-06-09); 8 phases, 28 requirements; close the production punch-list — water filter fix, ghost-link prune correctness + events-subtab detail, dashboard readability redesign, ~100-user load test + remediation, general hardening (incl. CRON-WATCH-01 7-day non-blocking watch), docs cleanup. Numbering continues from v1.6 Phase 41 → Phase 42.
 
 ## Phase Summary
 
@@ -300,6 +301,147 @@ Plans:
 | 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete | 2026-06-04 |
 | 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 4/4            | Complete | 2026-06-05 |
 | 41    | Public Reveal Polish                                                  | 6/6            | Complete | 2026-06-09 |
+
+## Milestone v2.0: Final Hardening — 🚧 IN PROGRESS (started 2026-06-09)
+
+**Goal:** Close out the production punch-list — fix the remaining data-quality bugs (water filter, ghost links), make the API-Health dashboard readable, prove ~100-concurrent-user capacity, and finish hardening + docs. This is a subsequent-milestone pass on an already-shipped, production-verified application: every feature decomposes onto existing modules with zero new runtime or dev dependencies. The work is debugging, wiring, styling, and verification — not redesign.
+
+**Operator-locked at milestone start (2026-06-09):** Priority order = water filter → ghost links + events subtab → dashboard readability → load test → general hardening → docs. Cleanup items become their own phases (NOT one bundled finishing-pass, per v1.6 priority-lock precedent). Load Remediation is its OWN phase immediately after the load-test phase (operator-requested "repair of load fails"; conditional-scope — closes trivially if the sweep is fully green, but must exist as a distinct phase). Docs cleanup is the LAST phase. Numbering continues from v1.6 Phase 41 → Phase 42 next.
+
+**Sequencing note (research-reconciled):** The operator priority text lists general hardening as item #5 (after the load test), but the research synthesis (and the CRON-WATCH-01 non-blocking requirement) place hardening BEFORE the load test so (a) the load-test metrics (429 counts, cold-start frequency) validate the 999.1/999.3 hardening and make any SLO failure unambiguous, and (b) the 7-day cron-stability watch starts early and runs in parallel with the later phases rather than gating milestone close. Executed order is therefore: water (42) → ghost (43) → events-subtab (44) → readability (45) → hardening (46) → load test (47) → load remediation (48) → docs (49). The operator's "readability sits between ghost-links and the load test" insert is honored in either reading.
+
+**EVENTS-TAB merge decision:** EVENTS-TAB-01/02 are kept as their OWN phase (44) between the server-only ghost-link work (43) and the presentational readability redesign (45), rather than folded into either neighbor. Rationale: ghost work (43) is server-only (`urlLiveness.ts`) while the events-subtab wiring is a pure UI mount into `EventsFiltersSectionV3`; keeping them separate avoids mixing server and client diffs in one phase. Wiring the LLM blocks (44) BEFORE the readability restyle (45) means the 3538-line `DevApiStatus.tsx` subtab is touched in a logical order (mount → restyle) rather than twice for the same concern. This still places the readability phase between the ghost work and the load test, satisfying the operator insert.
+
+**Coverage:** 28 REQ-IDs across 8 phases. Every REQ-ID appears in exactly one phase. CRON-WATCH-01 (Phase 46) is NON-BLOCKING and must not gate milestone close. Full REQ → phase → success-criterion mapping at [.planning/REQUIREMENTS.md §Traceability](REQUIREMENTS.md#traceability).
+
+**Parallelization mode:** Predominantly sequential by hard data-dependency. Phase 42 (water) is fully independent and must precede any water-subtab readability work. Phase 46 hardening's HARD-03 (Nyquist coverage backfill) is parallelizable with adjacent phases; CRON-WATCH-01's 7-day watch is async/non-blocking once started in Phase 46 and reports through later phases. Phase 47 (load test) must run against the fully hardened surface (42–46 complete) and lands the D-19 edge-cache headers at its own start as a hard prerequisite for the >90% cache-hit bar. Phase 48 (load remediation) is conditional on Phase 47 SLO results. Phase 49 (docs) is prose-only; contract-surface drift gates stay green throughout 42–48.
+
+### Phases summary (planned)
+
+- [ ] **Phase 42: Water Filter Fix** — telemetry-diagnosed rejection-bucket fix for intermittently-dropped water facilities; `water:facilities:v3` cache key bump + cold-start snapshot regen if shape changes; `waterFilterStats` regression fixtures pin the fix. _(WATER-FILTER-01..04)_
+- [ ] **Phase 43: Ghost Link Prune Correctness** — soft-404 body heuristic on 200s, source-less event coverage, `unknown`-excluded-from-prune + flaky-host attempt-reset fix, 403-auto-prune evidence decision, per-event evidence string surfaced. _(GHOST-06..10)_
+- [ ] **Phase 44: Events Subtab Pipeline Detail** — mount the 7 already-built LLM blocks into `EventsFiltersSectionV3` + per-bucket dead-link state, fed from existing `LLMStatus` + liveness fields; pure UI wiring, no server changes. _(EVENTS-TAB-01..02)_
+- [ ] **Phase 45: Dashboard Subtab Readability Redesign** — tabular-nums / right-aligned numerics / progressive disclosure / visual hierarchy on water+events+sites subtabs; off-the-grid aesthetic + ARIA tablist contract preserved; trend sparklines from small history rings. _(DASH-READ-01..05)_
+- [ ] **Phase 46: General Hardening + Cron Watch Start** — rate-limiter operator block (999.1) + 429 surface, cron first-tick/missed-run detection (999.3), CRON-WATCH-01 7-day NON-BLOCKING watch structured to avoid the Phase 31 early-close repeat, Nyquist coverage backfill for Phases 39/40 degrade-open paths. _(HARD-01, HARD-02, CRON-WATCH-01, HARD-03)_
+- [ ] **Phase 47: ~100-User Load Test** — D-19 edge-cache `s-maxage` headers (hard prerequisite) + k6 1→300 VU sweep with sustained ~100-VU window + CI-failing per-endpoint SLO thresholds + per-endpoint SLO table + read-only allowlist / dual-Bearer / budget guardrails. _(LOAD-01..04)_
+- [ ] **Phase 48: Load Remediation** — diagnose every SLO failure to a root cause and remediate; re-run the full sweep green to PROVE (not just measure) ~100-user capacity. Conditional-scope: closes trivially if Phase 47 is fully green, but exists as a distinct phase per operator lock. _(LOAD-FIX-01..02)_
+- [ ] **Phase 49: Docs Cleanup** — reconcile contract surfaces (CLAUDE.md Redis registry, `redis-keys.md`, OpenAPI, `.env.example`) with all drift gates green, then update prose docs (README, CHANGELOG, runbook, architecture) to v2.0 shipped reality. LAST phase per operator lock. _(DOCS-CLEAN-01..02)_
+
+### Phase 42: Water Filter Fix
+
+**Goal**: The water facilities layer stops intermittently dropping legitimate named facilities, with the fix proven telemetry-first (not guessed) and pinned against regression.
+**Depends on**: Nothing (first v2.0 phase; fully independent — must precede any water-subtab readability work in Phase 45 so the redesign shows correct facility counts).
+**Requirements**: WATER-FILTER-01, WATER-FILTER-02, WATER-FILTER-03, WATER-FILTER-04
+**Success Criteria** (what must be TRUE):
+
+1. Operator has a written diagnosis citing the specific `byTypeRejections` bucket(s) that ate the missing facilities, produced from `npm run refresh:water` telemetry BEFORE any code change (prime suspect: O(n²) spatial dedup keyed on `facilityType` only).
+2. The facilities layer no longer drops entries — spatial dedup never collapses distinct named facilities, and the Latin-label admission gate stays as-tight (the Phase 27.3.1 G1 "Dam near X" regression remains fixed, not loosened).
+3. The fix is visible in production data — if the persisted shape or behavior changed, `water:facilities:v3` is bumped (v3→v4) and `src/data/water-facilities.json` cold-start snapshot is regenerated and committed.
+4. The `waterFilterStats` test suite is updated in lockstep — rejection-bucket deltas pin the fix and a fixture for the previously-dropped OSM element fails on regression.
+   **Plans**: TBD
+
+### Phase 43: Ghost Link Prune Correctness
+
+**Goal**: Dead-link detection gets more precise (catches soft-404s, covers every event) without getting more aggressive (never prunes live-but-flaky links), and the operator can see WHY any link was flagged.
+**Depends on**: Phase 42 (sequence only; no code coupling). Server-only — independent of the dashboard work.
+**Requirements**: GHOST-06, GHOST-07, GHOST-08, GHOST-09, GHOST-10
+**Success Criteria** (what must be TRUE):
+
+1. The URL-liveness probe detects soft-404s via a body heuristic on 200 responses (not-found markers, redirect-to-home, near-empty content) with no headless browser.
+2. Every event is probe-reachable or explicitly classified — source-less events are no longer silently skipped by `buildProbeCandidates`, so prune can evaluate them.
+3. Transient failures never count toward terminal-dead prune — the `unknown` bucket is excluded from prune eligibility, the `attemptCount >= 3` gate is retained, and flaky-host attempt-reset semantics are fixed so repeat offenders eventually accumulate; a `prunedIds` sample audit confirms no live events were swept.
+4. The 403 auto-prune decision is made with evidence (a `prunedIds` sample) and implemented — 403 stays distinct from 404, demoted to manual-only if bot-blocking CDNs are confirmed false-positives.
+5. The operator can see why a link was flagged dead — an evidence string (matched marker / redirect target / body length) is persisted in `events:url-liveness:{eventId}` with the schema test and Redis registry updated in lockstep.
+   **Plans**: TBD
+
+### Phase 44: Events Subtab Pipeline Detail
+
+**Goal**: The operator can read full LLM-pipeline detail and per-bucket dead-link state directly in the API-Health events subtab, using data that already exists in Redis — a pure presentational mount, no server changes.
+**Depends on**: Phase 43 (GHOST-10 persists the per-event evidence string this subtab surfaces). Must precede Phase 45 so the 3538-line `DevApiStatus.tsx` subtab is wired before it is restyled (avoids touching the same file twice for the same concern).
+**Requirements**: EVENTS-TAB-01, EVENTS-TAB-02
+**Success Criteria** (what must be TRUE):
+
+1. The operator sees full LLM pipeline detail in the events subtab — the 7 already-built blocks (Waterfall, Histograms, CallLog, BudgetBars, EvalScore, Dlq, Suspect) are mounted into `EventsFiltersSectionV3`, fed from existing `LLMStatus` fields, with DLQ depth / breaker state / eval baseline+drift / run-history all visible.
+2. The operator can read dead-link state per bucket in the events subtab — counts per liveness status plus first-seen-dead / transition timestamps.
+3. The mount is data-wiring only — the WAI-ARIA tablist DOM contract (tab ids, `aria-labelledby` partners) is unchanged, and every block remains degrade-open (self-hides when its data is absent).
+   **Plans**: TBD
+   **UI hint**: yes
+
+### Phase 45: Dashboard Subtab Readability Redesign
+
+**Goal**: The dense water / events / sites subtabs become scannable and trend-aware while keeping the off-the-grid military aesthetic and breaking nothing behavioral.
+**Depends on**: Phase 44 (same file, same subtab — wiring lands first, restyle second). Sits between the ghost work and the load test per the operator priority insert.
+**Requirements**: DASH-READ-01, DASH-READ-02, DASH-READ-03, DASH-READ-04, DASH-READ-05
+**Success Criteria** (what must be TRUE):
+
+1. Numeric data in the water/events/sites subtabs is scannable — `tabular-nums`, right-aligned numeric columns, labeled headers, whitespace grouping.
+2. Raw data dumps are replaced with formatted summaries plus progressive disclosure — detail lives behind drill-down following the `FlightRecorderBlock` run→call→detail pattern.
+3. Visual hierarchy reads within the off-the-grid aesthetic — one primary metric prominent per block, labels small, contrast meets readability, and every color comes from the `@theme` token block / colorBridge (no inline hex).
+4. The redesign breaks nothing behavioral — the WAI-ARIA tablist contract (roving tabindex, tab ids) is frozen byte-stable, and the 5 pinning test suites (snapshot, tabMerge, diagnosticBlocks, operatorActions) plus degrade-open semantics stay green.
+5. The operator can see trends, not just point-in-time numbers — sparklines for dead-link count and cron freshness, backed by small history rings, catch slow-burn regressions.
+   **Plans**: TBD
+   **UI hint**: yes
+
+### Phase 46: General Hardening + Cron Watch Start
+
+**Goal**: The rate-limiter and cron primitives become operator-visible and verifiably safe, the 7-day cron-stability watch starts as a non-blocking async observation, and the Phase 39/40 surfaces get Nyquist coverage — all BEFORE the load test so its metrics validate this hardening.
+**Depends on**: Phase 45 (sequence). Must precede Phase 47 so the load test's 429-count and cold-start metrics exercise and confirm this hardening, making any load-test SLO failure unambiguous.
+**Requirements**: HARD-01, HARD-02, CRON-WATCH-01, HARD-03
+**Success Criteria** (what must be TRUE):
+
+1. Rate-limiter state is operator-visible and operator-safe — the Bearer bypass is verified to cover all operator dashboard polls (999.1), and tier config plus recent 429 counts are surfaced in the dashboard.
+2. Cron first-tick and missed-run detection works — an in-app freshness check computed from `cron:lastTick:{name}` age vs schedule + grace is surfaced via `/api/health` (999.3), with no external SaaS dependency.
+3. The 7-day cron-stability watch is structured as a NON-BLOCKING, auto-reported observation with daily auto-captured results that do NOT gate milestone close — its early-close criteria are a logged decision (citing the v1.5 Phase 31 early-close precedent), not a silent repeat.
+4. The Phase 39/40 surfaces have Nyquist test-coverage backfill — flight recorder, budget block, and subtab consolidation paths are covered, including degrade-open fault-injection tests.
+   **Plans**: TBD
+
+### Phase 47: ~100-User Load Test
+
+**Goal**: ~100-concurrent-user capacity is measured against the fully hardened surface with CI-failing SLO thresholds, edge-cache headers in place, and zero risk of burning money or skewing results.
+**Depends on**: Phase 46 (and 42–45) — must run against the fully hardened surface. The D-19 edge-cache `s-maxage` headers land at the START of this phase as a hard prerequisite for the >90% cache-hit PASS bar.
+**Requirements**: LOAD-01, LOAD-02, LOAD-03, LOAD-04
+**Success Criteria** (what must be TRUE):
+
+1. Cache-only GET endpoints serve from the CDN edge — `Cache-Control: s-maxage` headers (the deferred D-19) are implemented on all `/api/*` read routes, making the >90% cache-hit PASS bar reachable.
+2. ~100 concurrent users are proven — a k6 1→300 VU sweep with a sustained ~100-VU window, CI-failing `thresholds` (p95 + error-rate per endpoint mix), and the cold-start tail distinguished from warm p95.
+3. The run emits a per-endpoint SLO table — `handleSummary` markdown/JSON (endpoint → p95/p99/error-rate → pass/fail) that doubles as portfolio evidence.
+4. The load test cannot burn money or skew results — a read-only endpoint allowlist (no LLM cron/force-trigger paths), dual Bearer/no-Bearer passes so the public limiter is measured but doesn't throttle the capacity measurement, and Vercel Active-CPU + Upstash command budgets checked before sizing.
+   **Plans**: TBD
+
+### Phase 48: Load Remediation
+
+**Goal**: Every SLO failure the load test surfaced is root-caused and fixed, and a re-run proves ~100-user capacity green rather than merely measuring it.
+**Depends on**: Phase 47 (consumes its SLO results). Conditional-scope — closes trivially if Phase 47 was fully green, but exists as a distinct operator-requested phase.
+**Requirements**: LOAD-FIX-01, LOAD-FIX-02
+**Success Criteria** (what must be TRUE):
+
+1. Every SLO failure surfaced by the load test is diagnosed to a specific root cause (cold-start tail, Redis latency, rate-limiter interference, missing edge cache, function sizing) and remediated — or, if Phase 47 passed clean, that green-on-first-run result is recorded as the explicit close rationale.
+2. The full k6 sweep is re-run after remediation and passes all CI-failing thresholds green — ~100-user capacity is proven, not just measured.
+   **Plans**: TBD
+
+### Phase 49: Docs Cleanup
+
+**Goal**: All contract surfaces and prose docs reflect v2.0 shipped reality, with every mechanical drift gate green — the final phase per operator lock.
+**Depends on**: Phases 42–48 (prose follows all code; contract-surface drift gates have been kept green throughout, so this phase reconciles narrative and verifies once more).
+**Requirements**: DOCS-CLEAN-01, DOCS-CLEAN-02
+**Success Criteria** (what must be TRUE):
+
+1. All contract surfaces are reconciled after code settles — CLAUDE.md Redis key registry, `docs/architecture/redis-keys.md`, OpenAPI spec, and `.env.example` — with all mechanical drift gates green (redis-registry, Redocly, check:env).
+2. Prose docs reflect v2.0 shipped reality — README, CHANGELOG, runbook, and architecture docs are updated for the water fix, soft-404 probing, subtab redesign, load-test results, and hardening additions.
+   **Plans**: TBD
+
+### Progress Table
+
+| Phase | Name                                  | Plans Complete | Status      | Completed |
+| ----- | ------------------------------------- | -------------- | ----------- | --------- |
+| 42    | Water Filter Fix                      | 0/TBD          | Not started | -         |
+| 43    | Ghost Link Prune Correctness          | 0/TBD          | Not started | -         |
+| 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -         |
+| 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -         |
+| 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -         |
+| 47    | ~100-User Load Test                   | 0/TBD          | Not started | -         |
+| 48    | Load Remediation                      | 0/TBD          | Not started | -         |
+| 49    | Docs Cleanup                          | 0/TBD          | Not started | -         |
 
 ## Deferred Work
 

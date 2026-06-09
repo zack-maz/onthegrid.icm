@@ -95,44 +95,44 @@ Deferred — tracked but not in the v2.0 roadmap.
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement     | Phase | Status  |
-| --------------- | ----- | ------- |
-| WATER-FILTER-01 | TBD   | Pending |
-| WATER-FILTER-02 | TBD   | Pending |
-| WATER-FILTER-03 | TBD   | Pending |
-| WATER-FILTER-04 | TBD   | Pending |
-| GHOST-06        | TBD   | Pending |
-| GHOST-07        | TBD   | Pending |
-| GHOST-08        | TBD   | Pending |
-| GHOST-09        | TBD   | Pending |
-| GHOST-10        | TBD   | Pending |
-| EVENTS-TAB-01   | TBD   | Pending |
-| EVENTS-TAB-02   | TBD   | Pending |
-| DASH-READ-01    | TBD   | Pending |
-| DASH-READ-02    | TBD   | Pending |
-| DASH-READ-03    | TBD   | Pending |
-| DASH-READ-04    | TBD   | Pending |
-| DASH-READ-05    | TBD   | Pending |
-| LOAD-01         | TBD   | Pending |
-| LOAD-02         | TBD   | Pending |
-| LOAD-03         | TBD   | Pending |
-| LOAD-04         | TBD   | Pending |
-| LOAD-FIX-01     | TBD   | Pending |
-| LOAD-FIX-02     | TBD   | Pending |
-| HARD-01         | TBD   | Pending |
-| HARD-02         | TBD   | Pending |
-| CRON-WATCH-01   | TBD   | Pending |
-| HARD-03         | TBD   | Pending |
-| DOCS-CLEAN-01   | TBD   | Pending |
-| DOCS-CLEAN-02   | TBD   | Pending |
+| Requirement     | Phase    | Status  |
+| --------------- | -------- | ------- |
+| WATER-FILTER-01 | Phase 42 | Pending |
+| WATER-FILTER-02 | Phase 42 | Pending |
+| WATER-FILTER-03 | Phase 42 | Pending |
+| WATER-FILTER-04 | Phase 42 | Pending |
+| GHOST-06        | Phase 43 | Pending |
+| GHOST-07        | Phase 43 | Pending |
+| GHOST-08        | Phase 43 | Pending |
+| GHOST-09        | Phase 43 | Pending |
+| GHOST-10        | Phase 43 | Pending |
+| EVENTS-TAB-01   | Phase 44 | Pending |
+| EVENTS-TAB-02   | Phase 44 | Pending |
+| DASH-READ-01    | Phase 45 | Pending |
+| DASH-READ-02    | Phase 45 | Pending |
+| DASH-READ-03    | Phase 45 | Pending |
+| DASH-READ-04    | Phase 45 | Pending |
+| DASH-READ-05    | Phase 45 | Pending |
+| LOAD-01         | Phase 47 | Pending |
+| LOAD-02         | Phase 47 | Pending |
+| LOAD-03         | Phase 47 | Pending |
+| LOAD-04         | Phase 47 | Pending |
+| LOAD-FIX-01     | Phase 48 | Pending |
+| LOAD-FIX-02     | Phase 48 | Pending |
+| HARD-01         | Phase 46 | Pending |
+| HARD-02         | Phase 46 | Pending |
+| CRON-WATCH-01   | Phase 46 | Pending |
+| HARD-03         | Phase 46 | Pending |
+| DOCS-CLEAN-01   | Phase 49 | Pending |
+| DOCS-CLEAN-02   | Phase 49 | Pending |
 
 **Coverage:**
 
 - v2.0 requirements: 28 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 28 ⚠️ (expected — roadmap not yet created)
+- Mapped to phases: 28 (Phases 42-49)
+- Unmapped: 0 ✓
 
 ---
 
 _Requirements defined: 2026-06-09_
-_Last updated: 2026-06-09 after initial definition_
+_Last updated: 2026-06-09 after roadmap creation — all 28 requirements mapped to Phases 42-49_
