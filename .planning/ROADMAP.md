@@ -140,7 +140,7 @@ Full phase-by-phase detail archived to [milestones/v1.5-ROADMAP.md](milestones/v
 - [x] **Phase 38: LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup** — bug-fix punch-list (LLM-FIX) + dead-code purge incl. Cerebras+Groq adapter removal (LLM-PURGE) + GDELT corpus quality (GDELT-MATCH) + water-facility romanization (WATER-LATIN) + Vercel Pro docs+code repair (VERCEL-PRO) + optional 7-day cron-stability reopen (CRON-WATCH). (completed 2026-06-04)
 - [x] **Phase 39: Operator Visibility — Budget + Cost + LLM Flight Recorder** — `BudgetBlock` (per-provider tokens vs cap, soft/hard thresholds), cost-shadow accrual surface, Phase-27.4.5 absorbed LLM flight recorder (Redis-backed call+run history, Bearer-gated `/api/events/llm-history`, cold-start hydration). (completed 2026-06-04)
 - [x] **Phase 40: Dashboard UI/UX Polish + Subtab Consolidation** — UI-SPEC.md design contract precedes code (`/gsd:ui-phase`); ~13-sub-block stack consolidated into 3-4 grouped sections; typography/spacing/color polish; RTL contract tests regression-lock the consolidated layout. (completed 2026-06-05)
-- [ ] **Phase 41: Public Reveal Polish** — portfolio docs (`BUILDING-WITH-CLAUDE-CODE.md`, `SHOWCASE.md`, `JOURNEY.md`, `concepts.md`, `COSTS.md`, `operator-guide.md`, `LESSONS.md`, brainstorms cleanup), `npm run capture:layers` reproducible screenshots, REVEAL-SITE landing-page polish + demo flows + social-share + custom-domain decision, final-sweep audit against then-current main.
+- [x] **Phase 41: Public Reveal Polish** — portfolio docs (`BUILDING-WITH-CLAUDE-CODE.md`, `SHOWCASE.md`, `JOURNEY.md`, `concepts.md`, `COSTS.md`, `operator-guide.md`, `LESSONS.md`, brainstorms cleanup), `npm run capture:layers` reproducible screenshots, REVEAL-SITE landing-page polish + demo flows + social-share + custom-domain decision, final-sweep audit against then-current main. (completed 2026-06-09)
 
 ### Phase 38: LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup
 
@@ -268,7 +268,7 @@ _14 REQ-IDs — by strand: REVEAL-DOCS (10) · REVEAL-SITE (4)._
 3. **SC41-3** Glossary (`concepts.md` ~30 terms: Pitfall 1, LLM-optional, tier-green gate, polite-citizen, ghost event, canonical actor catalog, mechanical drift gate, degrade-open, 6-path resolver, honest deferral, probe-before-commit, flight recorder, …) + cost transparency (`COSTS.md`) + visitor operator-guide (`operator-guide.md` clone+run, force-trigger cron, prune dead URLs, read `/api/operator-status`, run eval, capture hero GIF) + distilled lessons (`LESSONS.md` pulled from `.planning/RETROSPECTIVE.md`) + brainstorms/superpowers cleanup ship as portfolio-readable docs. `public/screenshots/` extended with ~10 layer-by-layer captures (each viz layer + API Health + threat-density clusters + actor-quality drill-down + ghost-event prune flow + FlightRecorderBlock drill-down); `npm run capture:layers` reproduces them. _(REVEAL-DOCS-04, REVEAL-DOCS-05, REVEAL-DOCS-06, REVEAL-DOCS-07, REVEAL-DOCS-08, REVEAL-DOCS-09)_
 4. **SC41-4** User-facing reveal surface polished: landing-page hero/layout/copy refined (dashboard-is-landing-page vs separate-landing decision precedes the polish; coordinates with Phase 40 UI-POLISH-04); demo flows shipped (guided tour overlays, scripted walkthroughs, or `?demo=true` query param); social-share assets shipped (OG image/card, Twitter card, favicon refresh) verified across LinkedIn / Twitter / direct share previews; custom-domain decision made (stay on `otg-iran-monitor.vercel.app` or migrate). _(REVEAL-SITE-01, REVEAL-SITE-02, REVEAL-SITE-03, REVEAL-SITE-04)_
 
-**Plans:** 6/6 plans executed
+**Plans:** 6/6 plans complete
 Plans:
 **Wave 1**
 
@@ -292,12 +292,12 @@ Plans:
 
 ### Progress Table
 
-| Phase | Name                                                                  | Plans Complete | Status      | Completed  |
-| ----- | --------------------------------------------------------------------- | -------------- | ----------- | ---------- |
-| 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete    | 2026-06-04 |
-| 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete    | 2026-06-04 |
-| 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 4/4            | Complete    | 2026-06-05 |
-| 41    | Public Reveal Polish                                                  | 6/6            | In Progress |            |
+| Phase | Name                                                                  | Plans Complete | Status   | Completed  |
+| ----- | --------------------------------------------------------------------- | -------------- | -------- | ---------- |
+| 38    | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | 6/6            | Complete | 2026-06-04 |
+| 39    | Operator Visibility — Budget + Cost + LLM Flight Recorder             | 5/5            | Complete | 2026-06-04 |
+| 40    | Dashboard UI/UX Polish + Subtab Consolidation                         | 4/4            | Complete | 2026-06-05 |
+| 41    | Public Reveal Polish                                                  | 6/6            | Complete | 2026-06-09 |
 
 ## Deferred Work
 
