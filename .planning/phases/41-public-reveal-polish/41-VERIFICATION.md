@@ -1,9 +1,11 @@
 ---
 phase: 41-public-reveal-polish
 verified: 2026-06-05T19:05:00Z
-status: human_needed
+human_verified: 2026-06-09T19:16:00Z
+status: verified
 score: 14/14
 overrides_applied: 0
+human_verification_result: all-4-passed-on-live-prod
 human_verification:
   - test: 'Intro overlay first-visit + persistence'
     expected: "IntroOverlay appears on first load with cleared localStorage (iran-monitor.intro-seen); 'Explore the map' dismisses it; reload confirms it stays dismissed"
@@ -173,6 +175,38 @@ No `TBD`, `FIXME`, or `XXX` debt markers found in any phase 41 deliverable file 
 **Expected:** Read-only view shows operator metrics without secrets. Write paths remain Bearer-gated.
 
 **Why human:** Security/secrets inspection requires human visual review of the rendered dashboard. No automated test covers secret-exposure in the API Health surface.
+
+---
+
+## Human Verification — RESOLVED (2026-06-09, live prod)
+
+All 4 deferred human checks were executed against live production
+`https://otg-iran-monitor.vercel.app` (deploy `32017ef`, merged via PR #40) using Playwright +
+curl + the automated test suite. **All 4 PASS.** Full evidence in `41-UAT.md` (status: complete,
+4/4 passed). Summary:
+
+1. **Intro overlay first-visit + persistence** — PASS. Cleared key → overlay renders, `intro-seen`
+   null on mount, focus on primary (WR-03). "Explore the map" dismisses + persists across reload.
+   "Start the tour" dismisses + launches driver.js tour. Escape dismisses (Priority-0, consumed).
+2. **Guided tour spotlight geometry (WR-01)** — PASS. All 5 steps' highlighted `data-tour` matched
+   the step selector; step 2 opened the sidebar Layers section and step 4 opened the detail panel
+   via the `onHighlightStarted` hooks; both panels restored to closed on tour end. MINOR COSMETIC
+   (non-blocking): step-4 spotlight cutout offset ~100px from the panel's settled position because
+   driver.js measured during the 300ms slide-in transition — still on the right-side panel region,
+   not empty/off-viewport. Candidate polish item for the next hardening milestone (driver.refresh()
+   after the panel animation settles).
+3. **OG card** — PASS. `/screenshots/og-card.png` = real 1200×630 PNG (HTTP 200, image/png, 296 KB;
+   was a 715 B SPA-404 on prior prod). og:image + twitter:image absolute vercel.app URLs;
+   twitter:card=summary_large_image; og:image:width/height 1200/630. External crawler render
+   (LinkedIn/Twitter validators) flagged as optional manual paste-test per the criterion.
+4. **D-02 read-only API-Health (no-secrets / Bearer-gated writes)** — PASS. Unauthenticated
+   API-Health surface = "Dashboard access" password gate; full-page DOM + outerHTML scan found ZERO
+   secret-shaped tokens. All write/operator endpoints 401 without valid Bearer (llm-replay/:groupKey,
+   prune-dead-urls, refresh-events?force=true, operator-status). 109 automated Bearer-gate/auth/
+   secret/read-only tests pass. Password-UNLOCKED view no-secret property covered by D-02 component
+   tests; live-prod unlocked inspection deferred (needs prod DASHBOARD_PASSWORD) — optional follow-up.
+
+**Phase 41 status flipped `human_needed` → `verified`.**
 
 ---
 
