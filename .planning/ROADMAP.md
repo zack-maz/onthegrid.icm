@@ -340,11 +340,17 @@ Plans:
 4. The `waterFilterStats` test suite is updated in lockstep — rejection-bucket deltas pin the fix and a fixture for the previously-dropped OSM element fails on regression.
 
 **Plans:** 3 plans
-
 Plans:
+**Wave 1**
 
 - [ ] 42-01-PLAN.md — Telemetry-first diagnosis (42-DIAGNOSIS.md) + RED spatialDedup test scaffold [wave 1; checkpoint]
+
+**Wave 2** _(blocked on Wave 1 completion)_
+
 - [ ] 42-02-PLAN.md — Name-aware + deterministic spatialDedup fix + D-14 regression fixture + stats lockstep [wave 2, after 01]
+
+**Wave 3** _(blocked on Wave 2 completion)_
+
 - [ ] 42-03-PLAN.md — water:facilities:v3→v4 lockstep (10 surfaces) + snapshot regen + contract docs [wave 3, after 02]
 
 ### Phase 43: Ghost Link Prune Correctness
