@@ -47,15 +47,20 @@ vi.mock('../../lib/llmExtractionPipeline.js', () => ({
   LLM_EVENTS_KEY_ACTIVE: 'events:llm:v3',
 }));
 
-// Mocked so Test 9 can assert the eval harness NEVER calls it (A6 / Pitfall 8).
+// Phase 38 LLM-PURGE-02 — the `callLLM` shim was removed from llm-provider.js
+// (no remaining live importers). The resolver (which the eval harness calls)
+// uses `freeClaudeRouter.callLLM` directly, so Test 9's "eval NEVER calls the
+// LLM" assertion targets the router's callLLM instead (A6 / Pitfall 8).
 vi.mock('../../adapters/llm-provider.js', () => ({
-  callLLM: vi.fn(),
   isLLMConfigured: vi.fn(() => false),
+}));
+vi.mock('../../lib/freeClaudeRouter.js', () => ({
+  callLLM: vi.fn(),
 }));
 
 // Imports AFTER mocks are registered.
-import { callLLM } from '../../adapters/llm-provider.js';
 import { cacheGetSafe, cacheSetSafe } from '../../cache/redis.js';
+import { callLLM } from '../../lib/freeClaudeRouter.js';
 import {
   loadGroundTruth,
   runEval,
@@ -380,15 +385,15 @@ describe('runEval with no ground-truth available', () => {
 
     const score = await runEval();
 
-    // Phase 33 D-13: zero shape now carries actorMatchRate=0 alongside the
-    // geocode buckets. The interface remains additive (existing buckets
-    // unchanged) so pre-33 readers ignore the new field.
+    // Phase 38 WR-02: with no ground-truth fixture, actorMatchRate is null
+    // (not 0) so "not populated" reads honestly distinct from a real 0% actor
+    // match (consistent with LLM-FIX-03; EvalScore.actorMatchRate is number | null).
     expect(score).toEqual({
       within5km: 0,
       within20km: 0,
       within100km: 0,
       total: 0,
-      actorMatchRate: 0,
+      actorMatchRate: null,
     });
     // resolver never called when ground-truth is absent.
     expect(vi.mocked(resolveLocation)).not.toHaveBeenCalled();
@@ -400,7 +405,7 @@ describe('runEval with no ground-truth available', () => {
           within20km: 0,
           within100km: 0,
           total: 0,
-          actorMatchRate: 0,
+          actorMatchRate: null,
         },
       }),
     );
@@ -492,8 +497,11 @@ describe('runEval — actorMatchRate (D-13)', () => {
     expect((score as { actorMatchRate: number }).actorMatchRate).toBe(1);
   });
 
-  it('returns 0 actorMatchRate when no ground-truth events carry expectedActor1', async () => {
-    // Override mock to return GT event WITHOUT expectedActor1.
+  it('returns null actorMatchRate when no ground-truth events carry expectedActor1', async () => {
+    // LLM-FIX-03 / D-06 (Phase 38) — flipped from 0 to null. With no GT event
+    // carrying expectedActor1, actorTotal === 0 and the metric is not
+    // applicable: it must report `null` ("not populated"), not `0` ("0% actor
+    // accuracy"), so the audit surface does not misread an unpopulated metric.
     mockReadFileSync.mockReturnValue(
       JSON.stringify({
         version: 1,
@@ -509,7 +517,7 @@ describe('runEval — actorMatchRate (D-13)', () => {
 
     const score = await runEval();
 
-    expect((score as { actorMatchRate: number }).actorMatchRate).toBe(0);
+    expect((score as { actorMatchRate: number | null }).actorMatchRate).toBeNull();
   });
 
   it('persists actorMatchRate as part of the baseline score in Redis', async () => {
@@ -531,14 +539,17 @@ describe('runEval — actorMatchRate (D-13)', () => {
     expect(payload.actorMatchRate).toBe(1);
   });
 
-  it('degrades open on Redis live-cache read failure — actorMatchRate falls back to 0', async () => {
+  it('degrades open on Redis live-cache read failure — actorMatchRate is null', async () => {
     // Simulate a Redis hiccup on the second-pass live cache read.
     vi.mocked(cacheGetSafe).mockRejectedValue(new Error('redis unreachable'));
 
     const score = await runEval();
 
-    // Resolver-only / geocode buckets still scored; actorMatchRate falls back
-    // to 0 without throwing.
-    expect((score as { actorMatchRate: number }).actorMatchRate).toBe(0);
+    // LLM-FIX-03 / D-06 (Phase 38) — flipped from 0 to null. The throw fires
+    // on the first cacheGetSafe before any ground-truth iteration, so
+    // actorTotal stays 0 → the metric is reported as null ("not populated"),
+    // honestly distinct from a real 0% match. Resolver-only / geocode buckets
+    // are still scored; the harness never throws.
+    expect((score as { actorMatchRate: number | null }).actorMatchRate).toBeNull();
   });
 });

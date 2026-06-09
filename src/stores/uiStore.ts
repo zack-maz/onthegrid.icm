@@ -39,12 +39,42 @@ export const useUIStore = create<UIState>()((set, get) => ({
   openDevApiStatus: () => set({ isDevApiStatusOpen: true }),
   closeDevApiStatus: () => set({ isDevApiStatusOpen: false }),
   setDevApiStatusTab: (tab) => set({ activeDevApiStatusTab: tab }),
+  // Phase 40 — API Health tab restructure view-state. SESSION-SCOPED: do NOT
+  // route through readBool/localStorage (mirror the modal slice above, NOT the
+  // isMarketsCollapsed persistence branch below). Default {} ⇒ all groups
+  // expanded (D-01); drawer default closed (D-02a).
+  devApiGroupCollapsed: {},
+  isOperatorDrawerOpen: false,
+  toggleDevApiGroup: (slug) =>
+    set((s) => ({
+      devApiGroupCollapsed: {
+        ...s.devApiGroupCollapsed,
+        [slug]: !s.devApiGroupCollapsed[slug],
+      },
+    })),
+  toggleOperatorDrawer: () => set((s) => ({ isOperatorDrawerOpen: !s.isOperatorDrawerOpen })),
+  setOperatorDrawerOpen: (open) => set({ isOperatorDrawerOpen: open }),
   // Phase 27.4.4 Plan 02 — dashboard auth modal state (session-scoped;
   // matches DevApiStatus modal pattern — modal visibility never persists
   // across reloads, only the auth key itself does).
   isDashboardAuthOpen: false,
   openDashboardAuth: () => set({ isDashboardAuthOpen: true }),
   closeDashboardAuth: () => set({ isDashboardAuthOpen: false }),
+  // Phase 41 Plan 06 (REVEAL-SITE-01/02) — reveal slice. isIntroSeen is
+  // PERSISTED via the readBool + write-through idiom (mirror toggleMarkets);
+  // isTourOpen is SESSION-SCOPED (no localStorage, mirror isDashboardAuthOpen).
+  isIntroSeen: readBool('iran-monitor.intro-seen', false),
+  isTourOpen: false,
+  setIntroSeen: (seen) => {
+    set({ isIntroSeen: seen });
+    try {
+      localStorage.setItem('iran-monitor.intro-seen', String(seen));
+    } catch {
+      /* */
+    }
+  },
+  openTour: () => set({ isTourOpen: true }),
+  closeTour: () => set({ isTourOpen: false }),
   openDetailPanel: () => set({ isDetailPanelOpen: true }),
   closeDetailPanel: () => set({ isDetailPanelOpen: false }),
   toggleStatus: () => set((s) => ({ isStatusCollapsed: !s.isStatusCollapsed })),

@@ -96,10 +96,6 @@ vi.mock('../../lib/freeClaudeRouter.js', () => ({
   prewarmIfCold: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../lib/pipelineAudit.js', () => ({
-  appendPipelineAudit: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('../../config.js', () => ({
   env: mockEnv,
 }));
@@ -472,5 +468,75 @@ describe('v3 DLQ truncation classification (Plan 02 dev-pass)', () => {
       .mock.calls.filter(([e]) => (e as { reason: string }).reason === 'v3:max_tokens_truncation');
     expect(malformedEntries.length).toBe(1);
     expect(truncationEntries.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 39 SC39-3 (WR-01) — honest per-run failed-batch tally.
+//
+// finishBatch() ticks completedBatches on EVERY terminal branch (success AND
+// failure), so the run record could not derive an honest failure count from it.
+// The extractor now stamps llmProgress.failedBatches ONLY on genuine-failure
+// terminal branches. These tests pin that contract directly on the singleton.
+// ---------------------------------------------------------------------------
+describe('v3 failedBatches tally (WR-01)', () => {
+  it('a watchdog-timeout (null content) batch increments failedBatches', async () => {
+    mockEnv.V3_ADAPTIVE_BATCH = false;
+    const groups = [makeGroup('g1', 'e1')];
+    vi.mocked(withBatchWatchdog).mockImplementationOnce(watchdogTimeout);
+
+    await processEventGroupsV3(groups);
+
+    expect((llmProgress as Record<string, unknown>).failedBatches).toBe(1);
+  });
+
+  it('a schema-fail batch increments failedBatches', async () => {
+    const groups = [makeGroup('g1', 'e1')];
+    vi.mocked(withBatchWatchdog).mockImplementation(watchdogPassThrough);
+    // Valid JSON, but the wrong shape so batchResponseV3.safeParse() fails.
+    vi.mocked(freeClaudeCallLLM).mockResolvedValueOnce({
+      content: JSON.stringify({ events: [{ not: 'a valid v3 event' }] }),
+      routing: [
+        { provider: 'nvidia_nim', model: 'qwen', reason: 'primary', timestamp: Date.now() },
+      ],
+      finishReason: 'stop',
+    });
+
+    await processEventGroupsV3(groups);
+
+    expect((llmProgress as Record<string, unknown>).failedBatches).toBe(1);
+  });
+
+  it('a JSON.parse-fail batch increments failedBatches', async () => {
+    const groups = [makeGroup('g1', 'e1')];
+    vi.mocked(withBatchWatchdog).mockImplementation(watchdogPassThrough);
+    vi.mocked(freeClaudeCallLLM).mockResolvedValueOnce({
+      content: '{events: [unquoted, {invalid: tokens}]}',
+      routing: [
+        { provider: 'nvidia_nim', model: 'qwen', reason: 'primary', timestamp: Date.now() },
+      ],
+      finishReason: 'stop',
+    });
+
+    await processEventGroupsV3(groups);
+
+    expect((llmProgress as Record<string, unknown>).failedBatches).toBe(1);
+  });
+
+  it('a fully-successful batch does NOT increment failedBatches (stays undefined)', async () => {
+    const groups = [makeGroup('g1', 'e1')];
+    vi.mocked(withBatchWatchdog).mockImplementation(watchdogPassThrough);
+    vi.mocked(freeClaudeCallLLM).mockResolvedValueOnce({
+      content: validBatchResponse('g1'),
+      routing: [
+        { provider: 'nvidia_nim', model: 'qwen', reason: 'primary', timestamp: Date.now() },
+      ],
+      finishReason: 'stop',
+    });
+
+    await processEventGroupsV3(groups);
+
+    // Never touched → remains undefined (the run record floors it to 0).
+    expect((llmProgress as Record<string, unknown>).failedBatches).toBeUndefined();
   });
 });

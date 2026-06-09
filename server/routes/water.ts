@@ -124,6 +124,41 @@ const FACILITIES_KEY = 'water:facilities:v3';
 /** Redis key for cached precipitation data */
 const PRECIP_KEY = 'water:precip';
 
+/**
+ * LLM-FIX-02 / D-05 (Phase 38) — degraded sentinel written to `water:precip`
+ * when an Open-Meteo precipitation fetch returns ZERO results (all batches
+ * failed). The fresh `fetchedAt` makes the audit probe read `degraded`
+ * instead of `unknown` (cold cache), while `failed: true` keeps the failure
+ * detectable and prevents the empty result from masquerading as healthy.
+ */
+interface PrecipEmptySentinel {
+  data: [];
+  failed: true;
+  fetchedAt: number;
+}
+
+/** Type guard for the LLM-FIX-02 degraded sentinel envelope. */
+function isPrecipEmptySentinel(value: unknown): value is PrecipEmptySentinel {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { failed?: unknown }).failed === true &&
+    Array.isArray((value as { data?: unknown }).data)
+  );
+}
+
+/**
+ * Normalize a cached `water:precip` payload to a `PrecipitationData[]`.
+ * Tolerates both the bare success array and the degraded sentinel envelope —
+ * the sentinel collapses to `[]` ("degraded, no overlay"), never throwing.
+ */
+function normalizePrecipCache(
+  cached: PrecipitationData[] | PrecipEmptySentinel,
+): PrecipitationData[] {
+  if (isPrecipEmptySentinel(cached)) return [];
+  return cached;
+}
+
 export const waterRouter = Router();
 
 /**
@@ -321,10 +356,24 @@ waterRouter.get('/', validateQuery(waterQuerySchema), async (req, res) => {
  */
 waterRouter.get('/precip', validateQuery(waterQuerySchema), async (_req, res) => {
   const { refresh: forceRefresh } = res.locals.validatedQuery as z.infer<typeof waterQuerySchema>;
-  const cachedPrecip = await cacheGetSafe<PrecipitationData[]>(PRECIP_KEY, WATER_PRECIP_CACHE_TTL);
+  // LLM-FIX-02 / D-05 (Phase 38) — the cache may hold EITHER the bare
+  // PrecipitationData[] success payload OR the degraded sentinel envelope
+  // `{ data: [], failed: true, fetchedAt }` written on total batch failure.
+  // Read the union and normalize: a sentinel hit is treated as "degraded, no
+  // overlay" (empty data) — NOT a healthy cache — so a fresh-but-failed write
+  // does not masquerade as live precipitation data downstream.
+  const cachedPrecip = await cacheGetSafe<PrecipitationData[] | PrecipEmptySentinel>(
+    PRECIP_KEY,
+    WATER_PRECIP_CACHE_TTL,
+  );
 
   if (cachedPrecip && !cachedPrecip.stale && !forceRefresh) {
-    return res.json(cachedPrecip);
+    const cachedData = normalizePrecipCache(cachedPrecip.data);
+    return res.json({
+      data: cachedData,
+      stale: cachedPrecip.stale,
+      lastFresh: cachedPrecip.lastFresh,
+    });
   }
 
   try {
@@ -355,15 +404,35 @@ waterRouter.get('/precip', validateQuery(waterQuerySchema), async (_req, res) =>
     const locations = facilities.map((f) => ({ lat: f.lat, lng: f.lng }));
     const precipData = await fetchPrecipitation(locations);
 
-    // Only cache non-empty results — empty means all batches failed
+    // LLM-FIX-02 / D-05 (Phase 38) — honest degraded-not-unknown sentinel.
+    // Previously a total Open-Meteo batch failure (precipData.length === 0)
+    // skipped the cache write entirely, leaving water:precip COLD so the
+    // audit tier read `unknown` (indistinguishable from a fresh-deploy cold
+    // cache). On total failure we now write a FRESH, distinguishable sentinel
+    // envelope `{ data: [], failed: true, fetchedAt }` so the audit probe
+    // reads a fresh write (degraded, NOT unknown) while the failure stays
+    // detectable via the `failed: true` flag. A partial/full success still
+    // writes the bare array as before.
     if (precipData.length > 0) {
       await cacheSetSafe(PRECIP_KEY, precipData, WATER_PRECIP_REDIS_TTL_SEC);
+    } else {
+      await cacheSetSafe(
+        PRECIP_KEY,
+        { data: [], failed: true, fetchedAt: Date.now() },
+        WATER_PRECIP_REDIS_TTL_SEC,
+      );
     }
     res.json({ data: precipData, stale: false, lastFresh: Date.now() });
   } catch (err) {
     log.error({ err }, 'precipitation fetch error');
     if (cachedPrecip) {
-      res.json({ data: cachedPrecip.data, stale: true, lastFresh: cachedPrecip.lastFresh });
+      // LLM-FIX-02 (Phase 38) — normalize the sentinel here too so a stale
+      // degraded sentinel does not leak `{ failed: true }` to the client.
+      res.json({
+        data: normalizePrecipCache(cachedPrecip.data),
+        stale: true,
+        lastFresh: cachedPrecip.lastFresh,
+      });
     } else {
       throw err;
     }

@@ -135,4 +135,44 @@ describe('Vercel entry point (server/vercel-entry.ts)', () => {
     expect(body.summary).toBeDefined();
     expect(typeof body.generatedAt).toBe('number');
   });
+
+  // Phase 38-05 PRO-03 — Fluid Compute compatibility smoke.
+  // Fluid Compute runs multiple requests per warm instance against the
+  // memoized createApp() app. This guards the no-cross-request-leak
+  // invariant: the memoized app serves two sequential (and concurrent)
+  // requests without the second observing state mutated by the first.
+  it('memoized app serves concurrent requests without cross-request state leakage', async () => {
+    // Two sequential requests against the same memoized app.
+    const first = await fetch(`${baseUrl}/health`);
+    const second = await fetch(`${baseUrl}/health`);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+
+    const firstBody = await first.json();
+    const secondBody = await second.json();
+
+    // Both responses are independently well-formed — neither carries
+    // residue from the other (no shared per-request global mutated by
+    // the first request and read back by the second).
+    expect(firstBody.endpoints).toBeDefined();
+    expect(secondBody.endpoints).toBeDefined();
+    expect(typeof firstBody.generatedAt).toBe('number');
+    expect(typeof secondBody.generatedAt).toBe('number');
+    // generatedAt is computed per request, not a stale shared singleton.
+    expect(secondBody.generatedAt).toBeGreaterThanOrEqual(firstBody.generatedAt);
+
+    // Concurrent in-flight requests (Fluid Compute in-instance
+    // concurrency) all resolve to 200 independently.
+    const concurrent = await Promise.all(
+      Array.from({ length: 4 }, () => fetch(`${baseUrl}/health`)),
+    );
+    for (const res of concurrent) {
+      expect(res.status).toBe(200);
+    }
+    const bodies = await Promise.all(concurrent.map((r) => r.json()));
+    for (const body of bodies) {
+      expect(body.endpoints).toBeDefined();
+      expect(body.summary).toBeDefined();
+    }
+  });
 });

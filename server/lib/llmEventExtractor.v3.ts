@@ -1,18 +1,20 @@
 /**
- * Phase 27.4.3 v3 LLM Event Extractor (D-03).
+ * Phase 27.4.3 v3 LLM Event Extractor (D-03) — the sole runtime extractor.
  *
- * Mirrors v2 (server/lib/llmEventExtractor.v2.ts) with three changes:
- *   1. The llm-provider.ts cascade is replaced by freeClaudeRouter.callLLM.
- *   2. After each successfully validated batch, appendLineage() persists the
- *      prompt / response / parsed / coord / resolverPath / reasoningTrace /
- *      lineageHash to events:llm:v3:lineage:{eventId} (D-13, B-2).
- *   3. The recentEvents entry stamps reasoningTrace + lineageHash so Plan 04
- *      DrillDownRow can render them under TS strict mode.
+ * Provider path: NIM primary (qwen-235b instruct) with OpenRouter dormant
+ * (key-gated fallback; `skipOpenRouter: true` at the extractor sites per Phase
+ * 30.1), routed through freeClaudeRouter.callLLM. After each successfully
+ * validated batch, appendLineage() persists the prompt / response / parsed /
+ * coord / resolverPath / reasoningTrace / lineageHash to
+ * events:llm:v3:lineage:{eventId} (D-13, B-2). The recentEvents entry stamps
+ * reasoningTrace + lineageHash so the DrillDownRow renders them under TS strict.
  *
- * Cache keys bumped per D-04:
- *   events:llm:v2 → events:llm:v3
+ * Active cache key: events:llm:v3.
  *
- * v1/v2 extractors remain shipped untouched (rollback safety per D-21).
+ * Phase 38 LLM-PURGE-03 — the v1 + v2 extractor modules + the
+ * llmEventExtractor.ts re-export barrel were deleted (Phase 29 + Phase 38);
+ * llmExtractionPipeline.ts now imports processEventGroupsV3 + geocodeEnrichedEventsV3
+ * directly from this file. No rollback-safety v1/v2 modules remain.
  *
  * Phase 35 D-12 (SIMPLIFY-02): the partial-key envelope (`events:llm:v3:partial`)
  * is retired. Hobby-era 300s-budget mitigation; Pro 800s makes terminal-key writes
@@ -71,12 +73,13 @@ import type { RecentEnrichedEvent } from './llmProgress.js';
 import type { LocationHierarchyV2, EnrichedEventV3, GeocodeProvenance } from './llmSchema.js';
 
 // Phase 29 D-02 part A — Plan 05 D-17 auto-rollback ladder (v3 -> v2)
-// removed. With the operator pin-pipeline surface deleted (Plan 04) and
-// v1+v2 extractor modules being deleted in Plan 05/06, the v3->v2 rollback
-// path is no longer reachable. The watchdog-recurrence + eval-drop triggers
-// + the appendPipelineAudit calls inside them are gone. The cross-worker
-// audit log (listPipelineAudit reader in events.ts /llm-status) still
-// surfaces any historical entries written before this phase.
+// removed. With the operator pin-pipeline surface deleted (Plan 04) and the
+// v1+v2 extractor modules deleted in Plan 05/06, the v3->v2 rollback path is
+// no longer reachable; the watchdog-recurrence + eval-drop triggers are gone.
+// Phase 38 LLM-PURGE-05 (D-03 Path A) — the pipeline-flip audit log
+// (appendPipelineAudit writer + listPipelineAudit reader + the events.ts
+// /llm-status surface) was fully deleted. The legacy `events:llm-pipeline-audit`
+// Redis key drains on its 90d TTL — no migration.
 
 const log = logger.child({ module: 'llm-extractor-v3' });
 
@@ -575,6 +578,18 @@ export async function processEventGroupsV3(
     await onBatchComplete?.(c, totalBatches);
   };
 
+  // Phase 39 SC39-3 (WR-01) — honest per-run failure accounting. `finishBatch`
+  // ticks on EVERY terminal branch (success AND failure) so the progress
+  // cadence is monotonic; this separate tally counts ONLY genuine-failure
+  // terminal branches (watchdog null content, JSON.parse fail, Zod fail, or an
+  // adaptive split that yielded zero events). Surfaced into llmProgress.failedBatches
+  // so the run record's batchesFailed is honest and the FlightRecorder's
+  // 'partial'/'failed' outcome bands can actually fire. Synchronous R-M-W is
+  // race-safe under JS single-threading (same contract as the other counters).
+  const recordFailedBatch = (): void => {
+    updateProgress({ failedBatches: (llmProgress.failedBatches ?? 0) + 1 });
+  };
+
   const tasks: Promise<void>[] = [];
   for (let i = 0; i < groupsToProcess.length; i += BATCH_SIZE) {
     const batch = groupsToProcess.slice(i, i + BATCH_SIZE);
@@ -627,6 +642,10 @@ export async function processEventGroupsV3(
                 // amplifies breaker errors and burns the retry budget. v2
                 // keeps OR for legacy rollback parity.
                 skipOpenRouter: true,
+                // Phase 39 OBS-FLIGHT-05 — thread the batch index so the
+                // call-history entry (success + failure paths in callLLM) can
+                // group this call to its batch within the run.
+                batchIndex,
               },
             );
             routing = result.routing;
@@ -705,12 +724,16 @@ export async function processEventGroupsV3(
             const splitEvents = await splitBatchOnTimeout(contexts, batchIndex);
             results.push(...splitEvents);
             if (splitEvents.length > 0) allFailed = false;
+            // WR-01 — a split that recovered zero events is a failed batch; a
+            // split that recovered at least one half counts as a success.
+            if (splitEvents.length === 0) recordFailedBatch();
             await finishBatch();
             return;
           }
           // Either freeClaudeCallLLM returned null OR the watchdog fired. Both
           // paths already logged / DLQ'd / updated telemetry; just return.
           log.warn({ batchIndex }, 'v3 batch yielded no content (null or watchdog timeout)');
+          recordFailedBatch(); // WR-01 — null/timeout terminal branch is a failure
           await finishBatch();
           return;
         }
@@ -753,6 +776,7 @@ export async function processEventGroupsV3(
           sf[primary].total += 1;
           sf[primary].malformedJson += 1;
           updateProgress({ schemaFailures: sf });
+          recordFailedBatch(); // WR-01 — JSON.parse failure terminal branch is a failure
           await finishBatch();
           return;
         }
@@ -780,6 +804,7 @@ export async function processEventGroupsV3(
           sf[primary].total += 1;
           sf[primary].missingField += 1;
           updateProgress({ schemaFailures: sf });
+          recordFailedBatch(); // WR-01 — Zod schema-fail terminal branch is a failure
           await finishBatch();
           return;
         }
@@ -949,6 +974,9 @@ async function splitBatchOnTimeout(
             batchSize: half.length,
             modelOverride: V3_BAKEOFF_MODEL,
             skipOpenRouter: true,
+            // Phase 39 OBS-FLIGHT-05 — thread batchIndex through the split-retry
+            // path too so adaptive-retry calls back-correlate to the same batch.
+            batchIndex,
           },
         );
         return r.content;

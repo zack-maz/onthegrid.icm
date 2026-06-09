@@ -6,6 +6,8 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import { BaseMap } from '@/components/map/BaseMap';
 import { HealthStatusProvider } from '@/components/providers/HealthStatusProvider';
+import { GuidedTour } from '@/components/reveal/GuidedTour';
+import { IntroOverlay } from '@/components/reveal/IntroOverlay';
 import { DashboardAuthModal } from '@/components/ui/DashboardAuthModal';
 import { DevApiStatus } from '@/components/ui/DevApiStatus';
 import { HealthBanner } from '@/components/ui/HealthBanner';
@@ -67,6 +69,7 @@ export function AppShell() {
         {/* Map container - fills viewport below topbar */}
         <div
           data-testid="map-container"
+          data-tour="map"
           className="absolute inset-0 z-[var(--z-map)]"
           style={{ top: 'var(--height-topbar)' }}
         >
@@ -108,6 +111,15 @@ export function AppShell() {
         {/* Dashboard auth gate modal — opens via DevApiStatusTrigger in prod
           when the user has not yet entered a key. Self-closes when not open. */}
         <DashboardAuthModal />
+
+        {/* Phase 41 Plan 06 (REVEAL-SITE-01/02) — reveal surface, mounted as
+          siblings of DashboardAuthModal. IntroOverlay self-gates on isIntroSeen
+          (first-visit framing, D-01); GuidedTour is a behavior-only controller
+          driving the driver.js spotlight when isTourOpen. The persistent
+          TourTrigger affordance lives in the Topbar (D-03). No second route is
+          added — the dashboard IS the landing surface. */}
+        <IntroOverlay />
+        <GuidedTour />
       </div>
     </HealthStatusProvider>
   );

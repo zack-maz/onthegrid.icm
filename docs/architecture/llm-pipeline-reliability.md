@@ -1,9 +1,9 @@
-# LLM Pipeline Reliability (v1.5)
+# LLM Pipeline Reliability (v1.5–v1.6)
 
-> Measured throttle behavior + tuned defaults for the NIM + OpenRouter cascade on Vercel Pro's 800s `maxDuration` ceiling. Numbers in this doc come from `run-1-throttle-snapshot.json` and `run-2-throttle-snapshot.json` in `.planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/`.
+> Measured throttle behavior + tuned defaults for the NIM-primary pipeline (Pro 800s `maxDuration`). OpenRouter is a dormant, key-gated fallback per Phase 30.1 — at runtime the pipeline is NIM-only; see the "NIM-only" sub-block below (consistent with the line-6 cascade-shape note). Numbers in this doc come from `run-1-throttle-snapshot.json` and `run-2-throttle-snapshot.json` in `.planning/phases/30-nim-throttle-characterization-cascade-tuning-pro-enabled-sim/`.
 
 **Phase 30 measurement dates:** 2026-05-17 (Run 1 at 01:19:41Z, Run 2 at 02:36:01Z)
-**Cascade:** NVIDIA NIM (primary, qwen-235b instruct) → OpenRouter (fallback). v1/v2 retired Phase 29.
+**Cascade shape:** NVIDIA NIM-primary (qwen-235b instruct); OpenRouter dormant fallback (Phase 30.1 — NIM-only at runtime). v1/v2 retired Phase 29.
 **Vercel plan:** Pro · `maxDuration: 800` (`vercel.json`).
 
 > **Path B framing.** Both Run 1 and Run 2 hit Path B of the throttle-characterization decision tree — NIM returned **zero** 429s during either run (213 batches each, ~123s wall-clock). The "tuned defaults" in this doc are therefore **conservative defensive choices grounded in measured per-batch latency**, NOT empirical fits to a measured throttle window. Plan 05 explicitly ran in sanity-check mode rather than measured-tuning mode. Phase 31's 7-day watch (LLM-RELI-06) and any follow-up plan that lands the eval-harness fix are the next opportunities to re-derive the numbers against real throttle signal.

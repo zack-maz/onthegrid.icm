@@ -1,0 +1,930 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DevApiStatus consolidated layout snapshot — Phase 40 §Regression-Lock assertion 8 > locks the fully-populated consolidated-layout shape (hero + 4 expanded groups + closed drawer) 1`] = `
+<div
+  data-testid="all-apis-tab"
+>
+  <header
+    aria-label="API health summary"
+    class="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2"
+    data-testid="api-health-hero"
+    role="status"
+  >
+    <span
+      class="flex items-center gap-1"
+      data-testid="api-health-hero-endpoints"
+    >
+      <span
+        class="inline-block h-1.5 w-1.5 rounded-full"
+        style="background-color: var(--color-status-healthy);"
+      />
+      <span
+        class="text-[13px] font-semibold tabular-nums"
+      >
+        2
+        /
+        3
+      </span>
+      <span
+        class="text-[10px] text-white/60"
+      >
+        healthy
+      </span>
+    </span>
+    <span
+      class="flex items-center gap-1"
+      data-testid="api-health-hero-llm"
+    >
+      <span
+        class="inline-block h-1.5 w-1.5 rounded-full"
+        style="background-color: var(--color-status-healthy);"
+      />
+      <span
+        class="text-[13px] font-semibold"
+      >
+        ok
+      </span>
+      <span
+        class="text-[10px] tabular-nums text-white/60"
+      >
+        4h ago
+      </span>
+      <span
+        class="text-[10px] text-white/60"
+      >
+        last run
+      </span>
+    </span>
+    <span
+      class="flex items-center gap-1"
+      data-testid="api-health-hero-budget"
+    >
+      <span
+        class="inline-block h-1.5 w-1.5 rounded-full"
+        style="background-color: var(--color-status-healthy);"
+      />
+      <span
+        class="text-[13px] font-semibold tabular-nums"
+      >
+        60
+        %
+      </span>
+      <span
+        class="text-[10px] text-white/60"
+      >
+        of cap
+      </span>
+    </span>
+    <span
+      class="flex items-center gap-1"
+      data-testid="api-health-hero-deadurls"
+    >
+      <span
+        class="inline-block h-1.5 w-1.5 rounded-full"
+        style="background-color: var(--color-status-degraded);"
+      />
+      <span
+        class="text-[13px] font-semibold tabular-nums"
+      >
+        3
+      </span>
+      <span
+        class="text-[10px] text-white/60"
+      >
+        dead URLs
+      </span>
+    </span>
+  </header>
+  <section
+    aria-labelledby="group-endpoint-health-header"
+    class="mt-4 border-t border-white/10"
+    data-testid="group-endpoint-health"
+  >
+    <button
+      aria-controls="group-endpoint-health-body"
+      aria-expanded="true"
+      class="flex w-full items-center gap-2 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-white/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+      id="group-endpoint-health-header"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="inline-block w-3 text-[12px] text-white/40"
+      >
+        ▾
+      </span>
+      Endpoint Health
+    </button>
+    <div
+      class="mt-2 px-4"
+      id="group-endpoint-health-body"
+    >
+      <div
+        class="mb-2 flex items-center gap-3 px-3 py-1 text-[10px]"
+        data-testid="tier-summary-banner"
+      >
+        <span
+          class="flex items-center gap-1"
+        >
+          <span
+            class="inline-block h-1.5 w-1.5 rounded-full"
+            style="background-color: var(--color-status-healthy);"
+          />
+          2
+           of 
+          3
+           healthy
+        </span>
+        <span>
+          ·
+        </span>
+        <span
+          class="flex items-center gap-1"
+        >
+          <span
+            class="inline-block h-1.5 w-1.5 rounded-full"
+            style="background-color: var(--color-status-degraded);"
+          />
+          1
+           degraded
+        </span>
+        <span>
+          ·
+        </span>
+        <span
+          class="flex items-center gap-1"
+        >
+          <span
+            class="inline-block h-1.5 w-1.5 rounded-full"
+            style="background-color: var(--color-status-warning);"
+          />
+          0
+           unhealthy
+        </span>
+        <span
+          class="text-white/40"
+        >
+          | critical: 
+          1
+          /
+          2
+           · non-critical:
+           
+          1
+          /
+          1
+           · cron:
+           
+          0
+          /
+          0
+        </span>
+      </div>
+      <div
+        data-testid="audit-result-banner"
+      />
+      <table
+        class="w-full"
+      >
+        <thead>
+          <tr
+            class="text-white/40"
+          >
+            <th
+              class="pr-1 text-left font-normal"
+            >
+              Endpoint
+            </th>
+            <th
+              class="pr-1 text-left font-normal"
+            >
+              Tier
+            </th>
+            <th
+              class="pr-1 text-left font-normal"
+            >
+              Status
+            </th>
+            <th
+              class="pr-1 text-right font-normal"
+            >
+              Freshness
+            </th>
+            <th
+              class="pr-1 text-right font-normal"
+            >
+              Latency
+            </th>
+            <th
+              class="pr-1 text-left font-normal"
+            >
+              Recent
+            </th>
+            <th
+              class="text-left font-normal"
+            >
+              Last error
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td
+              class="border-t border-white/10 py-1 text-[9px] uppercase tracking-wider text-white/40"
+              colspan="7"
+            >
+              Critical
+            </td>
+          </tr>
+          <tr
+            class="cursor-pointer hover:bg-white/5"
+            data-testid="all-apis-row-/api/events"
+          >
+            <td
+              class="pr-1"
+            >
+              /api/events
+            </td>
+            <td
+              class="pr-1"
+            >
+              <span
+                class="rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-wider border-accent-red"
+              >
+                CRITICAL
+              </span>
+            </td>
+            <td
+              class="pr-1"
+            >
+              <span
+                class="rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-accent-yellow/20 text-accent-yellow"
+              >
+                DEGRADED
+              </span>
+            </td>
+            <td
+              class="pr-1 text-right tabular-nums text-accent-yellow"
+              title="2023-11-14T22:13:19.000Z"
+            >
+              1s
+            </td>
+            <td
+              class="pr-1 text-right tabular-nums text-white/50"
+            >
+              8ms
+            </td>
+            <td
+              class="pr-1"
+            >
+              <div
+                class="flex gap-1"
+                data-testid="api-health-sparkline-/api/events"
+              >
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+              </div>
+            </td>
+            <td
+              class="truncate text-white/40"
+            />
+          </tr>
+          <tr
+            class="cursor-pointer hover:bg-white/5"
+            data-testid="all-apis-row-/api/flights"
+          >
+            <td
+              class="pr-1"
+            >
+              /api/flights
+            </td>
+            <td
+              class="pr-1"
+            >
+              <span
+                class="rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-wider border-accent-red"
+              >
+                CRITICAL
+              </span>
+            </td>
+            <td
+              class="pr-1"
+            >
+              <span
+                class="rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-accent-green/20 text-accent-green"
+              >
+                HEALTHY
+              </span>
+            </td>
+            <td
+              class="pr-1 text-right tabular-nums text-white/50"
+              title="2023-11-14T22:13:19.000Z"
+            >
+              1s
+            </td>
+            <td
+              class="pr-1 text-right tabular-nums text-white/50"
+            >
+              8ms
+            </td>
+            <td
+              class="pr-1"
+            >
+              <div
+                class="flex gap-1"
+                data-testid="api-health-sparkline-/api/flights"
+              >
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+              </div>
+            </td>
+            <td
+              class="truncate text-white/40"
+            />
+          </tr>
+          <tr>
+            <td
+              class="border-t border-white/10 py-1 text-[9px] uppercase tracking-wider text-white/40"
+              colspan="7"
+            >
+              Non-critical
+            </td>
+          </tr>
+          <tr
+            class="cursor-pointer hover:bg-white/5"
+            data-testid="all-apis-row-/api/news"
+          >
+            <td
+              class="pr-1"
+            >
+              /api/news
+            </td>
+            <td
+              class="pr-1"
+            >
+              <span
+                class="rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-wider border-accent-yellow"
+              >
+                NON-CRITICAL
+              </span>
+            </td>
+            <td
+              class="pr-1"
+            >
+              <span
+                class="rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-accent-green/20 text-accent-green"
+              >
+                HEALTHY
+              </span>
+            </td>
+            <td
+              class="pr-1 text-right tabular-nums text-white/50"
+              title="2023-11-14T22:13:19.000Z"
+            >
+              1s
+            </td>
+            <td
+              class="pr-1 text-right tabular-nums text-white/50"
+            >
+              8ms
+            </td>
+            <td
+              class="pr-1"
+            >
+              <div
+                class="flex gap-1"
+                data-testid="api-health-sparkline-/api/news"
+              >
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+                <span
+                  class="h-1 w-1 rounded-full bg-white/10"
+                />
+              </div>
+            </td>
+            <td
+              class="truncate text-white/40"
+            />
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section
+    aria-labelledby="group-llm-pipeline-header"
+    class="mt-4 border-t border-white/10"
+    data-testid="group-llm-pipeline"
+  >
+    <button
+      aria-controls="group-llm-pipeline-body"
+      aria-expanded="true"
+      class="flex w-full items-center gap-2 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-white/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+      id="group-llm-pipeline-header"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="inline-block w-3 text-[12px] text-white/40"
+      >
+        ▾
+      </span>
+      LLM Pipeline
+    </button>
+    <div
+      class="mt-2 px-4"
+      id="group-llm-pipeline-body"
+    >
+      <section
+        class="text-[9px]"
+        data-testid="llm-pipeline-section"
+      >
+        <div
+          class="space-y-1"
+        >
+          <div
+            class="flex items-center gap-1"
+          >
+            <div
+              class="flex items-center gap-1"
+            >
+              <div
+                class="flex h-3 items-center justify-center rounded px-1 text-[7px] font-bold uppercase"
+                style="background-color: transparent; color: rgb(34, 197, 94); border: 1px solid rgb(34, 197, 94);"
+              >
+                Group
+              </div>
+              <span
+                style="color: rgb(34, 197, 94);"
+              >
+                →
+              </span>
+            </div>
+            <div
+              class="flex items-center gap-1"
+            >
+              <div
+                class="flex h-3 items-center justify-center rounded px-1 text-[7px] font-bold uppercase"
+                style="background-color: transparent; color: rgb(34, 197, 94); border: 1px solid rgb(34, 197, 94);"
+              >
+                LLM
+              </div>
+              <span
+                style="color: rgb(34, 197, 94);"
+              >
+                →
+              </span>
+            </div>
+            <div
+              class="flex items-center gap-1"
+            >
+              <div
+                class="flex h-3 items-center justify-center rounded px-1 text-[7px] font-bold uppercase"
+                style="background-color: transparent; color: rgb(34, 197, 94); border: 1px solid rgb(34, 197, 94);"
+              >
+                Geocode
+              </div>
+              <span
+                style="color: rgb(34, 197, 94);"
+              >
+                →
+              </span>
+            </div>
+            <div
+              class="flex items-center gap-1"
+            >
+              <div
+                class="flex h-3 items-center justify-center rounded px-1 text-[7px] font-bold uppercase"
+                style="background-color: rgb(34, 197, 94); color: rgb(0, 0, 0); border: 1px solid rgb(34, 197, 94);"
+              >
+                Done
+              </div>
+            </div>
+          </div>
+          <div
+            class="text-white/50"
+          >
+            Last: 
+            4h
+             ago · 
+            28
+             enriched · 
+            30
+             
+            geocoded · 
+            60.0s
+          </div>
+        </div>
+      </section>
+      <section
+        class="mt-2 text-xs"
+        data-testid="flight-recorder"
+      >
+        <div
+          class="text-[9px] font-bold uppercase tracking-wider text-white/40"
+        >
+          FLIGHT RECORDER
+        </div>
+        <div
+          class="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40"
+        >
+          RUNS
+        </div>
+        <div
+          class="mt-1 flex flex-col gap-1"
+        >
+          <div
+            data-testid="flight-recorder-run-run-aaaaaaaa-1111"
+          >
+            <div
+              class="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-white/5"
+              data-testid="flight-recorder-run-row-run-aaaaaaaa-1111"
+            >
+              <span
+                class="shrink-0 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-accent-green/20 text-accent-green"
+              >
+                SUCCESS
+              </span>
+              <span
+                class="shrink-0 font-mono text-[10px] text-white/60"
+              >
+                run-aaaa
+              </span>
+              <span
+                class="shrink-0 text-[8px] text-white/40 tabular-nums"
+              >
+                4h ago
+              </span>
+              <div
+                class="h-1 min-w-8 flex-1 rounded-full bg-white/10"
+              >
+                <div
+                  class="h-1 rounded-full transition-all duration-500 bg-accent-green"
+                  data-testid="flight-recorder-batch-bar-run-aaaaaaaa-1111"
+                  style="width: 100%;"
+                />
+              </div>
+              <span
+                class="shrink-0 text-[8px] text-white/40 tabular-nums"
+              >
+                4
+                /
+                4
+                 groups
+              </span>
+              <span
+                class="shrink-0 text-[8px] text-white/40 tabular-nums"
+              >
+                1200
+                 tok
+              </span>
+              <span
+                class="shrink-0 text-[8px] tabular-nums text-accent-yellow"
+                data-testid="flight-recorder-eval-run-aaaaaaaa-1111"
+                title="Resolver accuracy within 20km of ground truth"
+              >
+                eval 
+                90
+                % @20km
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div
+        class="mt-2 text-[10px] text-text-muted"
+        data-testid="adversarial-eval-row"
+      >
+        Prompt-injection robustness: 
+        9
+        /
+        10
+      </div>
+    </div>
+  </section>
+  <section
+    aria-labelledby="group-budget-cost-header"
+    class="mt-4 border-t border-white/10"
+    data-testid="group-budget-cost"
+  >
+    <button
+      aria-controls="group-budget-cost-body"
+      aria-expanded="true"
+      class="flex w-full items-center gap-2 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-white/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+      id="group-budget-cost-header"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="inline-block w-3 text-[12px] text-white/40"
+      >
+        ▾
+      </span>
+      Budget & Cost
+    </button>
+    <div
+      class="mt-2 px-4"
+      id="group-budget-cost-body"
+    >
+      <div
+        data-testid="budget-block"
+      >
+        <div
+          class="text-[9px] font-bold uppercase tracking-wider text-white/40"
+        >
+          TOKEN BUDGET
+        </div>
+        <div
+          class="mt-1 flex flex-col gap-1"
+        >
+          <div
+            class="flex items-center gap-2"
+            data-testid="budget-row-nvidia_nim"
+          >
+            <span
+              class="w-8 shrink-0 text-[10px] text-white/60"
+            >
+              NIM
+            </span>
+            <div
+              class="relative h-1 flex-1 rounded-full bg-white/10"
+            >
+              <div
+                class="h-1 rounded-full transition-all duration-500 bg-accent-green"
+                data-testid="budget-bar-fill-nvidia_nim"
+                style="width: 60%;"
+              />
+              <div
+                class="absolute top-0 h-1 w-px bg-white/30"
+                data-testid="budget-tick-soft-nvidia_nim"
+                style="left: 80%;"
+              />
+              <div
+                class="absolute top-0 h-1 w-px bg-white/30"
+                data-testid="budget-tick-hard-nvidia_nim"
+                style="left: 95%;"
+              />
+            </div>
+            <span
+              class="shrink-0 text-[8px] text-white/40 tabular-nums"
+            >
+              600
+              /
+              1000
+               
+              ok
+            </span>
+          </div>
+        </div>
+        <div
+          class="mt-1 text-[10px] font-mono tabular-nums text-white/70"
+        >
+          Cost today: $
+          0.0123
+        </div>
+        <div
+          class="text-[8px] text-white/40 tabular-nums"
+        >
+          1000
+           in · 
+          500
+           out
+        </div>
+      </div>
+    </div>
+  </section>
+  <section
+    aria-labelledby="group-operator-actions-header"
+    class="mt-4 border-t border-white/10"
+    data-testid="group-operator-actions"
+  >
+    <button
+      aria-controls="group-operator-actions-body"
+      aria-expanded="true"
+      class="flex w-full items-center gap-2 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-white/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+      id="group-operator-actions-header"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="inline-block w-3 text-[12px] text-white/40"
+      >
+        ▾
+      </span>
+      Operator Actions & Data Quality
+    </button>
+    <div
+      class="mt-2 px-4"
+      id="group-operator-actions-body"
+    >
+      <section
+        class="text-xs"
+        data-testid="operator-actions"
+      >
+        <div
+          class="text-[10px] text-text-muted"
+          data-testid="operator-actions-24h-count"
+        >
+          24h actions: 
+          7
+        </div>
+        <div
+          class="mt-1 flex flex-col gap-1"
+        >
+          <div
+            class="text-[10px] text-text-muted"
+            data-testid="operator-actions-bearer-row-abc12345abcdef"
+          >
+            abc12345
+            …: 
+            5
+             actions / 
+            1
+             swaps /
+             
+            4
+             replays
+          </div>
+        </div>
+        <div
+          class="mt-1 text-[10px] text-text-muted"
+          data-testid="dead-url-count"
+        >
+          Dead URL events: 
+          3
+        </div>
+        <ul
+          class="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
+          data-testid="dead-url-list"
+        >
+          <li
+            class="flex items-baseline gap-2 py-0.5"
+          >
+            <span
+              class="font-mono text-text-muted/60"
+            >
+              404
+            </span>
+            <span
+              class="truncate font-mono text-text-muted/40"
+            >
+              llm-v3-grp1
+            </span>
+            <span
+              class="truncate text-text-muted/70"
+              title="https://example.com/a"
+            >
+              https://example.com/a
+            </span>
+          </li>
+          <li
+            class="py-0.5 italic text-text-muted/40"
+            data-testid="dead-url-list-truncated"
+          >
+            … and 
+            2
+             more
+          </li>
+        </ul>
+        <div
+          aria-label="Actor quality counters: 5 null actors, 2 raw CAMEO codes, 3 ambiguous strings, 10 low confidence"
+          class="mt-1 text-[10px] text-text-muted"
+          data-testid="actor-quality-row"
+        >
+          Actor quality: Null: 
+          5
+           · Raw-CAMEO:
+           
+          2
+           · Ambiguous:
+           
+          3
+           · Low-confidence:
+           
+          10
+        </div>
+        <ul
+          aria-label="Actor quality drill-down sample (up to 20 events)"
+          class="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
+          data-testid="actor-quality-list"
+        >
+          <li
+            class="flex items-baseline gap-2 py-0.5"
+            data-testid="actor-quality-row-evt-1"
+          >
+            <span
+              class="font-mono text-[color:var(--color-faction-disputed)]"
+            >
+              raw-cameo
+            </span>
+            <span
+              class="truncate font-mono text-text-muted/40"
+            >
+              evt-1
+            </span>
+            <span
+              class="truncate text-text-muted/70"
+            >
+              USMIL
+            </span>
+          </li>
+        </ul>
+        <div
+          class="mt-4"
+        >
+          <button
+            aria-controls="operator-drawer"
+            aria-expanded="false"
+            aria-label="Open operator controls"
+            class="rounded-md border border-white/10 px-2 py-1 text-[10px] hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+            data-testid="operator-drawer-trigger"
+            type="button"
+          >
+            Operator Controls
+          </button>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+`;

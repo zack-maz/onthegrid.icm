@@ -86,10 +86,6 @@ vi.mock('../../lib/llmProgress.js', () => ({
   llmProgress: llmProgressSingleton,
 }));
 
-vi.mock('../../lib/pipelineAudit.js', () => ({
-  appendPipelineAudit: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('../../config.js', () => ({
   env: mockEnv,
 }));

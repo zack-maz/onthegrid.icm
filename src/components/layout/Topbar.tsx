@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { StatusDropdown } from '@/components/layout/StatusDropdown';
 import { INITIAL_VIEW_STATE } from '@/components/map/constants';
+import { TourTrigger } from '@/components/reveal/TourTrigger';
 import { SearchModal } from '@/components/search/SearchModal';
 import { effectiveStatus } from '@/lib/apiStatus';
 import { hasDashboardKey } from '@/lib/dashboardAuth';
@@ -173,6 +174,7 @@ function DevApiStatusTriggerInner() {
   return (
     <button
       data-testid="dev-api-status-trigger"
+      data-tour="api-health"
       onClick={onTriggerClick}
       className="rounded-md px-2 py-1 font-mono text-[10px] transition-colors hover:bg-white/5"
       style={{ color: hasIssue ? '#ef4444' : 'rgba(255,255,255,0.4)' }}
@@ -233,8 +235,9 @@ export function Topbar() {
         </kbd>
       </button>
 
-      {/* Right: Reset + DevApiStatus trigger (dev-only) + Notification bell */}
+      {/* Right: Tour + Reset + DevApiStatus trigger (dev-only) + Notification bell */}
       <div className="flex items-center gap-1">
+        <TourTrigger />
         <ResetButton />
         <DevApiStatusTrigger />
         <NotificationBell />

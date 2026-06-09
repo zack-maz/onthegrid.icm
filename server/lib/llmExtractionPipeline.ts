@@ -6,10 +6,10 @@
  * cron-driven trigger phase shipped, the route is cache-only — every
  * code path that fires an extraction calls this helper instead.
  *
- * The function is fire-and-forget by design: the actual `processEventGroups`
- * + `geocodeEnrichedEvents` work is launched as a `void async () => {}` IIFE
+ * The function is fire-and-forget by design: the actual `processEventGroupsV3`
+ * + `geocodeEnrichedEventsV3` work is launched as a `void async () => {}` IIFE
  * so the caller's response cycle is not held open while the LLM pipeline runs
- * (~95 minutes worst-case at LLM_V3_CONCURRENCY=1).
+ * (~13 minutes typical; bounded by the Vercel Pro 800s `maxDuration` ceiling).
  *
  * Decisions tracked:
  *   - D-04: verbatim port of the prior fire-and-forget body — zero re-implementation.
@@ -27,22 +27,40 @@
  *   - `LLM_SUMMARY_KEY_ACTIVE` is now the literal `'events:llm-summary:v3'`.
  *   - `BATCH_SIZE_ACTIVE` is the v3 default (2; see llmEventExtractor.v3.ts).
  *   - The v1 + v2 entity adapters were deleted along with the extractor modules.
+ *
+ * Phase 38 LLM-PURGE-01 — the `llmEventExtractor.ts` v3-only re-export barrel
+ * was deleted; this module imports `processEventGroupsV3` +
+ * `geocodeEnrichedEventsV3` directly from `./llmEventExtractor.v3.js`.
  */
 
 import { isLLMConfigured } from '../adapters/llm-provider.js';
 import { saveDevLLMCacheV2 } from '../cache/devFileCache.js';
 import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 
-import { groupGdeltRows } from './eventGrouping.js';
+import { checkCorroboration } from './corroboration.js';
+import { dedupHighConfidence, groupGdeltRows } from './eventGrouping.js';
+import { countDLQ } from './llmDLQ.js';
 import { runEval } from './llmEvalHarness.js';
 import {
-  processEventGroups,
-  geocodeEnrichedEvents,
+  processEventGroupsV3,
+  geocodeEnrichedEventsV3,
   type GeocodedEnrichedEventV3,
-} from './llmEventExtractor.js';
-import { llmProgress, resetProgress, updateProgress, buildSummary } from './llmProgress.js';
+} from './llmEventExtractor.v3.js';
+import {
+  llmProgress,
+  resetProgress,
+  updateProgress,
+  buildSummary,
+  type RunHistoryEntry,
+} from './llmProgress.js';
+// Phase 39 OBS-FLIGHT-02 — durable per-run record at the run boundary. GA-2:
+// openRunRecord writes a 'running' record at run start (so a maxDuration-killed
+// run leaves an honest "run that died" trace, Pitfall 5); closeRunRecord
+// re-LPUSHes the terminal record at every run-exit branch. Degrade-open.
+import { openRunRecord, closeRunRecord } from './llmRunHistory.js';
 import { shouldPauseNewEvents, prioritizeBySeverity } from './llmTokenBudget.js';
 import { logger } from './logger.js';
+import { computeCompositeScore } from './relevanceScorer.js';
 import { safeWaitUntil } from './safeWaitUntil.js';
 import { getHighestTier } from './sourceTiers.js';
 // Phase 32 Plan 32-03 Task 3 — cron post-step. After the existing
@@ -63,7 +81,7 @@ import {
   SWEEP_SAFETY_MARGIN_MS,
 } from './urlLiveness.js';
 
-import type { ConflictEventEntity } from '../types.js';
+import type { ConflictEventEntity, NewsCluster } from '../types.js';
 import type { GeocodeProvenance } from './llmSchema.js';
 
 const log = logger.child({ module: 'llm-extraction-pipeline' });
@@ -318,12 +336,100 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
   safeWaitUntil(
     (async () => {
       resetProgress(); // sets stage='grouping', startedAt=now
-      // Stamp schemaVersion + lastTriggerSource onto the freshly-reset
+
+      // Phase 39 OBS-FLIGHT-02 / -05 (GA-2) — generate the per-run id and stamp
+      // it on the singleton so every callHistory writer in freeClaudeRouter.ts
+      // inherits it onto each appended entry (call→run back-correlation).
+      // crypto.randomUUID is global in the pinned Node ≥20 runtime.
+      const runId = crypto.randomUUID();
+      const startedAt = new Date().toISOString();
+      // Stamp schemaVersion + lastTriggerSource + runId onto the freshly-reset
       // progress singleton (resetProgress() wipes optional fields).
-      updateProgress({ schemaVersion: 'v3', lastTriggerSource: opts.triggeredBy });
+      updateProgress({ schemaVersion: 'v3', lastTriggerSource: opts.triggeredBy, runId });
+
+      // GA-2 start-write: open the run record with outcome:'running' so a run
+      // killed by Vercel's maxDuration leaves a never-closed 'running' row — the
+      // "what happened to last night's 3am run that died?" signal (Pitfall 5).
+      // Degrade-open (openRunRecord try/caught internally; never throws).
+      await openRunRecord({ runId, startedAt });
+
+      // Phase 39 SC39-3 (WR-01) — DLQ size snapshot at run OPEN. dlqDelta in the
+      // closed run record is computed as max(0, close - open) so the FlightRecorder
+      // can surface how many groups this run pushed to the dead-letter queue
+      // (the prior hardcoded `dlqDelta: 0` made the 'partial' band dead code).
+      //
+      // CAVEAT (bounded-set): `events:llm-dlq` is a 200-entry / 7d-TTL bounded
+      // set (server/lib/llmDLQ.ts). When the set is at its cap, new enqueues
+      // LRU-evict the oldest, so SCARD(close) - SCARD(open) UNDERCOUNTS the true
+      // run delta in a saturated DLQ. The max(0, …) floor also masks a delta
+      // that goes negative because TTL expiry or eviction outpaced this run's
+      // enqueues. This is an honest lower bound on DLQ growth, not an exact
+      // per-run enqueue count — acceptable for the operator decision-support
+      // signal (a non-zero delta truthfully indicates failures occurred).
+      const dlqSizeAtOpen = await countDLQ();
+
+      // Mutable outcome witness — each terminal branch sets this, and the single
+      // close in the `finally` block re-LPUSHes the terminal record (Open Q3:
+      // prefer a finally close so a missed branch still closes the run). Defaults
+      // to 'error' so an unexpected throw past every branch still closes honestly.
+      let runOutcome: RunHistoryEntry['outcome'] = 'error';
+
+      // Snapshot the current llmProgress into a terminal RunHistoryEntry. v3/NIM
+      // single-provider per D-04.
+      //
+      // Phase 39 SC39-3 (WR-01) — honest failure accounting:
+      //   - `batchesFailed` comes from the v3 extractor's per-run failure tally
+      //     (llmProgress.failedBatches), which counts ONLY genuine-failure
+      //     terminal branches. The prior `totalBatches - completedBatches`
+      //     derivation was structurally ~0 because finishBatch() ticks
+      //     completedBatches on EVERY terminal branch (success AND failure).
+      //   - `batchesCompleted` is now the true SUCCESS count (total - failed) so
+      //     the FlightRecorder's `{done}/{total} groups` reads honestly and the
+      //     'partial'/'failed' outcome bands can fire.
+      //   - `dlqDelta` is the real DLQ growth across the run (close - open,
+      //     floored at 0) — see the bounded-set caveat at the open snapshot.
+      const buildRunHistoryEntry = async (
+        outcome: RunHistoryEntry['outcome'],
+      ): Promise<RunHistoryEntry> => {
+        const totalBatches = llmProgress.totalBatches ?? 0;
+        const failedBatches = Math.min(totalBatches, llmProgress.failedBatches ?? 0);
+        const succeededBatches = Math.max(0, totalBatches - failedBatches);
+        const cost = llmProgress.costShadow;
+        let dlqDelta = 0;
+        try {
+          const dlqSizeAtClose = await countDLQ();
+          dlqDelta = Math.max(0, dlqSizeAtClose - dlqSizeAtOpen);
+        } catch {
+          // Degrade-open — a Redis hiccup on the close snapshot yields an honest
+          // 0 delta rather than failing the run-record close.
+          dlqDelta = 0;
+        }
+        return {
+          runId,
+          startedAt,
+          completedAt: new Date().toISOString(),
+          outcome,
+          batchCount: totalBatches,
+          batchesCompleted: succeededBatches,
+          batchesFailed: failedBatches,
+          tokenSpend: { nvidia_nim: cost ? cost.tokensIn + cost.tokensOut : 0 },
+          evalScore: llmProgress.evalScore,
+          dlqDelta,
+          watchdogTimeouts: llmProgress.watchdogTimeoutCount ?? 0,
+          durationMs: Date.now() - (llmProgress.startedAt ?? Date.now()),
+          pipelineVersion: 'v3',
+        };
+      };
 
       try {
-        const groups = groupGdeltRows(merged);
+        // GDELT-MATCH-02 — high-confidence dedup pre-pass runs BEFORE the
+        // coarse 50km batch-grouping/enrichment. `dedupHighConfidence` is a
+        // PURE read-and-filter: it returns a new array and never mutates
+        // `merged` or the raw `events:gdelt` cache (D-07 non-destructive).
+        // Collapsing exact-duplicate mentions here means fewer redundant groups
+        // reach the LLM (saving tokens) without over-merging distinct events.
+        const deduped = dedupHighConfidence(merged);
+        const groups = groupGdeltRows(deduped);
         updateProgress({ totalGroups: groups.length, stage: 'grouping' });
 
         // Diff: only process groups whose key isn't already in the LLM cache.
@@ -342,6 +448,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
 
         if (newGroups.length === 0) {
           log.info('LLM: no new groups to process');
+          runOutcome = 'completed'; // GA-2 branch 1: no new groups → completed
           updateProgress({
             stage: 'done',
             completedAt: Date.now(),
@@ -360,6 +467,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         const paused = await shouldPauseNewEvents();
         if (paused) {
           log.info('LLM_PAUSED_SOFT_CAP');
+          runOutcome = 'budget_hit'; // GA-2 branch 2: soft-cap pause → budget_hit
           updateProgress({
             stage: 'done',
             completedAt: Date.now(),
@@ -384,19 +492,20 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           totalBatches: Math.ceil(prioritizedGroups.length / effectiveBatchSize),
         });
 
-        const extractResult = await processEventGroups(
+        const extractResult = await processEventGroupsV3(
           prioritizedGroups,
           async (completed, total) => {
             updateProgress({ completedBatches: completed, totalBatches: total });
             // Phase 30 D-04 (SIMPLIFY-01): incremental flush retired. Terminal
             // write at the mergeAndPersistLlmEntities call below is canonical.
-            // Partial-cache observability write stays in v3 extractor's
-            // writePartialCache (SIMPLIFY-02 / Phase 35).
+            // Phase 35 D-12 (SIMPLIFY-02): writePartialCache was deleted from the
+            // v3 extractor; there is no partial-cache write anywhere.
           },
         );
 
         if (!extractResult.events || extractResult.events.length === 0) {
           log.warn('LLM processing returned null — raw GDELT serving continues');
+          runOutcome = 'error'; // GA-2 branch 3: null extraction → error
           updateProgress({
             stage: 'error',
             errorMessage: 'LLM returned null for all batches',
@@ -417,34 +526,60 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           totalGeocodes: extractResult.events.length,
         });
 
-        const geoResult = await geocodeEnrichedEvents(
-          {
-            schemaVersion: 'v3',
-            events: extractResult.events,
-            matchedNewsByGroup: extractResult.matchedNewsByGroup,
-            bellingcatByGroup: extractResult.bellingcatByGroup,
-          },
-          prioritizedGroups,
+        // geocodeEnrichedEventsV3 takes the v3-native signature: a flat events
+        // array + a groupsByKey map + the per-group news/bellingcat maps
+        // threaded straight from the extractor run (no tagged-shape wrapper —
+        // the Phase 38 LLM-PURGE-01 stub barrel that wrapped this was deleted).
+        const groupsByKey = new Map(prioritizedGroups.map((g) => [g.key, g] as const));
+        const geocodedEvents = await geocodeEnrichedEventsV3(
+          extractResult.events,
+          groupsByKey,
+          extractResult.matchedNewsByGroup,
+          extractResult.bellingcatByGroup,
           (completed, total) => {
             updateProgress({ completedGeocodes: completed, totalGeocodes: total });
           },
         );
         const provenanceCounts: Partial<Record<GeocodeProvenance, number>> = {};
         let suspectCount = 0;
-        for (const e of geoResult.events) {
+        for (const e of geocodedEvents) {
           provenanceCounts[e.geocodeProvenance] = (provenanceCounts[e.geocodeProvenance] ?? 0) + 1;
           if (e.suspect) suspectCount++;
         }
         updateProgress({ provenanceCounts, suspectCount });
 
+        // Phase 39 SC39-3 (WR-04) — capture the eval result and stamp it onto
+        // the live progress singleton so `buildRunHistoryEntry` snapshots THIS
+        // run's actual score into the run record (and the FlightRecorder eval
+        // pill renders a real value). `runEval()` already calls
+        // updateProgress({ evalScore }) internally, but we re-stamp explicitly
+        // here so the run-record write does not depend on that side effect — a
+        // future refactor of runEval that drops the internal write would
+        // otherwise silently blank the eval pill again. The shape is the real
+        // harness shape (`{ within5km, within20km, within100km, total,
+        // actorMatchRate }`); the client renders within20km/total (WR-05).
         try {
           const evalScore = await runEval();
+          updateProgress({ evalScore });
           log.info({ evalScore, schemaVersion: 'v3' }, 'eval harness completed');
         } catch (evalErr) {
           log.warn({ err: evalErr }, 'eval harness threw; continuing pipeline');
         }
 
-        const llmEntities = enrichedV3ToEntities(geoResult.events, prioritizedGroups);
+        // GDELT-MATCH-03/04 — read the OSINT clusters (`news:gdelt`) so the
+        // strict three-gate corroboration boost can be folded into each
+        // entity's additive compositeScore. Best-effort: a missing/failed read
+        // simply yields a tier+precision composite with zero corroboration —
+        // never blocks the write, never mutates the raw corpus (D-07).
+        let newsClusters: NewsCluster[] | undefined;
+        try {
+          const newsCache = await cacheGetSafe<NewsCluster[]>('news:gdelt', 0);
+          if (newsCache?.data) newsClusters = newsCache.data;
+        } catch {
+          /* best-effort — corroboration boost defaults to 0 */
+        }
+
+        const llmEntities = enrichedV3ToEntities(geocodedEvents, prioritizedGroups, newsClusters);
 
         // Phase 30 D-04 (SIMPLIFY-01) — sole / terminal write of the
         // canonical `events:llm:v3` key for this cron run. The Phase 28.2.6
@@ -452,6 +587,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         // onBatchComplete callback above) was retired here.
         await mergeAndPersistLlmEntities(llmEntities, llmCachedRef, LLM_EVENTS_KEY_ACTIVE);
 
+        runOutcome = 'completed'; // GA-2 branch 4: full success → completed
         updateProgress({
           stage: 'done',
           completedAt: Date.now(),
@@ -463,6 +599,7 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
           /* best-effort */
         }
       } catch (llmErr) {
+        runOutcome = 'error'; // GA-2 branch 5: thrown error → error
         updateProgress({
           stage: 'error',
           errorMessage: llmErr instanceof Error ? llmErr.message : 'Unknown LLM error',
@@ -476,6 +613,14 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         }
         log.warn({ err: llmErr }, 'LLM background processing failed');
       } finally {
+        // Phase 39 OBS-FLIGHT-02 (GA-2 / Open Q3) — close the run record exactly
+        // once here, keyed off the `runOutcome` witness each terminal branch set.
+        // A finally close guarantees a missed branch still closes the run (the
+        // default 'error' outcome is the honest fallback). closeRunRecord
+        // re-LPUSHes the terminal record over the earlier 'running' one; the
+        // reader dedupes by runId head-first. Degrade-open (never throws).
+        await closeRunRecord(await buildRunHistoryEntry(runOutcome));
+
         // Phase 32 Plan 32-03 Task 3 — cron post-step. Runs AFTER the
         // existing extraction work resolves (success OR error path) so
         // probe+prune cleanup happens regardless of whether LLM
@@ -548,6 +693,10 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
 export function enrichedV3ToEntities(
   geocoded: GeocodedEnrichedEventV3[],
   groups: Array<{ key: string; entities: ConflictEventEntity[]; sourceUrls: string[] }>,
+  // GDELT-MATCH-03/04 — optional OSINT clusters (`news:gdelt`) for the strict
+  // three-gate corroboration boost folded into compositeScore. Omitted callers
+  // (legacy / tests) get a tier+precision composite with zero corroboration.
+  newsClusters?: NewsCluster[],
 ): ConflictEventEntity[] {
   const groupMap = new Map<string, ConflictEventEntity[]>();
   const groupSourceUrls = new Map<string, string[]>();
@@ -575,6 +724,24 @@ export function enrichedV3ToEntities(
       enriched.displayName ||
       'unknown';
 
+    // GDELT-MATCH-04 — additive composite ranking signal. tier × corroboration
+    // × specificity. Corroboration boost is the strict three-gate result against
+    // the OSINT clusters (when provided). This is a NEW field on the enriched
+    // output entity; the raw GDELT corpus is untouched (D-07).
+    const candidate: ConflictEventEntity = {
+      ...template,
+      lat: enriched.resolvedLat,
+      lng: enriched.resolvedLng,
+      timestamp: template.timestamp,
+      data: { ...template.data, locationName: placeLabel, actors: enriched.actors },
+    };
+    const corroboration = newsClusters ? checkCorroboration(candidate, newsClusters) : { boost: 0 };
+    const compositeScore = computeCompositeScore({
+      tier: sourceTier ?? null,
+      corroborationBoost: corroboration.boost,
+      precision: enriched.precision,
+    });
+
     results.push({
       ...template,
       id: `llm-v3-${enriched.groupKey}`,
@@ -591,6 +758,7 @@ export function enrichedV3ToEntities(
         actors: enriched.actors,
         sourceCount: enriched.sourceCount,
         sourceTier,
+        compositeScore,
         casualties: {
           killed: enriched.casualties.killed ?? undefined,
           injured: enriched.casualties.injured ?? undefined,

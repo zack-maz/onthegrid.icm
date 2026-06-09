@@ -240,3 +240,71 @@ export function computeRelevanceScore(input: ScoringInput): number {
 
   return Math.min(1, tripleScore + negativityScore + sourceScore);
 }
+
+// ---------------------------------------------------------------------------
+// GDELT-MATCH-04 — additive composite rescore (tier × corroboration ×
+// specificity).
+//
+// This is the per-event dashboard top-of-list ranking signal. It is ADDITIVE
+// and OPTIONAL: callers compute it as a NEW `compositeScore` field on a COPY,
+// then sort the dashboard view by it. The raw `events:llm:v3` corpus is NEVER
+// mutated or dropped (D-07). Old cached events without the field self-heal on
+// the next 24h–90d cron overwrite.
+//
+// The three inputs and their weights:
+//   - tier (from sourceTiers): gold(1) > silver(2) > bronze(3) > unknown(null).
+//     The strongest single ranking lever — high-tier sourcing is the best
+//     proxy for "this really happened".
+//   - corroborationBoost (from corroboration.checkCorroboration): an additive
+//     0–0.25 boost granted only on a genuine strict three-gate OSINT match.
+//   - precision (from llmSchema.derivePrecision): exact > neighborhood > city >
+//     region. Finer geography ranks higher.
+//
+// Sizing caveat (38-03-SUMMARY.md GDELT-MATCH-04): the raw corpus was 99.7%
+// unknown-tier at audit time, so the composite MUST NOT collapse to "tier
+// dominates" — unknown-tier events still get a meaningful base from precision
+// + corroboration. Re-validate the weights once `events:llm:v3` is warm.
+// ---------------------------------------------------------------------------
+
+export type Precision = 'exact' | 'neighborhood' | 'city' | 'region';
+
+export interface CompositeScoreInput {
+  /** Best source tier (1=gold, 2=silver, 3=bronze) or null (unknown). */
+  tier: 1 | 2 | 3 | null;
+  /** Additive corroboration boost (0–0.25) from corroboration.ts. */
+  corroborationBoost: number;
+  /** Resolved location precision from llmSchema.derivePrecision. */
+  precision: Precision;
+}
+
+/** Tier → base ranking weight. Unknown-tier keeps a non-zero floor (D: audit
+ *  showed 99.7% unknown, so unknown must still be rankable). */
+const TIER_WEIGHT: Record<'1' | '2' | '3' | 'unknown', number> = {
+  '1': 0.45,
+  '2': 0.35,
+  '3': 0.22,
+  unknown: 0.15,
+};
+
+/** Precision → specificity weight. Finer geography ranks higher. */
+const PRECISION_WEIGHT: Record<Precision, number> = {
+  exact: 0.3,
+  neighborhood: 0.22,
+  city: 0.15,
+  region: 0.05,
+};
+
+/**
+ * Compute the additive composite ranking score for one event.
+ * Bounded to [0, 1]. Higher = surfaces nearer the dashboard top-of-list.
+ *
+ * @returns compositeScore in [0, 1]
+ */
+export function computeCompositeScore(input: CompositeScoreInput): number {
+  const tierWeight =
+    input.tier === null ? TIER_WEIGHT.unknown : TIER_WEIGHT[String(input.tier) as '1' | '2' | '3'];
+  const precisionWeight = PRECISION_WEIGHT[input.precision];
+  const boost = Math.max(0, input.corroborationBoost);
+
+  return Math.min(1, tierWeight + precisionWeight + boost);
+}

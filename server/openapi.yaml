@@ -821,6 +821,142 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/events/llm-history:
+    get:
+      summary: LLM flight recorder — per-call + per-run history (read-only).
+      description: |
+        Bearer-gated read of the LLM observability flight recorder
+        (Phase 39 OBS-FLIGHT). Returns `{ runs, calls }` from the
+        Redis-backed recorders `llm:runs:history` (per-run summaries,
+        200-cap, dedup-by-`runId`) and `llm:calls:history` (per-call rows,
+        500-cap). Both degrade-open and self-hydrate from Redis on the first
+        request after a Vercel Fluid-Compute cold start
+        (`hydrateCallHistoryIfCold` / `hydrateRunHistoryIfCold`).
+
+        Query params (input-validation clamps): `limit` (default 200, max
+        500 — the LTRIM cap) and optional `runId` to filter the per-call
+        rows to a single run. A run killed by Vercel `maxDuration` leaves
+        only its `running` record — the "run that died" signal.
+
+        Handler: `server/routes/events.ts:495`.
+      tags: [Operator]
+      security:
+        - operatorBearer: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+          description: Max rows per recorder (clamped to the 500 LTRIM cap).
+        - in: query
+          name: runId
+          required: false
+          schema:
+            type: string
+          description: Filter the per-call rows to a single run id (in-memory).
+      responses:
+        '200':
+          description: Flight-recorder envelope (per-run summaries + per-call rows).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      type: object
+                    description: Per-run summary records (RunHistoryEntry), dedup-by-runId.
+                  calls:
+                    type: array
+                    items:
+                      type: object
+                    description: Per-call records (CallHistoryEntry).
+        '401':
+          description: Missing or invalid operator Bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: '`auth_not_configured` — DASHBOARD_PASSWORD empty in production.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/events/prune-dead-urls:
+    post:
+      summary: Prune conflict events whose source URL has gone dead (ghost events).
+      description: |
+        Bearer-gated operator action (Phase 32 GHOST). Removes events whose
+        primary source URL has a terminal-dead liveness status
+        (404 / 403 / dead-host) from the terminal `events:llm:v3` cache and
+        decrements the `events:url-liveness-count` sidecar. Over HTTP the
+        `trigger` is ALWAYS `manual` (CR-01 fix) — the daily cron calls
+        `pruneDeadUrlEvents({ trigger: 'cron' })` directly, never via this
+        route, so an authenticated operator cannot self-record as the cron
+        caller to bypass the quota.
+
+        **Per-Bearer quota:** 50 prunes / 24h via
+        `operator:prune-quota:{fingerprint}:{YYYY-MM-DD}` (D-15). At cap,
+        returns 429 with a `Retry-After` header.
+
+        **Degrade-open (Pitfall 6):** the whole handler is wrapped so any
+        Redis death (quota INCR, helper SCAN, helper DEL/DECR) surfaces as a
+        503 `prune_failed`, never a 500.
+
+        Handler: `server/routes/events.ts:649`.
+      tags: [Operator]
+      security:
+        - operatorBearer: []
+      responses:
+        '200':
+          description: Prune result (counts of probed / pruned events).
+          content:
+            application/json:
+              schema:
+                type: object
+                description: PruneResult — pruned/remaining counts + trigger.
+        '401':
+          description: Missing or invalid operator Bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Per-Bearer prune quota exceeded (50/24h).
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until the per-Bearer prune-quota window resets.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum: [prune_quota_exceeded]
+                  message:
+                    type: string
+                  resetsAt:
+                    type: string
+                    format: date-time
+        '503':
+          description: |
+            `prune_failed` (degrade-open under Redis death, Pitfall 6) or
+            `auth_not_configured` (DASHBOARD_PASSWORD empty in production).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   # ---------- Cron (Phase 36 D-05) ----------
   /api/cron/health:
     get:
@@ -1835,10 +1971,6 @@ components:
           type: string
           enum: [closed, open, half-open]
         routingTrace:
-          type: array
-          items:
-            type: object
-        pipelineFlips:
           type: array
           items:
             type: object

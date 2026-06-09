@@ -84,6 +84,7 @@ export interface ConflictEventEntity extends MapEntityBase {
     durationMinutes?: number | null;
     reasoning?: string; // ≤200 char LLM rationale citing signals used
     geocodeDisplayName?: string; // Resolver's displayName (e.g. Nominatim full address)
+    compositeScore?: number; // Phase 38 GDELT-MATCH-04 — additive dashboard top-of-list ranking signal (tier × corroboration × specificity). Optional; never mutates the raw corpus (D-07).
   };
 }
 
@@ -234,6 +235,20 @@ export interface WaterFacility {
   };
   /** Notability score (0-100). Higher = more strategically relevant. */
   notabilityScore?: number;
+  /**
+   * WATER-LATIN-03 (Phase 38): machine-searchable romanized Latin token
+   * synthesized from a non-Latin OSM `name` so the facility admits past the
+   * Latin-label gate. Set ONLY when the original name was non-Latin and no
+   * Latin `name:en` existed. Optional so pre-Phase-38 cached entries (24h
+   * TTL) still validate. Consumers display this with `nameOriginal` on hover.
+   */
+  nameLatin?: string;
+  /**
+   * WATER-LATIN-03 (Phase 38): the preserved ORIGINAL non-Latin OSM name,
+   * shown as a sub-label / hover title alongside `nameLatin`. Set only when
+   * romanization fired (i.e. alongside `nameLatin`).
+   */
+  nameOriginal?: string;
 }
 
 export class RateLimitError extends Error {

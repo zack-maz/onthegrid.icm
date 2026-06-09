@@ -78,7 +78,7 @@ export function StatusDropdown() {
         : 'bg-text-muted animate-pulse';
 
   return (
-    <div ref={containerRef} className="relative" data-testid="topbar-status">
+    <div ref={containerRef} className="relative" data-testid="topbar-status" data-tour="status">
       <button
         onClick={() => setIsOpen((prev) => !prev)}
         className="flex items-center gap-2 hover:opacity-80 transition-opacity"

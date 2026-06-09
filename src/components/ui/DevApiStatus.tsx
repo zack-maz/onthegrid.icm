@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
+import { BudgetBlock, type TokenBudgetBlock } from '@/components/ui/BudgetBlock';
+import { FlightRecorderBlock } from '@/components/ui/FlightRecorderBlock';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
@@ -258,22 +260,44 @@ function TabButton({
   onClick,
   indicator,
   testid,
+  id,
   children,
 }: {
   active: boolean;
   onClick: () => void;
   indicator?: 'red';
   testid: string;
+  /**
+   * Phase 40-03 (D-04) — stable element id so the matching panel container can
+   * point at this tab via `aria-labelledby` (WAI-ARIA tablist/tabpanel link).
+   */
+  id?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       role="tab"
+      id={id}
       aria-selected={active}
       data-testid={testid}
       onClick={onClick}
-      className={`flex items-center gap-1 rounded-md px-3 py-1 text-[10px] font-medium transition-colors ${
-        active ? 'bg-white/10 text-white' : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+      // Phase 40-03 (D-04) — roving tabindex: only the active tab is in the
+      // natural Tab order; arrow keys move focus among the others (handled by
+      // the tablist onKeyDown). Inactive tabs are tabindex=-1.
+      tabIndex={active ? 0 : -1}
+      // Phase 40-03 (D-04 / D-04b lockdown): chrome (px-3 py-1 / rounded-md /
+      // active bg-white/10 text-white / font) is UNCHANGED — Phase 41
+      // REVEAL-SITE-01 owns the visual reveal. The additions below are
+      // INTERACTION AFFORDANCES ONLY:
+      //   • focus-visible:* — keyboard-only focus ring (no ring on mouse click)
+      //   • when active: border-b-2 border-accent-blue — a 2px accent-blue
+      //     bottom indicator that stays readable in a greyscale screenshot.
+      //     PHASE 41: preserve this active-indicator affordance through the
+      //     chrome restyle.
+      className={`flex items-center gap-1 rounded-md px-3 py-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black ${
+        active
+          ? 'border-b-2 border-accent-blue bg-white/10 text-white'
+          : 'border-b-2 border-transparent text-white/50 hover:bg-white/5 hover:text-white/80'
       }`}
     >
       {children}
@@ -672,6 +696,75 @@ export function DevApiStatus() {
     if (activeTab === 'sites' && !showSitesTab) setTab('apiHealth');
   }, [activeTab, showSitesTab, setTab]);
 
+  // Phase 40-03 (D-04) — roving-tabindex keyboard navigation over the tablist.
+  // Manual-activation pattern (WAI-ARIA tablist): Arrow/Home/End move FOCUS
+  // only; Enter/Space activate the focused tab. The visible tab set is dynamic
+  // (showApiHealthTab / showWaterTab / showSitesTab / showEventsTab), so we
+  // operate over the currently-rendered `[role="tab"]` elements scoped to the
+  // tablist rather than a hard-coded id list.
+  const tablistRef = useRef<HTMLDivElement>(null);
+
+  // Map a tab element's testid → the uiStore tab key consumed by setTab.
+  const TAB_TESTID_TO_KEY: Record<string, 'apiHealth' | 'water' | 'sites' | 'events'> = useMemo(
+    () => ({
+      'tab-api-health': 'apiHealth',
+      'tab-water': 'water',
+      'tab-sites': 'sites',
+      'tab-events': 'events',
+    }),
+    [],
+  );
+
+  const handleTablistKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const list = tablistRef.current;
+      if (!list) return;
+      const tabs = Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+      if (tabs.length === 0) return;
+
+      // The focused tab (the roving tabindex=0 one), else the active tab as a
+      // fallback when focus has not yet landed inside the tablist.
+      const currentIndex = Math.max(
+        0,
+        tabs.findIndex((t) => t === document.activeElement),
+      );
+
+      const focusAt = (idx: number) => {
+        e.preventDefault();
+        tabs[idx]?.focus();
+      };
+
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'ArrowDown':
+          focusAt((currentIndex + 1) % tabs.length); // wrap at end
+          break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+          focusAt((currentIndex - 1 + tabs.length) % tabs.length); // wrap at start
+          break;
+        case 'Home':
+          focusAt(0);
+          break;
+        case 'End':
+          focusAt(tabs.length - 1);
+          break;
+        case 'Enter':
+        case ' ': // Space
+        case 'Spacebar': {
+          e.preventDefault();
+          const testid = tabs[currentIndex]?.getAttribute('data-testid') ?? '';
+          const key = TAB_TESTID_TO_KEY[testid];
+          if (key) setTab(key);
+          break;
+        }
+        default:
+          break; // Tab falls through — roving tabindex moves focus into the panel
+      }
+    },
+    [TAB_TESTID_TO_KEY, setTab],
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -703,17 +796,25 @@ export function DevApiStatus() {
             API Status
           </h2>
 
-          <div className="flex items-center gap-1" role="tablist">
+          <div
+            className="flex items-center gap-1"
+            role="tablist"
+            ref={tablistRef}
+            onKeyDown={handleTablistKeyDown}
+          >
             {/* Phase 28.2 W5 D-22/D-27 — merged API Health tab in first
                 position. Indicator combines polling-store issue signal
                 (formerly Overview) with critical-unhealthy signal (formerly
-                All APIs) — both matter on the merged surface. */}
+                All APIs) — both matter on the merged surface.
+                Phase 40-03 (D-04): each tab carries a stable `id` so its
+                panel container can reference it via `aria-labelledby`. */}
             {showApiHealthTab && (
               <TabButton
                 active={activeTab === 'apiHealth'}
                 onClick={() => setTab('apiHealth')}
                 indicator={hasIssue || hasCriticalUnhealthy ? 'red' : undefined}
                 testid="tab-api-health"
+                id="tab-api-health"
               >
                 API Health
               </TabButton>
@@ -723,6 +824,7 @@ export function DevApiStatus() {
                 active={activeTab === 'water'}
                 onClick={() => setTab('water')}
                 testid="tab-water"
+                id="tab-water"
               >
                 Water
               </TabButton>
@@ -732,6 +834,7 @@ export function DevApiStatus() {
                 active={activeTab === 'sites'}
                 onClick={() => setTab('sites')}
                 testid="tab-sites"
+                id="tab-sites"
               >
                 Sites
               </TabButton>
@@ -741,6 +844,7 @@ export function DevApiStatus() {
                 active={activeTab === 'events'}
                 onClick={() => setTab('events')}
                 testid="tab-events"
+                id="tab-events"
               >
                 Events
               </TabButton>
@@ -775,30 +879,47 @@ export function DevApiStatus() {
             populated byCountry tables + Overpass Health + per-type rejection
             buckets all fit without overflowing the viewport */}
         <div className="flex-1 overflow-y-auto px-4 py-3">
+          {/* Phase 40-03 (D-04) — each active panel is a role="tabpanel"
+              labelled by its owning tab's id (WAI-ARIA tablist/tabpanel link).
+              Within the API Health panel, the group-header collapse buttons +
+              drawer controls stay in normal DOM tab order (no roving), so Tab
+              walks them top-to-bottom after exiting the tablist. */}
           {activeTab === 'apiHealth' && showApiHealthTab && (
-            <DevApiStatusAllApisTab
-              health={aggregateHealth}
-              loading={healthLoading}
-              error={healthError}
-              llmStatus={llmStatus}
-            />
+            <div role="tabpanel" aria-labelledby="tab-api-health">
+              <DevApiStatusAllApisTab
+                health={aggregateHealth}
+                loading={healthLoading}
+                error={healthError}
+                llmStatus={llmStatus}
+              />
+            </div>
           )}
-          {activeTab === 'water' && showWaterTab && <WaterFiltersSection />}
-          {activeTab === 'sites' && showSitesTab && <SitesFiltersSection />}
-          {activeTab === 'events' &&
-            showEventsTab &&
-            // Phase 27.4.6 — V3 is the default body when schemaVersion is
-            // unknown (cold start, post-deploy before first cron tick). V2
-            // remains the explicit override; the V1 case drops out via the
-            // shouldRenderDashboard() outer gate since V1 is no longer a
-            // valid runtime pipeline. Prior version-routed switch hid the
-            // body entirely when schemaVersion was undefined, leaving the
-            // tab button visible with an empty body.
-            (llmStatus?.schemaVersion === 'v2' ? (
-              <EventsFiltersSection llmStatus={llmStatus} />
-            ) : (
-              <EventsFiltersSectionV3 llmStatus={llmStatus} />
-            ))}
+          {activeTab === 'water' && showWaterTab && (
+            <div role="tabpanel" aria-labelledby="tab-water">
+              <WaterFiltersSection />
+            </div>
+          )}
+          {activeTab === 'sites' && showSitesTab && (
+            <div role="tabpanel" aria-labelledby="tab-sites">
+              <SitesFiltersSection />
+            </div>
+          )}
+          {activeTab === 'events' && showEventsTab && (
+            <div role="tabpanel" aria-labelledby="tab-events">
+              {/* Phase 27.4.6 — V3 is the default body when schemaVersion is
+                  unknown (cold start, post-deploy before first cron tick). V2
+                  remains the explicit override; the V1 case drops out via the
+                  shouldRenderDashboard() outer gate since V1 is no longer a
+                  valid runtime pipeline. Prior version-routed switch hid the
+                  body entirely when schemaVersion was undefined, leaving the
+                  tab button visible with an empty body. */}
+              {llmStatus?.schemaVersion === 'v2' ? (
+                <EventsFiltersSection llmStatus={llmStatus} />
+              ) : (
+                <EventsFiltersSectionV3 llmStatus={llmStatus} />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -868,6 +989,82 @@ function freshnessCellClass(ep: EndpointHealth): string {
   return 'text-white/50';
 }
 
+/* ---------- Phase 40 (UI-POLISH-01/02/03) — API Health consolidation ---------- */
+
+/**
+ * Phase 40 — relative-time formatter for the hero "last run" field.
+ * Compact "Nh ago" / "Nm ago" / "Ns ago" form; "—" when no timestamp.
+ */
+function heroRelativeTime(ts: number | null | undefined): string {
+  if (ts == null) return '—';
+  const sec = Math.floor((Date.now() - ts) / 1000);
+  if (sec < 0) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86_400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86_400)}d ago`;
+}
+
+/**
+ * Phase 40 (D-06) — canonical muted-placeholder for honest degraded render.
+ * `text-[10px] text-white/30 italic` + copy `— no data ({reason})`. Used for
+ * every group/hero field whose data source is null so the GROUP shell + hero
+ * never silently vanish. Degrade-open semantics unchanged (no throw, route 200).
+ */
+function MutedPlaceholder({ testid, reason }: { testid: string; reason: string }) {
+  return (
+    <div className="text-[10px] italic text-white/30" data-testid={testid}>
+      — no data ({reason})
+    </div>
+  );
+}
+
+/**
+ * Phase 40 (D-01) — collapsible grouped `<section>`. Default EXPANDED (the
+ * `devApiGroupCollapsed` slice defaults `{}`). Header is a real `<button>` with
+ * `aria-expanded`/`aria-controls`; chevron rotates ▸→▾. Group-header type role
+ * (11px/600 uppercase tracking-wider) per UI-SPEC §Typography. Inter-group
+ * break `mt-4` (lg) + top hairline. Collapse state is session-scoped in uiStore.
+ */
+function CollapsibleGroup({
+  slug,
+  title,
+  collapsed,
+  onToggle,
+  children,
+}: {
+  slug: string;
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className="mt-4 border-t border-white/10"
+      data-testid={`group-${slug}`}
+      aria-labelledby={`group-${slug}-header`}
+    >
+      <button
+        type="button"
+        id={`group-${slug}-header`}
+        aria-expanded={!collapsed}
+        aria-controls={`group-${slug}-body`}
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-white/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+      >
+        <span aria-hidden="true" className="inline-block w-3 text-[12px] text-white/40">
+          {collapsed ? '▸' : '▾'}
+        </span>
+        {title}
+      </button>
+      <div id={`group-${slug}-body`} hidden={collapsed} className="mt-2 px-4">
+        {children}
+      </div>
+    </section>
+  );
+}
+
 function DevApiStatusAllApisTab({
   health,
   loading,
@@ -880,6 +1077,15 @@ function DevApiStatusAllApisTab({
   llmStatus: LLMStatus;
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  // Phase 40 (D-01/D-02a) — collapsible group + operator-drawer view-state
+  // (Plan 01 uiStore slice; session-scoped, no localStorage). Selector form
+  // per CLAUDE.md to minimize re-renders.
+  const devApiGroupCollapsed = useUIStore((s) => s.devApiGroupCollapsed);
+  const toggleDevApiGroup = useUIStore((s) => s.toggleDevApiGroup);
+  const isOperatorDrawerOpen = useUIStore((s) => s.isOperatorDrawerOpen);
+  const toggleOperatorDrawer = useUIStore((s) => s.toggleOperatorDrawer);
+  const setOperatorDrawerOpen = useUIStore((s) => s.setOperatorDrawerOpen);
 
   // Phase 28.2 W5 Task 7.5 — Operator Actions block state. Sourced from
   // /api/operator-status (Bearer-gated read-only aggregator). One fetch
@@ -928,6 +1134,12 @@ function DevApiStatusAllApisTab({
         issue: 'null' | 'raw-cameo' | 'ambiguous' | 'low-confidence';
       }>;
     } | null;
+    // Phase 39 Plan 03/05 (BUDGET-01/02) — token-budget proximity + today's
+    // cost-shadow USD. GA-4 provider-keyed map mirrored from the Plan-03 server
+    // shape (server/routes/operator-status.ts TokenBudgetBlock). `null` (or
+    // absent) when the server has not shipped Plan 03 or the Redis read threw
+    // (degrade-open) — BudgetBlock's render gate hides the block in that case.
+    tokenBudget?: TokenBudgetBlock | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
   // Phase 32 Plan 05 MEDIUM-03 — `fetchOpStatus` hoisted out of the
@@ -1193,7 +1405,7 @@ function DevApiStatusAllApisTab({
           if (!fetch) {
             return <span key={i} className="h-1 w-1 rounded-full bg-white/10" />;
           }
-          const bg = fetch.ok ? 'var(--color-site-healthy)' : 'var(--color-event-airstrike)';
+          const bg = fetch.ok ? 'var(--color-status-healthy)' : 'var(--color-status-degraded)';
           return <span key={i} className="h-1 w-1 rounded-full" style={{ backgroundColor: bg }} />;
         })}
       </div>
@@ -1266,72 +1478,182 @@ function DevApiStatusAllApisTab({
   // rows + LLMPipelineSection + operator-actions ALWAYS render below so
   // operators retain visibility into the local-store + pipeline surfaces
   // even when /api/health is loading / errored / unreachable.
+  // Phase 40 (D-05) — hero rollup derived from already-polled data (no new
+  // fetch). Health endpoint counts, last-run outcome (from llmStatus.lastRun,
+  // already in scope as a prop — avoids coupling to FlightRecorder's internal
+  // fetch), token-budget %, and dead-URL count.
+  const heroEndpoints = (() => {
+    if (!health) return null;
+    const eps = Object.values(health.endpoints);
+    return { healthy: eps.filter((e) => e.status === 'healthy').length, total: eps.length };
+  })();
+  const heroLastRun = llmStatus.lastRun ?? null;
+  const heroLastRunOk = heroLastRun ? heroLastRun.error == null : null;
+  const heroBudget = (() => {
+    const nim = opStatus?.tokenBudget?.providers?.nvidia_nim;
+    if (!nim || nim.cap <= 0) return null;
+    const ratio = nim.used / nim.cap;
+    return { pct: Math.min(100, Math.round(ratio * 100)), ratio };
+  })();
+  const heroDeadUrls = opStatus?.prune?.deadUrlCount ?? null;
+
   return (
     <div data-testid="all-apis-tab">
-      {/* Phase 28.2 W5 D-23 block 1 — tier-grouped summary banner. Renders
+      {/* Phase 40 (D-05) — read-only hero rollup strip. Four fields in
+          health → pipeline → cost → data-quality order so the hero reads as a
+          table-of-contents for the four groups below. Each field degrades to
+          its own muted fallback independently (D-06). */}
+      <header
+        data-testid="api-health-hero"
+        role="status"
+        aria-label="API health summary"
+        className="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2"
+      >
+        {/* Field 1 — endpoints healthy */}
+        {heroEndpoints ? (
+          <span className="flex items-center gap-1" data-testid="api-health-hero-endpoints">
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: 'var(--color-status-healthy)' }}
+            />
+            <span className="text-[13px] font-semibold tabular-nums">
+              {heroEndpoints.healthy}/{heroEndpoints.total}
+            </span>
+            <span className="text-[10px] text-white/60">healthy</span>
+          </span>
+        ) : (
+          <MutedPlaceholder testid="api-health-hero-endpoints" reason="no health data" />
+        )}
+        {/* Field 2 — LLM last run */}
+        {heroLastRun ? (
+          <span className="flex items-center gap-1" data-testid="api-health-hero-llm">
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{
+                backgroundColor: heroLastRunOk
+                  ? 'var(--color-status-healthy)'
+                  : 'var(--color-status-degraded)',
+              }}
+            />
+            <span className="text-[13px] font-semibold">{heroLastRunOk ? 'ok' : 'failed'}</span>
+            <span className="text-[10px] tabular-nums text-white/60">
+              {heroRelativeTime(heroLastRun.lastRun)}
+            </span>
+            <span className="text-[10px] text-white/60">last run</span>
+          </span>
+        ) : (
+          <MutedPlaceholder testid="api-health-hero-llm" reason="no recorder data" />
+        )}
+        {/* Field 3 — budget % of cap */}
+        {heroBudget ? (
+          <span className="flex items-center gap-1" data-testid="api-health-hero-budget">
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{
+                backgroundColor:
+                  heroBudget.ratio >= 0.95
+                    ? 'var(--color-status-degraded)'
+                    : heroBudget.ratio >= 0.8
+                      ? 'var(--color-status-warning)'
+                      : 'var(--color-status-healthy)',
+              }}
+            />
+            <span className="text-[13px] font-semibold tabular-nums">{heroBudget.pct}%</span>
+            <span className="text-[10px] text-white/60">of cap</span>
+          </span>
+        ) : (
+          <MutedPlaceholder testid="api-health-hero-budget" reason="no budget data" />
+        )}
+        {/* Field 4 — dead URLs */}
+        {heroDeadUrls != null ? (
+          <span className="flex items-center gap-1" data-testid="api-health-hero-deadurls">
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{
+                backgroundColor:
+                  heroDeadUrls > 0 ? 'var(--color-status-degraded)' : 'var(--color-status-healthy)',
+              }}
+            />
+            <span className="text-[13px] font-semibold tabular-nums">{heroDeadUrls}</span>
+            <span className="text-[10px] text-white/60">dead URLs</span>
+          </span>
+        ) : (
+          <MutedPlaceholder testid="api-health-hero-deadurls" reason="no prune data" />
+        )}
+      </header>
+
+      {/* GROUP 1 — Endpoint Health (tier banner + audit banner + states +
+          per-endpoint quality table). */}
+      <CollapsibleGroup
+        slug="endpoint-health"
+        title="Endpoint Health"
+        collapsed={devApiGroupCollapsed['endpoint-health'] ?? false}
+        onToggle={() => toggleDevApiGroup('endpoint-health')}
+      >
+        {/* Phase 28.2 W5 D-23 block 1 — tier-grouped summary banner. Renders
           a single horizontal row with three colored dots (healthy / degraded
           / unhealthy via CSS-var tokens per UI-SPEC §9) followed by the
           per-tier breakdown. Hidden when health is null (loading / error).
-          Spacing values are multiples of 4 per UI-SPEC §7 W-1. */}
-      {health &&
-        (() => {
-          const eps = Object.values(health.endpoints);
-          const total = eps.length;
-          const totalHealthy = eps.filter((e) => e.status === 'healthy').length;
-          const totalDegraded = eps.filter((e) => e.status === 'degraded').length;
-          const totalUnhealthy = eps.filter((e) => e.status === 'unhealthy').length;
-          const sumTier = (rec: {
-            healthy: number;
-            unhealthy?: number;
-            unknown?: number;
-            degraded?: number;
-          }): number => {
-            const h = rec.healthy ?? 0;
-            const d = rec.degraded ?? 0;
-            const u = rec.unhealthy ?? 0;
-            const k = rec.unknown ?? 0;
-            return h + d + u + k;
-          };
-          const criticalTotal = sumTier(health.summary.critical);
-          const nonCriticalTotal = sumTier(health.summary.nonCritical);
-          const cronTotal = sumTier(health.summary.cron);
-          return (
-            <div
-              className="mb-2 flex items-center gap-3 px-3 py-1 text-[10px]"
-              data-testid="tier-summary-banner"
-            >
-              <span className="flex items-center gap-1">
-                <span
-                  className="inline-block h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: 'var(--color-site-healthy)' }}
-                />
-                {totalHealthy} of {total} healthy
-              </span>
-              <span>·</span>
-              <span className="flex items-center gap-1">
-                <span
-                  className="inline-block h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: 'var(--color-site-attacked)' }}
-                />
-                {totalDegraded} degraded
-              </span>
-              <span>·</span>
-              <span className="flex items-center gap-1">
-                <span
-                  className="inline-block h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: 'var(--color-event-airstrike)' }}
-                />
-                {totalUnhealthy} unhealthy
-              </span>
-              <span className="text-white/40">
-                | critical: {health.summary.critical.healthy}/{criticalTotal} · non-critical:{' '}
-                {health.summary.nonCritical.healthy}/{nonCriticalTotal} · cron:{' '}
-                {health.summary.cron.healthy}/{cronTotal}
-              </span>
-            </div>
-          );
-        })()}
-      {/* Phase 28.2 W6 Plan 06 Task 7 — connectivity audit-result banner.
+          Spacing values carried forward verbatim (pre-existing chrome). */}
+        {health &&
+          (() => {
+            const eps = Object.values(health.endpoints);
+            const total = eps.length;
+            const totalHealthy = eps.filter((e) => e.status === 'healthy').length;
+            const totalDegraded = eps.filter((e) => e.status === 'degraded').length;
+            const totalUnhealthy = eps.filter((e) => e.status === 'unhealthy').length;
+            const sumTier = (rec: {
+              healthy: number;
+              unhealthy?: number;
+              unknown?: number;
+              degraded?: number;
+            }): number => {
+              const h = rec.healthy ?? 0;
+              const d = rec.degraded ?? 0;
+              const u = rec.unhealthy ?? 0;
+              const k = rec.unknown ?? 0;
+              return h + d + u + k;
+            };
+            const criticalTotal = sumTier(health.summary.critical);
+            const nonCriticalTotal = sumTier(health.summary.nonCritical);
+            const cronTotal = sumTier(health.summary.cron);
+            return (
+              <div
+                className="mb-2 flex items-center gap-3 px-3 py-1 text-[10px]"
+                data-testid="tier-summary-banner"
+              >
+                <span className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: 'var(--color-status-healthy)' }}
+                  />
+                  {totalHealthy} of {total} healthy
+                </span>
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: 'var(--color-status-degraded)' }}
+                  />
+                  {totalDegraded} degraded
+                </span>
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: 'var(--color-status-warning)' }}
+                  />
+                  {totalUnhealthy} unhealthy
+                </span>
+                <span className="text-white/40">
+                  | critical: {health.summary.critical.healthy}/{criticalTotal} · non-critical:{' '}
+                  {health.summary.nonCritical.healthy}/{nonCriticalTotal} · cron:{' '}
+                  {health.summary.cron.healthy}/{cronTotal}
+                </span>
+              </div>
+            );
+          })()}
+        {/* Phase 28.2 W6 Plan 06 Task 7 — connectivity audit-result banner.
           Reads /api/audit-status (sidecar `audit:connectivity:last-result`
           populated by .github/workflows/prod-connectivity-audit.yml after
           each manual prod-audit run). Per UI-SPEC §5.4 + §10:
@@ -1341,283 +1663,314 @@ function DevApiStatusAllApisTab({
               also produced when M=N — the verify-gate grep target.)
             status === 'fail'   → red:   "<N> of <M> endpoints failing connectivity audit. See <names>."
             status === 'absent' → silent (placeholder div, empty content). */}
-      {(() => {
-        if (!auditStatus || auditStatus.status === 'absent') {
-          // Silent placeholder. Tests assert empty content; production
-          // shows nothing.
-          return <div data-testid="audit-result-banner" />;
-        }
-        const endpoints = auditStatus.endpoints ?? {};
-        const total = Object.keys(endpoints).length;
-        const failing = Object.entries(endpoints)
-          .filter(([, v]) => v === 'fail')
-          .map(([k]) => k);
-        const ageRefIso = auditStatus.lastVerifiedAt ?? auditStatus.timestamp ?? '';
-        const dateStr = ageRefIso ? ageRefIso.slice(0, 10) : 'unknown';
-        if (auditStatus.status === 'pass') {
+        {(() => {
+          if (!auditStatus || auditStatus.status === 'absent') {
+            // Silent placeholder. Tests assert empty content; production
+            // shows nothing.
+            return <div data-testid="audit-result-banner" />;
+          }
+          const endpoints = auditStatus.endpoints ?? {};
+          const total = Object.keys(endpoints).length;
+          const failing = Object.entries(endpoints)
+            .filter(([, v]) => v === 'fail')
+            .map(([k]) => k);
+          const ageRefIso = auditStatus.lastVerifiedAt ?? auditStatus.timestamp ?? '';
+          const dateStr = ageRefIso ? ageRefIso.slice(0, 10) : 'unknown';
+          if (auditStatus.status === 'pass') {
+            return (
+              <div
+                className="mb-2 rounded border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-400"
+                data-testid="audit-result-banner"
+                data-status="pass"
+              >
+                All {total} of {total} endpoints connecting (last verified {dateStr} via prod
+                audit).
+              </div>
+            );
+          }
+          // status === 'fail'
+          const failCount = failing.length;
+          // Strip /api/ prefix for human-readable names ("events" not "/api/events").
+          const failNames = failing
+            .map((p) => p.replace(/^\/api\//, '').replace(/\/$/, ''))
+            .join(', ');
           return (
             <div
-              className="mb-2 rounded border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-400"
+              className="mb-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400"
               data-testid="audit-result-banner"
-              data-status="pass"
+              data-status="fail"
             >
-              All {total} of {total} endpoints connecting (last verified {dateStr} via prod audit).
+              {failCount} of {total} endpoints failing connectivity audit. See {failNames}.
             </div>
           );
-        }
-        // status === 'fail'
-        const failCount = failing.length;
-        // Strip /api/ prefix for human-readable names ("events" not "/api/events").
-        const failNames = failing
-          .map((p) => p.replace(/^\/api\//, '').replace(/\/$/, ''))
-          .join(', ');
-        return (
-          <div
-            className="mb-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400"
-            data-testid="audit-result-banner"
-            data-status="fail"
-          >
-            {failCount} of {total} endpoints failing connectivity audit. See {failNames}.
-          </div>
-        );
-      })()}
+        })()}
 
-      {/* /api/health-driven block — renders only when the aggregate response
+        {/* /api/health-driven block — renders only when the aggregate response
           is available. The polling-store / LLM / operator sections below
           render unconditionally so the merged tab stays useful while
           /api/health is loading / errored. */}
-      {loading && !health && (
-        <div className="space-y-2" data-testid="all-apis-loading">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-6 animate-pulse rounded bg-white/5" />
-          ))}
-        </div>
-      )}
-      {error && !health && (
-        <div className="py-6 text-center text-text-muted" data-testid="all-apis-error-no-data">
-          /api/health unreachable since page load. Check server logs.
-        </div>
-      )}
-      {!loading && !error && !health && (
-        <div className="py-6 text-center text-text-muted" data-testid="all-apis-empty">
-          No endpoints configured.
-        </div>
-      )}
-      {error && health && (
-        <div
-          className="mb-2 border-l-2 border-accent-yellow bg-yellow-950/40 px-3 py-1 text-[10px] text-accent-yellow"
-          data-testid="all-apis-stale-banner"
-        >
-          Last poll failed at {new Date().toUTCString()}. Showing cached values.
-        </div>
-      )}
-      {health && (
-        <table className="w-full">
-          <thead>
-            <tr className="text-white/40">
-              <th className="pr-1 text-left font-normal">Endpoint</th>
-              <th className="pr-1 text-left font-normal">Tier</th>
-              <th className="pr-1 text-left font-normal">Status</th>
-              <th className="pr-1 text-right font-normal">Freshness</th>
-              <th className="pr-1 text-right font-normal">Latency</th>
-              <th className="pr-1 text-left font-normal">Recent</th>
-              <th className="text-left font-normal">Last error</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groupedRows.map((group) => (
-              <React.Fragment key={group.tier}>
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="border-t border-white/10 py-1 text-[9px] uppercase tracking-wider text-white/40"
-                  >
-                    {TIER_GROUP_LABEL[group.tier]}
-                  </td>
-                </tr>
-                {group.rows.map((ep) => {
-                  const isExpanded = expandedRow === ep.name;
-                  const errorTruncated =
-                    ep.lastErrorReason && ep.lastErrorReason.length > 80
-                      ? `…${ep.lastErrorReason.slice(-80)}`
-                      : (ep.lastErrorReason ?? '');
-                  return (
-                    <React.Fragment key={ep.name}>
-                      <tr
-                        className="cursor-pointer hover:bg-white/5"
-                        onClick={() => setExpandedRow(isExpanded ? null : ep.name)}
-                        data-testid={`all-apis-row-${ep.name}`}
-                      >
-                        <td className="pr-1">{ep.name}</td>
-                        <td className="pr-1">
-                          <span
-                            className={`rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${TIER_BORDER_CLASSES[ep.tier]}`}
-                          >
-                            {TIER_LABEL[ep.tier]}
-                          </span>
-                        </td>
-                        <td className="pr-1">
-                          <span
-                            className={`rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${STATUS_PILL_CLASSES[ep.status]}`}
-                          >
-                            {ep.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td
-                          className={`pr-1 text-right tabular-nums ${freshnessCellClass(ep)}`}
-                          title={ep.lastSuccessTs ? new Date(ep.lastSuccessTs).toISOString() : ''}
+        {loading && !health && (
+          <div className="space-y-2" data-testid="all-apis-loading">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-6 animate-pulse rounded bg-white/5" />
+            ))}
+          </div>
+        )}
+        {error && !health && (
+          <div className="py-6 text-center text-text-muted" data-testid="all-apis-error-no-data">
+            /api/health unreachable since page load. Check server logs.
+          </div>
+        )}
+        {!loading && !error && !health && (
+          <div className="py-6 text-center text-text-muted" data-testid="all-apis-empty">
+            No endpoints configured.
+          </div>
+        )}
+        {error && health && (
+          <div
+            className="mb-2 border-l-2 border-accent-yellow bg-yellow-950/40 px-3 py-1 text-[10px] text-accent-yellow"
+            data-testid="all-apis-stale-banner"
+          >
+            Last poll failed at {new Date().toUTCString()}. Showing cached values.
+          </div>
+        )}
+        {health && (
+          <table className="w-full">
+            <thead>
+              <tr className="text-white/40">
+                <th className="pr-1 text-left font-normal">Endpoint</th>
+                <th className="pr-1 text-left font-normal">Tier</th>
+                <th className="pr-1 text-left font-normal">Status</th>
+                <th className="pr-1 text-right font-normal">Freshness</th>
+                <th className="pr-1 text-right font-normal">Latency</th>
+                <th className="pr-1 text-left font-normal">Recent</th>
+                <th className="text-left font-normal">Last error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groupedRows.map((group) => (
+                <React.Fragment key={group.tier}>
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="border-t border-white/10 py-1 text-[9px] uppercase tracking-wider text-white/40"
+                    >
+                      {TIER_GROUP_LABEL[group.tier]}
+                    </td>
+                  </tr>
+                  {group.rows.map((ep) => {
+                    const isExpanded = expandedRow === ep.name;
+                    const errorTruncated =
+                      ep.lastErrorReason && ep.lastErrorReason.length > 80
+                        ? `…${ep.lastErrorReason.slice(-80)}`
+                        : (ep.lastErrorReason ?? '');
+                    return (
+                      <React.Fragment key={ep.name}>
+                        <tr
+                          className="cursor-pointer hover:bg-white/5"
+                          onClick={() => setExpandedRow(isExpanded ? null : ep.name)}
+                          data-testid={`all-apis-row-${ep.name}`}
                         >
-                          {freshnessText(ep.freshnessMs)}
-                        </td>
-                        <td className="pr-1 text-right tabular-nums text-white/50">
-                          {ep.latencyMs === null ? '--' : `${ep.latencyMs}ms`}
-                        </td>
-                        {/* Phase 28.2 W5 D-23 block 4 — recent-fetch
+                          <td className="pr-1">{ep.name}</td>
+                          <td className="pr-1">
+                            <span
+                              className={`rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${TIER_BORDER_CLASSES[ep.tier]}`}
+                            >
+                              {TIER_LABEL[ep.tier]}
+                            </span>
+                          </td>
+                          <td className="pr-1">
+                            <span
+                              className={`rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${STATUS_PILL_CLASSES[ep.status]}`}
+                            >
+                              {ep.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td
+                            className={`pr-1 text-right tabular-nums ${freshnessCellClass(ep)}`}
+                            title={ep.lastSuccessTs ? new Date(ep.lastSuccessTs).toISOString() : ''}
+                          >
+                            {freshnessText(ep.freshnessMs)}
+                          </td>
+                          <td className="pr-1 text-right tabular-nums text-white/50">
+                            {ep.latencyMs === null ? '--' : `${ep.latencyMs}ms`}
+                          </td>
+                          {/* Phase 28.2 W5 D-23 block 4 — recent-fetch
                             sparkline. Inline 10-dot strip from the matching
                             store's recentFetches[]; oldest-left to newest-
                             right. CSS-var color tokens per UI-SPEC §9. */}
-                        <td className="pr-1">{renderSparkline(ep.name)}</td>
-                        <td className="truncate text-white/40">{errorTruncated}</td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="rounded border border-white/5 bg-white/5 p-1.5"
-                            data-testid={`expanded-row-${ep.name}`}
-                          >
-                            {/* Phase 28.2 W5 D-23 block 2 — per-endpoint
+                          <td className="pr-1">{renderSparkline(ep.name)}</td>
+                          <td className="truncate text-white/40">{errorTruncated}</td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td
+                              colSpan={7}
+                              className="rounded border border-white/5 bg-white/5 p-1.5"
+                              data-testid={`expanded-row-${ep.name}`}
+                            >
+                              {/* Phase 28.2 W5 D-23 block 2 — per-endpoint
                                 quality metrics. Renders ABOVE the JSON dump
                                 per UI-SPEC §5.3.2; null for non-quality
                                 endpoints (silent — no "no metrics" copy). */}
-                            {renderQualityBlock(ep.name)}
-                            {/* Phase 28.2 W5 D-23 block 3 — per-endpoint
+                              {renderQualityBlock(ep.name)}
+                              {/* Phase 28.2 W5 D-23 block 3 — per-endpoint
                                 manual retry button. Class spec is verbatim
                                 per UI-SPEC §5.3.3; py-1 (4px) per W-1 — NOT
                                 the 6px DashboardAuthModal precedent (which
                                 violates UI-SPEC §7 multiples-of-4 rule). */}
-                            {ENDPOINT_RETRY_PATH[ep.name] && (
-                              <div className="mt-1">
-                                <button
-                                  type="button"
-                                  disabled={refreshing.has(ep.name)}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRefreshNow(ep.name);
-                                  }}
-                                  className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-                                  data-testid={`api-health-retry-${ep.name}`}
-                                >
-                                  {refreshing.has(ep.name) ? 'Refreshing...' : 'Refresh now'}
-                                </button>
-                              </div>
-                            )}
-                            <pre
-                              className="whitespace-pre-wrap text-[9px] text-white/60"
-                              data-testid={`all-apis-row-expanded-${ep.name}`}
-                            >
-                              {JSON.stringify(ep, null, 2)}
-                            </pre>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* Phase 28.2 W5 D-22 — LLMPipelineSection folded in from Overview.
-          Heading text "LLM Pipeline" preserved verbatim per UI-SPEC §5.2. */}
-      <section className="mt-2 border-t border-white/10 pt-2" data-testid="llm-pipeline-section">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
-          LLM Pipeline
-        </span>
-        <div className="mt-0.5 text-[9px]">
-          <LLMPipelineSection llmStatus={llmStatus} />
-        </div>
-      </section>
-
-      {/* Phase 28.2 W5 Task 7 — Operator Actions block. Plan 05 lands the
-          baseline (Pin to v1/v2/v3 + Clear pin + 429 quota alert + replay
-          test trigger); Task 7.5 expands with 24h count / per-Bearer
-          breakdown / pin TTL countdown / adversarial eval row sourced from
-          the new /api/operator-status endpoint. */}
-      <section className="mt-4 px-3 py-2 text-xs" data-testid="operator-actions">
-        <h3 className="mb-2 text-xs font-semibold text-text-primary">Operator Actions</h3>
-
-        {/* Phase 28.2 W5 Task 7.5 — Operator Actions live content (AI-SPEC
-            §7). Sourced from /api/operator-status; renders only when the
-            aggregator returns data. Rows: 24h count, per-Bearer breakdown,
-            pin TTL countdown, prompt-injection robustness (adversarial
-            eval row — B-2). */}
-        {opStatus && (
-          <>
-            <div className="text-text-muted" data-testid="operator-actions-24h-count">
-              24h actions: {opStatus.audit24h}
-            </div>
-            {opStatus.byBearer.length > 0 && (
-              <div className="mt-1 flex flex-col gap-1">
-                {opStatus.byBearer.map((b) => (
-                  <div
-                    key={b.bearerFingerprint}
-                    data-testid={`operator-actions-bearer-row-${b.bearerFingerprint}`}
-                    className="text-text-muted"
-                  >
-                    {b.bearerFingerprint.slice(0, 8)}…: {b.actions} actions / {b.swaps} swaps /{' '}
-                    {b.replays} replays
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* Phase 29 D-02 part A + D — operator-actions-pin-ttl render
-                block, Pin-to-v1/v2/v3 buttons, confirm modal, and Topbar
-                pipeline-version pill all removed. The operator pipeline
-                override surface and its underlying POST endpoint are gone. */}
-            {opStatus.advEval && (
-              <div className="mt-1 text-text-muted" data-testid="adversarial-eval-row">
-                Prompt-injection robustness: {opStatus.advEval.blocked}/{opStatus.advEval.total}
-              </div>
-            )}
-          </>
+                              {ENDPOINT_RETRY_PATH[ep.name] && (
+                                <div className="mt-1">
+                                  <button
+                                    type="button"
+                                    disabled={refreshing.has(ep.name)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRefreshNow(ep.name);
+                                    }}
+                                    className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+                                    data-testid={`api-health-retry-${ep.name}`}
+                                  >
+                                    {refreshing.has(ep.name) ? 'Refreshing...' : 'Refresh now'}
+                                  </button>
+                                </div>
+                              )}
+                              <pre
+                                className="whitespace-pre-wrap text-[9px] text-white/60"
+                                data-testid={`all-apis-row-expanded-${ep.name}`}
+                              >
+                                {JSON.stringify(ep, null, 2)}
+                              </pre>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
         )}
+      </CollapsibleGroup>
 
-        {/* Phase 28.2 W5 Task 7 (UI-SPEC §6.2) — 429 replay-quota alert.
-            px-2 py-1 spacing — multiples of 4. Renders ABOVE the Pin
-            buttons so the operator sees it before reissuing actions. */}
-        {quotaAlert && (
-          <div
-            className="mb-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-400"
-            data-testid="replay-quota-alert"
-          >
-            Replay quota reached: 50 of 50 in last 24h. Resets at {quotaAlert.resetsAt}. Quota
-            protects daily token budget.
+      {/* GROUP 2 — LLM Pipeline (LLMPipelineSection + FlightRecorderBlock +
+          the adversarial-eval / prompt-injection robustness row relocated
+          from the operator-actions block — it is LLM-eval data). */}
+      <CollapsibleGroup
+        slug="llm-pipeline"
+        title="LLM Pipeline"
+        collapsed={devApiGroupCollapsed['llm-pipeline'] ?? false}
+        onToggle={() => toggleDevApiGroup('llm-pipeline')}
+      >
+        {/* Phase 28.2 W5 D-22 — LLMPipelineSection folded in from Overview.
+            Heading text "LLM Pipeline" preserved verbatim per UI-SPEC §5.2.
+            Testid preserved (regression tests assert it). */}
+        <section className="text-[9px]" data-testid="llm-pipeline-section">
+          <LLMPipelineSection llmStatus={llmStatus} />
+        </section>
+
+        {/* Phase 39 Plan 05 (OBS-FLIGHT-04) — LLM flight recorder relocated up
+            into the LLM Pipeline group. Its own Bearer fetch of
+            /api/events/llm-history; degrade-open → muted placeholder (Task 3). */}
+        <FlightRecorderBlock />
+
+        {/* Phase 40 — adversarial-eval / prompt-injection robustness row moved
+            here from operator-actions (it is LLM-eval data, not an operator
+            action). Testid preserved. */}
+        {opStatus?.advEval && (
+          <div className="mt-2 text-[10px] text-text-muted" data-testid="adversarial-eval-row">
+            Prompt-injection robustness: {opStatus.advEval.blocked}/{opStatus.advEval.total}
           </div>
         )}
+      </CollapsibleGroup>
 
-        {/* Phase 29 Plan 08 D-02 part D — Pin-to-v1/v2/v3 + Clear pin
+      {/* GROUP 3 — Budget & Cost (BudgetBlock — token-proximity bars + cost
+          shadow USD). */}
+      <CollapsibleGroup
+        slug="budget-cost"
+        title="Budget &amp; Cost"
+        collapsed={devApiGroupCollapsed['budget-cost'] ?? false}
+        onToggle={() => toggleDevApiGroup('budget-cost')}
+      >
+        {/* Phase 39 Plan 05 (BUDGET-01/02) — sources the already-polled
+            `tokenBudget` field (no new fetch). Degrade-open → muted
+            placeholder (Task 3). */}
+        <BudgetBlock tokenBudget={opStatus?.tokenBudget ?? null} />
+      </CollapsibleGroup>
+
+      {/* GROUP 4 — Operator Actions & Data Quality. Read-only counters STAY
+          here (24h count, byBearer, dead-URL count + drill-down, actor-quality,
+          429 alerts); the destructive Replay + Prune BUTTONS move into the
+          default-closed drawer at the foot of this group (D-02a). */}
+      <CollapsibleGroup
+        slug="operator-actions"
+        title="Operator Actions &amp; Data Quality"
+        collapsed={devApiGroupCollapsed['operator-actions'] ?? false}
+        onToggle={() => toggleDevApiGroup('operator-actions')}
+      >
+        {/* Phase 28.2 W5 Task 7 — Operator Actions block (read-only counters +
+          alerts). Testid preserved (regression tests assert it). */}
+        <section className="text-xs" data-testid="operator-actions">
+          {/* Phase 40 (D-06) — group-level muted placeholder when the
+            operator-status aggregator is unreachable, so the group body is
+            never empty. */}
+          {opStatus == null && (
+            <MutedPlaceholder
+              testid="group-operator-actions-placeholder"
+              reason="operator-status unreachable"
+            />
+          )}
+
+          {/* Phase 28.2 W5 Task 7.5 — Operator Actions live content (AI-SPEC
+            §7). Sourced from /api/operator-status; renders only when the
+            aggregator returns data. Rows: 24h count, per-Bearer breakdown. */}
+          {opStatus && (
+            <>
+              <div className="text-[10px] text-text-muted" data-testid="operator-actions-24h-count">
+                24h actions: {opStatus.audit24h}
+              </div>
+              {opStatus.byBearer.length > 0 && (
+                <div className="mt-1 flex flex-col gap-1">
+                  {opStatus.byBearer.map((b) => (
+                    <div
+                      key={b.bearerFingerprint}
+                      data-testid={`operator-actions-bearer-row-${b.bearerFingerprint}`}
+                      className="text-[10px] text-text-muted"
+                    >
+                      {b.bearerFingerprint.slice(0, 8)}…: {b.actions} actions / {b.swaps} swaps /{' '}
+                      {b.replays} replays
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Phase 40 — the adversarial-eval row relocated to the LLM
+                Pipeline group (it is LLM-eval data, not an operator action). */}
+            </>
+          )}
+
+          {/* Phase 28.2 W5 Task 7 (UI-SPEC §6.2) — 429 replay-quota alert.
+            px-2 py-1 spacing — multiples of 4. Renders ABOVE the Pin
+            buttons so the operator sees it before reissuing actions. */}
+          {quotaAlert && (
+            <div
+              className="mb-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-400"
+              data-testid="replay-quota-alert"
+            >
+              Replay quota reached: 50 of 50 in last 24h. Resets at {quotaAlert.resetsAt}. Quota
+              protects daily token budget.
+            </div>
+          )}
+
+          {/* Phase 29 Plan 08 D-02 part D — Pin-to-v1/v2/v3 + Clear pin
             button row removed. The underlying POST /api/events/llm-pipeline
             endpoint was deleted in Plan 04; the UI buttons would only 404. */}
 
-        {/* Phase 28.2 W5 Task 7 — replay test trigger. Issues a
-            /api/events/llm-replay/test probe so the operator can verify
-            the 50/24h quota path. The probe never writes to events:llm:v3
-            (Pitfall 6 dual-gate stays absolute — server-side enforcement). */}
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={() => void replayProbe()}
-            className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-            data-testid="replay-test-trigger"
-          >
-            Run replay probe
-          </button>
-        </div>
+          {/* Phase 40 (D-02a) — the replay test trigger button relocated into
+            the operator-controls drawer below. Its 429 quota alert (above)
+            stays in this group near the rest of the read-only surface. */}
 
-        {/* Phase 32 Plan 05 (GHOST-03, GHOST-04, D-10) — dead-URL count +
+          {/* Phase 32 Plan 05 (GHOST-03, GHOST-04, D-10) — dead-URL count +
             drill-down list + Prune {N} dead events button. Sourced from
             /api/operator-status `prune` block (Plan 32-04). Renders only
             when the server returns the optional `prune` field; pre-Plan-04
@@ -1626,51 +1979,42 @@ function DevApiStatusAllApisTab({
             replay-test-trigger UX). 429 surfaces through prune-quota-alert;
             200 triggers an immediate fetchOpStatus refresh so the count
             drops in-place. */}
-        {opStatus?.prune != null && (
-          <>
-            <div className="mt-1 text-text-muted" data-testid="dead-url-count">
-              Dead URL events: {opStatus.prune.deadUrlCount}
-            </div>
-            {opStatus.prune.deadUrlSample.length > 0 && (
-              <ul
-                className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
-                data-testid="dead-url-list"
-              >
-                {opStatus.prune.deadUrlSample.map((entry) => (
-                  <li key={entry.eventId} className="flex items-baseline gap-2 py-0.5">
-                    <span className="font-mono text-text-muted/60">{entry.status}</span>
-                    <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
-                    <span className="truncate text-text-muted/70" title={entry.url}>
-                      {entry.url}
-                    </span>
-                  </li>
-                ))}
-                {opStatus.prune.deadUrlCount > opStatus.prune.deadUrlSample.length && (
-                  <li
-                    className="py-0.5 italic text-text-muted/40"
-                    data-testid="dead-url-list-truncated"
-                  >
-                    … and {opStatus.prune.deadUrlCount - opStatus.prune.deadUrlSample.length} more
-                  </li>
-                )}
-              </ul>
-            )}
-            {opStatus.prune.deadUrlCount > 0 && (
-              <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={() => void pruneHandler()}
-                  className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-                  data-testid="prune-dead-urls-trigger"
-                >
-                  Prune {opStatus.prune.deadUrlCount} dead events
-                </button>
+          {opStatus?.prune != null && (
+            <>
+              <div className="mt-1 text-[10px] text-text-muted" data-testid="dead-url-count">
+                Dead URL events: {opStatus.prune.deadUrlCount}
               </div>
-            )}
-          </>
-        )}
+              {opStatus.prune.deadUrlSample.length > 0 && (
+                <ul
+                  className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
+                  data-testid="dead-url-list"
+                >
+                  {opStatus.prune.deadUrlSample.map((entry) => (
+                    <li key={entry.eventId} className="flex items-baseline gap-2 py-0.5">
+                      <span className="font-mono text-text-muted/60">{entry.status}</span>
+                      <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
+                      <span className="truncate text-text-muted/70" title={entry.url}>
+                        {entry.url}
+                      </span>
+                    </li>
+                  ))}
+                  {opStatus.prune.deadUrlCount > opStatus.prune.deadUrlSample.length && (
+                    <li
+                      className="py-0.5 italic text-text-muted/40"
+                      data-testid="dead-url-list-truncated"
+                    >
+                      … and {opStatus.prune.deadUrlCount - opStatus.prune.deadUrlSample.length} more
+                    </li>
+                  )}
+                </ul>
+              )}
+              {/* Phase 40 (D-02a) — the Prune button relocated into the
+                operator-controls drawer below. The dead-URL count + drill-down
+                list stay here (read-only); only the destructive button moves. */}
+            </>
+          )}
 
-        {/* Phase 33 D-17 — Actor Quality sub-block. Read-only counters +
+          {/* Phase 33 D-17 — Actor Quality sub-block. Read-only counters +
             drill-down sample. Mounted between the Phase 32 prune block close
             (above) and the pruneQuotaAlert (below) per UI-SPEC §"DOM Mount
             Point". Render gate `opStatus?.actorQuality != null` silently
@@ -1678,72 +2022,166 @@ function DevApiStatusAllApisTab({
             (matches Phase 32 D-10 forward-compat). Color tokens come from
             existing @theme CSS vars only — zero new tokens per UI-SPEC
             §Color (D-13 single-source-of-truth contract preserved). */}
-        {opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents > 0 && (
-          <>
-            <div
-              className="mt-1 text-text-muted"
-              data-testid="actor-quality-row"
-              aria-label={`Actor quality counters: ${opStatus.actorQuality.nullActors} null actors, ${opStatus.actorQuality.rawCameoActors} raw CAMEO codes, ${opStatus.actorQuality.ambiguousActors} ambiguous strings, ${opStatus.actorQuality.lowConfidenceActors} low confidence`}
-            >
-              Actor quality: Null: {opStatus.actorQuality.nullActors} · Raw-CAMEO:{' '}
-              {opStatus.actorQuality.rawCameoActors} · Ambiguous:{' '}
-              {opStatus.actorQuality.ambiguousActors} · Low-confidence:{' '}
-              {opStatus.actorQuality.lowConfidenceActors}
-            </div>
-            {opStatus.actorQuality.sample.length > 0 && (
-              <ul
-                className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
-                data-testid="actor-quality-list"
-                aria-label="Actor quality drill-down sample (up to 20 events)"
+          {opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents > 0 && (
+            <>
+              <div
+                className="mt-1 text-[10px] text-text-muted"
+                data-testid="actor-quality-row"
+                aria-label={`Actor quality counters: ${opStatus.actorQuality.nullActors} null actors, ${opStatus.actorQuality.rawCameoActors} raw CAMEO codes, ${opStatus.actorQuality.ambiguousActors} ambiguous strings, ${opStatus.actorQuality.lowConfidenceActors} low confidence`}
               >
-                {opStatus.actorQuality.sample.map((entry) => {
-                  const issueColor =
-                    entry.issue === 'null'
-                      ? 'text-text-muted/60'
-                      : entry.issue === 'raw-cameo' || entry.issue === 'ambiguous'
-                        ? 'text-[color:var(--color-faction-disputed)]'
-                        : 'text-[color:var(--color-event-other)]';
-                  return (
+                Actor quality: Null: {opStatus.actorQuality.nullActors} · Raw-CAMEO:{' '}
+                {opStatus.actorQuality.rawCameoActors} · Ambiguous:{' '}
+                {opStatus.actorQuality.ambiguousActors} · Low-confidence:{' '}
+                {opStatus.actorQuality.lowConfidenceActors}
+              </div>
+              {opStatus.actorQuality.sample.length > 0 && (
+                <ul
+                  className="mt-1 max-h-40 overflow-y-auto text-[10px] text-text-muted/80"
+                  data-testid="actor-quality-list"
+                  aria-label="Actor quality drill-down sample (up to 20 events)"
+                >
+                  {opStatus.actorQuality.sample.map((entry) => {
+                    const issueColor =
+                      entry.issue === 'null'
+                        ? 'text-text-muted/60'
+                        : entry.issue === 'raw-cameo' || entry.issue === 'ambiguous'
+                          ? 'text-[color:var(--color-faction-disputed)]'
+                          : 'text-[color:var(--color-event-other)]';
+                    return (
+                      <li
+                        key={entry.eventId}
+                        className="flex items-baseline gap-2 py-0.5"
+                        data-testid={`actor-quality-row-${entry.eventId}`}
+                      >
+                        <span className={`font-mono ${issueColor}`}>{entry.issue}</span>
+                        <span className="truncate font-mono text-text-muted/40">
+                          {entry.eventId}
+                        </span>
+                        <span className="truncate text-text-muted/70">
+                          {entry.actors.join(', ')}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {opStatus.actorQuality.sample.length === 20 && (
                     <li
-                      key={entry.eventId}
-                      className="flex items-baseline gap-2 py-0.5"
-                      data-testid={`actor-quality-row-${entry.eventId}`}
+                      className="py-0.5 italic text-text-muted/40"
+                      data-testid="actor-quality-list-truncated"
                     >
-                      <span className={`font-mono ${issueColor}`}>{entry.issue}</span>
-                      <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
-                      <span className="truncate text-text-muted/70">{entry.actors.join(', ')}</span>
+                      … and more
                     </li>
-                  );
-                })}
-                {opStatus.actorQuality.sample.length === 20 && (
-                  <li
-                    className="py-0.5 italic text-text-muted/40"
-                    data-testid="actor-quality-list-truncated"
-                  >
-                    … and more
-                  </li>
-                )}
-              </ul>
-            )}
-          </>
-        )}
-        {opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents === 0 && (
-          <div className="mt-1 text-text-muted italic" data-testid="actor-quality-empty">
-            Actor quality: no data
-          </div>
-        )}
+                  )}
+                </ul>
+              )}
+            </>
+          )}
+          {opStatus?.actorQuality != null && opStatus.actorQuality.totalEvents === 0 && (
+            <div className="mt-1" data-testid="actor-quality-empty">
+              <MutedPlaceholder testid="actor-quality-placeholder" reason="no actor data" />
+            </div>
+          )}
 
-        {/* Phase 32 Plan 05 — 429 prune-quota alert. Mirrors the existing
+          {/* Phase 32 Plan 05 — 429 prune-quota alert. Mirrors the existing
             replay-quota-alert above. px-2 py-1 spacing — multiples of 4. */}
-        {pruneQuotaAlert && (
-          <div
-            className="mt-2 mb-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-400"
-            data-testid="prune-quota-alert"
-          >
-            Prune quota reached: 50 of 50 in last 24h. Resets at {pruneQuotaAlert.resetsAt}.
+          {pruneQuotaAlert && (
+            <div
+              className="mt-2 mb-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-400"
+              data-testid="prune-quota-alert"
+            >
+              Prune quota reached: 50 of 50 in last 24h. Resets at {pruneQuotaAlert.resetsAt}.
+            </div>
+          )}
+
+          {/* Phase 40 (D-01/D-02a) — operator-controls drawer trigger at the
+            foot of Group 4. Noun-label "Operator Controls" + action-verb
+            aria-label for assistive tech. */}
+          <div className="mt-4">
+            <button
+              type="button"
+              data-testid="operator-drawer-trigger"
+              aria-expanded={isOperatorDrawerOpen}
+              aria-controls="operator-drawer"
+              aria-label="Open operator controls"
+              onClick={toggleOperatorDrawer}
+              className="rounded-md border border-white/10 px-2 py-1 text-[10px] hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60 focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+            >
+              Operator Controls
+            </button>
           </div>
-        )}
-      </section>
+
+          {/* Phase 40 (D-01/D-02a) — operator-controls DRAWER. Rendered ONLY when
+            open so the destructive Replay + Prune buttons are NOT in the
+            document until the operator opens it (Regression-Lock assertion 5).
+            Scoped Escape closes the drawer and stopPropagation prevents the
+            modal's capture-phase Escape (DevApiStatus header :322) from closing
+            the whole modal. */}
+          {isOperatorDrawerOpen && (
+            <div
+              id="operator-drawer"
+              data-testid="operator-drawer"
+              role="region"
+              aria-label="Operator controls"
+              className="animate-slide-in-right mt-2 rounded-md border border-white/10 bg-black/40 p-4"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation();
+                  setOperatorDrawerOpen(false);
+                }
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                  Operator Controls
+                </span>
+                <button
+                  type="button"
+                  aria-label="Close operator controls"
+                  onClick={() => setOperatorDrawerOpen(false)}
+                  className="rounded border border-white/10 px-2 py-1 text-[10px] text-white/60 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Replay probe — relocated from operator-actions (:1617). Issues
+                a /api/events/llm-replay/test probe; never writes to
+                events:llm:v3 (server-side dual-gate). */}
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => void replayProbe()}
+                  className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60"
+                  data-testid="replay-test-trigger"
+                >
+                  Run replay probe
+                </button>
+                <div className="mt-1 text-[10px] text-white/40">
+                  Probes the 50/24h replay quota without writing to the event cache.
+                </div>
+              </div>
+
+              {/* Prune button — relocated from operator-actions (:1666). Keeps
+                its dynamic label + a destructive caption. Its read-only count +
+                drill-down list stay in Group 4. */}
+              {opStatus?.prune != null && opStatus.prune.deadUrlCount > 0 && (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => void pruneHandler()}
+                    className="rounded-md border border-accent-red/40 px-2 py-1 text-xs text-red-400 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/60"
+                    data-testid="prune-dead-urls-trigger"
+                  >
+                    Prune {opStatus.prune.deadUrlCount} dead events
+                  </button>
+                  <div className="mt-1 text-[10px] text-white/40">
+                    Permanently removes events whose primary source URL is dead.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </CollapsibleGroup>
 
       {/* Phase 29 Plan 08 D-02 part D — confirm modal removed. The
           pipeline-version pin UI surface is gone now that the underlying
@@ -2833,59 +3271,6 @@ function ErrorTaxonomyBlock({ taxonomy }: { taxonomy?: LLMStatus['errorTaxonomy'
 }
 
 /**
- * Phase 27.4.3 D-15 — Pipeline Flips block. Analog: CallLogBlock + DlqBlock.
- * Each entry shows ISO timestamp, from→to version, trigger, operator,
- * optional reason. Auto-flip triggers (auto:eval_drop, auto:watchdog_recurrence)
- * are color-coded amber/red so on-call eyes are drawn to them.
- */
-function PipelineFlipsBlock({ flips }: { flips?: LLMStatus['pipelineFlips'] }) {
-  const rows = flips ?? [];
-  if (rows.length === 0) {
-    return (
-      <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
-          Pipeline Flips (last 200)
-        </div>
-        <div className="mt-1 text-[9px] text-white/40">No flips recorded.</div>
-      </div>
-    );
-  }
-  return (
-    <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
-        Pipeline Flips (last 200)
-      </div>
-      <div className="mt-1 max-h-32 overflow-y-auto">
-        {rows.slice(0, 50).map((f) => {
-          const iso = new Date(f.ts).toISOString();
-          const triggerClass =
-            f.trigger === 'auto:eval_drop'
-              ? 'text-amber-400'
-              : f.trigger === 'auto:watchdog_recurrence'
-                ? 'text-red-400'
-                : 'text-white/60';
-          return (
-            <div key={`${f.ts}-${f.from}-${f.to}`} className="text-[9px]">
-              <div className={`flex items-center gap-1 tabular-nums ${triggerClass}`}>
-                <span>[{iso}]</span>
-                <span>
-                  {f.from} → {f.to}
-                </span>
-                <span>·</span>
-                <span>{f.trigger}</span>
-                <span>·</span>
-                <span>{f.operator}</span>
-              </div>
-              {f.reason ? <div className="text-[9px] italic text-white/50">{f.reason}</div> : null}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/**
  * Phase 27.4.3 D-19 — Cost Shadow block. Analog: EvalScoreBlock.
  * Shows what the v3 run would cost at Anthropic Sonnet rates if the
  * pipeline were on the paid path; tagline reaffirms that free-claude-code
@@ -3006,7 +3391,7 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
 /**
  * Phase 27.4.3 Plan 04 — sibling of EventsFiltersSection, gated on
  * schemaVersion === 'v3' && import.meta.env.DEV by the parent render switch.
- * Renders the 8-block v3 observability stack per UI-SPEC §"Component
+ * Renders the 7-block v3 observability stack per UI-SPEC §"Component
  * Inventory" + §"Render switch".
  *
  * Block order (per UI-SPEC §"Section headers" lines 169-180):
@@ -3015,8 +3400,7 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
  *   3. Rate-Limit Headroom (D-12 §3)
  *   4. Schema-Strict Failure Rate (D-12 §4)
  *   5. Error Taxonomy (D-14)
- *   6. Pipeline Flips (D-15)
- *   7. v3 Cost Shadow (D-19)
+ *   6. v3 Cost Shadow (D-19)
  *   + Lineage drill-down (D-13) — rendered IN-PLACE inside DrillDownRow under
  *     the existing event-list block (DrillDownRow auto-detects v3 fields).
  *     No separate block here; that's the entire v3 lineage UX surface.
@@ -3041,7 +3425,6 @@ function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
         callHistory={llmStatus.callHistory}
       />
       <ErrorTaxonomyBlock taxonomy={llmStatus.errorTaxonomy} />
-      <PipelineFlipsBlock flips={llmStatus.pipelineFlips} />
       <CostShadowBlock cost={llmStatus.costShadow} />
       {/* Phase 27.4.4 — A9 atomic dev cells. Each renders an "—" placeholder
           for any field that is undefined / null so a v2 fallback or a fresh

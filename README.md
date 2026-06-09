@@ -2,7 +2,7 @@
 
 > **Real-time Iran conflict intelligence dashboard. Numbers over narratives.**
 
-![Hero](docs/hero.gif)
+![Hero](public/screenshots/hero.gif)
 
 A personal open-source intelligence (OSINT) tool that fuses ten upstream public
 data feeds into a single 2.5D map of the Greater Middle East. Flights, ships,
@@ -15,6 +15,8 @@ Hormuz right now, quantitatively?_
 ---
 
 **Live demo:** [otg-iran-monitor.vercel.app](https://otg-iran-monitor.vercel.app)
+
+**Portfolio tour:** [docs/SHOWCASE.md](docs/SHOWCASE.md) — a 1-page guided tour through the decisions, architecture, and the agentic-dev meta-story.
 
 > Please be gentle. This is a single-user Redis budget (Upstash free tier, ~92%
 > of the monthly command ceiling already in use). The live demo is protected by
@@ -31,13 +33,13 @@ Hormuz right now, quantitatively?_
 [![CI](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/codeql.yml/badge.svg)](https://github.com/zack-maz/otg-iran-monitor/actions/workflows/codeql.yml)
 [![Coverage](https://codecov.io/gh/zack-maz/otg-iran-monitor/branch/main/graph/badge.svg)](https://codecov.io/gh/zack-maz/otg-iran-monitor)
-![Tests](https://img.shields.io/badge/tests-2380%20passing-success)
+![Tests](https://img.shields.io/badge/tests-2543%20passing-success)
 ![Type Coverage](https://img.shields.io/badge/type--coverage-97%25-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
 ![Node](https://img.shields.io/badge/node-22.x-green)
 [![API Spec](https://img.shields.io/badge/API-OpenAPI%203.0-orange)](server/openapi.yaml)
 
-**2380 passing tests across 188 files.** TypeScript strict mode with
+**2543 passing tests across 208 files.** TypeScript strict mode with
 `noUncheckedIndexedAccess` on the server tsconfig. Type coverage gated at 97%
 in CI (ratchet floor, 99% aspirational). Pino structured logging with secret
 redaction proven by a write-stream sink test. Graceful degradation against
@@ -148,7 +150,7 @@ npm run dev
 **Run tests:**
 
 ```bash
-npx vitest run              # full suite (2380 tests across 188 files)
+npx vitest run              # full suite (2543 tests across 208 files)
 npx vitest run src/         # frontend only
 npx vitest run server/      # server only
 npx vitest run --coverage   # with coverage report
@@ -258,15 +260,15 @@ contract.
 
 ## Visualization Layers
 
-| Layer          | Description                                                                        | Screenshot                                         |
-| -------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Geographic     | Elevation color-relief, maplibre-contour lines, feature labels                     | _(active in every shot)_                           |
-| Weather        | Open-Meteo temperature heatmap (bilinear-interpolated canvas) + wind barbs         | _(active in hero GIF)_                             |
-| Threat density | BFS-clustered GDELT events with custom GLSL radial gradient + P90 normalization    | [screenshot](docs/screenshots/threat-density.png)  |
-| Political      | Natural Earth faction fills (US-aligned blue / Iran-aligned red / neutral gray)    | [screenshot](docs/screenshots/political-layer.png) |
-| Ethnic         | 10 ethnic zones (GeoEPR 2021) with `FillStyleExtension` hatching + overlap stripes | [screenshot](docs/screenshots/ethnic-layer.png)    |
-| Water stress   | Facility-level stress via WRI Aqueduct + precipitation anomaly, 6 rivers as lines  | [screenshot](docs/screenshots/water-stress.png)    |
-| Satellite      | ArcGIS World Imagery — _deferred to v1.4_                                          | _(coming soon)_                                    |
+| Layer          | Description                                                                        | Screenshot                                           |
+| -------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Geographic     | Elevation color-relief, maplibre-contour lines, feature labels                     | _(active in every shot)_                             |
+| Weather        | Open-Meteo temperature heatmap (bilinear-interpolated canvas) + wind barbs         | _(active in hero GIF)_                               |
+| Threat density | BFS-clustered GDELT events with custom GLSL radial gradient + P90 normalization    | [screenshot](public/screenshots/threat-density.png)  |
+| Political      | Natural Earth faction fills (US-aligned blue / Iran-aligned red / neutral gray)    | [screenshot](public/screenshots/political-layer.png) |
+| Ethnic         | 10 ethnic zones (GeoEPR 2021) with `FillStyleExtension` hatching + overlap stripes | [screenshot](public/screenshots/ethnic-layer.png)    |
+| Water stress   | Facility-level stress via WRI Aqueduct + precipitation anomaly, 6 rivers as lines  | [screenshot](public/screenshots/water-stress.png)    |
+| Satellite      | ArcGIS World Imagery — _deferred (carried forward)_                                | _(coming soon)_                                      |
 
 Entity filters (flights, ships, events, sites) operate independently from
 visualization layer toggles. Layer stacking is zoom-dependent: threat clusters
@@ -276,12 +278,12 @@ render below entities below zoom 9, above them at zoom ≥ 9.
 
 ## Screenshots
 
-- **Threat density:** [docs/screenshots/threat-density.png](docs/screenshots/threat-density.png)
-- **Political layer:** [docs/screenshots/political-layer.png](docs/screenshots/political-layer.png)
-- **Ethnic distribution:** [docs/screenshots/ethnic-layer.png](docs/screenshots/ethnic-layer.png)
-- **Water stress:** [docs/screenshots/water-stress.png](docs/screenshots/water-stress.png)
-- **Detail panel:** [docs/screenshots/detail-panel.png](docs/screenshots/detail-panel.png)
-- **Search modal (Cmd+K):** [docs/screenshots/search-modal.png](docs/screenshots/search-modal.png)
+- **Threat density:** [public/screenshots/threat-density.png](public/screenshots/threat-density.png)
+- **Political layer:** [public/screenshots/political-layer.png](public/screenshots/political-layer.png)
+- **Ethnic distribution:** [public/screenshots/ethnic-layer.png](public/screenshots/ethnic-layer.png)
+- **Water stress:** [public/screenshots/water-stress.png](public/screenshots/water-stress.png)
+- **Detail panel:** [public/screenshots/detail-panel.png](public/screenshots/detail-panel.png)
+- **Search modal (Cmd+K):** [public/screenshots/search-modal.png](public/screenshots/search-modal.png)
 
 ---
 
@@ -294,10 +296,10 @@ sample, this is the part worth reading carefully.
 
 | Metric              | Value                                             |
 | ------------------- | ------------------------------------------------- |
-| Total tests         | **2380 passing** (19 skipped, 5 todo)             |
-| Test files          | 188                                               |
-| Frontend tests      | ~870                                              |
-| Server tests        | ~400                                              |
+| Total tests         | **2543 passing** (19 skipped, 5 todo)             |
+| Test files          | 208                                               |
+| Frontend tests      | ~1170                                             |
+| Server tests        | ~1369                                             |
 | Duration (cold)     | ~38 s (vitest forks pool)                         |
 | Coverage (baseline) | lines 66 / funcs 69 / branches 53 / statements 65 |
 | Type coverage       | **97.05%** (7977 / 8219 typed)                    |
@@ -380,6 +382,34 @@ These are the gaps that Phase 26.3 left open and Phase 26.4 closed:
    `public/robots.txt` disallows `/api/*` and `/health` so well-behaved
    crawlers never touch upstream APIs.
 
+### Operator surfaces (v1.5–v1.6)
+
+The dev-open / Bearer-gated API-Health dashboard accumulated a set of
+operator instruments across v1.5 and v1.6:
+
+- **Budget & cost shadow (Phase 38)** — a `BudgetBlock` renders per-provider
+  token-proximity bars (soft 0.8 / hard 0.95) sourced from
+  `llm:tokens:{provider}:YYYY-MM-DD`, alongside a daily cost roll-up
+  (`events:llm-cost-shadow:v3:{date}`, tokens-in × $0.20/M + tokens-out ×
+  $0.40/M stored as integer microcents).
+- **LLM Flight Recorder (Phase 39)** — `/api/events/llm-history` exposes a
+  500-cap call-history recorder (`llm:calls:history`) and a 200-cap per-run
+  summary recorder (`llm:runs:history`); a run killed by Vercel `maxDuration`
+  leaves only its `running` record (the "run that died" signal). Cold-start
+  hydration repopulates the in-memory singletons after a Fluid Compute cold
+  start.
+- **Water-facility romanization (Phase 38)** — water facilities carry a
+  `nameLatin` / `nameOriginal` pair so non-Latin OSM labels render legibly on
+  the map and in the detail panel.
+- **API-Health dashboard consolidation (Phase 40)** — the dev dashboard was
+  consolidated into a single API-Health tab with a hero summary plus four
+  collapsible groups (endpoint health, LLM pipeline, budget & cost, operator
+  actions & data quality).
+- **v1.5 operator actions** — registry-drift gate, dead-URL prune flow
+  (`prune-dead-urls`, per-Bearer daily quota), and actor-confidence / data
+  quality counts surfaced through `/api/operator-status`, all read-only in
+  the captured screenshots.
+
 ### OpenAPI Contract
 
 [`server/openapi.yaml`](server/openapi.yaml) — 1164-line hand-written
@@ -416,12 +446,12 @@ code path that proves each contract. The cache layer contract is
 This directory ships four additional sets of artifacts that document
 the project's engineering story beyond the code itself:
 
-- **[Architecture](docs/architecture/README.md)** — 10 markdown files
+- **[Architecture](docs/architecture/README.md)** — 12 architecture files
   with 21 Mermaid diagrams covering system context, per-source data
   flows, frontend composition, deployment topology, and a four-file
   ontology deep dive (types, algorithms, state machines, complexity).
   Known tech debt labeled inline with `TODO(26.2)` markers.
-- **[Architecture Decision Records](docs/adr/README.md)** — 8 ADRs in
+- **[Architecture Decision Records](docs/adr/README.md)** — 11 ADRs in
   Michael Nygard short format documenting the load-bearing decisions
   from Phase 13 through Phase 26.4: Upstash, Vercel, GDELT,
   RadialGradientExtension shader, Pino+Zod hardening, water stress
@@ -476,7 +506,7 @@ lives in [`server/config.ts`](server/config.ts); drift is checked by
 ## Testing
 
 ```bash
-# Full suite (2380 tests)
+# Full suite (2543 tests)
 npx vitest run
 
 # With coverage report (lcov + HTML)
@@ -596,7 +626,7 @@ shared `dashboardAuth.ts` middleware.
 
 ### Redis key registry
 
-All Redis state — the 30+ keys spanning the LLM pipeline, per-source caches,
+All Redis state — the 32 keys spanning the LLM pipeline, per-source caches,
 operator audit log, cron tick sentinels, and dashboard rate-quota counters —
 is documented in [`docs/architecture/redis-keys.md`](docs/architecture/redis-keys.md)
 (Phase 35 D-05 deep-dive). A drift gate at
@@ -728,4 +758,4 @@ terms of service.
 
 ---
 
-_Phase 26.4-04 — Portfolio presentation pass. Last updated 2026-04-08._
+_Phase 41 — Public reveal polish. Last updated 2026-06-05._

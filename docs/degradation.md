@@ -319,15 +319,15 @@ Response shape (stable contract):
 
 ## Summary Table
 
-| Layer                   | Failure mode       | User-facing outcome                    | Proof                                          |
-| ----------------------- | ------------------ | -------------------------------------- | ---------------------------------------------- |
-| Upstash Redis           | Unreachable / hung | In-memory fallback, slower but working | Chaos test + `withTimeout` 2000 ms cap         |
-| Upstream API            | Timeout / 4xx      | Stale data + yellow StatusPanel dot    | Stale-serve path in each route                 |
-| Zod response validation | Schema drift       | Dev: 500 throw; Prod: warn + send      | `validateResponse.test.ts` covers both         |
-| Rate limiter            | Redis down         | Fail-open, request proceeds            | Limiter skips non-production by design         |
-| Frontend                | Entity dropped     | "LOST CONTACT" gray banner             | `useSelectedEntity` ref-based last-known       |
-| Vercel function         | 10 s timeout       | 504 once, retry serves from warm cache | Cron warming + CDN `s-maxage` mitigates        |
-| `/health`               | Always 200         | Body reflects degradation              | Endpoint is rate-limit-exempt and cache-exempt |
+| Layer                   | Failure mode        | User-facing outcome                    | Proof                                          |
+| ----------------------- | ------------------- | -------------------------------------- | ---------------------------------------------- |
+| Upstash Redis           | Unreachable / hung  | In-memory fallback, slower but working | Chaos test + `withTimeout` 2000 ms cap         |
+| Upstream API            | Timeout / 4xx       | Stale data + yellow StatusPanel dot    | Stale-serve path in each route                 |
+| Zod response validation | Schema drift        | Dev: 500 throw; Prod: warn + send      | `validateResponse.test.ts` covers both         |
+| Rate limiter            | Redis down          | Fail-open, request proceeds            | Limiter skips non-production by design         |
+| Frontend                | Entity dropped      | "LOST CONTACT" gray banner             | `useSelectedEntity` ref-based last-known       |
+| Vercel function         | 800 s timeout (Pro) | 504 once, retry serves from warm cache | Cron warming + CDN `s-maxage` mitigates        |
+| `/health`               | Always 200          | Body reflects degradation              | Endpoint is rate-limit-exempt and cache-exempt |
 
 For specific operational procedures when each failure mode fires,
 see [`docs/runbook.md`](./runbook.md). For the decision rationale

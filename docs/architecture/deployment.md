@@ -53,7 +53,9 @@ flowchart TD
   pins `functions["api/vercel-entry.js"].maxDuration = 800` so the
   daily LLM extraction cron has the wall-clock headroom it needs
   (measured ~125s typical, ~10min worst-case during throttle).
-  Hobby tier's 60s ceiling was incompatible with the v3 cron run.
+  The 800s ceiling is well within Pro's `maxDuration` headroom; the
+  Fluid-Compute-era default function timeout is 300s, which the v3
+  cron run can exceed, so the explicit 800s override is required.
 - **Edge CDN first.** Every cached route emits a `Cache-Control`
   header with `s-maxage` and `stale-while-revalidate`, so a burst of
   identical requests never reaches the function. The lambda is a
@@ -77,7 +79,10 @@ Runs three steps in sequence:
    a single output file at `api/vercel-entry.js`. The Vercel runtime
    discovers `api/vercel-entry.js` directly via the
    `functions["api/vercel-entry.js"]` config in `vercel.json` — no
-   separate stub layer.
+   separate stub layer. (The Build Output API was evaluated as PRO-02
+   and **deferred** — see [Vercel Pro configuration
+   decisions](#vercel-pro-configuration-decisions). The `vercel.ts`
+   config migration was likewise evaluated as PRO-01 and deferred.)
 3. **`tsc -b`** — typechecks the server and app projects end-to-end.
    Fails the build on any type error; there is no `any` escape hatch
    tolerated (strict mode + `noUncheckedIndexedAccess` on the server).
@@ -130,8 +135,9 @@ flowchart LR
 
 ## Cron jobs
 
-Scheduled from `vercel.json` — Vercel Hobby/Pro tier caps at 3 cron
-entries; all three slots are in active use:
+Scheduled from `vercel.json` — Vercel Pro allows up to 40 cron
+entries; the project uses 3 by choice (well under the cap), all in
+active use:
 
 ```json
 {
@@ -167,6 +173,78 @@ authentication in production (Vercel injects the header
 automatically on scheduled invocations). The operator force-trigger
 path on `/api/cron/refresh-events` accepts either `CRON_SECRET` or
 `DASHBOARD_PASSWORD` as the Bearer.
+
+## Vercel Pro configuration decisions
+
+Two Vercel-platform migrations were evaluated during Phase 38 (the
+VERCEL-PRO strand) and **both deliberately deferred with rationale**
+per D-09. Recording the defer decision is what satisfies the
+"shipped-or-explicitly-deferred-with-rationale" bar; neither migration
+is shipped.
+
+- **PRO-01 — `vercel.json` → `vercel.ts` via `@vercel/config`:
+  DEFERRED.** The recommended modern config format would only pay off
+  if there were imperative config to express (e.g. a computed
+  `headers` block or config-drift handlers). The current
+  [`vercel.json`](../../vercel.json) is purely declarative — `crons`,
+  `rewrites`, and `functions` only, with **no `headers` block and no
+  drift handlers to delete**. Migrating would therefore be a net-zero
+  simplification while adding a dependency (`@vercel/config`), an extra
+  build step, and deploy-path risk mid-cleanup. No upside; real
+  downside. Revisit in v1.7 if/when imperative config is actually
+  needed.
+
+- **PRO-02 — Build Output API for `api/vercel-entry.js`: DEFERRED.**
+  Moving to the Build Output API (emitting
+  `.vercel/output/functions/*.func` + a per-function `config.json`
+  instead of relying on Vercel's zero-config function discovery) is a
+  fundamental change to how the function deploys. It would put three
+  load-bearing settings at risk simultaneously: the 800s
+  `maxDuration`, the `includeFiles: api/_eval/*.json` eval-fixture
+  copy, and the rewrite map. Touching the production deploy path in the
+  middle of a cleanup milestone is the wrong risk/reward trade. The
+  carry-forward (Phase 999.2 "api/vercel-entry rebuild discipline")
+  **stays open**; revisit in v1.7.
+
+Both decisions can be reopened in v1.7. Until then, the declarative
+`vercel.json` + zero-config function discovery remains the deploy path.
+
+## Fluid Compute compatibility
+
+Vercel Fluid Compute (now the default execution model) runs **multiple
+concurrent requests inside a single warm function instance** rather
+than one request per isolate. PRO-03 verified that the
+[`createApp()`](../../server/index.ts) factory and the memoized
+[`server/vercel-entry.ts`](../../server/vercel-entry.ts) wrapper are
+safe under in-instance concurrency. Compat verdict: **compatible, no
+changes required.**
+
+- **App memoization is correct, not a hazard.** `vercel-entry.ts`
+  builds the Express app once at module load (`app = createApp()`) and
+  reuses it across warm invocations. Express apps are designed for
+  concurrent request handling; `createApp()` constructs no per-request
+  global state — every request gets its own `req`/`res` pair and the
+  router is read-only after construction. Request reuse via the
+  memoized app ✓.
+- **No graceful-shutdown handler needed.** Upstash Redis is
+  REST-based, so there are no persistent connections to drain on
+  SIGTERM. Vercel's own 500ms shutdown window is sufficient; the entry
+  wrapper documents this inline. No connection pool to drain ✓.
+- **Process-scoped singletons do not leak across concurrent
+  requests.** The in-memory `callHistory` and `llmProgress` singletons
+  in the LLM modules are **intentionally process-scoped** and are NOT
+  written per request on the hot path — they are mutated only by the
+  cron-driven extraction pipeline (single writer), and Phase 28.2.7
+  added Redis write-through (`llm:lastProgress`) so status survives
+  cold starts. Concurrent `/api/*` reads observe a consistent snapshot;
+  there is no per-request global write that one operator's request
+  could leak into another's. No cross-request state contamination ✓.
+
+A smoke assertion in
+[`server/__tests__/vercel-entry.test.ts`](../../server/__tests__/vercel-entry.test.ts)
+boots the memoized app and issues two sequential requests, asserting
+they do not cross-contaminate state — a regression guard for the
+no-leak invariant above.
 
 ## Environment variables
 

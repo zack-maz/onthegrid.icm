@@ -23,7 +23,7 @@ not aspirational operations advice.
 3. [Overpass API timeout](#3-overpass-api-timeout)
 4. [AISStream WebSocket disconnect mid-collect](#4-aisstream-websocket-disconnect-mid-collect)
 5. [Yahoo Finance throttling](#5-yahoo-finance-throttling)
-6. [Vercel function timeout (300s default / 800s configured ceiling)](#6-vercel-function-timeout-10-second-limit)
+6. [Vercel function timeout (300s default / 800s configured ceiling)](#6-vercel-function-timeout-300s-default-800s-ceiling)
 7. [Upstash command budget exhausted](#7-upstash-command-budget-exhausted)
 8. [CORS misconfiguration after deploy](#8-cors-misconfiguration-after-deploy)
 9. [Vercel cron job failure](#9-vercel-cron-job-failure)
@@ -352,7 +352,7 @@ prices.
 
 ---
 
-<a id="6-vercel-function-timeout-10-second-limit"></a>
+<a id="6-vercel-function-timeout-300s-default-800s-ceiling"></a>
 
 ## 6. Vercel function timeout (300s default / 800s configured ceiling)
 
@@ -366,7 +366,7 @@ prices.
 
 **Cause:**
 
-- Pre-Phase-29 Hobby plan baseline was a hard 10-second timeout (the framing this section retained until Phase 36 D-14). Phase 29 D-08 upgraded to Vercel Pro and set `vercel.json functions."api/vercel-entry.js".maxDuration: 800` to accommodate worst-case LLM extraction runs (~10 minutes).
+- Historical note: the pre-Phase-29 Hobby plan baseline was a hard 10-second timeout (the framing this section retained until Phase 36 D-14). Phase 29 D-08 upgraded to Vercel Pro and set `vercel.json functions."api/vercel-entry.js".maxDuration: 800` to accommodate worst-case LLM extraction runs (~10 minutes). The live ceiling is now 800s (Fluid-Compute-era default function timeout is 300s).
 - Cold-start latency + upstream API latency together approaching the configured `maxDuration` on long-running paths. NIM throttle (Phase 30 / 34 measurements) is the dominant driver for `/api/cron/refresh-events`.
 - Less commonly: Upstash command budget exhausted causing cache writes to fail silently; every request re-fetches upstream and accumulates latency.
 
@@ -533,10 +533,10 @@ multiple layers even during low-traffic periods.
 - `vercel.json` `crons` array misconfigured (bad schedule syntax,
   wrong endpoint path, missing auth).
 - The cron endpoint itself is failing — e.g.
-  `/api/cron/warm` times out because the function hits the 10-
-  second limit (see failure mode 6).
-- Vercel cron billing / plan limit reached (Hobby plan has a
-  limited cron count).
+  `/api/cron/warm` times out because the function hits the
+  configured 800s `maxDuration` ceiling (see failure mode 6).
+- Vercel cron billing / plan limit reached (Pro allows up to 40
+  cron entries; the project uses 3, so this is unlikely).
 
 **Remediation:**
 

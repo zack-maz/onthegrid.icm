@@ -107,6 +107,11 @@ vi.mock('../../lib/llmEvalHarness.js', () => ({
 const groupGdeltRowsMock = vi.fn();
 vi.mock('../../lib/eventGrouping.js', () => ({
   groupGdeltRows: groupGdeltRowsMock,
+  // GDELT-MATCH-02 — the pipeline now runs the high-confidence dedup pre-pass
+  // before grouping. Mock it as an identity pass-through so these diff-filter
+  // assertions still drive group keys through `groupGdeltRowsMock` unchanged
+  // (the dedup pass itself is unit-tested in eventGrouping.dedup.test.ts).
+  dedupHighConfidence: vi.fn((entities: unknown[]) => entities),
 }));
 
 const { llmProgressSingleton } = vi.hoisted(() => ({
@@ -177,30 +182,41 @@ const processEventGroupsMock = vi.fn(
   },
 );
 
-const geocodeEnrichedEventsMock = vi.fn(async (input: any, _groups: any, onProgress?: any) => {
-  const events = input.events as Array<Record<string, unknown>>;
-  const out = events.map((e) => {
-    const groupKey = (e as { groupKey: string }).groupKey;
-    return {
-      ...e,
-      resolvedLat: 35.0 + groupKey.length * 0.001,
-      resolvedLng: 50.0 + groupKey.length * 0.001,
-      displayName: `Test Site ${groupKey}`,
-      geocodeProvenance: 'nominatim-direct' as const,
-      precision: 'city' as const,
-      suspect: false,
-      actionGeoDistanceKm: 0,
-    };
-  });
-  if (typeof onProgress === 'function') {
-    onProgress(out.length, out.length);
-  }
-  return { schemaVersion: input.schemaVersion, events: out };
-});
+// Phase 38 LLM-PURGE-01 — pipeline now imports the v3 extractor directly
+// (the `llmEventExtractor.js` stub barrel was deleted). geocodeEnrichedEventsV3
+// takes the v3-native signature `(events, groupsByKey, matchedNewsByGroup,
+// bellingcatByGroup, onComplete)` and returns a flat array (no tagged shape).
+const geocodeEnrichedEventsMock = vi.fn(
+  async (
+    events: Array<Record<string, unknown>>,
+    _groupsByKey: any,
+    _matchedNews: any,
+    _bellingcat: any,
+    onProgress?: any,
+  ) => {
+    const out = events.map((e) => {
+      const groupKey = (e as { groupKey: string }).groupKey;
+      return {
+        ...e,
+        resolvedLat: 35.0 + groupKey.length * 0.001,
+        resolvedLng: 50.0 + groupKey.length * 0.001,
+        displayName: `Test Site ${groupKey}`,
+        geocodeProvenance: 'nominatim-direct' as const,
+        precision: 'city' as const,
+        suspect: false,
+        actionGeoDistanceKm: 0,
+      };
+    });
+    if (typeof onProgress === 'function') {
+      onProgress(out.length, out.length);
+    }
+    return out;
+  },
+);
 
-vi.mock('../../lib/llmEventExtractor.js', () => ({
-  processEventGroups: processEventGroupsMock,
-  geocodeEnrichedEvents: geocodeEnrichedEventsMock,
+vi.mock('../../lib/llmEventExtractor.v3.js', () => ({
+  processEventGroupsV3: processEventGroupsMock,
+  geocodeEnrichedEventsV3: geocodeEnrichedEventsMock,
 }));
 
 interface MinimalEntity {

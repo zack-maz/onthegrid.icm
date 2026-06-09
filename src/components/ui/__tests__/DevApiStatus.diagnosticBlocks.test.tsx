@@ -161,10 +161,11 @@ describe('DevApiStatus diagnostic blocks (Phase 28.2 W5 Plan 05 Tasks 3-6)', () 
       // Expect at least 3 dots; each must use a CSS var, not hex literal.
       expect(dots.length).toBeGreaterThanOrEqual(3);
       const styles = Array.from(dots).map((d) => (d as HTMLElement).getAttribute('style') ?? '');
-      // At least one dot uses var(--color-site-healthy)
-      expect(styles.some((s) => s.includes('var(--color-site-healthy)'))).toBe(true);
-      expect(styles.some((s) => s.includes('var(--color-site-attacked)'))).toBe(true);
-      expect(styles.some((s) => s.includes('var(--color-event-airstrike)'))).toBe(true);
+      // Phase 40 Task 2 — tier-banner dots migrated to the operator-console
+      // --color-status-* namespace (byte-identical hex; zero visual change).
+      expect(styles.some((s) => s.includes('var(--color-status-healthy)'))).toBe(true);
+      expect(styles.some((s) => s.includes('var(--color-status-degraded)'))).toBe(true);
+      expect(styles.some((s) => s.includes('var(--color-status-warning)'))).toBe(true);
     });
 
     it('Test 3: spacing classes are multiples of 4', () => {
@@ -407,6 +408,28 @@ describe('DevApiStatus diagnostic blocks (Phase 28.2 W5 Plan 05 Tasks 3-6)', () 
     });
   });
 
+  // ==========================================================================
+  // Phase 40 Plan 04 — Regression-Lock assertion 2 (muted-placeholder markup),
+  // diagnosticBlocks vantage. This file renders with health present but no
+  // operator-status fetch mock, so `opStatus` stays null ⇒ the BudgetBlock +
+  // FlightRecorder degrade to their canonical muted placeholders. Assert the
+  // exact D-06 markup (text-white/30 italic) + copy form `— no data (...)`.
+  // ==========================================================================
+  describe('Phase 40 §Regression-Lock assertion 2 — muted placeholders (D-06 honest render)', () => {
+    it('Budget + FlightRecorder placeholders carry text-white/30 italic + "— no data (...)" copy', () => {
+      const health = makeResponse({
+        endpoints: { Flights: makeEndpoint({ name: 'Flights' }) },
+      });
+      renderModal({ health });
+      for (const testid of ['budget-block-placeholder', 'flight-recorder-placeholder']) {
+        const el = screen.getByTestId(testid);
+        expect(el.className).toContain('text-white/30');
+        expect(el.className).toContain('italic');
+        expect(el.textContent ?? '').toMatch(/^—\s*no data \(.+\)$/);
+      }
+    });
+  });
+
   describe('Block 4 (Task 6) — recent-fetch sparkline', () => {
     beforeEach(() => {
       // Seed flightStore.recentFetches with 7 entries (5 ok, 2 fail)
@@ -439,8 +462,10 @@ describe('DevApiStatus diagnostic blocks (Phase 28.2 W5 Plan 05 Tasks 3-6)', () 
       const last7Styles = Array.from(dots)
         .slice(3)
         .map((d) => (d as HTMLElement).getAttribute('style') ?? '');
-      const greens = last7Styles.filter((s) => s.includes('--color-site-healthy')).length;
-      const reds = last7Styles.filter((s) => s.includes('--color-event-airstrike')).length;
+      // Phase 40 Task 2 — sparkline dots migrated to the --color-status-*
+      // namespace (ok → status-healthy, fail → status-degraded).
+      const greens = last7Styles.filter((s) => s.includes('--color-status-healthy')).length;
+      const reds = last7Styles.filter((s) => s.includes('--color-status-degraded')).length;
       expect(greens).toBe(5);
       expect(reds).toBe(2);
     });
@@ -478,7 +503,8 @@ describe('DevApiStatus diagnostic blocks (Phase 28.2 W5 Plan 05 Tasks 3-6)', () 
       expect(dots.length).toBe(10);
       // Newest 10 = entries 5..14. Entries 5..14 have ok=true (i>=5 in seed).
       const styles = Array.from(dots).map((d) => (d as HTMLElement).getAttribute('style') ?? '');
-      const greens = styles.filter((s) => s.includes('--color-site-healthy')).length;
+      // Phase 40 Task 2 — sparkline ok-dot migrated to --color-status-healthy.
+      const greens = styles.filter((s) => s.includes('--color-status-healthy')).length;
       // Items 5..14: ok=true => 10 greens
       expect(greens).toBe(10);
     });

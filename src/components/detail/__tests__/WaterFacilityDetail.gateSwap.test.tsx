@@ -67,6 +67,16 @@ const mockFacility: WaterFacility = {
   notabilityScore: 87,
 } as unknown as WaterFacility;
 
+// WATER-LATIN-04: a facility whose original name was non-Latin — `label` carries
+// the romanized token, `nameOriginal` preserves the original for hover/sub-label.
+const mockRomanizedFacility: WaterFacility = {
+  ...mockFacility,
+  id: 'water-test-2',
+  label: 'Sd Lmwsl',
+  nameLatin: 'Sd Lmwsl',
+  nameOriginal: 'سد الموصل',
+} as unknown as WaterFacility;
+
 function findOsmIdRow(container: HTMLElement): HTMLElement | null {
   const labels = container.querySelectorAll('span');
   for (const el of labels) {
@@ -153,5 +163,25 @@ describe('WaterFacilityDetail — OSM ID Path B gate-swap + notabilityScore lock
     const { container } = render(<WaterFacilityDetail facility={mockFacility} />);
     expect(findOsmIdRow(container)).toBeNull();
     expect(findNotabilityScoreSection(container)).toBeNull();
+  });
+
+  // --- Surface C: WATER-LATIN-04 romanized-name display ---
+
+  it('Surface C — Test 6: romanized label displays with the original as a sub-label', () => {
+    vi.mocked(DashboardAuth.shouldRenderDashboard).mockReturnValue(true);
+    const { container } = render(<WaterFacilityDetail facility={mockRomanizedFacility} />);
+    // The romanized (searchable) display name is rendered.
+    expect(container.textContent).toContain('Sd Lmwsl');
+    // The preserved original is reachable (sub-label).
+    expect(container.textContent).toContain('سد الموصل');
+  });
+
+  it('Surface C — Test 7: a Latin-named facility shows no original sub-label', () => {
+    vi.mocked(DashboardAuth.shouldRenderDashboard).mockReturnValue(true);
+    const { container } = render(<WaterFacilityDetail facility={mockFacility} />);
+    // No nameOriginal → no Arabic sub-label leaks in.
+    expect(container.textContent).not.toContain('سد');
+    // The Latin label is present.
+    expect(container.textContent).toContain('Test Dam');
   });
 });

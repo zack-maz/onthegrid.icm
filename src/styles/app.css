@@ -54,6 +54,16 @@
   --color-site-healthy: #22c55e;
   --color-site-attacked: #f97316;
 
+  /* Phase 40 D-13 — operator-console status namespace (API Health tab hero header +
+     unified status dots). Semantically distinct from the entity map palette above:
+     these name health/degraded/warning STATUS, not site/event entities. Hex (NOT OKLCH)
+     so colorBridge's hex parser roundtrips. Byte-identical to the site/event map tokens
+     they replace as status colors (--color-site-healthy / --color-site-attacked /
+     --color-flight) so the migration off borrowed map tokens is zero-visual-change. */
+  --color-status-healthy: #22c55e;
+  --color-status-degraded: #f97316;
+  --color-status-warning: #eab308;
+
   /* Faction palette (consumed by src/lib/factions.ts via colorBridge hex re-exports) */
   --color-faction-us-aligned: #3b82f6;
   --color-faction-iran-aligned: #dc2626;

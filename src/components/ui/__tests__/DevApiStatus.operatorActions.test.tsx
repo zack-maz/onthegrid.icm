@@ -7,7 +7,7 @@
  * row in the eval-score block. Sourced from /api/operator-status (the
  * route landed in step 1 of this task).
  */
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, cleanup, act, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { HealthStatusContext } from '@/components/providers/HealthStatusProvider';
@@ -206,5 +206,39 @@ describe('DevApiStatus Operator Actions + adversarial eval row (Phase 28.2 W5 Ta
     expect(html).not.toContain('py-1.5');
     expect(html).not.toContain('py-0.5');
     expect(html).not.toContain('gap-0.5');
+  });
+
+  // ==========================================================================
+  // Phase 40 Plan 04 — Regression-Lock assertion 5 (drawer default-closed),
+  // operator-actions vantage. The read-only 24h-action count STAYS in Group 4;
+  // the Replay probe button lives in the default-closed drawer and is absent
+  // until the operator opens it. (The prune case is covered in prune.test.tsx;
+  // this payload has no `prune` block so only Replay is exercised here.)
+  // ==========================================================================
+  it('Assertion 5 (operator-actions vantage): read-only 24h count present; Replay button absent until drawer opened', async () => {
+    mockOperatorStatus({
+      audit24h: 12,
+      byBearer: [],
+      advEval: null,
+    });
+    await renderModal();
+    // Read-only count present from first paint.
+    expect(screen.getByTestId('operator-actions-24h-count').textContent).toContain(
+      '24h actions: 12',
+    );
+    // Default-closed: drawer + Replay trigger absent; trigger affordance present.
+    expect(screen.queryByTestId('operator-drawer')).toBeNull();
+    expect(screen.queryByTestId('replay-test-trigger')).toBeNull();
+    const trigger = screen.getByTestId('operator-drawer-trigger');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+    // Open ⇒ drawer + Replay button appear inside it.
+    await act(async () => {
+      fireEvent.click(trigger);
+    });
+    const drawer = screen.getByTestId('operator-drawer');
+    expect(drawer).toBeInTheDocument();
+    expect(drawer.querySelector('[data-testid="replay-test-trigger"]')).not.toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
   });
 });

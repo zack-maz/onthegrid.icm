@@ -154,7 +154,7 @@ describe('DevApiStatus v3 surface — Phase 27.4.3 Plan 04', () => {
     vi.useRealTimers();
   });
 
-  it('renders all 7 v3 empty-state lines when schemaVersion=v3 and fields are empty', () => {
+  it('renders all 6 v3 empty-state lines when schemaVersion=v3 and fields are empty', () => {
     mockLLMStatus = {
       stage: 'idle',
       schemaVersion: 'v3',
@@ -172,7 +172,6 @@ describe('DevApiStatus v3 surface — Phase 27.4.3 Plan 04', () => {
     expect(screen.getByText('No requests this window.')).toBeInTheDocument();
     expect(screen.getByText('No schema rejections.')).toBeInTheDocument();
     expect(screen.getByText('No errors today.')).toBeInTheDocument();
-    expect(screen.getByText('No flips recorded.')).toBeInTheDocument();
     expect(screen.getByText('No tokens billed this window.')).toBeInTheDocument();
   });
 
@@ -188,7 +187,6 @@ describe('DevApiStatus v3 surface — Phase 27.4.3 Plan 04', () => {
     expect(screen.getByText('Rate-Limit Headroom')).toBeInTheDocument();
     expect(screen.getByText('Schema-Strict Failure Rate')).toBeInTheDocument();
     expect(screen.getByText('Error Taxonomy (today UTC)')).toBeInTheDocument();
-    expect(screen.getByText('Pipeline Flips (last 200)')).toBeInTheDocument();
     expect(screen.getByText('v3 Cost Shadow (last 24h)')).toBeInTheDocument();
   });
 
@@ -238,7 +236,6 @@ describe('DevApiStatus v3 surface — Phase 27.4.3 Plan 04', () => {
     // None of the v3-only headers leak through
     expect(screen.queryByText('Routing Trace (last 50)')).toBeNull();
     expect(screen.queryByText('v3 Cost Shadow (last 24h)')).toBeNull();
-    expect(screen.queryByText('Pipeline Flips (last 200)')).toBeNull();
   });
 
   it('renders populated routing-trace row with provider/model and reason chip', () => {

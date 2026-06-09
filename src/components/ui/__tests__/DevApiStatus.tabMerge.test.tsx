@@ -372,4 +372,75 @@ describe('DevApiStatus tab merge (Phase 28.2 W5 Plan 05 Task 2)', () => {
     fireEvent.click(tab);
     expect(useUIStore.getState().activeDevApiStatusTab).toBe('apiHealth');
   });
+
+  // ==========================================================================
+  // Phase 40 Plan 04 — Regression-Lock assertion 6 (roving keyboard nav +
+  // active-tab affordance). WAI-ARIA tablist manual-activation pattern
+  // (40-03-SUMMARY): ArrowRight/Left move FOCUS only (no activation); Enter/
+  // Space activate the focused tab; the active tab carries tabIndex=0 + the 2px
+  // `border-b-2 border-accent-blue` indicator while inactive tabs are
+  // tabIndex=-1; each panel container is role="tabpanel".
+  // ==========================================================================
+  describe('Phase 40 §Regression-Lock assertion 6 — roving keyboard nav + active indicator', () => {
+    it('ArrowRight moves roving focus to the next tab WITHOUT changing the active tab (focus-only)', () => {
+      const health = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      renderModalWithHealth({ health });
+      const tablist = screen.getByRole('tablist');
+      const tabs = screen.getAllByRole('tab');
+      // ≥2 tabs visible (API Health + Water + Sites + Events).
+      expect(tabs.length).toBeGreaterThanOrEqual(2);
+
+      const apiHealthTab = screen.getByTestId('tab-api-health');
+      // Focus the active tab (the roving tabIndex=0 one), then ArrowRight.
+      apiHealthTab.focus();
+      expect(document.activeElement).toBe(apiHealthTab);
+      fireEvent.keyDown(tablist, { key: 'ArrowRight' });
+      // Focus moved to the NEXT tab (Water) ...
+      expect(document.activeElement).toBe(tabs[1]);
+      // ... but the active tab is UNCHANGED (manual activation — no setTab).
+      expect(useUIStore.getState().activeDevApiStatusTab).toBe('apiHealth');
+      expect(apiHealthTab.getAttribute('aria-selected')).toBe('true');
+      expect(tabs[1].getAttribute('aria-selected')).toBe('false');
+    });
+
+    it('Enter on the focused tab activates it (aria-selected moves)', () => {
+      const health = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      renderModalWithHealth({ health });
+      const tablist = screen.getByRole('tablist');
+      const apiHealthTab = screen.getByTestId('tab-api-health');
+      const waterTab = screen.getByTestId('tab-water');
+
+      apiHealthTab.focus();
+      // Move focus to Water, then Enter activates it.
+      fireEvent.keyDown(tablist, { key: 'ArrowRight' });
+      expect(document.activeElement).toBe(waterTab);
+      fireEvent.keyDown(tablist, { key: 'Enter' });
+      expect(useUIStore.getState().activeDevApiStatusTab).toBe('water');
+    });
+
+    it('active tab carries the 2px accent-blue indicator + tabIndex=0; inactive tabs tabIndex=-1', () => {
+      const health = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      renderModalWithHealth({ health });
+      const apiHealthTab = screen.getByTestId('tab-api-health'); // active by default
+      const waterTab = screen.getByTestId('tab-water'); // inactive
+
+      // Active indicator (greyscale-readable 2px bottom border in accent-blue).
+      expect(apiHealthTab.className).toContain('border-b-2');
+      expect(apiHealthTab.className).toContain('border-accent-blue');
+      // Roving tabindex.
+      expect(apiHealthTab.getAttribute('tabindex')).toBe('0');
+      expect(waterTab.getAttribute('tabindex')).toBe('-1');
+      // Inactive tab does NOT carry the accent indicator.
+      expect(waterTab.className).not.toContain('border-accent-blue');
+    });
+
+    it('each rendered panel container is role="tabpanel" labelled by its tab', () => {
+      const health = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      renderModalWithHealth({ health });
+      // Active panel (API Health) is a tabpanel labelled by its tab id.
+      const panels = screen.getAllByRole('tabpanel');
+      expect(panels.length).toBeGreaterThanOrEqual(1);
+      expect(panels[0].getAttribute('aria-labelledby')).toBe('tab-api-health');
+    });
+  });
 });

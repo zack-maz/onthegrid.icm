@@ -1,13 +1,15 @@
 /**
  * Free Claude Router — multi-provider cascade for LLM-backed extraction + geocoding.
  *
- * Live production callers (verified Phase 35 / 2026-05-27):
- *   - server/lib/llmEventExtractor.v3.ts:40 — sole runtime extractor; calls
+ * Live production callers (verified Phase 38 / 2026-06-04):
+ *   - server/lib/llmEventExtractor.v3.ts — sole runtime extractor; calls
  *     callLLM for each event-group batch.
- *   - server/lib/llmResolver.ts:15 — 6-path geocode resolver; calls callLLM
+ *   - server/lib/llmResolver.ts — 6-path geocode resolver; calls callLLM
  *     for the nominatim-verified-2pass reranker only.
- *   - server/adapters/llm-provider.ts:23 — bridge wrapper; re-exports callLLM
- *     for legacy import paths (Phase 27.4.3 D-03 cascade replacement).
+ *
+ * Phase 38 LLM-PURGE-02 — the server/adapters/llm-provider.ts callLLM bridge
+ * wrapper was deleted; no module re-exports callLLM any more. Both live callers
+ * import it from here directly.
  *
  * Active cascade shape (Phase 34 close): NIM primary (qwen-235b instruct);
  * OpenRouter dormant (skipOpenRouter: true at extractor sites per Phase 30.1);
@@ -43,11 +45,18 @@ import OpenAI from 'openai';
 import { redis } from '../cache/redis.js';
 import { env } from '../config.js';
 
+// Phase 39 OBS-FLIGHT-01 / -05 — dual-write each call entry to the Redis-backed
+// `llm:calls:history` ring so the flight recorder survives cold starts and can
+// group calls by runId. Degrade-open — appendCallHistory never throws.
+import { appendCallHistory } from './llmCallHistory.js';
 import { isAvailable, record, type Provider } from './llmCircuitBreaker.js';
 // Phase 27.4.3 Plan 02b B-1 — instrumentation hooks. Writes per-attempt
 // latency, headroom, error-taxonomy, and shadow-cost into the live progress
 // singleton so DevApiStatus / /llm-status surfaces them under v3.
-import { llmProgress, updateProgress } from './llmProgress.js';
+// Phase 39 OBS-FLIGHT-05 — CallHistoryEntry carries runId + batchIndex for
+// call→run back-correlation; llmProgress.runId is the per-run id stamped at the
+// run boundary in llmExtractionPipeline.ts.
+import { llmProgress, updateProgress, type CallHistoryEntry } from './llmProgress.js';
 import { logger } from './logger.js';
 
 // ---------------------------------------------------------------------------
@@ -297,7 +306,15 @@ async function sleepWithJitter(base: number): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// OpenRouter daily counter (mirrors llmTokenBudget.todayKey shape)
+// UTC day key (YYYY-MM-DD) — used by the cost-shadow daily roll-up.
+//
+// Phase 38 LLM-PURGE-08 (D-04 Path A) — the OpenRouter daily-cap Redis counter
+// (incrOpenRouterDaily writer + getOpenRouterDaily reader, on the
+// `llm:tokens:openrouter:YYYY-MM-DD` key) was removed. OpenRouter stays a
+// dormant key-gated provider in the cascade (client is null without
+// OPENROUTER_API_KEY — ADR-0010 "dormant, could wake if key set" semantics);
+// only the dead daily-cap accounting is gone. The legacy
+// `llm:tokens:openrouter:YYYY-MM-DD` key drains on its 48h TTL.
 // ---------------------------------------------------------------------------
 
 function todayKey(): string {
@@ -305,27 +322,6 @@ function todayKey(): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
     d.getUTCDate(),
   ).padStart(2, '0')}`;
-}
-
-async function incrOpenRouterDaily(): Promise<number> {
-  try {
-    const key = `llm:tokens:openrouter:${todayKey()}`;
-    const next = await redis.incr(key);
-    await redis.expire(key, 48 * 3600);
-    return typeof next === 'number' ? next : 0;
-  } catch {
-    return 0;
-  }
-}
-
-async function getOpenRouterDaily(): Promise<number> {
-  try {
-    const key = `llm:tokens:openrouter:${todayKey()}`;
-    const v = await redis.get<number | string | null>(key);
-    return typeof v === 'number' ? v : typeof v === 'string' ? parseInt(v, 10) : 0;
-  } catch {
-    return 0;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +348,16 @@ export async function callLLM(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
 
   _schemaText: string,
-  opts: { batchSize?: number; modelOverride?: string; skipOpenRouter?: boolean } = {},
+  // Phase 39 OBS-FLIGHT-05 — `batchIndex` is threaded from the
+  // processEventGroupsV3 batch loop so each call-history entry can be grouped
+  // by its parent batch within the run. Optional; defaults to -1 (unknown)
+  // for non-extractor callers (e.g. the llmResolver reranker).
+  opts: {
+    batchSize?: number;
+    modelOverride?: string;
+    skipOpenRouter?: boolean;
+    batchIndex?: number;
+  } = {},
 ): Promise<{
   content: string | null;
   routing: RoutingDecision[];
@@ -392,7 +397,9 @@ export async function callLLM(
     const prevName = idx > 0 ? providers[idx - 1]?.name : null;
     /**
      * Build the routing reason for the *current* provider when it is BYPASSED
-     * by a gate (no_client / breaker / rate_limit_window / daily_cap).
+     * by a gate (no_client / breaker / rate_limit_window). Phase 38 LLM-PURGE-08
+     * removed the OpenRouter daily-cap gate; `daily_cap` survives only as a
+     * legacy skipReason union member.
      *   - For the primary, encode the bypass cause as `skipped:<suffix>` so
      *     observability sees why we never even attempted it (otherwise primary
      *     bypass would be indistinguishable from a normal primary attempt).
@@ -429,16 +436,6 @@ export async function callLLM(
       });
       continue;
     }
-    if (p.name === 'openrouter' && (await getOpenRouterDaily()) >= OPENROUTER_DAILY_CAP) {
-      decisions.push({
-        provider: p.name,
-        model: p.model,
-        reason: buildReason('daily_cap'),
-        timestamp: Date.now(),
-      });
-      continue;
-    }
-
     decisions.push({
       provider: p.name,
       model: p.model,
@@ -461,7 +458,6 @@ export async function callLLM(
       const t0 = Date.now();
       try {
         if (p.name === 'nvidia_nim') nvidiaNimWindow.consume();
-        if (p.name === 'openrouter') await incrOpenRouterDaily();
 
         const res = await p.client.chat.completions.create({
           model: p.model,
@@ -502,6 +498,32 @@ export async function callLLM(
         // Phase 27.4.4 D-21 — stamp lastNimCallTs on every successful NIM
         // call so prewarmIfCold() correctly detects > 60s of NIM idleness.
         if (p.name === 'nvidia_nim') lastNimCallTs = Date.now();
+
+        // Phase 39 OBS-FLIGHT-05 — SUCCESS-PATH callHistory writer. Pre-Phase-39
+        // the success branch only `record`ed 'ok' and returned; the in-memory
+        // callHistory row was written ONLY on the failure path. Build a
+        // runId+batchIndex-stamped entry here (real tokensIn/tokensOut from the
+        // completion usage), prepend it to the cap-20 singleton via the same
+        // updateProgress .slice(0,20) idiom, then dual-write it to
+        // `llm:calls:history` (degrade-open; never throws). Do NOT add a second
+        // `record(p.name,'err')` anywhere — the single per-call recording at
+        // the end of the failure path is unchanged (Pitfall 4).
+        const successEntry: CallHistoryEntry = {
+          provider: p.name,
+          model: p.model,
+          tokensIn,
+          tokensOut,
+          durationMs: latencyMs,
+          ok: true,
+          batchSize: opts.batchSize ?? 0,
+          timestamp: Date.now(),
+          runId: llmProgress.runId ?? '',
+          batchIndex: opts.batchIndex ?? -1,
+        };
+        const successHistory = llmProgress.callHistory ?? [];
+        updateProgress({ callHistory: [successEntry, ...successHistory].slice(0, 20) });
+        void appendCallHistory(successEntry); // dual-write — degrade-open
+
         return { content, routing: decisions, finishReason };
       } catch (err) {
         const latencyMs = Date.now() - t0;
@@ -537,22 +559,26 @@ export async function callLLM(
         // end of the call (line 479) is unchanged so the breaker window still
         // sees exactly one 'err' per call, not per attempt.
         const history = llmProgress.callHistory ?? [];
+        // Phase 39 OBS-FLIGHT-05 — stamp runId + batchIndex on the failure-path
+        // entry too (back-correlation), and dual-write it to `llm:calls:history`
+        // below so the flight recorder sees failed attempts as well as successes.
+        const failureEntry: CallHistoryEntry = {
+          provider: p.name,
+          model: p.model,
+          tokensIn: 0,
+          tokensOut: 0,
+          durationMs: latencyMs,
+          ok: false,
+          batchSize: opts.batchSize ?? 0,
+          timestamp: Date.now(),
+          retryAfterMs,
+          runId: llmProgress.runId ?? '',
+          batchIndex: opts.batchIndex ?? -1,
+        };
         updateProgress({
-          callHistory: [
-            {
-              provider: p.name,
-              model: p.model,
-              tokensIn: 0,
-              tokensOut: 0,
-              durationMs: latencyMs,
-              ok: false,
-              batchSize: opts.batchSize ?? 0,
-              timestamp: Date.now(),
-              retryAfterMs,
-            },
-            ...history,
-          ].slice(0, 20),
+          callHistory: [failureEntry, ...history].slice(0, 20),
         });
+        void appendCallHistory(failureEntry); // dual-write — degrade-open
 
         log.warn(
           {
@@ -640,23 +666,10 @@ function recordHeadroom(provider: FreeProvider): void {
     const h = nvidiaNimWindow.headroom();
     current.nvidia_nim = { ...current.nvidia_nim, used: h.used, cap: h.cap };
   } else {
-    // openrouter — read the daily counter without re-incrementing
-    // (incrOpenRouterDaily already incremented above; we just snapshot).
-    // Use a non-blocking fire-and-forget read.
-    getOpenRouterDaily()
-      .then((used) => {
-        const rl = llmProgress.rateLimit;
-        if (!rl) return;
-        updateProgress({
-          rateLimit: {
-            ...rl,
-            openrouter: { ...current.openrouter, used },
-          },
-        });
-      })
-      .catch(() => {
-        // observability-only — swallow errors silently
-      });
+    // openrouter — Phase 38 LLM-PURGE-08: the daily-cap counter was removed,
+    // so there is no per-day `used` to snapshot. OpenRouter is dormant
+    // (key-gated); report `used: 0` against the static cap for the headroom UI.
+    current.openrouter = { ...current.openrouter, used: 0 };
   }
   updateProgress({ rateLimit: current });
 }

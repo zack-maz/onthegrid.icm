@@ -194,6 +194,24 @@ vi.mock('../../cache/redis.js', async (importOriginal) => {
       get: vi.fn(redisDeath),
       set: vi.fn(redisDeath),
       del: vi.fn(redisDeath),
+      // LLM-FIX-04 (Phase 38) — extend the chaos mock to the raw-redis
+      // methods that operator-tier surfaces (operator-status aggregator,
+      // quota counters, DLQ/lineage/audit sidecars) call directly. Without
+      // these, a route that bypasses cacheGet/Set and reaches for
+      // redis.incr/sadd/scan/etc. would hit the UNMOCKED real client (which
+      // resolves against a misconfigured URL or hangs) — masking a genuine
+      // no-500 regression. Every raw method now throws like the rest.
+      incr: vi.fn(redisDeath),
+      sadd: vi.fn(redisDeath),
+      smembers: vi.fn(redisDeath),
+      scard: vi.fn(redisDeath),
+      srem: vi.fn(redisDeath),
+      zadd: vi.fn(redisDeath),
+      hset: vi.fn(redisDeath),
+      hincrby: vi.fn(redisDeath),
+      scan: vi.fn(redisDeath),
+      lpush: vi.fn(redisDeath),
+      expire: vi.fn(redisDeath),
     },
     cacheGet: vi.fn(redisDeath),
     cacheSet: vi.fn(redisDeath),
@@ -348,5 +366,26 @@ describe('Chaos: Redis death', () => {
       // cacheGetSafe's in-memory fallback.
       expect(res.body).toEqual({ prunedCount: 0, prunedIds: [] });
     }
+  });
+
+  // ---------------------------------------------------------------------------
+  // LLM-FIX-04 (Phase 38) — chaos coverage for the Bearer-gated operator
+  // aggregator. GET /api/operator-status reads a fan-out of operator-tier
+  // sidecars via raw redis methods (smembers/scard/scan/etc.) plus
+  // cacheGetSafe envelopes. Under simulated Redis death every one of those
+  // calls throws; the route's per-section try/catch degrade-open design must
+  // translate that into a 200 (degraded, empty sections) or 503 — NEVER 500
+  // (a 500 leaks a stack trace through the operator boundary, T-38.01-01).
+  //
+  // dashboardAuth is bypassed because NODE_ENV !== 'production' here, so no
+  // Bearer is required for the test to reach the aggregator body.
+  // ---------------------------------------------------------------------------
+  it('GET /api/operator-status returns 200 or 503 (NEVER 500) under Redis death', async () => {
+    const res = await request(baseUrl).get('/api/operator-status');
+
+    expect(res.status).not.toBe(500);
+    // 200 (degrade-open, empty/partial sections) or 401/503 are all
+    // acceptable "we know our state" responses; 500 means we crashed.
+    expect([200, 401, 503]).toContain(res.status);
   });
 });

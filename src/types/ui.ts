@@ -109,6 +109,15 @@ export interface UIState {
   openDevApiStatus: () => void;
   closeDevApiStatus: () => void;
   setDevApiStatusTab: (tab: DevApiStatusTab) => void;
+  // Phase 40 — API Health tab restructure view-state (session-scoped; no
+  // localStorage by design, mirrors the DevApiStatus modal slice). Default {}
+  // ⇒ all collapsible groups expanded (D-01); drawer default closed (D-02a —
+  // destructive operator controls are not screenshot-default-visible).
+  devApiGroupCollapsed: Record<string, boolean>;
+  isOperatorDrawerOpen: boolean;
+  toggleDevApiGroup: (slug: string) => void;
+  toggleOperatorDrawer: () => void;
+  setOperatorDrawerOpen: (open: boolean) => void;
   // Phase 27.4.4 Plan 02 — Dashboard auth modal. Opens when a not-yet-
   // authenticated user clicks the DevApiStatusTrigger in production. On
   // successful probe of /api/dashboard/auth-check the key is persisted to
@@ -116,6 +125,14 @@ export interface UIState {
   isDashboardAuthOpen: boolean;
   openDashboardAuth: () => void;
   closeDashboardAuth: () => void;
+  // Phase 41 Plan 06 (REVEAL-SITE-01/02) — reveal slice. isIntroSeen is
+  // PERSISTED (localStorage iran-monitor.intro-seen, mirrors isMarketsCollapsed);
+  // isTourOpen is SESSION-SCOPED (no localStorage, mirrors isDashboardAuthOpen).
+  isIntroSeen: boolean;
+  isTourOpen: boolean;
+  setIntroSeen: (seen: boolean) => void;
+  openTour: () => void;
+  closeTour: () => void;
   openDetailPanel: () => void;
   closeDetailPanel: () => void;
   toggleStatus: () => void;

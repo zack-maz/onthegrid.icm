@@ -2,6 +2,17 @@
 
 All notable changes to the Iran Monitor project.
 
+## [v1.6] — Production Hardening — 🚧 in progress
+
+**Span:** 2026-06-03 → 2026-06-05 (4 phases: 38 live-state verification, 39 LLM observability, 40 API-Health consolidation, 41 public-reveal polish). The v1.5-close code-side punch-list was fully resolved in Phase 38 — the residual v1.6 cleanup proved to be a pure docs sweep, completed alongside the reveal in Phase 41 (see `.planning/phases/41-public-reveal-polish/41-AUDIT.md`).
+
+### Headline deliverables
+
+- **Live-state verification & dead-code purge (Phase 38):** LLM-FIX honest health/audit/eval signals (split `health.ts` fallback token into generic `cache-fallback-active:` vs LLM-specific `llm-optional-fallback-active:`; `water.ts` writes a distinguishable degraded sentinel instead of skipping the cache write on total failure; `EvalScore.actorMatchRate` returns `null` not a silent `0`). LLM-PURGE removed the v1/v2 extractor schemas, the `pipelineAudit` writer + `PipelineFlipsBlock` UI, and the OpenRouter daily-cap writer; Cerebras/Groq retained as Phase-34 deferred-provider scaffolding. GDELT-MATCH added a high-confidence dedup pre-pass + three-gate OSINT corroboration with additive composite rescore. WATER-LATIN romanizes facility names before the Latin admission gate (`nameLatin`/`nameOriginal`). VERCEL-PRO repaired Hobby→Pro docs drift across 5 surfaces (`maxDuration` 800s, 40-cron cap, Fluid-Compute 300s default).
+- **LLM observability — Flight Recorder (Phase 39):** `llm:calls:history` (500-cap call recorder) + `llm:runs:history` (200-cap per-run recorder) Redis flight recorders with cold-start hydration; Bearer-gated `GET /api/events/llm-history` read surface; operator **BudgetBlock** (per-provider token-budget proximity bars + cost-shadow USD) and **FlightRecorderBlock** (run→call→detail drill-down); degrade-open `tokenBudget` block in `/api/operator-status`.
+- **API-Health dashboard consolidation (Phase 40):** restructured the API-Health tab into a hero + 4 collapsible groups + operator drawer; migrated status dots to `--color-status-*` tokens through the D-13 single-source color pipeline; muted-placeholder degrade for empty operator blocks; roving-tabindex keyboard nav + `role=tablist/tabpanel` ARIA + focus-visible affordances.
+- **Public reveal polish (Phase 41):** seven portfolio docs — `BUILDING-WITH-CLAUDE-CODE.md` (first-person build meta-story with honest-failure receipts), `SHOWCASE.md` (1-click guided hub), `JOURNEY.md` (product arc + Mermaid gantt), `concepts.md` (38-term glossary), `COSTS.md` (honest accounting: Vercel Pro $20/mo, every feed free-tier), `operator-guide.md` (visitor how-to), `LESSONS.md` (distilled retrospective). D-10 final-sweep audit (code-side proven clean post-Phase-38; ADR-layer + README-currency + OpenAPI docs-drift swept). Screenshots consolidated to `public/screenshots/` with a reproducible `capture:layers` tool + a 1200×630 `og-card.png`. Interactive reveal: first-visit `IntroOverlay` + driver.js-powered `GuidedTour` (`TourTrigger`, `tourSteps`, `data-tour` HUD anchors) + static OG/Twitter meta in `index.html`. Stay-on-`vercel.app` decision recorded (REVEAL-SITE-04).
+
 ## [v1.5] — LLM Reliability & Reveal Prep — 2026-06-03
 
 **Span:** 2026-05-11 → 2026-06-03 (24 days, 10 phases shipped). Closing milestone for the v1.x line; v1.6 promotion unblocked at close.

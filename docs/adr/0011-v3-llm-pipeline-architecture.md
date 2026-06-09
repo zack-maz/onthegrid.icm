@@ -65,6 +65,13 @@ of timing relative to the next 4am tick.
 before populating events. The cooldown is for thrash prevention; an empty
 cache is not thrash, it's a missing dependency.
 
+> **Amendment (Phase 35, SIMPLIFY-02 — immutability-safe note; body below unchanged):**
+> the `events:llm:v3:partial` per-batch durability flush described in this section
+> was **retired in Phase 35** (SIMPLIFY-02). At runtime only the terminal
+> `events:llm:v3` key is written; the writer/reader-shape discipline this section
+> documents is preserved at the design level (the terminal key stays array-shaped).
+> The text below is kept verbatim as the original decision record.
+
 ### 3. Terminal-key writes, observability-key envelope
 
 Each batch writes the full `ConflictEventEntity[]` to `events:llm:v3` as a

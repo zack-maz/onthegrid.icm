@@ -74,13 +74,17 @@ describe('replayQuota', () => {
     expect(result.resetsAt).toBe('2026-05-05T00:00:00.000Z');
   });
 
-  // Test 3 — under cap, mid-day usage (INCR returns 25)
-  it('under-cap subsequent call: EXPIRE NOT called', async () => {
+  // Test 3 — under cap, mid-day usage (INCR returns 25). WR-04: EXPIRE is now
+  // re-asserted on EVERY call (idempotent TTL refresh) so a counter whose first
+  // EXPIRE failed during a Redis flap self-heals instead of leaking TTL-less.
+  it('under-cap subsequent call: EXPIRE re-asserted (WR-04 self-heal)', async () => {
     incrMock.mockResolvedValue(25);
     const result = await checkReplayQuota('bbbb2222');
 
     expect(incrMock).toHaveBeenCalledTimes(1);
-    expect(expireMock).not.toHaveBeenCalled();
+    expect(expireMock).toHaveBeenCalledTimes(1);
+    expect(expireMock.mock.calls[0][0]).toBe('operator:replay-quota:bbbb2222:2026-05-04');
+    expect(expireMock.mock.calls[0][1]).toBe(48 * 3600);
     expect(result.allowed).toBe(true);
     expect(result.used).toBe(25);
   });

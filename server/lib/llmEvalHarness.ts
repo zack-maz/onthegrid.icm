@@ -150,8 +150,14 @@ export interface EvalScore {
    * Join uses landmark + country case-insensitive substring (Open Q §4
    * path c) — the synthetic `gt-NNN` id is NOT a real GDELT groupKey, so
    * direct id-join is broken-by-design.
+   *
+   * LLM-FIX-03 / D-06 (Phase 38) — widened to `number | null`. `null` means
+   * "no ground-truth events carried expectedActor1" (the metric is not
+   * applicable / not yet populated), which is honestly distinct from a real
+   * `0` ("we matched ground-truth actors but none agreed"). A 0 here would
+   * have been silently misread as 0% actor accuracy on the audit surface.
    */
-  actorMatchRate: number;
+  actorMatchRate: number | null;
 }
 
 /**
@@ -284,7 +290,10 @@ export async function runEval(opts: { model?: string } = {}): Promise<EvalScore>
       within20km: 0,
       within100km: 0,
       total: 0,
-      actorMatchRate: 0,
+      // Phase 38 WR-02 — null (not 0) when the ground-truth fixture is absent,
+      // so "not populated" reads honestly distinct from a real 0% actor match.
+      // Consistent with LLM-FIX-03 (EvalScore.actorMatchRate is number | null).
+      actorMatchRate: null,
     };
     // Still emit the zero score so DevApiStatus clears any stale value from a
     // previous run with a valid ground-truth file.
@@ -385,7 +394,14 @@ export async function runEval(opts: { model?: string } = {}): Promise<EvalScore>
   } catch (err) {
     log.warn({ err }, 'D-13 actorMatchRate computation failed; falling back to 0');
   }
-  const actorMatchRate = actorTotal === 0 ? 0 : actorMatched / actorTotal;
+  // LLM-FIX-03 / D-06 (Phase 38) — honest null-vs-0. When NO ground-truth
+  // events were counted (`actorTotal === 0` — either no GT event carried
+  // expectedActor1, OR the Redis live-cache read threw before any iteration)
+  // the metric is not applicable: return `null` ("not populated") rather than
+  // `0` ("we matched and nothing agreed"). This prevents the audit surface
+  // from misreading an unpopulated metric as 0% actor accuracy. A real
+  // computed rate (actorTotal > 0) flows through unchanged.
+  const actorMatchRate: number | null = actorTotal === 0 ? null : actorMatched / actorTotal;
 
   const score: EvalScore = {
     within5km: w5,

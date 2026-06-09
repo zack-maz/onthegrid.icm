@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: LLM Reliability & Reveal Prep — ✅ SHIPPED 2026-06-03
-status: shipped
-last_updated: 2026-06-03T03:40:00.000Z
-last_activity: 2026-06-03 -- Phase 37 complete (3/3); v1.5 milestone CLOSED; LLM-RELI-07 acceptance gate satisfied (3 consecutive greens); v1.6 promotion unblocked (Phase 999.5 next)
+milestone: v1.6
+milestone_name: Production Hardening — 🚧 ACTIVE
+status: executing
+last_updated: "2026-06-06T01:25:30Z"
+last_activity: 2026-06-05 -- Phase 41 Plan 06 complete (REVEAL-SITE strand: IntroOverlay + driver.js GuidedTour + TourTrigger + index.html OG/Twitter meta + REVEAL-SITE-04 stay-on-vercel.app; all 5 remaining Wave-0 stubs green; REVEAL-SITE-01..04). Phase 41 all 6 plans done — pending end-of-phase human-verify (tour geometry + OG card)
 progress:
-  total_phases: 15
-  completed_phases: 10
-  total_plans: 62
-  completed_plans: 60
-  percent: 67
-stopped_at: v1.5 SHIPPED 2026-06-03 — ready for v1.6 milestone start (Phase 999.5 Performance Load Test promotes first)
+  total_phases: 10
+  completed_phases: 3
+  total_plans: 21
+  completed_plans: 21
+  percent: 30
 ---
 
 # Project State
@@ -24,18 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Milestone: **v1.5 LLM Reliability & Reveal Prep — ✅ SHIPPED 2026-06-03**
-Next: v1.6 milestone start (Phase 999.5 Performance Load Test promotes first)
-Status: v1.5 closed; ready for v1.6 planning
-Last activity: 2026-06-03 -- Phase 37 closed; LLM-RELI-07 acceptance gate satisfied
-
-Phase 37 close artifact: [`.planning/phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md`](phases/37-adr-0010-acceptance-gate-closeout/37-SUMMARY.md).
-
-v1.5 CHANGELOG entry: [`CHANGELOG.md`](../CHANGELOG.md) §`[v1.5]` — 10 phases shipped 2026-05-11 → 2026-06-03 (24 days).
-
-Predecessor: v1.4 GDELT Redo & Performance shipped 2026-05-08 (18 phases). Audit at `.planning/milestones/v1.4-MILESTONE-AUDIT.md`.
-
-Acceptance gate (set at v1.5 milestone start, blocked v1.6 promotion): `prod-connectivity-audit.yml` exit-0 with `allTiersGreen=true` for 3 consecutive runs (LLM-RELI-07). **OBSERVED 2026-06-01 → 2026-06-03**: Run 1 [26771054370](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26771054370), Run 2 [26856054351](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856054351), Run 3 [26856364229](https://github.com/zack-maz/otg-iran-monitor/actions/runs/26856364229). Gate satisfied; v1.6 promotion unblocked.
+Phase: 41 (public-reveal-polish) — EXECUTING (all 6 plans done; end-of-phase human-verify pending)
+Plan: Wave 4 Plan 06 complete — all of 41-01..41-06 executed
+Status: Plan 06 complete (REVEAL-SITE strand: IntroOverlay + driver.js GuidedTour + persistent TourTrigger + index.html OG/Twitter meta + REVEAL-SITE-04 stay-on-vercel.app). driver.js@1.4.0 legitimacy-verified + installed. All 5 remaining Wave-0 stubs green (20/20); npm run build passes. Pending: end-of-phase manual tour-geometry + OG-card crawler verification (Task 5 checkpoint:human-verify, deferred per human_verify_mode=end-of-phase)
+Last activity: 2026-06-05 -- Phase 41 Plan 06 complete (REVEAL-SITE strand, REVEAL-SITE-01..04)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -65,18 +56,37 @@ Acceptance gate (set at v1.5 milestone start, blocked v1.6 promotion): `prod-con
 - ADR-0010 canonical: `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md`
 - CHANGELOG: `CHANGELOG.md` §`[v1.5]`
 
-## v1.6 Carry-forwards
+## v1.6 Phases (planned)
 
-- **Phase 999.5** Performance Optimization + 1-300 VU k6 sweep — promotes from `.planning/phases/999.5-performance-load-test/` as v1.6's first phase
-- **Phase 31 reopening** — 7-day cron stability watch, this time finished
-- **Open-Meteo cache-write policy** — `server/routes/water.ts:358-360` empty-result skip caused Phase 37 audit failures
-- **`news:feed` cron warmer** — Vercel Pro cron quota likely supports a 4th entry; CLAUDE.md "Hobby cap 3" framing is stale
-- **Probe-side `lastErrorReason` token rename** — `'llm-optional-fallback-active'` reused for news case in PR #33; could rename to `'fallback-active'`
-- **Phase 999.1 / 999.2 / 999.3** — parked v1.4 carry-forwards; re-evaluate priorities at v1.6 start
-- **Phase 27.3.3** — romanization of non-Latin water-facility names (v1.3 → v1.4 → v1.5 carry-forward)
-- **Cerebras + Groq adapter source-file removal** — if no v1.6 router-restoration phase is scheduled, the adapter source files in `server/adapters/` should be deleted
+| Phase | Name | Requirements | Status |
+| ----- | ---- | ------------ | ------ |
+| 38 | LLM Pipeline Reliability + GDELT Source Matching + Vercel Pro Cleanup | LLM-FIX-01..06, LLM-PURGE-01..09, GDELT-MATCH-01..04, WATER-LATIN-01..04, VERCEL-PRO-01..04, CRON-WATCH-01 (optional) | 📋 Planned |
+| 39 | Operator Visibility — Budget + Cost + LLM Flight Recorder | BUDGET-01..04, OBS-FLIGHT-01..06 | 📋 Planned |
+| 40 | Dashboard UI/UX Polish + Subtab Consolidation | UI-POLISH-01..05 | 📋 Planned |
+| 41 | Public Reveal Polish | REVEAL-DOCS-01..10, REVEAL-SITE-01..04 | 📋 Planned |
 
-Deferred to future milestone: 27.3.3 romanization of non-Latin water facility names.
+**Coverage:** 57 REQ-IDs (56 required + 1 optional CRON-WATCH-01) across 4 phases. Every REQ-ID maps to exactly one phase. No orphans. Full REQ → phase → success-criterion mapping at [`.planning/REQUIREMENTS.md` §Traceability](REQUIREMENTS.md#traceability) and per-phase success criteria at [`.planning/ROADMAP.md` §Milestone v1.6](ROADMAP.md#milestone-v16-production-hardening--ACTIVE-started-2026-06-03).
+
+**Plans:** TBD per phase (created via `/gsd:plan-phase <N>`).
+
+**Parallelization mode (operator-locked at milestone start):** Phase 38 + 39 interleavable (both touch LLM surfaces); Phase 40 + 41 independent. Build options: (a) sequential 38 → 39 → 40 → 41; (b) interleaved 38 ‖ 39 → 40 ‖ 41. Phase 40 hard-soft-depends on Phase 39 component shapes for UI-POLISH-02 BudgetBlock + FlightRecorderBlock placement.
+
+## v1.6 Carry-forwards Disposition (locked 2026-06-03 at milestone start)
+
+| Carry-forward item | Disposition |
+| ------------------ | ----------- |
+| **Phase 999.5** Performance Optimization + 1-300 VU k6 sweep | **Deferred to v1.7.** Operator chose reliability + visibility + polish + reveal over perf testing for v1.6. Promotion gate already satisfied (Phase 37 3-greens); ready for v1.7 first-task. Backlog dir preserved at `.planning/phases/999.5-performance-load-test/`. |
+| **Phase 31 reopening** (7-day cron stability watch) | **Absorbed into Phase 38 CRON-WATCH-01 (OPTIONAL).** Final absorb-or-defer decision locks at `/gsd:discuss-phase 38`. If not absorbed, carries to v1.7. |
+| **Open-Meteo cache-write policy** (`water.ts:358-360`) | **Absorbed into Phase 38 LLM-FIX-02.** Audit-tier degraded-from-empty-result fixed there. |
+| **`news:feed` cron warmer** | **Soft carry to Phase 38.** Folds in if scope allows during `38-CONTEXT.md`; otherwise carries to v1.7. Not a locked REQ-ID. |
+| **Probe-side `lastErrorReason` token rename** | **Absorbed into Phase 38 LLM-FIX-01.** Split into `cache-fallback-active:` (generic) + `llm-optional-fallback-active:` (LLM-specific). |
+| **Phase 999.1** rate-limiter public-global blocks operator | **Deferred to v1.7.** Re-evaluate at v1.7 milestone-start. Backlog dir preserved. |
+| **Phase 999.2** api/vercel-entry rebuild discipline | **Potentially absorbed into Phase 38 VERCEL-PRO-02.** Vercel Build Output API evaluation may close this naturally; if pursued, 999.2 retires. If deferred, carries to v1.7. |
+| **Phase 999.3** Phase 27.4.6 cron first-tick verification | **Deferred to v1.7.** Re-evaluate at v1.7 milestone-start. Backlog dir preserved. |
+| **Phase 27.3.3** water-facility name romanization | **Absorbed into Phase 38 WATER-LATIN-01..04.** Operator reversed prior backlog status at v1.6 lock-in. |
+| **Phase 27.4.5** LLM observability flight recorder | **Absorbed into Phase 39 OBS-FLIGHT-01..06.** Operator reversed prior "out-of-scope" status at v1.6 lock-in; adapted to v3-only pipeline. |
+| **Cerebras + Groq adapter source-file removal** | **Absorbed into Phase 38 LLM-PURGE-07.** No v1.6 router-restoration scheduled; source files delete; rollback path is `git revert <Phase 29 commit range>`. |
+| **Phase 999.6** Portfolio Documentation Polish + Vercel Pro Cleanup | **RETIRED from backlog.** Strand A (10 portfolio docs) → Phase 41 REVEAL-DOCS-01..10. Strand B (Vercel Pro cleanup-and-repair) → Phase 38 VERCEL-PRO-01..04. |
 
 ## v1.3 Phases
 
@@ -104,6 +114,23 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (41-05, D-07/D-11) Wave-3 distilled lessons + brainstorms receipts shipped (SC41-3 lessons+brainstorms portion): docs/LESSONS.md authored as a 1-page first-person distillation of RETROSPECTIVE.md surfacing the 5 named lessons (probe-before-commit, honest deferral, mechanical drift gates compound, deletion over deprecation, architecture decisions cascade into audit-tier semantics — Phase 37); cross-links BUILDING + SHOWCASE. BUILDING §7 Historical receipts (cross-links already in place from Plan 02) gained the load-bearing vision-to-shipped inline callout: origin brainstorm's day-one "numbers over narratives" thesis (held) vs its plumbing assumptions (ACLED→GDELT Phase 8.1, WebSocket→recursive setTimeout at v1.0 serverless). D-07 honored — nothing moved/deleted/archived. README localhost dead-links left untouched (pre-existing, out of scope); LESSONS.md links lint clean in isolation.
+- (41-03) Wave-2 round-out docs shipped (SC41-3 concepts+COSTS+operator-guide portion): concepts.md (38 terms), COSTS.md (Vercel Pro $20/mo sole paid line + D-09 stay-on-vercel.app rationale + RETROSPECTIVE-cited dev cost), operator-guide.md (6-workflow visitor how-to distinct from runbook, `<your-bearer>` placeholder only). Audit-carried Wave-2 docs sweep applied: ADR #1/2/3/4/21/23, .env.example #6 (LLM_PIPELINE_V2/V3 removed) + #7-ACLED (marked historical, kept blank assignments so check:env drift gate stays satisfied — Rule 3), OpenAPI #16 (prune-dead-urls path) + NN-3 (llm-history path), reliability-doc NN-4 title. redocly lint valid; all 3 new docs link-check clean; fixed CLAUDE.md-inherited dead link rateLimiter.ts→rateLimit.ts.
+- (41-01, D-10) Wave-0 final-sweep audit complete (SC41-1 satisfied): re-ran the v1.5-close 2nd-pass code+docs audit against current main. Phase 38 (LLM-FIX + LLM-PURGE) resolved the ENTIRE code-side punch-list (all 3 BUGS + all dead-code); the residual v1.6 cleanup is now a pure DOCS sweep. 4 net-new docs findings (README/CHANGELOG missing Phase 38/39/40 features; OpenAPI llm-history + reliability-doc title gaps) routed to Phase 41 docs waves 2-3 in 41-AUDIT.md §D. Both operator memories refreshed (resolved dropped, net-new added, still-open carried). News-warmer (punch-list #15) DEFERRED to v1.7 (operability nicety, not a reveal REQ-ID). Cerebras/Groq test fixtures RESOLVED-BY-REFRAME (LLM-PURGE-06 keeps them as deferred-provider scaffolding).
+- (41-01) 7 Wave-0 red Vitest stubs on disk pinning REVEAL-SITE store slice + overlays + tour-selector existence + OG tags + capture:layers contract (RED until Plans 04/06; tsc clean). `@ts-expect-error`-glued unresolved imports wrapped in import/order disable blocks so the lint-staged sorter cannot detach the suppression.
+- (38-05 PRO-01, D-09) DEFER vercel.json → vercel.ts: vercel.json is purely declarative (crons/rewrites/functions, NO headers block, no drift handlers), so the migration is net-zero simplification while adding @vercel/config + a build step + deploy-path risk mid-cleanup. Recorded in deployment.md; revisit v1.7. The recorded defer-with-rationale is what satisfies SC38-6 for PRO-01.
+- (38-05 PRO-02, D-09) DEFER Build Output API for api/vercel-entry.js: a fundamental deploy-path change that risks the 800s maxDuration, the includeFiles eval-fixture copy, and the rewrite map simultaneously — wrong risk/reward mid-cleanup. Phase 999.2 stays open; revisit v1.7.
+- (38-05 PRO-03) Fluid Compute compat verdict: COMPATIBLE, no code changes. Memoized createApp() reuse is correct (no per-request global state); no graceful-shutdown handler needed (Upstash REST = no connections to drain); callHistory/llmProgress singletons are process-scoped, cron-written (single writer), with Phase 28.2.7 Redis write-through — no cross-request leak. Guarded by a 2-sequential + 4-concurrent /health smoke assertion in vercel-entry.test.ts.
+- (38-05 PRO-04) llm-pipeline-reliability.md header reconciled to NIM-primary / OpenRouter-dormant (consistent with the body's :134 NIM-only declaration) rather than the stale "NIM + OpenRouter cascade" header framing; Hobby/10s/60s/3-cron claims across 5 surfaces repaired to Pro 800s / 40-cron / Fluid-Compute-default semantics; dev-env Vercel CLI bumped 52.0.0 → 54.9.0 (global, not a package.json dependency).
+- (38-04 WATER-LATIN-02, D-08) Library-evaluation outcome: KEEP transliteration@2.6.1, SKIP ICU. The reset acceptance bar (machine-searchable Latin token that admits the facility) is met by transliteration + an artifact-cleanup pass; ICU shares the same abjad vowel-less ceiling at native-binary serverless cost for zero quality win
+- (38-04 WATER-LATIN-02) romanize() artifact-cleanup overrides applied: ة (`@`)→`a`; uppercase emphatic artifacts ص/ط/ح/ض/ظ/غ/ق lowercased en masse via toLowerCase then re-title-cased; separator-run collapse; <2-char fallback to qualifier or "Facility". No per-letter overrides beyond these were needed — the pass clears the searchable-token bar for every RESEARCH sample
+- (38-04 WATER-LATIN-03) applyRomanizedName injects the romanized string as a synthetic name:en on a COPY of tags BEFORE computeAdmissionDecision; el.tags is never mutated, original preserved in nameOriginal, desalination + already-Latin facilities early-return untouched, GENERIC_OSM_NAME_RE filter intact
+- (38-04 WATER-LATIN-04) The real water tooltip surface is WaterTooltip (WaterOverlay.tsx), NOT EntityTooltip.tsx (whose MapEntity|SiteEntity union excludes water); updated WaterTooltip + WaterFacilityDetail + searchUtils, left EntityTooltip unchanged
+- (38-04) nameLatin/nameOriginal added OPTIONAL to WaterFacility so the live 24h-TTL water:facilities:v3 cache self-heals on next Overpass fetch (pre-Phase-38 entries without the fields still validate)
+- (38-02 LLM-PURGE-01) Pipeline calls processEventGroupsV3/geocodeEnrichedEventsV3 directly with the v3-native flat-array signature; the llmEventExtractor.ts tagged-wrapper barrel was deleted rather than inlined — one truth source, fewer moving parts
+- (38-02 LLM-PURGE-04, Pitfall 2) enrichedEventV2 survives as an UN-EXPORTED base const because enrichedEventV3 = enrichedEventV2.extend(); only the EXPORTED v1/v2 schemas + batchResponseV2 were deleted, and enrichedEventAny collapsed from a 3-arm discriminatedUnion to a single-arm v3 passthrough
+- (38-02 LLM-PURGE-08, D-04 Path A) OpenRouter stays a dormant key-gated cascade provider (ADR-0010 semantics); only the dead llm:tokens:openrouter daily-cap counter + cap-gate were removed. daily_cap left as a legacy skipReason union member
+- (38-02 LLM-PURGE-06) Cerebras/Groq env keys deleted from config + .env.example, but the Cerebras/Groq token-budget DAILY_LIMITS + circuit-breaker state are Phase-34 deferred-provider scaffolding (live structures) and were left in place per the triage rule
 - Source tier registry as standalone module (sourceTiers.ts) rather than extending relevanceScorer.ts — cleaner separation of classification vs scoring
 - Tier pre-filter runs before keyword/NLP scoring in filterAndScoreArticles — early exit saves NLP compute on unknown sources
 - Unknown sourceTier defaults to tier 2 (neutral 1.0x multiplier) in severity scoring — conservative default avoids penalizing events where source URL is missing
@@ -317,6 +344,8 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 - Phase 32 close: Per-event Redis key `events:url-liveness:{eventId}` (probe results, tiered TTL via `ttlSecForStatus`) + sidecar count `events:url-liveness-count` (O(1) dashboard polls, Pitfall 3 mitigation). Sidecar maintained jointly by Plan 32-02 `persistLiveness` (INCR on live→dead) and Plan 32-03 `pruneDeadUrlEvents` (DECRBY on prune). Underflow floors at 0 via the lone permitted raw `redis.set(KEY, 0)` call documented in CLAUDE.md.
 - Phase 32 close: Cron auto-prune gated on `attemptCount >= 3` consecutive ticks (D-12); manual prune has no gate (operator owns the call). Primary URL is `data.source` (NOT `data.sourceUrls[0]`) for both raw GDELT and LLM v3 entities (D-05 / RESEARCH A1 — `enrichedV3ToEntities` spreads `template.data` and never writes a `sourceUrls[]` field; v3 inherits `data.source` identically to raw GDELT).
 - Phase 32 close: `attemptCount` semantics = monotonic-with-reset-on-live-or-unknown (RESEARCH A2 / D-12). Pure-monotonic accumulation would conflate dead→live→dead with three-in-a-row-dead and falsely trigger the cron auto-prune gate. The monotonic-with-reset rule makes "≥3 consecutive terminal-dead ticks" a one-line check inside `persistLiveness`.
+- Phase 38 Plan 03 (GDELT-MATCH-01): `scripts/audit-gdelt-corpus.ts` is a READ-ONLY corpus audit (D-07 non-destructive) — pure functions (bucketByTier/detectOrphans/detectDuplicateClusters/buildAuditReport) exported for unit testing with a `import.meta.url` direct-run guard so vitest imports never trigger Redis I/O. Orphan detection uses a conservative 3-gate match (temporal ±2d AND geo ≤50km AND ≥1 shared keyword token); duplicate-cluster sizing reuses `groupGdeltRows` and is explicitly labeled coarse batch-grouping NOT true dedup (Pitfall 6 — plan 02 adds the tighter pre-pass). (38-03)
+- Phase 38 Plan 03 audit baseline: live `events:llm:v3` + `news:gdelt` were ABSENT in dev Redis at audit time, so the committed baseline (`gdelt-corpus-audit.json`) was sized from the dev raw `events:gdelt` corpus (688 events): 99.7% unknown source tier (expected for raw pre-LLM data), 134 duplicate-source clusters / 364 events (53% collapse) with a size-2-dominant histogram (81 of 134). Orphan rate is an unusable artifact (100% — `news:gdelt` empty). Plan 06 must RE-RUN `npm run audit:gdelt` against a warm `events:llm:v3` + `news:gdelt` for real tier/orphan distributions; the duplicate-cluster histogram is actionable now (start MATCH-02 Jaccard at 0.85 / geo gate at 5km, target the size-2 cohort, preserve the size 6–9 tail). (38-03)
 
 ## Pending Todos
 
@@ -398,3 +427,32 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - Phase 31 closed early under operator decision 2026-05-19 at Day 1 / 7 (Day-1 natural cron PASS captured, commit `d0c16e4`). LLM-RELI-06 declared "validated single-day, monitoring continues opportunistically" — caveat-marked. Snapshot harness retained for ad-hoc capture; D-05 escalation to Phase 31.1 deferred (no FAIL row observed). Phase 37 acceptance gate (LLM-RELI-07, 3 consecutive `prod-connectivity-audit.yml` exit-0) unaffected and remains the mechanical reliability check at milestone close. See [`.planning/phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md`](phases/31-cron-stability-validation-7-day-watch/31-SUMMARY.md) for the full close-out rationale and resume path.
 
 - Phase 34 (LLM Router Fallback Re-integration) inserted between Phase 33 and the existing Phase 34 (now Phase 35) on 2026-05-19 per operator decision. Goal: restore Cerebras + Groq as cascade fallbacks for NIM (probe-driven; mirrors Phase 30.1's `nim-only` precedent if free tiers fail the gate) plus per-provider eval scoring. Phase 31's Day-1 DLQ baseline (4 × `v3:timeout_watchdog`) is the empirical motivation. Existing Phases 34/35/36 renumbered → 35/36/37. New requirements LLM-RELI-08..11 added. Sequencing: Phase 34 sits on the LLM-RELI spine (29 → 30 → 31 → 34 → 37) and depends on Phase 33 closing first so cascade integration tests against the post-33 `actorConfidence` schema.
+
+## Performance Metrics
+
+| Phase | Plan | Duration | Notes |
+|-------|------|----------|-------|
+| Phase 38 P01 | 7min | 3 tasks | 15 files |
+| Phase 39 P01 | 5 min | 4 tasks | 7 files |
+| Phase 39 P02 | 21 min | 2 tasks | 5 files |
+| Phase 39 P04 | 8 min | 2 tasks | 2 files |
+| Phase 39 P05 | 5 min | 2 tasks | 4 files |
+| Phase 40 P01 | 6 min | 2 tasks | 5 files |
+| Phase 40 P02 | 18min | 3 tasks | 8 files |
+| Phase 40 P40-04 | 12min | 3 tasks | 7 files |
+| Phase 41 P02 | 22m | 3 tasks | 4 files |
+
+## Decisions
+
+- [Phase ?]: Phase 38 LLM-FIX: honest single-source health tokens (cache-fallback-active: default, llm-optional only for llmEvents)
+- [Phase ?]: Phase 38 LLM-FIX: actorMatchRate number|null — null=not-populated distinct from measured 0%; replay endpoint quota death now 503-not-500 (Pitfall 5 fix)
+- [Phase 39]: 39-02: runId generated once at run boundary + stamped on llmProgress; every call entry (success+failure) inherits it and dual-writes to llm:calls:history — call->run back-correlation for the flight recorder (OBS-FLIGHT-05)
+- [Phase 39]: 39-02: run record closed once in finally keyed off a runOutcome witness (Open Q3) — a missed branch still closes the run; default outcome 'error' is the honest fallback
+- [Phase 39]: BudgetBlock sources the already-polled tokenBudget field (no new fetch); FlightRecorderBlock owns its Bearer fetch of /llm-history — GA-3 no Redis fan-out for cost; Plan-04 /llm-history is the single FlightRecorder read surface (39-05)
+- [Phase 39]: FlightRecorder Level 3 renders the full CallHistoryEntry record as copyable JSON (call ring carries telemetry, not raw prompt/response text) — GA-1 baseline: operator CAN read a single call's record; richer prompt surface defers to Phase 40 (39-05)
+- [Phase 40]: 40-01: status colors declared as hex (NOT OKLCH), byte-identical to the map tokens they replace, so colorBridge's hex parser roundtrips and the migration off borrowed map tokens is zero-visual-change (UI-POLISH-03 foundation)
+- [Phase 40]: 40-01: status-token colorBridge re-exports are hex-only (no readCssRGB tuple) — no deck.gl consumer; collapse/drawer view-state is session-scoped (no localStorage, mirrors the DevApiStatus modal slice), drawer default closed per D-02a
+- [Phase ?]: (40-02) DevApiStatusAllApisTab restructured into hero + 4 collapsible groups + default-closed operator-controls drawer; Replay/Prune buttons relocated into the drawer, read-only counters stay in Group 4 (D-01/D-02a)
+- [Phase ?]: (40-02) Tier-banner/sparkline/hero status dots migrated to --color-status-* namespace (byte-identical hex, zero visual change); BudgetBlock/FlightRecorderBlock/actor-quality self-hides converted to canonical muted-placeholder degrade (D-06)
+- [Phase ?]: (40-04 UI-POLISH-05) 8 UI-SPEC Regression-Lock assertions coded as RTL/snapshot tests across the 6 existing DevApiStatus test files (extended, not replaced) + 1 new consolidated-layout snapshot; assertion 5 (drawer default-closed) doubles as a security-adjacent guard
+- [Phase 41]: Phase 41 Wave 1 docs core shipped: BUILDING-WITH-CLAUDE-CODE.md (first-person agentic meta-story), JOURNEY.md (product arc + Mermaid gantt), SHOWCASE.md (1-page guided-tour hub) + README hero link — SC41-2 satisfied (1-click to meta-story/product-arc/decisions)

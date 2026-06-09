@@ -124,6 +124,13 @@ export const COLOR_EVENT_OTHER_HEX = readCssHex('--color-event-other', '#dc5a5a'
 export const COLOR_SITE_HEALTHY_HEX = readCssHex('--color-site-healthy', '#22c55e');
 export const COLOR_SITE_ATTACKED_HEX = readCssHex('--color-site-attacked', '#f97316');
 
+// Phase 40 D-13 — operator-console status namespace (hex only; no deck.gl consumer,
+// so no readCssRGB tuple export). Byte-identical to the map tokens they replace as
+// status colors; the sentinel test in colorBridge.test.ts asserts the literals.
+export const COLOR_STATUS_HEALTHY_HEX = readCssHex('--color-status-healthy', '#22c55e');
+export const COLOR_STATUS_DEGRADED_HEX = readCssHex('--color-status-degraded', '#f97316');
+export const COLOR_STATUS_WARNING_HEX = readCssHex('--color-status-warning', '#eab308');
+
 export const COLOR_FACTION_US_ALIGNED_HEX = readCssHex('--color-faction-us-aligned', '#3b82f6');
 export const COLOR_FACTION_IRAN_ALIGNED_HEX = readCssHex('--color-faction-iran-aligned', '#dc2626');
 export const COLOR_FACTION_NEUTRAL_HEX = readCssHex('--color-faction-neutral', '#64748b');

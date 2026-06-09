@@ -8,10 +8,16 @@ import { cacheGetSafe, cacheSetSafe, redis } from '../cache/redis.js';
 import { WAR_START, CACHE_TTL } from '../config.js';
 import { groupGdeltRows } from '../lib/eventGrouping.js';
 import { extractBellingcatGeo } from '../lib/eventScoring.js';
+// Phase 39 Plan 04 OBS-FLIGHT-03/06 — the Bearer-gated /llm-history read
+// surface consumes both flight-recorder list modules + their cold-start
+// hydration helpers (repopulate the in-memory singleton after a Fluid Compute
+// cold start on whichever operator endpoint is hit first).
+import { listCallHistory, hydrateCallHistoryIfCold } from '../lib/llmCallHistory.js';
 import { listDLQ } from '../lib/llmDLQ.js';
 import { processEventGroupsV3 } from '../lib/llmEventExtractor.v3.js';
 import { enrichedV3ToEntities, LLM_TERMINAL_TTL_SEC } from '../lib/llmExtractionPipeline.js';
 import { llmProgress } from '../lib/llmProgress.js';
+import { listRunHistory, hydrateRunHistoryIfCold } from '../lib/llmRunHistory.js';
 import { shouldPauseNewEvents } from '../lib/llmTokenBudget.js';
 import { logger } from '../lib/logger.js';
 import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
@@ -22,12 +28,13 @@ import { normalizeEventTypes } from '../lib/normalizeEventTypes.js';
 // Phase 27.4.3 Plan 02b B-3 — pipeline-flip audit log; canonical home is lib
 // (routes is consumer, not provider). Cyclic-import fix in place.
 import { appendOperatorAuditEntry, bearerFingerprint } from '../lib/operatorAudit.js';
-import { listPipelineAudit } from '../lib/pipelineAudit.js';
 // Phase 28.2 Plan 03 D-08 — operator-action audit log + per-Bearer replay
 // quota guardrails on the dashboardAuth-gated /llm-pipeline + /llm-replay
 // endpoints. Both helpers degrade open on Redis failure (logged, not thrown).
 import { checkPruneQuota } from '../lib/pruneQuota.js';
+import { computeCompositeScore } from '../lib/relevanceScorer.js';
 import { checkReplayQuota } from '../lib/replayQuota.js';
+import { sanitizeError } from '../lib/sanitizeError.js';
 // Phase 32 Plan 32-03 — POST /api/events/prune-dead-urls + cron auto-prune
 // share one helper. The route is the Bearer-gated entry point for the
 // dashboard click (Plan 32-05) AND the cron post-step (Plan 32-03 Task 3,
@@ -97,11 +104,11 @@ const LLM_SUMMARY_TTL_SEC = 86_400;
  * DevApiStatus DrillDownBlock. Matches RecentEnrichedEvent on the client
  * side (src/hooks/useLLMStatusPolling.ts).
  *
- * The v2 extractor's richer fields (full location hierarchy, weapon/target,
+ * The v3 extractor's richer fields (full location hierarchy, weapon/target,
  * confidence, reasoning, per-event token counts, geocode provenance) are
- * not yet persisted onto the cached ConflictEventEntity.data envelope —
+ * not all persisted onto the cached ConflictEventEntity.data envelope —
  * only locationName/summary/precision/sourceCount survive the
- * enrichedV2ToEntities projection. We therefore populate what we can and
+ * enrichedV3ToEntities projection. We therefore populate what we can and
  * null out the rest so the client renderer degrades gracefully; richer
  * per-event persistence is a follow-up (noted in the plan's pattern map).
  */
@@ -287,6 +294,41 @@ export const enrichedToEntities = enrichedV3ToEntities;
  * Remaps old 11-type taxonomy (ground_combat, shelling, etc.) cached in Redis
  * to the new 5-type system so conflictEventEntitySchema doesn't reject them.
  */
+/**
+ * GDELT-MATCH-04 — additive composite-score ordering for the dashboard
+ * top-of-list. PURE / NON-MUTATING (D-07): returns a NEW array of shallow
+ * copies sorted by `data.compositeScore` descending; the raw `events:llm:v3`
+ * corpus is never re-written and no event is dropped.
+ *
+ * The v3 producer (`enrichedV3ToEntities`) already folds source tier +
+ * precision + the strict three-gate OSINT corroboration boost (GDELT-MATCH-03)
+ * into `data.compositeScore`. This read path PRESERVES that stored score
+ * verbatim — recomputing it here would have to pass `corroborationBoost: 0`
+ * (the news clusters aren't in scope on the read path) and would silently
+ * discard the corroboration signal the ordering exists to surface (Phase 38
+ * CR-01). Only cold/legacy entries that never passed through the producer
+ * (e.g. the raw-GDELT Pitfall-1 bridge) lack a stored score; those get a
+ * tier+precision-only score synthesized here so they still sort sensibly.
+ * Events keep their relative order on ties via a stable timestamp fallback.
+ */
+function applyCompositeOrdering(events: ConflictEventEntity[]): ConflictEventEntity[] {
+  const scored = events.map((event) => {
+    if (typeof event.data.compositeScore === 'number') {
+      // Producer already folded tier + precision + corroboration — keep it.
+      return event;
+    }
+    const tier = event.data.sourceTier ?? null;
+    const precision = event.data.precision ?? 'region';
+    const compositeScore = computeCompositeScore({ tier, corroborationBoost: 0, precision });
+    return { ...event, data: { ...event.data, compositeScore } };
+  });
+
+  return scored.sort((a, b) => {
+    const diff = (b.data.compositeScore ?? 0) - (a.data.compositeScore ?? 0);
+    return diff !== 0 ? diff : b.timestamp - a.timestamp;
+  });
+}
+
 function sendNormalizedEvents(
   res: import('express').Response,
   payload: {
@@ -299,7 +341,10 @@ function sendNormalizedEvents(
 ): void {
   sendValidated(res, eventsResponseSchema, {
     ...payload,
-    data: normalizeEventTypes(payload.data),
+    // Normalize types first (returns copies where needed), then apply the
+    // additive composite re-ordering on the read path. Neither step mutates
+    // the cached corpus (D-07).
+    data: applyCompositeOrdering(normalizeEventTypes(payload.data)),
   });
 }
 
@@ -348,6 +393,15 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
   // telemetry (DLQ, watchdog timeouts, eval scores, routing trace) — same
   // sensitivity as /llm-pipeline, so same Bearer gate.
 
+  // Phase 39 Plan 04 OBS-FLIGHT-06 / D-05 — cold-start hydration. On the first
+  // operator request after a Vercel Fluid Compute cold start, repopulate the
+  // empty in-memory `llmProgress.callHistory` singleton from Redis. The
+  // module-level flag inside each helper prevents a re-LRANGE on subsequent
+  // requests. Wired on whichever operator endpoint (/llm-status OR /llm-history)
+  // is hit first. Degrade-open — helpers never throw.
+  await hydrateCallHistoryIfCold();
+  await hydrateRunHistoryIfCold();
+
   // Phase 29 D-02 part C — single active key for v3 summary cache.
   const LLM_SUMMARY_KEY_ACTIVE = LLM_SUMMARY_KEY_ACTIVE_NAME;
 
@@ -355,17 +409,20 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
   //   * DLQ recent entries (D-30) — bounded at 50
   //   * Projected recent enriched events (B4 / D-18)
   //   * Soft-cap pause flag (B5 surface / D-33)
-  //   * Pipeline-flip audit log (B-3 / D-15) — 50 most recent entries
   //
   // Each is try/caught internally; a degraded signal returns [] or false
   // rather than throwing. The /llm-status endpoint is the single pane of
-  // glass ops relies on before the D-25 prod flip, so availability matters
-  // more than any single block being populated.
-  const [dlqRecent, recentEvents, paused, pipelineFlips] = await Promise.all([
+  // glass ops relies on, so availability matters more than any single block
+  // being populated.
+  //
+  // Phase 38 LLM-PURGE-05 (D-03 Path A) — the pipeline-flip audit log
+  // (listPipelineAudit) was deleted along with the v1/v2 pipeline-version flip
+  // machinery; the v3-only pipeline never flips, so the `pipelineFlips` wire
+  // field is gone.
+  const [dlqRecent, recentEvents, paused] = await Promise.all([
     listDLQ(50).catch(() => []),
     loadRecentEnrichedEvents(50).catch(() => []),
     shouldPauseNewEvents().catch(() => false),
-    listPipelineAudit(50).catch(() => []),
   ]);
 
   const common = {
@@ -391,7 +448,6 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     schemaFailures: llmProgress.schemaFailures,
     errorTaxonomy: llmProgress.errorTaxonomy,
     costShadow: llmProgress.costShadow,
-    pipelineFlips,
   };
 
   // If in-memory progress is active (not idle), return it merged with the
@@ -413,6 +469,44 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
   }
 
   res.json({ stage: 'idle' as const, lastRun: null, ...common });
+});
+
+/**
+ * Phase 39 Plan 04 OBS-FLIGHT-03 / -06 — Bearer-gated LLM flight-recorder read
+ * surface. The single read endpoint the FlightRecorderBlock (Plan 05) fetches.
+ *
+ * Returns `{ runs, calls }`:
+ *   - `runs`  — per-run summaries from `llm:runs:history` (dedupe-by-runId is
+ *               internal to `listRunHistory`; the route does NOT re-dedupe).
+ *   - `calls` — the bounded call list from `llm:calls:history`, optionally
+ *               filtered in-memory by `?runId` (back-correlation).
+ *
+ * Security (threat register T-39-04-*):
+ *   - T-39-04-S/I: `dashboardAuth` Bearer gate — identical to /llm-status.
+ *     Prompt/response telemetry + DLQ detail must never reach anonymous callers
+ *     (401 without a valid Bearer; dev bypasses per middleware contract).
+ *   - T-39-04-D: `?limit` clamped to the LTRIM cap (500) so an attacker cannot
+ *     force an unbounded LRANGE.
+ *   - T-39-04-T: `?runId` is a typeof-string-guarded in-memory `.filter()`
+ *     predicate ONLY — never concatenated into a Redis key.
+ *   - T-39-04-I2: degrade-open — the lib readers return `[]` on Redis failure,
+ *     so the route naturally returns `{ runs: [], calls: [] }` with 200.
+ */
+eventsRouter.get('/llm-history', dashboardAuth, async (req, res) => {
+  // OBS-FLIGHT-06 / D-05 — cold-start hydration (same hook as /llm-status, so
+  // whichever operator endpoint is hit first repopulates the singleton).
+  await hydrateCallHistoryIfCold();
+  await hydrateRunHistoryIfCold();
+
+  // V5 input-validation clamps (DoS + tampering mitigation):
+  const limit = Math.min(Number(req.query.limit) || 200, 500); // <= LTRIM cap
+  const runId = typeof req.query.runId === 'string' ? req.query.runId : undefined;
+
+  const runs = await listRunHistory(limit); // dedupe-by-runId is internal
+  let calls = await listCallHistory(limit);
+  if (runId) calls = calls.filter((c) => c.runId === runId); // in-memory only
+
+  res.json({ runs, calls });
 });
 
 /**
@@ -458,7 +552,23 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     // cap, return 429 + Retry-After so a compromised Bearer cannot drain the
     // daily token budget within minutes (T-28.2-03-02 mitigation).
     const fingerprint = bearerFingerprint(process.env.DASHBOARD_PASSWORD ?? '');
-    const quota = await checkReplayQuota(fingerprint);
+    // LLM-FIX-05 (Phase 38) — degrade-open on quota-counter death. checkReplayQuota
+    // issues a RAW `redis.incr` with NO enclosing try/catch in replayQuota.ts; if
+    // the counter is dead (Redis down / chaos) the throw previously bubbled to the
+    // Express error handler as an HTTP 500, leaking a stack trace through the
+    // operator boundary (T-38.01-02 / Pitfall 5 "right answer wrong reason"). Wrap
+    // the quota check so a dead counter degrades to a 503 (we KNOW we're broken),
+    // mirroring the prune endpoint's contract. The 429 short-circuit (quota
+    // exceeded) and a healthy allow both fall through unchanged.
+    let quota: Awaited<ReturnType<typeof checkReplayQuota>>;
+    try {
+      quota = await checkReplayQuota(fingerprint);
+    } catch (err) {
+      return res.status(503).json({
+        error: 'replay_quota_unavailable',
+        detail: sanitizeError(err),
+      });
+    }
     if (!quota.allowed) {
       res.set('Retry-After', String(quota.retryAfterSeconds));
       return res.status(429).json({
@@ -509,7 +619,7 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
     } catch (err) {
       return res.status(500).json({
         error: 'extract_failed',
-        detail: String(err).slice(0, 200),
+        detail: sanitizeError(err),
       });
     }
   });
@@ -579,7 +689,7 @@ eventsRouter.get('/llm-status', dashboardAuth, async (_req, res) => {
       // internally so it won't propagate.
       return res.status(503).json({
         error: 'prune_failed',
-        detail: String(err).slice(0, 200),
+        detail: sanitizeError(err),
       });
     }
   });

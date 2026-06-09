@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { extractTriple } from '../../lib/nlpExtractor.js';
 import {
   computeRelevanceScore,
+  computeCompositeScore,
   SOURCE_RELIABILITY,
   CONFLICT_VERBS,
   EXCLUSION_PATTERNS,
@@ -169,6 +170,71 @@ describe('relevanceScorer', () => {
       const summary = 'Iran won the World Cup qualifier in a stunning match';
       const score = scoreHeadline(title, 'BBC', summary);
       expect(score).toBe(0);
+    });
+  });
+
+  describe('computeCompositeScore (GDELT-MATCH-04)', () => {
+    it('combines tier, corroboration, and specificity into a single score', () => {
+      const score = computeCompositeScore({
+        tier: 1,
+        corroborationBoost: 0.2,
+        precision: 'exact',
+      });
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThanOrEqual(1);
+    });
+
+    it('a tier-1 corroborated exact event outranks an unknown-tier region event', () => {
+      const strong = computeCompositeScore({
+        tier: 1,
+        corroborationBoost: 0.2,
+        precision: 'exact',
+      });
+      const weak = computeCompositeScore({
+        tier: null,
+        corroborationBoost: 0,
+        precision: 'region',
+      });
+      expect(strong).toBeGreaterThan(weak);
+    });
+
+    it('corroboration increases the composite (additive boost)', () => {
+      const withBoost = computeCompositeScore({
+        tier: 2,
+        corroborationBoost: 0.3,
+        precision: 'city',
+      });
+      const noBoost = computeCompositeScore({
+        tier: 2,
+        corroborationBoost: 0,
+        precision: 'city',
+      });
+      expect(withBoost).toBeGreaterThan(noBoost);
+    });
+
+    it('re-orders a fixture set top-of-list WITHOUT dropping any event', () => {
+      const fixtures = [
+        {
+          id: 'a',
+          tier: null as 1 | 2 | 3 | null,
+          corroborationBoost: 0,
+          precision: 'region' as const,
+        },
+        { id: 'b', tier: 1 as const, corroborationBoost: 0.25, precision: 'exact' as const },
+        { id: 'c', tier: 3 as const, corroborationBoost: 0, precision: 'city' as const },
+      ];
+
+      // Additive: compute composite as a NEW field, then sort a COPY.
+      const scored = fixtures.map((f) => ({ ...f, compositeScore: computeCompositeScore(f) }));
+      const ordered = [...scored].sort((x, y) => y.compositeScore - x.compositeScore);
+
+      // No event dropped.
+      expect(ordered).toHaveLength(fixtures.length);
+      expect(ordered.map((o) => o.id).sort()).toEqual(['a', 'b', 'c']);
+      // The tier-1 corroborated exact event surfaces first.
+      expect(ordered[0]!.id).toBe('b');
+      // The raw fixture array is untouched (non-mutating).
+      expect(fixtures[0]!.id).toBe('a');
     });
   });
 
