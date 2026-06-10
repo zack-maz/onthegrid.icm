@@ -78,13 +78,24 @@ export const URL_LIVENESS_COUNT_KEY = 'events:url-liveness-count';
 // ============================================================================
 
 /**
- * D-07 + D-19 — five-status taxonomy. Terminal-dead statuses
- * (`404`/`403`/`dead-host`) count toward the dashboard dead-URL count
- * and are eligible for prune. `unknown` (5xx, network blip, transient
+ * D-04/D-06 + D-19 — seven-status taxonomy (Phase 43 widens the Phase 32
+ * five-status set with `soft-404` and `no-url`). Terminal-dead statuses
+ * (`404`/`403`/`dead-host`/`soft-404`) count toward the dashboard dead-URL
+ * count and are eligible for prune. `unknown` (5xx, network blip, transient
  * error) is excluded from the count and re-probed on the next sweep
- * tick. `live` is live.
+ * tick. `no-url` (event has no primary URL to probe) is NOT terminal-dead
+ * (D-08) — it is bookkeeping for events that can never have a live link.
+ * `live` is live.
  */
-export const UrlLivenessStatusSchema = z.enum(['live', '404', '403', 'dead-host', 'unknown']);
+export const UrlLivenessStatusSchema = z.enum([
+  'live',
+  '404',
+  '403',
+  'dead-host',
+  'unknown',
+  'soft-404',
+  'no-url',
+]);
 export type UrlLivenessStatus = z.infer<typeof UrlLivenessStatusSchema>;
 
 /**
@@ -98,20 +109,38 @@ export const UrlLivenessSchema = z
     status: UrlLivenessStatusSchema,
     lastProbedAt: z.string().datetime(),
     /**
-     * D-12 + 32-RESEARCH.md A2 — monotonic-with-reset-on-live-or-unknown
-     * transition. Increment ONLY when the latest probe status is
-     * terminal-dead AND the prior stored status was also terminal-dead
-     * (or no prior). Reset to 0 on any `live` or `unknown` transition.
+     * Phase 32 D-12 / 32-RESEARCH.md A2 origin: monotonic-with-reset on
+     * any non-dead transition. Phase 43 D-10 AMENDS this: `live` resets to
+     * 0; `unknown` PRESERVES the prior count (a transient blip must not
+     * erase an accumulating terminal-dead run); `dead→dead` increments.
+     * The "≥3 consecutive terminal-dead ticks" cron auto-prune gate
+     * (D-12) therefore survives a single intervening `unknown` tick.
      *
-     * Pure-monotonic accumulation would conflate dead→live→dead with
-     * three-in-a-row-dead and falsely trigger D-12's cron auto-prune
-     * `attemptCount >= 3` gate. The monotonic-with-reset rule makes the
-     * "≥3 consecutive terminal-dead ticks" semantics a one-line check
-     * inside the probe writer (Plan 32-02 Task 3).
+     * Increment ONLY when the latest probe status is terminal-dead AND
+     * the prior stored status was also terminal-dead (or first-write
+     * dead → start at 1). `no-url` resets to 0 (it is not a dead run).
      */
     attemptCount: z.number().int().nonnegative(),
-    lastUrlProbed: z.string().url(),
+    /**
+     * D-07 — nullable so a `no-url` entry (event has no primary URL to
+     * probe) can record `lastUrlProbed: null`. All other statuses carry
+     * the probed URL string.
+     */
+    lastUrlProbed: z.string().url().nullable(),
     lastHttpStatus: z.number().int().nullable(),
+    /**
+     * D-16 — required-but-nullable provenance string (≤200 chars).
+     * Carries the body/redirect heuristic that produced a `soft-404`
+     * verdict (e.g. `'soft-404: matched "page not found" in title'`),
+     * the status-code literal for hard 4xx (`'http-404'`, `'http-403'`),
+     * the dead-host reason (`'dead-host: fetch failed'`), or `null` for
+     * `live`/`unknown`/`no-url` verdicts with no body evidence yet.
+     * Required so the writer always carries it; nullable so status-only
+     * verdicts need no synthetic prose. Old Phase 32 entries lacking this
+     * field are read via TS-generic cast (no runtime re-parse) and surface
+     * as `undefined`/`null` safely (T-43-01 accept).
+     */
+    evidence: z.string().max(200).nullable(),
   })
   .strict();
 
@@ -140,6 +169,8 @@ const TTL_SEC_BY_STATUS: Record<UrlLivenessStatus, number> = {
   '403': 24 * 3600, // D-20: 24 hours
   'dead-host': 24 * 3600, // D-20: 24 hours
   unknown: 3600, // D-20: 1 hour
+  'soft-404': 24 * 3600, // D-04/D-09: 24 hours (terminal-dead tier)
+  'no-url': 24 * 3600, // D-04/D-09: 24 hours (re-confirm no-url daily)
 };
 
 /**
@@ -233,6 +264,15 @@ export interface ProbeResult {
   status: UrlLivenessStatus;
   httpStatus: number | null;
   finalUrl: string;
+  /**
+   * D-16 — provenance for the verdict, threaded so `persistLiveness`
+   * (Plan 03) reads it off the probe result rather than recomputing.
+   * Status-code-only verdicts carry the D-16 literal (`'http-404'`,
+   * `'http-403'`, `'dead-host: fetch failed'`); `live`/`unknown` carry
+   * `null`; the `soft-404` body heuristic (Plan 02) populates the match
+   * detail.
+   */
+  evidence: string | null;
 }
 
 /**
@@ -284,11 +324,16 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
     parsed = new URL(rawUrl);
   } catch {
     // Malformed URL — treat as dead-host (no DNS resolution possible).
-    return { status: 'dead-host', httpStatus: null, finalUrl: rawUrl };
+    return {
+      status: 'dead-host',
+      httpStatus: null,
+      finalUrl: rawUrl,
+      evidence: 'dead-host: fetch failed',
+    };
   }
   if (isPrivateHost(parsed.hostname)) {
     log.warn({ rawUrl }, 'probe target rejected by SSRF guard');
-    return { status: 'unknown', httpStatus: null, finalUrl: rawUrl };
+    return { status: 'unknown', httpStatus: null, finalUrl: rawUrl, evidence: null };
   }
 
   let currentUrl = rawUrl;
@@ -300,7 +345,12 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
 
       // fetch threw or aborted (network/DNS/timeout) → dead-host.
       if (res === null) {
-        return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+        return {
+          status: 'dead-host',
+          httpStatus: null,
+          finalUrl: currentUrl,
+          evidence: 'dead-host: fetch failed',
+        };
       }
 
       // 405 Method Not Allowed — fall back to GET (D-16). CDN-fronted
@@ -308,7 +358,12 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
       if (res.status === 405) {
         res = await fetchOnce(currentUrl, 'GET');
         if (res === null) {
-          return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+          return {
+            status: 'dead-host',
+            httpStatus: null,
+            finalUrl: currentUrl,
+            evidence: 'dead-host: fetch failed',
+          };
         }
       }
 
@@ -316,33 +371,33 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
 
       // 2xx → live.
       if (code >= 200 && code < 300) {
-        return { status: 'live', httpStatus: code, finalUrl: currentUrl };
+        return { status: 'live', httpStatus: code, finalUrl: currentUrl, evidence: null };
       }
 
       // Specific 4xx codes that count toward the dashboard dead surface.
       if (code === 404) {
-        return { status: '404', httpStatus: 404, finalUrl: currentUrl };
+        return { status: '404', httpStatus: 404, finalUrl: currentUrl, evidence: 'http-404' };
       }
       if (code === 403) {
-        return { status: '403', httpStatus: 403, finalUrl: currentUrl };
+        return { status: '403', httpStatus: 403, finalUrl: currentUrl, evidence: 'http-403' };
       }
 
       // 3xx — follow up to MAX_REDIRECTS hops. On the (MAX_REDIRECTS+1)th
       // 3xx (i.e. hop === MAX_REDIRECTS at this branch), return unknown.
       if (code >= 300 && code < 400) {
         if (hop >= MAX_REDIRECTS) {
-          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
         }
         const location = res.headers.get('location');
         if (!location) {
           // 3xx without Location — protocol violation. Bail with unknown.
-          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
         }
         // Resolve relative redirects against the current URL.
         try {
           currentUrl = new URL(location, currentUrl).toString();
         } catch {
-          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
         }
         // Re-run SSRF guard for each redirect target (defense-in-depth —
         // a hostile redirect can point at a private host).
@@ -352,26 +407,31 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
               { rawUrl, redirectTarget: currentUrl },
               'redirect target rejected by SSRF guard',
             );
-            return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+            return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
           }
         } catch {
-          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
         }
         continue; // next hop
       }
 
       // Any other code (5xx, 451, 410, 4xx not in {403,404,405}) → unknown.
-      return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+      return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
     }
 
     // Loop exhausted without return (shouldn't be reachable; MAX_REDIRECTS+1
     // iterations always terminate inside the loop). Treat as unknown.
-    return { status: 'unknown', httpStatus: null, finalUrl: currentUrl };
+    return { status: 'unknown', httpStatus: null, finalUrl: currentUrl, evidence: null };
   } catch (err) {
     // Catch-all guard — any unexpected throw collapses to dead-host so
     // the sweep keeps moving.
     log.warn({ err, rawUrl }, 'probeUrl unexpected throw');
-    return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+    return {
+      status: 'dead-host',
+      httpStatus: null,
+      finalUrl: currentUrl,
+      evidence: 'dead-host: fetch failed',
+    };
   }
 }
 
@@ -440,7 +500,13 @@ function pruneStaleHostSlots(): void {
  * sidecar maintenance share one truth source).
  */
 export function isTerminalDead(status: UrlLivenessStatus): boolean {
-  return status === '404' || status === '403' || status === 'dead-host';
+  // D-04/D-08 — `soft-404` joins the terminal-dead set (counts toward the
+  // dashboard dead-URL surface + prune-eligible). `no-url` is explicitly
+  // NOT terminal-dead (D-08 — an event with no primary URL is not a dead
+  // link). `403` stays terminal-dead here; the GHOST-09 cron-only 403
+  // demotion is a prune-filter-local change (Plan 04), NOT an
+  // isTerminalDead change (RESEARCH anti-pattern).
+  return status === '404' || status === '403' || status === 'dead-host' || status === 'soft-404';
 }
 
 /**
@@ -462,11 +528,15 @@ const LIVENESS_READ_LOGICAL_TTL_MS = 999_999_999;
  * and maintains the sidecar `events:url-liveness-count` integer on
  * live↔terminal-dead transitions (Pitfall 3).
  *
- * attemptCount semantics (RESEARCH A2):
+ * attemptCount semantics (Phase 32 RESEARCH A2 origin; Phase 43 D-10
+ * amends the `unknown` rule — `unknown` now PRESERVES the prior count
+ * instead of resetting it. Full D-10 wiring lands in Plan 03; this
+ * foundation plan keeps the Phase 32 reset-on-non-dead behaviour intact):
  *   prior=null,             next ∈ {live, unknown}     → attemptCount=0
  *   prior=null,             next ∈ {terminal-dead}     → attemptCount=1
  *   prior=terminal-dead,    next ∈ {terminal-dead}     → attemptCount=prior+1
- *   prior=terminal-dead,    next ∈ {live, unknown}     → attemptCount=0
+ *   prior=terminal-dead,    next=live                  → attemptCount=0
+ *   prior=terminal-dead,    next=unknown               → (D-10) PRESERVE prior
  *   prior ∈ {live, unknown}, next=anything             → attemptCount=
  *                                                        (next dead ? 1 : 0)
  *
@@ -512,6 +582,11 @@ async function persistLiveness(
     attemptCount,
     lastUrlProbed: urlProbed,
     lastHttpStatus: probeResult.httpStatus,
+    // D-16/D-17 — writer always carries the probe's evidence string
+    // (null for status-only verdicts). Full attemptCount-semantics +
+    // no-url wiring lands in Plan 03; this foundation plan only ensures
+    // the field is persisted so the .strict() parse below succeeds.
+    evidence: probeResult.evidence,
   };
 
   // Paranoid contract guard — throws on schema drift so the failing
