@@ -2765,17 +2765,27 @@ function DrillDownRow({ ev }: { ev: RecentEnrichedEvent }) {
           {ev.sources.length > 0 && (
             <div className="flex flex-wrap gap-1">
               <span>sources:</span>
-              {ev.sources.slice(0, 5).map((u, i) => (
-                <a
-                  key={u + i}
-                  href={u}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline"
-                >
-                  [{i + 1}]
-                </a>
-              ))}
+              {/* Phase 44 WR-06 — sources are LLM-extracted article URLs
+                  (externally influenceable). Only render an anchor for
+                  http/https schemes; anything else (javascript:, data:, …)
+                  renders as inert text instead of a clickable href. */}
+              {ev.sources.slice(0, 5).map((u, i) =>
+                /^https?:\/\//i.test(u) ? (
+                  <a
+                    key={u + i}
+                    href={u}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline"
+                  >
+                    [{i + 1}]
+                  </a>
+                ) : (
+                  <span key={u + i} className="text-white/40">
+                    [{i + 1}]
+                  </span>
+                ),
+              )}
             </div>
           )}
           {/* Phase 27.4.3 D-13 Lineage extension — reasoning trace + lineage hash chip.
