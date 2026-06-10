@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Final Hardening — 🚧 IN PROGRESS
-status: executing
-last_updated: "2026-06-10T15:36:05.750Z"
-last_activity: 2026-06-10 -- Phase 44 execution started
+status: verifying
+last_updated: "2026-06-10T15:50:28.970Z"
+last_activity: 2026-06-10
 progress:
   total_phases: 14
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
-  percent: 14
+  completed_plans: 10
+  percent: 21
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md
 
 Phase: 44 (Events Subtab Pipeline Detail) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-06-10 -- Phase 44 execution started
+Status: Phase complete — ready for verification
+Last activity: 2026-06-10
 
-Progress: [█████████░] 88%
+Progress: [██████████] 100%
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -485,6 +485,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 43 P03 | 6 | 2 tasks | 4 files |
 | Phase 43 P05 | 9min | 2 tasks | 3 files |
 | Phase 44 P01 | 12min | 2 tasks | 4 files |
+| Phase 44 P02 | 11min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -504,6 +505,9 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: (42-03, WATER-FILTER-03) water:facilities:v3 -> v4 bumped atomically across all 10 lockstep surfaces; v3 demoted to dead-surveillance in the redis-registry whitelist; snapshot regenerated 304 -> 460 facilities (D-09 behavior-change evidence); Open Question 2 resolved — data-flows.md not gate-covered, deferred to Phase 49 (D-11). Full server suite 1378 green; tsc clean; drift gate green.
 - [Phase ?]: (43-01, D-04/D-06/D-16) UrlLiveness widened to 7-status taxonomy (+soft-404 +no-url) with required-but-nullable evidence + nullable lastUrlProbed; isTerminalDead(soft-404)=true, no-url=false; soft-404/no-url 24h TTL; D-10 attemptCount JSDoc amended (unknown PRESERVES prior count, full wiring Plan 03). Contract-lockstep across schema test + src shim + redis-keys.md + CLAUDE.md (D-18). Rule-3: 7 sweep-test ProbeResult fixtures gained evidence.
 - [Phase ?]: (44-01, D-01/D-03) countsByStatus is a SAMPLED per-status tally (<=MAX_SCAN_KEYS=200) computed inside the existing buildDeadUrlSample SCAN loop with zero extra Redis reads; deadUrlCount stays the authoritative O(1) sidecar. lastProbedAt/attemptCount added to deadUrlSample (both already on stored UrlLiveness). Closed pre-existing Phase 43 OpenAPI drift (soft-404 enum + evidence) in the D-04 lockstep commit (route test + openapi.yaml + client interface).
+- [Phase ?]: (44-02, D-05/D-06) 7 v2 LLM blocks mounted presence-gated into production EventsFiltersSectionV3; BudgetBarsBlock self-hides under NIM-only (correct/honest); WaterfallBlock gated on stage != idle
+- [Phase ?]: (44-02, D-09/D-10) New DeadLinkBucketsBlock: authoritative deadUrlCount + sampled 'of N scanned' per-status buckets + drill-down rows with evidence-as-TEXT (T-44-04) + dead-streak attemptCount; self-hides on absent prune
+- [Phase ?]: (44-02, Rule 3) prune threaded via events-tab-scoped operator-status fetch in DevApiStatus (eventsPrune); canonical opStatus fetch lives in sibling DevApiStatusAllApisTab; mutually-exclusive tabs => no concurrent double fetch
 
 ## Operator Next Steps
 
