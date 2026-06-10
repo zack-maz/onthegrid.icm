@@ -385,8 +385,12 @@ Plans:
 3. The mount is data-wiring only — the WAI-ARIA tablist DOM contract (tab ids, `aria-labelledby` partners) is unchanged, and every block remains degrade-open (self-hides when its data is absent).
 
 **Plans:** 2 plans
+**Wave 1**
 
 - [ ] 44-01-PLAN.md — Server lockstep: `countsByStatus` tally + `lastProbedAt`/`attemptCount` on the prune `deadUrlSample` (inside the existing SCAN, no new reads) + 3-surface contract lockstep (route test, OpenAPI incl. closing the Phase-43 `evidence`/`soft-404` drift, client `OperatorStatus.prune` interface) [EVENTS-TAB-02] (Wave 1)
+
+**Wave 2** _(blocked on Wave 1 completion)_
+
 - [ ] 44-02-PLAN.md — Client mount: presence-gated 7 v2 blocks + FlightRecorder re-mount + new `DeadLinkBucketsBlock` into `EventsFiltersSectionV3` + `prune` prop thread + evolve the two events-section test pins (5 pinning suites stay green) [EVENTS-TAB-01, EVENTS-TAB-02] (Wave 2, after 44-01)
 
 **UI hint**: yes
