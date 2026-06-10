@@ -185,7 +185,16 @@ const MAX_SCAN_KEYS = 200;
 type DeadUrlSampleEntry = {
   eventId: string;
   url: string;
-  status: 'dead-host' | '403' | '404';
+  // Phase 43 D-19 — `soft-404` joins the terminal-dead status union the
+  // sample exposes (it is terminal-dead per isTerminalDead). `no-url` is
+  // deliberately NOT here — it is not terminal-dead and never reaches this
+  // sample. Phase 44 renders the badge color off this field.
+  status: 'dead-host' | '403' | '404' | 'soft-404';
+  // Phase 43 D-19 — operator-facing diagnostic string carried from the
+  // stored UrlLiveness entry (e.g. the matched soft-404 marker). `null` for
+  // status-only verdicts and for pre-Phase-43 entries lacking the field.
+  // Phase 44 must render this as TEXT, not HTML (T-43-16 carried forward).
+  evidence: string | null;
 };
 
 /**
@@ -244,6 +253,11 @@ async function buildDeadUrlSample(): Promise<DeadUrlSampleEntry[]> {
           // Terminal-dead union pinned by `isTerminalDead` — cast narrows
           // the broader `UrlLivenessStatus` type to the dashboard subset.
           status: value.status as DeadUrlSampleEntry['status'],
+          // Phase 43 D-19 — source evidence off the stored entry. The
+          // cacheGetSafe<UrlLiveness> read is a TS-generic cast (no runtime
+          // Zod parse here), so pre-Phase-43 entries lacking `evidence`
+          // read as `undefined` — coerce to `null`.
+          evidence: value.evidence ?? null,
         });
         if (sample.length >= LIMIT_DRILL_DOWN) {
           cursor = 0;
