@@ -455,6 +455,21 @@ describe('Phase 43 Plan 02 Task 1 — classifySoft404 (GHOST-06)', () => {
       expect(result.soft404).toBe(false);
       expect(result.evidence).toBeNull();
     });
+
+    // WR-04 — a CSR/SPA shell is near-empty after tag-stripping but is
+    // script-heavy (JS hydrates the live article client-side). The OLD
+    // text-length-only rule would have flagged this LIVE article dead. With
+    // the no-`<script>` co-condition it must classify live.
+    it('near-empty SPA shell WITH a <script> tag → soft404:false (WR-04 — never prune live CSR)', () => {
+      const body =
+        '<html><head><title>Loading…</title></head><body>' +
+        '<div id="root"></div>' +
+        '<script src="/assets/app.bundle.js"></script>' +
+        '</body></html>';
+      const result = classifySoft404(body, DEEP, DEEP);
+      expect(result.soft404).toBe(false);
+      expect(result.evidence).toBeNull();
+    });
   });
 
   describe('precision-first tie-break (D-03) + signal order (D-02)', () => {

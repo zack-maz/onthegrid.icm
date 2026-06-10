@@ -303,9 +303,12 @@ const NOT_FOUND_MARKERS: readonly string[] = [
  *       Evidence `redirect-to-home: <origPath> → <finalPath>` (D-16). A
  *       deep→deep canonical move does NOT match (Pitfall 3).
  *   (c) near-empty content — strip tags and if the remaining text is below
- *       `NEAR_EMPTY_FLOOR_BYTES` return evidence `near-empty: <n> bytes`
- *       (D-16). Conservative floor avoids false-positiving heavy SPA shells
- *       (Pitfall 2).
+ *       `NEAR_EMPTY_FLOOR_BYTES` AND the body contains no `<script` tag,
+ *       return evidence `near-empty: <n> bytes` (D-16). WR-04 — the
+ *       no-`<script>` co-condition exempts CSR/SPA shells (which serve the
+ *       same near-empty HTML for live AND dead articles); firing on
+ *       text-length alone would flag every live article on a CSR outlet as
+ *       dead, the one direction the asymmetric error budget forbids.
  *
  * Pure function (no fetch, no Redis, no side effects) so it gets a
  * table-driven test without fetch mocking. Exported directly — it needs no
@@ -349,8 +352,18 @@ export function classifySoft404(
   }
 
   // (c) near-empty content — strip tags, trim, measure remaining text length.
+  // WR-04 — a client-side-rendered (CSR/SPA) news site serves the SAME
+  // near-empty HTML shell (`<div id="root"></div>` + external `<script src>`
+  // tags, ~0 text after stripping) for LIVE articles as for dead ones. Firing
+  // soft-404 on text-length alone would condemn every live article on such an
+  // outlet (live-marked-dead — the one direction the phase's asymmetric error
+  // budget forbids). Require the body to ALSO contain no `<script` tag: a real
+  // SPA shell is script-heavy, so its presence means "JS will hydrate content"
+  // → degrade-open to live. A genuine static "page not found" body has no
+  // script and stays caught. Precision-first (D-03).
   const contentLen = bodyText.replace(/<[^>]+>/g, '').trim().length;
-  if (contentLen < NEAR_EMPTY_FLOOR_BYTES) {
+  const hasScript = /<script[\s>]/i.test(bodyText);
+  if (contentLen < NEAR_EMPTY_FLOOR_BYTES && !hasScript) {
     return { soft404: true, evidence: `near-empty: ${contentLen} bytes` };
   }
 
