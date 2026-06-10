@@ -260,10 +260,15 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
     expect(decrMock).toHaveBeenCalledTimes(1);
   });
 
-  // Phase 43 D-10 — the flaky-host accumulation fix. A host that
-  // alternates dead→unknown→dead must accumulate past the >=3 cron gate
-  // because `unknown` preserves the count instead of resetting it.
-  it('dead→unknown→dead accumulates attemptCount past the >=3 threshold (D-10)', async () => {
+  // Phase 43 D-10 — the flaky-host accumulation fix. A host that goes
+  // dead with `unknown` blips in between must NOT lose its consecutive-dead
+  // history: `unknown` PRESERVES the count rather than resetting it to 0,
+  // so the gate-read value (cronPrune reads attemptCount) survives the blip
+  // and a genuine repeat offender's dead-run accumulates past the >=3 gate.
+  // (Canonical derivation, RESEARCH §"attemptCount derivation under the NEW
+  // D-10 rule" [VERIFIED]: live→0, unknown→preserve, dead→dead→+1,
+  // not-dead→dead→1.)
+  it('dead-run with an unknown blip preserves history and accumulates past >=3 (D-10)', async () => {
     decrMock.mockResolvedValue(0);
     incrMock.mockResolvedValue(1);
 
@@ -278,7 +283,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
     let value = cacheSetSafeMock.mock.calls[0]![1] as { attemptCount: number };
     expect(value.attemptCount).toBe(1);
 
-    // Tick 2: dead→unknown → PRESERVE 1
+    // Tick 2: dead→dead → 2 (monotonic).
     cacheGetSafeMock.mockResolvedValueOnce(
       cacheHit({
         status: '404',
@@ -290,41 +295,37 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       }),
     );
     await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
-      status: 'unknown',
-      httpStatus: 503,
-      finalUrl: 'https://flaky.example.com/',
-      evidence: null,
-    });
-    value = cacheSetSafeMock.mock.calls[1]![1] as { attemptCount: number };
-    expect(value.attemptCount).toBe(1);
-
-    // Tick 3: unknown→dead → 1+1=2 (not-dead prior → start at... but the
-    // prior is `unknown` which is not-dead, so not-dead→dead = 1? No —
-    // D-10: dead-monotonic only applies dead→dead. unknown→dead is
-    // not-dead→dead → starts at 1. The accumulation works because the
-    // PRESERVED unknown count carries forward to the NEXT dead read.)
-    // The accumulation that crosses >=3 is driven by dead→dead increments
-    // where unknown ticks in between preserve rather than reset.
-    cacheGetSafeMock.mockResolvedValueOnce(
-      cacheHit({
-        status: 'unknown',
-        lastProbedAt: '2026-05-21T00:00:02.000Z',
-        attemptCount: 1,
-        lastUrlProbed: 'https://flaky.example.com/',
-        lastHttpStatus: 503,
-        evidence: null,
-      }),
-    );
-    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
       status: '404',
       httpStatus: 404,
       finalUrl: 'https://flaky.example.com/',
       evidence: 'http-404',
     });
+    value = cacheSetSafeMock.mock.calls[1]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBe(2);
+
+    // Tick 3: dead→unknown → PRESERVE 2 (the blip; the OLD rule reset to 0
+    // here — that was the flaky-host evasion bug). DECR still fires.
+    cacheGetSafeMock.mockResolvedValueOnce(
+      cacheHit({
+        status: '404',
+        lastProbedAt: '2026-05-21T00:00:02.000Z',
+        attemptCount: 2,
+        lastUrlProbed: 'https://flaky.example.com/',
+        lastHttpStatus: 404,
+        evidence: 'http-404',
+      }),
+    );
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: 'unknown',
+      httpStatus: 503,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: null,
+    });
     value = cacheSetSafeMock.mock.calls[2]![1] as { attemptCount: number };
     expect(value.attemptCount).toBe(2);
 
-    // Tick 4: dead→dead → 3 (crosses the >=3 cron prune gate).
+    // Tick 4: dead→dead → 3 (crosses the >=3 cron prune gate). The prior
+    // dead entry that re-asserts the run carries the preserved 2 forward.
     cacheGetSafeMock.mockResolvedValueOnce(
       cacheHit({
         status: '404',

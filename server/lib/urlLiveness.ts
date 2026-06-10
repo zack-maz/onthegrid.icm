@@ -758,16 +758,13 @@ const LIVENESS_READ_LOGICAL_TTL_MS = 999_999_999;
  * live↔terminal-dead transitions (Pitfall 3).
  *
  * attemptCount semantics (Phase 32 RESEARCH A2 origin; Phase 43 D-10
- * amends the `unknown` rule — `unknown` now PRESERVES the prior count
- * instead of resetting it. Full D-10 wiring lands in Plan 03; this
- * foundation plan keeps the Phase 32 reset-on-non-dead behaviour intact):
- *   prior=null,             next ∈ {live, unknown}     → attemptCount=0
- *   prior=null,             next ∈ {terminal-dead}     → attemptCount=1
- *   prior=terminal-dead,    next ∈ {terminal-dead}     → attemptCount=prior+1
- *   prior=terminal-dead,    next=live                  → attemptCount=0
- *   prior=terminal-dead,    next=unknown               → (D-10) PRESERVE prior
- *   prior ∈ {live, unknown}, next=anything             → attemptCount=
- *                                                        (next dead ? 1 : 0)
+ * splits the reset rule by status — `live` resets to 0, `unknown`
+ * PRESERVES the prior count, `no-url` is 0, dead→dead increments):
+ *   next=live                              → attemptCount=0 (full reset)
+ *   next=unknown                           → attemptCount=prior?.attemptCount ?? 0 (PRESERVE)
+ *   next=no-url                            → attemptCount=0
+ *   prior=terminal-dead, next=terminal-dead → attemptCount=prior+1 (monotonic)
+ *   prior≠terminal-dead, next=terminal-dead → attemptCount=1 (start of run)
  *
  * Sidecar INCR fires only on the prior→next transition NOT-DEAD → DEAD.
  * DECR fires only on DEAD → NOT-DEAD. Same-state transitions (dead→dead,
@@ -789,13 +786,29 @@ async function persistLiveness(
   const priorEntry = await cacheGetSafe<UrlLiveness>(key, LIVENESS_READ_LOGICAL_TTL_MS);
   const prior: UrlLiveness | null = priorEntry?.data ?? null;
 
-  // D-12 / RESEARCH A2 — monotonic-with-reset-on-live-or-unknown.
+  // Phase 43 D-10 — split attemptCount derivation (replaces the Phase 32
+  // reset-on-any-non-dead rule). The reset rule is now status-specific:
+  //   - `live`    → 0  (a recovered link fully resets; a blip is forgiven).
+  //   - `unknown` → PRESERVE prior?.attemptCount ?? 0  (a transient failure
+  //                 must NOT reset the consecutive-dead run a flaky host
+  //                 accumulates — the dead→unknown→dead repeat offender then
+  //                 eventually crosses the >=3 cron prune gate).
+  //   - `no-url`  → 0  (no probe issued; not a dead-link signal).
+  //   - dead→dead → prior+1 (monotonic increment).
+  //   - not-dead→dead → 1 (first write of a dead run).
+  // attemptCount (consecutive-dead history) and the sidecar dead-count
+  // (current terminal-dead membership) are INDEPENDENT axes: the sidecar
+  // DECR below still fires on dead→unknown even though attemptCount is
+  // preserved (the event has exited terminal-dead membership).
   const nextDead = isTerminalDead(probeResult.status);
   const priorDead = prior !== null && isTerminalDead(prior.status);
   let attemptCount: number;
-  if (!nextDead) {
-    // Any live / unknown transition resets the counter (the "≥3
-    // consecutive ticks" rule needs an unbroken run).
+  if (probeResult.status === 'live') {
+    attemptCount = 0;
+  } else if (probeResult.status === 'unknown') {
+    // D-10 — PRESERVE the prior count (no increment, no reset).
+    attemptCount = prior?.attemptCount ?? 0;
+  } else if (probeResult.status === 'no-url') {
     attemptCount = 0;
   } else if (priorDead) {
     // dead → dead: monotonic increment.
