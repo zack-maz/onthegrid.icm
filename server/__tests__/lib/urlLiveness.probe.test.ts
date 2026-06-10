@@ -548,4 +548,33 @@ describe('Phase 43 Plan 02 Task 2 — probeUrl soft-404 body wiring (GHOST-06)',
     expect(result.evidence).toBeNull();
     expect(result.httpStatus).toBe(200);
   });
+
+  // CR-02 — method-asymmetric bot-blocking: HEAD 200 then a GET 403 with a
+  // tiny "Access Denied" body. Without the body-GET status check, signal (c)
+  // near-empty would condemn this LIVE article as soft-404 (cron-prunable).
+  // The 2xx-only gate must return live (degrade-open, precision-first).
+  it('CR-02 — HEAD 200 then GET 403 with tiny body → status:live (no soft-404 false positive)', async () => {
+    const tinyDenied =
+      '<html><head><title>Access Denied</title></head><body>Forbidden</body></html>';
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(200))
+      .mockResolvedValueOnce(makeBodyResponse(tinyDenied, { status: 403 }));
+    const result = await probeUrl('https://cdn.example.com/news/blocked-article');
+    expect(result.status).toBe('live');
+    expect(result.evidence).toBeNull();
+    expect(result.httpStatus).toBe(200);
+  });
+
+  // CR-02 — method-dependent redirect: GET answered with a 3xx (empty body
+  // under redirect:'manual'). Near-empty would fire on the 0-byte body; the
+  // non-2xx gate must short-circuit to live.
+  it('CR-02 — HEAD 200 then GET 302 with empty body → status:live (no near-empty false positive)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(200))
+      .mockResolvedValueOnce(makeResponse(302, { location: 'https://cdn.example.com/' }));
+    const result = await probeUrl('https://cdn.example.com/news/redirected-on-get');
+    expect(result.status).toBe('live');
+    expect(result.evidence).toBeNull();
+    expect(result.httpStatus).toBe(200);
+  });
 });

@@ -516,6 +516,24 @@ async function classifyTwoHundred(
       // fetch threw on the body GET — degrade-open to live.
       return liveVerdict;
     }
+    // CR-02 (GHOST-09 false-positive re-import guard) — the HEAD said 200, but
+    // the follow-up body GET can land on a DIFFERENT response: method-asymmetric
+    // bot-blocking CDNs pass HEAD then challenge/deny GET (403/429), and
+    // `redirect: 'manual'` means a GET answered with 3xx carries an empty body.
+    // Both produce a tiny/empty body that signal (c) near-empty would condemn —
+    // flipping a LIVE article to `soft-404` (cron-prunable), exactly the
+    // class GHOST-09's 403 demotion exists to prevent. Precision-first
+    // (D-03): only run the heuristic on a 2xx body GET; any non-2xx is
+    // no-trustworthy-signal → degrade-open to live.
+    if (res.status < 200 || res.status >= 300) {
+      log.info(
+        { finalUrl, getStatus: res.status, headStatus: httpStatus },
+        'soft-404 body GET non-2xx where HEAD was 200 — no body signal, returning live',
+      );
+      // Release the connection on the discarded body (Range-ignoring servers).
+      await res.body?.cancel().catch(() => {});
+      return liveVerdict;
+    }
     const body = await readCappedBody(res, SOFT404_BODY_CAP_BYTES);
     const verdict = classifySoft404(body, finalUrl, originalUrl);
     if (verdict.soft404) {
