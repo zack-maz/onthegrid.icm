@@ -2413,7 +2413,43 @@ describe('spatialDedup', () => {
     expect(ids(orderB)).toEqual(ids(orderC));
   });
 
-  // (e) regression pin on the REAL previously-dropped OSM pair from 42-DIAGNOSIS.md —
-  // filled in Plan 02 (Sd Wdy Rbg / Rabigh Dam must BOTH admit post-fix, kept.length === 2).
-  it.todo('(e) regression: real previously-dropped OSM pair from 42-DIAGNOSIS.md both admit');
+  // (e) D-14 regression pin on the REAL previously-dropped OSM pair from
+  // 42-DIAGNOSIS.md. Two distinct named dams 21.1m apart that the OLD name-blind
+  // predicate collapsed to one (DROPPED `Sd Wdy Rbg` / SURVIVOR `Rabigh Dam`).
+  // Post-fix BOTH must admit because their names differ (D-04): kept.length === 2,
+  // collapsed === 0. The legacy name-blind predicate yielded collapsed === 1 for
+  // this exact pair — so reintroducing name-blindness flips the count and FAILS
+  // this test (WATER-FILTER-04 bucket-delta pin).
+  it('(e) regression: real Sd Wdy Rbg / Rabigh Dam pair (42-DIAGNOSIS) both admit', () => {
+    // Exact id / facilityType / coords / labels / scores from 42-DIAGNOSIS.md.
+    const corpus = [
+      facility({
+        osmId: 897724216, // water-897724216 — the DROPPED element
+        label: 'Sd Wdy Rbg',
+        facilityType: 'dam',
+        lat: 22.8215266,
+        lng: 39.3761299,
+        notabilityScore: 35,
+      }),
+      facility({
+        osmId: 156481893, // water-156481893 — the SURVIVOR (present in snapshot)
+        label: 'Rabigh Dam',
+        facilityType: 'dam',
+        lat: 22.8215284,
+        lng: 39.3763353,
+        notabilityScore: 70,
+      }),
+    ];
+
+    const { kept, collapsed } = spatialDedup(corpus);
+
+    // Both distinct-named dams admit post-fix (D-04 / WATER-FILTER-02).
+    expect(kept.length).toBe(2);
+    // Bucket-delta pin: the legacy name-blind predicate collapsed this pair to
+    // collapsed === 1. The fixed name-aware predicate yields collapsed === 0.
+    // A regression to name-blindness flips this back to 1 and fails (D-14).
+    expect(collapsed).toBe(0);
+    // Pin the exact survivors so a silent drop of either element is caught.
+    expect(kept.map((f) => f.id).sort()).toEqual(['water-156481893', 'water-897724216']);
+  });
 });
