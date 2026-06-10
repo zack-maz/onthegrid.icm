@@ -3452,6 +3452,44 @@ function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
           v3 is active (the v2 composer is replaced, not stacked, by the
           version-routed render switch). */}
       <DrillDownBlock llmStatus={llmStatus} />
+
+      {/* Phase 44 (EVENTS-TAB-01, D-05) — the 7 v2-era LLM-pipeline blocks,
+          mounted PRESENCE-GATED into the production V3 path. The gate lives
+          here (not in the block bodies, which declare NonNullable props)
+          because each block self-hides when its LLMStatus field is absent —
+          NEVER fabricate the legacy composer's `{cerebras:0, groq:0}` /
+          `'ok'` zero-defaults (the D-05/D-06 anti-pattern). Under NIM-only,
+          `BudgetBarsBlock` self-hides — that is the correct, honest outcome
+          (D-06), not a defect. The live token-budget surface is Phase 39's
+          `BudgetBlock` in the API-Health tab. WaterfallBlock self-`?? 0`-
+          guards every field, so it is render-safe; gated on `stage !== 'idle'`
+          for honesty so an idle pipeline doesn't show a zeroed waterfall. */}
+      {llmStatus.stage !== 'idle' && <WaterfallBlock llmStatus={llmStatus} />}
+      {llmStatus.callHistory && llmStatus.callHistory.length > 0 && (
+        <HistogramsBlock
+          provenanceCounts={llmStatus.provenanceCounts ?? {}}
+          callHistory={llmStatus.callHistory}
+        />
+      )}
+      {llmStatus.callHistory && <CallLogBlock callHistory={llmStatus.callHistory} />}
+      {llmStatus.tokenCounters && llmStatus.breakerState && (
+        <BudgetBarsBlock
+          tokenCounters={llmStatus.tokenCounters}
+          breakerState={llmStatus.breakerState}
+        />
+      )}
+      {llmStatus.evalScore && <EvalScoreBlock evalScore={llmStatus.evalScore} />}
+      {llmStatus.dlqRecent && <DlqBlock entries={llmStatus.dlqRecent} />}
+      {typeof llmStatus.suspectCount === 'number' && (
+        <SuspectBlock count={llmStatus.suspectCount} />
+      )}
+
+      {/* Phase 44 (D-08) — run-history visibility. FlightRecorderBlock is
+          self-contained (own /api/events/llm-history fetch + 30s poll +
+          degrade-open). The events tab and the API-Health tab are
+          mutually-exclusive activeTab render branches, so this re-mount
+          causes NO double fetch. */}
+      <FlightRecorderBlock />
     </section>
   );
 }
