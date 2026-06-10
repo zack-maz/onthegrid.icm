@@ -35,6 +35,9 @@ function validEntry(overrides: Partial<UrlLiveness> = {}): UrlLiveness {
     attemptCount: 0,
     lastUrlProbed: 'https://example.com/a',
     lastHttpStatus: 200,
+    // Phase 43 D-16 — required-but-nullable evidence field. Without it the
+    // .strict() schema rejects every fixture (Pitfall 5 lockstep).
+    evidence: null,
     ...overrides,
   };
 }
@@ -78,10 +81,51 @@ describe('Phase 32 D-22 — UrlLiveness schema contract', () => {
       expect(() => UrlLivenessSchema.parse({ ...validEntry(), attemptCount: -1 })).toThrow();
     });
 
-    it('parses each valid status enum value', () => {
-      for (const status of ['live', '404', '403', 'dead-host', 'unknown'] as const) {
+    it('parses each valid status enum value (Phase 43 — 7-status taxonomy)', () => {
+      for (const status of [
+        'live',
+        '404',
+        '403',
+        'dead-host',
+        'unknown',
+        'soft-404',
+        'no-url',
+      ] as const) {
         expect(() => UrlLivenessSchema.parse(validEntry({ status }))).not.toThrow();
       }
+    });
+
+    it('parses a no-url entry with null lastUrlProbed (Phase 43 D-07)', () => {
+      expect(() =>
+        UrlLivenessSchema.parse(
+          validEntry({
+            status: 'no-url',
+            lastUrlProbed: null,
+            lastHttpStatus: null,
+            attemptCount: 0,
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('parses an entry with a non-null string evidence (Phase 43 D-16)', () => {
+      expect(() =>
+        UrlLivenessSchema.parse(
+          validEntry({
+            status: 'soft-404',
+            evidence: 'soft-404: matched "page not found" in title',
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('rejects an entry missing the evidence field (Phase 43 D-16 — required)', () => {
+      const { evidence: _omit, ...rest } = validEntry();
+      expect(() => UrlLivenessSchema.parse(rest as unknown)).toThrow();
+    });
+
+    it('rejects evidence longer than 200 chars (Phase 43 D-16 — max(200))', () => {
+      expect(() => UrlLivenessSchema.parse(validEntry({ evidence: 'x'.repeat(201) }))).toThrow();
     });
   });
 
@@ -106,6 +150,14 @@ describe('Phase 32 D-22 — UrlLiveness schema contract', () => {
       expect(ttlSecForStatus('unknown')).toBeLessThanOrEqual(3600);
     });
 
+    it('soft-404 ≤ 24h (Phase 43 D-04)', () => {
+      expect(ttlSecForStatus('soft-404')).toBeLessThanOrEqual(86400);
+    });
+
+    it('no-url ≤ 24h (Phase 43 D-04)', () => {
+      expect(ttlSecForStatus('no-url')).toBeLessThanOrEqual(86400);
+    });
+
     it('returns exact D-20 ceilings (no silent reduction)', () => {
       // D-20 intent: ceilings are exactly the value RESEARCH Common
       // Operation 4 specifies. Drift here would still pass the upper-bound
@@ -116,6 +168,9 @@ describe('Phase 32 D-22 — UrlLiveness schema contract', () => {
       expect(ttlSecForStatus('403')).toBe(24 * 3600);
       expect(ttlSecForStatus('dead-host')).toBe(24 * 3600);
       expect(ttlSecForStatus('unknown')).toBe(3600);
+      // Phase 43 D-04/D-09 — new 24h tiers.
+      expect(ttlSecForStatus('soft-404')).toBe(24 * 3600);
+      expect(ttlSecForStatus('no-url')).toBe(24 * 3600);
     });
   });
 });
