@@ -383,8 +383,13 @@ Plans:
 1. The operator sees full LLM pipeline detail in the events subtab — the 7 already-built blocks (Waterfall, Histograms, CallLog, BudgetBars, EvalScore, Dlq, Suspect) are mounted into `EventsFiltersSectionV3`, fed from existing `LLMStatus` fields, with DLQ depth / breaker state / eval baseline+drift / run-history all visible.
 2. The operator can read dead-link state per bucket in the events subtab — counts per liveness status plus first-seen-dead / transition timestamps.
 3. The mount is data-wiring only — the WAI-ARIA tablist DOM contract (tab ids, `aria-labelledby` partners) is unchanged, and every block remains degrade-open (self-hides when its data is absent).
-   **Plans**: TBD
-   **UI hint**: yes
+
+**Plans:** 2 plans
+
+- [ ] 44-01-PLAN.md — Server lockstep: `countsByStatus` tally + `lastProbedAt`/`attemptCount` on the prune `deadUrlSample` (inside the existing SCAN, no new reads) + 3-surface contract lockstep (route test, OpenAPI incl. closing the Phase-43 `evidence`/`soft-404` drift, client `OperatorStatus.prune` interface) [EVENTS-TAB-02] (Wave 1)
+- [ ] 44-02-PLAN.md — Client mount: presence-gated 7 v2 blocks + FlightRecorder re-mount + new `DeadLinkBucketsBlock` into `EventsFiltersSectionV3` + `prune` prop thread + evolve the two events-section test pins (5 pinning suites stay green) [EVENTS-TAB-01, EVENTS-TAB-02] (Wave 2, after 44-01)
+
+**UI hint**: yes
 
 ### Phase 45: Dashboard Subtab Readability Redesign
 
