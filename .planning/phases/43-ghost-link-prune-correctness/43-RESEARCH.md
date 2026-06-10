@@ -441,22 +441,22 @@ _(All four `urlLiveness._.test.ts` files + the shim exist today; this phase exte
 
 **Note:** Most of this research is `[VERIFIED]` against the codebase. The `[ASSUMED]` items above are threshold/format judgment calls that CONTEXT explicitly delegates to Claude's discretion (marker list contents, helper placement, sweep-counter shape) or that the GHOST-09 evidence sample will empirically settle. None require user confirmation before planning — they are precisely the "Claude's Discretion" gray areas the operator pre-approved in auto-recommend mode.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does dead→unknown DECR the sidecar count?** (see A4)
    - What we know: `unknown` is not terminal-dead, so it's excluded from the count by `isTerminalDead`. Current code DECRs on `priorDead && !nextDead` (`:530`).
    - What's unclear: D-10 only specifies attemptCount preservation; it's silent on the sidecar.
-   - Recommendation: Keep the DECR (event exits dead-membership) while preserving attemptCount (history). Add an explicit sweep test asserting both. Flag in the plan as a one-line decision.
+   - RESOLVED: Keep the DECR (event exits dead-membership) while preserving attemptCount (history) — the two are independent axes. An explicit sweep test asserts both; Plan 43-03 implements this as a one-line decision.
 
 2. **Is there an `operator-status` route contract test pinning `DeadUrlSampleEntry`?**
    - What we know: the type is defined inline in the route (`:185`); the aggregator builds the sample degrade-open.
    - What's unclear: whether a `.strict()` Zod contract test pins the response shape (like Phase 39's `tokenBudget` block).
-   - Recommendation: grep `server/__tests__/routes/operator-status*.test.ts` in Wave 0; widen if present, else rely on typecheck.
+   - RESOLVED: No dedicated route contract test pins `DeadUrlSampleEntry`; the plans widen the inline type and rely on `npx tsc --noEmit` (with a Wave-0 grep guard in Plan 43-05 to widen any test found at execution time).
 
 3. **Where exactly does the `no-url` write happen?**
    - What we know: `buildProbeCandidates` reads all events and currently drops source-less ones; it returns `{eventId,url}[]` and writes nothing today.
    - What's unclear: whether to give `buildProbeCandidates` a write side-effect or add a step.
-   - Recommendation: side-effect inside `buildProbeCandidates` (it already has `persistLiveness` and reads every event) + return a `classifiedNoUrl` count for the cron log line (D-09). Cleanest fit, no new wiring.
+   - RESOLVED: Side-effect inside `buildProbeCandidates` (it already imports `persistLiveness` machinery and reads every event) + return a `classifiedNoUrl` count for the cron log line (D-09). Cleanest fit, no new wiring; Plan 43-03 implements it.
 
 ## Environment Availability
 
