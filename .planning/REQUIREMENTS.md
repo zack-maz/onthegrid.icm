@@ -11,7 +11,7 @@ Operator-locked priority order: water filter → ghost links + events subtab →
 
 ### Water Data Quality (WATER-FILTER)
 
-- [ ] **WATER-FILTER-01**: Operator has a written diagnosis identifying which rejection stage(s) drop the missing facilities, derived from the existing `byTypeRejections` 8-bucket telemetry (prime suspect: O(n²) spatial dedup keyed on `facilityType` only)
+- [x] **WATER-FILTER-01**: Operator has a written diagnosis identifying which rejection stage(s) drop the missing facilities, derived from the existing `byTypeRejections` 8-bucket telemetry (prime suspect: O(n²) spatial dedup keyed on `facilityType` only)
 - [ ] **WATER-FILTER-02**: Water facilities layer no longer intermittently drops entries — spatial dedup never collapses distinct named facilities, and the Latin-label admission gate is not loosened (Phase 27.3.1 G1 "Dam near X" regression stays fixed)
 - [ ] **WATER-FILTER-03**: Fix is observable in production data — `water:facilities:v3` cache key bumped if persisted shape/behavior changes, and the `src/data/water-facilities.json` cold-start snapshot regenerated
 - [ ] **WATER-FILTER-04**: `waterFilterStats` test suite updated in lockstep — rejection-bucket deltas pin the fix against regression
@@ -95,36 +95,36 @@ Deferred — tracked but not in the v2.0 roadmap.
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement     | Phase    | Status  |
-| --------------- | -------- | ------- |
-| WATER-FILTER-01 | Phase 42 | Pending |
-| WATER-FILTER-02 | Phase 42 | Pending |
-| WATER-FILTER-03 | Phase 42 | Pending |
-| WATER-FILTER-04 | Phase 42 | Pending |
-| GHOST-06        | Phase 43 | Pending |
-| GHOST-07        | Phase 43 | Pending |
-| GHOST-08        | Phase 43 | Pending |
-| GHOST-09        | Phase 43 | Pending |
-| GHOST-10        | Phase 43 | Pending |
-| EVENTS-TAB-01   | Phase 44 | Pending |
-| EVENTS-TAB-02   | Phase 44 | Pending |
-| DASH-READ-01    | Phase 45 | Pending |
-| DASH-READ-02    | Phase 45 | Pending |
-| DASH-READ-03    | Phase 45 | Pending |
-| DASH-READ-04    | Phase 45 | Pending |
-| DASH-READ-05    | Phase 45 | Pending |
-| LOAD-01         | Phase 47 | Pending |
-| LOAD-02         | Phase 47 | Pending |
-| LOAD-03         | Phase 47 | Pending |
-| LOAD-04         | Phase 47 | Pending |
-| LOAD-FIX-01     | Phase 48 | Pending |
-| LOAD-FIX-02     | Phase 48 | Pending |
-| HARD-01         | Phase 46 | Pending |
-| HARD-02         | Phase 46 | Pending |
-| CRON-WATCH-01   | Phase 46 | Pending |
-| HARD-03         | Phase 46 | Pending |
-| DOCS-CLEAN-01   | Phase 49 | Pending |
-| DOCS-CLEAN-02   | Phase 49 | Pending |
+| Requirement     | Phase    | Status   |
+| --------------- | -------- | -------- |
+| WATER-FILTER-01 | Phase 42 | Complete |
+| WATER-FILTER-02 | Phase 42 | Pending  |
+| WATER-FILTER-03 | Phase 42 | Pending  |
+| WATER-FILTER-04 | Phase 42 | Pending  |
+| GHOST-06        | Phase 43 | Pending  |
+| GHOST-07        | Phase 43 | Pending  |
+| GHOST-08        | Phase 43 | Pending  |
+| GHOST-09        | Phase 43 | Pending  |
+| GHOST-10        | Phase 43 | Pending  |
+| EVENTS-TAB-01   | Phase 44 | Pending  |
+| EVENTS-TAB-02   | Phase 44 | Pending  |
+| DASH-READ-01    | Phase 45 | Pending  |
+| DASH-READ-02    | Phase 45 | Pending  |
+| DASH-READ-03    | Phase 45 | Pending  |
+| DASH-READ-04    | Phase 45 | Pending  |
+| DASH-READ-05    | Phase 45 | Pending  |
+| LOAD-01         | Phase 47 | Pending  |
+| LOAD-02         | Phase 47 | Pending  |
+| LOAD-03         | Phase 47 | Pending  |
+| LOAD-04         | Phase 47 | Pending  |
+| LOAD-FIX-01     | Phase 48 | Pending  |
+| LOAD-FIX-02     | Phase 48 | Pending  |
+| HARD-01         | Phase 46 | Pending  |
+| HARD-02         | Phase 46 | Pending  |
+| CRON-WATCH-01   | Phase 46 | Pending  |
+| HARD-03         | Phase 46 | Pending  |
+| DOCS-CLEAN-01   | Phase 49 | Pending  |
+| DOCS-CLEAN-02   | Phase 49 | Pending  |
 
 **Coverage:**
 

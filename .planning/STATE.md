@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Final Hardening — 🚧 IN PROGRESS
 status: executing
-last_updated: "2026-06-09T20:36:14.775Z"
-last_activity: 2026-06-09 — v2.0 roadmap created (8 phases, 42-49); all 28 requirements mapped
+last_updated: "2026-06-10T01:34:38.502Z"
+last_activity: 2026-06-09 -- Phase 42 execution started
 progress:
   total_phases: 14
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 42 of 49 (Water Filter Fix) — first v2.0 phase
-Plan: — (none yet; ready to plan)
+Phase: 42 (water-filter-fix) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-06-09 — v2.0 roadmap created (8 phases, 42-49); all 28 requirements mapped
+Last activity: 2026-06-09 -- Phase 42 execution started
 
 Progress: [░░░░░░░░░░] 0% (0/8 phases)
 
@@ -139,6 +139,7 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (42-01, D-03) confirm-dedup: telemetry-first diagnosis (42-DIAGNOSIS.md, verdict confirmed_prime_suspect_dedup) confirms the name-blind, order-dependent O(n²) spatial-dedup loop (server/adapters/overpass-water.ts:1202-1212) as the cause of missing water facilities. No pivot — proceed to the pre-registered name-aware + deterministic spatialDedup fix in Plan 02. Latin-label admission gate NOT implicated; D-06 (forbidding gate loosening) NOT triggered. Diagnosis cites the SUMMED rejections.duplicate bucket, never byTypeRejections.*.duplicate (structurally always 0 post-merge per Pitfall 1). RED spatialDedup scaffold (cases a-d + it.todo e) verified: 4 dedup cases RED, 165 G1 tests GREEN, 1 todo. WATER-FILTER-01 complete.
 - (41-05, D-07/D-11) Wave-3 distilled lessons + brainstorms receipts shipped (SC41-3 lessons+brainstorms portion): docs/LESSONS.md authored as a 1-page first-person distillation of RETROSPECTIVE.md surfacing the 5 named lessons (probe-before-commit, honest deferral, mechanical drift gates compound, deletion over deprecation, architecture decisions cascade into audit-tier semantics — Phase 37); cross-links BUILDING + SHOWCASE. BUILDING §7 Historical receipts (cross-links already in place from Plan 02) gained the load-bearing vision-to-shipped inline callout: origin brainstorm's day-one "numbers over narratives" thesis (held) vs its plumbing assumptions (ACLED→GDELT Phase 8.1, WebSocket→recursive setTimeout at v1.0 serverless). D-07 honored — nothing moved/deleted/archived. README localhost dead-links left untouched (pre-existing, out of scope); LESSONS.md links lint clean in isolation.
 - (41-03) Wave-2 round-out docs shipped (SC41-3 concepts+COSTS+operator-guide portion): concepts.md (38 terms), COSTS.md (Vercel Pro $20/mo sole paid line + D-09 stay-on-vercel.app rationale + RETROSPECTIVE-cited dev cost), operator-guide.md (6-workflow visitor how-to distinct from runbook, `<your-bearer>` placeholder only). Audit-carried Wave-2 docs sweep applied: ADR #1/2/3/4/21/23, .env.example #6 (LLM_PIPELINE_V2/V3 removed) + #7-ACLED (marked historical, kept blank assignments so check:env drift gate stays satisfied — Rule 3), OpenAPI #16 (prune-dead-urls path) + NN-3 (llm-history path), reliability-doc NN-4 title. redocly lint valid; all 3 new docs link-check clean; fixed CLAUDE.md-inherited dead link rateLimiter.ts→rateLimit.ts.
 - (41-01, D-10) Wave-0 final-sweep audit complete (SC41-1 satisfied): re-ran the v1.5-close 2nd-pass code+docs audit against current main. Phase 38 (LLM-FIX + LLM-PURGE) resolved the ENTIRE code-side punch-list (all 3 BUGS + all dead-code); the residual v1.6 cleanup is now a pure DOCS sweep. 4 net-new docs findings (README/CHANGELOG missing Phase 38/39/40 features; OpenAPI llm-history + reliability-doc title gaps) routed to Phase 41 docs waves 2-3 in 41-AUDIT.md §D. Both operator memories refreshed (resolved dropped, net-new added, still-open carried). News-warmer (punch-list #15) DEFERRED to v1.7 (operability nicety, not a reveal REQ-ID). Cerebras/Groq test fixtures RESOLVED-BY-REFRAME (LLM-PURGE-06 keeps them as deferred-provider scaffolding).

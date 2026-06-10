@@ -339,11 +339,11 @@ Plans:
 3. The fix is visible in production data — if the persisted shape or behavior changed, `water:facilities:v3` is bumped (v3→v4) and `src/data/water-facilities.json` cold-start snapshot is regenerated and committed.
 4. The `waterFilterStats` test suite is updated in lockstep — rejection-bucket deltas pin the fix and a fixture for the previously-dropped OSM element fails on regression.
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 42-01-PLAN.md — Telemetry-first diagnosis (42-DIAGNOSIS.md) + RED spatialDedup test scaffold [wave 1; checkpoint]
+- [x] 42-01-PLAN.md — Telemetry-first diagnosis (42-DIAGNOSIS.md) + RED spatialDedup test scaffold [wave 1; checkpoint]
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
@@ -447,7 +447,7 @@ Plans:
 
 | Phase | Name                                  | Plans Complete | Status      | Completed |
 | ----- | ------------------------------------- | -------------- | ----------- | --------- |
-| 42    | Water Filter Fix                      | 0/TBD          | Not started | -         |
+| 42    | Water Filter Fix                      | 1/3            | In Progress |           |
 | 43    | Ghost Link Prune Correctness          | 0/TBD          | Not started | -         |
 | 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -         |
 | 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -         |
