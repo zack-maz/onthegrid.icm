@@ -318,7 +318,7 @@ Plans:
 
 ### Phases summary (planned)
 
-- [ ] **Phase 42: Water Filter Fix** — telemetry-diagnosed rejection-bucket fix for intermittently-dropped water facilities; `water:facilities:v3` cache key bump + cold-start snapshot regen if shape changes; `waterFilterStats` regression fixtures pin the fix. _(WATER-FILTER-01..04)_
+- [x] **Phase 42: Water Filter Fix** — telemetry-diagnosed rejection-bucket fix for intermittently-dropped water facilities; `water:facilities:v3` cache key bump + cold-start snapshot regen if shape changes; `waterFilterStats` regression fixtures pin the fix. _(WATER-FILTER-01..04)_ (completed 2026-06-10)
 - [ ] **Phase 43: Ghost Link Prune Correctness** — soft-404 body heuristic on 200s, source-less event coverage, `unknown`-excluded-from-prune + flaky-host attempt-reset fix, 403-auto-prune evidence decision, per-event evidence string surfaced. _(GHOST-06..10)_
 - [ ] **Phase 44: Events Subtab Pipeline Detail** — mount the 7 already-built LLM blocks into `EventsFiltersSectionV3` + per-bucket dead-link state, fed from existing `LLMStatus` + liveness fields; pure UI wiring, no server changes. _(EVENTS-TAB-01..02)_
 - [ ] **Phase 45: Dashboard Subtab Readability Redesign** — tabular-nums / right-aligned numerics / progressive disclosure / visual hierarchy on water+events+sites subtabs; off-the-grid aesthetic + ARIA tablist contract preserved; trend sparklines from small history rings. _(DASH-READ-01..05)_
@@ -339,7 +339,7 @@ Plans:
 3. The fix is visible in production data — if the persisted shape or behavior changed, `water:facilities:v3` is bumped (v3→v4) and `src/data/water-facilities.json` cold-start snapshot is regenerated and committed.
 4. The `waterFilterStats` test suite is updated in lockstep — rejection-bucket deltas pin the fix and a fixture for the previously-dropped OSM element fails on regression.
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 **Wave 1**
 
@@ -351,7 +351,7 @@ Plans:
 
 **Wave 3** _(blocked on Wave 2 completion)_
 
-- [ ] 42-03-PLAN.md — water:facilities:v3→v4 lockstep (10 surfaces) + snapshot regen + contract docs [wave 3, after 02]
+- [x] 42-03-PLAN.md — water:facilities:v3→v4 lockstep (10 surfaces) + snapshot regen + contract docs [wave 3, after 02]
 
 ### Phase 43: Ghost Link Prune Correctness
 
@@ -445,16 +445,16 @@ Plans:
 
 ### Progress Table
 
-| Phase | Name                                  | Plans Complete | Status      | Completed |
-| ----- | ------------------------------------- | -------------- | ----------- | --------- |
-| 42    | Water Filter Fix                      | 2/3            | In Progress |           |
-| 43    | Ghost Link Prune Correctness          | 0/TBD          | Not started | -         |
-| 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -         |
-| 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -         |
-| 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -         |
-| 47    | ~100-User Load Test                   | 0/TBD          | Not started | -         |
-| 48    | Load Remediation                      | 0/TBD          | Not started | -         |
-| 49    | Docs Cleanup                          | 0/TBD          | Not started | -         |
+| Phase | Name                                  | Plans Complete | Status      | Completed  |
+| ----- | ------------------------------------- | -------------- | ----------- | ---------- |
+| 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
+| 43    | Ghost Link Prune Correctness          | 0/TBD          | Not started | -          |
+| 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -          |
+| 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -          |
+| 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
+| 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |
+| 48    | Load Remediation                      | 0/TBD          | Not started | -          |
+| 49    | Docs Cleanup                          | 0/TBD          | Not started | -          |
 
 ## Deferred Work
 

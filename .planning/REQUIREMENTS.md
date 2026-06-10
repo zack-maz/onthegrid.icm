@@ -13,7 +13,7 @@ Operator-locked priority order: water filter → ghost links + events subtab →
 
 - [x] **WATER-FILTER-01**: Operator has a written diagnosis identifying which rejection stage(s) drop the missing facilities, derived from the existing `byTypeRejections` 8-bucket telemetry (prime suspect: O(n²) spatial dedup keyed on `facilityType` only)
 - [x] **WATER-FILTER-02**: Water facilities layer no longer intermittently drops entries — spatial dedup never collapses distinct named facilities, and the Latin-label admission gate is not loosened (Phase 27.3.1 G1 "Dam near X" regression stays fixed)
-- [ ] **WATER-FILTER-03**: Fix is observable in production data — `water:facilities:v3` cache key bumped if persisted shape/behavior changes, and the `src/data/water-facilities.json` cold-start snapshot regenerated
+- [x] **WATER-FILTER-03**: Fix is observable in production data — `water:facilities:v3` cache key bumped if persisted shape/behavior changes, and the `src/data/water-facilities.json` cold-start snapshot regenerated
 - [x] **WATER-FILTER-04**: `waterFilterStats` test suite updated in lockstep — rejection-bucket deltas pin the fix against regression
 
 ### Ghost Links (GHOST — continues v1.5 numbering from GHOST-05)
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | --------------- | -------- | -------- |
 | WATER-FILTER-01 | Phase 42 | Complete |
 | WATER-FILTER-02 | Phase 42 | Complete |
-| WATER-FILTER-03 | Phase 42 | Pending  |
+| WATER-FILTER-03 | Phase 42 | Complete |
 | WATER-FILTER-04 | Phase 42 | Complete |
 | GHOST-06        | Phase 43 | Pending  |
 | GHOST-07        | Phase 43 | Pending  |

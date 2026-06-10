@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Final Hardening — 🚧 IN PROGRESS
-status: executing
-last_updated: "2026-06-10T01:39:26.669Z"
+status: verifying
+last_updated: "2026-06-10T01:49:37.388Z"
 last_activity: 2026-06-09 -- Phase 42 execution started
 progress:
   total_phases: 14
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 7
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md
 
 Phase: 42 (water-filter-fix) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-09 -- Phase 42 execution started
 
 Progress: [░░░░░░░░░░] 0% (0/8 phases)
@@ -480,6 +480,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 40 P40-04 | 12min | 3 tasks | 7 files |
 | Phase 41 P02 | 22m | 3 tasks | 4 files |
 | Phase 42 P02 | 8min | 3 tasks | 2 files |
+| Phase 42 P03 | ~12min | 3 tasks | 12 files |
 
 ## Decisions
 
@@ -496,6 +497,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: (40-04 UI-POLISH-05) 8 UI-SPEC Regression-Lock assertions coded as RTL/snapshot tests across the 6 existing DevApiStatus test files (extended, not replaced) + 1 new consolidated-layout snapshot; assertion 5 (drawer default-closed) doubles as a security-adjacent guard
 - [Phase 41]: Phase 41 Wave 1 docs core shipped: BUILDING-WITH-CLAUDE-CODE.md (first-person agentic meta-story), JOURNEY.md (product arc + Mermaid gantt), SHOWCASE.md (1-page guided-tour hub) + README hero link — SC41-2 satisfied (1-click to meta-story/product-arc/decisions)
 - [Phase ?]: (42-02, D-04/D-07) Name-aware + deterministic spatialDedup shipped: extracted the inline name-blind O(n²) dedup loop into an exported pure spatialDedup(facilities)->{kept,collapsed}. Distinct named facilities of the same type within 50m now BOTH admit (D-04); survivor is deterministic (notabilityScore desc, osmId asc — D-07), order-independent of Overpass return order. normName reads f.label (Pitfall 4, not nameLatin). 50m window + facilityType equality unchanged (D-05); admission gate untouched (D-06). D-14 regression fixture pins the real Sd Wdy Rbg / Rabigh Dam dropped pair (collapsed===0 post-fix). Task 3 no schema change. WATER-FILTER-02 + WATER-FILTER-04 complete.
+- [Phase ?]: (42-03, WATER-FILTER-03) water:facilities:v3 -> v4 bumped atomically across all 10 lockstep surfaces; v3 demoted to dead-surveillance in the redis-registry whitelist; snapshot regenerated 304 -> 460 facilities (D-09 behavior-change evidence); Open Question 2 resolved — data-flows.md not gate-covered, deferred to Phase 49 (D-11). Full server suite 1378 green; tsc clean; drift gate green.
 
 ## Operator Next Steps
 
