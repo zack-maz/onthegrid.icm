@@ -3522,66 +3522,66 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
         {' · '}pruned <span className="tabular-nums text-white/80">{prune.last24hPrunes}</span> in
         24h
       </div>
-      {prune.deadUrlCount > 0 && (
-        <>
-          {/* Per-status SAMPLED buckets — "of N scanned" caveat (D-03). */}
-          {buckets.length > 0 && (
-            <div className="mt-1" data-testid="dead-link-buckets">
-              {buckets.map(([status, n]) => (
-                <div
-                  key={status}
-                  className="flex items-center gap-1 text-[9px]"
-                  data-testid={`dead-link-bucket-${status}`}
-                >
-                  <span
-                    className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
-                      DEAD_LINK_STATUS_COLORS[status] ?? 'text-white/60'
-                    }`}
-                  >
-                    {status}
-                  </span>
-                  <span className="tabular-nums text-white/80">{n}</span>
-                  <span className="ml-auto text-white/30">of {scannedTotal} scanned</span>
-                </div>
-              ))}
+      {/* Phase 44 WR-05 — buckets + sample gate on their OWN data presence,
+          NOT the deadUrlCount sidecar. The sidecar has a documented
+          underflow-to-0 mode (T-32-11); gating scan evidence on it would
+          mask the only signal that the sidecar has drifted. A count/sample
+          disagreement is now visible instead of hidden (matches the sibling
+          API-Health list, which gates on deadUrlSample.length). The
+          authoritative-total line above stays sidecar-sourced (D-03). */}
+      {/* Per-status SAMPLED buckets — "of N scanned" caveat (D-03). */}
+      {buckets.length > 0 && (
+        <div className="mt-1" data-testid="dead-link-buckets">
+          {buckets.map(([status, n]) => (
+            <div
+              key={status}
+              className="flex items-center gap-1 text-[9px]"
+              data-testid={`dead-link-bucket-${status}`}
+            >
+              <span
+                className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                  DEAD_LINK_STATUS_COLORS[status] ?? 'text-white/60'
+                }`}
+              >
+                {status}
+              </span>
+              <span className="tabular-nums text-white/80">{n}</span>
+              <span className="ml-auto text-white/30">of {scannedTotal} scanned</span>
             </div>
-          )}
-          {/* Drill-down sample rows (≤20) — evidence as TEXT (D-11), relative
-              lastProbedAt + dead-streak attemptCount (D-02). */}
-          {sample.length > 0 && (
-            <div className="mt-1 max-h-32 overflow-y-auto" data-testid="dead-link-sample">
-              {sample.map((entry) => (
-                <div
-                  key={entry.eventId}
-                  className="flex items-center gap-1 text-[9px] text-white/60"
-                >
-                  <span
-                    className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
-                      DEAD_LINK_STATUS_COLORS[entry.status] ?? 'text-white/60'
-                    }`}
-                  >
-                    {entry.status}
-                  </span>
-                  {/* Phase 44 WR-04 — url is string | null; null renders nothing. */}
-                  <span className="truncate text-white/70" title={entry.url ?? undefined}>
-                    {entry.url}
-                  </span>
-                  {entry.evidence ? (
-                    <span className="truncate text-white/40">{entry.evidence}</span>
-                  ) : null}
-                  {typeof entry.attemptCount === 'number' && (
-                    <span className="tabular-nums text-white/40">dead ×{entry.attemptCount}</span>
-                  )}
-                  {entry.lastProbedAt ? (
-                    <span className="ml-auto tabular-nums text-white/30">
-                      {relativeTime(entry.lastProbedAt)}
-                    </span>
-                  ) : null}
-                </div>
-              ))}
+          ))}
+        </div>
+      )}
+      {/* Drill-down sample rows (≤20) — evidence as TEXT (D-11), relative
+          lastProbedAt + dead-streak attemptCount (D-02). */}
+      {sample.length > 0 && (
+        <div className="mt-1 max-h-32 overflow-y-auto" data-testid="dead-link-sample">
+          {sample.map((entry) => (
+            <div key={entry.eventId} className="flex items-center gap-1 text-[9px] text-white/60">
+              <span
+                className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                  DEAD_LINK_STATUS_COLORS[entry.status] ?? 'text-white/60'
+                }`}
+              >
+                {entry.status}
+              </span>
+              {/* Phase 44 WR-04 — url is string | null; null renders nothing. */}
+              <span className="truncate text-white/70" title={entry.url ?? undefined}>
+                {entry.url}
+              </span>
+              {entry.evidence ? (
+                <span className="truncate text-white/40">{entry.evidence}</span>
+              ) : null}
+              {typeof entry.attemptCount === 'number' && (
+                <span className="tabular-nums text-white/40">dead ×{entry.attemptCount}</span>
+              )}
+              {entry.lastProbedAt ? (
+                <span className="ml-auto tabular-nums text-white/30">
+                  {relativeTime(entry.lastProbedAt)}
+                </span>
+              ) : null}
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
     </div>
   );

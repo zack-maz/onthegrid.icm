@@ -651,7 +651,11 @@ describe('DeadLinkBucketsBlock (events tab) — Phase 44 EVENTS-TAB-02', () => {
     });
   });
 
-  it('skips bucket + sample rows when deadUrlCount === 0 (mirrors the existing empty copy)', async () => {
+  it('WR-05: buckets render on their own data even when deadUrlCount === 0 (sidecar drift stays visible)', async () => {
+    // The deadUrlCount sidecar has a documented underflow-to-0 mode (T-32-11).
+    // Scan-derived buckets/sample must gate on their OWN presence so a count
+    // of 0 cannot mask contradicting scan evidence — the disagreement IS the
+    // operator's drift signal.
     v44Payload = {
       audit24h: 1,
       byBearer: [],
@@ -663,9 +667,29 @@ describe('DeadLinkBucketsBlock (events tab) — Phase 44 EVENTS-TAB-02', () => {
     await waitFor(() => {
       expect(screen.getByTestId('dead-link-authoritative-total')).toBeInTheDocument();
     });
+    // Authoritative line still reports the sidecar count verbatim (D-03).
     expect(screen.getByTestId('dead-link-authoritative-total').textContent).toMatch(
       /Dead URL events: 0/,
     );
+    // Buckets render from their own non-empty tally despite count === 0.
+    expect(screen.getByTestId('dead-link-buckets')).toBeInTheDocument();
+    expect(screen.getByTestId('dead-link-bucket-live')).toBeInTheDocument();
+    // The sample gates on ITS own data — empty array → hidden.
+    expect(screen.queryByTestId('dead-link-sample')).toBeNull();
+  });
+
+  it('WR-05: skips bucket + sample rows when scan data itself is empty', async () => {
+    v44Payload = {
+      audit24h: 1,
+      byBearer: [],
+      advEval: null,
+      prune: { deadUrlCount: 0, last24hPrunes: 0, countsByStatus: {}, deadUrlSample: [] },
+    };
+    openEventsTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-link-authoritative-total')).toBeInTheDocument();
+    });
     expect(screen.queryByTestId('dead-link-buckets')).toBeNull();
     expect(screen.queryByTestId('dead-link-sample')).toBeNull();
   });
