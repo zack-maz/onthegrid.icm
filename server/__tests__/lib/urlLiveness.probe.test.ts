@@ -52,6 +52,42 @@ function makeResponse(status: number, headers: Record<string, string> = {}): Res
   return new Response(null, { status, headers });
 }
 
+/**
+ * Phase 43 Plan 02 — build a 200 Response whose `.body` streams the given HTML
+ * via a real `getReader()`-bearing ReadableStream, so the capped-GET body read
+ * in `probeUrl` exercises the manual reader loop. `chunkBytes` controls how
+ * many bytes each `read()` yields (used to assert the 16 KiB cap aborts a
+ * server that ignores `Range`). `onCancel` records `reader.cancel()` calls.
+ */
+function makeBodyResponse(
+  html: string,
+  opts: { status?: number; chunkBytes?: number; onCancel?: () => void } = {},
+): Response {
+  const { status = 200, chunkBytes = 1 << 20, onCancel } = opts;
+  const full = new TextEncoder().encode(html);
+  let offset = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (offset >= full.byteLength) {
+        controller.close();
+        return;
+      }
+      const end = Math.min(offset + chunkBytes, full.byteLength);
+      controller.enqueue(full.subarray(offset, end));
+      offset = end;
+    },
+    cancel() {
+      onCancel?.();
+    },
+  });
+  return new Response(stream, { status, headers: { 'content-type': 'text/html' } });
+}
+
+const NORMAL_ARTICLE_HTML =
+  '<html><head><title>A real news article</title></head><body><article>' +
+  'The situation on the ground continued to develop today. '.repeat(40) +
+  '</article></body></html>';
+
 beforeEach(() => {
   fetchMock.mockReset();
 });
@@ -62,13 +98,19 @@ afterEach(() => {
 
 describe('Phase 32 Plan 02 Task 1 — probeUrl', () => {
   describe('terminal-2xx and explicit-4xx taxonomy (D-07)', () => {
-    it('HEAD 200 → status:live, httpStatus:200', async () => {
-      fetchMock.mockResolvedValueOnce(makeResponse(200));
+    it('HEAD 200 → status:live, httpStatus:200 (+ capped body GET classifies live)', async () => {
+      // Phase 43: the 200 branch now issues a follow-up capped GET whose body
+      // feeds classifySoft404. A normal article body → still live.
+      fetchMock
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
       const result = await probeUrl('https://example.com/article');
       expect(result.status).toBe('live');
       expect(result.httpStatus).toBe(200);
       expect(result.finalUrl).toBe('https://example.com/article');
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.evidence).toBeNull();
+      // 1 HEAD + 1 capped GET.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('HEAD 404 → status:"404"', async () => {
@@ -86,12 +128,16 @@ describe('Phase 32 Plan 02 Task 1 — probeUrl', () => {
     });
 
     it('HEAD 405 → GET with Range fallback, then 200 → status:live (D-16)', async () => {
-      fetchMock.mockResolvedValueOnce(makeResponse(405)).mockResolvedValueOnce(makeResponse(200));
+      fetchMock
+        .mockResolvedValueOnce(makeResponse(405))
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
       const result = await probeUrl('https://cdn.example.com/article');
       expect(result.status).toBe('live');
       expect(result.httpStatus).toBe(200);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      // Assert the GET fallback carried the Range header.
+      // 1 HEAD + 1 405-fallback GET + 1 capped body GET.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      // Assert the 405-fallback GET carried the 1 KiB Range header.
       const getCall = fetchMock.mock.calls[1];
       expect(getCall?.[1]?.method).toBe('GET');
       expect(getCall?.[1]?.headers?.Range).toBe('bytes=0-1023');
@@ -110,13 +156,16 @@ describe('Phase 32 Plan 02 Task 1 — probeUrl', () => {
       fetchMock
         .mockResolvedValueOnce(makeResponse(301, { location: 'https://b.example.com/' }))
         .mockResolvedValueOnce(makeResponse(302, { location: 'https://c.example.com/' }))
-        .mockResolvedValueOnce(makeResponse(200));
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
       const result = await probeUrl('https://a.example.com/');
       expect(result.status).toBe('live');
       expect(result.httpStatus).toBe(200);
       expect(result.finalUrl).toBe('https://c.example.com/');
-      expect(fetchMock).toHaveBeenCalledTimes(3);
-      // Every fetch must carry `redirect: 'manual'` so the count is honest.
+      // 3 redirect/terminal HEADs + 1 capped body GET.
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      // Every redirect-following fetch must carry `redirect: 'manual'` so the
+      // hop count is honest (the capped body GET also uses manual).
       for (const call of fetchMock.mock.calls) {
         expect(call[1]?.redirect).toBe('manual');
       }
@@ -167,12 +216,16 @@ describe('Phase 32 Plan 02 Task 1 — probeUrl', () => {
 
   describe('polite-citizen headers (D-21)', () => {
     it('every fetch carries the exact PROBE_UA User-Agent', async () => {
-      fetchMock.mockResolvedValueOnce(makeResponse(200));
+      fetchMock
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
       await probeUrl('https://example.com/');
-      const call = fetchMock.mock.calls[0];
-      expect(call?.[1]?.headers?.['User-Agent']).toBe(
-        'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)',
-      );
+      // Both the HEAD and the follow-up capped GET carry the UA.
+      for (const call of fetchMock.mock.calls) {
+        expect(call?.[1]?.headers?.['User-Agent']).toBe(
+          'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)',
+        );
+      }
     });
   });
 
@@ -234,14 +287,18 @@ describe('Phase 32 Plan 02 Task 1 — probeUrl', () => {
     // (e.g. 'fc-barcelona.com', 'fdcompany.com') must NOT be false-positive-blocked
     // now that ULA detection requires the `[0-9a-f]{2}:` hex disambiguation.
     it('CR-02 — legitimate hostname "fc-barcelona.com" is NOT blocked by SSRF guard', async () => {
-      fetchMock.mockResolvedValueOnce(makeResponse(200));
+      fetchMock
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
       const result = await probeUrl('https://fc-barcelona.com/players');
       expect(result.status).toBe('live');
       expect(fetchMock).toHaveBeenCalled();
     });
 
     it('CR-02 — legitimate hostname "fdcompany.com" is NOT blocked by SSRF guard', async () => {
-      fetchMock.mockResolvedValueOnce(makeResponse(200));
+      fetchMock
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
       const result = await probeUrl('https://fdcompany.com/about');
       expect(result.status).toBe('live');
       expect(fetchMock).toHaveBeenCalled();
@@ -380,5 +437,115 @@ describe('Phase 43 Plan 02 Task 1 — classifySoft404 (GHOST-06)', () => {
       expect(result.soft404).toBe(true);
       expect(result.evidence).toBe('soft-404: matched "page not found" in title');
     });
+  });
+});
+
+// ============================================================================
+// Phase 43 Plan 02 Task 2 — probeUrl 200-branch capped GET + soft-404 wiring
+// ============================================================================
+//
+// Integration over the mocked fetch: every 200 (HEAD or 405-fallback GET, or
+// the terminal hop of a redirect chain) triggers a follow-up 16 KiB capped GET
+// whose decoded body feeds classifySoft404. Asserts soft-404 detection, the
+// 16 KiB Range header, the cap abort on Range-ignoring servers, degrade-open
+// on body-read throw, and the SSRF-safe target (the already-vetted finalUrl).
+
+describe('Phase 43 Plan 02 Task 2 — probeUrl soft-404 body wiring (GHOST-06)', () => {
+  it('200 with <title>Page not found</title> → status:soft-404 + D-16 evidence', async () => {
+    const soft404Body =
+      '<html><head><title>Page not found</title></head><body>' +
+      'x'.repeat(1000) +
+      '</body></html>';
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(200))
+      .mockResolvedValueOnce(makeBodyResponse(soft404Body));
+    const result = await probeUrl('https://example.com/news/article-1');
+    expect(result.status).toBe('soft-404');
+    expect(result.evidence).toBe('soft-404: matched "page not found" in title');
+    expect(result.httpStatus).toBe(200);
+    expect(result.finalUrl).toBe('https://example.com/news/article-1');
+  });
+
+  it('200 with a normal deep-article body → status:live, evidence:null', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(200))
+      .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
+    const result = await probeUrl('https://example.com/news/2026/big-story');
+    expect(result.status).toBe('live');
+    expect(result.evidence).toBeNull();
+    expect(result.httpStatus).toBe(200);
+  });
+
+  it('the capped GET sends Range: bytes=0-16383 (16 KiB, NOT the 1 KiB 405-fallback)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(200))
+      .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
+    await probeUrl('https://example.com/news/article-2');
+    // calls[0] = HEAD, calls[1] = capped body GET.
+    const cappedGet = fetchMock.mock.calls[1];
+    expect(cappedGet?.[1]?.method).toBe('GET');
+    expect(cappedGet?.[1]?.headers?.Range).toBe('bytes=0-16383');
+  });
+
+  it('server ignores Range and streams > 16 KiB → read aborts at the cap (reader.cancel called)', async () => {
+    let cancelled = false;
+    // 64 KiB of normal content; tiny chunks so the reader loop iterates many
+    // times and the cap break happens mid-stream.
+    const bigHtml =
+      '<html><head><title>Huge but live</title></head><body>' +
+      'y'.repeat(64 * 1024) +
+      '</body></html>';
+    fetchMock.mockResolvedValueOnce(makeResponse(200)).mockResolvedValueOnce(
+      makeBodyResponse(bigHtml, {
+        chunkBytes: 4096,
+        onCancel: () => {
+          cancelled = true;
+        },
+      }),
+    );
+    const result = await probeUrl('https://example.com/news/huge');
+    // Cap aborted the read → connection released via reader.cancel().
+    expect(cancelled).toBe(true);
+    // A huge-but-live body classifies live (markers absent, deep→deep, above floor).
+    expect(result.status).toBe('live');
+  });
+
+  it('degrade-open (D-22): body read throws → status:live, evidence:null', async () => {
+    // A 200 HEAD, then a capped GET whose body stream errors on read.
+    const erroringStream = new ReadableStream<Uint8Array>({
+      pull() {
+        throw new Error('stream blew up');
+      },
+    });
+    const erroringResponse = new Response(erroringStream, {
+      status: 200,
+      headers: { 'content-type': 'text/html' },
+    });
+    fetchMock.mockResolvedValueOnce(makeResponse(200)).mockResolvedValueOnce(erroringResponse);
+    const result = await probeUrl('https://example.com/news/flaky');
+    expect(result.status).toBe('live');
+    expect(result.evidence).toBeNull();
+    expect(result.httpStatus).toBe(200);
+  });
+
+  it('SSRF: the capped GET targets the already-vetted finalUrl (same currentUrl, no fresh unvetted fetch)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(200))
+      .mockResolvedValueOnce(makeBodyResponse(NORMAL_ARTICLE_HTML));
+    const url = 'https://vetted.example.com/news/article-3';
+    await probeUrl(url);
+    // The capped GET (calls[1]) must hit the exact vetted finalUrl.
+    const cappedGet = fetchMock.mock.calls[1];
+    expect(cappedGet?.[0]).toBe(url);
+  });
+
+  it('capped GET that itself returns null (fetch threw) → degrade-open to live', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(200))
+      .mockRejectedValueOnce(new Error('GET failed'));
+    const result = await probeUrl('https://example.com/news/article-4');
+    expect(result.status).toBe('live');
+    expect(result.evidence).toBeNull();
+    expect(result.httpStatus).toBe(200);
   });
 });
