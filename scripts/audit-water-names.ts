@@ -8,11 +8,11 @@
 // VALIDATE the romanize() reset-bar quality (Task 1) before the adapter lock-in
 // (Task 2 injects romanize BEFORE this gate so these facilities stop dropping).
 //
-// Per D-07 the audit is strictly non-destructive — it reads `water:facilities:v3`
+// Per D-07 the audit is strictly non-destructive — it reads `water:facilities:v4`
 // via cacheGetSafe only and NEVER writes back (no cacheSet / redis.set).
 //
 // Usage:
-//   npm run audit:water                              # read live water:facilities:v3
+//   npm run audit:water                              # read live water:facilities:v4
 //   npx tsx scripts/audit-water-names.ts --snapshot s.json   # read a captured snapshot
 //   npx tsx scripts/audit-water-names.ts -o water-names-audit.json
 //   npx tsx scripts/audit-water-names.ts --help
@@ -179,7 +179,7 @@ The audit NEVER writes to Redis (D-07).
 
 /**
  * The audit needs the RAW OSM tags to re-run hasLatinLabel. The live
- * water:facilities:v3 cache stores NORMALIZED WaterFacility objects (already
+ * water:facilities:v4 cache stores NORMALIZED WaterFacility objects (already
  * past the gate), so the live path reconstructs a best-effort tag bag from
  * label/operator. For a faithful pre-gate audit, pass a --snapshot of raw
  * Overpass elements ({ facilities: [{ osmId, facilityType, tags }] }).
@@ -211,7 +211,7 @@ function toAuditFacility(entry: RawSnapshotEntry): NameAuditFacility {
 async function loadFromRedis(): Promise<NameAuditFacility[]> {
   try {
     const { cacheGetSafe } = await import('../server/cache/redis.js');
-    const res = await cacheGetSafe<RawSnapshotEntry[]>('water:facilities:v3', 0);
+    const res = await cacheGetSafe<RawSnapshotEntry[]>('water:facilities:v4', 0);
     return (res?.data ?? []).map(toAuditFacility);
   } catch (err) {
     console.error(

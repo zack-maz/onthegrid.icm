@@ -128,7 +128,7 @@ D-13 single source of truth for all entity / event / site / faction / ethnic col
 - **`flights:{source}`** — per-source flight cache (OpenSky / ADS-B Exchange / adsb.lol); short TTL.
 - **`ships:ais`** — AISStream merged ship cache (10 min stale).
 - **`sites:v3`** — Overpass static infrastructure (24h TTL).
-- **`water:facilities:v3`** — Overpass water facilities with Latin-label admission gate + desalination synthesis (24h TTL).
+- **`water:facilities:v4`** — Overpass water facilities with Latin-label admission gate + desalination synthesis (24h TTL). Phase 42: bumped v3→v4 for the name-aware + deterministic spatial-dedup behavior change.
 - **`water:precip`** — Open-Meteo 30-day precipitation anomaly (6h TTL); `findNearestPrecip` 4° Manhattan cutoff.
 - **`news:feed`** — clustered render-target cache (RSS + GDELT-DOC merged, Jaccard 0.8 dedup, 7-day window); 15-min TTL. Writer: `server/routes/news.ts:28` (`NEWS_FEED_KEY`). Reader: same file + `server/lib/healthSources.ts:40`.
 - **`news:gdelt`** — raw GDELT-DOC LLM-input cache; 15-min TTL. Writer: GDELT-DOC adapter (`server/adapters/gdelt-doc.ts`). Reader: `server/lib/llmEventExtractor.v3.ts:107` (NEWS BLOCK in prompt); `server/routes/events.ts:672` (Pitfall 1 fallback path).

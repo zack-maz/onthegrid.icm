@@ -1,0 +1,9 @@
+{
+  "content": "Operational/status dashboard design: visual hierarchy via font size+weight; group related data with whitespace; density modes; tabular/monospace fonts + right-alignment for numeric columns; status badges + sparklines; progressive disclosure (summary first, drill-down).",
+  "source": "web",
+  "provider": "websearch",
+  "confidence": "MEDIUM",
+  "fetched_at": "2026-06-09T19:50:35.810Z",
+  "ttl": 86400000,
+  "kind": "web"
+}

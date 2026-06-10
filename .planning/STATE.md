@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Production Hardening — 🚧 ACTIVE
-status: Awaiting next milestone
-last_updated: "2026-06-09T19:28:48.757Z"
-last_activity: 2026-06-09 — Milestone v1.6 completed and archived
+milestone: v2.0
+milestone_name: Final Hardening — 🚧 IN PROGRESS
+status: verifying
+last_updated: "2026-06-10T02:03:26.702Z"
+last_activity: 2026-06-10
 progress:
-  total_phases: 10
-  completed_phases: 4
-  total_plans: 21
-  completed_plans: 21
-  percent: 40
+  total_phases: 14
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 7
 ---
 
 # Project State
@@ -23,10 +23,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v1.6 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-09 — Milestone v1.6 completed and archived
+Phase: 43
+Plan: Not started
+Status: Phase complete — ready for verification
+Last activity: 2026-06-10
+
+Progress: [░░░░░░░░░░] 0% (0/8 phases)
 
 ## v1.5 Phases (SHIPPED 2026-06-03)
 
@@ -88,6 +90,29 @@ Last activity: 2026-06-09 — Milestone v1.6 completed and archived
 | **Cerebras + Groq adapter source-file removal** | **Absorbed into Phase 38 LLM-PURGE-07.** No v1.6 router-restoration scheduled; source files delete; rollback path is `git revert <Phase 29 commit range>`. |
 | **Phase 999.6** Portfolio Documentation Polish + Vercel Pro Cleanup | **RETIRED from backlog.** Strand A (10 portfolio docs) → Phase 41 REVEAL-DOCS-01..10. Strand B (Vercel Pro cleanup-and-repair) → Phase 38 VERCEL-PRO-01..04. |
 
+## v2.0 Phases (planned)
+
+Roadmap created 2026-06-09. Numbering continues from v1.6 Phase 41 → Phase 42. Granularity `fine` (8 phases). Operator-locked priority order, research-reconciled sequencing (hardening before load test so its metrics validate the hardening and the 7-day cron watch runs in parallel; load remediation is its own phase immediately after the load test; docs last).
+
+| Phase | Name | Requirements | Status |
+| ----- | ---- | ------------ | ------ |
+| 42 | Water Filter Fix | WATER-FILTER-01..04 | 📋 Planned |
+| 43 | Ghost Link Prune Correctness | GHOST-06..10 | 📋 Planned |
+| 44 | Events Subtab Pipeline Detail | EVENTS-TAB-01..02 | 📋 Planned |
+| 45 | Dashboard Subtab Readability Redesign | DASH-READ-01..05 | 📋 Planned |
+| 46 | General Hardening + Cron Watch Start | HARD-01, HARD-02, CRON-WATCH-01, HARD-03 | 📋 Planned |
+| 47 | ~100-User Load Test | LOAD-01..04 | 📋 Planned |
+| 48 | Load Remediation | LOAD-FIX-01..02 | 📋 Planned |
+| 49 | Docs Cleanup | DOCS-CLEAN-01..02 | 📋 Planned |
+
+**Coverage:** 28 REQ-IDs across 8 phases. Every REQ-ID maps to exactly one phase. No orphans, no duplicates. Full REQ → phase → success-criterion mapping at [`.planning/REQUIREMENTS.md` §Traceability](REQUIREMENTS.md#traceability); per-phase success criteria at [`.planning/ROADMAP.md` §Milestone v2.0](ROADMAP.md#milestone-v20-final-hardening--in-progress-started-2026-06-09).
+
+**Plans:** TBD per phase (created via `/gsd:plan-phase <N>`).
+
+**Non-blocking:** CRON-WATCH-01 (Phase 46) is a 7-day auto-reported observation that MUST NOT gate milestone close — structured to avoid the v1.5 Phase 31 early-close repeat (logged early-close decision, not a silent Day-1 close).
+
+**Execution order + dependencies:** 42 (independent; precedes water-subtab redesign) → 43 (server-only) → 44 (wires LLM blocks into `EventsFiltersSectionV3` before restyle) → 45 (restyle same file; ARIA contract frozen) → 46 (hardening BEFORE load test; starts the cron watch) → 47 (load test against hardened surface; D-19 edge-cache headers land at phase start) → 48 (remediate Phase 47 SLO failures; conditional-scope) → 49 (prose docs; drift gates kept green throughout 42–48).
+
 ## v1.3 Phases
 
 | Phase | Name                                    | Status                                     |
@@ -114,6 +139,7 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (42-01, D-03) confirm-dedup: telemetry-first diagnosis (42-DIAGNOSIS.md, verdict confirmed_prime_suspect_dedup) confirms the name-blind, order-dependent O(n²) spatial-dedup loop (server/adapters/overpass-water.ts:1202-1212) as the cause of missing water facilities. No pivot — proceed to the pre-registered name-aware + deterministic spatialDedup fix in Plan 02. Latin-label admission gate NOT implicated; D-06 (forbidding gate loosening) NOT triggered. Diagnosis cites the SUMMED rejections.duplicate bucket, never byTypeRejections.*.duplicate (structurally always 0 post-merge per Pitfall 1). RED spatialDedup scaffold (cases a-d + it.todo e) verified: 4 dedup cases RED, 165 G1 tests GREEN, 1 todo. WATER-FILTER-01 complete.
 - (41-05, D-07/D-11) Wave-3 distilled lessons + brainstorms receipts shipped (SC41-3 lessons+brainstorms portion): docs/LESSONS.md authored as a 1-page first-person distillation of RETROSPECTIVE.md surfacing the 5 named lessons (probe-before-commit, honest deferral, mechanical drift gates compound, deletion over deprecation, architecture decisions cascade into audit-tier semantics — Phase 37); cross-links BUILDING + SHOWCASE. BUILDING §7 Historical receipts (cross-links already in place from Plan 02) gained the load-bearing vision-to-shipped inline callout: origin brainstorm's day-one "numbers over narratives" thesis (held) vs its plumbing assumptions (ACLED→GDELT Phase 8.1, WebSocket→recursive setTimeout at v1.0 serverless). D-07 honored — nothing moved/deleted/archived. README localhost dead-links left untouched (pre-existing, out of scope); LESSONS.md links lint clean in isolation.
 - (41-03) Wave-2 round-out docs shipped (SC41-3 concepts+COSTS+operator-guide portion): concepts.md (38 terms), COSTS.md (Vercel Pro $20/mo sole paid line + D-09 stay-on-vercel.app rationale + RETROSPECTIVE-cited dev cost), operator-guide.md (6-workflow visitor how-to distinct from runbook, `<your-bearer>` placeholder only). Audit-carried Wave-2 docs sweep applied: ADR #1/2/3/4/21/23, .env.example #6 (LLM_PIPELINE_V2/V3 removed) + #7-ACLED (marked historical, kept blank assignments so check:env drift gate stays satisfied — Rule 3), OpenAPI #16 (prune-dead-urls path) + NN-3 (llm-history path), reliability-doc NN-4 title. redocly lint valid; all 3 new docs link-check clean; fixed CLAUDE.md-inherited dead link rateLimiter.ts→rateLimit.ts.
 - (41-01, D-10) Wave-0 final-sweep audit complete (SC41-1 satisfied): re-ran the v1.5-close 2nd-pass code+docs audit against current main. Phase 38 (LLM-FIX + LLM-PURGE) resolved the ENTIRE code-side punch-list (all 3 BUGS + all dead-code); the residual v1.6 cleanup is now a pure DOCS sweep. 4 net-new docs findings (README/CHANGELOG missing Phase 38/39/40 features; OpenAPI llm-history + reliability-doc title gaps) routed to Phase 41 docs waves 2-3 in 41-AUDIT.md §D. Both operator memories refreshed (resolved dropped, net-new added, still-open carried). News-warmer (punch-list #15) DEFERRED to v1.7 (operability nicety, not a reveal REQ-ID). Cerebras/Groq test fixtures RESOLVED-BY-REFRAME (LLM-PURGE-06 keeps them as deferred-provider scaffolding).
@@ -453,6 +479,8 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 40 P02 | 18min | 3 tasks | 8 files |
 | Phase 40 P40-04 | 12min | 3 tasks | 7 files |
 | Phase 41 P02 | 22m | 3 tasks | 4 files |
+| Phase 42 P02 | 8min | 3 tasks | 2 files |
+| Phase 42 P03 | ~12min | 3 tasks | 12 files |
 
 ## Decisions
 
@@ -468,6 +496,8 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: (40-02) Tier-banner/sparkline/hero status dots migrated to --color-status-* namespace (byte-identical hex, zero visual change); BudgetBlock/FlightRecorderBlock/actor-quality self-hides converted to canonical muted-placeholder degrade (D-06)
 - [Phase ?]: (40-04 UI-POLISH-05) 8 UI-SPEC Regression-Lock assertions coded as RTL/snapshot tests across the 6 existing DevApiStatus test files (extended, not replaced) + 1 new consolidated-layout snapshot; assertion 5 (drawer default-closed) doubles as a security-adjacent guard
 - [Phase 41]: Phase 41 Wave 1 docs core shipped: BUILDING-WITH-CLAUDE-CODE.md (first-person agentic meta-story), JOURNEY.md (product arc + Mermaid gantt), SHOWCASE.md (1-page guided-tour hub) + README hero link — SC41-2 satisfied (1-click to meta-story/product-arc/decisions)
+- [Phase ?]: (42-02, D-04/D-07) Name-aware + deterministic spatialDedup shipped: extracted the inline name-blind O(n²) dedup loop into an exported pure spatialDedup(facilities)->{kept,collapsed}. Distinct named facilities of the same type within 50m now BOTH admit (D-04); survivor is deterministic (notabilityScore desc, osmId asc — D-07), order-independent of Overpass return order. normName reads f.label (Pitfall 4, not nameLatin). 50m window + facilityType equality unchanged (D-05); admission gate untouched (D-06). D-14 regression fixture pins the real Sd Wdy Rbg / Rabigh Dam dropped pair (collapsed===0 post-fix). Task 3 no schema change. WATER-FILTER-02 + WATER-FILTER-04 complete.
+- [Phase ?]: (42-03, WATER-FILTER-03) water:facilities:v3 -> v4 bumped atomically across all 10 lockstep surfaces; v3 demoted to dead-surveillance in the redis-registry whitelist; snapshot regenerated 304 -> 460 facilities (D-09 behavior-change evidence); Open Question 2 resolved — data-flows.md not gate-covered, deferred to Phase 49 (D-11). Full server suite 1378 green; tsc clean; drift gate green.
 
 ## Operator Next Steps
 

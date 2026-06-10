@@ -17,7 +17,7 @@ const SITES_REDIS_TTL_SEC = 259_200;
  *
  * Phase 28.1 W7 sub-4 alignment: previously this module wrote to `sites:v2`
  * and `water:facilities`, while the read-side route handlers (sites.ts:56 and
- * water.ts:120) read from `sites:v3` and `water:facilities:v3`. The mismatch
+ * water.ts:120) read from `sites:v3` and `water:facilities:v4`. The mismatch
  * meant the cron pre-warm never warmed the live cache — every warm landed in
  * a key no reader consumed. See .planning/phases/28.1-cleanup-sweep/28.1-W7-REDIS-AUDIT.md.
  *
@@ -26,7 +26,7 @@ const SITES_REDIS_TTL_SEC = 259_200;
  * arrays would corrupt downstream cache reads.
  */
 const SITES_KEY = 'sites:v3';
-const WATER_KEY = 'water:facilities:v3';
+const WATER_KEY = 'water:facilities:v4'; // Phase 42 D-09 — bumped v3→v4 (name-aware dedup behavior change)
 
 export const cronWarmRouter = Router();
 

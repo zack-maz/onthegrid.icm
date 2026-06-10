@@ -1,265 +1,189 @@
-# Feature Landscape: v1.1 Intelligence Layer
+# Feature Research
 
-**Domain:** OSINT conflict monitoring dashboard — infrastructure overlay, news feed, notification center, oil markets tracker, global search
-**Researched:** 2026-03-19
-**Prior milestone:** v0.9 MVP (flights, ships, events, filters, detail panel, counters)
+**Domain:** Operational hardening for a shipped real-time OSINT dashboard (Express-on-Vercel + Upstash Redis) — status/health UI, dead-link detection, load testing, serverless hardening
+**Researched:** 2026-06-09
+**Confidence:** MEDIUM (well-established engineering conventions cross-checked across multiple independent sources; provider = websearch, no curated-doc tier hit)
 
----
-
-## Table Stakes
-
-Features that users of OSINT/intelligence dashboards expect. Missing any of these makes the v1.1 milestone feel incomplete relative to comparable tools.
-
-### 1. Key Infrastructure Sites Overlay
-
-| Feature                                             | Why Expected                                                                                                                                                                          | Complexity | Notes                                                                                  |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------- |
-| Static site markers on map (nuclear, military, oil) | Every OSINT dashboard shows strategic infrastructure. World Monitor has 220+ military bases, nuclear facilities, ports. Without this the map lacks context for flight/ship movements. | Medium     | Overpass API is the correct source: free, no auth, comprehensive OSM data              |
-| Distinct icon per site type (6 types)               | Visual differentiation is table stakes for any multi-layer map. Users need to distinguish nuclear from naval at a glance.                                                             | Low        | 6 icons: nuclear, oil, naval, airbase, dam, port. Match existing icon atlas pattern.   |
-| Click-to-inspect on sites                           | Consistency with existing entity click behavior. Every map marker should be inspectable.                                                                                              | Low        | Reuses existing detail panel + `useSelectedEntity` hook pattern                        |
-| Per-type toggle visibility                          | Users already have per-type toggles for flights, ships, 4 event categories. Sites need the same granularity.                                                                          | Medium     | Adds ~7 rows to LayerTogglesSlot (parent + 6 sub-toggles). Overflow becomes a problem. |
-| 24h cache with lazy polling                         | OSM data changes slowly. Polling every 5s like flights would waste bandwidth and hit Overpass rate limits.                                                                            | Low        | Redis 24h TTL, fetch once at startup, matches design spec                              |
-
-**Integration dependencies:**
-
-- Extends `MapEntity` discriminated union with `'site'` type
-- Extends `useSelectedEntity` to search new `siteStore`
-- Extends `useEntityLayers` with new `IconLayer` for sites
-- Extends `LayerTogglesSlot` with site toggle rows (triggers overflow issue)
-
-### 2. Multi-Source News Feed
-
-| Feature                                     | Why Expected                                                                                                                                                                                  | Complexity | Notes                                                                                                                  |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Aggregated news from 2+ sources             | Single-source feeds miss coverage. GDELT DOC + BBC RSS + Al Jazeera RSS gives breadth (GDELT: 65-language machine-translated global coverage; BBC/AJ: editorial quality, regional authority). | Medium     | Server-side merge, deduplicate by URL, sort by timestamp                                                               |
-| Conflict relevance filtering                | Raw feeds are noisy. A Middle East RSS includes sports, culture, weather. Must filter to conflict-relevant titles.                                                                            | Medium     | Keyword whitelist (Iran, Iraq, Israel, Syria, Gaza, airstrike, missile, military, etc.) applied to title + description |
-| Time-sorted article list                    | Recency is critical in conflict monitoring. Most recent first.                                                                                                                                | Low        | Sort by `publishedAt` descending                                                                                       |
-| URL deduplication                           | Same story appears in multiple sources. Showing duplicates wastes attention.                                                                                                                  | Low        | Hash article URL for dedup key                                                                                         |
-| No standalone UI (feeds into notifications) | The news feed is infrastructure for the notification center. A standalone news ticker contradicts "numbers over narratives".                                                                  | Low        | `newsStore` holds data; Phase 17 notification drawer consumes it                                                       |
-
-**Integration dependencies:**
-
-- New `newsStore.ts` Zustand store (follows existing store pattern)
-- New `useNewsPolling` hook (15min recursive setTimeout)
-- New `/api/news` endpoint with Redis 15min cache
-- Consumed by notification center in Phase 17 (not rendered directly)
-
-### 3. Notification Center with Severity Scoring
-
-| Feature                                 | Why Expected                                                                                                                                  | Complexity | Notes                                                                                                                                         |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bell icon with unread badge             | Universal notification pattern. Users need a persistent visual cue for new events without cluttering the map.                                 | Low        | Top-right, red unread count, resets on drawer open                                                                                            |
-| Severity-scored event ranking           | Not all events are equal. An airstrike with 50 media mentions outranks a minor border skirmish. Without scoring, the user drowns in noise.    | High       | `score = type_weight * log(1+mentions) * log(1+sources) * recency_decay`. 11 type weights, 5 recency tiers.                                   |
-| Notification drawer (360px right panel) | Dedicated space for prioritized alerts. Must coexist with existing detail panel.                                                              | Medium     | Panel stacking: drawer pushes detail panel left via CSS offset. LIFO Escape key dismiss.                                                      |
-| News headline matching per event        | Linking GDELT events to actual news articles bridges "what happened" (data) with "what's being reported" (context). Key intelligence pattern. | High       | Match by temporal proximity (2h) + geographic/keyword overlap. 1-3 headlines per card.                                                        |
-| Proximity alerts (entity near key site) | The whole point of showing infrastructure sites AND moving entities. Flight approaching a nuclear site at low altitude is high-signal.        | High       | Client-side haversine distance, 50km threshold, 30min cooldown per site+entity pair                                                           |
-| 24h rolling event window default        | Without a default window, every GDELT event since WAR_START shows up. This drowns the signal in weeks of accumulated noise.                   | Medium     | `DEFAULT_EVENT_WINDOW_MS` constant (86,400,000ms). Applied as soft lower bound when `dateStart === null`. Does NOT trigger custom-range mode. |
-
-**Integration dependencies:**
-
-- Depends on Phase 15 (sites for proximity alerts) and Phase 16 (news for headline matching)
-- Extends `uiStore` with `isNotificationDrawerOpen` state
-- Extends `filterStore` with `DEFAULT_EVENT_WINDOW_MS` constant
-- Modifies `useEntityLayers` to apply 24h window when `dateStart` is null
-- Modifies `DetailPanelSlot` to respect `--notification-drawer-offset` when both panels open
-
-### 4. Oil Markets Tracker
-
-| Feature                                   | Why Expected                                                                                                                                                                 | Complexity | Notes                                                                                          |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| Brent + WTI crude prices                  | Oil prices are the primary economic indicator for Middle East conflict escalation. A monitoring dashboard without oil prices is missing the most obvious correlation signal. | Medium     | Yahoo Finance unofficial API: free, no auth, real-time quotes                                  |
-| 5-day sparkline per instrument            | Price alone is not enough. Trend direction (rising/falling/flat) over a few days gives context for whether current conflict is moving markets.                               | Medium     | SVG `<polyline>` in a 60x20px viewport. No dependency needed (hand-roll with `<svg>` element). |
-| Color-coded % change (green up, red down) | Instant visual signal for market direction. Universal financial UX convention.                                                                                               | Low        | Ternary on `changePct` sign                                                                    |
-| 5 instruments (BZ=F, CL=F, XLE, USO, XOM) | Brent (international benchmark, most Middle East sensitive), WTI (US benchmark), XLE (sector ETF), USO (oil fund), XOM (company proxy). Covers the oil exposure spectrum.    | Low        | Parallel fetch, single endpoint                                                                |
-| Market closed state                       | Oil futures don't trade 24/7. Showing stale prices without context misleads.                                                                                                 | Low        | `marketOpen: boolean` flag, dim UI state with "Markets closed" label                           |
-| Collapsible overlay panel                 | Matches existing CountersSlot and LayerTogglesSlot pattern. User can hide if not interested.                                                                                 | Low        | Reuse `OverlayPanel` component, bottom-left position                                           |
-
-**Integration dependencies:**
-
-- New `marketStore.ts` Zustand store
-- New `useMarketPolling` hook (60s, hourly when markets closed)
-- New `/api/markets` endpoint with Redis 60s cache
-- New `MarketsPanelSlot` component in AppShell
-- New `SparklineChart` SVG component (no external charting library)
-- Independent of all other v1.1 features (can be built in any order)
-
-### 5. Global Search Bar
-
-| Feature                                | Why Expected                                                                                                                                                                                | Complexity | Notes                                                                                                                                                 |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cmd+K / Ctrl+K shortcut to focus       | Command palette pattern is now standard (VS Code, Slack, Notion, PowerToys, WordPress). Users expect keyboard-first search in power-user tools.                                             | Low        | `useEffect` with `keydown` listener                                                                                                                   |
-| Fuzzy matching across all entity types | Heterogeneous search (flights by callsign, ships by MMSI/name, events by location, sites by name) from one input. Without this, finding a specific entity means scrolling/scanning the map. | Medium     | Fuse.js is the right choice: weighted multi-field search, proven at scale, 28KB gzipped. microfuzz is too lightweight for multi-type weighted search. |
-| Results grouped by entity type         | Users need to know what they found. A flat list of mixed types is confusing. Group headers (Flights, Ships, Events, Sites) with counts.                                                     | Low        | Group by `entity.type` in results dropdown                                                                                                            |
-| Click result: fly-to + select entity   | The purpose of search is navigation. Finding an entity should take you there and open its detail panel.                                                                                     | Medium     | Map `flyTo()` + `selectEntity()` + `openDetailPanel()`                                                                                                |
-| Floating position, top-center          | Standard placement for global search in map applications. Non-obstructive when collapsed, prominent when active.                                                                            | Low        | Absolute positioned, z-index above map controls                                                                                                       |
-
-**Integration dependencies:**
-
-- Reads from all entity stores (flightStore, shipStore, eventStore, siteStore)
-- New `searchStore.ts` for query state and results
-- Triggers `selectEntity` + map `flyTo` on result click
-- Requires map ref access for `flyTo` (available via `useMap` hook from react-maplibre)
-
-### 6. Filter Panel Improvements
-
-| Feature                                               | Why Expected                                                                                                      | Complexity | Notes                                                                 |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------- |
-| Reset All button                                      | With 7+ active filters, clearing them one by one is tedious. Every filter panel needs a "clear all" escape hatch. | Low        | Calls `filterStore.clearAll()`                                        |
-| Grouped sections (Flights, Ships, Events, Date Range) | Current flat list of filters becomes unwieldy as filter count grows. Logical grouping reduces cognitive load.     | Medium     | Collapsible sections with headers, collapse empty/inactive by default |
-| Remove Minute granularity from date slider            | Minute-level precision on a conflict timeline is false precision. GDELT data is 15-min granularity at best.       | Low        | Remove `minute` from `STEP_MS` record and granularity toggle          |
-| Scrollable/collapsible layer toggles panel            | Phase 15 adds ~7 site toggle rows, bringing total to ~15. This overflows at minimum viewport heights.             | Medium     | `max-height` with `overflow-y: auto` or collapsible category sections |
-
-**Integration dependencies:**
-
-- Modifies existing `FilterPanelSlot` and `LayerTogglesSlot`
-- Modifies `filterStore` (remove minute granularity, verify clearAll)
-- No new stores or endpoints
+> Scope note: This is a **subsequent milestone (v2.0 Final Hardening)** on an already-shipped app. "Table stakes / differentiator / anti-feature" below are framed relative to _operational maturity for an internal/operator tool_, not relative to a greenfield product. Most "table stakes" rows are partially built already — the gap is finishing/hardening them, and dependencies on existing surfaces are called out explicitly.
 
 ---
 
-## Differentiators
+## Feature Landscape
 
-Features that set this apart from generic OSINT dashboards. Not expected, but valued.
+### Table Stakes (Operators Expect These)
 
-| Feature                                      | Value Proposition                                                                                                                                                                                                                                                | Complexity | Notes                                                                                                   |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
-| Proximity alerts with severity scoring       | World Monitor has geographic convergence scoring, but requires 3+ event types co-occurring. This app's simpler "entity within 50km of key site" threshold is faster to trigger and more tactically relevant for a single-conflict monitor.                       | High       | Client-side haversine, 30min cooldown dedup. Unique to this tool's single-theater focus.                |
-| News-event correlation per notification card | Linking a GDELT conflict event to 1-3 BBC/AJ headlines in the same notification card provides both the "what" (quantitative event) and "why" (journalistic context) without abandoning the numbers-first philosophy.                                             | High       | Time-window matching (2h) + geo/keyword overlap. Rare in OSINT dashboards.                              |
-| Oil-conflict correlation signal              | Most OSINT dashboards show either geopolitical data OR financial data, not both in the same view. Juxtaposing oil prices with conflict events lets the user visually correlate market reactions to strikes/escalation.                                           | Medium     | No automated correlation (anti-feature). The value is in co-location: user draws their own conclusions. |
-| Logarithmic severity scoring                 | The `log(1+NumMentions) * log(1+NumSources)` formula compresses the long tail of media coverage. A story with 500 mentions doesn't score 50x higher than one with 10 mentions — it scores ~2.7x higher. This prevents viral-but-trivial stories from dominating. | Low        | Pure math, server-side. Well-calibrated signal extraction.                                              |
-| Markets-closed awareness                     | Showing "Markets closed" with dimmed sparklines on weekends prevents misinterpretation of stale prices. Most amateur dashboards show last known price with no temporal context.                                                                                  | Low        | `marketOpen` flag from Yahoo Finance response                                                           |
+Conventions a credible production-hardening pass is expected to satisfy. Their absence reads as "unfinished," not "minimal."
 
----
+| Feature                                                        | Why Expected                                                                                                                                                                                                                             | Complexity | Notes                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Soft-404 detection in the URL-liveness probe**               | Status-code-only classification misses 200-with-"not-found"-body pages; soft-404s are estimated >25% of all dead links. This is the literal root cause of "ghost links still slipping past prune."                                       | MEDIUM     | Current `server/lib/urlLiveness.ts` classifies on HTTP code only (`live/404/403/dead-host/unknown`). Needs a body-heuristic pass on 200 responses (title/body markers, redirect-to-home, near-empty content). Already HEAD-then-GET-on-405 — good. Dependency: extends existing probe + `events:url-liveness:{id}` schema (may add a `soft-404` status or a reason field; touches the pinned schema test).       |
+| **Distinct error buckets, not a binary dead flag**             | Operators need to tell "404 (gone)" from "403 (blocked)" from "timeout/DNS (transient)" to avoid pruning live-but-flaky links.                                                                                                           | LOW        | Already bucketed (`404/403/dead-host/unknown`). Gap is mostly making the buckets legible in the events subtab + ensuring `unknown` (5xx/timeout) is NOT counted toward terminal-dead prune (verify `isTerminalDead` excludes `unknown`).                                                                                                                                                                         |
+| **Expected vs unexpected dead-link distinction**               | A 404 on a known-broken external source is routine; a 404 on a previously-live URL signals content removal and is the actionable signal.                                                                                                 | LOW        | `attemptCount` (monotonic-with-reset) already encodes some of this. Surface "first seen dead at" / transition timestamp in the subtab.                                                                                                                                                                                                                                                                           |
+| **Pipeline-health detail in the events subtab**                | An operations tool's events tab should answer "is the LLM pipeline healthy right now AND over the last N runs?" — live stage + last-run outcome + failure surfaces (DLQ depth, eval drift, breaker state).                               | MEDIUM     | `LLMPipelineSection` shows _live_ stage + last-run summary only. Missing: DLQ depth, circuit-breaker state, token-budget proximity, eval baseline/drift, run-history. Most data already exists in Redis (`events:llm-dlq`, `llm:runs:history`, `events:llm-eval-baseline:v3`, `tokenBudget` on `/api/operator-status`) and in `FlightRecorderBlock`/`BudgetBlock` — this is surfacing/wiring, not new pipelines. |
+| **Readable dense tables (monospace + right-aligned numerics)** | Numeric columns are only scannable when right-aligned with tabular/monospace figures (keeps decimals aligned; prevents `1,111.11` rendering narrower than `999.99`). This is the concrete fix for "unreadable subtabs / raw data dumps." | LOW        | Pure CSS/layout. Tailwind v4 `@theme` already in place. Apply `font-variant-numeric: tabular-nums`, right-align numeric cells, add column headers + whitespace grouping. No data changes.                                                                                                                                                                                                                        |
+| **Visual hierarchy + grouping + progressive disclosure**       | Dense operator UIs need a primary metric per block (large/bold), labels small, related rows grouped with whitespace, and detail behind drill-down rather than dumped inline.                                                             | LOW–MEDIUM | Redesign of water/events/sites subtabs. Keep existing drill-down pattern (`FlightRecorderBlock` run→call→detail is the model to mirror). Aesthetic constraint: preserve off-the-grid/terminal military look.                                                                                                                                                                                                     |
+| **Codified SLO thresholds in the load test (CI-failing)**      | A load test without `thresholds` that exit non-zero is a demo, not a gate. p95 < SLO and error-rate < budget must be assertions, not eyeballed graphs.                                                                                   | LOW        | `scripts/load-test.js` already ramps 0→100 VUs. Gap: add/verify `thresholds` block (`http_req_duration: p(95)<...`, `http_req_failed: rate<...`) so the run fails CI on regression. Pick per-endpoint SLOs (cache-only endpoints faster than cold-start/LLM paths).                                                                                                                                              |
+| **~100-VU sustained-load scenario with reported percentiles**  | The named ask. A credible run holds ~100 VUs for a sustained window and reports p95/p99/error-rate per endpoint, not just a peak number.                                                                                                 | LOW        | Harness already holds 100 VUs for 120s. Formalize: define the target endpoint mix, record p95/p99/error-rate, and assert. Distinguish cold-start tail (Fluid Compute) from warm p95.                                                                                                                                                                                                                             |
+| **Cron first-tick / missed-run verification**                  | A scheduled job that silently never fires is the classic serverless failure. Heartbeat stays "pending" until first check-in; alert on missed-run-by-X-min.                                                                               | LOW–MEDIUM | `cron:lastTick:{name}` already written by all 3 crons (`refresh-events` writes only after extraction resolves — honest semantics). Gap (999.3 + CRON-WATCH-01): verify each cron's _first_ tick lands post-deploy, and add a freshness/missed-run check (lastTick age vs schedule + grace) surfaced in health.                                                                                                   |
+| **Rate-limiter operator/observability block**                  | Operators need to see limiter state (which tiers, current 429 rate, Bearer-bypass active) to confirm the limiter isn't silently blocking dashboard polls or letting abuse through.                                                       | LOW        | `server/middleware/rateLimiter.ts` exists (public 60/min + per-endpoint tiers + Bearer bypass). 999.1 = a public-global operator block (surface tier config + recent 429 counts). Monitoring sustained-429 is the documented convention.                                                                                                                                                                         |
+| **Test-coverage backfill for recently-added surfaces**         | Phases 39/40 added observability/UI surfaces; production-hardening convention is to backfill coverage on the new code paths before declaring done.                                                                                       | MEDIUM     | "Nyquist coverage backfill" for Phases 39/40. Mechanical but broad; degrade-open paths (flight recorder, budget block) especially need fault-injection tests.                                                                                                                                                                                                                                                    |
+| **Docs reconciliation after fixes land**                       | Convention: docs cleanup is the _last_ step, after behavior changes, so it reflects shipped reality (CLAUDE.md Redis registry, redis-keys.md, OpenAPI, runbook).                                                                         | LOW–MEDIUM | Schema/key changes from soft-404 work and subtab redesign will drift the 32-key registry + drift gate. Run after the above.                                                                                                                                                                                                                                                                                      |
 
-## Anti-Features
+### Differentiators (Beyond Baseline Hardening)
 
-Features to explicitly NOT build in v1.1. Each has a concrete reason.
+Features that elevate this from "patched" to "operationally excellent" and align with the project's _numbers-over-narratives_ core value. Not strictly required to close the milestone.
 
-| Anti-Feature                               | Why Avoid                                                                                                                                                                                                   | What to Do Instead                                                                     |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Standalone news ticker/feed panel          | Contradicts "numbers over narratives" core value. A scrolling news feed invites the user to read articles instead of monitoring data. The original v0.9 research explicitly listed this as an anti-feature. | News exists only as metadata within notification cards. No dedicated news panel.       |
-| AI-generated situation briefs (Claude API) | Deferred to v1.2 per design spec. Adds API cost, latency, and hallucination risk. Not needed for v1.1 core value.                                                                                           | Manual interpretation by user. The data speaks for itself.                             |
-| Automated push/desktop notifications       | User actively monitors the dashboard. Background notifications create false urgency and alert fatigue. The in-app bell icon is sufficient.                                                                  | In-app notification drawer with unread badge. User pulls alerts on their own schedule. |
-| Automated oil-conflict correlation         | "Brent spiked 3% because of the Isfahan airstrike" is speculation without classified data. Causal claims from public data are unreliable.                                                                   | Co-locate oil panel and conflict events. User draws correlations visually.             |
-| Real-time oil price streaming (WebSocket)  | Yahoo Finance provides REST-only data. WebSocket alternatives (Finnhub, Polygon) require paid tiers. 60s polling is more than adequate for oil prices.                                                      | 60s polling via `/api/markets` with Redis cache                                        |
-| Full-text article search                   | Searching within article bodies requires content ingestion/indexing. The news feed only stores title + URL + metadata. Full-text search is a different product (news aggregator).                           | Search by entity attributes only (callsign, MMSI, site name, event location)           |
-| Mobile-responsive layout                   | Desktop monitoring tool. Responsive layout for 5 overlay panels + map is extremely complex and low-value for a single-user tool.                                                                            | Minimum 1280px viewport width. No mobile breakpoints.                                  |
-| Persistent notification history            | Storing months of scored notifications adds database complexity. The rolling 24h window covers the active monitoring use case.                                                                              | 24h rolling window. Older events age out via recency decay.                            |
-| Configurable severity weights              | Exposing 11 type weights + 5 recency tiers as user-configurable settings adds UI complexity for marginal value. Single-user tool; the developer tunes weights directly.                                     | Hardcoded weights in `server/routes/notifications.ts`. Adjust in code if needed.       |
-| Multiple map style themes                  | Dark theme is the only appropriate style for a monitoring dashboard used in extended sessions. Light theme adds maintenance cost.                                                                           | Single CARTO Dark Matter basemap.                                                      |
+| Feature                                                            | Value Proposition                                                                                                                                        | Complexity | Notes                                                                                                                                                              |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Soft-404 confidence + sample evidence in the subtab**            | Don't just flag a soft-404 — show _why_ (matched marker / redirect target / body length) so the operator trusts the auto-prune. Numbers over narratives. | MEDIUM     | Store a short `reason`/evidence string in `events:url-liveness:{id}`. Mirrors existing lineage/provenance philosophy ("never returns a coord without provenance"). |
+| **Per-endpoint SLO table baked into the load report**              | A small table (endpoint → p95/p99/error-rate → pass/fail vs SLO) is far more actionable than a raw k6 summary, and doubles as portfolio evidence.        | LOW        | k6 `handleSummary` can emit JSON/markdown. Cheap, high-signal.                                                                                                     |
+| **Sparkline/trend for cron freshness + dead-link count over time** | Trend (lastTick age, dead-URL count) catches slow-burn regression (the Phase 31 slow-burn that reopened in v1.6) better than a point-in-time number.     | MEDIUM     | `events:url-liveness-count` sidecar already O(1). A small history ring + sparkline in the subtab. Sparklines are an established dense-dashboard pattern.           |
+| **Soak run to catch leaks/breaker-stuck states**                   | A short soak (0.8× peak, sustained) on the cache-only endpoints catches Redis connection churn / memory creep that a 5-min ramp won't.                   | LOW–MEDIUM | Harness already has a `constant-vus` 5m scenario. Extend window if validating the 7-day-watch story.                                                               |
+| **Status-page-style "all systems" rollup**                         | One honest top-line (green/degraded/down) computed from the existing tier truth-table, so the operator gets a glance-level answer.                       | LOW        | Reuse `audit:connectivity:last-result` tier logic; render as a single rollup badge atop the dashboard.                                                             |
+
+### Anti-Features (Tempting, Avoid)
+
+| Feature                                                              | Why Requested                                     | Why Problematic                                                                                                                                                                          | Alternative                                                                                                                                              |
+| -------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Real-time/continuous URL re-probing**                              | "Catch dead links instantly."                     | N URLs × frequent probes burns the polite-citizen budget (per-host 1 req/s + 8-concurrency), risks getting the prober IP-blocked, and adds soft-404 false-positives under transient 5xx. | Keep the tiered-TTL cron sweep (live 7d / dead 24h / unknown 1h). Only tighten the soft-404 _heuristic_, not the cadence.                                |
+| **Aggressive auto-prune on first dead probe**                        | "Ghost links are slipping through, prune harder." | First-probe-prune deletes live-but-flaky links on a transient timeout/5xx/403-cloak. The `attemptCount >= 3` gate exists for exactly this reason.                                        | Keep the ≥3-attempt gate; fix _classification_ (soft-404) instead of lowering the gate. Transient buckets (`unknown`) must never count toward prune.     |
+| **External cron-monitor SaaS (Healthchecks.io / Dead Man's Snitch)** | Turnkey heartbeat + alerting.                     | Adds a third-party dependency + secret + egress for a single-operator tool that already has Redis `cron:lastTick` + a health endpoint. Over-engineering for scope.                       | Compute first-tick/missed-run in-app from `cron:lastTick:{name}` age vs schedule; surface in `/api/health`. (Note the pattern, don't import the vendor.) |
+| **Push/email/desktop alerting on cron miss**                         | "Tell me when a cron fails."                      | Out of scope per PROJECT.md (operator monitors actively, single user, no notifications). Builds notification infra for one person.                                                       | Surface freshness/missed-run state in the dashboard; operator reads it on visit.                                                                         |
+| **Big k6 numbers (501 VUs again) as the headline**                   | "Bigger load proves robustness."                  | The v1.2 501-VU run already exists; re-chasing peak VU count doesn't validate the _~100-user SLO_ the milestone actually asks for, and stresses free-tier upstream APIs.                 | Assert ~100-VU SLOs (p95/error-rate) that fail CI. Capacity ceiling is a separate stress concern, not the goal here.                                     |
+| **Full design-system rewrite of the dashboard**                      | "Make it readable" → "redesign everything."       | Scope creep; risks regressing the WAI-ARIA tablist + existing drill-down wiring from v1.6. Aesthetic must stay off-the-grid/military.                                                    | Targeted typography/alignment/grouping pass on the 3 named subtabs (water/events/sites), reusing the `FlightRecorderBlock` drill-down pattern.           |
+| **Soft-404 via headless-browser rendering**                          | "Detect JS-rendered not-found pages perfectly."   | Headless browser per URL is heavy, slow, and impossible within serverless probe budgets.                                                                                                 | Heuristic on the fetched HTML body (markers, redirect target, content length) — good-enough at OSINT scale.                                              |
 
 ---
 
 ## Feature Dependencies
 
 ```
-Phase 15: Key Sites Overlay
-  ├── SiteEntity type (extends MapEntity union)
-  ├── siteStore (new Zustand store)
-  ├── /api/sites endpoint (Overpass API + Redis 24h cache)
-  ├── Site IconLayer in BaseMap
-  ├── SiteDetail in DetailPanelSlot
-  └── Site toggles in LayerTogglesSlot (triggers overflow)
+Soft-404 detection (probe body heuristic)
+    └──requires──> existing URL-liveness probe + events:url-liveness schema (Phase 32)
+    └──may-alter──> events:url-liveness:{id} schema  ──requires──> schema-drift test + Redis registry update (docs)
 
-Phase 16: News Feed
-  ├── /api/news endpoint (GDELT DOC + BBC RSS + AJ RSS + Redis 15min cache)
-  ├── newsStore (new Zustand store)
-  └── useNewsPolling hook (no UI — consumed by Phase 17)
+Auto-prune correctness
+    └──requires──> Soft-404 detection (classify before prune)
+    └──requires──> attemptCount >= 3 gate (existing) + unknown-bucket-excluded-from-prune
 
-Phase 17: Notification Center  [depends on Phase 15 + 16]
-  ├── /api/notifications endpoint (severity scoring)
-  ├── notificationStore (new Zustand store)
-  ├── Proximity alerts (client-side, needs siteStore from P15)
-  ├── News matching (needs newsStore from P16)
-  ├── Bell icon + notification drawer UI
-  ├── DEFAULT_EVENT_WINDOW_MS constant in filterStore
-  └── Panel coexistence with DetailPanelSlot
+Events subtab pipeline detail
+    └──reads──> events:llm-dlq, llm:runs:history, eval-baseline:v3, tokenBudget (all existing)
+    └──enhances──> Dashboard subtab readability pass (shared typography/grouping work)
 
-Phase 18: Oil Markets Tracker  [independent]
-  ├── /api/markets endpoint (Yahoo Finance + Redis 60s cache)
-  ├── marketStore (new Zustand store)
-  ├── useMarketPolling hook
-  ├── MarketsPanelSlot (OverlayPanel, bottom-left)
-  └── SparklineChart (SVG component)
+Dashboard subtab readability (water/events/sites)
+    └──requires──> Water filter fix (water subtab should show correct facility counts first)
+    └──reuses──> FlightRecorderBlock drill-down pattern (v1.6)
 
-Phase 19: Search, Filter & UI Cleanup  [depends on all stores existing]
-  ├── Global search bar (reads all 5+ stores)
-  ├── searchStore (new Zustand store)
-  ├── Filter panel redesign (grouped sections, Reset All)
-  ├── LayerTogglesSlot overflow fix (scrollable/collapsible)
-  ├── Remove Minute granularity
-  └── Layout audit (z-index, spacing, 1280px min)
+Load test ~100-VU SLOs
+    └──requires──> scripts/load-test.js (existing 0→100 ramp)
+    └──independent of──> all data-quality fixes (can run in parallel)
 
-Phase 20: Layer Purpose Refactor  [depends on Phase 19]
-  └── TBD — rethink layer toggle purposes and organization
+Cron first-tick + 7-day watch (999.3 / CRON-WATCH-01)
+    └──reads──> cron:lastTick:{name} (existing writers)
+    └──independent of──> dashboard/data fixes
 
-Phase 21: Production Review  [depends on all above]
-  └── E2E verification + Vercel deploy + git tag v1.2
+Rate-limiter operator block (999.1)
+    └──reads──> rateLimiter middleware state (existing)
+    └──enhances──> Dashboard readability pass (another operator block)
+
+Test-coverage backfill (Phases 39/40)  ──independent, can run anytime──
+Docs cleanup  ──MUST run last──> after schema/key/UI changes settle
 ```
 
-**Critical path:** Phase 15 -> Phase 16 -> Phase 17 (notification center needs both sites and news).
-**Parallel track:** Phase 18 (oil markets) is fully independent and can be built alongside Phase 16.
-**Cleanup last:** Phase 19 must follow all feature phases because search needs all stores to exist.
+### Dependency Notes
+
+- **Soft-404 → auto-prune correctness:** The ghost-link bug is a _classification_ defect, not a _prune-cadence_ defect. Fixing the probe's soft-404 heuristic is the prerequisite for prune to do the right thing. Lowering the attempt gate without fixing classification trades false-negatives for false-positives.
+- **Water filter fix → water subtab readability:** Redesigning the water subtab on top of a layer that intermittently drops entries means redesigning around wrong numbers. Fix the admission/Latin-label/desal-synthesis drop first, then make the (now-correct) data readable. (PROJECT.md locks this priority order anyway: water filter is item #1.)
+- **Events subtab detail ⟂ readability pass:** They share the typography/grouping work but the _data wiring_ (DLQ/run-history/eval) is independent — wiring can land before or after the visual pass.
+- **Docs cleanup runs last:** Soft-404 schema changes + any new Redis fields will drift the 32-key registry and the OpenAPI spec; reconciling docs before the schema settles guarantees rework.
+- **Load test + cron watch + rate-limiter block are parallelizable** with the data/UI fixes — no shared surfaces.
 
 ---
 
-## MVP Recommendation
+## MVP Definition
 
-For the v1.1 Intelligence Layer, prioritize in this order:
+> "MVP" here = the minimum to **close v2.0 Final Hardening credibly**, in the operator-locked priority order from PROJECT.md.
 
-1. **Key Sites Overlay (P15)** — Foundational. Every subsequent feature benefits from infrastructure context on the map. Proximity alerts (P17) are useless without sites.
+### Launch With (closes the milestone)
 
-2. **News Feed (P16)** — Infrastructure for notifications. No standalone UI, so low risk of scope creep. Must exist before notification center.
+- [ ] **Water filter fix** — facilities layer must stop dropping entries (admission gate / Latin-label gate / desal-synthesis path). Item #1; unblocks water-subtab redesign.
+- [ ] **Soft-404 detection + prune correctness** — body heuristic on 200 responses; `unknown` bucket excluded from prune; ≥3-attempt gate retained. Closes the ghost-link bug.
+- [ ] **Events subtab pipeline detail** — surface DLQ depth, breaker state, eval baseline/drift, run-history from existing Redis keys.
+- [ ] **3-subtab readability pass** (water/events/sites) — tabular-nums, right-aligned numerics, grouping, progressive disclosure; off-the-grid aesthetic preserved.
+- [ ] **~100-VU load test with CI-failing SLO thresholds** — p95 + error-rate assertions per endpoint; report percentiles.
+- [ ] **Cron first-tick verification** (999.3) + **CRON-WATCH-01 7-day watch** — missed-run/freshness check from `cron:lastTick`.
+- [ ] **Rate-limiter operator block** (999.1) — surface tier config + 429 state.
+- [ ] **Phases 39/40 coverage backfill** — Nyquist coverage on new observability/UI code, incl. degrade-open fault paths.
+- [ ] **Docs cleanup** — reconcile CLAUDE.md registry, redis-keys.md, OpenAPI, runbook after the above. (Last.)
 
-3. **Notification Center (P17)** — The highest-value new feature. Severity scoring + proximity alerts + news matching transforms the dashboard from passive display to active intelligence. This is the feature that differentiates v1.1 from v0.9.
+### Add After Validation (defer if time-boxed)
 
-4. **Oil Markets Tracker (P18)** — Independent, moderate value. Builds quickly because it follows the established store/polling/panel pattern. Co-locating oil prices with conflict data is a genuine differentiator.
+- [ ] **Soft-404 evidence/confidence string** — show _why_ a link was flagged, surfaced in the subtab.
+- [ ] **Per-endpoint SLO table in the k6 summary** — `handleSummary` markdown/JSON output.
+- [ ] **Dead-link-count / cron-freshness sparkline** — trend, not point-in-time (catches slow-burn).
 
-5. **Search, Filter & UI Cleanup (P19)** — Polish phase. Should NOT be started until P15-P18 are stable. Global search is meaningless with only 3 entity types; it becomes valuable only with 5+ (flights, ships, events, sites, plus news/notifications as secondary hits).
+### Future Consideration (out of scope for v2.0)
 
-**Defer to v1.2:**
-
-- AI situation briefs (Claude API integration)
-- Historical replay / event timeline
-- Trajectory arcs / flight path rendering
-- Force posture overlays (carrier groups, air defense zones)
+- [ ] **Stress/capacity-ceiling test (3×+ peak)** — find the subsystem ceiling. Separate concern from the ~100-user SLO ask.
+- [ ] **Status-page "all systems" rollup badge** — nice glance-level summary; not required to close.
+- [ ] **External cron-monitor SaaS / push alerting** — explicitly anti-feature for this single-operator tool.
 
 ---
 
-## Complexity Budget
+## Feature Prioritization Matrix
 
-| Phase              | New Files | Modified Files | New Store         | New Endpoint       | Estimated LOC | Risk                                                                |
-| ------------------ | --------- | -------------- | ----------------- | ------------------ | ------------- | ------------------------------------------------------------------- |
-| P15: Key Sites     | ~5        | ~8             | siteStore         | /api/sites         | ~600          | Low — follows existing patterns exactly                             |
-| P16: News Feed     | ~4        | ~2             | newsStore         | /api/news          | ~400          | Medium — RSS parsing, GDELT DOC API reliability                     |
-| P17: Notifications | ~4        | ~5             | notificationStore | /api/notifications | ~800          | High — severity scoring tuning, panel coexistence, proximity alerts |
-| P18: Oil Markets   | ~6        | ~2             | marketStore       | /api/markets       | ~500          | Medium — Yahoo Finance API stability (unofficial)                   |
-| P19: Search/UI     | ~3        | ~6             | searchStore       | none               | ~500          | Medium — Fuse.js integration, layout overflow fixes                 |
-| P20: Deploy        | 0         | 0              | none              | none               | ~0            | Low — verification only                                             |
-| **Total**          | **~22**   | **~23**        | **4 new**         | **4 new**          | **~2800**     |                                                                     |
+| Feature                                | Operator Value | Implementation Cost | Priority  |
+| -------------------------------------- | -------------- | ------------------- | --------- |
+| Water filter fix                       | HIGH           | MEDIUM              | P1        |
+| Soft-404 detection + prune correctness | HIGH           | MEDIUM              | P1        |
+| Events subtab pipeline detail          | HIGH           | MEDIUM              | P1        |
+| 3-subtab readability pass              | HIGH           | LOW–MEDIUM          | P1        |
+| ~100-VU load test w/ CI-failing SLOs   | MEDIUM         | LOW                 | P1        |
+| Cron first-tick + 7-day watch          | MEDIUM         | LOW–MEDIUM          | P1        |
+| Rate-limiter operator block            | MEDIUM         | LOW                 | P2        |
+| Phases 39/40 coverage backfill         | MEDIUM         | MEDIUM              | P2        |
+| Docs cleanup                           | MEDIUM         | LOW–MEDIUM          | P2 (last) |
+| Soft-404 evidence string               | MEDIUM         | MEDIUM              | P3        |
+| Per-endpoint SLO summary table         | MEDIUM         | LOW                 | P3        |
+| Dead-link/cron-freshness sparkline     | MEDIUM         | MEDIUM              | P3        |
+
+**Priority key:** P1 = must-have to close milestone · P2 = should-have, finish within milestone · P3 = nice-to-have, defer if time-boxed.
+
+---
+
+## Competitor / Convention Analysis
+
+(For an internal hardening milestone, "competitors" = established conventions in monitoring/SRE tooling.)
+
+| Feature                  | Convention (industry)                                                                                 | Turnkey example                                  | Our Approach                                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Dead-link classification | Distinct buckets (404/403/timeout/DNS/SSL) + HEAD-then-GET + soft-404 body heuristic                  | Linkinator, broken-link-checker crawlers         | Already bucketed; **add the soft-404 body heuristic** (the missing piece) on the existing tiered-TTL cron sweep |
+| Cron monitoring          | Heartbeat / dead-man's-switch; first-tick "pending"; missed-run-by-X + runtime-anomaly                | Healthchecks.io, Dead Man's Snitch, Sentry Crons | **In-app** from `cron:lastTick:{name}` age (no SaaS dep); surface in `/api/health`                              |
+| Load-test gating         | SLOs as `thresholds` that exit non-zero; load/stress/soak/spike; CI tiering smoke/full/soak           | k6 thresholds, Grafana k6                        | **~100-VU load run with CI-failing p95/error-rate thresholds**; soak optional; stress deferred                  |
+| Status/operator UI       | Visual hierarchy, tabular-nums + right-aligned numerics, grouping, progressive disclosure, sparklines | Datadog/Grafana infra dashboards                 | Targeted typography/alignment/grouping pass on 3 subtabs; **preserve terminal/military aesthetic**              |
+| Serverless hardening     | Explicit distributed rate limiting + 429-burst monitoring; CSP/Helmet; observability                  | Vercel production checklist                      | Helmet + per-endpoint limiter already shipped; **add operator-visible limiter block + 429 state**               |
 
 ---
 
 ## Sources
 
-- [OpenStreetMap Key:military wiki](https://wiki.openstreetmap.org/wiki/Key:military) — OSM military tag documentation
-- [Overpass API wiki](https://wiki.openstreetmap.org/wiki/Overpass_API) — Overpass API documentation and rate limits
-- [Security Force Monitor: OSM for military locations](https://securityforcemonitor.org/2018/07/06/openstreetmap-is-sometimes-a-handy-database-of-national-security-locations-heres-how-to-see-them/) — Patterns for querying military infrastructure from OSM
-- [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/) — DOC API parameters, modes, response format
-- [GDELT Hybrid Relevance Mode](https://blog.gdeltproject.org/new-hybrid-relevance-mode-for-doc-2-0-api/) — News ranking improvements
-- [World Monitor OSINT dashboard](https://github.com/MrB4nz4i/worldmonitor-osint) — Competitor analysis: 35+ layers, 220+ military bases, deck.gl + MapLibre stack
-- [Smashing Magazine: Notification UX Guidelines](https://www.smashingmagazine.com/2025/07/design-guidelines-better-notifications-ux/) — Severity tiering, alert fatigue prevention
-- [Smashing Magazine: Real-Time Dashboard UX](https://www.smashingmagazine.com/2025/09/ux-strategies-real-time-dashboards/) — Information hierarchy, sparklines, visual feedback patterns
-- [NN/g: Alert Fatigue in User Interfaces](https://www.nngroup.com/videos/alert-fatigue-user-interfaces/) — Why notification centers need scoring/filtering
-- [Carbon Design System: Notification Pattern](https://carbondesignsystem.com/patterns/notification-pattern/) — High/medium/low severity tiering, panel design
-- [Signal Detection Theory in UX](https://www.ux-bulletin.com/signal-detection-theory-in-ux/) — Balancing alert signal vs noise
-- [Fuse.js documentation](https://www.fusejs.io/) — Fuzzy search library for weighted multi-field search
-- [microfuzz](https://github.com/Nozbe/microfuzz) — Lightweight alternative (rejected: insufficient for multi-type weighted search)
-- [Command Palette UX Patterns](https://medium.com/design-bootcamp/command-palette-ux-patterns-1-d6b6e68f30c1) — Cmd+K shortcut, modal overlay, keyboard-first interaction
-- [UX Patterns: Command Palette](https://uxpatterns.dev/patterns/advanced/command-palette) — Dashboard search best practices
-- [Search UX Best Practices 2026](https://www.designmonks.co/blog/search-ux-best-practices) — Fuzzy matching, grouped results, highlighted keywords
-- [DEV: Sparkline component in React](https://dev.to/gnykka/how-to-create-a-sparkline-component-in-react-4e1) — Dependency-free SVG sparkline pattern
-- [react-sparklines](https://github.com/borisyankov/react-sparklines) — Considered but rejected (adds dependency for trivial SVG)
-- [rss-parser npm](https://www.npmjs.com/package/rss-parser) — RSS feed parsing for BBC/AJ feeds
-- [yahoo-finance2](https://github.com/gadicc/yahoo-finance2) — Unofficial Yahoo Finance API (considered but raw fetch is simpler for 1 endpoint)
-- [Overpass API rate limits](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html) — Slot-based rate limiting, 180s default timeout
+- [k6 Thresholds for SLOs — OneUptime](https://oneuptime.com/blog/post/2026-01-27-k6-thresholds-slos/view) (MEDIUM)
+- [Load testing types: load, stress, soak, spike in k6 — Kodziak](https://www.kodziak.com/blog/load-testing-types-load-stress-soak-spike) (MEDIUM)
+- [Load Testing Complete Guide 2026 — ARDURA](https://ardura.consulting/blog/load-testing-complete-guide-2026/) (MEDIUM)
+- [What is a 404 error in web scraping (soft-404) — Firecrawl Glossary](https://www.firecrawl.dev/glossary/web-scraping-apis/what-is-404-error-web-scraping) (MEDIUM)
+- [Linkinator — broken link checker (HEAD/GET, retry, classification)](https://jbeckwith.com/projects/linkinator) (MEDIUM)
+- [Unsupervised detection of soft-404 pages — USPTO (soft-404 >25% of dead links)](https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/7707229) (MEDIUM)
+- [Vercel Production Checklist (CSP, WAF, rate limiting, log drains)](https://vercel.com/docs/production-checklist) (MEDIUM)
+- [Vercel Rate Limiting (no built-in; Upstash/KV; alert on 429 bursts)](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting) (MEDIUM)
+- [Monitor cron jobs with Healthchecks.io (heartbeat / first-tick pending)](https://healthchecks.io/docs/monitoring_cron_jobs/) (MEDIUM)
+- [Sentry Crons — check-in monitoring (missed / max-runtime)](https://docs.sentry.io/platforms/python/guides/serverless/crons/) (MEDIUM)
+- [Dashboard Design Principles 2026 — UXPin (hierarchy, grouping, density)](https://www.uxpin.com/studio/blog/dashboard-design-principles/) (MEDIUM)
+- [The Ultimate Guide to Designing Data Tables — UIPrep (tabular-nums, right-align numerics)](https://www.uiprep.com/blog/the-ultimate-guide-to-designing-data-tables) (MEDIUM)
+- [Data Table UX Patterns — Pencil & Paper (grid lines / density tradeoffs)](https://www.pencilandpaper.io/articles/ux-pattern-analysis-enterprise-data-tables) (MEDIUM)
+
+Internal grounding (read during research): `server/lib/urlLiveness.ts` (status-code-only classification — soft-404 gap confirmed), `scripts/load-test.js` (existing 0→100 VU ramp), `src/components/ui/DevApiStatus.tsx` (`LLMPipelineSection` is live-status-only).
+
+---
+
+_Feature research for: v2.0 Final Hardening — operational hardening of a shipped OSINT dashboard_
+_Researched: 2026-06-09_

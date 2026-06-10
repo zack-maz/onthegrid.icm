@@ -994,7 +994,7 @@ paths:
       summary: Pre-warm Redis caches for sites + water facilities.
       description: |
         Pre-warms Redis caches for sites (`sites:v3`) and water facilities
-        (`water:facilities:v3`). Called by Vercel cron every 12 hours
+        (`water:facilities:v4`). Called by Vercel cron every 12 hours
         (schedule `0 12 * * *`) to keep end users off cold Overpass fetches.
         Runs both fetches in parallel to fit the 60s function timeout.
 

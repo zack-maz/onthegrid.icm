@@ -57,8 +57,8 @@ describe('SOURCE_KEYS', () => {
     expect(SOURCE_KEYS.weather).toBe('weather:open-meteo');
     // DRIFT-2 fix: sites route writes sites:v3
     expect(SOURCE_KEYS.sites).toBe('sites:v3');
-    // DRIFT-3 fix: water route writes water:facilities:v3
-    expect(SOURCE_KEYS.water).toBe('water:facilities:v3');
+    // DRIFT-3 fix: water route writes water:facilities:v4 (Phase 42 name-aware dedup bump)
+    expect(SOURCE_KEYS.water).toBe('water:facilities:v4');
   });
 });
 

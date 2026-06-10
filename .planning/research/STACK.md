@@ -1,353 +1,128 @@
-# Technology Stack
+# Stack Research
 
-**Project:** Iran Conflict Monitor v1.1 Intelligence Layer
-**Researched:** 2026-03-19
+**Domain:** Production-hardening of a shipped real-time intelligence dashboard (React 19 + Vite 6 + Deck.gl 9 + MapLibre 5 + Tailwind v4 + Express 5 on Vercel Pro / Fluid Compute + Upstash Redis)
+**Researched:** 2026-06-09
+**Confidence:** HIGH
 
-## Scope
+## Bottom Line Up Front
 
-This document covers ONLY new dependencies and integration patterns needed for v1.1 features. The validated v0.9/v1.0 stack (React 19, TypeScript ~5.9.3, Vite 6, Zustand 5, Deck.gl 9, MapLibre GL 5, Tailwind CSS 4, Express 5, Upstash Redis, adm-zip) is unchanged and not re-researched.
+**v2.0 Final Hardening needs ZERO new runtime dependencies and ZERO new dev dependencies.**
 
----
+All six target features are either (a) bug-fixes / debugging of existing internal logic, (b) UI redesign within the existing Tailwind v4 + hand-rolled component system, or (c) load-test re-runs against the _already-installed_ k6 (`v1.7.0`) + Playwright (`@playwright/test@^1.58.2`) harness from v1.2/v1.4. The strongest recommendation in this document is a negative one: **do not add libraries.** Every feature maps to code the project already owns.
 
-## Recommended Stack Additions
+The remainder of this file justifies that conclusion feature-by-feature and records the version checks that back it.
 
-### RSS/XML Parsing (Phase 16: News Feed)
+## Recommended Stack
 
-| Technology      | Version | Purpose                                        | Why                                                                                                                                                                                                      |
-| --------------- | ------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| fast-xml-parser | ^5.5.6  | Parse BBC and Al Jazeera RSS XML to JS objects | Zero dependencies, 104KB, pure JS (no native C/C++ modules), TypeScript types included, actively maintained (v5.5.6 released 2026-03-16). Ideal for serverless — no binary compilation issues on Vercel. |
+### Core Technologies (all PRE-EXISTING — no change)
 
-**Confidence:** HIGH (verified via GitHub, npm, widespread serverless adoption)
+| Technology                  | Installed Version                           | Purpose for v2.0                                             | Why it stays                                                                                                                                                                                                  |
+| --------------------------- | ------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| k6                          | `v1.7.0` (homebrew, `/opt/homebrew/bin/k6`) | ~100-user 1–300 VU sweep (feature 4)                         | Current 1.x line; `k6/http` + `ramping-vus` scenarios API is NOT deprecated. Existing `scripts/load-test.js` already uses the modern scenario/executor pattern.                                               |
+| @playwright/test            | `^1.58.2`                                   | Browser-side validation during load (feature 4)              | Already wired as `scripts/load-test.spec.ts`. k6-API + Playwright-browser is the canonical 2026 split (k6 measures backend RPS/latency; Playwright asserts the React app stays functional + Core Web Vitals). |
+| Tailwind CSS v4             | `^4.2.1` (`@tailwindcss/vite` `^4.2.1`)     | Dashboard subtab readability redesign (feature 3)            | CSS-first `@theme` already holds the design-token source of truth (`src/styles/app.css`). Redesign is utility-class + layout work, not a new styling system.                                                  |
+| transliteration             | `2.6.1` (pinned, exact)                     | Water admission-gate debugging (feature 1)                   | Already the romanization engine feeding `name:en` _before_ the Latin-label gate (`server/adapters/overpass-water.ts`). Debugging the drop bug works _within_ this path — no replacement.                      |
+| vitest                      | `^4.1.0` + `@vitest/coverage-v8` `^4.1.2`   | Nyquist coverage backfill for Phases 39/40 (feature 5)       | Coverage harness already present; backfill is writing tests, not adding tooling.                                                                                                                              |
+| pino / Zod / @upstash/redis | `^10.3.1` / `^3.25.76` / `^1.37.0`          | Cron first-tick verification, rate-limiter block (feature 5) | All hardening primitives (logger, config validation, Redis sidecars) already in place.                                                                                                                        |
 
-**Usage pattern:**
+### Supporting Libraries
 
-```typescript
-import { XMLParser } from 'fast-xml-parser';
-const parser = new XMLParser({ ignoreAttributes: false });
-const feed = parser.parse(xmlText);
-const items = feed.rss?.channel?.item ?? [];
-```
+**None required.** The features decompose entirely onto existing modules:
 
-**Why not rss-parser:** Depends on xml2js (heavier transitive deps), last major update 2022, larger bundle. fast-xml-parser is the modern standard for XML in serverless JS.
+| Feature                           | Existing module(s) that own it                                                                                                                                                                                              | New dep? |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Water filter fix                  | `server/adapters/overpass-water.ts` (`hasLatinLabel`, `computeAdmissionDecision`, `GENERIC_OSM_NAME_RE`, desalination D-03 bypass, romanization-before-gate), `server/lib/waterSnapshot.ts`, `scripts/audit-water-names.ts` | No       |
+| Event ghost links + events subtab | `server/lib/urlLiveness.ts` (probe sweep, HEAD-then-GET, `attemptCount` gate, terminal-dead TTL tiers, count sidecar), `src/components/ui/DevApiStatus.tsx` (events subtab)                                                 | No       |
+| Dashboard subtab cleanup          | `src/components/ui/DevApiStatus.tsx` + sibling `*Block.tsx` (`BudgetBlock`, `FlightRecorderBlock`, `actorQuality` block), `src/components/markets/Sparkline.tsx`, Tailwind v4 `@theme` tokens                               | No       |
+| ~100-user load test               | `scripts/load-test.js` (k6), `scripts/load-test.spec.ts` (Playwright)                                                                                                                                                       | No       |
+| General hardening                 | `server/middleware/rateLimiter.ts`, cron handlers + `cron:lastTick:*` keys, `server/lib/healthSources.ts`, vitest                                                                                                           | No       |
+| Docs cleanup                      | markdown only (`markdown-link-check`, `@redocly/cli` already present)                                                                                                                                                       | No       |
 
-**Why not feedsmith:** Newer library, lower adoption (fewer dependents), less battle-tested for production serverless.
+### Development Tools (all PRE-EXISTING)
 
-**Why not built-in DOMParser:** Not available in Node.js server environment. Would need jsdom which is 30MB+ — absurd for RSS parsing.
+| Tool                                                   | Purpose                             | Notes                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| k6 `v1.7.0`                                            | Backend load generation             | Run `k6 run scripts/load-test.js --env BASE_URL=https://otg-iran-monitor.vercel.app --out json=load-test-results/results.json`. Existing `RAMP_STAGES` already does 0→25→100→0; widen to a 1→300 sweep per the feature-4 spec by editing the `stages` array — no tooling change. |
+| @playwright/test `^1.58.2`                             | Browser validation under load       | Run concurrently with k6 (pattern already documented in the spec file header).                                                                                                                                                                                                   |
+| @vitest/coverage-v8 `^4.1.2`                           | Nyquist coverage backfill           | `npx vitest run --coverage` already configured.                                                                                                                                                                                                                                  |
+| @redocly/cli `^2.31.5` + markdown-link-check `^3.14.2` | Docs/OpenAPI lint for the docs pass | `npm run openapi:lint` + `npm run docs:lint` already wired.                                                                                                                                                                                                                      |
 
-**Integration:** Used exclusively in `server/adapters/news.ts` to parse BBC and Al Jazeera RSS feeds. GDELT DOC API returns JSON natively — no XML parsing needed for that source.
+## Feature-by-Feature Stack Verdict
 
-### Fuzzy Search (Phase 19: Global Search Bar)
+### Feature 1 — Water filter fix (DEBUG, no dep)
 
-| Technology | Version | Purpose                                           | Why                                                                                                                            |
-| ---------- | ------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| fuse.js    | ^7.1.0  | Client-side fuzzy search across all entity stores | Zero dependencies, ~12KB minified, TypeScript types, 3,252+ npm dependents, well-documented API for weighted multi-key search. |
+The drop is inside the **compound admission gate**: `admit = hasName(tags) AND (isNotable || isPriorityCountry || hasCapacityData)`, with the Latin-label sub-gate (`hasLatinLabel` → `isRealLatin` → `GENERIC_OSM_NAME_RE`), the **desalination D-03 bypass**, and the **WATER-LATIN-03 romanize-before-gate** step. Intermittent drops are almost certainly a _logic interaction_ between these branches (e.g. a romanized name collapsing to a generic English word, or a desalination synthesis path that skips romanization). This is a `vitest` + `scripts/audit-water-names.ts` debugging task. `transliteration@2.6.1` stays; no new dep. **Do NOT** reach for a heavier NLP/transliteration library — the existing one is the byte-identity-gated source of truth and swapping it would re-open that gate.
 
-**Confidence:** HIGH (zero-dependency, stable API, dominant market share for client-side fuzzy search)
+### Feature 2 — Event ghost links + events subtab (DEBUG + UI, no dep)
 
-**Usage pattern:**
+Dead links slipping past prune is a tuning/logic question in `server/lib/urlLiveness.ts` — the probe strategy is already polite-citizen grade (`createLimit(8)`, per-host 1 req/s throttle, ±200ms jitter, 10s timeout, 3-hop redirect cap, **HEAD-then-GET-on-405**, identifying User-Agent). Improvements live in the _classification_ (e.g. treating `403`/soft-404 bodies, widening the terminal-dead status set) and the **`attemptCount >= 3` prune gate**, not in a new HTTP client. Node's built-in `fetch` (Node 22.x engine) already powers the probe; no `undici`/`got`/`axios` needed. The events-subtab gap is React/Tailwind work in `DevApiStatus.tsx`.
 
-```typescript
-import Fuse from 'fuse.js';
-const fuse = new Fuse(entities, {
-  keys: ['label', 'id', 'data.callsign'],
-  threshold: 0.4,
-  includeScore: true,
-});
-const results = fuse.search(query);
-```
+### Feature 3 — Dashboard subtab cleanup (UI redesign, no dep)
 
-**Why not uFuzzy:** Smaller (4KB) but optimized for file path matching, not structured entity search with weighted keys. Fuse.js weighted key support is critical for ranking flight callsigns higher than GDELT location strings.
+**Bias-toward-no-deps holds firmly.** The off-the-grid military aesthetic is already encoded as CSS custom properties in the Tailwind v4 `@theme` block (24 entity color vars + z-index scale). Readability fixes — denser-to-airier layout, contrast, typography, replacing raw data dumps with summarized blocks — are pure utility-class + component-composition work. The project already hand-rolls its viz primitive (`src/components/markets/Sparkline.tsx`), so even inline charts need no library. **Explicitly reject** recharts / visx / d3 / a component kit (shadcn, Radix, MUI): they would import a foreign design language into a bespoke military theme, balloon the client bundle, and duplicate primitives that already exist.
 
-**Why not MiniSearch:** Full-text search engine — overkill for searching a few thousand entities. Requires index building and document management. Fuse.js is simpler for real-time search over live Zustand store arrays.
+### Feature 4 — ~100-user load test (RE-RUN, no dep)
 
-**Why not native filter+includes:** No fuzzy matching, no typo tolerance, no relevance scoring. Users will type partial callsigns and approximate location names.
+k6 `v1.7.0` is installed and current; the v1.0 (May 2025) maturity release made the `k6/http` + scenarios + `ramping-vus` API a stable, semver-supported surface — nothing the existing script uses is deprecated. The 2026 best-practice pattern for serverless/Fluid-Compute backends is exactly what this project already does: **k6 OSS run locally (or from CI) for backend RPS/latency + cold-start measurement, paired with Playwright for browser-side functional + Core Web Vitals validation.** Grafana Cloud k6 is only worth it for geo-distributed or very-high-VU (>1k) tests — a 1–300 VU sweep runs fine from one local/CI machine, so **stay on k6 OSS.** The k6 **browser module (`k6/browser`) is GA**, but adopting it would _replace_ the working Playwright spec for no benefit — keep the existing split. Edit `RAMP_STAGES` in `scripts/load-test.js` to express the 1→300 sweep; capture cold-start via the existing `cold_start_duration` Trend metric (Fluid Compute cold starts are the metric of interest).
 
-**Integration:** Used in `src/stores/searchStore.ts`. Builds index on-demand from combined entity arrays (flightStore, shipStore, eventStore, siteStore). Re-indexes when stores update. Results grouped by entity type in dropdown.
+### Feature 5 — General hardening (CODE, no dep)
 
----
+Rate-limiter public-global operator block → `server/middleware/rateLimiter.ts` (`express-rate-limit` + Bearer `timingSafeEqual`, already present). Cron first-tick verification + 7-day stability watch → existing `cron:lastTick:*` Redis keys + `scripts/snapshot-cron-watch.ts` (`npm run watch:snapshot`). Nyquist coverage backfill → `vitest`. All in-house.
 
-## No New Dependencies Required
+### Feature 6 — Docs cleanup (DOCS, no dep)
 
-The following v1.1 features need NO new npm packages — they are fully covered by the existing stack plus native Node.js/browser APIs.
-
-### Overpass API Integration (Phase 15: Key Sites)
-
-**No library needed.** Overpass API is a REST endpoint that accepts Overpass QL queries via POST and returns JSON.
-
-- **Endpoint:** `https://overpass-api.de/api/interpreter`
-- **Method:** POST with `Content-Type: application/x-www-form-urlencoded`, body: `data=[out:json][timeout:30][bbox:15,30,42,70];...`
-- **Response:** JSON with `elements` array containing nodes/ways with tags
-- **Rate limits:** <10,000 queries/day, <1GB/day (generous for 1 query/24h)
-- **Auth:** None required
-- **Implementation:** Native `fetch()` in `server/adapters/overpass.ts`, same pattern as existing GDELT adapter
-- **Caching:** Redis 24h TTL — OSM data changes very slowly, one fetch per day is sufficient
-
-**Confidence:** HIGH (official OSM wiki documentation, free, no auth, stable for 10+ years)
-
-**Query structure for the 6 site types:**
-
-```
-[out:json][timeout:30][bbox:15,30,42,70];
-(
-  node["military"="naval_base"];
-  node["military"="airfield"];
-  node["aeroway"="military"];
-  node["man_made"="petroleum_well"]["name"];
-  node["industrial"="oil_refinery"];
-  way["industrial"="oil_refinery"];
-  node["military"="nuclear_hazard"];
-  node["man_made"="nuclear_facility"];
-  node["waterway"="dam"]["name"];
-  way["waterway"="dam"]["name"];
-  node["harbour"="yes"]["name"];
-);
-out center;
-```
-
-The `out center;` directive returns centroid coordinates for ways (polygons), giving consistent lat/lng for all element types.
-
-### Yahoo Finance Charts (Phase 18: Oil Markets)
-
-**No library needed.** Direct `fetch()` to Yahoo Finance's v8 chart endpoint from Express server.
-
-- **Endpoint:** `https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d`
-- **Method:** GET
-- **Headers:** `User-Agent: Mozilla/5.0` (required — Yahoo rejects requests without a browser-like UA)
-- **Response:** JSON with `chart.result[0]` containing `meta.regularMarketPrice`, `meta.previousClose`, `indicators.quote[0].close[]` for sparkline data
-- **Auth:** The v8/finance/chart endpoint does NOT require crumb/cookie authentication for basic chart data (unlike the v7/finance/quote endpoint which does). This is confirmed by multiple implementations working without auth as of 2025-2026.
-- **Rate limits:** Undocumented, but 5 symbols every 60s (via Redis cache) is negligible
-
-**Confidence:** MEDIUM (unofficial API — Yahoo provides no guarantees, but the chart endpoint has been stable for years and does not require crumb auth unlike the quote endpoints that were locked down in April 2024)
-
-**Risk mitigation:**
-
-- Return empty array (not error) on Yahoo Finance failure — graceful degradation per design spec
-- Cache in Redis with 60s TTL to minimize requests
-- If Yahoo blocks this endpoint in the future, `yahoo-finance2` npm package (v3.13.2) could be added as fallback — it handles crumb/cookie negotiation but adds complexity and has known intermittent crumb expiry issues
-
-**Why not yahoo-finance2 npm package now:** The library (v3.13.2) handles crumb/cookie authentication automatically, but has known issues: crumb expires after 10-20 minutes requiring re-authentication, the quote endpoint was disabled by Yahoo in April 2024 (the chart endpoint was NOT affected), and it adds 15+ transitive dependencies. Direct fetch to the chart endpoint is simpler, more reliable for this use case, and matches the project's existing adapter pattern (direct fetch + normalize).
-
-**Why not a paid API (Alpha Vantage, Twelve Data, etc.):** Project constraint is free-tier APIs. Yahoo Finance chart endpoint is free and sufficient for 5 symbols.
-
-### GDELT DOC API (Phase 16: News Feed)
-
-**No library needed.** GDELT DOC 2.0 API returns JSON natively.
-
-- **Endpoint:** `https://api.gdeltproject.org/api/v2/doc/doc`
-- **Parameters:** `?query=...&mode=artlist&maxrecords=50&format=json&timespan=24h`
-- **Response:** JSON with `articles` array containing `{url, url_mobile, title, seendate, socialimage, domain, language, sourcecountry}`
-- **Auth:** None required
-- **Rate limits:** Undocumented but generous for low-frequency queries
-- **Max records:** Up to 250 (design spec uses 50)
-
-**Confidence:** HIGH (same GDELT project already used for events in v0.9, well-documented API)
-
-**Query for the news adapter:**
-
-```
-query=Iran OR "Middle East" OR Iraq OR Israel theme:MILITARY_STRIKE OR theme:TERROR
-mode=artlist
-maxrecords=50
-format=json
-timespan=24h
-```
-
-### BBC Middle East RSS Feed (Phase 16: News Feed)
-
-**No new library needed** (uses fast-xml-parser added above).
-
-- **URL:** `https://feeds.bbci.co.uk/news/world/middle_east/rss.xml`
-- **Format:** Standard RSS 2.0 XML
-- **Fields:** `item.title`, `item.link`, `item.pubDate`, `item.description`, `item.media:thumbnail`
-- **Auth:** None required
-- **Reliability:** Very stable, BBC has maintained this feed structure for years
-
-**Confidence:** HIGH (verified via multiple sources, standard RSS format)
-
-### Al Jazeera RSS Feed (Phase 16: News Feed)
-
-**No new library needed** (uses fast-xml-parser added above).
-
-- **URL:** `https://www.aljazeera.com/xml/rss/all.xml`
-- **Format:** Standard RSS 2.0 XML
-- **Fields:** Same RSS 2.0 structure as BBC
-- **Auth:** None required
-- **Note:** This is the global "all news" feed — the noise filter in `server/adapters/news.ts` will handle filtering to Middle East conflict content via keyword matching
-
-**Confidence:** HIGH (verified endpoint, standard RSS)
-
-### Haversine Distance (Phase 17: Proximity Alerts)
-
-**No library needed.** Haversine is a 10-line formula. Adding an npm package for it would be dependency bloat.
-
-```typescript
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-```
-
-Used client-side in `notificationStore` for proximity alerts (flight/ship within 50km of key site).
-
-**Confidence:** HIGH (well-known formula, accurate to ~0.5% for distances under 1000km)
-
-### SVG Sparkline Charts (Phase 18: Oil Markets)
-
-**No library needed.** Sparklines are a single SVG `<polyline>` element. For 5 data points rendered at 60x20px, a React component is ~20 lines of code.
-
-```tsx
-function Sparkline({
-  data,
-  width = 60,
-  height = 20,
-}: {
-  data: number[];
-  width?: number;
-  height?: number;
-}) {
-  const min = Math.min(...data),
-    max = Math.max(...data);
-  const range = max - min || 1;
-  const points = data
-    .map((v, i) => `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * height}`)
-    .join(' ');
-  return (
-    <svg width={width} height={height}>
-      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-```
-
-**Why not react-sparklines:** Adds ~8KB for something achievable in 20 lines. Project already uses inline SVG (EntityTooltip icons), so the pattern is established.
-
-**Why not recharts/d3:** Massive overkill. These are charting frameworks designed for complex interactive charts. Sparklines have zero interactivity.
-
-### Severity Scoring (Phase 17: Notification Center)
-
-**No library needed.** The scoring formula `type_weight * log(1+NumMentions) * log(1+NumSources) * recency_decay` uses only `Math.log()`. Computed server-side in `/api/notifications` route handler.
-
-### News Keyword Matching (Phase 17: Notification Center)
-
-**No library needed.** Matching news headlines to events uses simple string operations (country code match OR keyword overlap in title). Not fuzzy — exact substring matching is appropriate for news-to-event correlation.
-
----
-
-## Existing Stack Leveraged (No Changes)
-
-| Existing Technology          | v1.1 Usage                                                                                                                                     |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Express 5 routes             | 4 new routes: `/api/sites`, `/api/news`, `/api/notifications`, `/api/markets`                                                                  |
-| Upstash Redis                | 4 new cache keys: `sites:osm` (24h), `news:feed` (15min), `markets:quotes` (60s), notifications computed from events cache                     |
-| Zustand 5 (curried create)   | 4 new stores: `siteStore`, `newsStore`, `notificationStore`, `marketStore`                                                                     |
-| Deck.gl IconLayer            | 1 new layer for key sites (same pattern as conflict events)                                                                                    |
-| Recursive setTimeout polling | 4 new hooks: `useSitePolling` (24h), `useNewsPolling` (15min), `useMarketPolling` (60s), `useNotificationPolling` (implicit via event polling) |
-| Tailwind CSS v4              | All new UI panels (notification drawer, markets panel, search bar)                                                                             |
-| Vitest + jsdom               | Tests for all new adapters, routes, stores, components                                                                                         |
-| tsup serverless bundle       | New routes auto-included via Express app factory                                                                                               |
-| adm-zip                      | Not used by v1.1 (GDELT DOC returns JSON, not ZIP)                                                                                             |
-
----
+`markdown-link-check` + `@redocly/cli` already power `npm run docs:lint` / `npm run openapi:lint`.
 
 ## Alternatives Considered
 
-| Category      | Recommended     | Alternative            | Why Not                                                       |
-| ------------- | --------------- | ---------------------- | ------------------------------------------------------------- |
-| XML parsing   | fast-xml-parser | rss-parser             | Heavier deps (xml2js), last updated 2022, slower              |
-| XML parsing   | fast-xml-parser | DOMParser              | Not available in Node.js without jsdom (30MB)                 |
-| Fuzzy search  | fuse.js         | uFuzzy                 | No weighted multi-key search, optimized for file paths        |
-| Fuzzy search  | fuse.js         | MiniSearch             | Full-text search engine, overkill for ~5K entities            |
-| Fuzzy search  | fuse.js         | native filter          | No fuzzy matching, no typo tolerance, no scoring              |
-| Yahoo Finance | Direct fetch    | yahoo-finance2         | Crumb auth issues, 15+ transitive deps, intermittent failures |
-| Yahoo Finance | Direct fetch    | Alpha Vantage          | Requires API key, rate-limited free tier (5 req/min)          |
-| Sparklines    | Inline SVG      | react-sparklines       | 8KB dep for 20 lines of code                                  |
-| Sparklines    | Inline SVG      | recharts               | Massive bundle for non-interactive mini charts                |
-| Haversine     | Inline function | haversine-distance npm | 10 lines of math vs. adding a dependency                      |
-| Overpass      | Direct fetch    | osm-api npm            | Unnecessary abstraction over a single POST request            |
+| Recommended (keep)                        | Alternative                        | When the alternative would win (NOT now)                                                                                                                         |
+| ----------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| k6 OSS local/CI                           | Grafana Cloud k6                   | Only if you need geo-distributed VUs or >1k concurrent — overkill for a 1–300 sweep; adds account + cost.                                                        |
+| k6 + Playwright split                     | k6 `k6/browser` module (GA)        | If you wanted a single binary for combined API+browser and were willing to rewrite the working Playwright spec — no payoff here.                                 |
+| Node built-in `fetch` for URL probes      | undici / got / axios               | Only if you needed advanced retry/agent pooling beyond the current polite-citizen limiter — current logic already covers redirects, timeouts, HEAD/GET fallback. |
+| Hand-rolled `Sparkline.tsx` + Tailwind    | recharts / visx / d3               | Only for genuinely complex interactive charts — dashboard cleanup needs none.                                                                                    |
+| `transliteration@2.6.1`                   | ICU / a different romanizer        | Never mid-milestone — it's the byte-identity-gated source of truth for `nameLatin`.                                                                              |
+| Tailwind v4 `@theme` + bespoke components | shadcn/ui, Radix, MUI, Headless UI | Only on a from-scratch design system — would fight the existing military aesthetic and bloat the bundle.                                                         |
 
----
+## What NOT to Use
 
-## Installation
+| Avoid                                             | Why                                                                                                             | Use Instead                                                                     |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Any new chart library (recharts/visx/d3/chart.js) | Duplicates existing `Sparkline.tsx`; imports foreign visual language into the military theme; bundle bloat      | Existing `Sparkline.tsx` + Tailwind utilities                                   |
+| Any component kit (shadcn/Radix/MUI/Headless UI)  | Conflicts with the bespoke off-the-grid aesthetic; large dep tree; the dashboard is already hand-built          | Compose existing `*Block.tsx` components + Tailwind `@theme` tokens             |
+| undici/got/axios for URL liveness                 | Node 22.x global `fetch` already drives the probe with full redirect/timeout/HEAD-GET handling                  | Built-in `fetch` + existing `createLimit`/throttle                              |
+| Swapping `transliteration` for another romanizer  | Re-opens the water `nameLatin` byte-identity gate; the bug is logic, not the library                            | Debug `hasLatinLabel` / `GENERIC_OSM_NAME_RE` / desalination-bypass interaction |
+| Grafana Cloud k6 / Artillery / Locust / JMeter    | k6 OSS already installed, scripted, and validated (501 VUs in v1.2); switching tools discards a working harness | Existing `scripts/load-test.js` (edit `RAMP_STAGES`)                            |
+| k6 `k6/browser` module                            | GA but would replace the working Playwright spec for no benefit                                                 | Keep `scripts/load-test.spec.ts` running alongside k6                           |
+| Migrating `vercel.ts` → Build Output API now      | Explicitly deferred-with-rationale at v1.6 D-09 (risky); out of v2.0 scope                                      | Leave `api/vercel-entry.js` tsup bundle as-is                                   |
 
-```bash
-# New production dependencies (only 2 packages)
-npm install fast-xml-parser fuse.js
+## Version Compatibility
 
-# No new dev dependencies needed
-```
+| Package          | Version                                 | Compatibility note                                                                                                       |
+| ---------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| k6               | `v1.7.0`                                | `k6/http` + `ramping-vus` stable since k6 v1.0 (May 2025); semver two-year support; no API churn affects `load-test.js`. |
+| @playwright/test | `^1.58.2`                               | Runs standalone against prod URL; no coupling to k6 version.                                                             |
+| Node engine      | `22.x` (pinned in `package.json`)       | Global `fetch` GA — URL-liveness probe needs no HTTP-client dep.                                                         |
+| TypeScript       | `~5.9.3` (pinned)                       | Held below TS 6.0 deliberately; no v2.0 tooling forces an upgrade.                                                       |
+| transliteration  | `2.6.1` (exact pin)                     | Keep exact-pinned to preserve `nameLatin` byte-identity gate.                                                            |
+| Tailwind CSS     | `^4.2.1` + `@tailwindcss/vite` `^4.2.1` | CSS-first `@theme`; redesign uses utilities only — no config-file reintroduction.                                        |
 
-**Total new dependency footprint:**
+## Integration Considerations
 
-- fast-xml-parser: ~104KB, 0 transitive dependencies
-- fuse.js: ~12KB, 0 transitive dependencies
-- **Combined: ~116KB, 0 transitive dependencies**
-
-This is deliberately minimal. The project already has 14 production dependencies; adding only 2 (both zero-dependency) keeps the bundle lean and serverless-friendly.
-
----
-
-## Version Pinning
-
-| Package         | Pin    | Rationale                                                                                   |
-| --------------- | ------ | ------------------------------------------------------------------------------------------- |
-| fast-xml-parser | ^5.5.6 | Major version 5 API is stable; minor/patch updates are safe                                 |
-| fuse.js         | ^7.1.0 | Major version 7 API is stable; last published ~1 year ago, unlikely to see breaking changes |
-
-Both packages use standard semver. Caret (`^`) pinning is appropriate — no known upcoming breaking changes in either.
-
----
-
-## TypeScript Integration Notes
-
-Both new packages include TypeScript type definitions:
-
-- `fast-xml-parser`: Ships its own types (3.4% of codebase is `.ts`)
-- `fuse.js`: Ships its own types, generic `Fuse<T>` for typed results
-
-No `@types/*` packages needed.
-
----
-
-## Serverless (Vercel) Compatibility
-
-Both new packages are serverless-safe:
-
-- **fast-xml-parser:** Pure JS, no native binaries, no filesystem access
-- **fuse.js:** Pure JS, client-side only (not in serverless bundle)
-
-The tsup bundle for Vercel (`server/vercel-entry.ts`) will include fast-xml-parser. fuse.js is client-side only and bundled by Vite.
-
----
-
-## Risk Assessment
-
-| Technology                 | Risk                                            | Mitigation                                                                   |
-| -------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
-| Yahoo Finance v8 chart API | MEDIUM — unofficial, could be blocked           | Graceful degradation (empty array), can add yahoo-finance2 as fallback later |
-| Overpass API               | LOW — free, stable, 10+ year track record       | Redis 24h cache means 1 request/day; fallback to cached data on failure      |
-| GDELT DOC API              | LOW — same project as existing GDELT v2 events  | 15min cache; existing GDELT event data provides fallback context             |
-| BBC RSS                    | LOW — BBC has maintained feeds for 15+ years    | Cache; if feed dies, GDELT DOC + Al Jazeera still provide news               |
-| Al Jazeera RSS             | LOW — standard RSS, stable endpoint             | Cache; one of three sources, not single point of failure                     |
-| fast-xml-parser            | LOW — 3,844 npm dependents, actively maintained | Well-established, v5 API is stable                                           |
-| fuse.js                    | LOW — 3,252 npm dependents, zero deps           | Dominant client-side fuzzy search library                                    |
-
----
+- **Load test (feature 4):** Run k6 against the _production_ Vercel Pro alias (Fluid Compute cold starts only reproduce on the real platform, not `vite dev`). The existing `rate_limited` Counter + `cold_start_duration` Trend are the metrics to watch; expect the public 60-req/min global limiter to throttle synthetic VUs unless the test sends a valid `DASHBOARD_PASSWORD` Bearer (feature 5's operator-block work interacts here — coordinate the rate-limiter change with the load-test VU profile so the test measures real capacity, not the limiter).
+- **Dashboard redesign (feature 3):** All color/spacing changes flow through `src/styles/app.css` `@theme` and `src/lib/colorBridge.ts`; the byte-identity sentinel test (`src/__tests__/lib/colorBridge.test.ts`) will fail on any drift — treat that as the guardrail, not a blocker.
+- **Water + URL-liveness debugging (features 1–2):** Both have Redis-key schema tests (`waterFilterStats.test.ts`, `urlLiveness.schema.test.ts`) pinning their shapes — changes that touch persisted JSON must update the pinned schemas in lockstep.
 
 ## Sources
 
-- [Overpass API - OpenStreetMap Wiki](https://wiki.openstreetmap.org/wiki/Overpass_API)
-- [Overpass API Bounding Box Docs](https://dev.overpass-api.de/overpass-doc/en/full_data/bbox.html)
-- [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/)
-- [GDELT DOC JSONFeed Support](https://blog.gdeltproject.org/gdelt-doc-2-0-api-supports-jsonfeed/)
-- [fast-xml-parser GitHub](https://github.com/NaturalIntelligence/fast-xml-parser)
-- [Fuse.js Official Site](https://www.fusejs.io/)
-- [Yahoo Finance API Guide - AlgoTrading101](https://algotrading101.com/learn/yahoo-finance-api-guide/)
-- [yahoo-finance2 Crumb Issue #764](https://github.com/gadicc/yahoo-finance2/issues/764)
-- [BBC RSS Feeds](https://rss.feedspot.com/bbc_rss_feeds/)
-- [Al Jazeera RSS - Inoreader](https://www.inoreader.com/feed/https://www.aljazeera.com/xml/rss/all.xml)
-- [Haversine Formula Reference](https://www.movable-type.co.uk/scripts/latlong.html)
+- Local toolchain probe — `k6 v1.7.0` confirmed installed (`/opt/homebrew/bin/k6`); `package.json` deps/devDeps inspected directly (HIGH).
+- [Grafana k6 GitHub releases](https://github.com/grafana/k6/releases) — `k6/http` + `ramping-vus` not deprecated; `k6/browser` GA (HIGH; minor version-string noise in the fetched page reconciled against the installed v1.7.0 ground truth).
+- [k6.io](https://k6.io/) / [k6 OSS](https://k6.io/open-source/) — k6 v1.0 maturity release (May 2025): first-class TS, semver, two-year support (HIGH).
+- [Best Load Testing Tools 2026 — k6 vs Locust vs JMeter vs Artillery](https://thesoftwarescout.com/best-load-testing-tools-2026-k6-vs-locust-vs-jmeter-vs-artillery-compared/) — 2026 best-practice: k6 OSS for daily/CI checks, Cloud only for distributed/high-VU (MEDIUM).
+- [Grafana Cloud k6](https://grafana.com/products/cloud/performance-load-testing-k6/) — cloud is for geo-distributed/large-scale; confirms OSS suffices for a 1–300 VU local sweep (MEDIUM).
+- Repo inspection — `scripts/load-test.js`, `scripts/load-test.spec.ts`, `server/adapters/overpass-water.ts`, `server/lib/urlLiveness.ts`, `src/components/markets/Sparkline.tsx` read directly to confirm existing capabilities (HIGH).
+
+---
+
+_Stack research for: v2.0 Final Hardening of otg-iran-monitor_
+_Researched: 2026-06-09_
