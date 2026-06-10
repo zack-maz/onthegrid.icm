@@ -673,6 +673,14 @@ export function DevApiStatus() {
   // ONLY `prune` (threaded down to EventsFiltersSectionV3), degrades open on
   // any failure (network / non-200 / missing Bearer → null → block self-hides),
   // and only runs while the events tab is the active, Bearer-unlocked surface.
+  //
+  // Phase 44 WR-02 — two failure-handling guarantees, pinned here:
+  //   1. Failures NULL the state (not keep-last-good): a Bearer expiry or
+  //      server failure after one successful fetch must hide the block, not
+  //      leave it rendering progressively staler data with no indicator.
+  //   2. Out-of-order guard: a monotonically increasing per-effect request id
+  //      is checked before every setEventsPrune so a slow first response
+  //      resolving after a faster interval tick cannot clobber newer data.
   const [eventsPrune, setEventsPrune] = useState<PruneSummary | null>(null);
   useEffect(() => {
     if (activeTab !== 'events' || !showEventsTab) {
@@ -680,16 +688,25 @@ export function DevApiStatus() {
       return;
     }
     let cancelled = false;
+    let latestRequestId = 0;
     const fetchPrune = async (): Promise<void> => {
+      const requestId = ++latestRequestId;
+      // Only the most recent in-flight request may write state (WR-02 §2).
+      const mayWrite = () => !cancelled && requestId === latestRequestId;
       try {
         const res = await fetch('/api/operator-status', {
           headers: { ...dashboardAuthHeaders() },
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          // Degrade-open (WR-02 §1) — non-200 nulls the state; block self-hides.
+          if (mayWrite()) setEventsPrune(null);
+          return;
+        }
         const data = (await res.json()) as { prune?: PruneSummary | null };
-        if (!cancelled) setEventsPrune(data?.prune ?? null);
+        if (mayWrite()) setEventsPrune(data?.prune ?? null);
       } catch {
-        // degrade-open — block self-hides
+        // Degrade-open (WR-02 §1) — network failure nulls the state too.
+        if (mayWrite()) setEventsPrune(null);
       }
     };
     void fetchPrune();
