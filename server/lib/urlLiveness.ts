@@ -1154,8 +1154,21 @@ export async function pruneDeadUrlEvents(opts: {
     const entry = cached?.data ?? null;
     if (!entry) continue;
 
-    // D-07 — only terminal-dead statuses are ever pruned.
+    // D-07 — only terminal-dead statuses are ever pruned. This shared
+    // `isTerminalDead` predicate is INTENTIONALLY left unchanged (RESEARCH
+    // anti-pattern): 403 stays terminal-dead so the dashboard count, the
+    // deadUrlSample drill-down, and the manual operator prune all keep
+    // treating it as dead. Only the cron auto-prune filter below demotes it.
     if (!isTerminalDead(entry.status)) continue;
+
+    // Phase 43 D-14/D-15 (DEMOTE) — cron-only 403 exclusion. Evidence:
+    // 43-VERIFICATION.md GHOST-09 sample re-probed 20 of 20 production
+    // 403-status URLs and found all 20 serve a LIVE article under a browser
+    // UA (bot-blocking CDN false positives confirmed). The cron auto-prune
+    // skips 403 regardless of attemptCount; the manual prune (operator
+    // judgment) still prunes it. This is prune-filter-local — NOT an
+    // isTerminalDead change.
+    if (opts.trigger === 'cron' && entry.status === '403') continue;
 
     // D-12 cron gate — manual trigger bypasses, cron requires ≥3 ticks.
     if (opts.trigger === 'cron' && entry.attemptCount < 3) continue;
