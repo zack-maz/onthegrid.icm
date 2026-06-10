@@ -369,7 +369,7 @@ Plans:
 
 - [x] 43-01-PLAN.md — Widen UrlLiveness schema/enum/TTL/isTerminalDead + evidence field; contract lockstep (schema test + shim + redis-keys.md + CLAUDE.md) [GHOST-10] (Wave 1)
 - [x] 43-02-PLAN.md — soft-404 body heuristic: classifySoft404 + 16 KiB capped GET on 200s + probeUrl wiring [GHOST-06] (Wave 2)
-- [ ] 43-03-PLAN.md — attemptCount semantics (live=0, unknown=preserve) + source-less no-url coverage + classifiedNoUrl log line [GHOST-07, GHOST-08] (Wave 3)
+- [x] 43-03-PLAN.md — attemptCount semantics (live=0, unknown=preserve) + source-less no-url coverage + classifiedNoUrl log line [GHOST-07, GHOST-08] (Wave 3)
 - [x] 43-04-PLAN.md — GHOST-09 evidence sample: prunedIds + 403 browser-UA re-probe (prod, checkpoint) → decision recorded [GHOST-09] (Wave 2)
 - [ ] 43-05-PLAN.md — cron-only 403 exclusion (per evidence) + unknown/no-url prune pins + DeadUrlSampleEntry evidence/soft-404 exposure [GHOST-09, GHOST-10] (Wave 4)
 
@@ -454,7 +454,7 @@ Plans:
 | Phase | Name                                  | Plans Complete | Status      | Completed  |
 | ----- | ------------------------------------- | -------------- | ----------- | ---------- |
 | 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
-| 43    | Ghost Link Prune Correctness          | 3/5            | In Progress |            |
+| 43    | Ghost Link Prune Correctness          | 4/5            | In Progress |            |
 | 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -          |
 | 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -          |
 | 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |

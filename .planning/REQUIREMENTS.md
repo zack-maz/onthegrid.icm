@@ -19,8 +19,8 @@ Operator-locked priority order: water filter → ghost links + events subtab →
 ### Ghost Links (GHOST — continues v1.5 numbering from GHOST-05)
 
 - [ ] **GHOST-06**: URL-liveness probe detects soft-404s — body heuristic on 200 responses (not-found markers, redirect-to-home, near-empty content); no headless browser
-- [ ] **GHOST-07**: Every event is probe-reachable or explicitly classified — source-less events no longer silently skipped by `buildProbeCandidates`, so prune can evaluate them
-- [ ] **GHOST-08**: Transient failures never count toward terminal-dead prune — `unknown` bucket excluded from prune eligibility, `attemptCount >= 3` gate retained, flaky-host attempt-reset semantics fixed so repeat offenders eventually accumulate
+- [x] **GHOST-07**: Every event is probe-reachable or explicitly classified — source-less events no longer silently skipped by `buildProbeCandidates`, so prune can evaluate them
+- [x] **GHOST-08**: Transient failures never count toward terminal-dead prune — `unknown` bucket excluded from prune eligibility, `attemptCount >= 3` gate retained, flaky-host attempt-reset semantics fixed so repeat offenders eventually accumulate
 - [ ] **GHOST-09**: 403 auto-prune decision made with evidence — evaluate demoting `403` to manual-only prune (bot-blocking CDNs 403 unknown UAs on live articles) using a `prunedIds` sample; implement the decision
 - [x] **GHOST-10**: Operator can see WHY a link was flagged dead — evidence string (matched marker / redirect target / body length) persisted in `events:url-liveness:{eventId}` and surfaced in the events subtab; pinned schema test + Redis registry updated in lockstep
 
@@ -102,8 +102,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WATER-FILTER-03 | Phase 42 | Complete |
 | WATER-FILTER-04 | Phase 42 | Complete |
 | GHOST-06        | Phase 43 | Pending  |
-| GHOST-07        | Phase 43 | Pending  |
-| GHOST-08        | Phase 43 | Pending  |
+| GHOST-07        | Phase 43 | Complete |
+| GHOST-08        | Phase 43 | Complete |
 | GHOST-09        | Phase 43 | Pending  |
 | GHOST-10        | Phase 43 | Complete |
 | EVENTS-TAB-01   | Phase 44 | Pending  |
