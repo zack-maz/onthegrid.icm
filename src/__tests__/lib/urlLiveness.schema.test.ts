@@ -40,6 +40,8 @@ describe('Phase 32 D-22 — literal CONTEXT-path shim', () => {
         attemptCount: 0,
         lastUrlProbed: 'https://example.com/a',
         lastHttpStatus: 200,
+        // Phase 43 D-16 — required-but-nullable evidence field.
+        evidence: null,
       }),
     ).not.toThrow();
   });
@@ -52,6 +54,7 @@ describe('Phase 32 D-22 — literal CONTEXT-path shim', () => {
         attemptCount: 0,
         lastUrlProbed: 'https://example.com/a',
         lastHttpStatus: 200,
+        evidence: null,
         extra: true,
       } as unknown),
     ).toThrow();
@@ -67,7 +70,12 @@ describe('Phase 32 D-22 — literal CONTEXT-path shim', () => {
     expect(ttlSecForStatus('dead-host')).toBeLessThanOrEqual(86400);
   });
 
-  it('D-20 TTL upper bound: unknown ≤ 1h', () => {
-    expect(ttlSecForStatus('unknown')).toBeLessThanOrEqual(3600);
+  it('D-20 TTL upper bound: unknown ≤ 24h (WR-02 — raised from 1h)', () => {
+    expect(ttlSecForStatus('unknown')).toBeLessThanOrEqual(86400);
+  });
+
+  it('Phase 43 D-04 TTL upper bound: soft-404 / no-url ≤ 24h', () => {
+    expect(ttlSecForStatus('soft-404')).toBeLessThanOrEqual(86400);
+    expect(ttlSecForStatus('no-url')).toBeLessThanOrEqual(86400);
   });
 });

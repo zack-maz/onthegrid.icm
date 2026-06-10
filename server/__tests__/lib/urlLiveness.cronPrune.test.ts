@@ -76,25 +76,42 @@ vi.stubGlobal('fetch', fetchMock);
 const { pruneDeadUrlEvents, URL_LIVENESS_KEY_PREFIX } = await import('../../lib/urlLiveness.js');
 
 // ---------------------------------------------------------------------------
-// Seed helper — five synthetic events + their per-event liveness entries.
+// Seed helper — synthetic events + their per-event liveness entries.
 //
-//   A → 404, attemptCount=1   (single-tick dead — cron skips, manual prunes)
+//   A → 404, attemptCount=1      (single-tick dead — cron skips, manual prunes)
 //   B → dead-host, attemptCount=3 (3-tick dead — both triggers prune)
-//   C → unknown, attemptCount=5  (D-07 NEVER pruned regardless of count)
-//   D → live, attemptCount=0    (NEVER pruned)
-//   E → 403, attemptCount=4    (4-tick dead — both triggers prune)
+//   C → unknown, attemptCount=5  (D-11 NEVER pruned regardless of count/trigger)
+//   D → live, attemptCount=0     (NEVER pruned)
+//   E → 403, attemptCount=4      (Phase 43 D-14/D-15 DEMOTE — cron SKIPS,
+//                                 manual STILL prunes)
+//   F → soft-404, attemptCount=3 (Phase 43 D-05 — cron-prunable under >=3 gate)
+//   G → soft-404, attemptCount=2 (Phase 43 — cron SKIPS under retained >=3 gate)
+//   H → no-url, attemptCount=0   (D-08 NEVER pruned on either trigger)
+//
+// Phase 43 Pitfall 5 — every fixture carries `evidence` so the strict
+// UrlLivenessSchema round-trips through cacheGetSafe<UrlLiveness>.
 // ---------------------------------------------------------------------------
 
-const EVENTS = [{ id: 'A' }, { id: 'B' }, { id: 'C' }, { id: 'D' }, { id: 'E' }];
+const EVENTS = [
+  { id: 'A' },
+  { id: 'B' },
+  { id: 'C' },
+  { id: 'D' },
+  { id: 'E' },
+  { id: 'F' },
+  { id: 'G' },
+  { id: 'H' },
+];
 
 const LIVENESS_BY_ID: Record<
   string,
   {
-    status: 'live' | '404' | '403' | 'dead-host' | 'unknown';
+    status: 'live' | '404' | '403' | 'dead-host' | 'soft-404' | 'unknown' | 'no-url';
     attemptCount: number;
-    lastUrlProbed: string;
+    lastUrlProbed: string | null;
     lastHttpStatus: number | null;
     lastProbedAt: string;
+    evidence: string | null;
   }
 > = {
   A: {
@@ -103,6 +120,7 @@ const LIVENESS_BY_ID: Record<
     lastUrlProbed: 'https://a.example/x',
     lastHttpStatus: 404,
     lastProbedAt: '2026-05-20T00:00:00.000Z',
+    evidence: null,
   },
   B: {
     status: 'dead-host',
@@ -110,6 +128,7 @@ const LIVENESS_BY_ID: Record<
     lastUrlProbed: 'https://b.example/x',
     lastHttpStatus: null,
     lastProbedAt: '2026-05-20T00:00:00.000Z',
+    evidence: null,
   },
   C: {
     status: 'unknown',
@@ -117,6 +136,7 @@ const LIVENESS_BY_ID: Record<
     lastUrlProbed: 'https://c.example/x',
     lastHttpStatus: 500,
     lastProbedAt: '2026-05-20T00:00:00.000Z',
+    evidence: null,
   },
   D: {
     status: 'live',
@@ -124,6 +144,7 @@ const LIVENESS_BY_ID: Record<
     lastUrlProbed: 'https://d.example/x',
     lastHttpStatus: 200,
     lastProbedAt: '2026-05-20T00:00:00.000Z',
+    evidence: null,
   },
   E: {
     status: '403',
@@ -131,6 +152,31 @@ const LIVENESS_BY_ID: Record<
     lastUrlProbed: 'https://e.example/x',
     lastHttpStatus: 403,
     lastProbedAt: '2026-05-20T00:00:00.000Z',
+    evidence: null,
+  },
+  F: {
+    status: 'soft-404',
+    attemptCount: 3,
+    lastUrlProbed: 'https://f.example/x',
+    lastHttpStatus: 200,
+    lastProbedAt: '2026-05-20T00:00:00.000Z',
+    evidence: 'soft-404: matched "page not found" in title',
+  },
+  G: {
+    status: 'soft-404',
+    attemptCount: 2,
+    lastUrlProbed: 'https://g.example/x',
+    lastHttpStatus: 200,
+    lastProbedAt: '2026-05-20T00:00:00.000Z',
+    evidence: 'soft-404: matched "article removed" in title',
+  },
+  H: {
+    status: 'no-url',
+    attemptCount: 0,
+    lastUrlProbed: null,
+    lastHttpStatus: null,
+    lastProbedAt: '2026-05-20T00:00:00.000Z',
+    evidence: null,
   },
 };
 
@@ -176,27 +222,68 @@ beforeEach(() => {
 });
 
 describe('Phase 32 D-12/D-13/D-14 — pruneDeadUrlEvents', () => {
-  it('cron trigger prunes only attemptCount>=3 terminal-dead events (B, E)', async () => {
+  it('cron trigger prunes attemptCount>=3 terminal-dead events but SKIPS 403 (B, F)', async () => {
+    // Phase 43 D-14/D-15 DEMOTE: 403 (E) is excluded from cron auto-prune
+    // regardless of attemptCount. dead-host B (ac=3) and soft-404 F (ac=3)
+    // remain cron-prunable under the retained >=3 gate. E (403/ac=4) and
+    // G (soft-404/ac=2) are skipped.
     seedCacheGetSafe();
     seedScan();
 
     const result = await pruneDeadUrlEvents({ trigger: 'cron' });
 
     expect(result.prunedCount).toBe(2);
-    expect(result.prunedIds.sort()).toEqual(['B', 'E']);
+    expect(result.prunedIds.sort()).toEqual(['B', 'F']);
+    // 403 demoted to manual-only on cron.
+    expect(result.prunedIds).not.toContain('E');
   });
 
-  it('manual trigger prunes ALL terminal-dead events regardless of attemptCount (A, B, E)', async () => {
+  it('manual trigger prunes ALL terminal-dead events regardless of attemptCount, INCLUDING 403 (A, B, E, F, G)', async () => {
+    // Phase 43 — the cron-only 403 exclusion does NOT change the manual path.
+    // 403 (E) is STILL pruned on manual; soft-404 G (ac=2) is pruned too
+    // (manual has no attemptCount gate).
     seedCacheGetSafe();
     seedScan();
 
     const result = await pruneDeadUrlEvents({ trigger: 'manual', fingerprint: 'fp-test' });
 
-    expect(result.prunedCount).toBe(3);
-    expect(result.prunedIds.sort()).toEqual(['A', 'B', 'E']);
+    expect(result.prunedCount).toBe(5);
+    expect(result.prunedIds.sort()).toEqual(['A', 'B', 'E', 'F', 'G']);
+    // 403 is still terminal-dead and manual-prunable.
+    expect(result.prunedIds).toContain('E');
   });
 
-  it('unknown status is NEVER pruned even with attemptCount>=3', async () => {
+  it('403 is SKIPPED on cron (DEMOTE) but PRUNED on manual (D-14/D-15)', async () => {
+    seedCacheGetSafe();
+    seedScan();
+
+    const cron = await pruneDeadUrlEvents({ trigger: 'cron' });
+    expect(cron.prunedIds).not.toContain('E');
+
+    seedScan();
+    const manual = await pruneDeadUrlEvents({ trigger: 'manual' });
+    expect(manual.prunedIds).toContain('E');
+  });
+
+  it('soft-404 is cron-prunable at attemptCount>=3 (F) but SKIPPED at <3 (G) under the retained gate', async () => {
+    // D-05 — soft-404 joins terminal-dead and is cron-prunable, but the
+    // retained D-12 attemptCount>=3 gate still applies: F (ac=3) prunes,
+    // G (ac=2) is skipped on cron.
+    seedCacheGetSafe();
+    seedScan();
+
+    const cron = await pruneDeadUrlEvents({ trigger: 'cron' });
+    expect(cron.prunedIds).toContain('F');
+    expect(cron.prunedIds).not.toContain('G');
+
+    // Manual ignores the gate — both soft-404s prune.
+    seedScan();
+    const manual = await pruneDeadUrlEvents({ trigger: 'manual' });
+    expect(manual.prunedIds).toContain('F');
+    expect(manual.prunedIds).toContain('G');
+  });
+
+  it('unknown status is NEVER pruned on EITHER trigger even with attemptCount>=3 (D-11 pin)', async () => {
     seedCacheGetSafe();
     seedScan();
 
@@ -206,6 +293,18 @@ describe('Phase 32 D-12/D-13/D-14 — pruneDeadUrlEvents', () => {
     seedScan();
     const manual = await pruneDeadUrlEvents({ trigger: 'manual' });
     expect(manual.prunedIds).not.toContain('C');
+  });
+
+  it('no-url status is NEVER pruned on EITHER trigger (D-08 pin)', async () => {
+    seedCacheGetSafe();
+    seedScan();
+
+    const cron = await pruneDeadUrlEvents({ trigger: 'cron' });
+    expect(cron.prunedIds).not.toContain('H');
+
+    seedScan();
+    const manual = await pruneDeadUrlEvents({ trigger: 'manual' });
+    expect(manual.prunedIds).not.toContain('H');
   });
 
   it('live status is NEVER pruned', async () => {
@@ -238,7 +337,7 @@ describe('Phase 32 D-12/D-13/D-14 — pruneDeadUrlEvents', () => {
     expect(entry.result).toBe('ok');
     expect(entry.args.trigger).toBe('cron');
     expect(entry.args.prunedCount).toBe(2);
-    expect(entry.args.prunedIds.sort()).toEqual(['B', 'E']);
+    expect(entry.args.prunedIds.sort()).toEqual(['B', 'F']);
   });
 
   it('audit-log entry: manual trigger uses caller-supplied fingerprint', async () => {
@@ -267,10 +366,10 @@ describe('Phase 32 D-12/D-13/D-14 — pruneDeadUrlEvents', () => {
 
     const [, spliced, ttl] = v3WriteCalls[0]!;
     expect(Array.isArray(spliced)).toBe(true);
-    // 5 originals − 2 pruned (B, E) = 3 remaining.
-    expect((spliced as Array<{ id: string }>).length).toBe(3);
+    // 8 originals − 2 pruned (B, F) = 6 remaining.
+    expect((spliced as Array<{ id: string }>).length).toBe(6);
     const remainingIds = (spliced as Array<{ id: string }>).map((e) => e.id).sort();
-    expect(remainingIds).toEqual(['A', 'C', 'D']);
+    expect(remainingIds).toEqual(['A', 'C', 'D', 'E', 'G', 'H']);
 
     // TTL must be the terminal v3 cache TTL (48h) so a prune never re-TTLs
     // events:llm:v3 down to the short cooldown-sentinel TTL.
@@ -291,7 +390,9 @@ describe('Phase 32 D-12/D-13/D-14 — pruneDeadUrlEvents', () => {
     );
     const keys = allArgs.filter((a): a is string => typeof a === 'string');
     expect(keys).toContain(`${URL_LIVENESS_KEY_PREFIX}B`);
-    expect(keys).toContain(`${URL_LIVENESS_KEY_PREFIX}E`);
+    expect(keys).toContain(`${URL_LIVENESS_KEY_PREFIX}F`);
+    // 403 (E) demoted from cron prune — its key must NOT be DEL'd on cron.
+    expect(keys).not.toContain(`${URL_LIVENESS_KEY_PREFIX}E`);
     expect(keys).not.toContain(`${URL_LIVENESS_KEY_PREFIX}C`);
     expect(keys).not.toContain(`${URL_LIVENESS_KEY_PREFIX}D`);
   });

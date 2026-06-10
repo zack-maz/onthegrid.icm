@@ -12,7 +12,8 @@
  *           with a JSON value `{status, lastProbedAt, attemptCount,
  *           lastUrlProbed, lastHttpStatus}`.
  *   - D-20  Tiered TTL by status: `live` → 7d, terminal-dead
- *           (`404`/`403`/`dead-host`) → 24h, `unknown` → 1h.
+ *           (`404`/`403`/`dead-host`) → 24h, `unknown` → 24h (WR-02 — raised
+ *           from 1h so entries survive the once-daily sweep gap).
  *   - D-22  Schema is `z.object({...}).strict()` so extra keys / missing
  *           fields / unknown enum values all throw at parse time. The
  *           D-22 contract test (`server/__tests__/lib/urlLiveness.schema.test.ts`)
@@ -78,13 +79,24 @@ export const URL_LIVENESS_COUNT_KEY = 'events:url-liveness-count';
 // ============================================================================
 
 /**
- * D-07 + D-19 — five-status taxonomy. Terminal-dead statuses
- * (`404`/`403`/`dead-host`) count toward the dashboard dead-URL count
- * and are eligible for prune. `unknown` (5xx, network blip, transient
+ * D-04/D-06 + D-19 — seven-status taxonomy (Phase 43 widens the Phase 32
+ * five-status set with `soft-404` and `no-url`). Terminal-dead statuses
+ * (`404`/`403`/`dead-host`/`soft-404`) count toward the dashboard dead-URL
+ * count and are eligible for prune. `unknown` (5xx, network blip, transient
  * error) is excluded from the count and re-probed on the next sweep
- * tick. `live` is live.
+ * tick. `no-url` (event has no primary URL to probe) is NOT terminal-dead
+ * (D-08) — it is bookkeeping for events that can never have a live link.
+ * `live` is live.
  */
-export const UrlLivenessStatusSchema = z.enum(['live', '404', '403', 'dead-host', 'unknown']);
+export const UrlLivenessStatusSchema = z.enum([
+  'live',
+  '404',
+  '403',
+  'dead-host',
+  'unknown',
+  'soft-404',
+  'no-url',
+]);
 export type UrlLivenessStatus = z.infer<typeof UrlLivenessStatusSchema>;
 
 /**
@@ -98,20 +110,38 @@ export const UrlLivenessSchema = z
     status: UrlLivenessStatusSchema,
     lastProbedAt: z.string().datetime(),
     /**
-     * D-12 + 32-RESEARCH.md A2 — monotonic-with-reset-on-live-or-unknown
-     * transition. Increment ONLY when the latest probe status is
-     * terminal-dead AND the prior stored status was also terminal-dead
-     * (or no prior). Reset to 0 on any `live` or `unknown` transition.
+     * Phase 32 D-12 / 32-RESEARCH.md A2 origin: monotonic-with-reset on
+     * any non-dead transition. Phase 43 D-10 AMENDS this: `live` resets to
+     * 0; `unknown` PRESERVES the prior count (a transient blip must not
+     * erase an accumulating terminal-dead run); `dead→dead` increments.
+     * The "≥3 consecutive terminal-dead ticks" cron auto-prune gate
+     * (D-12) therefore survives a single intervening `unknown` tick.
      *
-     * Pure-monotonic accumulation would conflate dead→live→dead with
-     * three-in-a-row-dead and falsely trigger D-12's cron auto-prune
-     * `attemptCount >= 3` gate. The monotonic-with-reset rule makes the
-     * "≥3 consecutive terminal-dead ticks" semantics a one-line check
-     * inside the probe writer (Plan 32-02 Task 3).
+     * Increment ONLY when the latest probe status is terminal-dead AND
+     * the prior stored status was also terminal-dead (or first-write
+     * dead → start at 1). `no-url` resets to 0 (it is not a dead run).
      */
     attemptCount: z.number().int().nonnegative(),
-    lastUrlProbed: z.string().url(),
+    /**
+     * D-07 — nullable so a `no-url` entry (event has no primary URL to
+     * probe) can record `lastUrlProbed: null`. All other statuses carry
+     * the probed URL string.
+     */
+    lastUrlProbed: z.string().url().nullable(),
     lastHttpStatus: z.number().int().nullable(),
+    /**
+     * D-16 — required-but-nullable provenance string (≤200 chars).
+     * Carries the body/redirect heuristic that produced a `soft-404`
+     * verdict (e.g. `'soft-404: matched "page not found" in title'`),
+     * the status-code literal for hard 4xx (`'http-404'`, `'http-403'`),
+     * the dead-host reason (`'dead-host: fetch failed'`), or `null` for
+     * `live`/`unknown`/`no-url` verdicts with no body evidence yet.
+     * Required so the writer always carries it; nullable so status-only
+     * verdicts need no synthetic prose. Old Phase 32 entries lacking this
+     * field are read via TS-generic cast (no runtime re-parse) and surface
+     * as `undefined`/`null` safely (T-43-01 accept).
+     */
+    evidence: z.string().max(200).nullable(),
   })
   .strict();
 
@@ -125,11 +155,24 @@ export type UrlLiveness = z.infer<typeof UrlLivenessSchema>;
  * D-20 — TTL ceilings by status. Re-probe cadence proportional to verdict
  * confidence: live verdicts last a week (no need to re-confirm fresh
  * content frequently), terminal-dead verdicts re-confirm daily (so the
- * prune list stays current as publishers move URLs), unknown verdicts
- * re-probe hourly (push toward a terminal verdict fast).
+ * prune list stays current as publishers move URLs).
  *
  * The TTL itself is the GC mechanism — there is no separate cleanup
  * pass. When the per-event key expires, the next sweep tick re-probes it.
+ *
+ * WR-02/WR-03 (GHOST-08 intent restored) — `unknown` was raised from 1h
+ * to 24h. `cacheSetSafe` writes this value as the HARD Redis TTL (no 10×
+ * multiplier — `server/cache/redis.ts` `cacheSet` does `{ ex: redisTtlSec }`).
+ * The sweep runs ONCE per day (4am cron). At a 1h TTL an `unknown` entry had
+ * ALWAYS expired by the next daily probe, so on the post-blip tick the writer
+ * read `prior = null` and RESTARTED attemptCount at 1 — making the D-10
+ * "unknown PRESERVES the prior count" rule unreachable at the production
+ * cadence (the flaky-host dead→unknown→dead accumulation it was built for
+ * never crossed the ≥3 gate). It ALSO meant an expired-then-re-probed dead
+ * entry read `prior = null` and re-INCR'd the sidecar (WR-03 monotonic
+ * inflation). A 24h logical tier lets unknown (and terminal-dead) entries
+ * survive between daily ticks so `prior` is non-null on the next sweep,
+ * engaging the D-10 preserve rule and avoiding the spurious re-INCR.
  *
  * Schema test (Plan 32-01 Task 3) asserts each value here matches the
  * D-20 upper-bound, so silent ceiling raises fail loudly.
@@ -139,7 +182,9 @@ const TTL_SEC_BY_STATUS: Record<UrlLivenessStatus, number> = {
   '404': 24 * 3600, // D-20: 24 hours
   '403': 24 * 3600, // D-20: 24 hours
   'dead-host': 24 * 3600, // D-20: 24 hours
-  unknown: 3600, // D-20: 1 hour
+  unknown: 24 * 3600, // WR-02: 24 hours (raised from 1h — must survive the daily sweep gap)
+  'soft-404': 24 * 3600, // D-04/D-09: 24 hours (terminal-dead tier)
+  'no-url': 24 * 3600, // D-04/D-09: 24 hours (re-confirm no-url daily)
 };
 
 /**
@@ -178,6 +223,153 @@ const PER_HOST_INTERVAL_MS = 1_000;
 const JITTER_MS = 200;
 const MAX_REDIRECTS = 3;
 const PROBE_UA = 'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)';
+
+// ============================================================================
+// Phase 43 Plan 02 — soft-404 body heuristic constants (D-20, no env)
+// ============================================================================
+
+/**
+ * D-01 / D-20 — capped GET byte budget for the soft-404 body read. 16 KiB
+ * (`Range: bytes=0-16383`) is enough to capture the `<head>`/`<title>` of any
+ * realistic publisher page; the manual `readCappedBody` reader aborts at this
+ * cap even when the server ignores the `Range` header (DoS guard T-43-04).
+ * Hard-coded module const, NOT env — heuristic knobs are domain constants for
+ * this phase, not operator levers.
+ *
+ * Consumed by the `probeUrl` 200-branch capped GET wiring (`classifyTwoHundred`)
+ * as the canonical single source of truth for the 16 KiB cap.
+ */
+const SOFT404_BODY_CAP_BYTES = 16384;
+
+/**
+ * D-02c / D-20 — near-empty content floor. A 200 response whose body, after
+ * stripping HTML tags, holds fewer than this many bytes of actual text is
+ * treated as a soft-404 shell. ~512 bytes is deliberately conservative
+ * (precision-first, D-03): a real React SPA shell with meta + script tags
+ * typically exceeds 512 bytes of MARKUP, but tag-stripping measures TEXT, so a
+ * genuine "page not found" empty body falls well under while a hydrated
+ * article stays above. A dead-but-heavy-shell SPA link surviving is within the
+ * asymmetric error budget (Pitfall 2).
+ */
+const NEAR_EMPTY_FLOOR_BYTES = 512;
+
+/**
+ * D-02a / D-20 — curated, precision-first not-found marker list (lowercase).
+ * Matched case-insensitively against the `<title>` of a 200 response. Kept
+ * deliberately tiny and unambiguous: a marker matched anywhere in BODY text
+ * would false-positive on legitimate articles that are ABOUT 404s/errors
+ * (RESEARCH anti-pattern), so classifySoft404 matches markers against the
+ * `<title>` only. The exact membership of this list is Claude's discretion per
+ * the CONTEXT D-discretion note ("keep small, curated, precision-first;
+ * expanding it later is cheap"); these are the conservative core English
+ * phrases plus two common CMS strings.
+ */
+const NOT_FOUND_MARKERS: readonly string[] = [
+  // CR-03 — every entry must be an error-context phrase that cannot occur in a
+  // live conflict-news <title>. The bare substrings `'404'`, `'not found'`, and
+  // `'no longer exists'` were DROPPED because they deterministically match live
+  // headlines in THIS corpus: `'404'` hits Persian Solar-Hijri years (SH 1404 =
+  // Mar 2025–Mar 2026) + hardware (GE F404) + flight/casualty numbers;
+  // `'not found'` hits "Missing sailors not found after strike"; `'no longer
+  // exists'` hits "Hamas says the ceasefire no longer exists". Each survivor
+  // below requires the error framing ("page"/"article"/"content"/"error 404"/
+  // "404 not found"/"http 404"/"this page no longer exists") so a live article
+  // title cannot match. Precision-first (D-03); expanding later is cheap.
+  'page not found',
+  'article not available',
+  'page no longer available',
+  'content not found',
+  'this page no longer exists',
+  'error 404',
+  '404 not found',
+  'http 404',
+];
+
+/**
+ * Phase 43 Plan 02 Task 1 (GHOST-06) — pure soft-404 body heuristic.
+ *
+ * Evaluates the three D-02 signals IN ORDER with early-return, applying the
+ * D-03 precision-first tie-break (any ambiguity / no-signal → `live`,
+ * `evidence: null`; NEVER flag live content dead):
+ *
+ *   (a) not-found markers — extract the `<title>`, lowercase it, and if it
+ *       includes any `NOT_FOUND_MARKERS` entry return a soft-404 verdict with
+ *       evidence `soft-404: matched "<marker>" in title` (D-16 verbatim).
+ *       Markers are matched against the title ONLY — never the full body — so
+ *       an article ABOUT a 404 does not false-positive.
+ *   (b) redirect-to-home — if the ORIGINAL URL had a deep path (≥2 segments)
+ *       and the FINAL URL landed at `/` or a single-segment root (≤1 segment),
+ *       the redirect chain bounced an article to a homepage/section root.
+ *       Evidence `redirect-to-home: <origPath> → <finalPath>` (D-16). A
+ *       deep→deep canonical move does NOT match (Pitfall 3).
+ *   (c) near-empty content — strip tags and if the remaining text is below
+ *       `NEAR_EMPTY_FLOOR_BYTES` AND the body contains no `<script` tag,
+ *       return evidence `near-empty: <n> bytes` (D-16). WR-04 — the
+ *       no-`<script>` co-condition exempts CSR/SPA shells (which serve the
+ *       same near-empty HTML for live AND dead articles); firing on
+ *       text-length alone would flag every live article on a CSR outlet as
+ *       dead, the one direction the asymmetric error budget forbids.
+ *
+ * Pure function (no fetch, no Redis, no side effects) so it gets a
+ * table-driven test without fetch mocking. Exported directly — it needs no
+ * NODE_ENV gate (that gate is only for module-private fetch/Redis helpers like
+ * `persistLiveness`).
+ *
+ * The fetched HTML body is UNTRUSTED external input (T-43-05): it is only
+ * substring-scanned for ASCII markers and tag-stripped for a length count —
+ * never eval'd, parsed-as-code, or rendered. The evidence string is bounded by
+ * the schema's `z.string().max(200)` from Plan 01.
+ */
+export function classifySoft404(
+  bodyText: string,
+  finalUrl: string,
+  originalUrl: string,
+): { soft404: boolean; evidence: string | null } {
+  // (a) not-found markers in <title> (case-insensitive). Single regex capture
+  // over the decoded head — no DOM parser (D-20 / RESEARCH "Don't Hand-Roll").
+  const title = (/<title[^>]*>([^<]*)<\/title>/i.exec(bodyText)?.[1] ?? '').toLowerCase();
+  for (const marker of NOT_FOUND_MARKERS) {
+    if (title.includes(marker)) {
+      return { soft404: true, evidence: `soft-404: matched "${marker}" in title` };
+    }
+  }
+
+  // (b) redirect-to-home — deep original bounced to a shallow root. Wrapped in
+  // a try so a malformed URL degrades open (D-03 / D-22) rather than throwing.
+  try {
+    const origDepth = new URL(originalUrl).pathname.split('/').filter(Boolean).length;
+    const finalPath = new URL(finalUrl).pathname;
+    const finalDepth = finalPath.split('/').filter(Boolean).length;
+    if (origDepth >= 2 && finalDepth <= 1) {
+      return {
+        soft404: true,
+        evidence: `redirect-to-home: ${new URL(originalUrl).pathname} → ${finalPath}`,
+      };
+    }
+  } catch {
+    // Unparseable URL → fall through to the near-empty check (precision-first:
+    // no redirect signal rather than a crash).
+  }
+
+  // (c) near-empty content — strip tags, trim, measure remaining text length.
+  // WR-04 — a client-side-rendered (CSR/SPA) news site serves the SAME
+  // near-empty HTML shell (`<div id="root"></div>` + external `<script src>`
+  // tags, ~0 text after stripping) for LIVE articles as for dead ones. Firing
+  // soft-404 on text-length alone would condemn every live article on such an
+  // outlet (live-marked-dead — the one direction the phase's asymmetric error
+  // budget forbids). Require the body to ALSO contain no `<script` tag: a real
+  // SPA shell is script-heavy, so its presence means "JS will hydrate content"
+  // → degrade-open to live. A genuine static "page not found" body has no
+  // script and stays caught. Precision-first (D-03).
+  const contentLen = bodyText.replace(/<[^>]+>/g, '').trim().length;
+  const hasScript = /<script[\s>]/i.test(bodyText);
+  if (contentLen < NEAR_EMPTY_FLOOR_BYTES && !hasScript) {
+    return { soft404: true, evidence: `near-empty: ${contentLen} bytes` };
+  }
+
+  // D-03 precision-first: no unambiguous signal fired → live, no evidence.
+  return { soft404: false, evidence: null };
+}
 
 /**
  * Pitfall 1 / RESEARCH A6 — caller-supplied wall-clock cutoff for the
@@ -233,21 +425,36 @@ export interface ProbeResult {
   status: UrlLivenessStatus;
   httpStatus: number | null;
   finalUrl: string;
+  /**
+   * D-16 — provenance for the verdict, threaded so `persistLiveness`
+   * (Plan 03) reads it off the probe result rather than recomputing.
+   * Status-code-only verdicts carry the D-16 literal (`'http-404'`,
+   * `'http-403'`, `'dead-host: fetch failed'`); `live`/`unknown` carry
+   * `null`; the `soft-404` body heuristic (Plan 02) populates the match
+   * detail.
+   */
+  evidence: string | null;
 }
 
 /**
  * fetch-with-timeout helper. Diverges from `server/adapters/nominatim.ts`
  * in two places per CONTEXT D-16 / D-17:
  *   - `redirect: 'manual'` so Phase 32 counts hops itself (not fetch)
- *   - GET branch sets `Range: bytes=0-1023` so 405-fallback caps the
- *     download to 1 KiB
+ *   - GET branch sets a `Range` header so the download is capped. The
+ *     default `rangeBytes` (1024) preserves the Phase 32 405-fallback's
+ *     1 KiB cap; Phase 43's soft-404 body GET passes `SOFT404_BODY_CAP_BYTES`
+ *     (16 KiB) so the heuristic sees enough of the `<head>`/`<title>`.
  */
-async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response | null> {
+async function fetchOnce(
+  url: string,
+  method: 'HEAD' | 'GET',
+  rangeBytes = 1024,
+): Promise<Response | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = { 'User-Agent': PROBE_UA };
-    if (method === 'GET') headers.Range = 'bytes=0-1023';
+    if (method === 'GET') headers.Range = `bytes=0-${rangeBytes - 1}`;
     return await fetch(url, {
       method,
       headers,
@@ -262,12 +469,130 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 }
 
 /**
+ * Phase 43 Plan 02 Task 2 — read at most `maxBytes` of a Response body via a
+ * manual `getReader()` loop, then abort the rest.
+ *
+ * DoS guard (T-43-04): some CDNs (Cloudflare, Fastly, many WordPress hosts)
+ * ignore `Range` on `text/html` and stream the full body with `200 OK` (not
+ * `206`). The manual loop breaks once `total >= maxBytes` and the `finally`
+ * `reader.cancel()` releases the connection — so a multi-MB article never gets
+ * fully buffered.
+ *
+ * Charset: decode with `TextDecoder('utf-8', { fatal: false })` so a multibyte
+ * character split across the cap boundary does NOT throw — the not-found
+ * markers are ASCII, so a garbled partial tail is harmless. Exotic
+ * `Content-Type; charset=` values are deliberately NOT honored (precision-first
+ * posture, D-03 — a mis-decoded body simply yields no marker → `live`).
+ */
+async function readCappedBody(res: Response, maxBytes: number): Promise<string> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        total += value.byteLength;
+      }
+    }
+  } finally {
+    // Releases the connection for servers that ignore `Range` and keep
+    // streaming. Swallow any cancel rejection — best-effort cleanup.
+    await reader.cancel().catch(() => {});
+  }
+  // Concatenate the accumulated chunks, capped to maxBytes.
+  const merged = new Uint8Array(total);
+  let pos = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, pos);
+    pos += chunk.byteLength;
+  }
+  return new TextDecoder('utf-8', { fatal: false }).decode(merged.subarray(0, maxBytes));
+}
+
+/**
+ * Phase 43 Plan 02 Task 2 (GHOST-06) — soft-404 body heuristic on the 200
+ * branch. Issues a 16 KiB capped GET on the ALREADY-SSRF-VETTED `finalUrl`
+ * (the redirect-followed `currentUrl` — never a fresh fetch to an unvetted
+ * host; T-43-03), reads the body via `readCappedBody` (DoS-capped; T-43-04),
+ * and feeds the decoded head into the pure `classifySoft404` helper.
+ *
+ * Degrade-open (D-22 / D-03): on ANY failure — the GET returns null (fetch
+ * threw), the body read throws, the body is empty/unreadable — the verdict is
+ * `live` with `evidence: null`. A body-read failure is treated as live, never
+ * poisons the sweep, and never flips live content to dead.
+ *
+ * D-21 — the extra GET respects the per-host 1-req/s throttle map via
+ * `waitForHostSlot` so the polite-citizen contract holds (it is the only added
+ * outbound traffic this phase introduces).
+ */
+async function classifyTwoHundred(
+  finalUrl: string,
+  originalUrl: string,
+  httpStatus: number,
+): Promise<ProbeResult> {
+  const liveVerdict: ProbeResult = {
+    status: 'live',
+    httpStatus,
+    finalUrl,
+    evidence: null,
+  };
+  try {
+    // D-21 — honor the per-host throttle for the follow-up GET (same host as
+    // the just-completed HEAD). First-touch hosts incur ~no delay.
+    try {
+      await waitForHostSlot(new URL(finalUrl).hostname);
+    } catch {
+      // Unparseable finalUrl host → skip throttle, degrade-open below.
+    }
+    // SSRF (T-43-03): the GET targets the already-vetted finalUrl ONLY.
+    const res = await fetchOnce(finalUrl, 'GET', SOFT404_BODY_CAP_BYTES);
+    if (res === null) {
+      // fetch threw on the body GET — degrade-open to live.
+      return liveVerdict;
+    }
+    // CR-02 (GHOST-09 false-positive re-import guard) — the HEAD said 200, but
+    // the follow-up body GET can land on a DIFFERENT response: method-asymmetric
+    // bot-blocking CDNs pass HEAD then challenge/deny GET (403/429), and
+    // `redirect: 'manual'` means a GET answered with 3xx carries an empty body.
+    // Both produce a tiny/empty body that signal (c) near-empty would condemn —
+    // flipping a LIVE article to `soft-404` (cron-prunable), exactly the
+    // class GHOST-09's 403 demotion exists to prevent. Precision-first
+    // (D-03): only run the heuristic on a 2xx body GET; any non-2xx is
+    // no-trustworthy-signal → degrade-open to live.
+    if (res.status < 200 || res.status >= 300) {
+      log.info(
+        { finalUrl, getStatus: res.status, headStatus: httpStatus },
+        'soft-404 body GET non-2xx where HEAD was 200 — no body signal, returning live',
+      );
+      // Release the connection on the discarded body (Range-ignoring servers).
+      await res.body?.cancel().catch(() => {});
+      return liveVerdict;
+    }
+    const body = await readCappedBody(res, SOFT404_BODY_CAP_BYTES);
+    const verdict = classifySoft404(body, finalUrl, originalUrl);
+    if (verdict.soft404) {
+      return { status: 'soft-404', httpStatus, finalUrl, evidence: verdict.evidence };
+    }
+    return liveVerdict;
+  } catch (err) {
+    // D-22 — any body-read / classification throw degrades open to live.
+    log.warn({ err, finalUrl }, 'soft-404 body classification failed (degrade-open to live)');
+    return liveVerdict;
+  }
+}
+
+/**
  * D-16 / D-17 / D-18 / D-21 — single-URL liveness probe.
  *
  * Method sequence:
- *   1. HEAD with `redirect: 'manual'`. 200 → live; 404 → 404; 403 → 403.
- *   2. On 405, GET with `Range: bytes=0-1023`. 200 → live; 4xx/5xx → same
- *      taxonomy.
+ *   1. HEAD with `redirect: 'manual'`. 200 → soft-404 heuristic; 404 → 404;
+ *      403 → 403.
+ *   2. On 405, GET with `Range: bytes=0-1023`. 200 → soft-404 heuristic;
+ *      4xx/5xx → same taxonomy.
  *   3. On 3xx with a `location` header, follow up to MAX_REDIRECTS (3)
  *      hops, counting hops manually. 4th 3xx → `unknown`.
  *   4. fetch throws (DNS / ECONNREFUSED / abort) → `dead-host`.
@@ -284,11 +609,16 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
     parsed = new URL(rawUrl);
   } catch {
     // Malformed URL — treat as dead-host (no DNS resolution possible).
-    return { status: 'dead-host', httpStatus: null, finalUrl: rawUrl };
+    return {
+      status: 'dead-host',
+      httpStatus: null,
+      finalUrl: rawUrl,
+      evidence: 'dead-host: fetch failed',
+    };
   }
   if (isPrivateHost(parsed.hostname)) {
     log.warn({ rawUrl }, 'probe target rejected by SSRF guard');
-    return { status: 'unknown', httpStatus: null, finalUrl: rawUrl };
+    return { status: 'unknown', httpStatus: null, finalUrl: rawUrl, evidence: null };
   }
 
   let currentUrl = rawUrl;
@@ -300,7 +630,12 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
 
       // fetch threw or aborted (network/DNS/timeout) → dead-host.
       if (res === null) {
-        return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+        return {
+          status: 'dead-host',
+          httpStatus: null,
+          finalUrl: currentUrl,
+          evidence: 'dead-host: fetch failed',
+        };
       }
 
       // 405 Method Not Allowed — fall back to GET (D-16). CDN-fronted
@@ -308,41 +643,46 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
       if (res.status === 405) {
         res = await fetchOnce(currentUrl, 'GET');
         if (res === null) {
-          return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+          return {
+            status: 'dead-host',
+            httpStatus: null,
+            finalUrl: currentUrl,
+            evidence: 'dead-host: fetch failed',
+          };
         }
       }
 
       const code = res.status;
 
-      // 2xx → live.
+      // 2xx → run the soft-404 body heuristic (Phase 43 Plan 02, GHOST-06).
       if (code >= 200 && code < 300) {
-        return { status: 'live', httpStatus: code, finalUrl: currentUrl };
+        return await classifyTwoHundred(currentUrl, rawUrl, code);
       }
 
       // Specific 4xx codes that count toward the dashboard dead surface.
       if (code === 404) {
-        return { status: '404', httpStatus: 404, finalUrl: currentUrl };
+        return { status: '404', httpStatus: 404, finalUrl: currentUrl, evidence: 'http-404' };
       }
       if (code === 403) {
-        return { status: '403', httpStatus: 403, finalUrl: currentUrl };
+        return { status: '403', httpStatus: 403, finalUrl: currentUrl, evidence: 'http-403' };
       }
 
       // 3xx — follow up to MAX_REDIRECTS hops. On the (MAX_REDIRECTS+1)th
       // 3xx (i.e. hop === MAX_REDIRECTS at this branch), return unknown.
       if (code >= 300 && code < 400) {
         if (hop >= MAX_REDIRECTS) {
-          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
         }
         const location = res.headers.get('location');
         if (!location) {
           // 3xx without Location — protocol violation. Bail with unknown.
-          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
         }
         // Resolve relative redirects against the current URL.
         try {
           currentUrl = new URL(location, currentUrl).toString();
         } catch {
-          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
         }
         // Re-run SSRF guard for each redirect target (defense-in-depth —
         // a hostile redirect can point at a private host).
@@ -352,26 +692,31 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
               { rawUrl, redirectTarget: currentUrl },
               'redirect target rejected by SSRF guard',
             );
-            return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+            return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
           }
         } catch {
-          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+          return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
         }
         continue; // next hop
       }
 
       // Any other code (5xx, 451, 410, 4xx not in {403,404,405}) → unknown.
-      return { status: 'unknown', httpStatus: code, finalUrl: currentUrl };
+      return { status: 'unknown', httpStatus: code, finalUrl: currentUrl, evidence: null };
     }
 
     // Loop exhausted without return (shouldn't be reachable; MAX_REDIRECTS+1
     // iterations always terminate inside the loop). Treat as unknown.
-    return { status: 'unknown', httpStatus: null, finalUrl: currentUrl };
+    return { status: 'unknown', httpStatus: null, finalUrl: currentUrl, evidence: null };
   } catch (err) {
     // Catch-all guard — any unexpected throw collapses to dead-host so
     // the sweep keeps moving.
     log.warn({ err, rawUrl }, 'probeUrl unexpected throw');
-    return { status: 'dead-host', httpStatus: null, finalUrl: currentUrl };
+    return {
+      status: 'dead-host',
+      httpStatus: null,
+      finalUrl: currentUrl,
+      evidence: 'dead-host: fetch failed',
+    };
   }
 }
 
@@ -440,7 +785,13 @@ function pruneStaleHostSlots(): void {
  * sidecar maintenance share one truth source).
  */
 export function isTerminalDead(status: UrlLivenessStatus): boolean {
-  return status === '404' || status === '403' || status === 'dead-host';
+  // D-04/D-08 — `soft-404` joins the terminal-dead set (counts toward the
+  // dashboard dead-URL surface + prune-eligible). `no-url` is explicitly
+  // NOT terminal-dead (D-08 — an event with no primary URL is not a dead
+  // link). `403` stays terminal-dead here; the GHOST-09 cron-only 403
+  // demotion is a prune-filter-local change (Plan 04), NOT an
+  // isTerminalDead change (RESEARCH anti-pattern).
+  return status === '404' || status === '403' || status === 'dead-host' || status === 'soft-404';
 }
 
 /**
@@ -462,13 +813,14 @@ const LIVENESS_READ_LOGICAL_TTL_MS = 999_999_999;
  * and maintains the sidecar `events:url-liveness-count` integer on
  * live↔terminal-dead transitions (Pitfall 3).
  *
- * attemptCount semantics (RESEARCH A2):
- *   prior=null,             next ∈ {live, unknown}     → attemptCount=0
- *   prior=null,             next ∈ {terminal-dead}     → attemptCount=1
- *   prior=terminal-dead,    next ∈ {terminal-dead}     → attemptCount=prior+1
- *   prior=terminal-dead,    next ∈ {live, unknown}     → attemptCount=0
- *   prior ∈ {live, unknown}, next=anything             → attemptCount=
- *                                                        (next dead ? 1 : 0)
+ * attemptCount semantics (Phase 32 RESEARCH A2 origin; Phase 43 D-10
+ * splits the reset rule by status — `live` resets to 0, `unknown`
+ * PRESERVES the prior count, `no-url` is 0, dead→dead increments):
+ *   next=live                              → attemptCount=0 (full reset)
+ *   next=unknown                           → attemptCount=prior?.attemptCount ?? 0 (PRESERVE)
+ *   next=no-url                            → attemptCount=0
+ *   prior=terminal-dead, next=terminal-dead → attemptCount=prior+1 (monotonic)
+ *   prior≠terminal-dead, next=terminal-dead → attemptCount=1 (start of run)
  *
  * Sidecar INCR fires only on the prior→next transition NOT-DEAD → DEAD.
  * DECR fires only on DEAD → NOT-DEAD. Same-state transitions (dead→dead,
@@ -483,20 +835,36 @@ const LIVENESS_READ_LOGICAL_TTL_MS = 999_999_999;
  */
 async function persistLiveness(
   eventId: string,
-  urlProbed: string,
+  urlProbed: string | null,
   probeResult: ProbeResult,
 ): Promise<void> {
   const key = `${URL_LIVENESS_KEY_PREFIX}${eventId}`;
   const priorEntry = await cacheGetSafe<UrlLiveness>(key, LIVENESS_READ_LOGICAL_TTL_MS);
   const prior: UrlLiveness | null = priorEntry?.data ?? null;
 
-  // D-12 / RESEARCH A2 — monotonic-with-reset-on-live-or-unknown.
+  // Phase 43 D-10 — split attemptCount derivation (replaces the Phase 32
+  // reset-on-any-non-dead rule). The reset rule is now status-specific:
+  //   - `live`    → 0  (a recovered link fully resets; a blip is forgiven).
+  //   - `unknown` → PRESERVE prior?.attemptCount ?? 0  (a transient failure
+  //                 must NOT reset the consecutive-dead run a flaky host
+  //                 accumulates — the dead→unknown→dead repeat offender then
+  //                 eventually crosses the >=3 cron prune gate).
+  //   - `no-url`  → 0  (no probe issued; not a dead-link signal).
+  //   - dead→dead → prior+1 (monotonic increment).
+  //   - not-dead→dead → 1 (first write of a dead run).
+  // attemptCount (consecutive-dead history) and the sidecar dead-count
+  // (current terminal-dead membership) are INDEPENDENT axes: the sidecar
+  // DECR below still fires on dead→unknown even though attemptCount is
+  // preserved (the event has exited terminal-dead membership).
   const nextDead = isTerminalDead(probeResult.status);
   const priorDead = prior !== null && isTerminalDead(prior.status);
   let attemptCount: number;
-  if (!nextDead) {
-    // Any live / unknown transition resets the counter (the "≥3
-    // consecutive ticks" rule needs an unbroken run).
+  if (probeResult.status === 'live') {
+    attemptCount = 0;
+  } else if (probeResult.status === 'unknown') {
+    // D-10 — PRESERVE the prior count (no increment, no reset).
+    attemptCount = prior?.attemptCount ?? 0;
+  } else if (probeResult.status === 'no-url') {
     attemptCount = 0;
   } else if (priorDead) {
     // dead → dead: monotonic increment.
@@ -512,6 +880,17 @@ async function persistLiveness(
     attemptCount,
     lastUrlProbed: urlProbed,
     lastHttpStatus: probeResult.httpStatus,
+    // D-16/D-17 — writer always carries the probe's evidence string
+    // (null for status-only verdicts). WR-01 — truncate to 200 chars at this
+    // single writer choke point BEFORE the `.strict()` parse below. The
+    // redirect-to-home evidence embeds two verbatim pathnames; percent-encoded
+    // Persian/Arabic news slugs (this corpus is Middle-East-outlet dominated)
+    // routinely exceed the schema's `z.string().max(200)`, and an over-length
+    // string makes `UrlLivenessSchema.parse` THROW — which would silently drop
+    // this event's liveness write every sweep (it stays Tier A forever and can
+    // never accumulate attemptCount≥3 to be pruned). Truncating here guarantees
+    // persistLiveness never throws on a long evidence string.
+    evidence: probeResult.evidence === null ? null : probeResult.evidence.slice(0, 200),
   };
 
   // Paranoid contract guard — throws on schema drift so the failing
@@ -524,6 +903,19 @@ async function persistLiveness(
   // Wrap raw redis.incr/decr in try/catch (cacheSetSafe shape doesn't
   // fit integer counters; Pitfall 6 note says raw incr/decr must
   // degrade-open).
+  //
+  // WR-03 (bounded residual drift) — the INCR fires on prior-not-dead →
+  // next-dead. The WR-02 TTL fix (unknown + terminal-dead now 24h hard) keeps
+  // `prior` non-null across the single daily sweep gap, so a still-dead entry
+  // re-probed the next day reads `priorDead = true` and does NOT re-INCR. A
+  // residual drift window remains only if a terminal-dead key outlives its 24h
+  // hard TTL between two sweeps that are themselves >24h apart (e.g. a skipped
+  // cron day): the key expires, `prior = null`, and the next dead re-probe
+  // re-INCRs an already-counted event. This is bounded (at most +1 per such
+  // skipped-day-then-re-probe per event) and self-heals downward via the
+  // floor-at-0 DECR underflow guard below + the prune-time DECRBY; the
+  // dashboard read also floors at 0 (`Math.max(0, …)` in operator-status). No
+  // mechanism change beyond the TTL fix is warranted given the daily cadence.
   try {
     if (!priorDead && nextDead) {
       await redis.incr(URL_LIVENESS_COUNT_KEY);
@@ -574,32 +966,56 @@ const V3_READ_LOGICAL_TTL_MS = 999_999_999;
  *           `lastProbedAt` (oldest first — re-probe stale verdicts).
  *           ISO-8601 byte-lex sort equals chronological sort.
  *
- * Entities whose `data.source` is empty / missing / non-string are
- * silently dropped (no probe target — the dashboard count remains 0 for
- * those events). Logged at debug rather than throw so a malformed event
- * never poisons the candidate list.
+ * Phase 43 GHOST-07 (D-06/D-07/D-08/D-09) — entities whose `data.source`
+ * is empty / missing / non-string are NO LONGER silently dropped. Each
+ * source-less event now gets an explicit `no-url` liveness write (via
+ * `persistLiveness`, NO fetch issued) so prune can SEE the event and
+ * explicitly skip it (D-08 — `no-url` is NOT terminal-dead, so pruning an
+ * event merely for lacking a URL never happens). The count of such events
+ * is returned as `classifiedNoUrl` and surfaced in the cron post-step log
+ * line (D-09 — full coverage accounting). A `no-url` write does NOT INCR
+ * the sidecar dead-count (no-url is not-dead; first write of a fresh
+ * source-less event has `priorDead === false`).
  *
  * Reads `events:llm:v3` once and one `events:url-liveness:{eventId}`
- * lookup per candidate. Plan 32-03 will call this immediately before
+ * lookup per candidate. Plan 32-03 calls this immediately before
  * `runProbeSweep` inside the cron handler.
  */
-export async function buildProbeCandidates(): Promise<Array<{ eventId: string; url: string }>> {
+export async function buildProbeCandidates(): Promise<{
+  candidates: Array<{ eventId: string; url: string }>;
+  classifiedNoUrl: number;
+}> {
   const v3 = await cacheGetSafe<ConflictEventEntityForProbe[]>(
     'events:llm:v3',
     V3_READ_LOGICAL_TTL_MS,
   );
   const entities = v3?.data ?? [];
   if (!Array.isArray(entities) || entities.length === 0) {
-    return [];
+    return { candidates: [], classifiedNoUrl: 0 };
   }
 
   const tierA: Array<{ eventId: string; url: string }> = [];
   const tierB: Array<{ eventId: string; url: string; lastProbedAt: string }> = [];
+  let classifiedNoUrl = 0;
 
   for (const entity of entities) {
     const url = entity?.data?.source;
     if (!url || typeof url !== 'string' || url.length === 0) {
-      // No primary URL — nothing to probe. Skip silently.
+      // GHOST-07 (D-08/D-16) — source-less event: write an explicit `no-url`
+      // liveness entry (no HTTP issued) instead of silently dropping it, so
+      // prune can evaluate-and-skip it. Degrade-open — a write throw for one
+      // event must never poison the candidate build.
+      classifiedNoUrl++;
+      try {
+        await persistLiveness(entity.id, null, {
+          status: 'no-url',
+          httpStatus: null,
+          finalUrl: '',
+          evidence: 'no-url: event has no source URL',
+        });
+      } catch (err) {
+        log.warn({ err, eventId: entity?.id }, 'no-url liveness write failed (degrade-open)');
+      }
       continue;
     }
     const prior = await cacheGetSafe<UrlLiveness>(
@@ -620,7 +1036,10 @@ export async function buildProbeCandidates(): Promise<Array<{ eventId: string; u
   // ISO-8601 byte-lex sort == chronological sort (well-known JS idiom).
   tierB.sort((a, b) => a.lastProbedAt.localeCompare(b.lastProbedAt));
 
-  return [...tierA, ...tierB.map(({ eventId, url }) => ({ eventId, url }))];
+  return {
+    candidates: [...tierA, ...tierB.map(({ eventId, url }) => ({ eventId, url }))],
+    classifiedNoUrl,
+  };
 }
 
 // ============================================================================
@@ -810,8 +1229,21 @@ export async function pruneDeadUrlEvents(opts: {
     const entry = cached?.data ?? null;
     if (!entry) continue;
 
-    // D-07 — only terminal-dead statuses are ever pruned.
+    // D-07 — only terminal-dead statuses are ever pruned. This shared
+    // `isTerminalDead` predicate is INTENTIONALLY left unchanged (RESEARCH
+    // anti-pattern): 403 stays terminal-dead so the dashboard count, the
+    // deadUrlSample drill-down, and the manual operator prune all keep
+    // treating it as dead. Only the cron auto-prune filter below demotes it.
     if (!isTerminalDead(entry.status)) continue;
+
+    // Phase 43 D-14/D-15 (DEMOTE) — cron-only 403 exclusion. Evidence:
+    // 43-VERIFICATION.md GHOST-09 sample re-probed 20 of 20 production
+    // 403-status URLs and found all 20 serve a LIVE article under a browser
+    // UA (bot-blocking CDN false positives confirmed). The cron auto-prune
+    // skips 403 regardless of attemptCount; the manual prune (operator
+    // judgment) still prunes it. This is prune-filter-local — NOT an
+    // isTerminalDead change.
+    if (opts.trigger === 'cron' && entry.status === '403') continue;
 
     // D-12 cron gate — manual trigger bypasses, cron requires ≥3 ticks.
     if (opts.trigger === 'cron' && entry.attemptCount < 3) continue;

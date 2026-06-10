@@ -149,6 +149,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'live',
       httpStatus: 200,
       finalUrl: 'https://example.com/a',
+      evidence: null,
     });
 
     expect(cacheSetSafeMock).toHaveBeenCalledTimes(1);
@@ -167,6 +168,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: '404',
       httpStatus: 404,
       finalUrl: 'https://example.com/missing',
+      evidence: 'http-404',
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
@@ -183,6 +185,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         attemptCount: 1,
         lastUrlProbed: 'https://example.com/missing',
         lastHttpStatus: 404,
+        evidence: 'http-404',
       }),
     );
 
@@ -190,6 +193,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'dead-host',
       httpStatus: null,
       finalUrl: 'https://example.com/missing',
+      evidence: 'dead-host: fetch failed',
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
@@ -207,6 +211,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         attemptCount: 5,
         lastUrlProbed: 'https://example.com/x',
         lastHttpStatus: 404,
+        evidence: 'http-404',
       }),
     );
     decrMock.mockResolvedValue(0);
@@ -215,6 +220,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'live',
       httpStatus: 200,
       finalUrl: 'https://example.com/x',
+      evidence: null,
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
@@ -223,7 +229,12 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
     expect(decrMock).toHaveBeenCalledWith(URL_LIVENESS_COUNT_KEY);
   });
 
-  it('dead→unknown resets attemptCount to 0 and fires DECR', async () => {
+  // Phase 43 D-10 (FLIPPED from the Phase 32 reset-on-non-dead rule):
+  // dead→unknown now PRESERVES the prior attemptCount (a transient blip
+  // must not reset the consecutive-dead run a flaky host accumulates),
+  // WHILE the sidecar DECR still fires (the event exits terminal-dead
+  // membership — attemptCount and sidecar are independent axes).
+  it('dead→unknown PRESERVES attemptCount and fires DECR (D-10)', async () => {
     cacheGetSafeMock.mockResolvedValueOnce(
       cacheHit({
         status: '403',
@@ -231,6 +242,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         attemptCount: 3,
         lastUrlProbed: 'https://example.com/y',
         lastHttpStatus: 403,
+        evidence: 'http-403',
       }),
     );
     decrMock.mockResolvedValue(0);
@@ -239,11 +251,144 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'unknown',
       httpStatus: 503,
       finalUrl: 'https://example.com/y',
+      evidence: null,
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
-    expect((value as { attemptCount: number }).attemptCount).toBe(0);
+    // PRESERVED at the prior 3 (NOT reset to 0).
+    expect((value as { attemptCount: number }).attemptCount).toBe(3);
     expect(decrMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Phase 43 D-10 — the flaky-host accumulation fix. A host that goes
+  // dead with `unknown` blips in between must NOT lose its consecutive-dead
+  // history: `unknown` PRESERVES the count rather than resetting it to 0,
+  // so the gate-read value (cronPrune reads attemptCount) survives the blip
+  // and a genuine repeat offender's dead-run accumulates past the >=3 gate.
+  // (Canonical derivation, RESEARCH §"attemptCount derivation under the NEW
+  // D-10 rule" [VERIFIED]: live→0, unknown→preserve, dead→dead→+1,
+  // not-dead→dead→1.)
+  it('dead-run with an unknown blip preserves history and accumulates past >=3 (D-10)', async () => {
+    decrMock.mockResolvedValue(0);
+    incrMock.mockResolvedValue(1);
+
+    // Tick 1: not-dead→dead → attemptCount=1
+    cacheGetSafeMock.mockResolvedValueOnce(null);
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: '404',
+      httpStatus: 404,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: 'http-404',
+    });
+    let value = cacheSetSafeMock.mock.calls[0]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBe(1);
+
+    // Tick 2: dead→dead → 2 (monotonic).
+    cacheGetSafeMock.mockResolvedValueOnce(
+      cacheHit({
+        status: '404',
+        lastProbedAt: '2026-05-21T00:00:01.000Z',
+        attemptCount: 1,
+        lastUrlProbed: 'https://flaky.example.com/',
+        lastHttpStatus: 404,
+        evidence: 'http-404',
+      }),
+    );
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: '404',
+      httpStatus: 404,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: 'http-404',
+    });
+    value = cacheSetSafeMock.mock.calls[1]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBe(2);
+
+    // Tick 3: dead→unknown → PRESERVE 2 (the blip; the OLD rule reset to 0
+    // here — that was the flaky-host evasion bug). DECR still fires.
+    cacheGetSafeMock.mockResolvedValueOnce(
+      cacheHit({
+        status: '404',
+        lastProbedAt: '2026-05-21T00:00:02.000Z',
+        attemptCount: 2,
+        lastUrlProbed: 'https://flaky.example.com/',
+        lastHttpStatus: 404,
+        evidence: 'http-404',
+      }),
+    );
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: 'unknown',
+      httpStatus: 503,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: null,
+    });
+    value = cacheSetSafeMock.mock.calls[2]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBe(2);
+
+    // Tick 4: dead→dead → 3 (crosses the >=3 cron prune gate). The prior
+    // dead entry that re-asserts the run carries the preserved 2 forward.
+    cacheGetSafeMock.mockResolvedValueOnce(
+      cacheHit({
+        status: '404',
+        lastProbedAt: '2026-05-21T00:00:03.000Z',
+        attemptCount: 2,
+        lastUrlProbed: 'https://flaky.example.com/',
+        lastHttpStatus: 404,
+        evidence: 'http-404',
+      }),
+    );
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: '404',
+      httpStatus: 404,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: 'http-404',
+    });
+    value = cacheSetSafeMock.mock.calls[3]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBeGreaterThanOrEqual(3);
+  });
+
+  it('every written entry carries the ProbeResult evidence string', async () => {
+    cacheGetSafeMock.mockResolvedValueOnce(null);
+    incrMock.mockResolvedValue(1);
+
+    await __test__.persistLiveness('e-evi', 'https://example.com/missing', {
+      status: '404',
+      httpStatus: 404,
+      finalUrl: 'https://example.com/missing',
+      evidence: 'http-404',
+    });
+
+    const [, value] = cacheSetSafeMock.mock.calls[0]!;
+    expect((value as { evidence: string | null }).evidence).toBe('http-404');
+  });
+
+  // WR-01 — a long redirect-to-home evidence string (percent-encoded
+  // Persian/Arabic slugs routinely exceed 200 chars) must NOT make the
+  // `.strict()` schema parse throw. The writer truncates evidence to 200
+  // chars before parsing, so persistLiveness resolves and the entry persists.
+  it('truncates evidence >200 chars and persists without throwing (WR-01)', async () => {
+    cacheGetSafeMock.mockResolvedValueOnce(null);
+    incrMock.mockResolvedValue(1);
+
+    const longEvidence = `redirect-to-home: /${'a'.repeat(300)} → /`;
+    expect(longEvidence.length).toBeGreaterThan(200);
+
+    await expect(
+      __test__.persistLiveness('e-long-evi', 'https://example.com/x', {
+        status: 'soft-404',
+        httpStatus: 200,
+        finalUrl: 'https://example.com/',
+        evidence: longEvidence,
+      }),
+    ).resolves.toBeUndefined();
+
+    // The entry persisted (the parse did not throw) and the evidence is
+    // truncated to exactly 200 chars.
+    expect(cacheSetSafeMock).toHaveBeenCalledTimes(1);
+    const [, value] = cacheSetSafeMock.mock.calls[0]!;
+    const evidence = (value as { evidence: string | null }).evidence;
+    expect(evidence).not.toBeNull();
+    expect(evidence!.length).toBe(200);
+    expect(evidence).toBe(longEvidence.slice(0, 200));
   });
 
   it('DECR underflow floors at 0 via redis.set', async () => {
@@ -254,6 +399,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         attemptCount: 1,
         lastUrlProbed: 'https://example.com/z',
         lastHttpStatus: 404,
+        evidence: 'http-404',
       }),
     );
     decrMock.mockResolvedValue(-1);
@@ -263,6 +409,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'live',
       httpStatus: 200,
       finalUrl: 'https://example.com/z',
+      evidence: null,
     });
 
     expect(setMock).toHaveBeenCalledWith(URL_LIVENESS_COUNT_KEY, 0);
@@ -278,6 +425,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         status: '404',
         httpStatus: 404,
         finalUrl: 'https://example.com/dead',
+        evidence: 'http-404',
       }),
     ).resolves.toBeUndefined();
 
@@ -448,7 +596,7 @@ describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
       return null;
     });
 
-    const candidates = await urlLivenessModule.buildProbeCandidates();
+    const { candidates } = await urlLivenessModule.buildProbeCandidates();
     expect(candidates).toHaveLength(3);
     // 'c' (never-probed) must be first.
     expect(candidates[0]?.eventId).toBe('c');
@@ -477,11 +625,11 @@ describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
       return null;
     });
 
-    const candidates = await urlLivenessModule.buildProbeCandidates();
+    const { candidates } = await urlLivenessModule.buildProbeCandidates();
     expect(candidates.map((c) => c.eventId)).toEqual(['A', 'B', 'C']);
   });
 
-  it('drops entities with empty / missing data.source', async () => {
+  it('excludes source-less entities from the candidate array (GHOST-07)', async () => {
     cacheGetSafeMock.mockImplementation(async (key: string) => {
       if (key === 'events:llm:v3') {
         return cacheHit([
@@ -493,25 +641,84 @@ describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
       }
       return null;
     });
+    incrMock.mockResolvedValue(1);
 
-    const candidates = await urlLivenessModule.buildProbeCandidates();
+    const { candidates } = await urlLivenessModule.buildProbeCandidates();
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.eventId).toBe('ok');
   });
 
-  it('cache miss on events:llm:v3 returns []', async () => {
-    cacheGetSafeMock.mockResolvedValueOnce(null);
-    const candidates = await urlLivenessModule.buildProbeCandidates();
-    expect(candidates).toEqual([]);
+  it('writes an explicit no-url liveness entry per source-less event, no fetch (GHOST-07)', async () => {
+    cacheGetSafeMock.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') {
+        return cacheHit([
+          { id: 'empty', data: { source: '' } },
+          { id: 'missing', data: {} },
+          { id: 'ok', data: { source: 'https://ok.example.com/' } },
+        ]);
+      }
+      return null;
+    });
+    incrMock.mockResolvedValue(1);
+
+    const result = await urlLivenessModule.buildProbeCandidates();
+
+    // classifiedNoUrl counts the two source-less events.
+    expect(result.classifiedNoUrl).toBe(2);
+
+    // No HTTP issued by the candidate builder for source-less events.
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // A no-url persistLiveness write fired per source-less event (cacheSetSafe
+    // is the persistLiveness sink). 'ok' is NOT written (it's a probe target).
+    const noUrlWrites = cacheSetSafeMock.mock.calls.filter(
+      ([, value]) => (value as { status?: string }).status === 'no-url',
+    );
+    expect(noUrlWrites).toHaveLength(2);
+    const [, entry] = noUrlWrites[0]!;
+    const v = entry as {
+      status: string;
+      lastUrlProbed: string | null;
+      lastHttpStatus: number | null;
+      attemptCount: number;
+      evidence: string | null;
+    };
+    expect(v.status).toBe('no-url');
+    expect(v.lastUrlProbed).toBeNull();
+    expect(v.lastHttpStatus).toBeNull();
+    expect(v.attemptCount).toBe(0);
+    expect(v.evidence).toBe('no-url: event has no source URL');
   });
 
-  it('empty events array returns []', async () => {
+  it('a no-url write does NOT INCR the sidecar dead-count (GHOST-07)', async () => {
+    cacheGetSafeMock.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') {
+        return cacheHit([{ id: 'nourl', data: {} }]);
+      }
+      return null;
+    });
+    incrMock.mockResolvedValue(1);
+
+    await urlLivenessModule.buildProbeCandidates();
+
+    expect(incrMock).not.toHaveBeenCalled();
+  });
+
+  it('cache miss on events:llm:v3 returns empty candidates', async () => {
+    cacheGetSafeMock.mockResolvedValueOnce(null);
+    const { candidates, classifiedNoUrl } = await urlLivenessModule.buildProbeCandidates();
+    expect(candidates).toEqual([]);
+    expect(classifiedNoUrl).toBe(0);
+  });
+
+  it('empty events array returns empty candidates', async () => {
     cacheGetSafeMock.mockResolvedValueOnce({
       data: [],
       stale: false,
       lastFresh: Date.now(),
     });
-    const candidates = await urlLivenessModule.buildProbeCandidates();
+    const { candidates, classifiedNoUrl } = await urlLivenessModule.buildProbeCandidates();
     expect(candidates).toEqual([]);
+    expect(classifiedNoUrl).toBe(0);
   });
 });
