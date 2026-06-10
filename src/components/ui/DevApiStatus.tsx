@@ -663,6 +663,45 @@ export function DevApiStatus() {
   // continues to surface critical-tier outages to anonymous prod users.
   const showApiHealthTab = shouldRenderDashboard();
 
+  // Phase 44 (EVENTS-TAB-02, D-10) — prune data for the events-subtab
+  // DeadLinkBucketsBlock. The canonical operator-status fetch lives inside the
+  // sibling `DevApiStatusAllApisTab` (API-Health tab), which only mounts when
+  // that tab is active. Because the API-Health and events tabpanels are
+  // mutually-exclusive `activeTab` branches, only one fetcher is ever mounted
+  // at a time — so this events-tab-scoped fetch never runs CONCURRENTLY with
+  // the API-Health one (honoring D-10's no-double-fetch intent). It extracts
+  // ONLY `prune` (threaded down to EventsFiltersSectionV3), degrades open on
+  // any failure (network / non-200 / missing Bearer → null → block self-hides),
+  // and only runs while the events tab is the active, Bearer-unlocked surface.
+  const [eventsPrune, setEventsPrune] = useState<PruneSummary | null>(null);
+  useEffect(() => {
+    if (activeTab !== 'events' || !showEventsTab) {
+      setEventsPrune(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchPrune = async (): Promise<void> => {
+      try {
+        const res = await fetch('/api/operator-status', {
+          headers: { ...dashboardAuthHeaders() },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { prune?: PruneSummary | null };
+        if (!cancelled) setEventsPrune(data?.prune ?? null);
+      } catch {
+        // degrade-open — block self-hides
+      }
+    };
+    void fetchPrune();
+    const id = setInterval(() => {
+      void fetchPrune();
+    }, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [activeTab, showEventsTab]);
+
   // Phase 28.2.5 D-08 — `aggregateHealth` / `healthLoading` / `healthError`
   // and `hasCriticalUnhealthy` are now declared earlier in the component
   // body (just above the `rows[]` array) so the Precip-row IIFE inside
@@ -916,7 +955,7 @@ export function DevApiStatus() {
               {llmStatus?.schemaVersion === 'v2' ? (
                 <EventsFiltersSection llmStatus={llmStatus} />
               ) : (
-                <EventsFiltersSectionV3 llmStatus={llmStatus} />
+                <EventsFiltersSectionV3 llmStatus={llmStatus} prune={eventsPrune} />
               )}
             </div>
           )}
@@ -3400,6 +3439,132 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
 }
 
 /**
+ * Phase 44 (D-09/D-10) — module-level mirror of the local `OperatorStatus.prune`
+ * shape (which lives inside the DevApiStatus component closure and is therefore
+ * unreachable from module-scope block components). Structurally compatible with
+ * the local interface, so threading `opStatus?.prune ?? null` type-checks. All
+ * fields except the two authoritative totals are optional forward-compat
+ * (Phase 32 D-10): older servers pre-dating the Plan 01 D-01 extension omit
+ * `countsByStatus` / `evidence` / `lastProbedAt` / `attemptCount`.
+ */
+type PruneSummary = {
+  deadUrlCount: number;
+  last24hPrunes: number;
+  countsByStatus?: Record<string, number>;
+  deadUrlSample: Array<{
+    eventId: string;
+    status: 'dead-host' | '403' | '404' | 'soft-404';
+    url: string;
+    evidence?: string | null;
+    lastProbedAt?: string;
+    attemptCount?: number;
+  }>;
+};
+
+/**
+ * Phase 44 (D-09 / EVENTS-TAB-02) — per-liveness-status dead-link state for the
+ * events subtab. Follows the verbatim DlqBlock/SuspectBlock block idiom (D-13):
+ * `text-[9px]`, `font-bold uppercase tracking-wider text-white/40` header,
+ * `tabular-nums`, `max-h-32 overflow-y-auto` scroll list. Threaded the already-
+ * fetched `opStatus.prune` down as a prop (D-10) — NO second fetch.
+ *
+ * Honest-signal contract (load-bearing):
+ *   - `deadUrlCount` (sidecar) is the AUTHORITATIVE terminal-dead total (D-03).
+ *   - `countsByStatus` is a SAMPLED tally (≤MAX_SCAN_KEYS=200) — labeled
+ *     "of N scanned", NEVER presented as authoritative (D-03).
+ *   - `evidence` renders as a PLAIN TEXT React node (default-escaped) — never
+ *     via raw-HTML injection (D-11 / T-43-16). Server caps it at ≤200 chars.
+ *   - `attemptCount` is the dead-streak depth ("dead ×N consecutive sweeps"),
+ *     the honest transition proxy — NOT a true first-seen-dead timestamp (D-02).
+ */
+const DEAD_LINK_STATUS_COLORS: Record<string, string> = {
+  live: 'text-green-300',
+  unknown: 'text-amber-300',
+  'no-url': 'text-white/40',
+  '404': 'text-red-300',
+  '403': 'text-red-300',
+  'dead-host': 'text-red-300',
+  'soft-404': 'text-red-300',
+};
+
+function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
+  const buckets = Object.entries(prune.countsByStatus ?? {}).sort((a, b) => b[1] - a[1]);
+  const scannedTotal = buckets.reduce((s, [, n]) => s + n, 0);
+  const sample = prune.deadUrlSample ?? [];
+  return (
+    <div className="mt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">Dead Links</div>
+      {/* Authoritative total (sidecar) — NOT the summed buckets (D-03). */}
+      <div className="mt-1 text-[9px] text-white/60" data-testid="dead-link-authoritative-total">
+        Dead URL events: <span className="tabular-nums text-white/80">{prune.deadUrlCount}</span>
+        {' · '}pruned <span className="tabular-nums text-white/80">{prune.last24hPrunes}</span> in
+        24h
+      </div>
+      {prune.deadUrlCount > 0 && (
+        <>
+          {/* Per-status SAMPLED buckets — "of N scanned" caveat (D-03). */}
+          {buckets.length > 0 && (
+            <div className="mt-1" data-testid="dead-link-buckets">
+              {buckets.map(([status, n]) => (
+                <div
+                  key={status}
+                  className="flex items-center gap-1 text-[9px]"
+                  data-testid={`dead-link-bucket-${status}`}
+                >
+                  <span
+                    className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                      DEAD_LINK_STATUS_COLORS[status] ?? 'text-white/60'
+                    }`}
+                  >
+                    {status}
+                  </span>
+                  <span className="tabular-nums text-white/80">{n}</span>
+                  <span className="ml-auto text-white/30">of {scannedTotal} scanned</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Drill-down sample rows (≤20) — evidence as TEXT (D-11), relative
+              lastProbedAt + dead-streak attemptCount (D-02). */}
+          {sample.length > 0 && (
+            <div className="mt-1 max-h-32 overflow-y-auto" data-testid="dead-link-sample">
+              {sample.map((entry) => (
+                <div
+                  key={entry.eventId}
+                  className="flex items-center gap-1 text-[9px] text-white/60"
+                >
+                  <span
+                    className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                      DEAD_LINK_STATUS_COLORS[entry.status] ?? 'text-white/60'
+                    }`}
+                  >
+                    {entry.status}
+                  </span>
+                  <span className="truncate text-white/70" title={entry.url}>
+                    {entry.url}
+                  </span>
+                  {entry.evidence ? (
+                    <span className="truncate text-white/40">{entry.evidence}</span>
+                  ) : null}
+                  {typeof entry.attemptCount === 'number' && (
+                    <span className="tabular-nums text-white/40">dead ×{entry.attemptCount}</span>
+                  )}
+                  {entry.lastProbedAt ? (
+                    <span className="ml-auto tabular-nums text-white/30">
+                      {relativeTime(entry.lastProbedAt)}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * Phase 27.4.3 Plan 04 — sibling of EventsFiltersSection, gated on
  * schemaVersion === 'v3' && import.meta.env.DEV by the parent render switch.
  * Renders the 7-block v3 observability stack per UI-SPEC §"Component
@@ -3422,7 +3587,13 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
  *   - T-27.4.3-04-03: lineage prompt/response only inside DEV gate
  *   - T-27.4.3-04-04: regression tests assert empty-state copy verbatim
  */
-function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
+function EventsFiltersSectionV3({
+  llmStatus,
+  prune,
+}: {
+  llmStatus: LLMStatus;
+  prune?: PruneSummary | null;
+}) {
   return (
     <section className="mt-2 border-t border-white/10 pt-2">
       <div className="text-[9px] text-white/60">
@@ -3490,6 +3661,12 @@ function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
           mutually-exclusive activeTab render branches, so this re-mount
           causes NO double fetch. */}
       <FlightRecorderBlock />
+
+      {/* Phase 44 (EVENTS-TAB-02, D-09/D-10) — per-bucket dead-link state, fed
+          by the already-fetched opStatus.prune threaded down as a prop. Self-
+          hides when `prune` is absent (older server / fetch failure / missing
+          Bearer) — degrade-open (D-10). */}
+      {prune && <DeadLinkBucketsBlock prune={prune} />}
     </section>
   );
 }
