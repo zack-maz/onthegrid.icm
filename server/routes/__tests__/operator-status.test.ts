@@ -489,6 +489,53 @@ describe('/api/operator-status — Phase 32 Plan 04 `prune` block', () => {
 
     const sample = res.body.prune.deadUrlSample as Array<unknown>;
     expect(sample).toHaveLength(20);
+
+    // Phase 44 WR-01 — the LIMIT_DRILL_DOWN=20 cap bounds ONLY the sample
+    // array; the countsByStatus tally keeps accumulating over scanned keys
+    // up to the MAX_SCAN_KEYS=200 budget. With 30 terminal-dead keys, the
+    // tally must read 30 (all scanned), not 20 (the sample cap).
+    const countsByStatus = res.body.prune.countsByStatus as Record<string, number>;
+    expect(countsByStatus['404']).toBe(30);
+  });
+
+  it('prune.countsByStatus: tally continues past the LIMIT_DRILL_DOWN sample cap (WR-01) — mixed dead/live beyond 20 dead', async () => {
+    process.env.NODE_ENV = 'development';
+    mockRedis.get.mockResolvedValue(null);
+
+    // 25 terminal-dead FIRST (fills the 20-entry sample early), then 40 live.
+    // Pre-WR-01, the loop broke at the 20th dead key, so `live` vanished from
+    // the tally entirely. Post-fix the tally covers all 65 scanned keys.
+    const keys: string[] = [];
+    const valueByKey: Record<string, unknown> = {};
+    for (let i = 0; i < 65; i++) {
+      const key = `events:url-liveness:event-${i}`;
+      keys.push(key);
+      const status = i < 25 ? '404' : 'live';
+      valueByKey[key] = {
+        data: {
+          status,
+          lastProbedAt: new Date().toISOString(),
+          attemptCount: status === 'live' ? 0 : 1,
+          lastUrlProbed: `https://example.com/article-${i}`,
+          lastHttpStatus: status === 'live' ? 200 : 404,
+        },
+        stale: false,
+        lastFresh: Date.now(),
+      };
+    }
+    mockRedis.scan.mockResolvedValueOnce([0, keys]);
+    mockCacheGetSafe.mockImplementation(async (key: string) => valueByKey[key] ?? null);
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+
+    // Sample stays capped at 20 — the cap still bounds the payload.
+    expect(res.body.prune.deadUrlSample).toHaveLength(20);
+    // Tally reflects ALL 65 scanned keys (≤ MAX_SCAN_KEYS=200 budget).
+    const countsByStatus = res.body.prune.countsByStatus as Record<string, number>;
+    expect(countsByStatus['404']).toBe(25);
+    expect(countsByStatus.live).toBe(40);
   });
 
   it('prune.deadUrlSample: defaults to [] when SCAN throws (degrade-open, deadUrlCount still populated)', async () => {

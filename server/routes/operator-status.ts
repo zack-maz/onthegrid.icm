@@ -53,10 +53,15 @@ export const operatorStatusRouter = Router();
 
 /**
  * Cap on the number of terminal-dead entries returned in `prune.deadUrlSample`.
- * Bounds the dashboard payload size + serves as a SCAN short-circuit when the
- * dead population is large. Plan 32-05's `<ul data-testid="dead-url-list">`
+ * Bounds the dashboard payload size. Plan 32-05's `<ul data-testid="dead-url-list">`
  * renders this slice with a "...and N more" truncation row when
  * `prune.deadUrlCount > LIMIT_DRILL_DOWN`.
+ *
+ * Phase 44 WR-01 — this cap bounds ONLY the sample array; it is NOT a SCAN
+ * short-circuit. The `countsByStatus` tally keeps accumulating over scanned
+ * keys until the MAX_SCAN_KEYS=200 budget guard stops the loop, so the
+ * sampled distribution is not dead-biased when ≥20 terminal-dead entries
+ * appear early in encounter order.
  */
 const LIMIT_DRILL_DOWN = 20;
 
@@ -214,7 +219,8 @@ type DeadUrlSampleEntry = {
  * up to `LIMIT_DRILL_DOWN` matches in encounter order.
  *
  * Why a helper (not inline): the SCAN cursor loop with the MAX_SCAN_KEYS
- * short-circuit + LIMIT_DRILL_DOWN cap + per-key `cacheGetSafe` value load
+ * short-circuit (the SOLE loop short-circuit — Phase 44 WR-01) + the
+ * LIMIT_DRILL_DOWN sample cap + per-key `cacheGetSafe` value load
  * is non-trivial; extracting it keeps the main route body readable and
  * isolates the degrade-open `try/catch` so a SCAN throw can't cascade past
  * the `prune` block.
@@ -270,6 +276,11 @@ async function buildDeadUrlSample(): Promise<{
         // dashboard can show full per-bucket counts, not just dead ones.
         countsByStatus[value.status] = (countsByStatus[value.status] ?? 0) + 1;
         if (!isTerminalDead(value.status)) continue;
+        // Phase 44 WR-01 — the LIMIT_DRILL_DOWN cap bounds ONLY the sample
+        // array. Once full, the loop keeps SCANning (and tallying) up to the
+        // MAX_SCAN_KEYS budget — the sole short-circuit — so countsByStatus
+        // honestly reflects ≤200 scanned keys, not the first 20 dead ones.
+        if (sample.length >= LIMIT_DRILL_DOWN) continue;
         const eventId = key.startsWith(URL_LIVENESS_KEY_PREFIX)
           ? key.slice(URL_LIVENESS_KEY_PREFIX.length)
           : key;
@@ -288,10 +299,6 @@ async function buildDeadUrlSample(): Promise<{
           lastProbedAt: value.lastProbedAt,
           attemptCount: value.attemptCount,
         });
-        if (sample.length >= LIMIT_DRILL_DOWN) {
-          cursor = 0;
-          break;
-        }
       }
     } while (cursor !== 0 && cursor !== '0');
     return { sample, countsByStatus };
