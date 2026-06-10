@@ -12,6 +12,8 @@ Surface actionable, data-backed intelligence on the Iran conflict in real-time o
 
 **Shipped through v1.6 Production Hardening (2026-06-09).** 4 phases (38–41), 56/56 required requirements satisfied (1 optional CRON-WATCH-01 deferred to v1.7). Shipped to production via PR #40 (deploy `32017ef`). Six honest-signal LLM bug fixes + GDELT source matching; water-facility name romanization (`nameLatin`) through the Overpass Latin-label gate; safe Vercel Pro cleanup (risky vercel.ts/Build-Output migrations explicitly deferred per D-09); operator visibility — token-budget + cost-shadow surface and a Redis-backed LLM flight recorder (call-history + run-history rings surviving Fluid Compute cold starts); dashboard UI polish + API-Health subtab consolidation with WAI-ARIA tablist; and the public-reveal portfolio surface (first-visit IntroOverlay, re-openable driver.js GuidedTour, OG/Twitter share card, BUILDING-WITH-CLAUDE-CODE / SHOWCASE / JOURNEY / concepts / COSTS / operator-guide / LESSONS docs). Milestone audit PASSED; cross-phase integration verified; Phase 41 human-verified on live prod (intro/tour/OG/secrets).
 
+**v2.0 progress:** Phase 42 (Water Filter Fix) complete 2026-06-10 — telemetry-diagnosed and fixed the name-blind, order-dependent spatial-dedup loop (exported pure `spatialDedup()`, name-aware + deterministic survivor), bumped `water:facilities:v3` → `v4` across all 10 lockstep surfaces, regenerated the cold-start snapshot (304 → 460 admitted facilities). WATER-FILTER-01..04 validated (8/8 must-haves verified).
+
 **v1.6 milestone archives:** `.planning/milestones/v1.6-ROADMAP.md` · `.planning/milestones/v1.6-REQUIREMENTS.md` · `.planning/milestones/v1.6-MILESTONE-AUDIT.md` · `.planning/milestones/v1.6-phases/` · `CHANGELOG.md` §`[v1.6]`.
 
 **v1.5 milestone archives:** `.planning/milestones/v1.5-ROADMAP.md` · `.planning/milestones/v1.5-REQUIREMENTS.md` · `.planning/milestones/v1.5-phases/` · `docs/adr/0010-v1-5-llm-pipeline-narrowing-and-deletion.md` · `CHANGELOG.md` §`[v1.5]`.
@@ -205,4 +207,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-06-09 at v2.0 Final Hardening milestone start. Six target features locked in operator priority order (water filter / ghost links + events subtab / dashboard subtab cleanup / ~100-user load test / general hardening / docs cleanup). v1.6 archives at `.planning/milestones/v1.6-*`._
+_Last updated: 2026-06-10 after Phase 42 (Water Filter Fix) completion. Six target features locked in operator priority order (water filter / ghost links + events subtab / dashboard subtab cleanup / ~100-user load test / general hardening / docs cleanup). v1.6 archives at `.planning/milestones/v1.6-*`._
