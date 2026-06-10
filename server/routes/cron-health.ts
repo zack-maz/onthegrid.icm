@@ -15,7 +15,7 @@ const log = logger.child({ module: 'cron-health' });
 export const cronHealthRouter = Router();
 
 // Phase 28.1 W2 — SOURCE_KEYS deduplicated to server/lib/healthSources.ts.
-// W1 audit DRIFT-1/2/3 fixes (news:feed, sites:v3, water:facilities:v3) now
+// W1 audit DRIFT-1/2/3 fixes (news:feed, sites:v3, water:facilities:v4) now
 // land here automatically because the shared module is the single writer.
 
 /** If a source's lastFresh is older than this, log a warning */

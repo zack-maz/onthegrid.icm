@@ -50,10 +50,10 @@
 
 ## water:\*
 
-| Key                   | Writers                                                       | Readers                                      | TTL | Value             | Purpose                                                                             | Cardinality | Classification   |
-| --------------------- | ------------------------------------------------------------- | -------------------------------------------- | --- | ----------------- | ----------------------------------------------------------------------------------- | ----------- | ---------------- |
-| `water:facilities:v3` | `server/routes/water.ts:122`; `server/routes/cron-warm.ts:29` | Same file + `server/lib/healthSources.ts:46` | 24h | `WaterFacility[]` | Overpass water facilities with Latin-label admission gate + desalination synthesis. | 1           | **load-bearing** |
-| `water:precip`        | `server/routes/water.ts:125`                                  | Same file + `server/lib/healthSources.ts:48` | 6h  | `PrecipAnomaly[]` | Open-Meteo 30-day precipitation anomaly; `findNearestPrecip` 4° Manhattan cutoff.   | 1           | **load-bearing** |
+| Key                   | Writers                                                       | Readers                                      | TTL | Value             | Purpose                                                                                                                                                                      | Cardinality | Classification   |
+| --------------------- | ------------------------------------------------------------- | -------------------------------------------- | --- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------------- |
+| `water:facilities:v4` | `server/routes/water.ts:122`; `server/routes/cron-warm.ts:29` | Same file + `server/lib/healthSources.ts:46` | 24h | `WaterFacility[]` | Overpass water facilities with Latin-label admission gate + desalination synthesis. Phase 42: bumped v3→v4 for the name-aware + deterministic spatial-dedup behavior change. | 1           | **load-bearing** |
+| `water:precip`        | `server/routes/water.ts:125`                                  | Same file + `server/lib/healthSources.ts:48` | 6h  | `PrecipAnomaly[]` | Open-Meteo 30-day precipitation anomaly; `findNearestPrecip` 4° Manhattan cutoff.                                                                                            | 1           | **load-bearing** |
 
 ## news:\*
 

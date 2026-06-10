@@ -118,8 +118,13 @@ const waterQuerySchema = z.object({
  * `rejections.no_resolved_name` / `byTypeRejections[*].no_resolved_name`
  * bucket. Stale v2 entries fail the `.strict()` Zod parse (missing key)
  * and fall through to snapshot tier on the first post-deploy request.
+ *
+ * Phase 42 D-09 — bumped v3→v4. The name-aware + deterministic spatialDedup
+ * fix (Plan 02) admits previously-collapsed distinct named facilities, so the
+ * admitted-facility set changed (a behavior change). The bump forces a
+ * cold-fill on next refresh; stale v3 entries age out under their hard TTL.
  */
-const FACILITIES_KEY = 'water:facilities:v3';
+const FACILITIES_KEY = 'water:facilities:v4';
 
 /** Redis key for cached precipitation data */
 const PRECIP_KEY = 'water:precip';

@@ -15,11 +15,12 @@
  *              freshness witness for /api/news).
  *   - DRIFT-2: sites → 'sites:v3' (post Phase-27.3.1 envelope shape; the
  *              prior 'sites:v2' is unread/dead).
- *   - DRIFT-3: water → 'water:facilities:v3' (post Phase-27.3.2; the prior
- *              'water:facilities' is unread/dead).
+ *   - DRIFT-3: water → 'water:facilities:v4' (post Phase-42 name-aware dedup
+ *              behavior bump; the prior 'water:facilities:v3' / bare
+ *              'water:facilities' are unread/dead).
  *
  * Anti-pattern guard: NEVER rename Redis keys events:llm:v3, sites:v3, or
- * water:facilities:v3 — they are load-bearing for the Phase 27.4.x
+ * water:facilities:v4 — they are load-bearing for the Phase 27.4.x
  * Pitfall 1 cache bridge.
  */
 
@@ -42,8 +43,8 @@ export const SOURCE_KEYS: Record<string, string> = {
   weather: 'weather:open-meteo',
   // DRIFT-2: route writer bumped to sites:v3 in Phase 27.3.1.
   sites: 'sites:v3',
-  // DRIFT-3: route writer bumped to water:facilities:v3 in Phase 27.3.2.
-  water: 'water:facilities:v3',
+  // DRIFT-3: route writer bumped to water:facilities:v4 in Phase 42 (name-aware dedup).
+  water: 'water:facilities:v4',
   // DRIFT-4: waterPrecip was in thresholds + tier but missing from SOURCE_KEYS — operator-reported in 28.2.5.
   waterPrecip: 'water:precip',
   // Phase 37 (fix/prod-audit-tier-regression): `events:llm:v3` is the primary cache

@@ -70,9 +70,14 @@ const EXEMPT_KEYS: ReadonlyArray<{ key: string; reason: string }> = [
       'migration-cleanup probe in server/routes/water.ts:50,113 — cold-fill rollout from the same Phase. Dead after deploy; listed for surveillance.',
   },
   {
+    key: 'water:facilities:v3',
+    reason:
+      'migration-cleanup probe; dead after the Phase 42 v4 deploy (name-aware dedup behavior bump). The prior canonical key now ages out under its hard TTL; listed for surveillance during retirement.',
+  },
+  {
     key: 'water:facilities',
     reason:
-      'transitional bare-prefix string in server/routes/water.ts (used as a redis-store debug probe in test fixtures); not the canonical key (`water:facilities:v3` is canonical per CLAUDE.md).',
+      'transitional bare-prefix string in server/routes/water.ts (used as a redis-store debug probe in test fixtures); not the canonical key (`water:facilities:v4` is canonical per CLAUDE.md).',
   },
 ];
 
