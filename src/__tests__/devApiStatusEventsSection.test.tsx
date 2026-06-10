@@ -415,4 +415,46 @@ describe('EventsFiltersSection (Phase 27.4 Plan 09)', () => {
     render(<DevApiStatus />);
     expect(screen.queryByText(/Paused — soft cap/)).toBeNull();
   });
+
+  // ── Phase 44 (EVENTS-TAB-01, D-05/D-08) — the v2-era blocks + FlightRecorder
+  //    now also mount inside the PRODUCTION V3 composer (EventsFiltersSectionV3),
+  //    presence-gated. The legacy v2-composer tests above are unchanged; these
+  //    cover the v3 default path.
+
+  it('R12 (Phase 44): the v2 blocks + FlightRecorder mount inside the V3 composer under populated data', () => {
+    mockLLMStatus = makePopulatedStatus({ schemaVersion: 'v3', stage: 'done' });
+    openAndSelectEventsTab();
+    render(<DevApiStatus />);
+
+    // v3-native header confirms we are on the V3 path (no legacy v2 header).
+    expect(screen.getByText(/Schema: v3 · Stage: done/)).toBeInTheDocument();
+    expect(screen.queryByText(/Events Pipeline \(v2\)/)).toBeNull();
+    // The mounted v2 blocks render their content (presence gates satisfied).
+    expect(screen.getByText('Pipeline Waterfall')).toBeInTheDocument();
+    expect(screen.getByText('Provenance Distribution')).toBeInTheDocument();
+    expect(screen.getByText(/LLM Call Log/)).toBeInTheDocument();
+    expect(screen.getByText('Token Budget (daily)')).toBeInTheDocument();
+    expect(screen.getByText(/Accuracy Eval/)).toBeInTheDocument();
+    expect(screen.getByText(/DLQ \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Suspect events:/)).toBeInTheDocument();
+    // FlightRecorderBlock re-mount (D-08) — self-contained. With no resolved
+    // /api/events/llm-history fetch in jsdom, it degrades open to its canonical
+    // muted placeholder (proving the re-mount is present + degrade-open).
+    expect(screen.getByTestId('flight-recorder-placeholder')).toBeInTheDocument();
+  });
+
+  it('R13 (Phase 44, D-05): the v2 blocks SELF-HIDE in the V3 composer under empty data (degrade-open, no crash)', () => {
+    mockLLMStatus = { stage: 'idle', schemaVersion: 'v3' };
+    openAndSelectEventsTab();
+    // No throw == degrade-open.
+    expect(() => render(<DevApiStatus />)).not.toThrow();
+    // Presence-gated v2 blocks are absent (no fabricated zeros).
+    expect(screen.queryByText('Provenance Distribution')).toBeNull();
+    expect(screen.queryByText('Token Budget (daily)')).toBeNull();
+    expect(screen.queryByText(/DLQ: 0 entries/)).toBeNull();
+    expect(screen.queryByText(/Suspect events:/)).toBeNull();
+    // FlightRecorder is self-contained → still mounts; degrades open to its
+    // muted placeholder when its own fetch has not resolved.
+    expect(screen.getByTestId('flight-recorder-placeholder')).toBeInTheDocument();
+  });
 });
