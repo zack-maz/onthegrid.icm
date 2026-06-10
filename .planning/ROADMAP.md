@@ -384,10 +384,10 @@ Plans:
 2. The operator can read dead-link state per bucket in the events subtab — counts per liveness status plus first-seen-dead / transition timestamps.
 3. The mount is data-wiring only — the WAI-ARIA tablist DOM contract (tab ids, `aria-labelledby` partners) is unchanged, and every block remains degrade-open (self-hides when its data is absent).
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 **Wave 1**
 
-- [ ] 44-01-PLAN.md — Server lockstep: `countsByStatus` tally + `lastProbedAt`/`attemptCount` on the prune `deadUrlSample` (inside the existing SCAN, no new reads) + 3-surface contract lockstep (route test, OpenAPI incl. closing the Phase-43 `evidence`/`soft-404` drift, client `OperatorStatus.prune` interface) [EVENTS-TAB-02] (Wave 1)
+- [x] 44-01-PLAN.md — Server lockstep: `countsByStatus` tally + `lastProbedAt`/`attemptCount` on the prune `deadUrlSample` (inside the existing SCAN, no new reads) + 3-surface contract lockstep (route test, OpenAPI incl. closing the Phase-43 `evidence`/`soft-404` drift, client `OperatorStatus.prune` interface) [EVENTS-TAB-02] (Wave 1)
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
@@ -464,7 +464,7 @@ Plans:
 | ----- | ------------------------------------- | -------------- | ----------- | ---------- |
 | 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
 | 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
-| 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -          |
+| 44    | Events Subtab Pipeline Detail         | 1/2            | In Progress |            |
 | 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -          |
 | 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
 | 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |
