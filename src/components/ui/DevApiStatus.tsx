@@ -1111,10 +1111,21 @@ function DevApiStatusAllApisTab({
     prune?: {
       deadUrlCount: number;
       last24hPrunes: number;
+      // Phase 44 D-01 — optional, forward-compat (Phase 32 D-10 pattern):
+      // older servers pre-dating the D-01 extension omit it, so the dashboard
+      // must not break. SAMPLED per-status tally (≤MAX_SCAN_KEYS=200), NOT
+      // authoritative — deadUrlCount is. Render "of N scanned" caveat (D-03).
+      countsByStatus?: Record<string, number>;
       deadUrlSample: Array<{
         eventId: string;
+        // Phase 43 drift close — `soft-404` joins the terminal-dead union.
+        status: 'dead-host' | '403' | '404' | 'soft-404';
         url: string;
-        status: 'dead-host' | '403' | '404';
+        // Phase 44 D-01 — optional forward-compat (Phase 32 D-10 pattern).
+        // `evidence` renders as TEXT, not HTML (D-11 / T-43-16).
+        evidence?: string | null;
+        lastProbedAt?: string;
+        attemptCount?: number;
       }>;
     } | null;
     // Phase 33 D-17 — actor metadata quality counts from /api/operator-status
