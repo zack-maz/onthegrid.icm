@@ -146,8 +146,8 @@ describe('Phase 32 D-22 — UrlLiveness schema contract', () => {
       expect(ttlSecForStatus('dead-host')).toBeLessThanOrEqual(86400);
     });
 
-    it('unknown ≤ 1h', () => {
-      expect(ttlSecForStatus('unknown')).toBeLessThanOrEqual(3600);
+    it('unknown ≤ 24h (WR-02 — raised from 1h to survive the daily sweep gap)', () => {
+      expect(ttlSecForStatus('unknown')).toBeLessThanOrEqual(86400);
     });
 
     it('soft-404 ≤ 24h (Phase 43 D-04)', () => {
@@ -167,7 +167,9 @@ describe('Phase 32 D-22 — UrlLiveness schema contract', () => {
       expect(ttlSecForStatus('404')).toBe(24 * 3600);
       expect(ttlSecForStatus('403')).toBe(24 * 3600);
       expect(ttlSecForStatus('dead-host')).toBe(24 * 3600);
-      expect(ttlSecForStatus('unknown')).toBe(3600);
+      // WR-02 — raised from 3600 (1h) to 24h so unknown entries survive the
+      // once-daily cron sweep gap, engaging the D-10 attemptCount-preserve rule.
+      expect(ttlSecForStatus('unknown')).toBe(24 * 3600);
       // Phase 43 D-04/D-09 — new 24h tiers.
       expect(ttlSecForStatus('soft-404')).toBe(24 * 3600);
       expect(ttlSecForStatus('no-url')).toBe(24 * 3600);

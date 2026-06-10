@@ -12,7 +12,8 @@
  *           with a JSON value `{status, lastProbedAt, attemptCount,
  *           lastUrlProbed, lastHttpStatus}`.
  *   - D-20  Tiered TTL by status: `live` → 7d, terminal-dead
- *           (`404`/`403`/`dead-host`) → 24h, `unknown` → 1h.
+ *           (`404`/`403`/`dead-host`) → 24h, `unknown` → 24h (WR-02 — raised
+ *           from 1h so entries survive the once-daily sweep gap).
  *   - D-22  Schema is `z.object({...}).strict()` so extra keys / missing
  *           fields / unknown enum values all throw at parse time. The
  *           D-22 contract test (`server/__tests__/lib/urlLiveness.schema.test.ts`)
@@ -154,11 +155,24 @@ export type UrlLiveness = z.infer<typeof UrlLivenessSchema>;
  * D-20 — TTL ceilings by status. Re-probe cadence proportional to verdict
  * confidence: live verdicts last a week (no need to re-confirm fresh
  * content frequently), terminal-dead verdicts re-confirm daily (so the
- * prune list stays current as publishers move URLs), unknown verdicts
- * re-probe hourly (push toward a terminal verdict fast).
+ * prune list stays current as publishers move URLs).
  *
  * The TTL itself is the GC mechanism — there is no separate cleanup
  * pass. When the per-event key expires, the next sweep tick re-probes it.
+ *
+ * WR-02/WR-03 (GHOST-08 intent restored) — `unknown` was raised from 1h
+ * to 24h. `cacheSetSafe` writes this value as the HARD Redis TTL (no 10×
+ * multiplier — `server/cache/redis.ts` `cacheSet` does `{ ex: redisTtlSec }`).
+ * The sweep runs ONCE per day (4am cron). At a 1h TTL an `unknown` entry had
+ * ALWAYS expired by the next daily probe, so on the post-blip tick the writer
+ * read `prior = null` and RESTARTED attemptCount at 1 — making the D-10
+ * "unknown PRESERVES the prior count" rule unreachable at the production
+ * cadence (the flaky-host dead→unknown→dead accumulation it was built for
+ * never crossed the ≥3 gate). It ALSO meant an expired-then-re-probed dead
+ * entry read `prior = null` and re-INCR'd the sidecar (WR-03 monotonic
+ * inflation). A 24h logical tier lets unknown (and terminal-dead) entries
+ * survive between daily ticks so `prior` is non-null on the next sweep,
+ * engaging the D-10 preserve rule and avoiding the spurious re-INCR.
  *
  * Schema test (Plan 32-01 Task 3) asserts each value here matches the
  * D-20 upper-bound, so silent ceiling raises fail loudly.
@@ -168,7 +182,7 @@ const TTL_SEC_BY_STATUS: Record<UrlLivenessStatus, number> = {
   '404': 24 * 3600, // D-20: 24 hours
   '403': 24 * 3600, // D-20: 24 hours
   'dead-host': 24 * 3600, // D-20: 24 hours
-  unknown: 3600, // D-20: 1 hour
+  unknown: 24 * 3600, // WR-02: 24 hours (raised from 1h — must survive the daily sweep gap)
   'soft-404': 24 * 3600, // D-04/D-09: 24 hours (terminal-dead tier)
   'no-url': 24 * 3600, // D-04/D-09: 24 hours (re-confirm no-url daily)
 };
@@ -876,6 +890,19 @@ async function persistLiveness(
   // Wrap raw redis.incr/decr in try/catch (cacheSetSafe shape doesn't
   // fit integer counters; Pitfall 6 note says raw incr/decr must
   // degrade-open).
+  //
+  // WR-03 (bounded residual drift) — the INCR fires on prior-not-dead →
+  // next-dead. The WR-02 TTL fix (unknown + terminal-dead now 24h hard) keeps
+  // `prior` non-null across the single daily sweep gap, so a still-dead entry
+  // re-probed the next day reads `priorDead = true` and does NOT re-INCR. A
+  // residual drift window remains only if a terminal-dead key outlives its 24h
+  // hard TTL between two sweeps that are themselves >24h apart (e.g. a skipped
+  // cron day): the key expires, `prior = null`, and the next dead re-probe
+  // re-INCRs an already-counted event. This is bounded (at most +1 per such
+  // skipped-day-then-re-probe per event) and self-heals downward via the
+  // floor-at-0 DECR underflow guard below + the prune-time DECRBY; the
+  // dashboard read also floors at 0 (`Math.max(0, …)` in operator-status). No
+  // mechanism change beyond the TTL fix is warranted given the daily cadence.
   try {
     if (!priorDead && nextDead) {
       await redis.incr(URL_LIVENESS_COUNT_KEY);
