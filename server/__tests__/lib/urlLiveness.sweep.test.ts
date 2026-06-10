@@ -566,7 +566,7 @@ describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
       return null;
     });
 
-    const candidates = await urlLivenessModule.buildProbeCandidates();
+    const { candidates } = await urlLivenessModule.buildProbeCandidates();
     expect(candidates).toHaveLength(3);
     // 'c' (never-probed) must be first.
     expect(candidates[0]?.eventId).toBe('c');
@@ -595,11 +595,11 @@ describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
       return null;
     });
 
-    const candidates = await urlLivenessModule.buildProbeCandidates();
+    const { candidates } = await urlLivenessModule.buildProbeCandidates();
     expect(candidates.map((c) => c.eventId)).toEqual(['A', 'B', 'C']);
   });
 
-  it('drops entities with empty / missing data.source', async () => {
+  it('excludes source-less entities from the candidate array (GHOST-07)', async () => {
     cacheGetSafeMock.mockImplementation(async (key: string) => {
       if (key === 'events:llm:v3') {
         return cacheHit([
@@ -611,25 +611,84 @@ describe('Plan 02 Task 5 — buildProbeCandidates (D-04 priority sort)', () => {
       }
       return null;
     });
+    incrMock.mockResolvedValue(1);
 
-    const candidates = await urlLivenessModule.buildProbeCandidates();
+    const { candidates } = await urlLivenessModule.buildProbeCandidates();
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.eventId).toBe('ok');
   });
 
-  it('cache miss on events:llm:v3 returns []', async () => {
-    cacheGetSafeMock.mockResolvedValueOnce(null);
-    const candidates = await urlLivenessModule.buildProbeCandidates();
-    expect(candidates).toEqual([]);
+  it('writes an explicit no-url liveness entry per source-less event, no fetch (GHOST-07)', async () => {
+    cacheGetSafeMock.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') {
+        return cacheHit([
+          { id: 'empty', data: { source: '' } },
+          { id: 'missing', data: {} },
+          { id: 'ok', data: { source: 'https://ok.example.com/' } },
+        ]);
+      }
+      return null;
+    });
+    incrMock.mockResolvedValue(1);
+
+    const result = await urlLivenessModule.buildProbeCandidates();
+
+    // classifiedNoUrl counts the two source-less events.
+    expect(result.classifiedNoUrl).toBe(2);
+
+    // No HTTP issued by the candidate builder for source-less events.
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // A no-url persistLiveness write fired per source-less event (cacheSetSafe
+    // is the persistLiveness sink). 'ok' is NOT written (it's a probe target).
+    const noUrlWrites = cacheSetSafeMock.mock.calls.filter(
+      ([, value]) => (value as { status?: string }).status === 'no-url',
+    );
+    expect(noUrlWrites).toHaveLength(2);
+    const [, entry] = noUrlWrites[0]!;
+    const v = entry as {
+      status: string;
+      lastUrlProbed: string | null;
+      lastHttpStatus: number | null;
+      attemptCount: number;
+      evidence: string | null;
+    };
+    expect(v.status).toBe('no-url');
+    expect(v.lastUrlProbed).toBeNull();
+    expect(v.lastHttpStatus).toBeNull();
+    expect(v.attemptCount).toBe(0);
+    expect(v.evidence).toBe('no-url: event has no source URL');
   });
 
-  it('empty events array returns []', async () => {
+  it('a no-url write does NOT INCR the sidecar dead-count (GHOST-07)', async () => {
+    cacheGetSafeMock.mockImplementation(async (key: string) => {
+      if (key === 'events:llm:v3') {
+        return cacheHit([{ id: 'nourl', data: {} }]);
+      }
+      return null;
+    });
+    incrMock.mockResolvedValue(1);
+
+    await urlLivenessModule.buildProbeCandidates();
+
+    expect(incrMock).not.toHaveBeenCalled();
+  });
+
+  it('cache miss on events:llm:v3 returns empty candidates', async () => {
+    cacheGetSafeMock.mockResolvedValueOnce(null);
+    const { candidates, classifiedNoUrl } = await urlLivenessModule.buildProbeCandidates();
+    expect(candidates).toEqual([]);
+    expect(classifiedNoUrl).toBe(0);
+  });
+
+  it('empty events array returns empty candidates', async () => {
     cacheGetSafeMock.mockResolvedValueOnce({
       data: [],
       stale: false,
       lastFresh: Date.now(),
     });
-    const candidates = await urlLivenessModule.buildProbeCandidates();
+    const { candidates, classifiedNoUrl } = await urlLivenessModule.buildProbeCandidates();
     expect(candidates).toEqual([]);
+    expect(classifiedNoUrl).toBe(0);
   });
 });
