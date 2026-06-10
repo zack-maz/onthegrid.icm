@@ -20,7 +20,8 @@ findings:
   warning: 5
   info: 4
   total: 12
-status: issues_found
+fixed: 8
+status: fixed
 ---
 
 # Phase 43: Code Review Report
@@ -39,6 +40,8 @@ However, the review found one hard build break (`tsc -b` fails — the D-07 null
 ## Critical Issues
 
 ### CR-01: TypeScript build break — `lastUrlProbed: string | null` assigned to `DeadUrlSampleEntry.url: string`
+
+**FIXED** — 6e33f3f (widened `DeadUrlSampleEntry.url` to `string | null` in lockstep with `UrlLiveness.lastUrlProbed`; `npx tsc -b` clean).
 
 **File:** `server/routes/operator-status.ts:252` (type declared at `server/routes/operator-status.ts:185-198`)
 **Issue:** Phase 43 D-07 made `UrlLivenessSchema.lastUrlProbed` nullable (`server/lib/urlLiveness.ts:129`), so `value.lastUrlProbed` is now `string | null`. `buildDeadUrlSample` assigns it to `url`, which is still typed `string`. `npx tsc -b` (the project's `npm run typecheck` gate) fails:
@@ -63,6 +66,8 @@ type DeadUrlSampleEntry = {
 (or `if (value.lastUrlProbed === null) continue;` before the push, keeping `url: string`). Then re-run `npx tsc -b` to confirm zero errors.
 
 ### CR-02: `classifyTwoHundred` ignores the body GET's HTTP status — bot-blocked/redirected GET responses are classified as soft-404, re-importing the false-positive class GHOST-09 demoted 403 for
+
+**FIXED** — 7d64791 (only run `classifySoft404` on a 2xx body GET; non-2xx degrades open to live + releases the connection. Added HEAD-200→GET-403 and HEAD-200→GET-302 probe regressions).
 
 **File:** `server/lib/urlLiveness.ts:514-524`
 **Issue:** After a 200 HEAD, the follow-up capped GET's response is fed straight into `classifySoft404` without ever checking `res.status`:
@@ -96,6 +101,8 @@ Add a probe test: HEAD 200 → GET 403-with-tiny-body must yield `status: 'live'
 
 ### CR-03: `NOT_FOUND_MARKERS` contains bare substrings (`'404'`, `'not found'`, `'no longer exists'`) that match live conflict-news titles — deterministic soft-404 of live events
 
+**FIXED** — 0e33f14 (dropped bare `'404'`/`'not found'`/`'no longer exists'`; markers now require error-context framing: `'error 404'`, `'404 not found'`, `'http 404'`, `'this page no longer exists'`. Added regression cases for Persian year 1404, GE F404, "sailors not found", "ceasefire no longer exists" — all classify live).
+
 **File:** `server/lib/urlLiveness.ts:253-261, 302-307`
 **Issue:** Markers are matched as bare substrings of the lowercased `<title>`. Three list entries are not "unambiguous" for THIS corpus (Greater-Middle-East conflict news):
 
@@ -123,6 +130,8 @@ Add negative table-driven cases to the `classifySoft404` test: titles "Iran's 14
 
 ### WR-01: `evidence` is not truncated before the `.strict()` parse — long redirect paths make `persistLiveness` throw, permanently dropping that event's liveness write
 
+**FIXED** — c6cbb0d (truncate `evidence` to 200 chars at the `persistLiveness` writer choke point before the parse; added a >200-char-evidence persist-without-throw test).
+
 **File:** `server/lib/urlLiveness.ts:316-319` (construction), `server/lib/urlLiveness.ts:831-836` (parse)
 **Issue:** The redirect-to-home evidence embeds both pathnames verbatim: `` `redirect-to-home: ${origPath} → ${finalPath}` ``. The schema enforces `z.string().max(200)` and `persistLiveness` calls `UrlLivenessSchema.parse(next)`, which **throws** on overflow. News-article paths routinely exceed ~175 chars — especially percent-encoded Persian/Arabic slugs, where `URL.pathname` returns the encoded form (3–9× expansion), and this corpus is dominated by Middle-East outlets. The throw is caught by `runProbeSweep`'s task catch (degrade-open), but the consequence recurs every sweep: that event's verdict is never persisted, it stays Tier A forever, is re-probed daily, and a genuinely-dead redirect-to-home URL can never accumulate `attemptCount ≥ 3` to be cron-pruned.
 **Fix:** Truncate at the writer (single choke point):
@@ -136,6 +145,8 @@ evidence: probeResult.evidence === null ? null : probeResult.evidence.slice(0, 2
 
 ### WR-02: D-10 "unknown preserves attemptCount" is defeated by the D-20 TTL tiers at the production cadence — the flagship semantics change is dead in production
 
+**FIXED** — f658db0 (raised the `unknown` logical/hard TTL tier from 1h to 24h so entries survive the once-daily sweep gap; the D-10 preserve rule now engages. Lockstep: `TTL_SEC_BY_STATUS`, both schema-test pins, redis-keys.md, CLAUDE.md registry).
+
 **File:** `server/lib/urlLiveness.ts:166-174` (TTL tiers) vs `server/lib/urlLiveness.ts:806-819` (attemptCount derivation)
 **Issue:** `cacheSet` applies the tier value as the **hard** Redis TTL (`server/cache/redis.ts:187-190` — `{ ex: redisTtlSec }`, no 10× multiplier). The sweep runs once per day (4am cron). Therefore:
 
@@ -145,17 +156,23 @@ evidence: probeResult.evidence === null ? null : probeResult.evidence.slice(0, 2
 
 ### WR-03: Sidecar `events:url-liveness-count` inflates monotonically — TTL expiry of a dead entry skips the DECR, then re-probe re-INCRs
 
+**FIXED** — f658db0 (the WR-02 24h TTL fix removes the common expiry-between-daily-sweeps path; the residual drift window — a dead key outliving 24h across two >24h-apart sweeps — is now documented inline as bounded (+1 max per skipped-day per event) and self-healing via the existing floor-at-0 DECR underflow guard, prune-time DECRBY, and the dashboard `Math.max(0, …)`. No mechanism change beyond the TTL fix).
+
 **File:** `server/lib/urlLiveness.ts:844-857`
 **Issue:** INCR fires on not-dead→dead and DECR on dead→not-dead/prune, but there is a third exit from the dead set: **key expiry** (24h TTL, WR-02). When a terminal-dead entry expires and the still-dead URL is re-probed, `prior = null` → `priorDead = false` → INCR fires _again_ for an event already counted. Nothing ever compensates, so `deadUrlCount` drifts upward by +1 per expiry/re-probe cycle per dead event — over weeks the dashboard count diverges arbitrarily from reality (`Math.max(0, …)` in operator-status only floors underflow, not inflation). The phase invariant "sidecar count stays consistent with the new statuses" holds for `soft-404`/`no-url` transitions themselves, but not across the TTL boundary.
 **Fix:** Either fix the retention mismatch (WR-02's fix removes the common path), or make the sidecar self-healing: recompute it periodically from the SCAN the cron prune already performs (`pruneDeadUrlEvents` walks every liveness key and knows the true terminal-dead count — `redis.set(URL_LIVENESS_COUNT_KEY, trueCount)` at the end of the cron pass turns the sidecar into a bounded-error cache instead of an unbounded integrator).
 
 ### WR-04: Near-empty floor flags live client-side-rendered articles as soft-404 — the asymmetric error budget is applied in the wrong direction
 
+**FIXED** — 07b4687 (near-empty signal (c) now also requires the body to contain no `<script` tag; script-heavy CSR/SPA shells degrade open to live. Added an SPA-shell-with-script regression case).
+
 **File:** `server/lib/urlLiveness.ts:234-240, 327-329`
 **Issue:** Signal (c) marks any 200 body whose tag-stripped text is <512 bytes as soft-404. The comment argues a "dead-but-heavy-shell SPA link surviving is within the asymmetric error budget" — but the inverse case is the dangerous one and is unhandled: a CSR-only news site serves the **same** near-empty HTML shell (`<div id="root"></div>` + external `<script src>` tags, ~0 text after stripping) for _live_ articles as for dead ones. Every live article on such an outlet classifies `near-empty: N bytes` → soft-404 → terminal-dead → deterministic `attemptCount` accumulation → cron-pruned. The same applies to live pages whose first 16 KiB (the cap) is pure head markup with no inline script/JSON-LD text. The phase's error budget explicitly tolerates dead-marked-live, never live-marked-dead.
 **Fix:** Make signal (c) corroboration-only rather than standalone: require it to co-occur with signal (b) (redirect-to-home), or exempt bodies containing a `<script src=` / `<div id="root"` SPA fingerprint, or at minimum demote a (c)-only verdict to `unknown` (re-probe, not terminal-dead) so it can never feed the cron prune on its own.
 
 ### WR-05: `docs/architecture/redis-keys.md` registry drift — `events:llm:v3` TTL row contradicts the code, and urlLiveness line references are stale
+
+**FIXED** — d42a0e5 (corrected the `events:llm:v3` TTL cell to `172800s LLM_TERMINAL_TTL_SEC, 48h`; refreshed the stale url-liveness line refs to :66 / :836 / :1274 / :75. redis-registry test green).
 
 **File:** `docs/architecture/redis-keys.md:17, 29`
 **Issue:** Row `events:llm:v3` states TTL "9000s (`LLM_REDIS_TTL_SEC`, ≈2.5h hard)", but both writers use `LLM_TERMINAL_TTL_SEC = 172_800` (48h) — `server/lib/llmExtractionPipeline.ts:150, 200` and the prune splice at `server/lib/urlLiveness.ts:1199`. The code comment at `llmExtractionPipeline.ts:137-149` explicitly documents the 2.5h value as retired ("left events:llm:v3 empty for ~21.5h of every day"). An operator consulting this registry (its stated purpose) would draw the wrong conclusion about cache survival across the cron window. Additionally, row 29's writer/reader line refs (`urlLiveness.ts:62`, `:454`, `:585`) are stale after the Phase 43 edits (`URL_LIVENESS_KEY_PREFIX` is at :65, `persistLiveness` at :780, the splice writer at :1199) — the row's Phase 43 content updates (7-status taxonomy, evidence, D-10 semantics) were made without refreshing the references in the same row family.
