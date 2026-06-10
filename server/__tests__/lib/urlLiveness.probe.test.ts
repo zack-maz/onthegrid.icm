@@ -322,16 +322,18 @@ describe('Phase 43 Plan 02 Task 1 — classifySoft404 (GHOST-06)', () => {
     const markerCases: Array<{ name: string; title: string; marker: string }> = [
       { name: 'lowercase "page not found"', title: 'Page not found', marker: 'page not found' },
       { name: 'mixed-case "Page Not Found"', title: 'Page Not Found', marker: 'page not found' },
-      { name: 'numeric "404"', title: 'Error 404 — Oops', marker: '404' },
+      // CR-03 — error-context "404" phrase (bare '404' dropped to avoid
+      // matching live Persian-calendar / hardware / flight-number titles).
+      { name: 'error-context "error 404"', title: 'Error 404 — Oops', marker: 'error 404' },
       {
         name: '"article not available"',
         title: 'This article not available',
         marker: 'article not available',
       },
       {
-        name: '"no longer exists"',
-        title: 'The page no longer exists',
-        marker: 'no longer exists',
+        name: '"this page no longer exists"',
+        title: 'Sorry, this page no longer exists',
+        marker: 'this page no longer exists',
       },
     ];
 
@@ -356,6 +358,43 @@ describe('Phase 43 Plan 02 Task 1 — classifySoft404 (GHOST-06)', () => {
       expect(result.soft404).toBe(false);
       expect(result.evidence).toBeNull();
     });
+
+    // CR-03 — live conflict-news titles that the OLD bare substrings ('404',
+    // 'not found', 'no longer exists') would have deterministically flagged as
+    // soft-404, pruning a live event. Each must classify LIVE now that markers
+    // require explicit error framing.
+    const liveTitleCases: Array<{ name: string; title: string }> = [
+      // Persian Solar-Hijri year 1404 (Mar 2025–Mar 2026, in the war window).
+      { name: 'Persian year 1404 budget headline', title: "Iran's 1404 budget review under way" },
+      // Casualty/search headline containing "not found".
+      {
+        name: '"sailors not found" headline',
+        title: 'Missing sailors not found after strike on tanker',
+      },
+      // Ceasefire headline containing "no longer exists".
+      {
+        name: '"ceasefire no longer exists" headline',
+        title: 'Hamas says the ceasefire no longer exists, official confirms',
+      },
+      // Military hardware containing "404".
+      {
+        name: 'GE F404 engine headline',
+        title: 'GE F404 engine deliveries resume to fighter fleet',
+      },
+    ];
+
+    for (const { name, title } of liveTitleCases) {
+      it(`live title ${name} → soft404:false (CR-03 regression — must NOT prune live)`, () => {
+        // Substantial body + deep→deep URLs so ONLY the marker signal could fire.
+        const body =
+          `<html><head><title>${title}</title></head><body><article>` +
+          'Substantial reporting content fills the article body here. '.repeat(40) +
+          '</article></body></html>';
+        const result = classifySoft404(body, DEEP, DEEP);
+        expect(result.soft404).toBe(false);
+        expect(result.evidence).toBeNull();
+      });
+    }
   });
 
   describe('(b) redirect-to-home — D-02b (deep→shallow only)', () => {

@@ -251,13 +251,24 @@ const NEAR_EMPTY_FLOOR_BYTES = 512;
  * phrases plus two common CMS strings.
  */
 const NOT_FOUND_MARKERS: readonly string[] = [
+  // CR-03 — every entry must be an error-context phrase that cannot occur in a
+  // live conflict-news <title>. The bare substrings `'404'`, `'not found'`, and
+  // `'no longer exists'` were DROPPED because they deterministically match live
+  // headlines in THIS corpus: `'404'` hits Persian Solar-Hijri years (SH 1404 =
+  // Mar 2025–Mar 2026) + hardware (GE F404) + flight/casualty numbers;
+  // `'not found'` hits "Missing sailors not found after strike"; `'no longer
+  // exists'` hits "Hamas says the ceasefire no longer exists". Each survivor
+  // below requires the error framing ("page"/"article"/"content"/"error 404"/
+  // "404 not found"/"http 404"/"this page no longer exists") so a live article
+  // title cannot match. Precision-first (D-03); expanding later is cheap.
   'page not found',
   'article not available',
-  'no longer exists',
   'page no longer available',
   'content not found',
-  '404',
-  'not found',
+  'this page no longer exists',
+  'error 404',
+  '404 not found',
+  'http 404',
 ];
 
 /**
