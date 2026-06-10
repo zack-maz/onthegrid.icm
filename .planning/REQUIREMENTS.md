@@ -22,7 +22,7 @@ Operator-locked priority order: water filter → ghost links + events subtab →
 - [ ] **GHOST-07**: Every event is probe-reachable or explicitly classified — source-less events no longer silently skipped by `buildProbeCandidates`, so prune can evaluate them
 - [ ] **GHOST-08**: Transient failures never count toward terminal-dead prune — `unknown` bucket excluded from prune eligibility, `attemptCount >= 3` gate retained, flaky-host attempt-reset semantics fixed so repeat offenders eventually accumulate
 - [ ] **GHOST-09**: 403 auto-prune decision made with evidence — evaluate demoting `403` to manual-only prune (bot-blocking CDNs 403 unknown UAs on live articles) using a `prunedIds` sample; implement the decision
-- [ ] **GHOST-10**: Operator can see WHY a link was flagged dead — evidence string (matched marker / redirect target / body length) persisted in `events:url-liveness:{eventId}` and surfaced in the events subtab; pinned schema test + Redis registry updated in lockstep
+- [x] **GHOST-10**: Operator can see WHY a link was flagged dead — evidence string (matched marker / redirect target / body length) persisted in `events:url-liveness:{eventId}` and surfaced in the events subtab; pinned schema test + Redis registry updated in lockstep
 
 ### Events Subtab Detail (EVENTS-TAB)
 
@@ -105,7 +105,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GHOST-07        | Phase 43 | Pending  |
 | GHOST-08        | Phase 43 | Pending  |
 | GHOST-09        | Phase 43 | Pending  |
-| GHOST-10        | Phase 43 | Pending  |
+| GHOST-10        | Phase 43 | Complete |
 | EVENTS-TAB-01   | Phase 44 | Pending  |
 | EVENTS-TAB-02   | Phase 44 | Pending  |
 | DASH-READ-01    | Phase 45 | Pending  |

@@ -367,7 +367,7 @@ Plans:
 5. The operator can see why a link was flagged dead — an evidence string (matched marker / redirect target / body length) is persisted in `events:url-liveness:{eventId}` with the schema test and Redis registry updated in lockstep.
    **Plans**: 5 plans
 
-- [ ] 43-01-PLAN.md — Widen UrlLiveness schema/enum/TTL/isTerminalDead + evidence field; contract lockstep (schema test + shim + redis-keys.md + CLAUDE.md) [GHOST-10] (Wave 1)
+- [x] 43-01-PLAN.md — Widen UrlLiveness schema/enum/TTL/isTerminalDead + evidence field; contract lockstep (schema test + shim + redis-keys.md + CLAUDE.md) [GHOST-10] (Wave 1)
 - [ ] 43-02-PLAN.md — soft-404 body heuristic: classifySoft404 + 16 KiB capped GET on 200s + probeUrl wiring [GHOST-06] (Wave 2)
 - [ ] 43-03-PLAN.md — attemptCount semantics (live=0, unknown=preserve) + source-less no-url coverage + classifiedNoUrl log line [GHOST-07, GHOST-08] (Wave 3)
 - [ ] 43-04-PLAN.md — GHOST-09 evidence sample: prunedIds + 403 browser-UA re-probe (prod, checkpoint) → decision recorded [GHOST-09] (Wave 2)
@@ -454,7 +454,7 @@ Plans:
 | Phase | Name                                  | Plans Complete | Status      | Completed  |
 | ----- | ------------------------------------- | -------------- | ----------- | ---------- |
 | 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
-| 43    | Ghost Link Prune Correctness          | 0/TBD          | Not started | -          |
+| 43    | Ghost Link Prune Correctness          | 1/5            | In Progress |            |
 | 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -          |
 | 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -          |
 | 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
@@ -488,7 +488,7 @@ Deferred from v1.5:
 **Goal:** Resolve operator-blocking rate limit. The 6 req/min global tier in `server/middleware/rateLimit.ts` (applied at `server/index.ts:99` to all `/api/*`) blocks the operator's own browser — flights polling alone is 12 req/min. Three options scoped earlier: (a) remove global tier (per-endpoint limits already tuned for browser), (b) bump to 300/min to keep loose anti-scraper net, (c) bypass when `DASHBOARD_PASSWORD` Bearer present.
 **Resolution:** Folded into Phase 28.2 on 2026-04-30 per 28-CONTEXT.md D-04 — option (c) Bearer-bypass selected. This entry remains for historical traceability.
 **Requirements:** Subsumed by 28-CONTEXT.md D-04
-**Plans:** 7/7 plans complete
+**Plans:** 1/5 plans executed
 
 ### Phase 999.2: `api/vercel-entry.js` build-artifact discipline (BACKLOG, likely-absorbed-by Phase 38 VERCEL-PRO-02)
 
