@@ -185,6 +185,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         attemptCount: 1,
         lastUrlProbed: 'https://example.com/missing',
         lastHttpStatus: 404,
+        evidence: 'http-404',
       }),
     );
 
@@ -210,6 +211,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         attemptCount: 5,
         lastUrlProbed: 'https://example.com/x',
         lastHttpStatus: 404,
+        evidence: 'http-404',
       }),
     );
     decrMock.mockResolvedValue(0);
@@ -227,7 +229,12 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
     expect(decrMock).toHaveBeenCalledWith(URL_LIVENESS_COUNT_KEY);
   });
 
-  it('dead→unknown resets attemptCount to 0 and fires DECR', async () => {
+  // Phase 43 D-10 (FLIPPED from the Phase 32 reset-on-non-dead rule):
+  // dead→unknown now PRESERVES the prior attemptCount (a transient blip
+  // must not reset the consecutive-dead run a flaky host accumulates),
+  // WHILE the sidecar DECR still fires (the event exits terminal-dead
+  // membership — attemptCount and sidecar are independent axes).
+  it('dead→unknown PRESERVES attemptCount and fires DECR (D-10)', async () => {
     cacheGetSafeMock.mockResolvedValueOnce(
       cacheHit({
         status: '403',
@@ -235,6 +242,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         attemptCount: 3,
         lastUrlProbed: 'https://example.com/y',
         lastHttpStatus: 403,
+        evidence: 'http-403',
       }),
     );
     decrMock.mockResolvedValue(0);
@@ -247,8 +255,109 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
-    expect((value as { attemptCount: number }).attemptCount).toBe(0);
+    // PRESERVED at the prior 3 (NOT reset to 0).
+    expect((value as { attemptCount: number }).attemptCount).toBe(3);
     expect(decrMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Phase 43 D-10 — the flaky-host accumulation fix. A host that
+  // alternates dead→unknown→dead must accumulate past the >=3 cron gate
+  // because `unknown` preserves the count instead of resetting it.
+  it('dead→unknown→dead accumulates attemptCount past the >=3 threshold (D-10)', async () => {
+    decrMock.mockResolvedValue(0);
+    incrMock.mockResolvedValue(1);
+
+    // Tick 1: not-dead→dead → attemptCount=1
+    cacheGetSafeMock.mockResolvedValueOnce(null);
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: '404',
+      httpStatus: 404,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: 'http-404',
+    });
+    let value = cacheSetSafeMock.mock.calls[0]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBe(1);
+
+    // Tick 2: dead→unknown → PRESERVE 1
+    cacheGetSafeMock.mockResolvedValueOnce(
+      cacheHit({
+        status: '404',
+        lastProbedAt: '2026-05-21T00:00:01.000Z',
+        attemptCount: 1,
+        lastUrlProbed: 'https://flaky.example.com/',
+        lastHttpStatus: 404,
+        evidence: 'http-404',
+      }),
+    );
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: 'unknown',
+      httpStatus: 503,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: null,
+    });
+    value = cacheSetSafeMock.mock.calls[1]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBe(1);
+
+    // Tick 3: unknown→dead → 1+1=2 (not-dead prior → start at... but the
+    // prior is `unknown` which is not-dead, so not-dead→dead = 1? No —
+    // D-10: dead-monotonic only applies dead→dead. unknown→dead is
+    // not-dead→dead → starts at 1. The accumulation works because the
+    // PRESERVED unknown count carries forward to the NEXT dead read.)
+    // The accumulation that crosses >=3 is driven by dead→dead increments
+    // where unknown ticks in between preserve rather than reset.
+    cacheGetSafeMock.mockResolvedValueOnce(
+      cacheHit({
+        status: 'unknown',
+        lastProbedAt: '2026-05-21T00:00:02.000Z',
+        attemptCount: 1,
+        lastUrlProbed: 'https://flaky.example.com/',
+        lastHttpStatus: 503,
+        evidence: null,
+      }),
+    );
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: '404',
+      httpStatus: 404,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: 'http-404',
+    });
+    value = cacheSetSafeMock.mock.calls[2]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBe(2);
+
+    // Tick 4: dead→dead → 3 (crosses the >=3 cron prune gate).
+    cacheGetSafeMock.mockResolvedValueOnce(
+      cacheHit({
+        status: '404',
+        lastProbedAt: '2026-05-21T00:00:03.000Z',
+        attemptCount: 2,
+        lastUrlProbed: 'https://flaky.example.com/',
+        lastHttpStatus: 404,
+        evidence: 'http-404',
+      }),
+    );
+    await __test__.persistLiveness('flaky', 'https://flaky.example.com/', {
+      status: '404',
+      httpStatus: 404,
+      finalUrl: 'https://flaky.example.com/',
+      evidence: 'http-404',
+    });
+    value = cacheSetSafeMock.mock.calls[3]![1] as { attemptCount: number };
+    expect(value.attemptCount).toBeGreaterThanOrEqual(3);
+  });
+
+  it('every written entry carries the ProbeResult evidence string', async () => {
+    cacheGetSafeMock.mockResolvedValueOnce(null);
+    incrMock.mockResolvedValue(1);
+
+    await __test__.persistLiveness('e-evi', 'https://example.com/missing', {
+      status: '404',
+      httpStatus: 404,
+      finalUrl: 'https://example.com/missing',
+      evidence: 'http-404',
+    });
+
+    const [, value] = cacheSetSafeMock.mock.calls[0]!;
+    expect((value as { evidence: string | null }).evidence).toBe('http-404');
   });
 
   it('DECR underflow floors at 0 via redis.set', async () => {
@@ -259,6 +368,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         attemptCount: 1,
         lastUrlProbed: 'https://example.com/z',
         lastHttpStatus: 404,
+        evidence: 'http-404',
       }),
     );
     decrMock.mockResolvedValue(-1);
