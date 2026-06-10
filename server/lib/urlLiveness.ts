@@ -222,10 +222,9 @@ const PROBE_UA = 'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.ap
  * Hard-coded module const, NOT env — heuristic knobs are domain constants for
  * this phase, not operator levers.
  *
- * Consumed by the `probeUrl` 200-branch capped GET wiring in Task 2; declared
- * here in Task 1 as the canonical single source of truth for the 16 KiB cap.
+ * Consumed by the `probeUrl` 200-branch capped GET wiring (`classifyTwoHundred`)
+ * as the canonical single source of truth for the 16 KiB cap.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- wired into the capped GET in Task 2 (same plan)
 const SOFT404_BODY_CAP_BYTES = 16384;
 
 /**
@@ -403,15 +402,21 @@ export interface ProbeResult {
  * fetch-with-timeout helper. Diverges from `server/adapters/nominatim.ts`
  * in two places per CONTEXT D-16 / D-17:
  *   - `redirect: 'manual'` so Phase 32 counts hops itself (not fetch)
- *   - GET branch sets `Range: bytes=0-1023` so 405-fallback caps the
- *     download to 1 KiB
+ *   - GET branch sets a `Range` header so the download is capped. The
+ *     default `rangeBytes` (1024) preserves the Phase 32 405-fallback's
+ *     1 KiB cap; Phase 43's soft-404 body GET passes `SOFT404_BODY_CAP_BYTES`
+ *     (16 KiB) so the heuristic sees enough of the `<head>`/`<title>`.
  */
-async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response | null> {
+async function fetchOnce(
+  url: string,
+  method: 'HEAD' | 'GET',
+  rangeBytes = 1024,
+): Promise<Response | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = { 'User-Agent': PROBE_UA };
-    if (method === 'GET') headers.Range = 'bytes=0-1023';
+    if (method === 'GET') headers.Range = `bytes=0-${rangeBytes - 1}`;
     return await fetch(url, {
       method,
       headers,
@@ -426,12 +431,112 @@ async function fetchOnce(url: string, method: 'HEAD' | 'GET'): Promise<Response 
 }
 
 /**
+ * Phase 43 Plan 02 Task 2 — read at most `maxBytes` of a Response body via a
+ * manual `getReader()` loop, then abort the rest.
+ *
+ * DoS guard (T-43-04): some CDNs (Cloudflare, Fastly, many WordPress hosts)
+ * ignore `Range` on `text/html` and stream the full body with `200 OK` (not
+ * `206`). The manual loop breaks once `total >= maxBytes` and the `finally`
+ * `reader.cancel()` releases the connection — so a multi-MB article never gets
+ * fully buffered.
+ *
+ * Charset: decode with `TextDecoder('utf-8', { fatal: false })` so a multibyte
+ * character split across the cap boundary does NOT throw — the not-found
+ * markers are ASCII, so a garbled partial tail is harmless. Exotic
+ * `Content-Type; charset=` values are deliberately NOT honored (precision-first
+ * posture, D-03 — a mis-decoded body simply yields no marker → `live`).
+ */
+async function readCappedBody(res: Response, maxBytes: number): Promise<string> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        total += value.byteLength;
+      }
+    }
+  } finally {
+    // Releases the connection for servers that ignore `Range` and keep
+    // streaming. Swallow any cancel rejection — best-effort cleanup.
+    await reader.cancel().catch(() => {});
+  }
+  // Concatenate the accumulated chunks, capped to maxBytes.
+  const merged = new Uint8Array(total);
+  let pos = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, pos);
+    pos += chunk.byteLength;
+  }
+  return new TextDecoder('utf-8', { fatal: false }).decode(merged.subarray(0, maxBytes));
+}
+
+/**
+ * Phase 43 Plan 02 Task 2 (GHOST-06) — soft-404 body heuristic on the 200
+ * branch. Issues a 16 KiB capped GET on the ALREADY-SSRF-VETTED `finalUrl`
+ * (the redirect-followed `currentUrl` — never a fresh fetch to an unvetted
+ * host; T-43-03), reads the body via `readCappedBody` (DoS-capped; T-43-04),
+ * and feeds the decoded head into the pure `classifySoft404` helper.
+ *
+ * Degrade-open (D-22 / D-03): on ANY failure — the GET returns null (fetch
+ * threw), the body read throws, the body is empty/unreadable — the verdict is
+ * `live` with `evidence: null`. A body-read failure is treated as live, never
+ * poisons the sweep, and never flips live content to dead.
+ *
+ * D-21 — the extra GET respects the per-host 1-req/s throttle map via
+ * `waitForHostSlot` so the polite-citizen contract holds (it is the only added
+ * outbound traffic this phase introduces).
+ */
+async function classifyTwoHundred(
+  finalUrl: string,
+  originalUrl: string,
+  httpStatus: number,
+): Promise<ProbeResult> {
+  const liveVerdict: ProbeResult = {
+    status: 'live',
+    httpStatus,
+    finalUrl,
+    evidence: null,
+  };
+  try {
+    // D-21 — honor the per-host throttle for the follow-up GET (same host as
+    // the just-completed HEAD). First-touch hosts incur ~no delay.
+    try {
+      await waitForHostSlot(new URL(finalUrl).hostname);
+    } catch {
+      // Unparseable finalUrl host → skip throttle, degrade-open below.
+    }
+    // SSRF (T-43-03): the GET targets the already-vetted finalUrl ONLY.
+    const res = await fetchOnce(finalUrl, 'GET', SOFT404_BODY_CAP_BYTES);
+    if (res === null) {
+      // fetch threw on the body GET — degrade-open to live.
+      return liveVerdict;
+    }
+    const body = await readCappedBody(res, SOFT404_BODY_CAP_BYTES);
+    const verdict = classifySoft404(body, finalUrl, originalUrl);
+    if (verdict.soft404) {
+      return { status: 'soft-404', httpStatus, finalUrl, evidence: verdict.evidence };
+    }
+    return liveVerdict;
+  } catch (err) {
+    // D-22 — any body-read / classification throw degrades open to live.
+    log.warn({ err, finalUrl }, 'soft-404 body classification failed (degrade-open to live)');
+    return liveVerdict;
+  }
+}
+
+/**
  * D-16 / D-17 / D-18 / D-21 — single-URL liveness probe.
  *
  * Method sequence:
- *   1. HEAD with `redirect: 'manual'`. 200 → live; 404 → 404; 403 → 403.
- *   2. On 405, GET with `Range: bytes=0-1023`. 200 → live; 4xx/5xx → same
- *      taxonomy.
+ *   1. HEAD with `redirect: 'manual'`. 200 → soft-404 heuristic; 404 → 404;
+ *      403 → 403.
+ *   2. On 405, GET with `Range: bytes=0-1023`. 200 → soft-404 heuristic;
+ *      4xx/5xx → same taxonomy.
  *   3. On 3xx with a `location` header, follow up to MAX_REDIRECTS (3)
  *      hops, counting hops manually. 4th 3xx → `unknown`.
  *   4. fetch throws (DNS / ECONNREFUSED / abort) → `dead-host`.
@@ -493,9 +598,9 @@ export async function probeUrl(rawUrl: string): Promise<ProbeResult> {
 
       const code = res.status;
 
-      // 2xx → live.
+      // 2xx → run the soft-404 body heuristic (Phase 43 Plan 02, GHOST-06).
       if (code >= 200 && code < 300) {
-        return { status: 'live', httpStatus: code, finalUrl: currentUrl, evidence: null };
+        return await classifyTwoHundred(currentUrl, rawUrl, code);
       }
 
       // Specific 4xx codes that count toward the dashboard dead surface.
