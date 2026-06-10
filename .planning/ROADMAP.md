@@ -319,7 +319,7 @@ Plans:
 ### Phases summary (planned)
 
 - [x] **Phase 42: Water Filter Fix** — telemetry-diagnosed rejection-bucket fix for intermittently-dropped water facilities; `water:facilities:v3` cache key bump + cold-start snapshot regen if shape changes; `waterFilterStats` regression fixtures pin the fix. _(WATER-FILTER-01..04)_ (completed 2026-06-10)
-- [ ] **Phase 43: Ghost Link Prune Correctness** — soft-404 body heuristic on 200s, source-less event coverage, `unknown`-excluded-from-prune + flaky-host attempt-reset fix, 403-auto-prune evidence decision, per-event evidence string surfaced. _(GHOST-06..10)_
+- [x] **Phase 43: Ghost Link Prune Correctness** — soft-404 body heuristic on 200s, source-less event coverage, `unknown`-excluded-from-prune + flaky-host attempt-reset fix, 403-auto-prune evidence decision, per-event evidence string surfaced. _(GHOST-06..10)_ (completed 2026-06-10)
 - [ ] **Phase 44: Events Subtab Pipeline Detail** — mount the 7 already-built LLM blocks into `EventsFiltersSectionV3` + per-bucket dead-link state, fed from existing `LLMStatus` + liveness fields; pure UI wiring, no server changes. _(EVENTS-TAB-01..02)_
 - [ ] **Phase 45: Dashboard Subtab Readability Redesign** — tabular-nums / right-aligned numerics / progressive disclosure / visual hierarchy on water+events+sites subtabs; off-the-grid aesthetic + ARIA tablist contract preserved; trend sparklines from small history rings. _(DASH-READ-01..05)_
 - [ ] **Phase 46: General Hardening + Cron Watch Start** — rate-limiter operator block (999.1) + 429 surface, cron first-tick/missed-run detection (999.3), CRON-WATCH-01 7-day NON-BLOCKING watch structured to avoid the Phase 31 early-close repeat, Nyquist coverage backfill for Phases 39/40 degrade-open paths. _(HARD-01, HARD-02, CRON-WATCH-01, HARD-03)_
@@ -371,7 +371,7 @@ Plans:
 - [x] 43-02-PLAN.md — soft-404 body heuristic: classifySoft404 + 16 KiB capped GET on 200s + probeUrl wiring [GHOST-06] (Wave 2)
 - [x] 43-03-PLAN.md — attemptCount semantics (live=0, unknown=preserve) + source-less no-url coverage + classifiedNoUrl log line [GHOST-07, GHOST-08] (Wave 3)
 - [x] 43-04-PLAN.md — GHOST-09 evidence sample: prunedIds + 403 browser-UA re-probe (prod, checkpoint) → decision recorded [GHOST-09] (Wave 2)
-- [ ] 43-05-PLAN.md — cron-only 403 exclusion (per evidence) + unknown/no-url prune pins + DeadUrlSampleEntry evidence/soft-404 exposure [GHOST-09, GHOST-10] (Wave 4)
+- [x] 43-05-PLAN.md — cron-only 403 exclusion (per evidence) + unknown/no-url prune pins + DeadUrlSampleEntry evidence/soft-404 exposure [GHOST-09, GHOST-10] (Wave 4)
 
 ### Phase 44: Events Subtab Pipeline Detail
 
@@ -454,7 +454,7 @@ Plans:
 | Phase | Name                                  | Plans Complete | Status      | Completed  |
 | ----- | ------------------------------------- | -------------- | ----------- | ---------- |
 | 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
-| 43    | Ghost Link Prune Correctness          | 4/5            | In Progress |            |
+| 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
 | 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -          |
 | 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -          |
 | 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
@@ -488,7 +488,7 @@ Deferred from v1.5:
 **Goal:** Resolve operator-blocking rate limit. The 6 req/min global tier in `server/middleware/rateLimit.ts` (applied at `server/index.ts:99` to all `/api/*`) blocks the operator's own browser — flights polling alone is 12 req/min. Three options scoped earlier: (a) remove global tier (per-endpoint limits already tuned for browser), (b) bump to 300/min to keep loose anti-scraper net, (c) bypass when `DASHBOARD_PASSWORD` Bearer present.
 **Resolution:** Folded into Phase 28.2 on 2026-04-30 per 28-CONTEXT.md D-04 — option (c) Bearer-bypass selected. This entry remains for historical traceability.
 **Requirements:** Subsumed by 28-CONTEXT.md D-04
-**Plans:** 3/5 plans executed
+**Plans:** 5/5 plans complete
 
 ### Phase 999.2: `api/vercel-entry.js` build-artifact discipline (BACKLOG, likely-absorbed-by Phase 38 VERCEL-PRO-02)
 
