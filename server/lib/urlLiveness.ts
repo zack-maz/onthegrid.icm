@@ -210,6 +210,130 @@ const JITTER_MS = 200;
 const MAX_REDIRECTS = 3;
 const PROBE_UA = 'IranMonitor-LinkCheck/1.0 (+https://otg-iran-monitor.vercel.app)';
 
+// ============================================================================
+// Phase 43 Plan 02 — soft-404 body heuristic constants (D-20, no env)
+// ============================================================================
+
+/**
+ * D-01 / D-20 — capped GET byte budget for the soft-404 body read. 16 KiB
+ * (`Range: bytes=0-16383`) is enough to capture the `<head>`/`<title>` of any
+ * realistic publisher page; the manual `readCappedBody` reader aborts at this
+ * cap even when the server ignores the `Range` header (DoS guard T-43-04).
+ * Hard-coded module const, NOT env — heuristic knobs are domain constants for
+ * this phase, not operator levers.
+ *
+ * Consumed by the `probeUrl` 200-branch capped GET wiring in Task 2; declared
+ * here in Task 1 as the canonical single source of truth for the 16 KiB cap.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- wired into the capped GET in Task 2 (same plan)
+const SOFT404_BODY_CAP_BYTES = 16384;
+
+/**
+ * D-02c / D-20 — near-empty content floor. A 200 response whose body, after
+ * stripping HTML tags, holds fewer than this many bytes of actual text is
+ * treated as a soft-404 shell. ~512 bytes is deliberately conservative
+ * (precision-first, D-03): a real React SPA shell with meta + script tags
+ * typically exceeds 512 bytes of MARKUP, but tag-stripping measures TEXT, so a
+ * genuine "page not found" empty body falls well under while a hydrated
+ * article stays above. A dead-but-heavy-shell SPA link surviving is within the
+ * asymmetric error budget (Pitfall 2).
+ */
+const NEAR_EMPTY_FLOOR_BYTES = 512;
+
+/**
+ * D-02a / D-20 — curated, precision-first not-found marker list (lowercase).
+ * Matched case-insensitively against the `<title>` of a 200 response. Kept
+ * deliberately tiny and unambiguous: a marker matched anywhere in BODY text
+ * would false-positive on legitimate articles that are ABOUT 404s/errors
+ * (RESEARCH anti-pattern), so classifySoft404 matches markers against the
+ * `<title>` only. The exact membership of this list is Claude's discretion per
+ * the CONTEXT D-discretion note ("keep small, curated, precision-first;
+ * expanding it later is cheap"); these are the conservative core English
+ * phrases plus two common CMS strings.
+ */
+const NOT_FOUND_MARKERS: readonly string[] = [
+  'page not found',
+  'article not available',
+  'no longer exists',
+  'page no longer available',
+  'content not found',
+  '404',
+  'not found',
+];
+
+/**
+ * Phase 43 Plan 02 Task 1 (GHOST-06) — pure soft-404 body heuristic.
+ *
+ * Evaluates the three D-02 signals IN ORDER with early-return, applying the
+ * D-03 precision-first tie-break (any ambiguity / no-signal → `live`,
+ * `evidence: null`; NEVER flag live content dead):
+ *
+ *   (a) not-found markers — extract the `<title>`, lowercase it, and if it
+ *       includes any `NOT_FOUND_MARKERS` entry return a soft-404 verdict with
+ *       evidence `soft-404: matched "<marker>" in title` (D-16 verbatim).
+ *       Markers are matched against the title ONLY — never the full body — so
+ *       an article ABOUT a 404 does not false-positive.
+ *   (b) redirect-to-home — if the ORIGINAL URL had a deep path (≥2 segments)
+ *       and the FINAL URL landed at `/` or a single-segment root (≤1 segment),
+ *       the redirect chain bounced an article to a homepage/section root.
+ *       Evidence `redirect-to-home: <origPath> → <finalPath>` (D-16). A
+ *       deep→deep canonical move does NOT match (Pitfall 3).
+ *   (c) near-empty content — strip tags and if the remaining text is below
+ *       `NEAR_EMPTY_FLOOR_BYTES` return evidence `near-empty: <n> bytes`
+ *       (D-16). Conservative floor avoids false-positiving heavy SPA shells
+ *       (Pitfall 2).
+ *
+ * Pure function (no fetch, no Redis, no side effects) so it gets a
+ * table-driven test without fetch mocking. Exported directly — it needs no
+ * NODE_ENV gate (that gate is only for module-private fetch/Redis helpers like
+ * `persistLiveness`).
+ *
+ * The fetched HTML body is UNTRUSTED external input (T-43-05): it is only
+ * substring-scanned for ASCII markers and tag-stripped for a length count —
+ * never eval'd, parsed-as-code, or rendered. The evidence string is bounded by
+ * the schema's `z.string().max(200)` from Plan 01.
+ */
+export function classifySoft404(
+  bodyText: string,
+  finalUrl: string,
+  originalUrl: string,
+): { soft404: boolean; evidence: string | null } {
+  // (a) not-found markers in <title> (case-insensitive). Single regex capture
+  // over the decoded head — no DOM parser (D-20 / RESEARCH "Don't Hand-Roll").
+  const title = (/<title[^>]*>([^<]*)<\/title>/i.exec(bodyText)?.[1] ?? '').toLowerCase();
+  for (const marker of NOT_FOUND_MARKERS) {
+    if (title.includes(marker)) {
+      return { soft404: true, evidence: `soft-404: matched "${marker}" in title` };
+    }
+  }
+
+  // (b) redirect-to-home — deep original bounced to a shallow root. Wrapped in
+  // a try so a malformed URL degrades open (D-03 / D-22) rather than throwing.
+  try {
+    const origDepth = new URL(originalUrl).pathname.split('/').filter(Boolean).length;
+    const finalPath = new URL(finalUrl).pathname;
+    const finalDepth = finalPath.split('/').filter(Boolean).length;
+    if (origDepth >= 2 && finalDepth <= 1) {
+      return {
+        soft404: true,
+        evidence: `redirect-to-home: ${new URL(originalUrl).pathname} → ${finalPath}`,
+      };
+    }
+  } catch {
+    // Unparseable URL → fall through to the near-empty check (precision-first:
+    // no redirect signal rather than a crash).
+  }
+
+  // (c) near-empty content — strip tags, trim, measure remaining text length.
+  const contentLen = bodyText.replace(/<[^>]+>/g, '').trim().length;
+  if (contentLen < NEAR_EMPTY_FLOOR_BYTES) {
+    return { soft404: true, evidence: `near-empty: ${contentLen} bytes` };
+  }
+
+  // D-03 precision-first: no unambiguous signal fired → live, no evidence.
+  return { soft404: false, evidence: null };
+}
+
 /**
  * Pitfall 1 / RESEARCH A6 — caller-supplied wall-clock cutoff for the
  * sweep. Plan 32-03 will compute this as `cronStart + 800_000 - 60_000`
