@@ -267,6 +267,68 @@ export function applyRomanizedName(
 /** Countries to fully exclude */
 const EXCLUDED_COUNTRIES = new Set(['Uzbekistan', 'Tajikistan', 'Kyrgyzstan', 'Kazakhstan']);
 
+/**
+ * Case/whitespace-insensitive name normalizer over `f.label` (Phase 42 D-04).
+ *
+ * Reads `f.label` (always populated by `extractLabel`, line ~984) — NOT
+ * `nameLatin` (RESEARCH Pitfall 4: `nameLatin` is only set when
+ * `applyRomanizedName` fires on a non-Latin name, so reading it would treat a
+ * romanized-from-Latin facility as unnamed and over-collapse).
+ */
+function normName(f: WaterFacility): string {
+  return (f.label ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Name-aware, deterministic spatial deduplication (Phase 42 WATER-FILTER-02,
+ * D-04..D-08). Extracted as an exported pure function from the former inline
+ * loop at `fetchWaterFacilities` (precedent: `computeAdmissionDecision`
+ * extraction, Phase 27.3.1 R-06 D-20) so it is unit-testable without mocking
+ * Overpass (RESEARCH Pitfall 3).
+ *
+ * Two fixes vs the old loop:
+ *   1. Name-aware collapse (D-04): two same-type facilities within 50m collapse
+ *      ONLY when their normalized names match OR one side is unnamed. Distinct
+ *      named facilities of the same type within 50m BOTH admit. The old loop was
+ *      name-blind and dropped legitimate distinct dams (e.g. `Sd Wdy Rbg` vs
+ *      `Rabigh Dam`, 21m apart — see 42-DIAGNOSIS.md).
+ *   2. Deterministic survivor (D-07): the working set is sorted by
+ *      `notabilityScore` descending, tie-broken by `osmId` ascending, BEFORE the
+ *      collapse scan. This makes the kept set order-independent of Overpass
+ *      return order — killing the "intermittent which-one-disappears" symptom.
+ *
+ * The 50m window (`haversine < 0.05`) and same-`facilityType` requirement are
+ * UNCHANGED (D-05).
+ *
+ * @returns `kept` (admitted facilities, deterministic order) and `collapsed`
+ *   (count of suppressed duplicates, summed into `stats.rejections.duplicate`).
+ */
+export function spatialDedup(facilities: WaterFacility[]): {
+  kept: WaterFacility[];
+  collapsed: number;
+} {
+  // D-07: deterministic survival order — highest notabilityScore, tie-break
+  // lowest osmId. Sort a COPY so the caller's array order is not mutated.
+  const ordered = [...facilities].sort(
+    (a, b) => (b.notabilityScore ?? 0) - (a.notabilityScore ?? 0) || a.osmId - b.osmId,
+  );
+  const kept: WaterFacility[] = [];
+  let collapsed = 0;
+  for (const f of ordered) {
+    const fname = normName(f);
+    const isDupe = kept.some((existing) => {
+      if (existing.facilityType !== f.facilityType) return false; // D-05: same type only
+      if (haversine(existing.lat, existing.lng, f.lat, f.lng) >= 0.05) return false; // D-05: 50m window unchanged
+      const ename = normName(existing);
+      // D-04: collapse only on a name match or when either side is unnamed.
+      return ename === fname || ename === '' || fname === '';
+    });
+    if (!isDupe) kept.push(f);
+    else collapsed++;
+  }
+  return { kept, collapsed };
+}
+
 /** Haversine distance in km (lightweight, no import needed) */
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -1199,17 +1261,10 @@ export async function fetchWaterFacilities(): Promise<{
   const unique = new Map<string, WaterFacility>();
   for (const f of all) unique.set(f.id, f);
 
-  // D-05: Spatial dedup (50m, same facilityType)
-  const deduped: WaterFacility[] = [];
-  for (const f of Array.from(unique.values())) {
-    const isDupe = deduped.some(
-      (existing) =>
-        existing.facilityType === f.facilityType &&
-        haversine(existing.lat, existing.lng, f.lat, f.lng) < 0.05,
-    );
-    if (!isDupe) deduped.push(f);
-    else stats.rejections.duplicate++;
-  }
+  // Phase 42 D-04..D-08: name-aware + deterministic spatial dedup (50m, same
+  // facilityType). Extracted to the exported pure `spatialDedup` above.
+  const { kept: deduped, collapsed } = spatialDedup(Array.from(unique.values()));
+  stats.rejections.duplicate += collapsed;
 
   // Phase 27.3.1 R-08 D-28 — per-country admission counts keyed by nearest
   // centroid name. Tallied AFTER dedup so duplicates do not double-count.
