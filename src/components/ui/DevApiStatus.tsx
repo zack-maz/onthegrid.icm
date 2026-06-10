@@ -1176,7 +1176,9 @@ function DevApiStatusAllApisTab({
         eventId: string;
         // Phase 43 drift close — `soft-404` joins the terminal-dead union.
         status: 'dead-host' | '403' | '404' | 'soft-404';
-        url: string;
+        // Phase 44 WR-04 — nullable in lockstep with the server's
+        // DeadUrlSampleEntry.url (string | null, Phase 43 D-07/CR-01).
+        url: string | null;
         // Phase 44 D-01 — optional forward-compat (Phase 32 D-10 pattern).
         // `evidence` renders as TEXT, not HTML (D-11 / T-43-16).
         evidence?: string | null;
@@ -2060,7 +2062,8 @@ function DevApiStatusAllApisTab({
                     <li key={entry.eventId} className="flex items-baseline gap-2 py-0.5">
                       <span className="font-mono text-text-muted/60">{entry.status}</span>
                       <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
-                      <span className="truncate text-text-muted/70" title={entry.url}>
+                      {/* Phase 44 WR-04 — url is string | null; null renders nothing. */}
+                      <span className="truncate text-text-muted/70" title={entry.url ?? undefined}>
                         {entry.url}
                       </span>
                     </li>
@@ -3471,7 +3474,9 @@ type PruneSummary = {
   deadUrlSample: Array<{
     eventId: string;
     status: 'dead-host' | '403' | '404' | 'soft-404';
-    url: string;
+    // Phase 44 WR-04 — nullable in lockstep with the server's
+    // DeadUrlSampleEntry.url (string | null, Phase 43 D-07/CR-01).
+    url: string | null;
     evidence?: string | null;
     lastProbedAt?: string;
     attemptCount?: number;
@@ -3557,7 +3562,8 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
                   >
                     {entry.status}
                   </span>
-                  <span className="truncate text-white/70" title={entry.url}>
+                  {/* Phase 44 WR-04 — url is string | null; null renders nothing. */}
+                  <span className="truncate text-white/70" title={entry.url ?? undefined}>
                     {entry.url}
                   </span>
                   {entry.evidence ? (

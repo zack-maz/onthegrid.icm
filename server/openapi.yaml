@@ -668,6 +668,12 @@ paths:
                               type: string
                             url:
                               type: string
+                              nullable: true
+                              description: >-
+                                Phase 43 D-07/CR-01 — mirrors UrlLiveness.lastUrlProbed
+                                (string | null). Terminal-dead entries carry a real URL
+                                by convention, but the read is a blind generic cast, so
+                                the contract honestly admits null.
                             status:
                               type: string
                               enum: [dead-host, '403', '404', soft-404]
