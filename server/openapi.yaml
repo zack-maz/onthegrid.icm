@@ -690,6 +690,14 @@ paths:
                     type: object
                     nullable: true
                     description: Actor-quality observability (Phase 33 Plan 06 D-16).
+                  tokenBudget:
+                    type: object
+                    nullable: true
+                    description: >-
+                      Phase 39 GA-4 — provider-keyed token-budget map
+                      (providers.nvidia_nim used/cap/soft/hard/state) + today's
+                      cost-shadow roll-up (tokensIn/tokensOut/usd). Null on
+                      degrade-open (Redis throw inside the block — T-39-03-D).
         '401':
           description: Missing or invalid operator Bearer.
           content:
