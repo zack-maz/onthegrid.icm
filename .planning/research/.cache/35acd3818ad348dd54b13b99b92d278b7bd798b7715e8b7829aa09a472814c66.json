@@ -1,0 +1,9 @@
+{
+  "content": "Dead-link detection: classify errors into buckets (404/403/500/timeout/DNS/SSL); HEAD-then-GET-on-405; soft-404 is key false-negative (200 with not-found body, >25% of dead links); differentiate expected vs unexpected 404.",
+  "source": "web",
+  "provider": "websearch",
+  "confidence": "MEDIUM",
+  "fetched_at": "2026-06-09T19:50:35.902Z",
+  "ttl": 86400000,
+  "kind": "web"
+}

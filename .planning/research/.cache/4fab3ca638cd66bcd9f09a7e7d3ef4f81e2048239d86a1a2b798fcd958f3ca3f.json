@@ -1,0 +1,9 @@
+{
+  "content": "k6: codify SLOs as thresholds (p95<300ms, error<budget, exit non-zero fails CI). Four types: load/stress/soak/spike. Pattern baseline@peak, headroom@1.5x, stress@3x, soak@0.8x 4-8h, spike 1x->10x/30s. CI tiering smoke/full/soak.",
+  "source": "web",
+  "provider": "websearch",
+  "confidence": "MEDIUM",
+  "fetched_at": "2026-06-09T19:50:36.005Z",
+  "ttl": 86400000,
+  "kind": "web"
+}

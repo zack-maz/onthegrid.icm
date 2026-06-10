@@ -1,0 +1,9 @@
+{
+  "content": "Vercel/Express hardening: CSP+Helmet; explicit distributed rate limiting per-IP/route; alert on 429 bursts; cron heartbeat/dead-man's-switch (start+end check-in, missed-run + runtime-anomaly alerts; first-tick Pending until first heartbeat); observability function latency/error views.",
+  "source": "web",
+  "provider": "websearch",
+  "confidence": "MEDIUM",
+  "fetched_at": "2026-06-09T19:50:36.100Z",
+  "ttl": 86400000,
+  "kind": "web"
+}
