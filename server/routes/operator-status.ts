@@ -184,7 +184,13 @@ const MAX_SCAN_KEYS = 200;
  */
 type DeadUrlSampleEntry = {
   eventId: string;
-  url: string;
+  // Phase 43 D-07 — nullable in lockstep with `UrlLiveness.lastUrlProbed`
+  // (CR-01). `lastUrlProbed` became `string | null` so a `no-url` entry can
+  // record `null`; the sample assigns it directly to `url`. In practice
+  // `no-url` is NOT terminal-dead so it never reaches this sample (every
+  // entry here carries a real URL), but the type must admit `null` for the
+  // assignment to typecheck honestly rather than masking the widening.
+  url: string | null;
   // Phase 43 D-19 — `soft-404` joins the terminal-dead status union the
   // sample exposes (it is terminal-dead per isTerminalDead). `no-url` is
   // deliberately NOT here — it is not terminal-dead and never reaches this
