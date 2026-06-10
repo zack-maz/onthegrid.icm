@@ -643,13 +643,19 @@ export async function runRefreshExtraction(opts: RunRefreshOpts): Promise<RunRef
         // via the standard pino observability path.
         try {
           const deadlineMs = cronStart + 800_000 - SWEEP_SAFETY_MARGIN_MS;
-          const candidates = await buildProbeCandidates();
+          const { candidates, classifiedNoUrl } = await buildProbeCandidates();
           const sweep = await runProbeSweep({
             eventIdsWithUrls: candidates,
             deadlineMs,
           });
           log.info(
-            { probed: sweep.probed, skippedBudget: sweep.skippedBudget },
+            {
+              probed: sweep.probed,
+              skippedBudget: sweep.skippedBudget,
+              // Phase 43 GHOST-07 (D-09) — full coverage accounting: how many
+              // events were classified `no-url` (source-less, no fetch issued).
+              classifiedNoUrl,
+            },
             'phase 32 probe sweep complete',
           );
           if (Date.now() < deadlineMs) {

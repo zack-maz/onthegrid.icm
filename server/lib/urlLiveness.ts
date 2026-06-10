@@ -779,7 +779,7 @@ const LIVENESS_READ_LOGICAL_TTL_MS = 999_999_999;
  */
 async function persistLiveness(
   eventId: string,
-  urlProbed: string,
+  urlProbed: string | null,
   probeResult: ProbeResult,
 ): Promise<void> {
   const key = `${URL_LIVENESS_KEY_PREFIX}${eventId}`;
@@ -891,32 +891,56 @@ const V3_READ_LOGICAL_TTL_MS = 999_999_999;
  *           `lastProbedAt` (oldest first — re-probe stale verdicts).
  *           ISO-8601 byte-lex sort equals chronological sort.
  *
- * Entities whose `data.source` is empty / missing / non-string are
- * silently dropped (no probe target — the dashboard count remains 0 for
- * those events). Logged at debug rather than throw so a malformed event
- * never poisons the candidate list.
+ * Phase 43 GHOST-07 (D-06/D-07/D-08/D-09) — entities whose `data.source`
+ * is empty / missing / non-string are NO LONGER silently dropped. Each
+ * source-less event now gets an explicit `no-url` liveness write (via
+ * `persistLiveness`, NO fetch issued) so prune can SEE the event and
+ * explicitly skip it (D-08 — `no-url` is NOT terminal-dead, so pruning an
+ * event merely for lacking a URL never happens). The count of such events
+ * is returned as `classifiedNoUrl` and surfaced in the cron post-step log
+ * line (D-09 — full coverage accounting). A `no-url` write does NOT INCR
+ * the sidecar dead-count (no-url is not-dead; first write of a fresh
+ * source-less event has `priorDead === false`).
  *
  * Reads `events:llm:v3` once and one `events:url-liveness:{eventId}`
- * lookup per candidate. Plan 32-03 will call this immediately before
+ * lookup per candidate. Plan 32-03 calls this immediately before
  * `runProbeSweep` inside the cron handler.
  */
-export async function buildProbeCandidates(): Promise<Array<{ eventId: string; url: string }>> {
+export async function buildProbeCandidates(): Promise<{
+  candidates: Array<{ eventId: string; url: string }>;
+  classifiedNoUrl: number;
+}> {
   const v3 = await cacheGetSafe<ConflictEventEntityForProbe[]>(
     'events:llm:v3',
     V3_READ_LOGICAL_TTL_MS,
   );
   const entities = v3?.data ?? [];
   if (!Array.isArray(entities) || entities.length === 0) {
-    return [];
+    return { candidates: [], classifiedNoUrl: 0 };
   }
 
   const tierA: Array<{ eventId: string; url: string }> = [];
   const tierB: Array<{ eventId: string; url: string; lastProbedAt: string }> = [];
+  let classifiedNoUrl = 0;
 
   for (const entity of entities) {
     const url = entity?.data?.source;
     if (!url || typeof url !== 'string' || url.length === 0) {
-      // No primary URL — nothing to probe. Skip silently.
+      // GHOST-07 (D-08/D-16) — source-less event: write an explicit `no-url`
+      // liveness entry (no HTTP issued) instead of silently dropping it, so
+      // prune can evaluate-and-skip it. Degrade-open — a write throw for one
+      // event must never poison the candidate build.
+      classifiedNoUrl++;
+      try {
+        await persistLiveness(entity.id, null, {
+          status: 'no-url',
+          httpStatus: null,
+          finalUrl: '',
+          evidence: 'no-url: event has no source URL',
+        });
+      } catch (err) {
+        log.warn({ err, eventId: entity?.id }, 'no-url liveness write failed (degrade-open)');
+      }
       continue;
     }
     const prior = await cacheGetSafe<UrlLiveness>(
@@ -937,7 +961,10 @@ export async function buildProbeCandidates(): Promise<Array<{ eventId: string; u
   // ISO-8601 byte-lex sort == chronological sort (well-known JS idiom).
   tierB.sort((a, b) => a.lastProbedAt.localeCompare(b.lastProbedAt));
 
-  return [...tierA, ...tierB.map(({ eventId, url }) => ({ eventId, url }))];
+  return {
+    candidates: [...tierA, ...tierB.map(({ eventId, url }) => ({ eventId, url }))],
+    classifiedNoUrl,
+  };
 }
 
 // ============================================================================
