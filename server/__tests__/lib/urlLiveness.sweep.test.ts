@@ -149,6 +149,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'live',
       httpStatus: 200,
       finalUrl: 'https://example.com/a',
+      evidence: null,
     });
 
     expect(cacheSetSafeMock).toHaveBeenCalledTimes(1);
@@ -167,6 +168,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: '404',
       httpStatus: 404,
       finalUrl: 'https://example.com/missing',
+      evidence: 'http-404',
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
@@ -190,6 +192,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'dead-host',
       httpStatus: null,
       finalUrl: 'https://example.com/missing',
+      evidence: 'dead-host: fetch failed',
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
@@ -215,6 +218,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'live',
       httpStatus: 200,
       finalUrl: 'https://example.com/x',
+      evidence: null,
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
@@ -239,6 +243,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'unknown',
       httpStatus: 503,
       finalUrl: 'https://example.com/y',
+      evidence: null,
     });
 
     const [, value] = cacheSetSafeMock.mock.calls[0]!;
@@ -263,6 +268,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
       status: 'live',
       httpStatus: 200,
       finalUrl: 'https://example.com/z',
+      evidence: null,
     });
 
     expect(setMock).toHaveBeenCalledWith(URL_LIVENESS_COUNT_KEY, 0);
@@ -278,6 +284,7 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
         status: '404',
         httpStatus: 404,
         finalUrl: 'https://example.com/dead',
+        evidence: 'http-404',
       }),
     ).resolves.toBeUndefined();
 
