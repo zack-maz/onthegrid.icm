@@ -201,6 +201,12 @@ type DeadUrlSampleEntry = {
   // status-only verdicts and for pre-Phase-43 entries lacking the field.
   // Phase 44 must render this as TEXT, not HTML (T-43-16 carried forward).
   evidence: string | null;
+  // Phase 44 D-01 — both already present on the stored `UrlLiveness` value
+  // (no extra Redis read). `lastProbedAt` is the ISO8601 last-probe timestamp;
+  // `attemptCount` is the dead-streak depth (D-02 honest transition proxy —
+  // "dead on N consecutive sweeps" under the once-daily cron cadence).
+  lastProbedAt: string;
+  attemptCount: number;
 };
 
 /**
@@ -227,9 +233,19 @@ type DeadUrlSampleEntry = {
  * from the sidecar) and the deadUrlSample row is empty until the next
  * poll succeeds.
  */
-async function buildDeadUrlSample(): Promise<DeadUrlSampleEntry[]> {
+async function buildDeadUrlSample(): Promise<{
+  sample: DeadUrlSampleEntry[];
+  countsByStatus: Record<string, number>;
+}> {
   try {
     const sample: DeadUrlSampleEntry[] = [];
+    // Phase 44 D-01/D-03 — sparse per-status tally accumulated inside this
+    // EXISTING SCAN loop (zero extra Redis reads). Bounded by the unchanged
+    // MAX_SCAN_KEYS=200 budget guard, so this is a SAMPLED tally — NOT the
+    // authoritative terminal-dead total (that stays the O(1) `deadUrlCount`
+    // sidecar). Absent statuses are omitted (sparse map); the consumer
+    // `?? 0`-guards per status.
+    const countsByStatus: Record<string, number> = {};
     let cursor: string | number = 0;
     let scanned = 0;
     do {
@@ -249,6 +265,10 @@ async function buildDeadUrlSample(): Promise<DeadUrlSampleEntry[]> {
         const cached = await cacheGetSafe<UrlLiveness>(key, 999_999_999);
         const value = cached?.data;
         if (!value) continue;
+        // Phase 44 D-01 — tally EVERY scanned status (live/unknown/no-url/
+        // 404/403/dead-host/soft-404) BEFORE the terminal-dead filter so the
+        // dashboard can show full per-bucket counts, not just dead ones.
+        countsByStatus[value.status] = (countsByStatus[value.status] ?? 0) + 1;
         if (!isTerminalDead(value.status)) continue;
         const eventId = key.startsWith(URL_LIVENESS_KEY_PREFIX)
           ? key.slice(URL_LIVENESS_KEY_PREFIX.length)
@@ -264,6 +284,9 @@ async function buildDeadUrlSample(): Promise<DeadUrlSampleEntry[]> {
           // Zod parse here), so pre-Phase-43 entries lacking `evidence`
           // read as `undefined` — coerce to `null`.
           evidence: value.evidence ?? null,
+          // Phase 44 D-01 — both already on the stored value (no extra read).
+          lastProbedAt: value.lastProbedAt,
+          attemptCount: value.attemptCount,
         });
         if (sample.length >= LIMIT_DRILL_DOWN) {
           cursor = 0;
@@ -271,10 +294,12 @@ async function buildDeadUrlSample(): Promise<DeadUrlSampleEntry[]> {
         }
       }
     } while (cursor !== 0 && cursor !== '0');
-    return sample;
+    return { sample, countsByStatus };
   } catch (err) {
     log.warn({ err }, 'failed to build dead-URL drill-down sample');
-    return [];
+    // Phase 44 — degrade-open: empty-but-shaped so a SCAN throw never
+    // cascades past the prune block (route stays 200-degraded, never 500).
+    return { sample: [], countsByStatus: {} };
   }
 }
 
@@ -449,8 +474,12 @@ operatorStatusRouter.get(
         log.warn({ err }, 'failed to read events:url-liveness-count');
       }
       const last24hPrunes = last24h.filter((e) => e.operation === 'prune-dead-urls').length;
-      const deadUrlSample = await buildDeadUrlSample();
-      const prune = { deadUrlCount, last24hPrunes, deadUrlSample };
+      // Phase 44 D-01 — `deadUrlSample` (terminal-dead drill-down, cap 20) and
+      // `countsByStatus` (all-status SAMPLED tally, ≤MAX_SCAN_KEYS=200) come
+      // from the SAME single SCAN loop. `deadUrlCount` stays the authoritative
+      // O(1) sidecar total (D-03) — `countsByStatus` is sampled, never authoritative.
+      const { sample: deadUrlSample, countsByStatus } = await buildDeadUrlSample();
+      const prune = { deadUrlCount, last24hPrunes, deadUrlSample, countsByStatus };
 
       // ===== Phase 33 Plan 06 D-16 — actorQuality block =====
       //
