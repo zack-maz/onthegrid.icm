@@ -38,8 +38,9 @@ Six warnings remain. The most consequential: the new `countsByStatus` tally is s
 
 ### WR-01: `countsByStatus` tally is truncated by the LIMIT_DRILL_DOWN=20 short-circuit, not the documented MAX_SCAN_KEYS=200 budget
 
+**Status:** fixed — sample cap no longer breaks the SCAN loop (`continue` past a full sample; `MAX_SCAN_KEYS` is the sole short-circuit); pinned by two new tally-beyond-cap test assertions.
 **File:** `server/routes/operator-status.ts:271-296` (also `server/openapi.yaml:650-660`)
-**Issue:** The Phase 44 D-01 tally is accumulated inside the existing SCAN loop, but that loop short-circuits (`cursor = 0; break;`) as soon as `sample.length >= LIMIT_DRILL_DOWN` (20). Trace: per key, tally → terminal-dead filter → push → break-at-20. So whenever the keyspace contains ≥20 terminal-dead entries early in encounter order, the tally stops at the 20th dead key — far below the 200-key budget. The inline comment ("Bounded by the unchanged MAX_SCAN_KEYS=200 budget guard") and the OpenAPI description ("bounded by MAX_SCAN_KEYS=200") both overstate the actual sampling window. Worst case: 200 dead + 1,000 live keys could yield `{'404': 20}` "of 20 scanned" — the live/unknown buckets vanish from the distribution precisely when dead links spike, which is when the operator needs this signal. The UI stays honest only because the "of N scanned" denominator is computed from the sum, but the per-bucket _proportions_ are systematically dead-biased. No test pins this: the cap-at-20 test (`operator-status.test.ts:462-492`, 30 dead keys) never asserts `countsByStatus` (which would read 20, not 30).
+**Issue:** The Phase 44 D-01 tally is accumulated inside the existing SCAN loop, but that loop short-circuits (`cursor = 0; break;`) as soon as `sample.length >= LIMIT_DRILL_DOWN` (20). Trace: per key, tally → terminal-dead filter → push → break-at-20. So whenever the keyspace contains ≥20 terminal-dead entries early in encounter order, the tally stops at the 20th dead key — far below the 200-key budget. The inline comment ("Bounded by the unchanged `MAX_SCAN_KEYS=200` budget guard") and the OpenAPI description ("bounded by `MAX_SCAN_KEYS=200`") both overstate the actual sampling window. Worst case: 200 dead + 1,000 live keys could yield `{'404': 20}` "of 20 scanned" — the live/unknown buckets vanish from the distribution precisely when dead links spike, which is when the operator needs this signal. The UI stays honest only because the "of N scanned" denominator is computed from the sum, but the per-bucket _proportions_ are systematically dead-biased. No test pins this: the cap-at-20 test (`operator-status.test.ts:462-492`, 30 dead keys) never asserts `countsByStatus` (which would read 20, not 30).
 **Fix:** Decouple the tally from the sample cap — continue SCANning up to `MAX_SCAN_KEYS` for the tally even after the sample is full:
 
 ```typescript
@@ -54,6 +55,7 @@ Then add a test asserting `countsByStatus['404'] === 30` for the 30-dead fixture
 
 ### WR-02: Events-tab fetch failure handling contradicts its documented degrade-open contract (stale prune data retained)
 
+**Status:** fixed — non-200 and network failures now null `eventsPrune` (block self-hides), and a per-effect monotonic request id guards every state write against out-of-order responses.
 **File:** `src/components/ui/DevApiStatus.tsx:677-703`
 **Issue:** The Phase 44 comment promises "degrades open on any failure (network / non-200 / missing Bearer → null → block self-hides)". The implementation does not do this: on `!res.ok` the function `return`s and on network failure the catch is empty — in both cases the previously fetched `eventsPrune` state is retained, not nulled. After one successful fetch, a Bearer expiry or server failure leaves the DeadLinkBucketsBlock rendering progressively staler data indefinitely (refreshed only by leaving the tab) with no staleness indicator. Additionally there is no out-of-order guard between the initial fetch and the 30s interval ticks: a slow first response resolving after a faster interval response will clobber newer data with older (the `cancelled` flag only covers unmount/tab-switch).
 **Fix:** Either make the implementation match the comment:
@@ -69,6 +71,7 @@ if (!res.ok) {
 
 ### WR-03: OpenAPI response schema for `/api/operator-status` omits the `tokenBudget` field the route emits
 
+**Status:** fixed — `tokenBudget` added to the 200 schema as a nullable object documenting the Phase 39 GA-4 shape + degrade-open null; Redocly stays green.
 **File:** `server/openapi.yaml:627-692` (route: `server/routes/operator-status.ts:621`)
 **Issue:** The route responds with `{ audit24h, byBearer, advEval, prune, actorQuality, tokenBudget }`. The OpenAPI 200 schema documents `audit24h`, `byBearer`, `advEval`, `prune` (extended for Phase 44), and `actorQuality` — but not `tokenBudget` (shipped Phase 39, consumed by BudgetBlock and the hero budget field). Phase 44 edited this exact schema block and the drift persists. Any consumer generating clients or validating against the spec misses a live field.
 **Fix:** Add to the response properties:
@@ -84,18 +87,21 @@ tokenBudget:
 
 ### WR-04: `url` nullability drift — server emits `string | null`, OpenAPI and both client interfaces declare `string`
 
+**Status:** fixed — option (a): OpenAPI `url` marked `nullable: true` and both client interfaces widened to `string | null` (title attrs coerce null → undefined).
 **File:** `server/routes/operator-status.ts:185-210` vs `server/openapi.yaml:669-670`, `src/components/ui/DevApiStatus.tsx:1158-1168` and `:3450-3462`
 **Issue:** `DeadUrlSampleEntry.url` was widened to `string | null` (Phase 43 D-07, CR-01) and the route assigns `value.lastUrlProbed` directly. The OpenAPI sample schema declares `url: type: string` with no `nullable: true`, and both client shapes (`OperatorStatus.prune.deadUrlSample[].url` and module-level `PruneSummary.deadUrlSample[].url`) declare `url: string`. The server's own comment concedes the invariant ("no-url never reaches this sample") is enforced only by convention: the `cacheGetSafe<UrlLiveness>` read is a blind generic cast with no Zod parse, so a corrupt/partially-written entry with a terminal-dead status and `lastUrlProbed: null` flows straight through, producing `url: null` in the payload — violating the published contract. (Same blind-cast class applies to `lastProbedAt`/`attemptCount`: a malformed entry emits `undefined`, which JSON-drops the keys.) The client happens not to crash (`{entry.url}` renders nothing), so this is contract drift rather than a runtime defect.
 **Fix:** Pick one side and align all three: either (a) mark `url` `nullable: true` in OpenAPI and `string | null` in both client interfaces, or (b) enforce the invariant at the route by skipping sample entries with `!value.lastUrlProbed` (one-line guard next to `isTerminalDead`), keeping `string` everywhere. (b) matches the documented intent.
 
 ### WR-05: DeadLinkBucketsBlock hides scan-derived buckets and sample whenever the sidecar count reads 0 — a documented sidecar failure mode
 
+**Status:** fixed — buckets/sample now gate on their own data presence (`buckets.length` / `sample.length`), authoritative-total line unchanged (D-03); prune test evolved to pin buckets-visible at count=0 with non-empty tally.
 **File:** `src/components/ui/DevApiStatus.tsx:3503` (`{prune.deadUrlCount > 0 && (...)}`)
 **Issue:** Both the bucket list and the drill-down sample are gated on the sidecar `deadUrlCount > 0`. The sidecar is maintained by INCR/DECR transitions and has a known underflow mode (floored at 0 by the server — `Math.max(0, ...)`, T-32-11). When the sidecar legitimately reads 0 while the SCAN still finds terminal-dead entries (post-underflow, or sidecar drift between sweep and prune), the block displays "Dead URL events: 0" and suppresses the contradicting scan evidence — the operator loses the only signal that the sidecar has drifted. This also diverges from the sibling API-Health list, which gates the sample on `deadUrlSample.length > 0` regardless of the count (`DevApiStatus.tsx:2037`), so the two surfaces can disagree on identical data.
 **Fix:** Gate the bucket list on `buckets.length > 0` and the sample on `sample.length > 0` independently of `deadUrlCount` (matching the API-Health list), keeping the authoritative-total line as-is. A count/sample disagreement then becomes visible instead of masked.
 
 ### WR-06: DrillDownRow renders `<a href>` from LLM-extracted source URLs without scheme validation
 
+**Status:** fixed — `/^https?:\/\//i` scheme guard added; non-http(s) sources render as inert text spans instead of anchors.
 **File:** `src/components/ui/DevApiStatus.tsx:2748-2757`
 **Issue:** `ev.sources` originates from LLM-extracted article URLs (GDELT/news content — externally influenceable). They are rendered as `<a href={u} target="_blank" rel="noopener noreferrer">` with no scheme check, so a `javascript:` or `data:` URL passes through to the DOM (React only console-warns on `javascript:` hrefs; it does not block them). Mitigations in place — `target="_blank"` + `noopener` prevents same-origin script execution on modern browsers, and the surface is Bearer-gated dev/operator-only — keep this a hardening warning rather than a blocker. Noting it because this file was in review scope and the same per-row link pattern is the obvious template for any future "open dead URL" affordance in DeadLinkBucketsBlock, where the URLs are _specifically_ the dead/suspicious ones. (DeadLinkBucketsBlock itself correctly renders `url` as text only.)
 **Fix:** Guard the scheme before rendering an anchor:
