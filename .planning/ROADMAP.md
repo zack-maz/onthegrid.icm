@@ -365,7 +365,13 @@ Plans:
 3. Transient failures never count toward terminal-dead prune — the `unknown` bucket is excluded from prune eligibility, the `attemptCount >= 3` gate is retained, and flaky-host attempt-reset semantics are fixed so repeat offenders eventually accumulate; a `prunedIds` sample audit confirms no live events were swept.
 4. The 403 auto-prune decision is made with evidence (a `prunedIds` sample) and implemented — 403 stays distinct from 404, demoted to manual-only if bot-blocking CDNs are confirmed false-positives.
 5. The operator can see why a link was flagged dead — an evidence string (matched marker / redirect target / body length) is persisted in `events:url-liveness:{eventId}` with the schema test and Redis registry updated in lockstep.
-   **Plans**: TBD
+   **Plans**: 5 plans
+
+- [ ] 43-01-PLAN.md — Widen UrlLiveness schema/enum/TTL/isTerminalDead + evidence field; contract lockstep (schema test + shim + redis-keys.md + CLAUDE.md) [GHOST-10] (Wave 1)
+- [ ] 43-02-PLAN.md — soft-404 body heuristic: classifySoft404 + 16 KiB capped GET on 200s + probeUrl wiring [GHOST-06] (Wave 2)
+- [ ] 43-03-PLAN.md — attemptCount semantics (live=0, unknown=preserve) + source-less no-url coverage + classifiedNoUrl log line [GHOST-07, GHOST-08] (Wave 3)
+- [ ] 43-04-PLAN.md — GHOST-09 evidence sample: prunedIds + 403 browser-UA re-probe (prod, checkpoint) → decision recorded [GHOST-09] (Wave 2)
+- [ ] 43-05-PLAN.md — cron-only 403 exclusion (per evidence) + unknown/no-url prune pins + DeadUrlSampleEntry evidence/soft-404 exposure [GHOST-09, GHOST-10] (Wave 4)
 
 ### Phase 44: Events Subtab Pipeline Detail
 
