@@ -15,7 +15,7 @@ human_verification:
 
 **Phase Goal:** Dead-link detection gets more precise (catches soft-404s, covers every event) without getting more aggressive (never prunes live-but-flaky links), and the operator can see WHY any link was flagged.
 **Verified:** 2026-06-10T23:05:00Z
-**Status:** human_needed (5/5 truths verified; one documentation tracking checkbox needs human confirmation)
+**Status:** passed (5/5 truths verified; the one documentation tracking checkbox was resolved in-session — see frontmatter resolution note)
 **Re-verification:** No — initial verification
 
 ---
