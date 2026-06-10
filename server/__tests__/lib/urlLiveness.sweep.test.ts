@@ -361,6 +361,36 @@ describe('Plan 02 Task 3 — persistLiveness writer (D-12, Pitfall 3)', () => {
     expect((value as { evidence: string | null }).evidence).toBe('http-404');
   });
 
+  // WR-01 — a long redirect-to-home evidence string (percent-encoded
+  // Persian/Arabic slugs routinely exceed 200 chars) must NOT make the
+  // `.strict()` schema parse throw. The writer truncates evidence to 200
+  // chars before parsing, so persistLiveness resolves and the entry persists.
+  it('truncates evidence >200 chars and persists without throwing (WR-01)', async () => {
+    cacheGetSafeMock.mockResolvedValueOnce(null);
+    incrMock.mockResolvedValue(1);
+
+    const longEvidence = `redirect-to-home: /${'a'.repeat(300)} → /`;
+    expect(longEvidence.length).toBeGreaterThan(200);
+
+    await expect(
+      __test__.persistLiveness('e-long-evi', 'https://example.com/x', {
+        status: 'soft-404',
+        httpStatus: 200,
+        finalUrl: 'https://example.com/',
+        evidence: longEvidence,
+      }),
+    ).resolves.toBeUndefined();
+
+    // The entry persisted (the parse did not throw) and the evidence is
+    // truncated to exactly 200 chars.
+    expect(cacheSetSafeMock).toHaveBeenCalledTimes(1);
+    const [, value] = cacheSetSafeMock.mock.calls[0]!;
+    const evidence = (value as { evidence: string | null }).evidence;
+    expect(evidence).not.toBeNull();
+    expect(evidence!.length).toBe(200);
+    expect(evidence).toBe(longEvidence.slice(0, 200));
+  });
+
   it('DECR underflow floors at 0 via redis.set', async () => {
     cacheGetSafeMock.mockResolvedValueOnce(
       cacheHit({

@@ -854,10 +854,16 @@ async function persistLiveness(
     lastUrlProbed: urlProbed,
     lastHttpStatus: probeResult.httpStatus,
     // D-16/D-17 — writer always carries the probe's evidence string
-    // (null for status-only verdicts). Full attemptCount-semantics +
-    // no-url wiring lands in Plan 03; this foundation plan only ensures
-    // the field is persisted so the .strict() parse below succeeds.
-    evidence: probeResult.evidence,
+    // (null for status-only verdicts). WR-01 — truncate to 200 chars at this
+    // single writer choke point BEFORE the `.strict()` parse below. The
+    // redirect-to-home evidence embeds two verbatim pathnames; percent-encoded
+    // Persian/Arabic news slugs (this corpus is Middle-East-outlet dominated)
+    // routinely exceed the schema's `z.string().max(200)`, and an over-length
+    // string makes `UrlLivenessSchema.parse` THROW — which would silently drop
+    // this event's liveness write every sweep (it stays Tier A forever and can
+    // never accumulate attemptCount≥3 to be pruned). Truncating here guarantees
+    // persistLiveness never throws on a long evidence string.
+    evidence: probeResult.evidence === null ? null : probeResult.evidence.slice(0, 200),
   };
 
   // Paranoid contract guard — throws on schema drift so the failing
