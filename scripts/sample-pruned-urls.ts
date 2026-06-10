@@ -152,15 +152,22 @@ interface AuditEntry {
  * Direct-Redis path: read prunedIds from the audit-log, resolve any still-
  * recoverable URLs, and SCAN the 403-status keys.
  */
-async function gatherViaRedis(
-  limit: number,
-): Promise<{
+async function gatherViaRedis(limit: number): Promise<{
   prunedTargets: { eventId: string; url: string | null }[];
   live403: { eventId: string; url: string }[];
 }> {
-  // Dynamic import so the script can run in --via-aggregator mode WITHOUT
-  // Upstash env present (the redis module parses env at import time).
-  const { redis } = await import('../server/cache/redis.js');
+  // Raw @upstash/redis client (dynamic import so --via-aggregator mode runs
+  // WITHOUT Upstash env present). Deliberately NOT the server cache module:
+  // that client applies the dev `CACHE_KEY_PREFIX` from .env.local, which
+  // would silently SCAN the empty `dev:` keyspace when this prod-sampling
+  // script runs on a dev machine. This tool's whole purpose is to read the
+  // LIVE production keys, so it must stay unprefixed.
+  const { Redis } = await import('@upstash/redis');
+  const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    enableAutoPipelining: false,
+  });
 
   // 1. prunedIds from recent prune-dead-urls audit entries.
   const prunedTargets: { eventId: string; url: string | null }[] = [];
@@ -187,9 +194,14 @@ async function gatherViaRedis(
         // The url-liveness key is usually DELETED by the prune; try anyway.
         let url: string | null = null;
         try {
-          const cached = (await redis.get(
-            `${URL_LIVENESS_KEY_PREFIX}${eventId}`,
-          )) as UrlLiveness | null;
+          // Values are persisted via cacheSetSafe as CacheEntry<UrlLiveness>
+          // ({data, fetchedAt}); unwrap .data with a bare-shape fallback for
+          // any legacy unwrapped writes.
+          const raw = (await redis.get(`${URL_LIVENESS_KEY_PREFIX}${eventId}`)) as
+            | { data?: UrlLiveness }
+            | UrlLiveness
+            | null;
+          const cached = (raw && 'data' in raw ? raw.data : raw) as UrlLiveness | null;
           url = cached?.lastUrlProbed ?? null;
         } catch {
           url = null;
@@ -224,7 +236,10 @@ async function gatherViaRedis(
         }
         scanned += 1;
         try {
-          const value = (await redis.get(key)) as UrlLiveness | null;
+          // CacheEntry<UrlLiveness> unwrap — same rationale as the prunedIds
+          // read above.
+          const raw = (await redis.get(key)) as { data?: UrlLiveness } | UrlLiveness | null;
+          const value = (raw && 'data' in raw ? raw.data : raw) as UrlLiveness | null;
           if (value?.status === '403' && value.lastUrlProbed) {
             const eventId = key.startsWith(URL_LIVENESS_KEY_PREFIX)
               ? key.slice(URL_LIVENESS_KEY_PREFIX.length)
