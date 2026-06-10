@@ -237,7 +237,12 @@ beforeEach(() => {
     matchedNewsByGroup: new Map(),
     bellingcatByGroup: new Map(),
   });
-  mockBuildProbeCandidates.mockResolvedValue([{ eventId: 'e1', url: 'https://example.com/a' }]);
+  // Phase 43 GHOST-07 — buildProbeCandidates now returns
+  // { candidates, classifiedNoUrl } (was a bare array).
+  mockBuildProbeCandidates.mockResolvedValue({
+    candidates: [{ eventId: 'e1', url: 'https://example.com/a' }],
+    classifiedNoUrl: 0,
+  });
   mockRunProbeSweep.mockResolvedValue({ probed: 1, skippedBudget: 0 });
   mockPruneDeadUrlEvents.mockResolvedValue({ prunedCount: 0, prunedIds: [] });
 });
