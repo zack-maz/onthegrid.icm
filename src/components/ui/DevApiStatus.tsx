@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
 import { BudgetBlock, type TokenBudgetBlock } from '@/components/ui/BudgetBlock';
 import { FlightRecorderBlock } from '@/components/ui/FlightRecorderBlock';
+import { MetricRow } from '@/components/ui/MetricRow';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
@@ -2337,6 +2338,59 @@ function DevApiStatusAllApisTab({
  * per-type rejections → total rejections → enrichment → overpass health →
  * score histogram.
  */
+/**
+ * Phase 45 Plan 03 — progressive-disclosure drill-down (DASH-READ-02).
+ *
+ * Replicates the `FlightRecorderBlock` run→detail idiom exactly:
+ *   - clickable summary row (`flex cursor-pointer items-center gap-2 rounded
+ *     px-1 py-0.5 hover:bg-white/5`) with a `▸/▾` caret,
+ *   - local transient `useState` expansion (NOT uiStore/localStorage),
+ *   - inline L2 expansion with the `mt-1 ml-2 border-l border-white/10 pl-2`
+ *     indent.
+ *
+ * Standard WAI-ARIA disclosure: `aria-expanded` on the trigger flips on toggle,
+ * `aria-controls` points at the panel id. Lives entirely INSIDE the existing
+ * `role="tabpanel"` container — adds no tablist/tab-id DOM (DASH-READ-04 freeze).
+ * Color from the white/N ramp only — no inline hex (DASH-READ-03).
+ */
+function DisclosureSection({
+  title,
+  panelId,
+  defaultOpen = false,
+  testid,
+  children,
+}: {
+  title: string;
+  panelId: string;
+  defaultOpen?: boolean;
+  testid?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        data-testid={testid}
+        className="flex w-full cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-white/5 focus-visible:ring focus-visible:ring-white/20"
+      >
+        <span className="text-white/40">{open ? '▾' : '▸'}</span>
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+          {title}
+        </span>
+      </button>
+      {open && (
+        <div id={panelId} className="mt-1 ml-2 border-l border-white/10 pl-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WaterFiltersSection() {
   const filterStats = useWaterStore((s) => s.filterStats);
 
@@ -2348,10 +2402,10 @@ function WaterFiltersSection() {
   if (!filterStats) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Water Filters
         </span>
-        <div className="mt-0.5 text-[9px] italic text-white/40">loading filter stats…</div>
+        <div className="mt-0.5 text-[9px] italic text-white/30">loading filter stats…</div>
       </div>
     );
   }
@@ -2374,101 +2428,122 @@ function WaterFiltersSection() {
     )
     .slice(0, 12);
 
+  // Phase 45 Plan 03 (DASH-READ-01) — summed rejection buckets as a labeled
+  // Reason|Count table. Reason labels are human-readable; the underlying
+  // bucket keys are preserved as data-testid suffixes for the render pins.
+  const r = filterStats.rejections;
+  const rejectionRows: { key: string; label: string; count: number }[] = [
+    { key: 'excluded_location', label: 'Excluded location', count: r.excluded_location },
+    { key: 'excluded_turkey', label: 'Excluded turkey', count: r.excluded_turkey },
+    { key: 'not_notable', label: 'Not notable', count: r.not_notable },
+    { key: 'no_name', label: 'No name', count: r.no_name },
+    { key: 'no_resolved_name', label: 'No resolved name', count: r.no_resolved_name },
+    { key: 'duplicate', label: 'Duplicate', count: r.duplicate },
+    { key: 'low_score', label: 'Low score', count: r.low_score },
+    { key: 'no_city', label: 'No city', count: r.no_city },
+  ];
+  const totalRejected = rejectionRows.reduce((a, b) => a + b.count, 0);
+
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Water Filters
       </span>
 
-      {/* Phase 27.3.1 R-08 D-30 — provenance header */}
+      {/* Phase 27.3.1 R-08 D-30 — provenance header (strings verbatim, re-toned) */}
       <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Source:</span> {filterStats.source} ·{' '}
-        <span className="font-bold text-white/40">Generated:</span>{' '}
+        <span className="font-semibold text-white/40">Source:</span> {filterStats.source} ·{' '}
+        <span className="font-semibold text-white/40">Generated:</span>{' '}
         {relativeTime(filterStats.generatedAt)}
       </div>
 
-      {/* Raw vs filtered summary */}
+      {/* Phase 45 Plan 03 — primary metric: kept % at 13px/600 (one per block) */}
+      <div
+        className="mt-0.5 text-[13px] font-semibold tabular-nums text-white/80"
+        data-testid="water-primary-metric"
+      >
+        {keepPct}%
+      </div>
+
+      {/* Raw vs filtered summary (verbatim) */}
       <div className="mt-0.5 text-[9px] text-white/60">
         {totalRaw} raw → {totalKept} kept ({keepPct}%)
       </div>
 
-      {/* Per-type breakdown */}
-      <table className="mt-0.5 w-full text-[9px]">
-        <tbody>
-          {typeKeys.map((type) => (
-            <tr key={type}>
-              <td className="text-white/40">{type}</td>
-              <td className="text-right tabular-nums text-white/60">
-                {filterStats.filteredCounts[type] ?? 0} / {filterStats.rawCounts[type] ?? 0}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Phase 27.3.1 R-08 D-28 — per-country admission table */}
-      {byCountrySorted.length > 0 && (
-        <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
-            By Country
-          </div>
-          <table className="mt-0.5 w-full text-[9px]">
-            <tbody>
-              {byCountrySorted.map(([country, perType]) => (
-                <tr key={country}>
-                  <td className="text-white/40">{country}</td>
-                  <td className="text-right tabular-nums text-white/60">
-                    {Object.entries(perType)
-                      .map(([t, n]) => `${t}=${n}`)
-                      .join(' ')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Phase 27.3.1 R-08 D-31 — per-type rejection breakdown
-          Phase 27.3.1 Plan 10 (G2) — added `turkey=` bucket display. */}
-      {Object.keys(filterStats.byTypeRejections).length > 0 && (
-        <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
-            Rejections by Type
-          </div>
-          {Object.entries(filterStats.byTypeRejections).map(([type, buckets]) => (
-            <div key={type} className="text-[9px] text-white/60">
-              <span className="text-white/40">{type}:</span> excl={buckets.excluded_location}{' '}
-              turkey={buckets.excluded_turkey} nn={buckets.not_notable} nname={buckets.no_name}{' '}
-              nores={buckets.no_resolved_name} dup=
-              {buckets.duplicate} low={buckets.low_score} nocity={buckets.no_city}
-            </div>
-          ))}
-        </>
-      )}
-
-      {/* Total rejections (back-compat + quick-scan view).
-          Phase 27.3.1 Plan 10 (G2) — added `turkey=` summed bucket. */}
-      <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Total rejections:</span> excl=
-        {filterStats.rejections.excluded_location} turkey={filterStats.rejections.excluded_turkey}{' '}
-        nn={filterStats.rejections.not_notable} nname={filterStats.rejections.no_name} nores=
-        {filterStats.rejections.no_resolved_name} dup=
-        {filterStats.rejections.duplicate} low={filterStats.rejections.low_score} nocity=
-        {filterStats.rejections.no_city}
+      {/* Per-type breakdown — MetricRow Reason|Count (may default open) */}
+      <div className="mt-0.5 flex flex-col gap-0.5">
+        {typeKeys.map((type) => (
+          <MetricRow
+            key={type}
+            label={type}
+            value={`${filterStats.filteredCounts[type] ?? 0} / ${filterStats.rawCounts[type] ?? 0}`}
+            data-testid={`water-type-${type}`}
+          />
+        ))}
       </div>
 
+      {/* Phase 45 Plan 03 — rejection breakdown behind progressive disclosure */}
+      <DisclosureSection
+        title="Rejections by Type"
+        panelId="water-rejections-panel"
+        testid="water-rejections-toggle"
+      >
+        <MetricRow label="Total rejections" value={totalRejected} emphasized />
+        {rejectionRows.map((row) => (
+          <MetricRow
+            key={row.key}
+            label={row.label}
+            value={row.count}
+            data-testid={`water-rejection-${row.key}`}
+          />
+        ))}
+        {Object.entries(filterStats.byTypeRejections).map(([type, buckets]) => (
+          <div key={type} className="mt-1">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+              {type}
+            </div>
+            <MetricRow label="Excluded location" value={buckets.excluded_location} />
+            <MetricRow label="Excluded turkey" value={buckets.excluded_turkey} />
+            <MetricRow label="Not notable" value={buckets.not_notable} />
+            <MetricRow label="No name" value={buckets.no_name} />
+            <MetricRow label="No resolved name" value={buckets.no_resolved_name} />
+            <MetricRow label="Duplicate" value={buckets.duplicate} />
+            <MetricRow label="Low score" value={buckets.low_score} />
+            <MetricRow label="No city" value={buckets.no_city} />
+          </div>
+        ))}
+      </DisclosureSection>
+
+      {/* Phase 27.3.1 R-08 D-28 — per-country admission behind disclosure */}
+      {byCountrySorted.length > 0 && (
+        <DisclosureSection
+          title="By Country"
+          panelId="water-country-panel"
+          testid="water-country-toggle"
+        >
+          {byCountrySorted.map(([country, perType]) => (
+            <MetricRow
+              key={country}
+              label={country}
+              value={Object.entries(perType)
+                .map(([t, n]) => `${t}=${n}`)
+                .join(' ')}
+            />
+          ))}
+        </DisclosureSection>
+      )}
+
       {/* Enrichment coverage */}
-      <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Enriched:</span> cap=
-        {filterStats.enrichment.withCapacity} city={filterStats.enrichment.withCity} river=
-        {filterStats.enrichment.withRiver}
+      <div className="mt-0.5 flex flex-col gap-0.5">
+        <MetricRow label="Enriched · capacity" value={filterStats.enrichment.withCapacity} />
+        <MetricRow label="Enriched · city" value={filterStats.enrichment.withCity} />
+        <MetricRow label="Enriched · river" value={filterStats.enrichment.withRiver} />
       </div>
 
       {/* Phase 27.3.1 R-08 D-29 — Overpass health rows */}
       {filterStats.overpass.length > 0 && (
         <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
+          <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-white/40">
             Overpass Health
           </div>
           {filterStats.overpass.map((rec, i) => (
@@ -2482,7 +2557,7 @@ function WaterFiltersSection() {
 
       {/* Score histogram */}
       <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Scores:</span>{' '}
+        <span className="font-semibold text-white/40">Scores:</span>{' '}
         {filterStats.scoreHistogram.map((b) => `${b.bucket}:${b.count}`).join(' ')}
       </div>
     </div>
