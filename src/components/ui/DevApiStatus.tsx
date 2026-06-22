@@ -5,6 +5,7 @@ import { useHealthStatusContext } from '@/components/providers/HealthStatusProvi
 import { BudgetBlock, type TokenBudgetBlock } from '@/components/ui/BudgetBlock';
 import { FlightRecorderBlock } from '@/components/ui/FlightRecorderBlock';
 import { MetricRow } from '@/components/ui/MetricRow';
+import { Sparkline } from '@/components/ui/Sparkline';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
@@ -683,9 +684,17 @@ export function DevApiStatus() {
   //      is checked before every setEventsPrune so a slow first response
   //      resolving after a faster interval tick cannot clobber newer data.
   const [eventsPrune, setEventsPrune] = useState<PruneSummary | null>(null);
+  // Phase 45 DASH-READ-05 (Plan 04) — the Plan-01 bounded dashboard:trends:history
+  // ring, surfaced as `trendHistory` on the SAME already-fetched /api/operator-status
+  // response. Threaded into EventsFiltersSectionV3 as the source for the four trend
+  // sparklines (cron freshness ×3 + dead-link count). NO new fetch (plan prohibition):
+  // it rides the existing events-scoped operator-status poll alongside `prune`, with
+  // the identical WR-02 out-of-order + degrade-open contract.
+  const [eventsTrend, setEventsTrend] = useState<TrendSample[] | null>(null);
   useEffect(() => {
     if (activeTab !== 'events' || !showEventsTab) {
       setEventsPrune(null);
+      setEventsTrend(null);
       return;
     }
     let cancelled = false;
@@ -700,14 +709,28 @@ export function DevApiStatus() {
         });
         if (!res.ok) {
           // Degrade-open (WR-02 §1) — non-200 nulls the state; block self-hides.
-          if (mayWrite()) setEventsPrune(null);
+          if (mayWrite()) {
+            setEventsPrune(null);
+            setEventsTrend(null);
+          }
           return;
         }
-        const data = (await res.json()) as { prune?: PruneSummary | null };
-        if (mayWrite()) setEventsPrune(data?.prune ?? null);
+        const data = (await res.json()) as {
+          prune?: PruneSummary | null;
+          trendHistory?: TrendSample[] | null;
+        };
+        if (mayWrite()) {
+          setEventsPrune(data?.prune ?? null);
+          // Forward-compat: absent on servers pre-dating Plan 45-01 → null →
+          // the trend block self-hides (degrade-open).
+          setEventsTrend(data?.trendHistory ?? null);
+        }
       } catch {
         // Degrade-open (WR-02 §1) — network failure nulls the state too.
-        if (mayWrite()) setEventsPrune(null);
+        if (mayWrite()) {
+          setEventsPrune(null);
+          setEventsTrend(null);
+        }
       }
     };
     void fetchPrune();
@@ -973,7 +996,11 @@ export function DevApiStatus() {
               {llmStatus?.schemaVersion === 'v2' ? (
                 <EventsFiltersSection llmStatus={llmStatus} />
               ) : (
-                <EventsFiltersSectionV3 llmStatus={llmStatus} prune={eventsPrune} />
+                <EventsFiltersSectionV3
+                  llmStatus={llmStatus}
+                  prune={eventsPrune}
+                  trendHistory={eventsTrend}
+                />
               )}
             </div>
           )}
@@ -3775,6 +3802,143 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
 }
 
 /**
+ * Phase 45 DASH-READ-05 (Plan 04, CONTEXT D-02/D-04/D-05) — the four trend wells
+ * for the events subtab. Reads the Plan-01 `dashboard:trends:history` ring threaded
+ * down as `trendHistory` (newest-first, ≤30 daily samples) — NO new fetch. Renders
+ * 4 labeled wells: 3 per-cron freshness (health / warm / refresh-events) + 1
+ * dead-link count, each with the CURRENT value as a 13px/600 primary metric (left)
+ * beside a Plan-02 `<Sparkline>` (right).
+ *
+ * Degrade-open (T-45-10):
+ *   - `trendHistory` null/absent/empty → the whole block self-hides (no fabricated
+ *     zeros, no false-healthy flatline).
+ *   - A series with < 2 points → the Sparkline returns null and the well shows only
+ *     the bare current value.
+ *
+ * Series orientation: trendHistory is newest-first; Sparkline expects oldest→newest,
+ * so each derived series is reversed.
+ *
+ * Degradation thresholds for the D-05 semantic last-point tint (CONTEXT discretion,
+ * recorded in the Plan-04 SUMMARY):
+ *   - Cron freshness: stale when the latest age > 30h (108_000_000 ms) — every cron
+ *     is daily (health 0 0, warm 0 12, refresh-events 0 4), so 24h schedule + 6h
+ *     grace. A null age (cron lastTick absent) is treated as 0 in the line (it cannot
+ *     fabricate a healthy value — null reads as the floor, and the AGE metric beside
+ *     it shows "—"); the tint is driven only by a real measured age crossing 30h.
+ *   - Dead-link count: degraded when the latest sample is a NEW HIGH — threshold =
+ *     the max of all prior points, thresholdDirection "above". A rising count past
+ *     its prior peak tints the "now" point.
+ *
+ * Color discipline (DASH-READ-03): the tint resolves through the @theme token
+ * `var(--color-status-degraded)` (the Sparkline default) — zero inline hex.
+ */
+const CRON_STALE_MS = 108_000_000; // 30h = daily 24h schedule + 6h grace.
+
+function formatCronAge(ms: number | null): string {
+  if (ms == null) return '—';
+  const h = ms / 3_600_000;
+  if (h >= 1) return `${h.toFixed(1)}h`;
+  const m = ms / 60_000;
+  return `${Math.round(m)}m`;
+}
+
+function TrendWell({
+  label,
+  series,
+  currentDisplay,
+  threshold,
+  thresholdDirection,
+  testid,
+}: {
+  label: string;
+  series: number[];
+  currentDisplay: string;
+  threshold?: number;
+  thresholdDirection?: 'above' | 'below';
+  testid: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1" data-testid={testid}>
+      <span className="text-[9px] uppercase tracking-wider text-white/40">{label}</span>
+      <div className="flex items-center gap-2">
+        <span
+          className="text-[13px] font-semibold tabular-nums text-white/80"
+          data-testid={`${testid}-value`}
+        >
+          {currentDisplay}
+        </span>
+        <div className="min-w-0 flex-1">
+          <Sparkline
+            points={series}
+            threshold={threshold}
+            thresholdDirection={thresholdDirection}
+            data-testid={`${testid}-spark`}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrendBlock({ trendHistory }: { trendHistory?: TrendSample[] | null }) {
+  // Degrade-open: self-hide when the ring is absent/empty (no fabricated zeros).
+  if (trendHistory == null || trendHistory.length === 0) return null;
+
+  // Ring is newest-first; Sparkline wants oldest→newest.
+  const chrono = [...trendHistory].reverse();
+  const latest = trendHistory[0];
+
+  // Per-cron freshness series (null age → 0 in the line; the AGE metric shows "—").
+  const cronSeries = (name: 'health' | 'warm' | 'refresh-events'): number[] =>
+    chrono.map((s) => s.cronAgeMs[name] ?? 0);
+  const deadSeries = chrono.map((s) => s.deadUrlCount);
+
+  // Dead-link tint threshold: a NEW HIGH past the prior peak (rising = degraded).
+  const priorDead = deadSeries.slice(0, -1);
+  const deadThreshold = priorDead.length > 0 ? Math.max(...priorDead) : undefined;
+
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2" data-testid="events-trend-block">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Trends</div>
+      <div className="mt-1 grid grid-cols-2 gap-2">
+        <TrendWell
+          label="CRON · HEALTH"
+          series={cronSeries('health')}
+          currentDisplay={formatCronAge(latest.cronAgeMs.health)}
+          threshold={CRON_STALE_MS}
+          thresholdDirection="above"
+          testid="trend-cron-health"
+        />
+        <TrendWell
+          label="CRON · WARM"
+          series={cronSeries('warm')}
+          currentDisplay={formatCronAge(latest.cronAgeMs.warm)}
+          threshold={CRON_STALE_MS}
+          thresholdDirection="above"
+          testid="trend-cron-warm"
+        />
+        <TrendWell
+          label="CRON · REFRESH"
+          series={cronSeries('refresh-events')}
+          currentDisplay={formatCronAge(latest.cronAgeMs['refresh-events'])}
+          threshold={CRON_STALE_MS}
+          thresholdDirection="above"
+          testid="trend-cron-refresh"
+        />
+        <TrendWell
+          label="DEAD LINKS · 30d"
+          series={deadSeries}
+          currentDisplay={String(latest.deadUrlCount)}
+          threshold={deadThreshold}
+          thresholdDirection="above"
+          testid="trend-dead-links"
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
  * Phase 27.4.3 Plan 04 — sibling of EventsFiltersSection, gated on
  * schemaVersion === 'v3' && import.meta.env.DEV by the parent render switch.
  * Renders the 7-block v3 observability stack per UI-SPEC §"Component
@@ -3800,15 +3964,25 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
 function EventsFiltersSectionV3({
   llmStatus,
   prune,
+  trendHistory,
 }: {
   llmStatus: LLMStatus;
   prune?: PruneSummary | null;
+  // Phase 45 DASH-READ-05 (Plan 04) — the already-fetched dashboard:trends:history
+  // ring, threaded from the parent operator-status fetch (no new fetch). Feeds the
+  // four trend wells; self-hides when absent (degrade-open / forward-compat).
+  trendHistory?: TrendSample[] | null;
 }) {
   return (
     <section className="mt-2 border-t border-white/10 pt-2">
       <div className="text-[9px] text-white/60">
         Schema: v3 · Stage: {llmStatus.stage ?? 'idle'}
       </div>
+      {/* Phase 45 DASH-READ-05 — trend half: 4 sparkline wells (cron freshness ×3
+          + dead-link count) read from opStatus.trendHistory. Self-hides when the
+          ring is absent. Sits at the top of the dense block stack so the operator
+          sees slow-burn trends before drilling into point-in-time blocks. */}
+      <TrendBlock trendHistory={trendHistory} />
       <RoutingTraceBlock trace={llmStatus.routingTrace} />
       <LatencyHistogramBlock latency={llmStatus.latency} />
       <RateLimitHeadroomBlock rateLimit={llmStatus.rateLimit} />
