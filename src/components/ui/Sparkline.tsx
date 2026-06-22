@@ -34,6 +34,14 @@ export interface SparklineProps {
    * point on threshold cross. Default `var(--color-status-degraded)`.
    */
   semanticToken?: string;
+  /**
+   * Phase 45 WR-01 — force the last point into the degraded tint regardless of
+   * `threshold`/`thresholdDirection`. Used when the latest sample is semantically
+   * "most degraded" but maps to a numeric value (e.g. a dead/absent cron whose
+   * `null` age is plotted as the `0` floor) that the threshold would otherwise
+   * read as healthy. Does NOT distort the auto-scaled line — only the marker.
+   */
+  forceDegraded?: boolean;
   /** Tailwind height class for the SVG. Default `h-4`. */
   height?: string;
   'data-testid'?: string;
@@ -44,6 +52,7 @@ export function Sparkline({
   threshold,
   thresholdDirection = 'above',
   semanticToken = 'var(--color-status-degraded)',
+  forceDegraded = false,
   height = 'h-4',
   'data-testid': testId,
 }: SparklineProps) {
@@ -56,8 +65,13 @@ export function Sparkline({
   const pathPoints = coords.map((c) => `${c.x},${c.y}`).join(' ');
 
   const latest = points[points.length - 1];
+  // WR-01: `forceDegraded` short-circuits the numeric threshold so a latest
+  // sample that is semantically "most degraded" (e.g. dead cron → null → 0 floor)
+  // still tints, instead of reading as the healthy floor.
   const crossed =
-    threshold != null && (thresholdDirection === 'above' ? latest > threshold : latest < threshold);
+    forceDegraded ||
+    (threshold != null &&
+      (thresholdDirection === 'above' ? latest > threshold : latest < threshold));
 
   const last = coords[coords.length - 1];
   // Neutral (currentColor) unless the latest sample crossed into degradation.

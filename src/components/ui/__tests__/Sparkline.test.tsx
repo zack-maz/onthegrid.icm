@@ -71,6 +71,18 @@ describe('Sparkline', () => {
     }
   });
 
+  it('forceDegraded tints the last-point marker even when the latest value is below threshold (WR-01)', () => {
+    // Latest (0) is BELOW the 5 threshold → would normally stay neutral. A dead
+    // cron maps its null age to the 0 floor, so forceDegraded must override and
+    // tint the marker so the dead cron reads as degraded at a glance.
+    const { container } = render(
+      <Sparkline points={[1, 2, 0]} threshold={5} thresholdDirection="above" forceDegraded />,
+    );
+    const marker = container.querySelector('circle');
+    expect(marker).not.toBeNull();
+    expect(marker!.getAttribute('fill') ?? '').toContain('var(--color-');
+  });
+
   it('introduces no inline hex / rgba literals in the source', () => {
     const src = readFileSync(resolve(__dirname, '../Sparkline.tsx'), 'utf-8');
     expect(/#[0-9a-fA-F]{3,6}\b/.test(src)).toBe(false);

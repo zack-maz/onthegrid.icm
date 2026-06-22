@@ -3853,6 +3853,7 @@ function TrendWell({
   currentDisplay,
   threshold,
   thresholdDirection,
+  forceDegraded,
   testid,
 }: {
   label: string;
@@ -3860,6 +3861,7 @@ function TrendWell({
   currentDisplay: string;
   threshold?: number;
   thresholdDirection?: 'above' | 'below';
+  forceDegraded?: boolean;
   testid: string;
 }) {
   return (
@@ -3877,6 +3879,7 @@ function TrendWell({
             points={series}
             threshold={threshold}
             thresholdDirection={thresholdDirection}
+            forceDegraded={forceDegraded}
             data-testid={`${testid}-spark`}
           />
         </div>
@@ -3898,6 +3901,15 @@ function TrendBlock({ trendHistory }: { trendHistory?: TrendSample[] | null }) {
     chrono.map((s) => s.cronAgeMs[name] ?? 0);
   const deadSeries = chrono.map((s) => s.deadUrlCount);
 
+  // WR-01: a `null` latest cron age means the cron's lastTick key was absent —
+  // the cron is dead/never-ran, the single MOST degraded state. The series maps
+  // that null to the `0` floor (freshest-looking), so the numeric threshold can
+  // never fire. Force the marker into the degraded tint when the latest age is
+  // null so a dead cron reads as degraded at a glance (the AGE text already
+  // shows "—"). Driven off the latest sample, not distorting the auto-scale.
+  const cronLatestNull = (name: 'health' | 'warm' | 'refresh-events'): boolean =>
+    latest.cronAgeMs[name] == null;
+
   // Dead-link tint threshold: a NEW HIGH past the prior peak (rising = degraded).
   const priorDead = deadSeries.slice(0, -1);
   const deadThreshold = priorDead.length > 0 ? Math.max(...priorDead) : undefined;
@@ -3912,6 +3924,7 @@ function TrendBlock({ trendHistory }: { trendHistory?: TrendSample[] | null }) {
           currentDisplay={formatCronAge(latest.cronAgeMs.health)}
           threshold={CRON_STALE_MS}
           thresholdDirection="above"
+          forceDegraded={cronLatestNull('health')}
           testid="trend-cron-health"
         />
         <TrendWell
@@ -3920,6 +3933,7 @@ function TrendBlock({ trendHistory }: { trendHistory?: TrendSample[] | null }) {
           currentDisplay={formatCronAge(latest.cronAgeMs.warm)}
           threshold={CRON_STALE_MS}
           thresholdDirection="above"
+          forceDegraded={cronLatestNull('warm')}
           testid="trend-cron-warm"
         />
         <TrendWell
@@ -3928,6 +3942,7 @@ function TrendBlock({ trendHistory }: { trendHistory?: TrendSample[] | null }) {
           currentDisplay={formatCronAge(latest.cronAgeMs['refresh-events'])}
           threshold={CRON_STALE_MS}
           thresholdDirection="above"
+          forceDegraded={cronLatestNull('refresh-events')}
           testid="trend-cron-refresh"
         />
         <TrendWell
