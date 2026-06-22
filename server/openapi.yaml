@@ -638,14 +638,26 @@ paths:
                     description: 'Last adversarial-eval result (events:llm-eval-adversarial:v3 sidecar).'
                   prune:
                     type: object
-                    description: Dead-URL prune block (Phase 32 Plan 04).
+                    description: Dead-URL prune block (Phase 32 Plan 04; Phase 44 D-01 fields).
                     properties:
                       deadUrlCount:
                         type: integer
                         minimum: 0
+                        description: Authoritative O(1) terminal-dead total (events:url-liveness-count sidecar).
                       last24hPrunes:
                         type: integer
                         minimum: 0
+                      countsByStatus:
+                        type: object
+                        description: >-
+                          Phase 44 D-01/D-03 — SAMPLED per-status tally over the
+                          events:url-liveness:* SCAN, bounded by MAX_SCAN_KEYS=200.
+                          NOT authoritative (deadUrlCount is). Keys are liveness
+                          statuses (live/unknown/no-url/404/403/dead-host/soft-404);
+                          absent statuses are omitted (sparse map).
+                        additionalProperties:
+                          type: integer
+                          minimum: 0
                       deadUrlSample:
                         type: array
                         maxItems: 20
@@ -656,13 +668,42 @@ paths:
                               type: string
                             url:
                               type: string
+                              nullable: true
+                              description: >-
+                                Phase 43 D-07/CR-01 — mirrors UrlLiveness.lastUrlProbed
+                                (string | null). Terminal-dead entries carry a real URL
+                                by convention, but the read is a blind generic cast, so
+                                the contract honestly admits null.
                             status:
                               type: string
-                              enum: [dead-host, '403', '404']
+                              enum: [dead-host, '403', '404', soft-404]
+                            evidence:
+                              type: string
+                              nullable: true
+                              description: >-
+                                Phase 43 D-19 — operator-facing diagnostic string
+                                (≤200 chars). Rendered as TEXT, not HTML (T-43-16).
+                            lastProbedAt:
+                              type: string
+                              description: Phase 44 D-01 — ISO8601 last-probe timestamp.
+                            attemptCount:
+                              type: integer
+                              minimum: 0
+                              description: >-
+                                Phase 44 D-01/D-02 — dead-streak depth ("dead on N
+                                consecutive sweeps"); honest transition proxy.
                   actorQuality:
                     type: object
                     nullable: true
                     description: Actor-quality observability (Phase 33 Plan 06 D-16).
+                  tokenBudget:
+                    type: object
+                    nullable: true
+                    description: >-
+                      Phase 39 GA-4 — provider-keyed token-budget map
+                      (providers.nvidia_nim used/cap/soft/hard/state) + today's
+                      cost-shadow roll-up (tokensIn/tokensOut/usd). Null on
+                      degrade-open (Redis throw inside the block — T-39-03-D).
         '401':
           description: Missing or invalid operator Bearer.
           content:

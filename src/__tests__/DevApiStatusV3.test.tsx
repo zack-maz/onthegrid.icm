@@ -165,14 +165,90 @@ describe('DevApiStatus v3 surface — Phase 27.4.3 Plan 04', () => {
 
     // Empty-state copy verbatim per UI-SPEC §"Empty states":
     expect(screen.getByText('No routing decisions yet.')).toBeInTheDocument();
-    // Note: 'No LLM calls yet.' is shared between LatencyHistogramBlock (v3) and
-    // CallLogBlock (v2). EventsFiltersSectionV3 only renders LatencyHistogramBlock,
-    // so a single match is the expected result here.
+    // Phase 44 (Pitfall 1): 'No LLM calls yet.' is the LatencyHistogramBlock
+    // (v3) empty copy. The v2 CallLogBlock — which shares this same string —
+    // is now mounted in EventsFiltersSectionV3 (Phase 44 EVENTS-TAB-01) but is
+    // PRESENCE-GATED on `llmStatus.callHistory` being present. Here callHistory
+    // is undefined, so CallLogBlock SELF-HIDES → still exactly one match.
     expect(screen.getByText('No LLM calls yet.')).toBeInTheDocument();
     expect(screen.getByText('No requests this window.')).toBeInTheDocument();
     expect(screen.getByText('No schema rejections.')).toBeInTheDocument();
     expect(screen.getByText('No errors today.')).toBeInTheDocument();
     expect(screen.getByText('No tokens billed this window.')).toBeInTheDocument();
+  });
+
+  it('Phase 44 (D-05): the 7 v2 blocks SELF-HIDE under an empty v3 llmStatus (no fabricated zeros)', () => {
+    mockLLMStatus = {
+      stage: 'idle',
+      schemaVersion: 'v3',
+      // No callHistory / tokenCounters / breakerState / evalScore / dlqRecent /
+      // suspectCount — every v2 block is presence-gated and must self-hide.
+    };
+    openAndSelectEventsTab();
+    render(<DevApiStatus />);
+
+    // WaterfallBlock is gated on stage !== 'idle' → absent here.
+    expect(screen.queryByText('Pipeline Waterfall')).toBeNull();
+    // HistogramsBlock (callHistory.length > 0) → absent.
+    expect(screen.queryByText('Provenance Distribution')).toBeNull();
+    // CallLogBlock self-hides (callHistory undefined) → no v2 "LLM Call Log (..)"
+    // header (the LatencyHistogramBlock 'No LLM calls yet.' line is a separate
+    // v3 block, asserted above).
+    expect(screen.queryByText(/LLM Call Log/)).toBeNull();
+    // BudgetBarsBlock self-hides under NIM-only (tokenCounters/breakerState
+    // absent) — EXPECTED, correct, honest (D-06), NOT a synthetic cerebras:0.
+    expect(screen.queryByText('Token Budget (daily)')).toBeNull();
+    // EvalScoreBlock self-hides (evalScore undefined).
+    expect(screen.queryByText(/Accuracy Eval/)).toBeNull();
+    expect(screen.queryByText(/Eval: no ground-truth loaded/)).toBeNull();
+    // DlqBlock self-hides (dlqRecent undefined) — no synthetic 'DLQ: 0 entries'.
+    expect(screen.queryByText(/DLQ: 0 entries/)).toBeNull();
+    // SuspectBlock self-hides (suspectCount not a number) — no 'Suspect events: 0'.
+    expect(screen.queryByText(/Suspect events:/)).toBeNull();
+  });
+
+  it('Phase 44 (D-05/D-08): the v2 blocks + FlightRecorder render under a populated v3 llmStatus', () => {
+    mockLLMStatus = {
+      stage: 'done',
+      schemaVersion: 'v3',
+      callHistory: [
+        {
+          provider: 'nvidia_nim',
+          model: 'qwen-235b',
+          ok: true,
+          tokensIn: 100,
+          tokensOut: 50,
+          durationMs: 1200,
+          batchSize: 4,
+          timestamp: now - 1000,
+        },
+      ],
+      provenanceCounts: { 'nominatim-direct': 3 },
+      tokenCounters: { cerebras: 12_000, groq: 4_000 },
+      breakerState: { cerebras: 'ok', groq: 'ok' },
+      evalScore: {
+        total: 50,
+        within5km: 40,
+        within20km: 45,
+        within100km: 49,
+      },
+      dlqRecent: [
+        { id: 'grp-1', reason: 'zod-fail', lastError: 'bad shape', timestamp: now - 500 },
+      ],
+      suspectCount: 2,
+    };
+    openAndSelectEventsTab();
+    render(<DevApiStatus />);
+
+    // Data-fed v2 blocks now render their content (presence gates satisfied).
+    expect(screen.getByText('Provenance Distribution')).toBeInTheDocument();
+    expect(screen.getByText(/LLM Call Log/)).toBeInTheDocument();
+    expect(screen.getByText('Token Budget (daily)')).toBeInTheDocument();
+    expect(screen.getByText(/Accuracy Eval/)).toBeInTheDocument();
+    expect(screen.getByText(/DLQ \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Suspect events:/)).toBeInTheDocument();
+    // WaterfallBlock renders since stage !== 'idle'.
+    expect(screen.getByText('Pipeline Waterfall')).toBeInTheDocument();
   });
 
   it('renders v3 section headers verbatim per UI-SPEC', () => {

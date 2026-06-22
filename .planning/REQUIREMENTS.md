@@ -26,8 +26,8 @@ Operator-locked priority order: water filter → ghost links + events subtab →
 
 ### Events Subtab Detail (EVENTS-TAB)
 
-- [ ] **EVENTS-TAB-01**: Operator can see full LLM pipeline detail in the events subtab — the 7 already-built blocks (Waterfall, Histograms, CallLog, BudgetBars, EvalScore, Dlq, Suspect) mounted into `EventsFiltersSectionV3`, fed from existing `LLMStatus` fields
-- [ ] **EVENTS-TAB-02**: Operator can read dead-link state per bucket in the events subtab — counts per liveness status plus first-seen-dead / transition timestamps
+- [x] **EVENTS-TAB-01**: Operator can see full LLM pipeline detail in the events subtab — the 7 already-built blocks (Waterfall, Histograms, CallLog, BudgetBars, EvalScore, Dlq, Suspect) mounted into `EventsFiltersSectionV3`, fed from existing `LLMStatus` fields
+- [x] **EVENTS-TAB-02**: Operator can read dead-link state per bucket in the events subtab — counts per liveness status plus first-seen-dead / transition timestamps
 
 ### Dashboard Readability (DASH-READ)
 
@@ -106,8 +106,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GHOST-08        | Phase 43 | Complete |
 | GHOST-09        | Phase 43 | Complete |
 | GHOST-10        | Phase 43 | Complete |
-| EVENTS-TAB-01   | Phase 44 | Pending  |
-| EVENTS-TAB-02   | Phase 44 | Pending  |
+| EVENTS-TAB-01   | Phase 44 | Complete |
+| EVENTS-TAB-02   | Phase 44 | Complete |
 | DASH-READ-01    | Phase 45 | Pending  |
 | DASH-READ-02    | Phase 45 | Pending  |
 | DASH-READ-03    | Phase 45 | Pending  |

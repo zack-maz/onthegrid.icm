@@ -377,6 +377,47 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     });
   });
 
+  it('Phase 44 — a 200 prunedCount:0 (drift reconciled) renders a visible no-op result, not silence', async () => {
+    opStatusPayload = makeOpStatus({ deadUrlCount: 3 });
+    pruneResponse = { status: 200, body: { prunedCount: 0, prunedIds: [] } };
+    openAndSelectApiHealthTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
+    await waitFor(() => {
+      expect(screen.getByTestId('prune-dead-urls-trigger')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('prune-dead-urls-trigger'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('prune-dead-urls-result')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('prune-dead-urls-result').textContent).toMatch(/count reconciled/i);
+  });
+
+  it('Phase 44 — replay probe surfaces a visible "quota OK" result on the server 404 (no longer silent)', async () => {
+    opStatusPayload = makeOpStatus({ deadUrlCount: 3 });
+    openAndSelectApiHealthTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
+    await waitFor(() => {
+      expect(screen.getByTestId('replay-test-trigger')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-test-trigger'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('replay-probe-result')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('replay-probe-result').textContent).toMatch(/Quota OK/i);
+  });
+
   it('drill-down list renders each deadUrlSample entry with status + eventId + url', async () => {
     opStatusPayload = makeOpStatus({
       deadUrlCount: 2,
@@ -470,5 +511,227 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     expect(screen.getByTestId('operator-drawer-trigger').getAttribute('aria-expanded')).toBe(
       'true',
     );
+  });
+});
+
+// ============================================================================
+// Phase 44 (EVENTS-TAB-02, D-09/D-10) — DeadLinkBucketsBlock on the EVENTS tab.
+//
+// The block is fed by the SAME /api/operator-status `prune` object, threaded
+// down to EventsFiltersSectionV3 (D-10). It renders the authoritative
+// deadUrlCount, the SAMPLED per-status buckets labeled "of N scanned" (D-03),
+// and drill-down rows (status badge / url / evidence-as-TEXT / relativeTime /
+// dead-streak attemptCount). It self-hides when prune is absent (degrade-open).
+// These are ADDITIVE — the API-Health-tab assertions above are untouched.
+// ============================================================================
+
+interface PruneSampleExtended {
+  eventId: string;
+  url: string;
+  status: 'dead-host' | '403' | '404' | 'soft-404';
+  evidence?: string | null;
+  lastProbedAt?: string;
+  attemptCount?: number;
+}
+
+interface OpStatusV44 {
+  audit24h: number;
+  byBearer: never[];
+  advEval: null;
+  prune: {
+    deadUrlCount: number;
+    last24hPrunes: number;
+    countsByStatus?: Record<string, number>;
+    deadUrlSample: PruneSampleExtended[];
+  } | null;
+}
+
+describe('DeadLinkBucketsBlock (events tab) — Phase 44 EVENTS-TAB-02', () => {
+  let v44Payload: OpStatusV44 | { notOperatorStatus: true };
+  const v44Fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : String(input);
+    if (url === '/api/operator-status') {
+      return { ok: true, status: 200, json: async () => v44Payload } as Response;
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as Response;
+  });
+
+  beforeEach(() => {
+    v44Fetch.mockClear();
+    vi.stubGlobal('fetch', v44Fetch);
+    const store = new Map<string, string>();
+    const ls = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, String(v)),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+      key: (i: number) => Array.from(store.keys())[i] ?? null,
+      get length() {
+        return store.size;
+      },
+    } satisfies Storage;
+    vi.stubGlobal('localStorage', ls);
+    Object.defineProperty(window, 'localStorage', { value: ls, configurable: true });
+    ls.setItem('dashboard:auth-key', 'test-bearer-key');
+    resetAllStores();
+    useUIStore.setState({
+      isDevApiStatusOpen: false,
+      activeDevApiStatusTab: 'apiHealth',
+      isOperatorDrawerOpen: false,
+      devApiGroupCollapsed: {},
+    });
+    useLayerStore.setState({ activeLayers: new Set(['water']) });
+    useFilterStore.setState({ showSites: true });
+    mockLLMStatus = { stage: 'idle', schemaVersion: 'v3' };
+    v44Payload = {
+      audit24h: 1,
+      byBearer: [],
+      advEval: null,
+      prune: {
+        deadUrlCount: 4,
+        last24hPrunes: 2,
+        countsByStatus: { live: 50, '404': 2, '403': 1, 'soft-404': 1, 'no-url': 3, unknown: 5 },
+        deadUrlSample: [
+          {
+            eventId: 'grp-404',
+            url: 'https://dead.example.com/a',
+            status: '404',
+            evidence: 'http-404',
+            lastProbedAt: new Date(now - 4 * 3600_000).toISOString(),
+            attemptCount: 3,
+          },
+          {
+            eventId: 'grp-soft',
+            url: 'https://soft.example.com/b',
+            status: 'soft-404',
+            // Adversarial evidence: must render as LITERAL text, not bold HTML.
+            evidence: 'matched <b>not found</b> marker',
+            lastProbedAt: new Date(now - 8 * 3600_000).toISOString(),
+            attemptCount: 2,
+          },
+        ],
+      },
+    };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function openEventsTab() {
+    useUIStore.setState({ isDevApiStatusOpen: true, activeDevApiStatusTab: 'events' });
+  }
+
+  it('renders the authoritative Dead URL events total + 24h prune count', async () => {
+    openEventsTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-link-authoritative-total')).toBeInTheDocument();
+    });
+    const total = screen.getByTestId('dead-link-authoritative-total');
+    expect(total.textContent).toMatch(/Dead URL events: 4/);
+    expect(total.textContent).toMatch(/pruned 2 in 24h/);
+  });
+
+  it('renders per-status buckets with the "of N scanned" sampled-tally caveat (D-03)', async () => {
+    openEventsTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-link-buckets')).toBeInTheDocument();
+    });
+    const buckets = screen.getByTestId('dead-link-buckets');
+    // Scanned total = 50+2+1+1+3+5 = 62.
+    expect(buckets.textContent).toMatch(/of 62 scanned/);
+    // A live bucket and terminal-dead buckets are present.
+    expect(screen.getByTestId('dead-link-bucket-live')).toBeInTheDocument();
+    expect(screen.getByTestId('dead-link-bucket-404')).toBeInTheDocument();
+    expect(screen.getByTestId('dead-link-bucket-soft-404')).toBeInTheDocument();
+  });
+
+  it('renders sample rows with status badge, url, relativeTime, and dead-streak attemptCount', async () => {
+    openEventsTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-link-sample')).toBeInTheDocument();
+    });
+    const sample = screen.getByTestId('dead-link-sample');
+    expect(sample.textContent).toContain('https://dead.example.com/a');
+    expect(sample.textContent).toContain('https://soft.example.com/b');
+    // Dead-streak depth (D-02 attemptCount framing).
+    expect(sample.textContent).toMatch(/dead ×3/);
+    expect(sample.textContent).toMatch(/dead ×2/);
+    // relativeTime() rendering of lastProbedAt (hours-ago form).
+    expect(sample.textContent).toMatch(/h ago|ago/);
+  });
+
+  it('renders evidence as TEXT, never injected HTML (D-11 / T-43-16)', async () => {
+    openEventsTab();
+    const { container } = render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-link-sample')).toBeInTheDocument();
+    });
+    // The literal evidence string (incl. the <b> characters) renders as text.
+    expect(screen.getByTestId('dead-link-sample').textContent).toContain(
+      'matched <b>not found</b> marker',
+    );
+    // And no actual <b> element was injected from the evidence value.
+    expect(container.querySelector('b')).toBeNull();
+  });
+
+  it('self-hides when prune is absent on the operator-status payload (degrade-open, D-10)', async () => {
+    v44Payload = { audit24h: 1, byBearer: [], advEval: null, prune: null };
+    openEventsTab();
+    render(<DevApiStatus />);
+    // Let the events-tab-scoped fetch resolve, then confirm the block is absent.
+    await waitFor(() => {
+      const calls = v44Fetch.mock.calls.filter((c) => c[0] === '/api/operator-status');
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('dead-link-authoritative-total')).toBeNull();
+    });
+  });
+
+  it('WR-05: buckets render on their own data even when deadUrlCount === 0 (sidecar drift stays visible)', async () => {
+    // The deadUrlCount sidecar has a documented underflow-to-0 mode (T-32-11).
+    // Scan-derived buckets/sample must gate on their OWN presence so a count
+    // of 0 cannot mask contradicting scan evidence — the disagreement IS the
+    // operator's drift signal.
+    v44Payload = {
+      audit24h: 1,
+      byBearer: [],
+      advEval: null,
+      prune: { deadUrlCount: 0, last24hPrunes: 0, countsByStatus: { live: 10 }, deadUrlSample: [] },
+    };
+    openEventsTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-link-authoritative-total')).toBeInTheDocument();
+    });
+    // Authoritative line still reports the sidecar count verbatim (D-03).
+    expect(screen.getByTestId('dead-link-authoritative-total').textContent).toMatch(
+      /Dead URL events: 0/,
+    );
+    // Buckets render from their own non-empty tally despite count === 0.
+    expect(screen.getByTestId('dead-link-buckets')).toBeInTheDocument();
+    expect(screen.getByTestId('dead-link-bucket-live')).toBeInTheDocument();
+    // The sample gates on ITS own data — empty array → hidden.
+    expect(screen.queryByTestId('dead-link-sample')).toBeNull();
+  });
+
+  it('WR-05: skips bucket + sample rows when scan data itself is empty', async () => {
+    v44Payload = {
+      audit24h: 1,
+      byBearer: [],
+      advEval: null,
+      prune: { deadUrlCount: 0, last24hPrunes: 0, countsByStatus: {}, deadUrlSample: [] },
+    };
+    openEventsTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-link-authoritative-total')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('dead-link-buckets')).toBeNull();
+    expect(screen.queryByTestId('dead-link-sample')).toBeNull();
   });
 });

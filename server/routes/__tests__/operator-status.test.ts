@@ -369,33 +369,41 @@ describe('/api/operator-status — Phase 32 Plan 04 `prune` block', () => {
   // prune.deadUrlSample — SCAN over events:url-liveness:* (LOW-03 drill-down)
   // ---------------------------------------------------------------------------
 
-  it('prune.deadUrlSample: returns terminal-dead entries with {eventId, url, status} shape', async () => {
+  it('prune.deadUrlSample: returns terminal-dead entries with {eventId, url, status, evidence, lastProbedAt, attemptCount} shape', async () => {
     process.env.NODE_ENV = 'development';
     mockRedis.get.mockResolvedValue(null);
 
-    // 25 keys total, mixed statuses — only 10 are terminal-dead.
+    // 28 keys total, mixed statuses. Phase 44: soft-404 (terminal-dead) and
+    // no-url (NOT terminal-dead) added so the new buckets are pinned.
+    //   10 live + 5 unknown + 1 no-url (all excluded from deadUrlSample)
+    //   5 '404' + 3 'dead-host' + 2 '403' + 2 'soft-404' = 12 terminal-dead
     const keys: string[] = [];
-    const statuses: Array<'live' | 'unknown' | '404' | 'dead-host' | '403'> = [
-      // 10 live (excluded)
+    const statuses: Array<
+      'live' | 'unknown' | 'no-url' | '404' | 'dead-host' | '403' | 'soft-404'
+    > = [
       ...Array<'live'>(10).fill('live'),
-      // 5 unknown (excluded)
       ...Array<'unknown'>(5).fill('unknown'),
-      // 5 '404' + 3 'dead-host' + 2 '403' = 10 terminal-dead
+      ...Array<'no-url'>(1).fill('no-url'),
       ...Array<'404'>(5).fill('404'),
       ...Array<'dead-host'>(3).fill('dead-host'),
       ...Array<'403'>(2).fill('403'),
+      ...Array<'soft-404'>(2).fill('soft-404'),
     ];
     const valueByKey: Record<string, unknown> = {};
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < statuses.length; i++) {
       const key = `events:url-liveness:event-${i}`;
       keys.push(key);
+      const status = statuses[i];
       valueByKey[key] = {
         data: {
-          status: statuses[i],
+          status,
           lastProbedAt: new Date().toISOString(),
-          attemptCount: 1,
-          lastUrlProbed: `https://example.com/article-${i}`,
-          lastHttpStatus: statuses[i] === 'live' ? 200 : 404,
+          attemptCount: status === 'live' ? 0 : 2,
+          // `no-url` records a null probed URL (D-07); it is NOT terminal-dead
+          // so it never reaches deadUrlSample, but MUST count in countsByStatus.
+          lastUrlProbed: status === 'no-url' ? null : `https://example.com/article-${i}`,
+          lastHttpStatus: status === 'live' ? 200 : 404,
+          evidence: status === 'soft-404' ? 'soft-404: matched "page not found" in title' : null,
         },
         stale: false,
         lastFresh: Date.now(),
@@ -411,22 +419,44 @@ describe('/api/operator-status — Phase 32 Plan 04 `prune` block', () => {
     const sample = res.body.prune.deadUrlSample as Array<{
       eventId: string;
       url: string;
-      status: 'dead-host' | '403' | '404';
+      status: 'dead-host' | '403' | '404' | 'soft-404';
+      evidence: string | null;
+      lastProbedAt: string;
+      attemptCount: number;
     }>;
 
-    // 10 terminal-dead — under the LIMIT_DRILL_DOWN=20 cap.
-    expect(sample).toHaveLength(10);
+    // 12 terminal-dead (incl. soft-404) — under the LIMIT_DRILL_DOWN=20 cap.
+    expect(sample).toHaveLength(12);
     for (const entry of sample) {
       expect(typeof entry.eventId).toBe('string');
       expect(entry.eventId.length).toBeGreaterThan(0);
       // eventId is the bare ID (no `events:url-liveness:` prefix leaked).
       expect(entry.eventId.startsWith('events:url-liveness:')).toBe(false);
       expect(typeof entry.url).toBe('string');
-      expect(['dead-host', '403', '404']).toContain(entry.status);
+      expect(['dead-host', '403', '404', 'soft-404']).toContain(entry.status);
+      // Phase 44 D-01 — new fields present on every entry.
+      expect(typeof entry.lastProbedAt).toBe('string');
+      expect(typeof entry.attemptCount).toBe('number');
+      expect(entry.evidence === null || typeof entry.evidence === 'string').toBe(true);
     }
-    // No 'live' or 'unknown' bleeds through.
+    // No 'live', 'unknown', or 'no-url' bleeds through into the dead sample.
     expect(sample.every((e) => e.status !== ('live' as unknown))).toBe(true);
     expect(sample.every((e) => e.status !== ('unknown' as unknown))).toBe(true);
+    expect(sample.every((e) => e.status !== ('no-url' as unknown))).toBe(true);
+
+    // Phase 44 D-01/D-03 — countsByStatus: all-status SAMPLED tally.
+    const countsByStatus = res.body.prune.countsByStatus as Record<string, number>;
+    expect(typeof countsByStatus).toBe('object');
+    expect(countsByStatus.live).toBe(10);
+    expect(countsByStatus.unknown).toBe(5);
+    expect(countsByStatus['no-url']).toBe(1);
+    // Sum of terminal-dead buckets matches the drill-down length (under cap).
+    const deadSum =
+      (countsByStatus['404'] ?? 0) +
+      (countsByStatus['dead-host'] ?? 0) +
+      (countsByStatus['403'] ?? 0) +
+      (countsByStatus['soft-404'] ?? 0);
+    expect(deadSum).toBe(sample.length);
   });
 
   it('prune.deadUrlSample: caps at 20 entries when more than 20 terminal-dead exist', async () => {
@@ -459,6 +489,53 @@ describe('/api/operator-status — Phase 32 Plan 04 `prune` block', () => {
 
     const sample = res.body.prune.deadUrlSample as Array<unknown>;
     expect(sample).toHaveLength(20);
+
+    // Phase 44 WR-01 — the LIMIT_DRILL_DOWN=20 cap bounds ONLY the sample
+    // array; the countsByStatus tally keeps accumulating over scanned keys
+    // up to the MAX_SCAN_KEYS=200 budget. With 30 terminal-dead keys, the
+    // tally must read 30 (all scanned), not 20 (the sample cap).
+    const countsByStatus = res.body.prune.countsByStatus as Record<string, number>;
+    expect(countsByStatus['404']).toBe(30);
+  });
+
+  it('prune.countsByStatus: tally continues past the LIMIT_DRILL_DOWN sample cap (WR-01) — mixed dead/live beyond 20 dead', async () => {
+    process.env.NODE_ENV = 'development';
+    mockRedis.get.mockResolvedValue(null);
+
+    // 25 terminal-dead FIRST (fills the 20-entry sample early), then 40 live.
+    // Pre-WR-01, the loop broke at the 20th dead key, so `live` vanished from
+    // the tally entirely. Post-fix the tally covers all 65 scanned keys.
+    const keys: string[] = [];
+    const valueByKey: Record<string, unknown> = {};
+    for (let i = 0; i < 65; i++) {
+      const key = `events:url-liveness:event-${i}`;
+      keys.push(key);
+      const status = i < 25 ? '404' : 'live';
+      valueByKey[key] = {
+        data: {
+          status,
+          lastProbedAt: new Date().toISOString(),
+          attemptCount: status === 'live' ? 0 : 1,
+          lastUrlProbed: `https://example.com/article-${i}`,
+          lastHttpStatus: status === 'live' ? 200 : 404,
+        },
+        stale: false,
+        lastFresh: Date.now(),
+      };
+    }
+    mockRedis.scan.mockResolvedValueOnce([0, keys]);
+    mockCacheGetSafe.mockImplementation(async (key: string) => valueByKey[key] ?? null);
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+
+    // Sample stays capped at 20 — the cap still bounds the payload.
+    expect(res.body.prune.deadUrlSample).toHaveLength(20);
+    // Tally reflects ALL 65 scanned keys (≤ MAX_SCAN_KEYS=200 budget).
+    const countsByStatus = res.body.prune.countsByStatus as Record<string, number>;
+    expect(countsByStatus['404']).toBe(25);
+    expect(countsByStatus.live).toBe(40);
   });
 
   it('prune.deadUrlSample: defaults to [] when SCAN throws (degrade-open, deadUrlCount still populated)', async () => {
@@ -474,6 +551,8 @@ describe('/api/operator-status — Phase 32 Plan 04 `prune` block', () => {
     // GET still returns 200 — sample failure is isolated.
     expect(res.status).toBe(200);
     expect(res.body.prune.deadUrlSample).toEqual([]);
+    // Phase 44 — degrade-open returns empty-but-shaped countsByStatus too.
+    expect(res.body.prune.countsByStatus).toEqual({});
     // Sidecar read succeeded independently of SCAN failure.
     expect(res.body.prune.deadUrlCount).toBe(5);
   });

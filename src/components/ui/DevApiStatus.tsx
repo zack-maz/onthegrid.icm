@@ -663,6 +663,62 @@ export function DevApiStatus() {
   // continues to surface critical-tier outages to anonymous prod users.
   const showApiHealthTab = shouldRenderDashboard();
 
+  // Phase 44 (EVENTS-TAB-02, D-10) — prune data for the events-subtab
+  // DeadLinkBucketsBlock. The canonical operator-status fetch lives inside the
+  // sibling `DevApiStatusAllApisTab` (API-Health tab), which only mounts when
+  // that tab is active. Because the API-Health and events tabpanels are
+  // mutually-exclusive `activeTab` branches, only one fetcher is ever mounted
+  // at a time — so this events-tab-scoped fetch never runs CONCURRENTLY with
+  // the API-Health one (honoring D-10's no-double-fetch intent). It extracts
+  // ONLY `prune` (threaded down to EventsFiltersSectionV3), degrades open on
+  // any failure (network / non-200 / missing Bearer → null → block self-hides),
+  // and only runs while the events tab is the active, Bearer-unlocked surface.
+  //
+  // Phase 44 WR-02 — two failure-handling guarantees, pinned here:
+  //   1. Failures NULL the state (not keep-last-good): a Bearer expiry or
+  //      server failure after one successful fetch must hide the block, not
+  //      leave it rendering progressively staler data with no indicator.
+  //   2. Out-of-order guard: a monotonically increasing per-effect request id
+  //      is checked before every setEventsPrune so a slow first response
+  //      resolving after a faster interval tick cannot clobber newer data.
+  const [eventsPrune, setEventsPrune] = useState<PruneSummary | null>(null);
+  useEffect(() => {
+    if (activeTab !== 'events' || !showEventsTab) {
+      setEventsPrune(null);
+      return;
+    }
+    let cancelled = false;
+    let latestRequestId = 0;
+    const fetchPrune = async (): Promise<void> => {
+      const requestId = ++latestRequestId;
+      // Only the most recent in-flight request may write state (WR-02 §2).
+      const mayWrite = () => !cancelled && requestId === latestRequestId;
+      try {
+        const res = await fetch('/api/operator-status', {
+          headers: { ...dashboardAuthHeaders() },
+        });
+        if (!res.ok) {
+          // Degrade-open (WR-02 §1) — non-200 nulls the state; block self-hides.
+          if (mayWrite()) setEventsPrune(null);
+          return;
+        }
+        const data = (await res.json()) as { prune?: PruneSummary | null };
+        if (mayWrite()) setEventsPrune(data?.prune ?? null);
+      } catch {
+        // Degrade-open (WR-02 §1) — network failure nulls the state too.
+        if (mayWrite()) setEventsPrune(null);
+      }
+    };
+    void fetchPrune();
+    const id = setInterval(() => {
+      void fetchPrune();
+    }, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [activeTab, showEventsTab]);
+
   // Phase 28.2.5 D-08 — `aggregateHealth` / `healthLoading` / `healthError`
   // and `hasCriticalUnhealthy` are now declared earlier in the component
   // body (just above the `rows[]` array) so the Precip-row IIFE inside
@@ -916,7 +972,7 @@ export function DevApiStatus() {
               {llmStatus?.schemaVersion === 'v2' ? (
                 <EventsFiltersSection llmStatus={llmStatus} />
               ) : (
-                <EventsFiltersSectionV3 llmStatus={llmStatus} />
+                <EventsFiltersSectionV3 llmStatus={llmStatus} prune={eventsPrune} />
               )}
             </div>
           )}
@@ -1111,10 +1167,23 @@ function DevApiStatusAllApisTab({
     prune?: {
       deadUrlCount: number;
       last24hPrunes: number;
+      // Phase 44 D-01 — optional, forward-compat (Phase 32 D-10 pattern):
+      // older servers pre-dating the D-01 extension omit it, so the dashboard
+      // must not break. SAMPLED per-status tally (≤MAX_SCAN_KEYS=200), NOT
+      // authoritative — deadUrlCount is. Render "of N scanned" caveat (D-03).
+      countsByStatus?: Record<string, number>;
       deadUrlSample: Array<{
         eventId: string;
-        url: string;
-        status: 'dead-host' | '403' | '404';
+        // Phase 43 drift close — `soft-404` joins the terminal-dead union.
+        status: 'dead-host' | '403' | '404' | 'soft-404';
+        // Phase 44 WR-04 — nullable in lockstep with the server's
+        // DeadUrlSampleEntry.url (string | null, Phase 43 D-07/CR-01).
+        url: string | null;
+        // Phase 44 D-01 — optional forward-compat (Phase 32 D-10 pattern).
+        // `evidence` renders as TEXT, not HTML (D-11 / T-43-16).
+        evidence?: string | null;
+        lastProbedAt?: string;
+        attemptCount?: number;
       }>;
     } | null;
     // Phase 33 D-17 — actor metadata quality counts from /api/operator-status
@@ -1230,7 +1299,14 @@ function DevApiStatusAllApisTab({
   // observable trigger for the 429 alert. Test 28-30 wire fetch spies
   // around this; production callsites issue /llm-replay from elsewhere
   // in the operator-actions block (Task 7.5 + Plan 06 expand).
+  // Phase 44 — visible probe result. The probe POSTs groupKey="test", which
+  // the server resolves PAST the quota check and then 404s ("not_found") — so a
+  // 404 is the SUCCESS signal (request authenticated, quota not exceeded). With
+  // no visible result the button read as broken ("nothing happens"); this line
+  // makes every outcome legible.
+  const [replayResult, setReplayResult] = useState<string | null>(null);
   const replayProbe = async (): Promise<void> => {
+    setReplayResult('Probing…');
     try {
       const res = await fetch('/api/events/llm-replay/test', {
         method: 'POST',
@@ -1242,11 +1318,19 @@ function DevApiStatusAllApisTab({
       if (res.status === 429) {
         const body = (await res.json()) as { resetsAt?: string };
         setQuotaAlert({ resetsAt: body.resetsAt ?? '' });
-      } else if (res.ok) {
+        setReplayResult('Quota exceeded (50/50 in 24h).');
+      } else if (res.ok || res.status === 404) {
+        // 404 = reached the handler past auth+quota (the "test" group is absent
+        // by design); ok = a real group replayed. Both mean quota not exceeded.
         setQuotaAlert(null);
+        setReplayResult('✓ Quota OK — probe reached server (not exceeded).');
+      } else if (res.status === 401 || res.status === 403) {
+        setReplayResult('✗ Auth rejected — re-enter the dashboard password.');
+      } else {
+        setReplayResult(`✗ Probe failed (HTTP ${res.status}).`);
       }
     } catch {
-      // Network failure — don't update alert state
+      setReplayResult('✗ Network error — probe did not reach the server.');
     }
   };
 
@@ -1257,7 +1341,12 @@ function DevApiStatusAllApisTab({
   // through pruneQuotaAlert (50/24h per Bearer per D-15). Network failures
   // degrade-open per the existing operator-actions convention.
   const [pruneQuotaAlert, setPruneQuotaAlert] = useState<{ resetsAt: string } | null>(null);
+  // Phase 44 — visible prune result. A 200 with prunedCount:0 (e.g. the count
+  // had drifted and the server reconciled it to 0) previously looked identical
+  // to a broken button; this line reports exactly what happened.
+  const [pruneResult, setPruneResult] = useState<string | null>(null);
   const pruneHandler = async (): Promise<void> => {
+    setPruneResult('Pruning…');
     try {
       const res = await fetch('/api/events/prune-dead-urls', {
         method: 'POST',
@@ -1270,14 +1359,26 @@ function DevApiStatusAllApisTab({
       if (res.status === 429) {
         const body = (await res.json()) as { resetsAt?: string };
         setPruneQuotaAlert({ resetsAt: body.resetsAt ?? '' });
+        setPruneResult('Quota exceeded (50/50 in 24h).');
       } else if (res.ok) {
         setPruneQuotaAlert(null);
+        const body = (await res.json().catch(() => null)) as { prunedCount?: number } | null;
+        const n = body?.prunedCount ?? 0;
+        setPruneResult(
+          n > 0
+            ? `✓ Pruned ${n} dead event${n === 1 ? '' : 's'}.`
+            : '✓ No prunable events — count reconciled.',
+        );
         // MEDIUM-03 resolution — refresh `prune.deadUrlCount` immediately
         // instead of waiting for the 30s polling tick.
         void fetchOpStatus();
+      } else if (res.status === 401 || res.status === 403) {
+        setPruneResult('✗ Auth rejected — re-enter the dashboard password.');
+      } else {
+        setPruneResult(`✗ Prune failed (HTTP ${res.status}).`);
       }
     } catch {
-      // Network failure — degrade-open (existing operator-actions convention)
+      setPruneResult('✗ Network error — prune did not reach the server.');
     }
   };
 
@@ -1993,7 +2094,8 @@ function DevApiStatusAllApisTab({
                     <li key={entry.eventId} className="flex items-baseline gap-2 py-0.5">
                       <span className="font-mono text-text-muted/60">{entry.status}</span>
                       <span className="truncate font-mono text-text-muted/40">{entry.eventId}</span>
-                      <span className="truncate text-text-muted/70" title={entry.url}>
+                      {/* Phase 44 WR-04 — url is string | null; null renders nothing. */}
+                      <span className="truncate text-text-muted/70" title={entry.url ?? undefined}>
                         {entry.url}
                       </span>
                     </li>
@@ -2158,6 +2260,15 @@ function DevApiStatusAllApisTab({
                 <div className="mt-1 text-[10px] text-white/40">
                   Probes the 50/24h replay quota without writing to the event cache.
                 </div>
+                {replayResult && (
+                  <div
+                    data-testid="replay-probe-result"
+                    role="status"
+                    className="mt-1 text-[10px] text-white/70"
+                  >
+                    {replayResult}
+                  </div>
+                )}
               </div>
 
               {/* Prune button — relocated from operator-actions (:1666). Keeps
@@ -2176,6 +2287,19 @@ function DevApiStatusAllApisTab({
                   <div className="mt-1 text-[10px] text-white/40">
                     Permanently removes events whose primary source URL is dead.
                   </div>
+                </div>
+              )}
+
+              {/* Phase 44 — prune result lives OUTSIDE the deadUrlCount>0 gate so
+                it survives the button vanishing when a successful prune drops the
+                count to 0. */}
+              {pruneResult && (
+                <div
+                  data-testid="prune-dead-urls-result"
+                  role="status"
+                  className="mt-2 text-[10px] text-white/70"
+                >
+                  {pruneResult}
                 </div>
               )}
             </div>
@@ -2695,17 +2819,27 @@ function DrillDownRow({ ev }: { ev: RecentEnrichedEvent }) {
           {ev.sources.length > 0 && (
             <div className="flex flex-wrap gap-1">
               <span>sources:</span>
-              {ev.sources.slice(0, 5).map((u, i) => (
-                <a
-                  key={u + i}
-                  href={u}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline"
-                >
-                  [{i + 1}]
-                </a>
-              ))}
+              {/* Phase 44 WR-06 — sources are LLM-extracted article URLs
+                  (externally influenceable). Only render an anchor for
+                  http/https schemes; anything else (javascript:, data:, …)
+                  renders as inert text instead of a clickable href. */}
+              {ev.sources.slice(0, 5).map((u, i) =>
+                /^https?:\/\//i.test(u) ? (
+                  <a
+                    key={u + i}
+                    href={u}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline"
+                  >
+                    [{i + 1}]
+                  </a>
+                ) : (
+                  <span key={u + i} className="text-white/40">
+                    [{i + 1}]
+                  </span>
+                ),
+              )}
             </div>
           )}
           {/* Phase 27.4.3 D-13 Lineage extension — reasoning trace + lineage hash chip.
@@ -3389,6 +3523,135 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
 }
 
 /**
+ * Phase 44 (D-09/D-10) — module-level mirror of the local `OperatorStatus.prune`
+ * shape (which lives inside the DevApiStatus component closure and is therefore
+ * unreachable from module-scope block components). Structurally compatible with
+ * the local interface, so threading `opStatus?.prune ?? null` type-checks. All
+ * fields except the two authoritative totals are optional forward-compat
+ * (Phase 32 D-10): older servers pre-dating the Plan 01 D-01 extension omit
+ * `countsByStatus` / `evidence` / `lastProbedAt` / `attemptCount`.
+ */
+type PruneSummary = {
+  deadUrlCount: number;
+  last24hPrunes: number;
+  countsByStatus?: Record<string, number>;
+  deadUrlSample: Array<{
+    eventId: string;
+    status: 'dead-host' | '403' | '404' | 'soft-404';
+    // Phase 44 WR-04 — nullable in lockstep with the server's
+    // DeadUrlSampleEntry.url (string | null, Phase 43 D-07/CR-01).
+    url: string | null;
+    evidence?: string | null;
+    lastProbedAt?: string;
+    attemptCount?: number;
+  }>;
+};
+
+/**
+ * Phase 44 (D-09 / EVENTS-TAB-02) — per-liveness-status dead-link state for the
+ * events subtab. Follows the verbatim DlqBlock/SuspectBlock block idiom (D-13):
+ * `text-[9px]`, `font-bold uppercase tracking-wider text-white/40` header,
+ * `tabular-nums`, `max-h-32 overflow-y-auto` scroll list. Threaded the already-
+ * fetched `opStatus.prune` down as a prop (D-10) — NO second fetch.
+ *
+ * Honest-signal contract (load-bearing):
+ *   - `deadUrlCount` (sidecar) is the AUTHORITATIVE terminal-dead total (D-03).
+ *   - `countsByStatus` is a SAMPLED tally (≤MAX_SCAN_KEYS=200) — labeled
+ *     "of N scanned", NEVER presented as authoritative (D-03).
+ *   - `evidence` renders as a PLAIN TEXT React node (default-escaped) — never
+ *     via raw-HTML injection (D-11 / T-43-16). Server caps it at ≤200 chars.
+ *   - `attemptCount` is the dead-streak depth ("dead ×N consecutive sweeps"),
+ *     the honest transition proxy — NOT a true first-seen-dead timestamp (D-02).
+ */
+const DEAD_LINK_STATUS_COLORS: Record<string, string> = {
+  live: 'text-green-300',
+  unknown: 'text-amber-300',
+  'no-url': 'text-white/40',
+  '404': 'text-red-300',
+  '403': 'text-red-300',
+  'dead-host': 'text-red-300',
+  'soft-404': 'text-red-300',
+};
+
+function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
+  const buckets = Object.entries(prune.countsByStatus ?? {}).sort((a, b) => b[1] - a[1]);
+  const scannedTotal = buckets.reduce((s, [, n]) => s + n, 0);
+  const sample = prune.deadUrlSample ?? [];
+  return (
+    <div className="mt-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">Dead Links</div>
+      {/* Authoritative total (sidecar) — NOT the summed buckets (D-03). */}
+      <div className="mt-1 text-[9px] text-white/60" data-testid="dead-link-authoritative-total">
+        Dead URL events: <span className="tabular-nums text-white/80">{prune.deadUrlCount}</span>
+        {' · '}pruned <span className="tabular-nums text-white/80">{prune.last24hPrunes}</span> in
+        24h
+      </div>
+      {/* Phase 44 WR-05 — buckets + sample gate on their OWN data presence,
+          NOT the deadUrlCount sidecar. The sidecar has a documented
+          underflow-to-0 mode (T-32-11); gating scan evidence on it would
+          mask the only signal that the sidecar has drifted. A count/sample
+          disagreement is now visible instead of hidden (matches the sibling
+          API-Health list, which gates on deadUrlSample.length). The
+          authoritative-total line above stays sidecar-sourced (D-03). */}
+      {/* Per-status SAMPLED buckets — "of N scanned" caveat (D-03). */}
+      {buckets.length > 0 && (
+        <div className="mt-1" data-testid="dead-link-buckets">
+          {buckets.map(([status, n]) => (
+            <div
+              key={status}
+              className="flex items-center gap-1 text-[9px]"
+              data-testid={`dead-link-bucket-${status}`}
+            >
+              <span
+                className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                  DEAD_LINK_STATUS_COLORS[status] ?? 'text-white/60'
+                }`}
+              >
+                {status}
+              </span>
+              <span className="tabular-nums text-white/80">{n}</span>
+              <span className="ml-auto text-white/30">of {scannedTotal} scanned</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Drill-down sample rows (≤20) — evidence as TEXT (D-11), relative
+          lastProbedAt + dead-streak attemptCount (D-02). */}
+      {sample.length > 0 && (
+        <div className="mt-1 max-h-32 overflow-y-auto" data-testid="dead-link-sample">
+          {sample.map((entry) => (
+            <div key={entry.eventId} className="flex items-center gap-1 text-[9px] text-white/60">
+              <span
+                className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                  DEAD_LINK_STATUS_COLORS[entry.status] ?? 'text-white/60'
+                }`}
+              >
+                {entry.status}
+              </span>
+              {/* Phase 44 WR-04 — url is string | null; null renders nothing. */}
+              <span className="truncate text-white/70" title={entry.url ?? undefined}>
+                {entry.url}
+              </span>
+              {entry.evidence ? (
+                <span className="truncate text-white/40">{entry.evidence}</span>
+              ) : null}
+              {typeof entry.attemptCount === 'number' && (
+                <span className="tabular-nums text-white/40">dead ×{entry.attemptCount}</span>
+              )}
+              {entry.lastProbedAt ? (
+                <span className="ml-auto tabular-nums text-white/30">
+                  {relativeTime(entry.lastProbedAt)}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Phase 27.4.3 Plan 04 — sibling of EventsFiltersSection, gated on
  * schemaVersion === 'v3' && import.meta.env.DEV by the parent render switch.
  * Renders the 7-block v3 observability stack per UI-SPEC §"Component
@@ -3411,7 +3674,13 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
  *   - T-27.4.3-04-03: lineage prompt/response only inside DEV gate
  *   - T-27.4.3-04-04: regression tests assert empty-state copy verbatim
  */
-function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
+function EventsFiltersSectionV3({
+  llmStatus,
+  prune,
+}: {
+  llmStatus: LLMStatus;
+  prune?: PruneSummary | null;
+}) {
   return (
     <section className="mt-2 border-t border-white/10 pt-2">
       <div className="text-[9px] text-white/60">
@@ -3441,6 +3710,50 @@ function EventsFiltersSectionV3({ llmStatus }: { llmStatus: LLMStatus }) {
           v3 is active (the v2 composer is replaced, not stacked, by the
           version-routed render switch). */}
       <DrillDownBlock llmStatus={llmStatus} />
+
+      {/* Phase 44 (EVENTS-TAB-01, D-05) — the 7 v2-era LLM-pipeline blocks,
+          mounted PRESENCE-GATED into the production V3 path. The gate lives
+          here (not in the block bodies, which declare NonNullable props)
+          because each block self-hides when its LLMStatus field is absent —
+          NEVER fabricate the legacy composer's `{cerebras:0, groq:0}` /
+          `'ok'` zero-defaults (the D-05/D-06 anti-pattern). Under NIM-only,
+          `BudgetBarsBlock` self-hides — that is the correct, honest outcome
+          (D-06), not a defect. The live token-budget surface is Phase 39's
+          `BudgetBlock` in the API-Health tab. WaterfallBlock self-`?? 0`-
+          guards every field, so it is render-safe; gated on `stage !== 'idle'`
+          for honesty so an idle pipeline doesn't show a zeroed waterfall. */}
+      {llmStatus.stage !== 'idle' && <WaterfallBlock llmStatus={llmStatus} />}
+      {llmStatus.callHistory && llmStatus.callHistory.length > 0 && (
+        <HistogramsBlock
+          provenanceCounts={llmStatus.provenanceCounts ?? {}}
+          callHistory={llmStatus.callHistory}
+        />
+      )}
+      {llmStatus.callHistory && <CallLogBlock callHistory={llmStatus.callHistory} />}
+      {llmStatus.tokenCounters && llmStatus.breakerState && (
+        <BudgetBarsBlock
+          tokenCounters={llmStatus.tokenCounters}
+          breakerState={llmStatus.breakerState}
+        />
+      )}
+      {llmStatus.evalScore && <EvalScoreBlock evalScore={llmStatus.evalScore} />}
+      {llmStatus.dlqRecent && <DlqBlock entries={llmStatus.dlqRecent} />}
+      {typeof llmStatus.suspectCount === 'number' && (
+        <SuspectBlock count={llmStatus.suspectCount} />
+      )}
+
+      {/* Phase 44 (D-08) — run-history visibility. FlightRecorderBlock is
+          self-contained (own /api/events/llm-history fetch + 30s poll +
+          degrade-open). The events tab and the API-Health tab are
+          mutually-exclusive activeTab render branches, so this re-mount
+          causes NO double fetch. */}
+      <FlightRecorderBlock />
+
+      {/* Phase 44 (EVENTS-TAB-02, D-09/D-10) — per-bucket dead-link state, fed
+          by the already-fetched opStatus.prune threaded down as a prop. Self-
+          hides when `prune` is absent (older server / fetch failure / missing
+          Bearer) — degrade-open (D-10). */}
+      {prune && <DeadLinkBucketsBlock prune={prune} />}
     </section>
   );
 }

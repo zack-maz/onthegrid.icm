@@ -320,7 +320,7 @@ Plans:
 
 - [x] **Phase 42: Water Filter Fix** — telemetry-diagnosed rejection-bucket fix for intermittently-dropped water facilities; `water:facilities:v3` cache key bump + cold-start snapshot regen if shape changes; `waterFilterStats` regression fixtures pin the fix. _(WATER-FILTER-01..04)_ (completed 2026-06-10)
 - [x] **Phase 43: Ghost Link Prune Correctness** — soft-404 body heuristic on 200s, source-less event coverage, `unknown`-excluded-from-prune + flaky-host attempt-reset fix, 403-auto-prune evidence decision, per-event evidence string surfaced. _(GHOST-06..10)_ (completed 2026-06-10)
-- [ ] **Phase 44: Events Subtab Pipeline Detail** — mount the 7 already-built LLM blocks into `EventsFiltersSectionV3` + per-bucket dead-link state, fed from existing `LLMStatus` + liveness fields; pure UI wiring, no server changes. _(EVENTS-TAB-01..02)_
+- [x] **Phase 44: Events Subtab Pipeline Detail** — mount the 7 already-built LLM blocks into `EventsFiltersSectionV3` + per-bucket dead-link state, fed from existing `LLMStatus` + liveness fields; pure UI wiring, no server changes. _(EVENTS-TAB-01..02)_ (completed 2026-06-10)
 - [ ] **Phase 45: Dashboard Subtab Readability Redesign** — tabular-nums / right-aligned numerics / progressive disclosure / visual hierarchy on water+events+sites subtabs; off-the-grid aesthetic + ARIA tablist contract preserved; trend sparklines from small history rings. _(DASH-READ-01..05)_
 - [ ] **Phase 46: General Hardening + Cron Watch Start** — rate-limiter operator block (999.1) + 429 surface, cron first-tick/missed-run detection (999.3), CRON-WATCH-01 7-day NON-BLOCKING watch structured to avoid the Phase 31 early-close repeat, Nyquist coverage backfill for Phases 39/40 degrade-open paths. _(HARD-01, HARD-02, CRON-WATCH-01, HARD-03)_
 - [ ] **Phase 47: ~100-User Load Test** — D-19 edge-cache `s-maxage` headers (hard prerequisite) + k6 1→300 VU sweep with sustained ~100-VU window + CI-failing per-endpoint SLO thresholds + per-endpoint SLO table + read-only allowlist / dual-Bearer / budget guardrails. _(LOAD-01..04)_
@@ -384,14 +384,14 @@ Plans:
 2. The operator can read dead-link state per bucket in the events subtab — counts per liveness status plus first-seen-dead / transition timestamps.
 3. The mount is data-wiring only — the WAI-ARIA tablist DOM contract (tab ids, `aria-labelledby` partners) is unchanged, and every block remains degrade-open (self-hides when its data is absent).
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 **Wave 1**
 
-- [ ] 44-01-PLAN.md — Server lockstep: `countsByStatus` tally + `lastProbedAt`/`attemptCount` on the prune `deadUrlSample` (inside the existing SCAN, no new reads) + 3-surface contract lockstep (route test, OpenAPI incl. closing the Phase-43 `evidence`/`soft-404` drift, client `OperatorStatus.prune` interface) [EVENTS-TAB-02] (Wave 1)
+- [x] 44-01-PLAN.md — Server lockstep: `countsByStatus` tally + `lastProbedAt`/`attemptCount` on the prune `deadUrlSample` (inside the existing SCAN, no new reads) + 3-surface contract lockstep (route test, OpenAPI incl. closing the Phase-43 `evidence`/`soft-404` drift, client `OperatorStatus.prune` interface) [EVENTS-TAB-02] (Wave 1)
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
-- [ ] 44-02-PLAN.md — Client mount: presence-gated 7 v2 blocks + FlightRecorder re-mount + new `DeadLinkBucketsBlock` into `EventsFiltersSectionV3` + `prune` prop thread + evolve the two events-section test pins (5 pinning suites stay green) [EVENTS-TAB-01, EVENTS-TAB-02] (Wave 2, after 44-01)
+- [x] 44-02-PLAN.md — Client mount: presence-gated 7 v2 blocks + FlightRecorder re-mount + new `DeadLinkBucketsBlock` into `EventsFiltersSectionV3` + `prune` prop thread + evolve the two events-section test pins (5 pinning suites stay green) [EVENTS-TAB-01, EVENTS-TAB-02] (Wave 2, after 44-01)
 
 **UI hint**: yes
 
@@ -464,7 +464,7 @@ Plans:
 | ----- | ------------------------------------- | -------------- | ----------- | ---------- |
 | 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
 | 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
-| 44    | Events Subtab Pipeline Detail         | 0/TBD          | Not started | -          |
+| 44    | Events Subtab Pipeline Detail         | 2/2            | Complete    | 2026-06-10 |
 | 45    | Dashboard Subtab Readability Redesign | 0/TBD          | Not started | -          |
 | 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
 | 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |

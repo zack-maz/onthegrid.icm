@@ -397,25 +397,23 @@ describe('Phase 32 D-12/D-13/D-14 — pruneDeadUrlEvents', () => {
     expect(keys).not.toContain(`${URL_LIVENESS_KEY_PREFIX}D`);
   });
 
-  it('sidecar count DECR fires with prunedCount (Pitfall 3 paired with persistLiveness INCR)', async () => {
+  it('sidecar count reconciled authoritatively to (terminalDead − pruned) after prune (Phase 44)', async () => {
     seedCacheGetSafe();
     seedScan();
 
     await pruneDeadUrlEvents({ trigger: 'cron' });
 
-    // Implementation may call decrby(KEY, n) OR call decr(KEY) n times — accept either.
-    if (decrbyMock.mock.calls.length > 0) {
-      // decrby path: single call with (KEY, count).
-      const [key, n] = decrbyMock.mock.calls[0]!;
-      expect(key).toBe('events:url-liveness-count');
-      expect(n).toBe(2);
-    } else {
-      // decr-loop path: two calls.
-      expect(decrMock.mock.calls.length).toBe(2);
-      for (const call of decrMock.mock.calls) {
-        expect(call[0]).toBe('events:url-liveness-count');
-      }
-    }
+    // Phase 44 — the prune no longer blind-DECRBYs (which drifts once the
+    // counter is already wrong). It SETs the sidecar to the terminal-dead
+    // membership it observed minus what it pruned. Seed terminal-dead members:
+    // A(404), B(dead-host), E(403), F(soft-404), G(soft-404) = 5; cron prunes
+    // B + F = 2; cron-excluded members E (403) + G (<3 ticks) remain ⇒ 5−2 = 3.
+    const countSets = setMock.mock.calls.filter((c) => c[0] === 'events:url-liveness-count');
+    expect(countSets.length).toBe(1);
+    expect(countSets[0]![1]).toBe(3);
+    // Old drift-prone decrement paths must no longer fire.
+    expect(decrbyMock).not.toHaveBeenCalled();
+    expect(decrMock).not.toHaveBeenCalled();
   });
 
   it('returns {prunedCount:0, prunedIds:[]} when events:llm:v3 cache is empty', async () => {
