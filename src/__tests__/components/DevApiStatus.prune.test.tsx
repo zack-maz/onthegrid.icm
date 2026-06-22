@@ -377,6 +377,47 @@ describe('DevApiStatus dead-URL count + Prune button — Phase 32 Plan 05', () =
     });
   });
 
+  it('Phase 44 — a 200 prunedCount:0 (drift reconciled) renders a visible no-op result, not silence', async () => {
+    opStatusPayload = makeOpStatus({ deadUrlCount: 3 });
+    pruneResponse = { status: 200, body: { prunedCount: 0, prunedIds: [] } };
+    openAndSelectApiHealthTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
+    await waitFor(() => {
+      expect(screen.getByTestId('prune-dead-urls-trigger')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('prune-dead-urls-trigger'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('prune-dead-urls-result')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('prune-dead-urls-result').textContent).toMatch(/count reconciled/i);
+  });
+
+  it('Phase 44 — replay probe surfaces a visible "quota OK" result on the server 404 (no longer silent)', async () => {
+    opStatusPayload = makeOpStatus({ deadUrlCount: 3 });
+    openAndSelectApiHealthTab();
+    render(<DevApiStatus />);
+    await waitFor(() => {
+      expect(screen.getByTestId('dead-url-count')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('operator-drawer-trigger'));
+    await waitFor(() => {
+      expect(screen.getByTestId('replay-test-trigger')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-test-trigger'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('replay-probe-result')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('replay-probe-result').textContent).toMatch(/Quota OK/i);
+  });
+
   it('drill-down list renders each deadUrlSample entry with status + eventId + url', async () => {
     opStatusPayload = makeOpStatus({
       deadUrlCount: 2,

@@ -932,6 +932,51 @@ async function persistLiveness(
   }
 }
 
+/**
+ * Phase 44 — reconcile the `events:url-liveness-count` sidecar against the
+ * authoritative liveness keyspace.
+ *
+ * The sidecar has NO TTL and only mutates on dead<->live transitions
+ * (persistLiveness) and prune (pruneDeadUrlEvents). A terminal-dead key that
+ * expires on its finite per-status TTL — or whose event leaves the daily probe
+ * candidate set so no future transition ever fires — is never decremented, so
+ * the counter drifts upward without bound. Observed in prod as deadUrlCount=202
+ * with ZERO live `events:url-liveness:*` keys, which made the operator "Prune N
+ * dead events" button a permanent no-op (it SCANs the keyspace, finds nothing,
+ * prunes 0, and the count never drops). The WR-03 note on persistLiveness
+ * assumed this drift stayed bounded; it does not once events exit the probe set.
+ *
+ * This SCANs the full keyspace, counts entries where `isTerminalDead(status)`
+ * is true (the same membership the sidecar INCR tracks — 403 included, per the
+ * D-07 / line ~1234 invariant), and SETs the sidecar to that authoritative
+ * total. Drift can therefore only ever last until the next reconcile (daily
+ * cron sweep + every prune). Degrade-open per the Pitfall 6 raw-counter rule:
+ * returns the reconciled count, or `null` if reconciliation could not run.
+ */
+export async function reconcileDeadUrlCount(): Promise<number | null> {
+  try {
+    let cursor: string | number = '0';
+    let terminalDead = 0;
+    do {
+      const reply = (await redis.scan(cursor, {
+        match: `${URL_LIVENESS_KEY_PREFIX}*`,
+        count: 200,
+      })) as [string | number, string[]];
+      cursor = reply[0];
+      for (const key of reply[1]) {
+        const cached = await cacheGetSafe<UrlLiveness>(key, LIVENESS_READ_LOGICAL_TTL_MS);
+        const entry = cached?.data ?? null;
+        if (entry && isTerminalDead(entry.status)) terminalDead++;
+      }
+    } while (cursor !== '0' && cursor !== 0);
+    await redis.set(URL_LIVENESS_COUNT_KEY, terminalDead);
+    return terminalDead;
+  } catch (err) {
+    log.warn({ err }, 'reconcileDeadUrlCount failed (degrade-open)');
+    return null;
+  }
+}
+
 // ============================================================================
 // Plan 32-02 Task 5 — buildProbeCandidates priority sort (D-04)
 // ============================================================================
@@ -1110,6 +1155,15 @@ export async function runProbeSweep(opts: {
 
   await Promise.all(tasks);
   pruneStaleHostSlots();
+
+  // Phase 44 — reconcile the dead-URL sidecar against the now-current keyspace.
+  // The daily sweep is the natural heal point: after re-probing, the
+  // events:url-liveness:* keyspace reflects reality, so a SCAN-and-SET corrects
+  // any drift (keys that expired on their TTL, or events that left the probe
+  // set, were never decremented from the no-TTL counter). Bounds the phantom
+  // dead-URL count to at most one cron interval. Degrade-open (never throws).
+  await reconcileDeadUrlCount();
+
   return { probed, skippedBudget };
 }
 
@@ -1218,7 +1272,12 @@ export async function pruneDeadUrlEvents(opts: {
   } while (cursor !== '0' && cursor !== 0);
 
   // 3. For each scanned liveness key, load the entry + apply the filter.
+  // Phase 44 — `terminalDeadFound` is the authoritative terminal-dead
+  // membership observed THIS scan (403 included; pre cron-exclusion filters).
+  // The sidecar count is reconciled to it below so the count can never outlive
+  // the keys it represents (the 202-phantom drift root cause).
   const prunedIds: string[] = [];
+  let terminalDeadFound = 0;
   for (const key of livenessKeys) {
     const eventId = key.startsWith(URL_LIVENESS_KEY_PREFIX)
       ? key.slice(URL_LIVENESS_KEY_PREFIX.length)
@@ -1235,6 +1294,7 @@ export async function pruneDeadUrlEvents(opts: {
     // deadUrlSample drill-down, and the manual operator prune all keep
     // treating it as dead. Only the cron auto-prune filter below demotes it.
     if (!isTerminalDead(entry.status)) continue;
+    terminalDeadFound++;
 
     // Phase 43 D-14/D-15 (DEMOTE) — cron-only 403 exclusion. Evidence:
     // 43-VERIFICATION.md GHOST-09 sample re-probed 20 of 20 production
@@ -1252,9 +1312,20 @@ export async function pruneDeadUrlEvents(opts: {
   }
 
   if (prunedIds.length === 0) {
+    // Phase 44 — reconcile the sidecar to the authoritative terminal-dead
+    // membership even on the no-candidate path. This is the fix for the
+    // "Prune N dead events" button no-op: a drifted counter (terminal-dead
+    // keys long expired) is corrected to reality (often 0) here instead of
+    // being left stale, so the phantom count drops the moment an operator
+    // clicks. Degrade-open on Redis throw (Pitfall 6 raw-counter rule).
+    try {
+      await redis.set(URL_LIVENESS_COUNT_KEY, terminalDeadFound);
+    } catch (err) {
+      log.warn({ err, terminalDeadFound }, 'sidecar reconcile failed (degrade-open)');
+    }
     // No prune candidates — still write the audit-log entry so operator
-    // sees the no-op (forensic completeness). Skip the splice + DEL +
-    // DECR steps since there's nothing to mutate.
+    // sees the no-op (forensic completeness). Skip the splice + DEL steps
+    // since there's nothing to mutate.
     await appendOperatorAuditEntry({
       timestamp: Date.now(),
       bearerFingerprint:
@@ -1277,17 +1348,20 @@ export async function pruneDeadUrlEvents(opts: {
   const keysToDelete = prunedIds.map((id) => `${URL_LIVENESS_KEY_PREFIX}${id}`);
   await redis.del(...keysToDelete);
 
-  // 6. Decrement the sidecar count by prunedCount.
-  //    @upstash/redis exposes DECRBY natively; one round-trip beats N decr() calls.
-  //    Pitfall 6 — degrade-open on Redis throw (mirror persistLiveness shape).
+  // 6. Reconcile the sidecar count authoritatively.
+  //    Phase 44 — the prior `DECRBY prunedCount` assumed the counter started
+  //    accurate, so an already-drifted counter (terminal-dead keys expired on
+  //    their TTL with no decrement) stayed wrong after a prune. SET it to the
+  //    terminal-dead membership we actually observed minus what we just pruned
+  //    (and DELeted): for a manual prune that is 0; for a cron prune it leaves
+  //    the cron-excluded 403 / <3-tick members still counted. `Math.max(0, …)`
+  //    guards against a concurrent-prune race. Degrade-open on Redis throw
+  //    (Pitfall 6 raw-counter rule).
+  const reconciledCount = Math.max(0, terminalDeadFound - prunedIds.length);
   try {
-    const after = await redis.decrby(URL_LIVENESS_COUNT_KEY, prunedIds.length);
-    if (typeof after === 'number' && after < 0) {
-      // Underflow (concurrent prune raced us past 0) — floor at 0.
-      await redis.set(URL_LIVENESS_COUNT_KEY, 0);
-    }
+    await redis.set(URL_LIVENESS_COUNT_KEY, reconciledCount);
   } catch (err) {
-    log.warn({ err, prunedCount: prunedIds.length }, 'sidecar DECRBY failed (degrade-open)');
+    log.warn({ err, reconciledCount }, 'sidecar reconcile failed (degrade-open)');
   }
 
   // 7. Append the audit-log entry (D-14 + RESEARCH A8).

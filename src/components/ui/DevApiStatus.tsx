@@ -1299,7 +1299,14 @@ function DevApiStatusAllApisTab({
   // observable trigger for the 429 alert. Test 28-30 wire fetch spies
   // around this; production callsites issue /llm-replay from elsewhere
   // in the operator-actions block (Task 7.5 + Plan 06 expand).
+  // Phase 44 — visible probe result. The probe POSTs groupKey="test", which
+  // the server resolves PAST the quota check and then 404s ("not_found") — so a
+  // 404 is the SUCCESS signal (request authenticated, quota not exceeded). With
+  // no visible result the button read as broken ("nothing happens"); this line
+  // makes every outcome legible.
+  const [replayResult, setReplayResult] = useState<string | null>(null);
   const replayProbe = async (): Promise<void> => {
+    setReplayResult('Probing…');
     try {
       const res = await fetch('/api/events/llm-replay/test', {
         method: 'POST',
@@ -1311,11 +1318,19 @@ function DevApiStatusAllApisTab({
       if (res.status === 429) {
         const body = (await res.json()) as { resetsAt?: string };
         setQuotaAlert({ resetsAt: body.resetsAt ?? '' });
-      } else if (res.ok) {
+        setReplayResult('Quota exceeded (50/50 in 24h).');
+      } else if (res.ok || res.status === 404) {
+        // 404 = reached the handler past auth+quota (the "test" group is absent
+        // by design); ok = a real group replayed. Both mean quota not exceeded.
         setQuotaAlert(null);
+        setReplayResult('✓ Quota OK — probe reached server (not exceeded).');
+      } else if (res.status === 401 || res.status === 403) {
+        setReplayResult('✗ Auth rejected — re-enter the dashboard password.');
+      } else {
+        setReplayResult(`✗ Probe failed (HTTP ${res.status}).`);
       }
     } catch {
-      // Network failure — don't update alert state
+      setReplayResult('✗ Network error — probe did not reach the server.');
     }
   };
 
@@ -1326,7 +1341,12 @@ function DevApiStatusAllApisTab({
   // through pruneQuotaAlert (50/24h per Bearer per D-15). Network failures
   // degrade-open per the existing operator-actions convention.
   const [pruneQuotaAlert, setPruneQuotaAlert] = useState<{ resetsAt: string } | null>(null);
+  // Phase 44 — visible prune result. A 200 with prunedCount:0 (e.g. the count
+  // had drifted and the server reconciled it to 0) previously looked identical
+  // to a broken button; this line reports exactly what happened.
+  const [pruneResult, setPruneResult] = useState<string | null>(null);
   const pruneHandler = async (): Promise<void> => {
+    setPruneResult('Pruning…');
     try {
       const res = await fetch('/api/events/prune-dead-urls', {
         method: 'POST',
@@ -1339,14 +1359,26 @@ function DevApiStatusAllApisTab({
       if (res.status === 429) {
         const body = (await res.json()) as { resetsAt?: string };
         setPruneQuotaAlert({ resetsAt: body.resetsAt ?? '' });
+        setPruneResult('Quota exceeded (50/50 in 24h).');
       } else if (res.ok) {
         setPruneQuotaAlert(null);
+        const body = (await res.json().catch(() => null)) as { prunedCount?: number } | null;
+        const n = body?.prunedCount ?? 0;
+        setPruneResult(
+          n > 0
+            ? `✓ Pruned ${n} dead event${n === 1 ? '' : 's'}.`
+            : '✓ No prunable events — count reconciled.',
+        );
         // MEDIUM-03 resolution — refresh `prune.deadUrlCount` immediately
         // instead of waiting for the 30s polling tick.
         void fetchOpStatus();
+      } else if (res.status === 401 || res.status === 403) {
+        setPruneResult('✗ Auth rejected — re-enter the dashboard password.');
+      } else {
+        setPruneResult(`✗ Prune failed (HTTP ${res.status}).`);
       }
     } catch {
-      // Network failure — degrade-open (existing operator-actions convention)
+      setPruneResult('✗ Network error — prune did not reach the server.');
     }
   };
 
@@ -2228,6 +2260,15 @@ function DevApiStatusAllApisTab({
                 <div className="mt-1 text-[10px] text-white/40">
                   Probes the 50/24h replay quota without writing to the event cache.
                 </div>
+                {replayResult && (
+                  <div
+                    data-testid="replay-probe-result"
+                    role="status"
+                    className="mt-1 text-[10px] text-white/70"
+                  >
+                    {replayResult}
+                  </div>
+                )}
               </div>
 
               {/* Prune button — relocated from operator-actions (:1666). Keeps
@@ -2246,6 +2287,19 @@ function DevApiStatusAllApisTab({
                   <div className="mt-1 text-[10px] text-white/40">
                     Permanently removes events whose primary source URL is dead.
                   </div>
+                </div>
+              )}
+
+              {/* Phase 44 — prune result lives OUTSIDE the deadUrlCount>0 gate so
+                it survives the button vanishing when a successful prune drops the
+                count to 0. */}
+              {pruneResult && (
+                <div
+                  data-testid="prune-dead-urls-result"
+                  role="status"
+                  className="mt-2 text-[10px] text-white/70"
+                >
+                  {pruneResult}
                 </div>
               )}
             </div>

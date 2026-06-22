@@ -32,6 +32,7 @@ const cacheSetSafeMock = vi.fn();
 const incrMock = vi.fn();
 const decrMock = vi.fn();
 const setMock = vi.fn();
+const scanMock = vi.fn();
 
 vi.mock('../../cache/redis.js', () => ({
   cacheGetSafe: (...args: unknown[]) => cacheGetSafeMock(...args),
@@ -41,6 +42,7 @@ vi.mock('../../cache/redis.js', () => ({
     set: (...args: unknown[]) => setMock(...args),
     incr: (...args: unknown[]) => incrMock(...args),
     decr: (...args: unknown[]) => decrMock(...args),
+    scan: (...args: unknown[]) => scanMock(...args),
     del: vi.fn(),
     expire: vi.fn(),
   },
@@ -68,6 +70,11 @@ beforeEach(() => {
   incrMock.mockReset();
   decrMock.mockReset();
   setMock.mockReset();
+  scanMock.mockReset();
+  // Default: empty liveness keyspace so the Phase 44 post-sweep
+  // reconcileDeadUrlCount() SCAN terminates cleanly in tests that don't
+  // exercise it explicitly.
+  scanMock.mockResolvedValue(['0', []]);
   fetchMock.mockReset();
   // Clear the persistent hostNext map between tests so test ordering
   // doesn't pollute state.
@@ -549,6 +556,40 @@ describe('Plan 02 Task 4 — runProbeSweep (D-03, D-18, Pitfall 1)', () => {
     // 4 same-host calls ⇒ 3 throttle gaps ⇒ ≥3 × (1000 - 200) = 2400ms.
     expect(elapsed).toBeGreaterThanOrEqual(2_400);
   }, 10_000);
+
+  it('Phase 44 — reconciles the dead-URL sidecar against the keyspace after the sweep', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+    cacheGetSafeMock.mockImplementation((key: string) => {
+      // Liveness reads during reconcile: two terminal-dead keys survive.
+      if (key === `${URL_LIVENESS_KEY_PREFIX}d1`) {
+        return Promise.resolve({ data: { status: '404', attemptCount: 2 }, fetchedAt: Date.now() });
+      }
+      if (key === `${URL_LIVENESS_KEY_PREFIX}d2`) {
+        return Promise.resolve({
+          data: { status: 'dead-host', attemptCount: 5 },
+          fetchedAt: Date.now(),
+        });
+      }
+      return Promise.resolve(null);
+    });
+    cacheSetSafeMock.mockResolvedValue(undefined);
+    incrMock.mockResolvedValue(1);
+    // Keyspace SCAN returns two terminal-dead keys ⇒ sidecar must be SET to 2,
+    // regardless of whatever stale value it held before.
+    scanMock.mockResolvedValue([
+      '0',
+      [`${URL_LIVENESS_KEY_PREFIX}d1`, `${URL_LIVENESS_KEY_PREFIX}d2`],
+    ]);
+
+    await urlLivenessModule.runProbeSweep({
+      eventIdsWithUrls: [{ eventId: 'p1', url: 'https://example.com/a' }],
+      deadlineMs: Date.now() + 5_000,
+    });
+
+    const countSets = setMock.mock.calls.filter((c) => c[0] === URL_LIVENESS_COUNT_KEY);
+    expect(countSets.length).toBe(1);
+    expect(countSets[0]![1]).toBe(2);
+  });
 });
 
 // ===========================================================================
