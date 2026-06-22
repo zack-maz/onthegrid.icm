@@ -34,7 +34,7 @@ Operator-locked priority order: water filter → ghost links + events subtab →
 - [x] **DASH-READ-01**: Numeric data in water/events/sites subtabs is scannable — `tabular-nums`, right-aligned numeric columns, labeled headers, whitespace grouping
 - [x] **DASH-READ-02**: Raw data dumps replaced with formatted summaries + progressive disclosure — detail behind drill-down following the `FlightRecorderBlock` run→call→detail pattern
 - [x] **DASH-READ-03**: Visual hierarchy within the off-the-grid military aesthetic — primary metric prominent per block, labels small, contrast meets readability; all colors from the `@theme` token block (no inline hex)
-- [ ] **DASH-READ-04**: Redesign breaks nothing behavioral — WAI-ARIA tablist contract (roving tabindex, tab ids) frozen; the 5 pinning test suites (snapshot, tabMerge, diagnosticBlocks, operatorActions) and degrade-open semantics stay green
+- [x] **DASH-READ-04**: Redesign breaks nothing behavioral — WAI-ARIA tablist contract (roving tabindex, tab ids) frozen; the 5 pinning test suites (snapshot, tabMerge, diagnosticBlocks, operatorActions) and degrade-open semantics stay green
 - [x] **DASH-READ-05**: Operator can see trends, not just point-in-time numbers — sparklines for dead-link count and cron freshness backed by small history rings (catches slow-burn regressions)
 
 ### Load Test (LOAD)
@@ -111,7 +111,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-READ-01    | Phase 45 | Complete |
 | DASH-READ-02    | Phase 45 | Complete |
 | DASH-READ-03    | Phase 45 | Complete |
-| DASH-READ-04    | Phase 45 | Pending  |
+| DASH-READ-04    | Phase 45 | Complete |
 | DASH-READ-05    | Phase 45 | Complete |
 | LOAD-01         | Phase 47 | Pending  |
 | LOAD-02         | Phase 47 | Pending  |

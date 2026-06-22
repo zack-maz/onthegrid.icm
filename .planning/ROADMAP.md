@@ -321,7 +321,7 @@ Plans:
 - [x] **Phase 42: Water Filter Fix** — telemetry-diagnosed rejection-bucket fix for intermittently-dropped water facilities; `water:facilities:v3` cache key bump + cold-start snapshot regen if shape changes; `waterFilterStats` regression fixtures pin the fix. _(WATER-FILTER-01..04)_ (completed 2026-06-10)
 - [x] **Phase 43: Ghost Link Prune Correctness** — soft-404 body heuristic on 200s, source-less event coverage, `unknown`-excluded-from-prune + flaky-host attempt-reset fix, 403-auto-prune evidence decision, per-event evidence string surfaced. _(GHOST-06..10)_ (completed 2026-06-10)
 - [x] **Phase 44: Events Subtab Pipeline Detail** — mount the 7 already-built LLM blocks into `EventsFiltersSectionV3` + per-bucket dead-link state, fed from existing `LLMStatus` + liveness fields; pure UI wiring, no server changes. _(EVENTS-TAB-01..02)_ (completed 2026-06-10)
-- [ ] **Phase 45: Dashboard Subtab Readability Redesign** — tabular-nums / right-aligned numerics / progressive disclosure / visual hierarchy on water+events+sites subtabs; off-the-grid aesthetic + ARIA tablist contract preserved; trend sparklines from small history rings. _(DASH-READ-01..05)_
+- [x] **Phase 45: Dashboard Subtab Readability Redesign** — tabular-nums / right-aligned numerics / progressive disclosure / visual hierarchy on water+events+sites subtabs; off-the-grid aesthetic + ARIA tablist contract preserved; trend sparklines from small history rings. _(DASH-READ-01..05)_ (completed 2026-06-22)
 - [ ] **Phase 46: General Hardening + Cron Watch Start** — rate-limiter operator block (999.1) + 429 surface, cron first-tick/missed-run detection (999.3), CRON-WATCH-01 7-day NON-BLOCKING watch structured to avoid the Phase 31 early-close repeat, Nyquist coverage backfill for Phases 39/40 degrade-open paths. _(HARD-01, HARD-02, CRON-WATCH-01, HARD-03)_
 - [ ] **Phase 47: ~100-User Load Test** — D-19 edge-cache `s-maxage` headers (hard prerequisite) + k6 1→300 VU sweep with sustained ~100-VU window + CI-failing per-endpoint SLO thresholds + per-endpoint SLO table + read-only allowlist / dual-Bearer / budget guardrails. _(LOAD-01..04)_
 - [ ] **Phase 48: Load Remediation** — diagnose every SLO failure to a root cause and remediate; re-run the full sweep green to PROVE (not just measure) ~100-user capacity. Conditional-scope: closes trivially if Phase 47 is fully green, but exists as a distinct phase per operator lock. _(LOAD-FIX-01..02)_
@@ -408,7 +408,7 @@ Plans:
 4. The redesign breaks nothing behavioral — the WAI-ARIA tablist contract (roving tabindex, tab ids) is frozen byte-stable, and the 5 pinning test suites (snapshot, tabMerge, diagnosticBlocks, operatorActions) plus degrade-open semantics stay green.
 5. The operator can see trends, not just point-in-time numbers — sparklines for dead-link count and cron freshness, backed by small history rings, catch slow-burn regressions.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1** _(parallel — disjoint files: server ring vs new atom files)_
@@ -426,7 +426,7 @@ Plans:
 
 **Wave 4** _(after 45-03 + 45-04)_
 
-- [ ] 45-05-PLAN.md — DASH-READ-04 behavioral freeze: 4 behavioral pins green unmodified + tablist byte-stability + deliberate snapshot regen (subtab-body-only diff) + no-inline-hex gate + full-phase sweep [DASH-READ-03, DASH-READ-04]
+- [x] 45-05-PLAN.md — DASH-READ-04 behavioral freeze: 4 behavioral pins green unmodified + tablist byte-stability + deliberate snapshot regen (subtab-body-only diff) + no-inline-hex gate + full-phase sweep [DASH-READ-03, DASH-READ-04]
 
 **UI hint**: yes
 
@@ -485,7 +485,7 @@ Plans:
 | 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
 | 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
 | 44    | Events Subtab Pipeline Detail         | 2/2            | Complete    | 2026-06-10 |
-| 45    | Dashboard Subtab Readability Redesign | 4/5            | In Progress |            |
+| 45    | Dashboard Subtab Readability Redesign | 5/5            | Complete    | 2026-06-22 |
 | 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
 | 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |
 | 48    | Load Remediation                      | 0/TBD          | Not started | -          |
