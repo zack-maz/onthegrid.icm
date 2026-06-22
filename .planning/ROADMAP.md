@@ -408,7 +408,7 @@ Plans:
 4. The redesign breaks nothing behavioral — the WAI-ARIA tablist contract (roving tabindex, tab ids) is frozen byte-stable, and the 5 pinning test suites (snapshot, tabMerge, diagnosticBlocks, operatorActions) plus degrade-open semantics stay green.
 5. The operator can see trends, not just point-in-time numbers — sparklines for dead-link count and cron freshness, backed by small history rings, catch slow-burn regressions.
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1** _(parallel — disjoint files: server ring vs new atom files)_
@@ -422,7 +422,7 @@ Plans:
 
 **Wave 3** _(after 45-01 + 45-02 + 45-03 — same file, sequenced)_
 
-- [ ] 45-04-PLAN.md — Events subtab: mount the 4 trend sparklines (3 per-cron freshness + 1 dead-link, D-02) from the trend ring + readability grammar over the Phase-44 blocks (no re-mount); render pins evolved [DASH-READ-02, DASH-READ-03, DASH-READ-05]
+- [x] 45-04-PLAN.md — Events subtab: mount the 4 trend sparklines (3 per-cron freshness + 1 dead-link, D-02) from the trend ring + readability grammar over the Phase-44 blocks (no re-mount); render pins evolved [DASH-READ-02, DASH-READ-03, DASH-READ-05]
 
 **Wave 4** _(after 45-03 + 45-04)_
 
@@ -485,7 +485,7 @@ Plans:
 | 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
 | 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
 | 44    | Events Subtab Pipeline Detail         | 2/2            | Complete    | 2026-06-10 |
-| 45    | Dashboard Subtab Readability Redesign | 3/5            | In Progress |            |
+| 45    | Dashboard Subtab Readability Redesign | 4/5            | In Progress |            |
 | 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
 | 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |
 | 48    | Load Remediation                      | 0/TBD          | Not started | -          |
