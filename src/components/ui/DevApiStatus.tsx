@@ -3342,7 +3342,7 @@ function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) 
                 <span className="text-amber-400">⚠ over watchdog warn (60s)</span>
               ) : null}
             </div>
-            <Sparkline points={stats.sparkline} />
+            <LatencySparkline points={stats.sparkline} />
           </div>
         );
       })}
@@ -3351,10 +3351,13 @@ function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) 
 }
 
 /**
- * Phase 27.4.3 D-12 §2 — sparkline helper. Inline SVG polyline; min 2 points.
+ * Phase 27.4.3 D-12 §2 — LLM-latency sparkline helper. Inline SVG polyline; min 2 points.
  * Caller decides container height; this scales 0..max → full height.
+ * Renamed from `Sparkline` in Phase 45-04 to avoid colliding with the imported
+ * `Sparkline` readability atom (src/components/ui/Sparkline.tsx). This local helper
+ * stays dedicated to the LLM Latency (P50/P95/P99) widget and keeps its exact look.
  */
-function Sparkline({ points }: { points: number[] }) {
+function LatencySparkline({ points }: { points: number[] }) {
   if (points.length < 2) return null;
   const max = Math.max(...points, 1);
   const xStep = 100 / (points.length - 1);
