@@ -2808,7 +2808,7 @@ function WaterfallBlock({ llmStatus }: { llmStatus: LLMStatus }) {
   ];
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Pipeline Waterfall
       </div>
       {stages.map((s) => (
@@ -2844,7 +2844,7 @@ function HistogramsBlock({
   const okCount = callHistory.filter((c) => c.ok).length;
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Provenance Distribution
       </div>
       {provEntries.length === 0 ? (
@@ -3017,7 +3017,7 @@ function DrillDownBlock({ llmStatus }: { llmStatus: LLMStatus }) {
   return (
     <div className="mt-2">
       <button
-        className="text-[9px] font-bold uppercase tracking-wider text-white/40 hover:text-white/80"
+        className="text-[9px] font-semibold uppercase tracking-wider text-white/40 hover:text-white/80"
         onClick={() => setExpanded((v) => !v)}
         data-testid="drill-down-expand"
       >
@@ -3042,7 +3042,7 @@ function CallLogBlock({ callHistory }: { callHistory: NonNullable<LLMStatus['cal
   if (callHistory.length === 0) {
     return (
       <div className="mt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           LLM Call Log (0)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No LLM calls yet.</div>
@@ -3051,7 +3051,7 @@ function CallLogBlock({ callHistory }: { callHistory: NonNullable<LLMStatus['cal
   }
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         LLM Call Log (last {callHistory.length})
       </div>
       <div className="mt-1 max-h-32 overflow-y-auto">
@@ -3104,7 +3104,7 @@ function BudgetBarsBlock({
   const GROQ_MAX = 200_000;
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Token Budget (daily)
       </div>
       <div className="mt-1 text-[9px]">
@@ -3151,7 +3151,7 @@ function EvalScoreBlock({ evalScore }: { evalScore: LLMStatus['evalScore'] }) {
       : null;
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Accuracy Eval (ground-truth {evalScore.total})
       </div>
       <div className="mt-0.5 text-[9px] text-white/60">
@@ -3199,7 +3199,7 @@ function DlqBlock({ entries }: { entries: NonNullable<LLMStatus['dlqRecent']> })
   }
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-red-400">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-red-400">
         DLQ ({entries.length})
       </div>
       <div className="mt-1 max-h-20 overflow-y-auto">
@@ -3231,7 +3231,7 @@ function DlqBlock({ entries }: { entries: NonNullable<LLMStatus['dlqRecent']> })
 function SuspectBlock({ count }: { count: number }) {
   return (
     <div className="mt-2 text-[9px]">
-      <span className="font-bold uppercase tracking-wider text-white/40">Suspect events: </span>
+      <span className="font-semibold uppercase tracking-wider text-white/40">Suspect events: </span>
       <span className={count > 0 ? 'tabular-nums text-amber-400' : 'tabular-nums text-white/60'}>
         {count}
       </span>
@@ -3258,7 +3258,7 @@ function RoutingTraceBlock({ trace }: { trace?: LLMStatus['routingTrace'] }) {
   if (rows.length === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Routing Trace (last 50)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No routing decisions yet.</div>
@@ -3267,7 +3267,7 @@ function RoutingTraceBlock({ trace }: { trace?: LLMStatus['routingTrace'] }) {
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Routing Trace (last 50)
       </div>
       <div className="mt-1 max-h-32 overflow-y-auto">
@@ -3314,7 +3314,7 @@ function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) 
   if (empty) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Latency (P50/P95/P99)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No LLM calls yet.</div>
@@ -3323,7 +3323,7 @@ function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) 
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Latency (P50/P95/P99)
       </div>
       {providers.map((p) => {
@@ -3378,7 +3378,7 @@ function RateLimitHeadroomBlock({ rateLimit }: { rateLimit?: LLMStatus['rateLimi
   if (providers.length === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Rate-Limit Headroom
         </div>
         <div className="mt-1 text-[9px] text-white/40">No requests this window.</div>
@@ -3387,7 +3387,7 @@ function RateLimitHeadroomBlock({ rateLimit }: { rateLimit?: LLMStatus['rateLimi
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Rate-Limit Headroom
       </div>
       {providers.map((p) => {
@@ -3442,7 +3442,7 @@ function SchemaStrictFailureBlock({
   if (totalAcrossAll === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Schema-Strict Failure Rate
         </div>
         <div className="mt-1 text-[9px] text-white/40">No schema rejections.</div>
@@ -3452,7 +3452,7 @@ function SchemaStrictFailureBlock({
   const totalCalls = (callHistory ?? []).length;
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Schema-Strict Failure Rate
       </div>
       {providers.map((p) => {
@@ -3487,7 +3487,7 @@ function ErrorTaxonomyBlock({ taxonomy }: { taxonomy?: LLMStatus['errorTaxonomy'
   if (totalAcrossAll === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Error Taxonomy (today UTC)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No errors today.</div>
@@ -3496,7 +3496,7 @@ function ErrorTaxonomyBlock({ taxonomy }: { taxonomy?: LLMStatus['errorTaxonomy'
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Error Taxonomy (today UTC)
       </div>
       {providers.map((p) => {
@@ -3544,7 +3544,7 @@ function CostShadowBlock({ cost }: { cost?: LLMStatus['costShadow'] }) {
   if (!c || (c.tokensIn === 0 && c.tokensOut === 0)) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           v3 Cost Shadow (last 24h)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No tokens billed this window.</div>
@@ -3553,7 +3553,7 @@ function CostShadowBlock({ cost }: { cost?: LLMStatus['costShadow'] }) {
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         v3 Cost Shadow (last 24h)
       </div>
       <div className="mt-1 text-[9px] tabular-nums text-white/80">
@@ -3605,7 +3605,7 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
 
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Events Pipeline (v2)
       </span>
       <div className="mt-0.5 text-[9px] text-white/60">
@@ -3700,7 +3700,7 @@ type TrendSample = {
 /**
  * Phase 44 (D-09 / EVENTS-TAB-02) — per-liveness-status dead-link state for the
  * events subtab. Follows the verbatim DlqBlock/SuspectBlock block idiom (D-13):
- * `text-[9px]`, `font-bold uppercase tracking-wider text-white/40` header,
+ * `text-[9px]`, `font-semibold uppercase tracking-wider text-white/40` header,
  * `tabular-nums`, `max-h-32 overflow-y-auto` scroll list. Threaded the already-
  * fetched `opStatus.prune` down as a prop (D-10) — NO second fetch.
  *
@@ -3729,7 +3729,9 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
   const sample = prune.deadUrlSample ?? [];
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">Dead Links</div>
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+        Dead Links
+      </div>
       {/* Authoritative total (sidecar) — NOT the summed buckets (D-03). */}
       <div className="mt-1 text-[9px] text-white/60" data-testid="dead-link-authoritative-total">
         Dead URL events: <span className="tabular-nums text-white/80">{prune.deadUrlCount}</span>
@@ -3753,7 +3755,7 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
               data-testid={`dead-link-bucket-${status}`}
             >
               <span
-                className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                className={`rounded px-1 text-[9px] font-semibold uppercase tracking-wider ${
                   DEAD_LINK_STATUS_COLORS[status] ?? 'text-white/60'
                 }`}
               >
@@ -3772,7 +3774,7 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
           {sample.map((entry) => (
             <div key={entry.eventId} className="flex items-center gap-1 text-[9px] text-white/60">
               <span
-                className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                className={`rounded px-1 text-[9px] font-semibold uppercase tracking-wider ${
                   DEAD_LINK_STATUS_COLORS[entry.status] ?? 'text-white/60'
                 }`}
               >
@@ -4086,7 +4088,7 @@ function PrewarmCell({ llmStatus }: { llmStatus: LLMStatus }) {
   const rel = tsRaw ? relativeTime(new Date(tsRaw).toISOString()) : '—';
   return (
     <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
-      <span className="font-bold uppercase tracking-wider text-white/40">Prewarm (D-21)</span>
+      <span className="font-semibold uppercase tracking-wider text-white/40">Prewarm (D-21)</span>
       <span className="text-white/80">{count} fired</span>
       <span className={stateColor}>({state})</span>
       <span className="text-white/40">last: {rel}</span>
@@ -4105,7 +4107,7 @@ function AdaptiveBatchCell({ llmStatus }: { llmStatus: LLMStatus }) {
   );
   return (
     <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
-      <span className="font-bold uppercase tracking-wider text-white/40">
+      <span className="font-semibold uppercase tracking-wider text-white/40">
         Adaptive batch (D-04)
       </span>
       {enabledBadge}
@@ -4132,7 +4134,7 @@ function LineagePrefilterCell({ llmStatus }: { llmStatus: LLMStatus }) {
   );
   return (
     <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
-      <span className="font-bold uppercase tracking-wider text-white/40">
+      <span className="font-semibold uppercase tracking-wider text-white/40">
         Lineage prefilter (D-18)
       </span>
       {enabledBadge}
