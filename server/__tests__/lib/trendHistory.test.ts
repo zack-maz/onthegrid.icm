@@ -4,8 +4,8 @@
  *
  * Covers the bounded trend-history ring (`dashboard:trends:history`), a verbatim
  * structural copy of `llm:runs:history`:
- *   1. appendTrendSample LPUSHes one JSON entry then LTRIMs to the 30 newest
- *      (cap 30 → ltrim(KEY, 0, 29)).
+ *   1. appendTrendSample pipelines LPUSH (one JSON entry) → LTRIM to the 30
+ *      newest (cap 30 → ltrim(KEY, 0, 29)) → EXPIRE in ONE round-trip (WR-02).
  *   2. appendTrendSample sets a 30d TTL (30*24*3600 sec) via expire after push.
  *   3. readTrendHistory returns parsed entries newest-first, parsing both
  *      raw-string and already-object Upstash REST shapes.
@@ -17,18 +17,41 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { lpushMock, ltrimMock, expireMock, lrangeMock } = vi.hoisted(() => ({
+// WR-02: appendTrendSample now pipelines lpush→ltrim→expire in one round-trip.
+// The pipeline mock returns a chainable builder that records each staged command
+// (key + args) and resolves on `.exec()`. `pipelineMock` lets us assert the
+// pipeline was opened exactly once per append; `execMock` lets degrade-open
+// tests reject the whole pipeline.
+const { lpushMock, ltrimMock, expireMock, lrangeMock, pipelineMock, execMock } = vi.hoisted(() => ({
   lpushMock: vi.fn(),
   ltrimMock: vi.fn(),
   expireMock: vi.fn(),
   lrangeMock: vi.fn(),
+  pipelineMock: vi.fn(),
+  execMock: vi.fn(),
 }));
 
 vi.mock('../../cache/redis.js', () => ({
   redis: {
-    lpush: (...args: unknown[]) => lpushMock(...args),
-    ltrim: (...args: unknown[]) => ltrimMock(...args),
-    expire: (...args: unknown[]) => expireMock(...args),
+    pipeline: (...args: unknown[]) => {
+      pipelineMock(...args);
+      const builder = {
+        lpush: (...a: unknown[]) => {
+          lpushMock(...a);
+          return builder;
+        },
+        ltrim: (...a: unknown[]) => {
+          ltrimMock(...a);
+          return builder;
+        },
+        expire: (...a: unknown[]) => {
+          expireMock(...a);
+          return builder;
+        },
+        exec: (...a: unknown[]) => execMock(...a),
+      };
+      return builder;
+    },
     lrange: (...args: unknown[]) => lrangeMock(...args),
   },
 }));
@@ -58,15 +81,24 @@ function sample(over: Partial<TrendSample> = {}): TrendSample {
 }
 
 beforeEach(() => {
-  lpushMock.mockReset().mockResolvedValue(1);
-  ltrimMock.mockReset().mockResolvedValue('OK');
-  expireMock.mockReset().mockResolvedValue(1);
+  // The staged builder methods are synchronous (they return the builder for
+  // chaining); only `.exec()` resolves the round-trip. Resetting their return
+  // values is unnecessary, but reset call history each test.
+  lpushMock.mockReset();
+  ltrimMock.mockReset();
+  expireMock.mockReset();
+  pipelineMock.mockReset();
+  execMock.mockReset().mockResolvedValue(['OK', 'OK', 1]);
   lrangeMock.mockReset().mockResolvedValue([]);
 });
 
 describe('trendHistory', () => {
-  it('appendTrendSample LPUSHes one JSON entry then LTRIMs to the 30 newest (cap 30)', async () => {
+  it('appendTrendSample pipelines LPUSH (one JSON entry) → LTRIM to the 30 newest (cap 30) → EXPIRE in one round-trip', async () => {
     await appendTrendSample(sample());
+
+    // WR-02: one pipeline opened, one exec — atomic single round-trip.
+    expect(pipelineMock).toHaveBeenCalledTimes(1);
+    expect(execMock).toHaveBeenCalledTimes(1);
 
     expect(lpushMock).toHaveBeenCalledTimes(1);
     expect(lpushMock.mock.calls[0][0]).toBe(TREND_HISTORY_KEY);
@@ -74,12 +106,12 @@ describe('trendHistory', () => {
     const pushed = JSON.parse(lpushMock.mock.calls[0][1] as string) as TrendSample;
     expect(pushed.sampledAt).toBe('2026-06-22T00:00:00.000Z');
 
-    // Cap 30 → LTRIM(KEY, 0, 29).
+    // Cap 30 → LTRIM(KEY, 0, 29) — the bound stays pinned through the pipeline.
     expect(ltrimMock).toHaveBeenCalledWith(TREND_HISTORY_KEY, 0, 29);
     expect(TREND_MAX).toBe(30);
   });
 
-  it('appendTrendSample sets a 30d TTL via expire after every push', async () => {
+  it('appendTrendSample sets a 30d TTL via expire in the same pipeline', async () => {
     await appendTrendSample(sample());
 
     expect(expireMock).toHaveBeenCalledWith(TREND_HISTORY_KEY, 30 * 24 * 3600);
@@ -101,8 +133,8 @@ describe('trendHistory', () => {
     expect(lrangeMock).toHaveBeenCalledWith(TREND_HISTORY_KEY, 0, TREND_MAX - 1);
   });
 
-  it('degrades open: a redis throw inside append is swallowed (no throw escapes)', async () => {
-    lpushMock.mockRejectedValue(new Error('redis down'));
+  it('degrades open: a redis throw inside the pipeline exec is swallowed (no throw escapes)', async () => {
+    execMock.mockRejectedValue(new Error('redis down'));
     await expect(appendTrendSample(sample())).resolves.toBeUndefined();
   });
 

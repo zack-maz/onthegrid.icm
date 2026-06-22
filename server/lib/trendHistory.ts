@@ -69,15 +69,24 @@ function parseEntry(raw: unknown): TrendSample | null {
 }
 
 /**
- * LPUSH a sample, then LTRIM to the 30 newest and refresh the 30d TTL.
+ * LPUSH a sample, then LTRIM to the 30 newest and refresh the 30d TTL — all in
+ * ONE Upstash REST round-trip via `redis.pipeline()` (Phase 45 WR-02). The three
+ * commands now execute atomically, removing the partial-write TTL gap: a kill
+ * between lpush and expire previously left a no-TTL key, and a kill between lpush
+ * and ltrim left the ring transiently at 31 entries. The reader still caps at
+ * `TREND_MAX - 1`, so the cap-30 bound (ltrim 0..29) stays pinned.
+ *
  * Degrade-open: any Redis throw is logged and swallowed; this NEVER throws
- * (copied from `pushRecord`).
+ * (mirrors `pushRecord`).
  */
 export async function appendTrendSample(sample: TrendSample): Promise<void> {
   try {
-    await redis.lpush(TREND_HISTORY_KEY, JSON.stringify(sample)); // newest at head
-    await redis.ltrim(TREND_HISTORY_KEY, 0, TREND_MAX - 1); // native bounded ring
-    await redis.expire(TREND_HISTORY_KEY, TREND_TTL_SEC);
+    await redis
+      .pipeline()
+      .lpush(TREND_HISTORY_KEY, JSON.stringify(sample)) // newest at head
+      .ltrim(TREND_HISTORY_KEY, 0, TREND_MAX - 1) // native bounded ring (cap 30 → 0..29)
+      .expire(TREND_HISTORY_KEY, TREND_TTL_SEC)
+      .exec();
   } catch (err) {
     log.warn({ err }, 'trendHistory append failed'); // never throw
   }
