@@ -442,7 +442,7 @@ Plans:
 3. The 7-day cron-stability watch is structured as a NON-BLOCKING, auto-reported observation with daily auto-captured results that do NOT gate milestone close — its early-close criteria are a logged decision (citing the v1.5 Phase 31 early-close precedent), not a silent repeat.
 4. The Phase 39/40 surfaces have Nyquist test-coverage backfill — flight recorder, budget block, and subtab consolidation paths are covered, including degrade-open fault-injection tests.
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 **Wave 1** _(parallel — disjoint files)_
 
@@ -452,7 +452,7 @@ Plans:
 
 **Wave 2** _(after Wave 1 — see notes)_
 
-- [ ] 46-03-PLAN.md — CRON-WATCH-01: `cronWatch.ts` ring + daily `appendWatchSample` on the existing /api/cron/health + NON-BLOCKING WATCH artifact + CLAUDE.md key (Wave 2 only to serialize the shared CLAUDE.md append after 46-01) [CRON-WATCH-01]
+- [x] 46-03-PLAN.md — CRON-WATCH-01: `cronWatch.ts` ring + daily `appendWatchSample` on the existing /api/cron/health + NON-BLOCKING WATCH artifact + CLAUDE.md key (Wave 2 only to serialize the shared CLAUDE.md append after 46-01) [CRON-WATCH-01]
 - [ ] 46-04-PLAN.md — HARD-01/02 dashboard: `rateLimiter` interface + two DevApiStatus blocks inside the frozen API-Health tabpanel (MISSED alarm badge) + sidecar-absent render coverage (after 46-01 + 46-02 server shapes) [HARD-01, HARD-02]
 
 ### Phase 47: ~100-User Load Test
@@ -498,7 +498,7 @@ Plans:
 | 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
 | 44    | Events Subtab Pipeline Detail         | 2/2            | Complete    | 2026-06-10 |
 | 45    | Dashboard Subtab Readability Redesign | 5/5            | Complete    | 2026-06-22 |
-| 46    | General Hardening + Cron Watch Start  | 3/5            | In Progress |            |
+| 46    | General Hardening + Cron Watch Start  | 4/5            | In Progress |            |
 | 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |
 | 48    | Load Remediation                      | 0/TBD          | Not started | -          |
 | 49    | Docs Cleanup                          | 0/TBD          | Not started | -          |
