@@ -2351,6 +2351,24 @@ function DevApiStatusAllApisTab({
         </section>
       </CollapsibleGroup>
 
+      {/* GROUP 5 — Load Shedding & Cron Freshness (Phase 46 HARD-01/HARD-02).
+          Two read-only operator observability blocks. Both render INSIDE this
+          API Health role="tabpanel" within the existing CollapsibleGroup idiom
+          — the WAI-ARIA tablist DOM stays FROZEN (Phase 45 D-08). The
+          rate-limiter block sources `opStatus.rateLimiter` (46-01 aggregator
+          field); the cron-freshness block reads the `missedRun` SIBLING field
+          off the already-consumed /api/health cron rows (NEVER the wire status
+          enum). Both degrade-open to a muted placeholder. */}
+      <CollapsibleGroup
+        slug="load-cron"
+        title="Load Shedding &amp; Cron Freshness"
+        collapsed={devApiGroupCollapsed['load-cron'] ?? false}
+        onToggle={() => toggleDevApiGroup('load-cron')}
+      >
+        <RateLimiterTelemetryBlock rateLimiter={opStatus?.rateLimiter ?? null} />
+        <CronFreshnessBlock health={health} />
+      </CollapsibleGroup>
+
       {/* Phase 29 Plan 08 D-02 part D — confirm modal removed. The
           pipeline-version pin UI surface is gone now that the underlying
           POST /api/events/llm-pipeline route was deleted in Plan 04. */}
@@ -3727,6 +3745,226 @@ type RateLimiterBlock = {
     recent429: number;
   }>;
 };
+
+/**
+ * Phase 46 HARD-01 (46-04 Task 2) — Rate-Limiter telemetry block, rendered
+ * INSIDE the API Health `role="tabpanel"` (the tablist DOM stays FROZEN — this
+ * is normal in-panel telemetry, NOT a new tab). Per `46-UI-SPEC.md`:
+ *   - One `text-[13px] font-semibold tabular-nums` primary metric = total recent
+ *     429s across all tiers (`0` when nothing has been shed).
+ *   - A `By Tier` column-group head + one `<MetricRow>` per tier (label = the
+ *     tier name verbatim; value = `{max}/{windowSec}s · {recent429}` with a
+ *     `· 24h` micro caption).
+ *   - A non-zero recent count tints the value to the warning token (discretionary
+ *     per UI-SPEC §Color — load-shedding becomes visible).
+ *
+ * Degrade-open (T-46-04-05): `rateLimiter == null` → muted placeholder
+ * `— no data (operator-status unreachable)`, never a crash. Every server string
+ * (tier name) renders as a React text child (T-46-04-04 / T-43-16). Zero inline
+ * hex — the warning tint resolves through the `--color-status-warning` @theme
+ * token. Exactly two weights {400, 600} — no `font-bold` (700).
+ */
+function RateLimiterTelemetryBlock({ rateLimiter }: { rateLimiter?: RateLimiterBlock | null }) {
+  if (rateLimiter == null) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2" data-testid="rate-limiter-block">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+          Rate Limiter
+        </div>
+        <MutedPlaceholder
+          testid="rate-limiter-block-placeholder"
+          reason="operator-status unreachable"
+        />
+      </div>
+    );
+  }
+
+  const tiers = rateLimiter.tiers ?? [];
+  const total429 = tiers.reduce((sum, t) => sum + (t.recent429 || 0), 0);
+
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2" data-testid="rate-limiter-block">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+        Rate Limiter
+      </div>
+      {/* Primary metric — total recent 429s (one per block). */}
+      <div className="mt-1 flex items-baseline gap-1">
+        <span
+          className="text-[13px] font-semibold tabular-nums text-white/80"
+          data-testid="rate-limiter-total-429"
+        >
+          {total429}
+        </span>
+        <span className="text-[8px] tabular-nums text-white/40">recent 429s · 24h</span>
+      </div>
+      {/* Column-group head + one MetricRow per tier. */}
+      <div className="mt-2 text-[9px] font-semibold uppercase tracking-wider text-white/40">
+        By Tier
+      </div>
+      <div className="mt-1 max-h-32 overflow-y-auto" data-testid="rate-limiter-tiers">
+        {tiers.map((t) => {
+          // A non-zero recent count is visibly shed load — tint amber via the
+          // @theme status-warning token (zero inline hex). Default neutral.
+          const tinted = t.recent429 > 0;
+          return (
+            <div
+              key={t.tier}
+              className="flex items-baseline justify-between gap-2"
+              data-testid={`rate-limiter-tier-${t.tier}`}
+            >
+              <span className="text-[9px] uppercase tracking-wider text-white/40">{t.tier}</span>
+              <span className="text-right text-[9px] tabular-nums text-white/60">
+                {t.max}/{t.windowSec}s
+                <span
+                  className={tinted ? 'ml-1' : 'ml-1 text-white/40'}
+                  style={tinted ? { color: 'var(--color-status-warning)' } : undefined}
+                  data-testid={`rate-limiter-tier-${t.tier}-429`}
+                >
+                  · {t.recent429}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 46 HARD-02 (46-04 Task 2) — Cron-Freshness telemetry block, rendered
+ * INSIDE the API Health `role="tabpanel"`. Reads the `missedRun` SIBLING field
+ * off the already-consumed `/api/health` cron-tier rows (NEVER the wire `status`
+ * enum — Pitfall 1 / okCron audit-gate safety). Per `46-UI-SPEC.md`:
+ *   - One `text-[13px] font-semibold` primary metric = count of crons in the
+ *     `missed` state (`0` when all healthy).
+ *   - One `<MetricRow>`-style row per cron (label = short cron name) with a
+ *     run-state badge + tick age:
+ *       healthy → `--color-status-healthy` `●` green
+ *       missed  → `--color-status-degraded` `●` + UPPERCASE `MISSED` label (the
+ *                 load-bearing alarm)
+ *       unknown → neutral `text-white/40` `○` (no alarm — pre-first-tick null)
+ *
+ * Degrade-open: no cron rows carry `missedRun` (older server) → muted placeholder
+ * `— no data (no cron data)`, never a crash. Zero inline hex — badge colors
+ * resolve through the `--color-status-{healthy,degraded}` @theme tokens. Exactly
+ * two weights {400, 600}.
+ */
+function CronFreshnessBlock({ health }: { health: HealthResponse | null }) {
+  // Cron-tier rows only; the missedRun sibling is present ONLY on those.
+  const cronRows =
+    health == null
+      ? []
+      : Object.values(health.endpoints).filter((e) => e.tier === 'cron' && e.missedRun != null);
+
+  if (cronRows.length === 0) {
+    return (
+      <div className="mt-2 border-t border-white/10 pt-2" data-testid="cron-freshness-block">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+          Cron Freshness
+        </div>
+        <MutedPlaceholder testid="cron-freshness-block-placeholder" reason="no cron data" />
+      </div>
+    );
+  }
+
+  const missedCount = cronRows.filter((e) => e.missedRun === 'missed').length;
+
+  // Short cron name from the endpoint key (cronHealth → health, cronWarm → warm,
+  // cronRefreshEvents → refresh-events). Falls back to the endpoint `name`.
+  const shortName = (row: EndpointHealth): string => {
+    switch (row.name) {
+      case 'cronHealth':
+        return 'health';
+      case 'cronWarm':
+        return 'warm';
+      case 'cronRefreshEvents':
+        return 'refresh-events';
+      default:
+        return row.name;
+    }
+  };
+
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2" data-testid="cron-freshness-block">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+        Cron Freshness
+      </div>
+      {/* Primary metric — count of MISSED crons (one per block). */}
+      <div className="mt-1 flex items-baseline gap-1">
+        <span
+          className="text-[13px] font-semibold tabular-nums text-white/80"
+          data-testid="cron-freshness-missed-count"
+        >
+          {missedCount}
+        </span>
+        <span className="text-[8px] uppercase tracking-wider text-white/40">missed</span>
+      </div>
+      <div className="mt-1" data-testid="cron-freshness-rows">
+        {cronRows.map((row) => {
+          const state = row.missedRun; // 'healthy' | 'missed' | 'unknown'
+          const name = shortName(row);
+          // Badge: glyph + color token + (for missed) the UPPERCASE alarm label.
+          let glyph = '○';
+          let glyphColor: string | undefined;
+          let glyphClass = 'text-white/40';
+          if (state === 'healthy') {
+            glyph = '●';
+            glyphColor = 'var(--color-status-healthy)';
+            glyphClass = '';
+          } else if (state === 'missed') {
+            glyph = '●';
+            glyphColor = 'var(--color-status-degraded)';
+            glyphClass = '';
+          }
+          return (
+            <div
+              key={row.name}
+              className="flex items-baseline justify-between gap-2"
+              data-testid={`cron-freshness-row-${name}`}
+            >
+              <span className="text-[9px] uppercase tracking-wider text-white/40">{name}</span>
+              <span className="flex items-baseline gap-1 text-right text-[9px] tabular-nums text-white/60">
+                <span
+                  aria-hidden="true"
+                  className={glyphClass}
+                  style={glyphColor ? { color: glyphColor } : undefined}
+                >
+                  {glyph}
+                </span>
+                {state === 'missed' && (
+                  <span
+                    className="font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--color-status-degraded)' }}
+                    data-testid={`cron-freshness-row-${name}-missed`}
+                  >
+                    MISSED
+                  </span>
+                )}
+                <span className="tabular-nums text-white/40">
+                  {formatCronTickAge(row.freshnessMs)}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 46 HARD-02 — render the cron tick age. `freshnessMs` is the cache-age
+ * the probe measured; null means the lastTick key was absent (never fired).
+ */
+function formatCronTickAge(ms: number | null): string {
+  if (ms == null) return '—';
+  const h = ms / 3_600_000;
+  if (h >= 1) return `${h.toFixed(h >= 10 ? 0 : 1)}h ago`;
+  const m = ms / 60_000;
+  if (m >= 1) return `${Math.round(m)}m ago`;
+  return `${Math.round(ms / 1000)}s ago`;
+}
 
 /**
  * Phase 44 (D-09 / EVENTS-TAB-02) — per-liveness-status dead-link state for the
