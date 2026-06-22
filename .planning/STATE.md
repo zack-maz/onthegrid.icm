@@ -5,8 +5,8 @@ milestone_name: Final Hardening — 🚧 IN PROGRESS
 current_phase: 46
 current_phase_name: General Hardening + Cron Watch Start
 status: "Phase 45 shipped — PR #44 (awaiting merge)"
-stopped_at: Phase 46 context gathered
-last_updated: "2026-06-22T18:58:50.547Z"
+stopped_at: Phase 46 UI-SPEC approved
+last_updated: "2026-06-22T19:13:42.601Z"
 last_activity: 2026-06-22
 progress:
   total_phases: 14
@@ -533,6 +533,6 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 
 ## Session
 
-**Last session:** 2026-06-22T18:58:50.537Z
-**Stopped at:** Phase 46 context gathered
-**Resume file:** .planning/phases/46-general-hardening-cron-watch-start/46-CONTEXT.md
+**Last session:** 2026-06-22T19:13:42.590Z
+**Stopped at:** Phase 46 UI-SPEC approved
+**Resume file:** .planning/phases/46-general-hardening-cron-watch-start/46-UI-SPEC.md
