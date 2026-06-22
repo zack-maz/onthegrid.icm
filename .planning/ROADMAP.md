@@ -322,7 +322,7 @@ Plans:
 - [x] **Phase 43: Ghost Link Prune Correctness** — soft-404 body heuristic on 200s, source-less event coverage, `unknown`-excluded-from-prune + flaky-host attempt-reset fix, 403-auto-prune evidence decision, per-event evidence string surfaced. _(GHOST-06..10)_ (completed 2026-06-10)
 - [x] **Phase 44: Events Subtab Pipeline Detail** — mount the 7 already-built LLM blocks into `EventsFiltersSectionV3` + per-bucket dead-link state, fed from existing `LLMStatus` + liveness fields; pure UI wiring, no server changes. _(EVENTS-TAB-01..02)_ (completed 2026-06-10)
 - [x] **Phase 45: Dashboard Subtab Readability Redesign** — tabular-nums / right-aligned numerics / progressive disclosure / visual hierarchy on water+events+sites subtabs; off-the-grid aesthetic + ARIA tablist contract preserved; trend sparklines from small history rings. _(DASH-READ-01..05)_ (completed 2026-06-22)
-- [ ] **Phase 46: General Hardening + Cron Watch Start** — rate-limiter operator block (999.1) + 429 surface, cron first-tick/missed-run detection (999.3), CRON-WATCH-01 7-day NON-BLOCKING watch structured to avoid the Phase 31 early-close repeat, Nyquist coverage backfill for Phases 39/40 degrade-open paths. _(HARD-01, HARD-02, CRON-WATCH-01, HARD-03)_
+- [x] **Phase 46: General Hardening + Cron Watch Start** — rate-limiter operator block (999.1) + 429 surface, cron first-tick/missed-run detection (999.3), CRON-WATCH-01 7-day NON-BLOCKING watch structured to avoid the Phase 31 early-close repeat, Nyquist coverage backfill for Phases 39/40 degrade-open paths. _(HARD-01, HARD-02, CRON-WATCH-01, HARD-03)_ (completed 2026-06-22)
 - [ ] **Phase 47: ~100-User Load Test** — D-19 edge-cache `s-maxage` headers (hard prerequisite) + k6 1→300 VU sweep with sustained ~100-VU window + CI-failing per-endpoint SLO thresholds + per-endpoint SLO table + read-only allowlist / dual-Bearer / budget guardrails. _(LOAD-01..04)_
 - [ ] **Phase 48: Load Remediation** — diagnose every SLO failure to a root cause and remediate; re-run the full sweep green to PROVE (not just measure) ~100-user capacity. Conditional-scope: closes trivially if Phase 47 is fully green, but exists as a distinct phase per operator lock. _(LOAD-FIX-01..02)_
 - [ ] **Phase 49: Docs Cleanup** — reconcile contract surfaces (CLAUDE.md Redis registry, `redis-keys.md`, OpenAPI, `.env.example`) with all drift gates green, then update prose docs (README, CHANGELOG, runbook, architecture) to v2.0 shipped reality. LAST phase per operator lock. _(DOCS-CLEAN-01..02)_
@@ -442,7 +442,7 @@ Plans:
 3. The 7-day cron-stability watch is structured as a NON-BLOCKING, auto-reported observation with daily auto-captured results that do NOT gate milestone close — its early-close criteria are a logged decision (citing the v1.5 Phase 31 early-close precedent), not a silent repeat.
 4. The Phase 39/40 surfaces have Nyquist test-coverage backfill — flight recorder, budget block, and subtab consolidation paths are covered, including degrade-open fault-injection tests.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 **Wave 1** _(parallel — disjoint files)_
 
@@ -453,7 +453,7 @@ Plans:
 **Wave 2** _(after Wave 1 — see notes)_
 
 - [x] 46-03-PLAN.md — CRON-WATCH-01: `cronWatch.ts` ring + daily `appendWatchSample` on the existing /api/cron/health + NON-BLOCKING WATCH artifact + CLAUDE.md key (Wave 2 only to serialize the shared CLAUDE.md append after 46-01) [CRON-WATCH-01]
-- [ ] 46-04-PLAN.md — HARD-01/02 dashboard: `rateLimiter` interface + two DevApiStatus blocks inside the frozen API-Health tabpanel (MISSED alarm badge) + sidecar-absent render coverage (after 46-01 + 46-02 server shapes) [HARD-01, HARD-02]
+- [x] 46-04-PLAN.md — HARD-01/02 dashboard: `rateLimiter` interface + two DevApiStatus blocks inside the frozen API-Health tabpanel (MISSED alarm badge) + sidecar-absent render coverage (after 46-01 + 46-02 server shapes) [HARD-01, HARD-02]
 
 ### Phase 47: ~100-User Load Test
 
@@ -498,7 +498,7 @@ Plans:
 | 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
 | 44    | Events Subtab Pipeline Detail         | 2/2            | Complete    | 2026-06-10 |
 | 45    | Dashboard Subtab Readability Redesign | 5/5            | Complete    | 2026-06-22 |
-| 46    | General Hardening + Cron Watch Start  | 4/5            | In Progress |            |
+| 46    | General Hardening + Cron Watch Start  | 5/5            | Complete    | 2026-06-22 |
 | 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |
 | 48    | Load Remediation                      | 0/TBD          | Not started | -          |
 | 49    | Docs Cleanup                          | 0/TBD          | Not started | -          |
