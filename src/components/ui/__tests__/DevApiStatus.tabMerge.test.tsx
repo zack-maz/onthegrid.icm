@@ -88,6 +88,55 @@ function renderModalWithHealth(opts: {
   );
 }
 
+// Phase 46 HARD-03 surface 3 — a cron-tier endpoint carrying the `missedRun`
+// sibling field (NEVER folded into `status`). `freshnessMs` drives the tick age.
+function makeCronEndpoint(overrides: Partial<EndpointHealth>): EndpointHealth {
+  return {
+    name: 'cronHealth',
+    status: 'healthy',
+    tier: 'cron',
+    lastSuccessTs: Date.now() - 3_600_000,
+    lastErrorReason: null,
+    freshnessMs: 3_600_000,
+    freshnessThresholdMs: 26 * 60 * 60_000,
+    latencyMs: null,
+    missedRun: 'healthy',
+    ...overrides,
+  };
+}
+
+// Phase 46 HARD-03 — stub `/api/operator-status` so the new rate-limiter block's
+// `opStatus.rateLimiter` source can be driven (or omitted) per test. `data` is
+// spread onto a minimal valid OperatorStatus body (audit24h/byBearer/advEval —
+// the fetchOpStatus shape gate). Any other URL returns an empty 200.
+function mockOpStatusFetch(data: Record<string, unknown>) {
+  const fetchSpy = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/operator-status') {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ audit24h: 0, byBearer: [], advEval: null, ...data }),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+  });
+  vi.stubGlobal('fetch', fetchSpy);
+  return fetchSpy;
+}
+
+// Snapshot the frozen WAI-ARIA tablist/tabpanel skeleton so sidecar-absent
+// renders can assert it is byte-stable (T-46-04-01). Captures every tab id +
+// aria-selected + roving tabIndex + each tabpanel's aria-labelledby.
+function tablistSkeleton(): string {
+  const tabs = screen.queryAllByRole('tab').map((t) => ({
+    id: t.id,
+    sel: t.getAttribute('aria-selected'),
+    ti: t.getAttribute('tabindex'),
+  }));
+  const panels = screen.queryAllByRole('tabpanel').map((p) => p.getAttribute('aria-labelledby'));
+  return JSON.stringify({ tabs, panels });
+}
+
 describe('DevApiStatus tab merge (Phase 28.2 W5 Plan 05 Task 2)', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', {
@@ -440,6 +489,163 @@ describe('DevApiStatus tab merge (Phase 28.2 W5 Plan 05 Task 2)', () => {
       // Active panel (API Health) is a tabpanel labelled by its tab id.
       const panels = screen.getAllByRole('tabpanel');
       expect(panels.length).toBeGreaterThanOrEqual(1);
+      expect(panels[0].getAttribute('aria-labelledby')).toBe('tab-api-health');
+    });
+  });
+
+  // ==========================================================================
+  // Phase 46 HARD-03 surface 3 (46-04 Task 3) — sidecar-absent render coverage
+  // for the two new operator observability blocks (rate-limiter + cron
+  // freshness). The named RESEARCH gap: degrade-open when an operator sidecar
+  // field is null/absent. Plus the MISSED-visual + missed-never-in-status pins
+  // (UI-SPEC Regression-Lock #5/#6/#7) and the frozen-tablist assertion (#1).
+  // ==========================================================================
+  describe('Phase 46 HARD-03 — sidecar-absent render + MISSED visual (degrade-open)', () => {
+    async function renderAwait(health: HealthResponse | null) {
+      useUIStore.setState({ isDevApiStatusOpen: true, activeDevApiStatusTab: 'apiHealth' });
+      const result = render(
+        <HealthStatusContext.Provider
+          value={{ health, loading: false, error: null, lastSuccessAt: Date.now() }}
+        >
+          <DevApiStatus />
+        </HealthStatusContext.Provider>,
+      );
+      // Drain the fetchOpStatus useEffect microtasks.
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      return result;
+    }
+
+    it('rate-limiter block degrades open (muted placeholder, no crash) when opStatus.rateLimiter is absent', async () => {
+      mockOpStatusFetch({}); // no rateLimiter field at all
+      const health = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      await renderAwait(health);
+      // Block shell present, muted placeholder shown, no crash.
+      expect(screen.getByTestId('rate-limiter-block')).toBeTruthy();
+      expect(screen.getByTestId('rate-limiter-block-placeholder').textContent).toContain(
+        'operator-status unreachable',
+      );
+      expect(screen.queryByTestId('rate-limiter-total-429')).toBeNull();
+    });
+
+    it('rate-limiter block degrades open when opStatus.rateLimiter is explicitly null', async () => {
+      mockOpStatusFetch({ rateLimiter: null });
+      const health = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      await renderAwait(health);
+      expect(screen.getByTestId('rate-limiter-block-placeholder')).toBeTruthy();
+    });
+
+    it('rate-limiter block renders per-tier config + total recent 429s when present', async () => {
+      mockOpStatusFetch({
+        rateLimiter: {
+          tiers: [
+            { tier: 'flights', max: 120, windowSec: 60, recent429: 2 },
+            { tier: 'public', max: 60, windowSec: 60, recent429: 5 },
+          ],
+        },
+      });
+      const health = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      await renderAwait(health);
+      // Primary metric = total recent 429s across tiers (2 + 5 = 7).
+      expect(screen.getByTestId('rate-limiter-total-429').textContent).toBe('7');
+      // Per-tier config row present.
+      const tierRow = screen.getByTestId('rate-limiter-tier-flights');
+      expect(tierRow.textContent).toContain('120/60s');
+      expect(tierRow.textContent).toContain('2');
+    });
+
+    it('cron-freshness block degrades open (muted placeholder) when no cron rows carry missedRun', async () => {
+      mockOpStatusFetch({});
+      // health has only a non-cron row → no missedRun sibling anywhere.
+      const health = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      await renderAwait(health);
+      expect(screen.getByTestId('cron-freshness-block')).toBeTruthy();
+      expect(screen.getByTestId('cron-freshness-block-placeholder').textContent).toContain(
+        'no cron data',
+      );
+    });
+
+    it('MISSED visual: a missedRun=missed cron renders the UPPERCASE MISSED label + degraded token; unknown renders neutral', async () => {
+      mockOpStatusFetch({});
+      const health = makeResponse({
+        flights: makeEndpoint({ name: '/api/flights' }),
+        cronHealth: makeCronEndpoint({
+          name: 'cronHealth',
+          status: 'unhealthy', // wire status is in the 4-state set
+          missedRun: 'missed',
+          freshnessMs: 120_000_000,
+        }),
+        cronWarm: makeCronEndpoint({
+          name: 'cronWarm',
+          status: 'unknown',
+          missedRun: 'unknown',
+          freshnessMs: null,
+        }),
+        cronRefreshEvents: makeCronEndpoint({
+          name: 'cronRefreshEvents',
+          status: 'healthy',
+          missedRun: 'healthy',
+        }),
+      });
+      await renderAwait(health);
+      // Primary metric = count of MISSED crons (exactly 1).
+      expect(screen.getByTestId('cron-freshness-missed-count').textContent).toBe('1');
+      // The missed cron renders the load-bearing UPPERCASE MISSED alarm label.
+      const missedBadge = screen.getByTestId('cron-freshness-row-health-missed');
+      expect(missedBadge.textContent).toBe('MISSED');
+      // The degraded color token drives it (no inline hex).
+      expect(missedBadge.getAttribute('style') ?? '').toContain('--color-status-degraded');
+      // The unknown cron is neutral — NO MISSED badge.
+      expect(screen.queryByTestId('cron-freshness-row-warm-missed')).toBeNull();
+      const unknownRow = screen.getByTestId('cron-freshness-row-warm');
+      expect(unknownRow.textContent).not.toContain('MISSED');
+      // The healthy cron is also not flagged missed.
+      expect(screen.queryByTestId('cron-freshness-row-refresh-events-missed')).toBeNull();
+    });
+
+    it('audit-gate safety: the cron badge is driven by missedRun, never by the wire status enum', async () => {
+      mockOpStatusFetch({});
+      // status is a valid 4-state value but DIFFERENT from missedRun — the badge
+      // must follow missedRun (Pitfall 1 / okCron audit-gate). Here status is
+      // 'healthy' yet missedRun is 'missed' (e.g. a fresh-but-stale-window edge):
+      // the block MUST render MISSED, proving it never sources from `status`.
+      const health = makeResponse({
+        flights: makeEndpoint({ name: '/api/flights' }),
+        cronHealth: makeCronEndpoint({
+          name: 'cronHealth',
+          status: 'healthy',
+          missedRun: 'missed',
+        }),
+      });
+      await renderAwait(health);
+      expect(screen.getByTestId('cron-freshness-missed-count').textContent).toBe('1');
+      expect(screen.getByTestId('cron-freshness-row-health-missed').textContent).toBe('MISSED');
+    });
+
+    it('frozen tablist DOM is byte-stable across present vs absent sidecar payloads', async () => {
+      // Render once with a full rateLimiter payload …
+      mockOpStatusFetch({
+        rateLimiter: { tiers: [{ tier: 'flights', max: 120, windowSec: 60, recent429: 3 }] },
+      });
+      const healthFull = makeResponse({
+        flights: makeEndpoint({ name: '/api/flights' }),
+        cronHealth: makeCronEndpoint({ name: 'cronHealth', missedRun: 'missed' }),
+      });
+      await renderAwait(healthFull);
+      const withData = tablistSkeleton();
+      cleanup();
+      vi.unstubAllGlobals();
+
+      // … and once with both sidecars absent. The tablist skeleton must match.
+      mockOpStatusFetch({});
+      const healthBare = makeResponse({ flights: makeEndpoint({ name: '/api/flights' }) });
+      await renderAwait(healthBare);
+      const withoutData = tablistSkeleton();
+
+      expect(withoutData).toBe(withData);
+      // And the API Health panel is still the labelled tabpanel (frozen #1).
+      const panels = screen.getAllByRole('tabpanel');
       expect(panels[0].getAttribute('aria-labelledby')).toBe('tab-api-health');
     });
   });
