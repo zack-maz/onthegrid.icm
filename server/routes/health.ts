@@ -12,6 +12,8 @@ import {
   FRESHNESS_THRESHOLDS_MS,
   TIER_BY_ENDPOINT,
   deriveStatus,
+  CRON_SCHEDULE_GRACE_MS,
+  deriveCronRunState,
 } from '../lib/healthSources.js';
 import { llmProgress, LLM_LASTPROGRESS_KEY } from '../lib/llmProgress.js';
 import { logger } from '../lib/logger.js';
@@ -517,7 +519,7 @@ healthRouter.get('/', async (_req, res) => {
       continue;
     }
     const status: HealthStatus = deriveStatus(probe.freshnessMs, threshold, probe.hadError);
-    endpoints[name] = {
+    const row: EndpointHealth = {
       name,
       status,
       tier,
@@ -527,6 +529,29 @@ healthRouter.get('/', async (_req, res) => {
       freshnessThresholdMs: threshold,
       latencyMs: probe.latencyMs,
     };
+
+    // Phase 46 HARD-02 (D-05/D-06) — cron run-state SIBLING field. For cron-tier
+    // rows only, derive the three-state `missedRun` signal from the cron's
+    // schedule+grace and the probe's freshness. `status` above stays 4-state and
+    // never carries `missed` (Pitfall 1 / okCron audit-gate safety). The cron
+    // short-name (health/warm/refresh-events) comes from the probe strategy's
+    // cronName; the lastTick key already uses that short name. `hasFiredYet` is
+    // true iff a lastTick was ever observed (non-null lastSuccessTs).
+    if (tier === 'cron') {
+      const strategy = PROBE_STRATEGIES[name];
+      const cronName = strategy?.kind === 'cron' ? strategy.cronName : undefined;
+      const grace = cronName ? CRON_SCHEDULE_GRACE_MS[cronName] : undefined;
+      if (grace !== undefined) {
+        row.missedRun = deriveCronRunState(
+          probe.freshnessMs,
+          grace.expectedIntervalMs,
+          grace.graceMs,
+          probe.lastSuccessTs !== null,
+        );
+      }
+    }
+
+    endpoints[name] = row;
   }
 
   const response: HealthResponse = {

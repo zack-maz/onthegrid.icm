@@ -26,6 +26,22 @@ export const healthStatusEnum = z.enum(['healthy', 'degraded', 'unhealthy', 'unk
 export type HealthStatus = z.infer<typeof healthStatusEnum>;
 
 /**
+ * Phase 46 HARD-02 (D-05) — Cron run-state SIBLING enum.
+ *
+ * This is a SEPARATE enum from `healthStatusEnum` BY DESIGN (Landmine 1/2,
+ * Pitfall 1). The three-state cron run-detection signal (`unknown` =
+ * pre-first-tick, `missed` = fired-then-silently-stopped, `healthy` =
+ * within expected+grace) is surfaced on the cron endpoint rows via the
+ * `missedRun` sibling field — NEVER folded into the wire `status` field.
+ * `prod-connectivity-audit.yml` `okCron = ["healthy","degraded"].includes(
+ * tierStatus.cron)` derives `tierStatus.cron` from the `status` enum; widening
+ * `status` to carry `missed` would flip `okCron` and regress the LLM-RELI-07
+ * milestone-close gate. The audit never reads `missedRun`.
+ */
+export const cronRunStateEnum = z.enum(['unknown', 'missed', 'healthy']);
+export type CronRunState = z.infer<typeof cronRunStateEnum>;
+
+/**
  * Endpoint-tier classification per CONTEXT D-26:
  *   - critical   → flights/ships/events (banner reaction)
  *   - non-critical → markets/news/water-precip/sources/llm-status (HUD dot)
@@ -57,6 +73,14 @@ export const endpointHealthSchema = z
     freshnessThresholdMs: z.number().int().nonnegative(),
     /** Probe round-trip duration; null when the probe failed before measurement. */
     latencyMs: z.number().nullable(),
+    /**
+     * Phase 46 HARD-02 — cron run-state SIBLING field (D-05). Present ONLY on
+     * cron-tier rows; non-cron rows omit it. `.optional()` so old clients /
+     * non-cron rows still parse under `.strict()`. This is the missed-run
+     * signal — `status` stays in the 4-state `healthStatusEnum` and never
+     * carries `missed` (Pitfall 1 / okCron audit-gate safety).
+     */
+    missedRun: cronRunStateEnum.optional(),
   })
   .strict();
 export type EndpointHealth = z.infer<typeof endpointHealthSchema>;
