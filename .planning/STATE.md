@@ -29,8 +29,8 @@ See: .planning/PROJECT.md
 
 Phase: 46 — General Hardening + Cron Watch Start
 Plan: Not started
-Status: Phase complete — ready for verification
-Next: Phase 45 (Dashboard Subtab Readability Redesign) — not started
+Status: Phase 45 complete + verified (45-VERIFICATION.md — 13/13 must-haves; 5/5 plans on `feature/45-dashboard-subtab-readability-redesign`, not yet merged). Phase 46 not started.
+Next: Phase 46 (General Hardening + Cron Watch Start) — discuss before planning
 Last activity: 2026-06-22 — Phase 45 complete, transitioned to Phase 46
 
 Progress: [██████████] 100%
