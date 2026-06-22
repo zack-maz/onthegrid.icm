@@ -168,9 +168,12 @@ cronHealthRouter.get('/', async (req, res) => {
     await appendTrendSample({
       sampledAt: new Date(sampleNow).toISOString(),
       cronAgeMs: {
-        health: ages[0],
-        warm: ages[1],
-        'refresh-events': ages[2],
+        // `?? null` collapses the `| undefined` that noUncheckedIndexedAccess
+        // adds to these in-bounds tuple reads back to the degrade-open `null`
+        // the TrendSample contract expects (absent → null, never fabricate).
+        health: ages[0] ?? null,
+        warm: ages[1] ?? null,
+        'refresh-events': ages[2] ?? null,
       },
       deadUrlCount,
     });
