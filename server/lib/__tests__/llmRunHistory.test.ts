@@ -146,4 +146,22 @@ describe('llmRunHistory', () => {
     await hydrateRunHistoryIfCold();
     expect(lrangeMock).toHaveBeenCalledTimes(1);
   });
+
+  // HARD-03 NAMED GAP (D-10/D-11) — hydration-throw no-op + flag-stays-set.
+  // Distinct from the happy-path flag-guard case above: here the LRANGE inside
+  // hydrate throws MID-HYDRATE. The contract is (a) hydrate resolves (never
+  // throws — listRunHistory swallows to []), and (b) the hydration flag STAYS
+  // set so a second call is a no-op (no retry-loop / no second LRANGE).
+  it('hydrate is a no-op when LRANGE throws mid-hydrate; flag stays set (no retry-loop)', async () => {
+    lrangeMock.mockRejectedValue(new Error('redis down'));
+    __resetRunHistoryHydrationForTest();
+
+    // First call: resolves despite the throw.
+    await expect(hydrateRunHistoryIfCold()).resolves.toBeUndefined();
+    expect(lrangeMock).toHaveBeenCalledTimes(1);
+
+    // Second call: flag stays set → short-circuit, NO re-LRANGE (no retry-loop).
+    await expect(hydrateRunHistoryIfCold()).resolves.toBeUndefined();
+    expect(lrangeMock).toHaveBeenCalledTimes(1);
+  });
 });
