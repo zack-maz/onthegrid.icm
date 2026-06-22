@@ -442,11 +442,11 @@ Plans:
 3. The 7-day cron-stability watch is structured as a NON-BLOCKING, auto-reported observation with daily auto-captured results that do NOT gate milestone close — its early-close criteria are a logged decision (citing the v1.5 Phase 31 early-close precedent), not a silent repeat.
 4. The Phase 39/40 surfaces have Nyquist test-coverage backfill — flight recorder, budget block, and subtab consolidation paths are covered, including degrade-open fault-injection tests.
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 **Wave 1** _(parallel — disjoint files)_
 
-- [ ] 46-01-PLAN.md — HARD-01 server: 429 sidecar counter (degrade-open) + RATE_LIMITER_CONFIG export + operator-status `rateLimiter` block + OpenAPI + 999.1 Bearer-bypass proof + CLAUDE.md key [HARD-01]
+- [x] 46-01-PLAN.md — HARD-01 server: 429 sidecar counter (degrade-open) + RATE_LIMITER_CONFIG export + operator-status `rateLimiter` block + OpenAPI + 999.1 Bearer-bypass proof + CLAUDE.md key [HARD-01]
 - [ ] 46-02-PLAN.md — HARD-02 server: `CRON_SCHEDULE_GRACE_MS` table + `deriveCronRunState` + `missedRun` SIBLING field on /api/health (status enum UNCHANGED — protects the LLM-RELI-07 okCron gate) [HARD-02]
 - [ ] 46-05-PLAN.md — HARD-03 Nyquist backfill: hydration-throw no-op (call+run history) + net-new `trendHistory.test.ts` degrade-open backfill (narrow named gaps only) [HARD-03]
 
@@ -498,7 +498,7 @@ Plans:
 | 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
 | 44    | Events Subtab Pipeline Detail         | 2/2            | Complete    | 2026-06-10 |
 | 45    | Dashboard Subtab Readability Redesign | 5/5            | Complete    | 2026-06-22 |
-| 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
+| 46    | General Hardening + Cron Watch Start  | 1/5            | In Progress |            |
 | 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |
 | 48    | Load Remediation                      | 0/TBD          | Not started | -          |
 | 49    | Docs Cleanup                          | 0/TBD          | Not started | -          |
