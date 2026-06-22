@@ -6,14 +6,14 @@ current_phase: 45
 current_phase_name: dashboard-subtab-readability-redesign
 status: executing
 stopped_at: Phase 45 UI-SPEC approved
-last_updated: "2026-06-22T04:50:01.829Z"
+last_updated: "2026-06-22T05:02:38.774Z"
 last_activity: 2026-06-22
 last_activity_desc: Phase 45 execution started
 progress:
   total_phases: 14
   completed_phases: 3
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 21
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 45 (dashboard-subtab-readability-redesign) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Next: Phase 45 (Dashboard Subtab Readability Redesign) — not started
 Last activity: 2026-06-22 — Phase 45 execution started
@@ -494,6 +494,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 44 P02 | 11min | 3 tasks | 4 files |
 | Phase 45 P01 | 5min | 3 tasks | 7 files |
 | Phase 45 P02 | 151 | 2 tasks | 4 files |
+| Phase 45 P03 | 420 | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -520,6 +521,8 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: Phase 45-01: trendHistory degrades to [] (not null) on Redis failure because readTrendHistory is itself degrade-open
 - [Phase ?]: Phase 45-01: cronAgeMs is null (never fabricated 0) when a cron:lastTick key is absent — a stalled cron is a valid sparkline signal (D-02)
 - [Phase ?]: Phase 45 readability atoms MetricRow + Sparkline extracted to separate files (CONTEXT D-06/D-07); no-inline-hex + two-weight; not yet wired into DevApiStatus (Plans 03/04 compose them)
+- [Phase ?]: Phase 45-03: shared DisclosureSection helper (FlightRecorder idiom) reused across Water + Sites for visual parity; Plan 04 can reuse
+- [Phase ?]: Phase 45-03: per-type table defaults open; By Country + Rejections default collapsed (the raw dumps being tamed)
 
 ## Operator Next Steps
 
@@ -527,6 +530,6 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 
 ## Session
 
-**Last session:** 2026-06-22T04:49:45.902Z
+**Last session:** 2026-06-22T05:02:18.946Z
 **Stopped at:** Phase 45 UI-SPEC approved
 **Resume file:** .planning/phases/45-dashboard-subtab-readability-redesign/45-UI-SPEC.md
