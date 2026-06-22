@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Final Hardening — 🚧 IN PROGRESS
-status: verifying
-last_updated: "2026-06-10T15:50:28.970Z"
-last_activity: 2026-06-10
+status: planning
+last_updated: "2026-06-22T02:46:34.000Z"
+last_activity: 2026-06-21
 progress:
   total_phases: 14
   completed_phases: 3
@@ -23,10 +23,11 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 44 (Events Subtab Pipeline Detail) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-06-10
+Phase: 44 (Events Subtab Pipeline Detail) — ✅ CLOSED (verified + shipped 2026-06-21)
+Plan: 2 of 2 complete
+Status: Verified (44-VERIFICATION.md); merged to `main` via PR #43; deployed to production. Folded in a dead-URL sidecar count drift hotfix (`reconcileDeadUrlCount` + authoritative prune/sweep reconcile) that fixed the operator "Prune" no-op — prod phantom `deadUrlCount` 202 → 0 confirmed live.
+Next: Phase 45 (Dashboard Subtab Readability Redesign) — not started
+Last activity: 2026-06-21
 
 Progress: [██████████] 100%
 
@@ -96,10 +97,10 @@ Roadmap created 2026-06-09. Numbering continues from v1.6 Phase 41 → Phase 42.
 
 | Phase | Name | Requirements | Status |
 | ----- | ---- | ------------ | ------ |
-| 42 | Water Filter Fix | WATER-FILTER-01..04 | 📋 Planned |
-| 43 | Ghost Link Prune Correctness | GHOST-06..10 | 📋 Planned |
-| 44 | Events Subtab Pipeline Detail | EVENTS-TAB-01..02 | 📋 Planned |
-| 45 | Dashboard Subtab Readability Redesign | DASH-READ-01..05 | 📋 Planned |
+| 42 | Water Filter Fix | WATER-FILTER-01..04 | ✅ Closed 2026-06-10 |
+| 43 | Ghost Link Prune Correctness | GHOST-06..10 | ✅ Closed 2026-06-10 |
+| 44 | Events Subtab Pipeline Detail | EVENTS-TAB-01..02 | ✅ Closed 2026-06-21 (PR #43 shipped; + dead-URL count drift hotfix) |
+| 45 | Dashboard Subtab Readability Redesign | DASH-READ-01..05 | 📋 Planned (next) |
 | 46 | General Hardening + Cron Watch Start | HARD-01, HARD-02, CRON-WATCH-01, HARD-03 | 📋 Planned |
 | 47 | ~100-User Load Test | LOAD-01..04 | 📋 Planned |
 | 48 | Load Remediation | LOAD-FIX-01..02 | 📋 Planned |
@@ -139,6 +140,7 @@ _Phase 26.2 was scrapped and renumbered to Phase 27 under v1.4 on 2026-04-08. Or
 
 ## Key Decisions
 
+- (44-hotfix, 2026-06-21) dead-URL count drift → reconcile-sidecar over derive-from-SCAN. Root cause: `events:url-liveness-count` (no TTL) only mutated on dead↔live transitions + prune, while the liveness keys it counts expire on a finite per-status TTL; expired/departed dead keys were never decremented, so the counter drifted to a prod phantom `deadUrlCount=202` over an empty `events:url-liveness:*` keyspace, making the operator "Prune N dead events" button a permanent no-op (SCAN finds nothing → prunes 0 → count never drops). Chose to KEEP the O(1) sidecar (Phase 32 Pitfall 3 lock) and add `reconcileDeadUrlCount()` (authoritative SCAN-and-SET) wired into `runProbeSweep` (self-heals daily) + the prune path (SET to `terminalDead − pruned` instead of the drift-prone DECRBY, correcting a stale count even on a no-op) — rejected derive-deadUrlCount-from-SCAN-per-poll (undoes the O(1) optimization). DevApiStatus replay/prune buttons gained visible result lines so a 200/404/no-op never reads as "nothing happens". Proven against live Upstash (seeded 202/0-keys → reconciled to 0) and confirmed in prod (202 → 0 via the deployed prune). Shipped on `feature/44` (commit `ad5e7ba`) → `main` (PR #43). New ops tool: `scripts/reconcile-deadurl-count.ts`.
 - (42-01, D-03) confirm-dedup: telemetry-first diagnosis (42-DIAGNOSIS.md, verdict confirmed_prime_suspect_dedup) confirms the name-blind, order-dependent O(n²) spatial-dedup loop (server/adapters/overpass-water.ts:1202-1212) as the cause of missing water facilities. No pivot — proceed to the pre-registered name-aware + deterministic spatialDedup fix in Plan 02. Latin-label admission gate NOT implicated; D-06 (forbidding gate loosening) NOT triggered. Diagnosis cites the SUMMED rejections.duplicate bucket, never byTypeRejections.*.duplicate (structurally always 0 post-merge per Pitfall 1). RED spatialDedup scaffold (cases a-d + it.todo e) verified: 4 dedup cases RED, 165 G1 tests GREEN, 1 todo. WATER-FILTER-01 complete.
 - (41-05, D-07/D-11) Wave-3 distilled lessons + brainstorms receipts shipped (SC41-3 lessons+brainstorms portion): docs/LESSONS.md authored as a 1-page first-person distillation of RETROSPECTIVE.md surfacing the 5 named lessons (probe-before-commit, honest deferral, mechanical drift gates compound, deletion over deprecation, architecture decisions cascade into audit-tier semantics — Phase 37); cross-links BUILDING + SHOWCASE. BUILDING §7 Historical receipts (cross-links already in place from Plan 02) gained the load-bearing vision-to-shipped inline callout: origin brainstorm's day-one "numbers over narratives" thesis (held) vs its plumbing assumptions (ACLED→GDELT Phase 8.1, WebSocket→recursive setTimeout at v1.0 serverless). D-07 honored — nothing moved/deleted/archived. README localhost dead-links left untouched (pre-existing, out of scope); LESSONS.md links lint clean in isolation.
 - (41-03) Wave-2 round-out docs shipped (SC41-3 concepts+COSTS+operator-guide portion): concepts.md (38 terms), COSTS.md (Vercel Pro $20/mo sole paid line + D-09 stay-on-vercel.app rationale + RETROSPECTIVE-cited dev cost), operator-guide.md (6-workflow visitor how-to distinct from runbook, `<your-bearer>` placeholder only). Audit-carried Wave-2 docs sweep applied: ADR #1/2/3/4/21/23, .env.example #6 (LLM_PIPELINE_V2/V3 removed) + #7-ACLED (marked historical, kept blank assignments so check:env drift gate stays satisfied — Rule 3), OpenAPI #16 (prune-dead-urls path) + NN-3 (llm-history path), reliability-doc NN-4 title. redocly lint valid; all 3 new docs link-check clean; fixed CLAUDE.md-inherited dead link rateLimiter.ts→rateLimit.ts.
