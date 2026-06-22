@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Final Hardening — 🚧 IN PROGRESS
-current_phase: 44
-current_phase_name: Events Subtab Pipeline Detail
-status: planning
+current_phase: 45
+current_phase_name: dashboard-subtab-readability-redesign
+status: executing
 stopped_at: Phase 45 UI-SPEC approved
-last_updated: "2026-06-22T04:25:59.277Z"
+last_updated: "2026-06-22T04:33:41.250Z"
 last_activity: 2026-06-22
-last_activity_desc: Phase 45 planning complete
+last_activity_desc: Phase 45 execution started
 progress:
   total_phases: 14
   completed_phases: 3
-  total_plans: 10
+  total_plans: 15
   completed_plans: 10
   percent: 21
 ---
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 44 (Events Subtab Pipeline Detail) — ✅ CLOSED (verified + shipped 2026-06-21)
-Plan: 2 of 2 complete
-Status: Verified (44-VERIFICATION.md); merged to `main` via PR #43; deployed to production. Folded in a dead-URL sidecar count drift hotfix (`reconcileDeadUrlCount` + authoritative prune/sweep reconcile) that fixed the operator "Prune" no-op — prod phantom `deadUrlCount` 202 → 0 confirmed live.
+Phase: 45 (dashboard-subtab-readability-redesign) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 45
 Next: Phase 45 (Dashboard Subtab Readability Redesign) — not started
-Last activity: 2026-06-22 — Phase 45 planning complete
+Last activity: 2026-06-22 — Phase 45 execution started
 
 Progress: [██████████] 100%
 
