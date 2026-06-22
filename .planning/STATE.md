@@ -4,11 +4,10 @@ milestone: v2.0
 milestone_name: Final Hardening — 🚧 IN PROGRESS
 current_phase: 46
 current_phase_name: General Hardening + Cron Watch Start
-status: verifying
+status: "Phase 45 shipped — PR #44 (awaiting merge)"
 stopped_at: Phase 45 UI-SPEC approved
-last_updated: "2026-06-22T05:38:09.642Z"
+last_updated: "2026-06-22T18:47:13.543Z"
 last_activity: 2026-06-22
-last_activity_desc: Phase 45 complete, transitioned to Phase 46
 progress:
   total_phases: 14
   completed_phases: 4
@@ -29,9 +28,9 @@ See: .planning/PROJECT.md
 
 Phase: 46 — General Hardening + Cron Watch Start
 Plan: Not started
-Status: Phase 45 complete + verified (45-VERIFICATION.md — 13/13 must-haves; 5/5 plans on `feature/45-dashboard-subtab-readability-redesign`, not yet merged). Phase 46 not started.
+Status: Phase 45 shipped — PR #44 (awaiting merge)
 Next: Phase 46 (General Hardening + Cron Watch Start) — discuss before planning
-Last activity: 2026-06-22 — Phase 45 complete, transitioned to Phase 46
+Last activity: 2026-06-22
 
 Progress: [██████████] 100%
 
