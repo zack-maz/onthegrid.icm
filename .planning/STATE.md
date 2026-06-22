@@ -6,14 +6,14 @@ current_phase: 45
 current_phase_name: dashboard-subtab-readability-redesign
 status: executing
 stopped_at: Phase 45 UI-SPEC approved
-last_updated: "2026-06-22T04:33:41.250Z"
+last_updated: "2026-06-22T04:45:25.574Z"
 last_activity: 2026-06-22
 last_activity_desc: Phase 45 execution started
 progress:
   total_phases: 14
   completed_phases: 3
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 11
   percent: 21
 ---
 
@@ -28,8 +28,8 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 45 (dashboard-subtab-readability-redesign) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 45
+Plan: 2 of 5
+Status: Ready to execute
 Next: Phase 45 (Dashboard Subtab Readability Redesign) — not started
 Last activity: 2026-06-22 — Phase 45 execution started
 
@@ -492,6 +492,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 43 P05 | 9min | 2 tasks | 3 files |
 | Phase 44 P01 | 12min | 2 tasks | 4 files |
 | Phase 44 P02 | 11min | 3 tasks | 4 files |
+| Phase 45 P01 | 5min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -514,6 +515,9 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: (44-02, D-05/D-06) 7 v2 LLM blocks mounted presence-gated into production EventsFiltersSectionV3; BudgetBarsBlock self-hides under NIM-only (correct/honest); WaterfallBlock gated on stage != idle
 - [Phase ?]: (44-02, D-09/D-10) New DeadLinkBucketsBlock: authoritative deadUrlCount + sampled 'of N scanned' per-status buckets + drill-down rows with evidence-as-TEXT (T-44-04) + dead-streak attemptCount; self-hides on absent prune
 - [Phase ?]: (44-02, Rule 3) prune threaded via events-tab-scoped operator-status fetch in DevApiStatus (eventsPrune); canonical opStatus fetch lives in sibling DevApiStatusAllApisTab; mutually-exclusive tabs => no concurrent double fetch
+- [Phase ?]: Phase 45-01: TREND_HISTORY_KEY = 'dashboard:trends:history' (bounded LPUSH+LTRIM 30-cap, 30d TTL; Phase 49 registry sweep)
+- [Phase ?]: Phase 45-01: trendHistory degrades to [] (not null) on Redis failure because readTrendHistory is itself degrade-open
+- [Phase ?]: Phase 45-01: cronAgeMs is null (never fabricated 0) when a cron:lastTick key is absent — a stalled cron is a valid sparkline signal (D-02)
 
 ## Operator Next Steps
 
@@ -521,6 +525,6 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 
 ## Session
 
-**Last session:** 2026-06-22T03:56:38.049Z
+**Last session:** 2026-06-22T04:45:02.310Z
 **Stopped at:** Phase 45 UI-SPEC approved
 **Resume file:** .planning/phases/45-dashboard-subtab-readability-redesign/45-UI-SPEC.md
