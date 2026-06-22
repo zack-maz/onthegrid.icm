@@ -151,7 +151,12 @@ cronHealthRouter.get('/', async (req, res) => {
         const entry = await cacheGetSafe<number>(`cron:lastTick:${name}`, 999_999_999);
         if (entry === null) return null;
         const tickTs = typeof entry.data === 'number' ? entry.data : entry.lastFresh;
-        return sampleNow - tickTs;
+        // Phase 45 WR-03 — floor at 0. `tickTs` is a `Date.now()` written by a
+        // (possibly different) serverless invocation; under Fluid Compute
+        // cold-start clock skew the writer's wall clock can lead the reader's,
+        // making `sampleNow - tickTs` negative. A negative age would draw the
+        // sparkline point below the viewBox and render a negative h/m string.
+        return Math.max(0, sampleNow - tickTs);
       }),
     );
 
