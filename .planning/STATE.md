@@ -5,9 +5,10 @@ milestone_name: Final Hardening — 🚧 IN PROGRESS
 current_phase: 44
 current_phase_name: Events Subtab Pipeline Detail
 status: planning
-stopped_at: Phase 45 context gathered
-last_updated: "2026-06-22T03:28:40.198Z"
-last_activity: 2026-06-21
+stopped_at: Phase 45 UI-SPEC approved
+last_updated: "2026-06-22T04:25:59.277Z"
+last_activity: 2026-06-22
+last_activity_desc: Phase 45 planning complete
 progress:
   total_phases: 14
   completed_phases: 3
@@ -30,7 +31,7 @@ Phase: 44 (Events Subtab Pipeline Detail) — ✅ CLOSED (verified + shipped 202
 Plan: 2 of 2 complete
 Status: Verified (44-VERIFICATION.md); merged to `main` via PR #43; deployed to production. Folded in a dead-URL sidecar count drift hotfix (`reconcileDeadUrlCount` + authoritative prune/sweep reconcile) that fixed the operator "Prune" no-op — prod phantom `deadUrlCount` 202 → 0 confirmed live.
 Next: Phase 45 (Dashboard Subtab Readability Redesign) — not started
-Last activity: 2026-06-21
+Last activity: 2026-06-22 — Phase 45 planning complete
 
 Progress: [██████████] 100%
 
@@ -520,6 +521,6 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 
 ## Session
 
-**Last session:** 2026-06-22T03:28:40.182Z
-**Stopped at:** Phase 45 context gathered
-**Resume file:** .planning/phases/45-dashboard-subtab-readability-redesign/45-CONTEXT.md
+**Last session:** 2026-06-22T03:56:38.049Z
+**Stopped at:** Phase 45 UI-SPEC approved
+**Resume file:** .planning/phases/45-dashboard-subtab-readability-redesign/45-UI-SPEC.md
