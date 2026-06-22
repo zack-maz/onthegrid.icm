@@ -1209,6 +1209,13 @@ function DevApiStatusAllApisTab({
     // absent) when the server has not shipped Plan 03 or the Redis read threw
     // (degrade-open) — BudgetBlock's render gate hides the block in that case.
     tokenBudget?: TokenBudgetBlock | null;
+    // Phase 45 DASH-READ-05 (CONTEXT D-01) — bounded dashboard:trends:history
+    // ring (up to 30 daily samples, newest-first) read through this aggregator.
+    // Backs the four trend sparklines (cron freshness ×3 + dead-link count).
+    // Optional forward-compat (Phase 32 D-10): older servers pre-dating Plan
+    // 45-01 omit it; `null` (or absent) on degrade-open. Interface-only here —
+    // the sparkline render that consumes it lands in Plan 04.
+    trendHistory?: TrendSample[] | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
   // Phase 32 Plan 05 MEDIUM-03 — `fetchOpStatus` hoisted out of the
@@ -3545,6 +3552,27 @@ type PruneSummary = {
     lastProbedAt?: string;
     attemptCount?: number;
   }>;
+};
+
+/**
+ * Phase 45 DASH-READ-05 (CONTEXT D-01) — one daily trend sample mirrored from
+ * the server's `server/lib/trendHistory.ts` TrendSample shape. Backs the four
+ * dashboard trend sparklines (cron freshness ×3 + dead-link count). `cronAgeMs`
+ * is the per-cron freshness age (ms) at sample time; `null` means the cron's
+ * lastTick key was absent (degrade-open — a stalled cron reads as null/stale,
+ * NOT a fabricated 0).
+ *
+ * Interface/type ONLY at this point (Phase 45 Plan 01 contract lockstep) — the
+ * sparkline mount that consumes it is Plan 04. Forward-compat per Phase 32 D-10.
+ */
+type TrendSample = {
+  sampledAt: string;
+  cronAgeMs: {
+    health: number | null;
+    warm: number | null;
+    'refresh-events': number | null;
+  };
+  deadUrlCount: number;
 };
 
 /**

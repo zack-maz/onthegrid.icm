@@ -704,6 +704,44 @@ paths:
                       (providers.nvidia_nim used/cap/soft/hard/state) + today's
                       cost-shadow roll-up (tokensIn/tokensOut/usd). Null on
                       degrade-open (Redis throw inside the block — T-39-03-D).
+                  trendHistory:
+                    type: array
+                    nullable: true
+                    description: >-
+                      Phase 45 DASH-READ-05 (CONTEXT D-01) — bounded
+                      dashboard:trends:history ring (LPUSH+LTRIM 30-cap, 30d TTL)
+                      written once-daily by the existing /api/cron/health handler.
+                      Up to 30 daily samples, newest-first; backs the four
+                      dashboard trend sparklines (cron freshness ×3 + dead-link
+                      count). Null on degrade-open (Redis throw inside the block).
+                    items:
+                      type: object
+                      properties:
+                        sampledAt:
+                          type: string
+                          description: ISO8601 timestamp of when the sample was taken.
+                        cronAgeMs:
+                          type: object
+                          description: >-
+                            Per-cron freshness age (ms since last successful tick)
+                            at sample time. Null means the cron:lastTick:{name} key
+                            was absent (degrade-open — a stalled cron reads as
+                            null/stale, a valid signal, NOT a fabricated 0).
+                          properties:
+                            health:
+                              type: integer
+                              nullable: true
+                            warm:
+                              type: integer
+                              nullable: true
+                            refresh-events:
+                              type: integer
+                              nullable: true
+                        deadUrlCount:
+                          type: integer
+                          minimum: 0
+                          description: >-
+                            events:url-liveness-count sidecar value at sample time.
         '401':
           description: Missing or invalid operator Bearer.
           content:
