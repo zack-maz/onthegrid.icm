@@ -2592,10 +2592,10 @@ function SitesFiltersSection() {
   if (!filterStats) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Sites Filters
         </span>
-        <div className="mt-0.5 text-[9px] italic text-white/40">loading filter stats…</div>
+        <div className="mt-0.5 text-[9px] italic text-white/30">loading filter stats…</div>
       </div>
     );
   }
@@ -2616,78 +2616,98 @@ function SitesFiltersSection() {
     )
     .slice(0, 12);
 
+  // Phase 45 Plan 03 (DASH-READ-01) — 4-bucket rejection register as a labeled
+  // Reason|Count table. Honors the documented water/sites asymmetry: sites has
+  // exactly 4 buckets (no per-type split, no invented buckets — see JSDoc above).
+  const sr = filterStats.rejections;
+  const rejectionRows: { key: string; label: string; count: number }[] = [
+    { key: 'excluded_turkey', label: 'Excluded turkey', count: sr.excluded_turkey },
+    { key: 'no_coords', label: 'No coords', count: sr.no_coords },
+    { key: 'no_type', label: 'No type', count: sr.no_type },
+    { key: 'duplicate', label: 'Duplicate', count: sr.duplicate },
+  ];
+  const totalRejected = rejectionRows.reduce((a, b) => a + b.count, 0);
+
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Sites Filters
       </span>
 
-      {/* Phase 27.3.1 R-05 D-30 parity — provenance header */}
+      {/* Phase 27.3.1 R-05 D-30 parity — provenance header (strings verbatim, re-toned) */}
       <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Source:</span> {filterStats.source} ·{' '}
-        <span className="font-bold text-white/40">Generated:</span>{' '}
+        <span className="font-semibold text-white/40">Source:</span> {filterStats.source} ·{' '}
+        <span className="font-semibold text-white/40">Generated:</span>{' '}
         {relativeTime(filterStats.generatedAt)}
       </div>
 
-      {/* Raw vs filtered summary */}
+      {/* Phase 45 Plan 03 — primary metric: kept % at 13px/600 (one per block) */}
+      <div
+        className="mt-0.5 text-[13px] font-semibold tabular-nums text-white/80"
+        data-testid="sites-primary-metric"
+      >
+        {keepPct}%
+      </div>
+
+      {/* Raw vs filtered summary (verbatim) */}
       <div className="mt-0.5 text-[9px] text-white/60">
         {filterStats.rawCount} raw → {filterStats.filteredCount} kept ({keepPct}%)
       </div>
 
-      {/* Per-type breakdown */}
+      {/* Per-type breakdown — MetricRow (may default open) */}
       {typeEntries.length > 0 && (
         <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
+          <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-white/40">
             By Type
           </div>
-          <table className="mt-0.5 w-full text-[9px]">
-            <tbody>
-              {typeEntries.map(([type, count]) => (
-                <tr key={type}>
-                  <td className="text-white/40">{type}</td>
-                  <td className="text-right tabular-nums text-white/60">{count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Phase 27.3.1 R-05 D-28 parity — per-country admission table */}
-      {byCountrySorted.length > 0 && (
-        <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
-            By Country
+          <div className="mt-0.5 flex flex-col gap-0.5">
+            {typeEntries.map(([type, count]) => (
+              <MetricRow key={type} label={type} value={count} data-testid={`sites-type-${type}`} />
+            ))}
           </div>
-          <table className="mt-0.5 w-full text-[9px]">
-            <tbody>
-              {byCountrySorted.map(([country, perType]) => (
-                <tr key={country}>
-                  <td className="text-white/40">{country}</td>
-                  <td className="text-right tabular-nums text-white/60">
-                    {Object.entries(perType)
-                      .map(([t, n]) => `${t}=${n}`)
-                      .join(' ')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </>
       )}
 
-      {/* Rejections — 4 buckets only (sites adapter register; see JSDoc above) */}
-      <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Rejections:</span> turkey=
-        {filterStats.rejections.excluded_turkey} nocoords=
-        {filterStats.rejections.no_coords} notype={filterStats.rejections.no_type} dup=
-        {filterStats.rejections.duplicate}
-      </div>
+      {/* Phase 45 Plan 03 — rejection breakdown behind progressive disclosure */}
+      <DisclosureSection
+        title="Rejections"
+        panelId="sites-rejections-panel"
+        testid="sites-rejections-toggle"
+      >
+        <MetricRow label="Total rejections" value={totalRejected} emphasized />
+        {rejectionRows.map((row) => (
+          <MetricRow
+            key={row.key}
+            label={row.label}
+            value={row.count}
+            data-testid={`sites-rejection-${row.key}`}
+          />
+        ))}
+      </DisclosureSection>
+
+      {/* Phase 27.3.1 R-05 D-28 parity — per-country admission behind disclosure */}
+      {byCountrySorted.length > 0 && (
+        <DisclosureSection
+          title="By Country"
+          panelId="sites-country-panel"
+          testid="sites-country-toggle"
+        >
+          {byCountrySorted.map(([country, perType]) => (
+            <MetricRow
+              key={country}
+              label={country}
+              value={Object.entries(perType)
+                .map(([t, n]) => `${t}=${n}`)
+                .join(' ')}
+            />
+          ))}
+        </DisclosureSection>
+      )}
 
       {/* Phase 27.3.1 R-05 D-29 parity — Overpass health rows */}
       {filterStats.overpass.length > 0 && (
         <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
+          <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-white/40">
             Overpass Health
           </div>
           {filterStats.overpass.map((rec, i) => (
