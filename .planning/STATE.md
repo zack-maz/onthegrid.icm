@@ -6,14 +6,14 @@ current_phase: 46
 current_phase_name: General Hardening + Cron Watch Start
 status: executing
 stopped_at: Phase 46 UI-SPEC approved
-last_updated: "2026-06-22T19:39:05.493Z"
+last_updated: "2026-06-22T19:45:58.262Z"
 last_activity: 2026-06-22
 last_activity_desc: Phase 46 execution started
 progress:
   total_phases: 14
   completed_phases: 4
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 17
   percent: 29
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 46 (General Hardening + Cron Watch Start) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Next: Phase 46 (General Hardening + Cron Watch Start) — discuss before planning
 Last activity: 2026-06-22 — Phase 46 execution started
@@ -498,6 +498,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 45 P04 | 4min | 3 tasks | 2 files |
 | Phase 45 P5 | 6min | 3 tasks | 0 files |
 | Phase 46 P01 | 9 | 3 tasks | 7 files |
+| Phase 46 P02 | 12min | 2 tasks | 6 files |
 
 ## Decisions
 
@@ -528,6 +529,9 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: Phase 45-03: per-type table defaults open; By Country + Rejections default collapsed (the raw dumps being tamed)
 - [Phase ?]: Plan 45-04: events trend sparklines thread opStatus.trendHistory off the existing events-scoped /api/operator-status poll (no new fetch); cron-stale threshold 30h, dead-link tint on a new high past prior peak
 - [Phase ?]: (45-05) DASH-READ-04 freeze PROVEN + DASH-READ-03 no-inline-hex CLOSED: 4 behavioral pins (60 tests) pass unmodified; only phase tab-token diff line is a JSDoc comment (zero JSX role/aria/tabIndex changed); deliberate snapshot -u regen = ZERO diff (byte-stable, scope=all-apis-tab body only); atom + new-DevApiStatus hex grep = 0; full-phase sweep 12 files/150 green; tsc exit 0.
+- [Phase ?]: 46-02: missedRun is a sibling field (cronRunStateEnum), never a healthStatusEnum value — protects prod-connectivity-audit okCron / LLM-RELI-07 gate
+- [Phase ?]: 46-02: cron graceMs = 4h (D-04 band), keeps missed strictly earlier than the 26h degraded window
+- [Phase ?]: 46-02: deriveCronRunState layered ON TOP of deriveStatus — 4-state ladder untouched (D-06)
 
 ## Operator Next Steps
 
@@ -535,6 +539,6 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 
 ## Session
 
-**Last session:** 2026-06-22T19:39:01.134Z
+**Last session:** 2026-06-22T19:45:38.769Z
 **Stopped at:** Phase 46 UI-SPEC approved
 **Resume file:** .planning/phases/46-general-hardening-cron-watch-start/46-UI-SPEC.md
