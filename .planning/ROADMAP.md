@@ -407,8 +407,28 @@ Plans:
 3. Visual hierarchy reads within the off-the-grid aesthetic — one primary metric prominent per block, labels small, contrast meets readability, and every color comes from the `@theme` token block / colorBridge (no inline hex).
 4. The redesign breaks nothing behavioral — the WAI-ARIA tablist contract (roving tabindex, tab ids) is frozen byte-stable, and the 5 pinning test suites (snapshot, tabMerge, diagnosticBlocks, operatorActions) plus degrade-open semantics stay green.
 5. The operator can see trends, not just point-in-time numbers — sparklines for dead-link count and cron freshness, backed by small history rings, catch slow-burn regressions.
-   **Plans**: TBD
-   **UI hint**: yes
+
+**Plans:** 5 plans
+
+Plans:
+**Wave 1** _(parallel — disjoint files: server ring vs new atom files)_
+
+- [ ] 45-01-PLAN.md — Server-backed bounded Redis trend ring (D-01): once-daily append in the existing `/api/cron/health` + `trendHistory` field on `/api/operator-status` w/ OpenAPI + route-test + client-interface lockstep [DASH-READ-05]
+- [ ] 45-02-PLAN.md — Extract the two reused atoms (D-06/D-07): `MetricRow.tsx` (tabular-nums right-aligned row) + `Sparkline.tsx` (30-pt SVG line, neutral stroke + semantic last-point tint) w/ own unit tests [DASH-READ-01, DASH-READ-03]
+
+**Wave 2** _(after 45-02)_
+
+- [ ] 45-03-PLAN.md — Restyle Water + Sites subtabs: one 13px/600 primary metric + MetricRow Reason|Count tables + progressive-disclosure drill-downs + two-weight headers; render pins evolved in lockstep [DASH-READ-01, DASH-READ-02, DASH-READ-03]
+
+**Wave 3** _(after 45-01 + 45-02 + 45-03 — same file, sequenced)_
+
+- [ ] 45-04-PLAN.md — Events subtab: mount the 4 trend sparklines (3 per-cron freshness + 1 dead-link, D-02) from the trend ring + readability grammar over the Phase-44 blocks (no re-mount); render pins evolved [DASH-READ-02, DASH-READ-03, DASH-READ-05]
+
+**Wave 4** _(after 45-03 + 45-04)_
+
+- [ ] 45-05-PLAN.md — DASH-READ-04 behavioral freeze: 4 behavioral pins green unmodified + tablist byte-stability + deliberate snapshot regen (subtab-body-only diff) + no-inline-hex gate + full-phase sweep [DASH-READ-03, DASH-READ-04]
+
+**UI hint**: yes
 
 ### Phase 46: General Hardening + Cron Watch Start
 
