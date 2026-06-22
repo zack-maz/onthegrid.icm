@@ -24,13 +24,13 @@ created: 2026-06-21
 > **Authority order:** `45-CONTEXT.md` decisions are AUTHORITATIVE and win over the prior
 > stale draft wherever they conflict. The four governing rules:
 >
-> 1. **No net-new visual language** — restyle *within* the off-the-grid block idiom
+> 1. **No net-new visual language** — restyle _within_ the off-the-grid block idiom
 >    (`text-[9px]`, `uppercase tracking-wider text-white/40` headers,
 >    `border-t border-white/10 pt-2` separators — Phase 44 D-13).
 > 2. **The WAI-ARIA tablist DOM is FROZEN byte-stable** (DASH-READ-04 / CONTEXT D-08) —
 >    `role="tablist"` (:857), every `role="tab"` + roving `tabIndex` (:279/:778), and the
 >    four `role="tabpanel" aria-labelledby="tab-{api-health,water,sites,events}"`
->    containers (:944–964) are untouchable. All restyle lands *inside* those panels.
+>    containers (:944–964) are untouchable. All restyle lands _inside_ those panels.
 > 3. **Behavioral pins stay green**; the **consolidated-layout snapshot is regenerated
 >    deliberately** (CONTEXT D-08 — it captures the look we are intentionally changing).
 > 4. **Every color from `@theme` / colorBridge — no inline hex** (DASH-READ-03 / D-05).
@@ -41,14 +41,14 @@ created: 2026-06-21
 
 ### In scope (Phase 45 touches)
 
-| Surface | What changes |
-| --- | --- |
-| `WaterFiltersSection` (:2333) | Replace the raw `excl=… turkey=… nn=… nname=… nores=… dup=… low=… nocity=…` rejection string-dumps (:2434–2436, :2446–2449) with a labeled, right-aligned, `tabular-nums` table + one prominent primary metric (kept %) + progressive-disclosure drill-down for the long per-country / per-bucket detail. |
-| `SitesFiltersSection` (:2507) | Same readability treatment, mirroring water (the two are parallel by design — keep them visually identical; sites rejection dump at :2599–2601). |
-| `EventsFiltersSectionV3` (:975) + its Phase-44 child blocks | Apply the readability grammar (one primary metric per block, small labels, right-aligned numerics, progressive disclosure following the `FlightRecorderBlock` run→call→detail idiom) to the dense blocks Phase 44 mounted. Do NOT re-mount/unmount any Phase-44 block; density tuning is planner discretion. |
-| **NEW** `src/components/ui/MetricRow.tsx` | Extracted atom (CONTEXT D-06/D-07): a `tabular-nums`, right-aligned-value, small-uppercase-label row. The DASH-READ-01 workhorse, reused across all three subtabs. Own unit test. |
-| **NEW** `src/components/ui/Sparkline.tsx` | Extracted atom (CONTEXT D-04/D-07): inline SVG `<polyline>`/`<path>` mini line-chart (~30 points), neutral muted stroke + semantic last-point tint. Own unit test (path `d` / point count). **Distinct from the existing in-file 10-dot API-Health sparkline and the existing in-file line `Sparkline` at :3228** — neither is touched. |
-| Server (narrow exception — CONTEXT D-01) | A bounded Redis history ring (`LPUSH`+`LTRIM` cap **30**, 30d TTL — the `llm:runs:history` idiom verified at `server/lib/llmRunHistory.ts:52–53`) written once-daily by the **existing** `/api/cron/health` handler (`server/routes/cron-health.ts`), read via the **existing** `/api/operator-status` aggregator. No new cron, no new endpoint, no pipeline/probe behavior change. |
+| Surface                                                     | What changes                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WaterFiltersSection` (:2333)                               | Replace the raw `excl=… turkey=… nn=… nname=… nores=… dup=… low=… nocity=…` rejection string-dumps (:2434–2436, :2446–2449) with a labeled, right-aligned, `tabular-nums` table + one prominent primary metric (kept %) + progressive-disclosure drill-down for the long per-country / per-bucket detail.                                                                           |
+| `SitesFiltersSection` (:2507)                               | Same readability treatment, mirroring water (the two are parallel by design — keep them visually identical; sites rejection dump at :2599–2601).                                                                                                                                                                                                                                    |
+| `EventsFiltersSectionV3` (:975) + its Phase-44 child blocks | Apply the readability grammar (one primary metric per block, small labels, right-aligned numerics, progressive disclosure following the `FlightRecorderBlock` run→call→detail idiom) to the dense blocks Phase 44 mounted. Do NOT re-mount/unmount any Phase-44 block; density tuning is planner discretion.                                                                        |
+| **NEW** `src/components/ui/MetricRow.tsx`                   | Extracted atom (CONTEXT D-06/D-07): a `tabular-nums`, right-aligned-value, small-uppercase-label row. The DASH-READ-01 workhorse, reused across all three subtabs. Own unit test.                                                                                                                                                                                                   |
+| **NEW** `src/components/ui/Sparkline.tsx`                   | Extracted atom (CONTEXT D-04/D-07): inline SVG `<polyline>`/`<path>` mini line-chart (~30 points), neutral muted stroke + semantic last-point tint. Own unit test (path `d` / point count). **Distinct from the existing in-file 10-dot API-Health sparkline and the existing in-file line `Sparkline` at :3228** — neither is touched.                                             |
+| Server (narrow exception — CONTEXT D-01)                    | A bounded Redis history ring (`LPUSH`+`LTRIM` cap **30**, 30d TTL — the `llm:runs:history` idiom verified at `server/lib/llmRunHistory.ts:52–53`) written once-daily by the **existing** `/api/cron/health` handler (`server/routes/cron-health.ts`), read via the **existing** `/api/operator-status` aggregator. No new cron, no new endpoint, no pipeline/probe behavior change. |
 
 ### Out of scope (lockdown — do NOT touch)
 
@@ -58,21 +58,21 @@ created: 2026-06-21
 - **Behavioral semantics** — polling cadence, degrade-open self-hide/placeholder rules, replay/prune operator actions, and the behavioral pin assertions (`tabMerge`, `diagnosticBlocks`, `operatorActions`, prune, degrade-open). Frozen & green (CONTEXT D-08).
 - **The existing in-file `Sparkline` (:3228) and the 10-dot API-Health "recent-fetch" sparkline** — both stay as-is (CONTEXT D-04). The new line primitive is a separate file.
 - **New dashboard capabilities** — filters, new tabs, new metrics beyond the two named sparkline families (dead-link count + per-cron freshness). No new chart library, no new Redis event/liveness keys.
-- **LLM pipeline / probe / prune behavior** (Phase 43 territory, closed); prose docs (Phase 49); progressive-disclosure *density* tuning is left to planner discretion within the run→call→detail idiom (CONTEXT deferred).
+- **LLM pipeline / probe / prune behavior** (Phase 43 territory, closed); prose docs (Phase 49); progressive-disclosure _density_ tuning is left to planner discretion within the run→call→detail idiom (CONTEXT deferred).
 
 ---
 
 ## Design System
 
-| Property | Value |
-| --- | --- |
-| Tool | **none** — established custom system; Tailwind v4 CSS-first `@theme` (`src/styles/app.css:3`), no `tailwind.config.js` (confirmed absent), no `components.json` (confirmed absent). |
-| Preset | not applicable |
-| Component library | none — local `function XSection(...)` / `function XBlock(...)` components inside `DevApiStatus.tsx` (the idiom used 15+ times), plus separate-file blocks `FlightRecorderBlock.tsx` / `BudgetBlock.tsx` (the D-07 precedent the two new atoms follow). |
-| Icon library | none — Unicode glyphs only (`●` status bullet, `→` arrow, `▸/▾` disclosure carets per the FlightRecorderBlock idiom); inline SVG only for the sparkline/copy icons. |
-| Font | system stack; the panel root is monospace so all telemetry reads as monospace. `tabular-nums` layered on every numeric. |
+| Property           | Value                                                                                                                                                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tool               | **none** — established custom system; Tailwind v4 CSS-first `@theme` (`src/styles/app.css:3`), no `tailwind.config.js` (confirmed absent), no `components.json` (confirmed absent).                                                                                                        |
+| Preset             | not applicable                                                                                                                                                                                                                                                                             |
+| Component library  | none — local `function XSection(...)` / `function XBlock(...)` components inside `DevApiStatus.tsx` (the idiom used 15+ times), plus separate-file blocks `FlightRecorderBlock.tsx` / `BudgetBlock.tsx` (the D-07 precedent the two new atoms follow).                                     |
+| Icon library       | none — Unicode glyphs only (`●` status bullet, `→` arrow, `▸/▾` disclosure carets per the FlightRecorderBlock idiom); inline SVG only for the sparkline/copy icons.                                                                                                                        |
+| Font               | system stack; the panel root is monospace so all telemetry reads as monospace. `tabular-nums` layered on every numeric.                                                                                                                                                                    |
 | Color token source | `src/styles/app.css @theme` → `src/lib/colorBridge.ts` (D-13 single source). Verified tokens: `--color-accent-{blue,red,green,yellow}` (:5–8), `--color-surface{,-elevated,-overlay}` (:11–13), `--color-border{,-accent}` (:21–22), `--color-status-{healthy,degraded,warning}` (:63–65). |
-| Numerics | `tabular-nums` MANDATORY on every count / % / ms / timestamp (file-wide idiom; DASH-READ-01). |
+| Numerics           | `tabular-nums` MANDATORY on every count / % / ms / timestamp (file-wide idiom; DASH-READ-01).                                                                                                                                                                                              |
 
 **shadcn gate:** NOT RUN. `components.json` absent (`ls` confirmed), but a complete locked design system already exists. Per the gate's "design system found" branch, we pre-populate from the existing system and add nothing new. Initializing shadcn would fork the D-13 token contract. **Registry safety: not applicable.**
 
@@ -88,12 +88,12 @@ created: 2026-06-21
 
 The subtab idiom is a **tight, 4px-base dense diagnostic scale**. Declared values in use — all multiples of 4 except the one grandfathered Tailwind `0.5 = 2px` half-step:
 
-| Token | Value | Tailwind | Usage in this surface |
-| --- | --- | --- | --- |
-| micro | 2px | `mt-0.5` | Nested list/table sub-row spacing (`mt-0.5` opens detail tables, :2347 etc.) — **permanent named exception**, the established nested-list density. Never for structural chrome. |
-| xs | 4px | `mt-1` `gap-1` `px-1` `pt-1` `py-0.5` | Block-header → first-row gap; inline glyph/label/value gap; disclosure-row padding (`px-1 py-0.5`, FlightRecorder :281); drill-down indent. |
-| sm | 8px | `mt-2` `pt-2` `gap-2` `ml-2` `pl-2` | Gap between stacked sub-sections (every section opens `mt-2 border-t border-white/10 pt-2`); primary-metric → table gap; drill-down `ml-2 pl-2` indent (FlightRecorder :326). |
-| scroll-cap | 80 / 128px | `max-h-20` `max-h-32` | Max height of scrollable drill-down lists before `overflow-y-auto`. |
+| Token      | Value      | Tailwind                              | Usage in this surface                                                                                                                                                           |
+| ---------- | ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| micro      | 2px        | `mt-0.5`                              | Nested list/table sub-row spacing (`mt-0.5` opens detail tables, :2347 etc.) — **permanent named exception**, the established nested-list density. Never for structural chrome. |
+| xs         | 4px        | `mt-1` `gap-1` `px-1` `pt-1` `py-0.5` | Block-header → first-row gap; inline glyph/label/value gap; disclosure-row padding (`px-1 py-0.5`, FlightRecorder :281); drill-down indent.                                     |
+| sm         | 8px        | `mt-2` `pt-2` `gap-2` `ml-2` `pl-2`   | Gap between stacked sub-sections (every section opens `mt-2 border-t border-white/10 pt-2`); primary-metric → table gap; drill-down `ml-2 pl-2` indent (FlightRecorder :326).   |
+| scroll-cap | 80 / 128px | `max-h-20` `max-h-32`                 | Max height of scrollable drill-down lists before `overflow-y-auto`.                                                                                                             |
 
 **Exceptions:** `micro` (`mt-0.5` / 2px) is a **permanent named exception** in this surface, permitted ONLY for nested list/table row density inside drill-downs. **No NEW fractional or non-multiple-of-4 spacing** (no `6px`, no `mt-1.5`). All new structural spacing (drill-down toggles, primary-metric strip, sparkline wells) MUST be `xs` (4px) / `sm` (8px). No `md`/`lg`/`xl`/`2xl`/`3xl` layout spacing applies — the subtabs live entirely inside the frozen `role="tabpanel"` container and add no layout-level structure.
 
@@ -103,12 +103,12 @@ The subtab idiom is a **tight, 4px-base dense diagnostic scale**. Declared value
 
 DASH-READ-03 mandates **one primary metric prominent per block, labels small**. The current subtabs run nearly everything flat at `text-[9px]` (the readability defect). This phase establishes a **3-tier hierarchy carried by exactly two weights** — `{400, 600}`, per the CONTEXT `<reference_only>` learning. Hierarchy is otherwise carried by **size + `uppercase` + `tracking-wider`**, not a third weight.
 
-| Role | Size | Weight | Line Height | Tailwind | Usage |
-| --- | --- | --- | --- | --- | --- |
-| Primary metric | 13px | 600 (semibold) | 1.2 | `text-[13px] font-semibold tabular-nums` | The ONE headline value per block — water/sites kept % (e.g. `82%`); events run-outcome / DLQ depth / dead-URL count; the current value beside each sparkline. Exactly one per block. The verified live hero idiom (`text-[13px] font-semibold`, DevApiStatus :1620/:1662/:1678) reused verbatim. |
-| Section header | 9px | 600 (semibold) | normal | `text-[9px] font-semibold uppercase tracking-wider text-white/40` | Section/column-group titles (`Water Filters`, `By Type`, `By Country`, `Rejections by Type`, `Dead Links`). **CHANGE:** the live code uses `font-bold` (700) for these (verified :2446, :2599, :3252); this phase drops them to `font-semibold` (600) so the surface declares only two weights — the header hierarchy is fully carried by `uppercase` + `tracking-wider`. |
-| Label / value | 9px | 400 (regular) | 1.4 | `text-[9px]` + `tabular-nums` on numerics | Table labels, column heads (`text-white/40`), every numeric cell (`text-white/60`, right-aligned), drill-down captions. |
-| Micro | 8px | 400 (regular) | normal | `text-[8px] text-white/40 tabular-nums` | `ProgressBar` percent (:120) + sparkline axis caption ONLY — confined to shared primitives, do not extend. |
+| Role           | Size | Weight         | Line Height | Tailwind                                                          | Usage                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------- | ---- | -------------- | ----------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primary metric | 13px | 600 (semibold) | 1.2         | `text-[13px] font-semibold tabular-nums`                          | The ONE headline value per block — water/sites kept % (e.g. `82%`); events run-outcome / DLQ depth / dead-URL count; the current value beside each sparkline. Exactly one per block. The verified live hero idiom (`text-[13px] font-semibold`, DevApiStatus :1620/:1662/:1678) reused verbatim.                                                                          |
+| Section header | 9px  | 600 (semibold) | normal      | `text-[9px] font-semibold uppercase tracking-wider text-white/40` | Section/column-group titles (`Water Filters`, `By Type`, `By Country`, `Rejections by Type`, `Dead Links`). **CHANGE:** the live code uses `font-bold` (700) for these (verified :2446, :2599, :3252); this phase drops them to `font-semibold` (600) so the surface declares only two weights — the header hierarchy is fully carried by `uppercase` + `tracking-wider`. |
+| Label / value  | 9px  | 400 (regular)  | 1.4         | `text-[9px]` + `tabular-nums` on numerics                         | Table labels, column heads (`text-white/40`), every numeric cell (`text-white/60`, right-aligned), drill-down captions.                                                                                                                                                                                                                                                   |
+| Micro          | 8px  | 400 (regular)  | normal      | `text-[8px] text-white/40 tabular-nums`                           | `ProgressBar` percent (:120) + sparkline axis caption ONLY — confined to shared primitives, do not extend.                                                                                                                                                                                                                                                                |
 
 **Exactly two weights — {400, 600}.** Regular (400) for content/labels/values; semibold (600) for both the primary metric and the (re-toned) uppercase section header. **No `font-bold` (700) survives in the touched subtab code** — every `font-bold` header in the three subtabs is re-toned to `font-semibold`. No new third structural weight is introduced.
 
@@ -143,11 +143,11 @@ Raw data dumps are replaced with **formatted summaries + drill-down**, following
 - **Clickable summary row:** `flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-white/5` (FlightRecorderBlock :281) + a `▸/▾` disclosure caret (`text-white/40`).
 - **Deepest level** (a single record's raw dump) uses the existing copyable code-panel modal idiom (`CallDetailModal`, FlightRecorderBlock :405–406) ONLY if raw JSON is genuinely needed; otherwise prefer inline expansion.
 
-| Subtab | Summary (always visible) | Drill-down (disclosure-gated) |
-| --- | --- | --- |
-| Water | Kept % (primary metric, 13px/600) + `N raw → M kept (P%)` line (verbatim from :2385) | Per-type table, per-country table, rejection-by-type table |
-| Sites | Kept % (primary metric) + `N raw → M kept (P%)` line (verbatim from :2552) | Per-type table, per-country table, rejection-by-type table |
-| Events | Per-block primary metric (run outcome / DLQ depth / dead-URL count) | Existing FlightRecorder L1→L2→L3; CallLog; per-bucket dead-link sample rows (Phase 44 `DeadLinkBucketsBlock`) |
+| Subtab | Summary (always visible)                                                             | Drill-down (disclosure-gated)                                                                                 |
+| ------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Water  | Kept % (primary metric, 13px/600) + `N raw → M kept (P%)` line (verbatim from :2385) | Per-type table, per-country table, rejection-by-type table                                                    |
+| Sites  | Kept % (primary metric) + `N raw → M kept (P%)` line (verbatim from :2552)           | Per-type table, per-country table, rejection-by-type table                                                    |
+| Events | Per-block primary metric (run outcome / DLQ depth / dead-URL count)                  | Existing FlightRecorder L1→L2→L3; CallLog; per-bucket dead-link sample rows (Phase 44 `DeadLinkBucketsBlock`) |
 
 **Disclosure default state:** **collapsed** for the heavy detail tables (per-country, rejection-by-type) — these are the raw dumps being tamed; the operator opens them on demand. The summary + primary metric + the single most-useful table (per-type) MAY default open. Exact density (how aggressively to collapse the events subtab's 7+ Phase-44 blocks) is **planner discretion** within this idiom (CONTEXT deferred area).
 
@@ -159,17 +159,17 @@ The off-the-grid military operator aesthetic is preserved: dark translucent surf
 
 - **One primary metric prominent per block** (13px/600). Everything else is label-tier (9px) or micro (8px).
 - **Labels small** — `text-[9px] text-white/40` labels/column-heads; values `text-white/60`; emphasized values `text-white/80`.
-- **Contrast meets readability** — muted ramp floor for *structural* text is `text-white/40`; `text-white/30` is reserved ONLY for the italic "no data / loading" placeholder (intentional-absence). Never render a real value at `white/30`.
+- **Contrast meets readability** — muted ramp floor for _structural_ text is `text-white/40`; `text-white/30` is reserved ONLY for the italic "no data / loading" placeholder (intentional-absence). Never render a real value at `white/30`.
 - **Every color from `@theme` / colorBridge — no inline hex.** Audit gate: a grep for `#[0-9a-fA-F]{3,6}` and `rgba(` in the touched subtab + new-atom code MUST return zero new matches.
 
 ### Color (60 / 30 / 10 mapped onto the opacity ladder)
 
-| Role | Value | Usage |
-| --- | --- | --- |
-| Dominant (60%) | `--color-surface` (`oklch(0.145 0 0)`) + `text-white/60` default row text | Panel surface + body content |
-| Secondary (30%) | `white/N` neutral ramp (`white/40` labels, `white/30` placeholders, `white/10` hairlines) + `--color-border` | Headers, muted labels, separators, drill-down backgrounds, structure |
-| Accent (10%) | `--color-accent-{blue,red,green,yellow}` + `--color-status-{healthy,degraded,warning}` | Status/outcome semantics ONLY |
-| Destructive | `--color-accent-red` / `text-red-400` | Terminal-dead status, error states (read-only here — no destructive *action* in this phase) |
+| Role            | Value                                                                                                        | Usage                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Dominant (60%)  | `--color-surface` (`oklch(0.145 0 0)`) + `text-white/60` default row text                                    | Panel surface + body content                                                                |
+| Secondary (30%) | `white/N` neutral ramp (`white/40` labels, `white/30` placeholders, `white/10` hairlines) + `--color-border` | Headers, muted labels, separators, drill-down backgrounds, structure                        |
+| Accent (10%)    | `--color-accent-{blue,red,green,yellow}` + `--color-status-{healthy,degraded,warning}`                       | Status/outcome semantics ONLY                                                               |
+| Destructive     | `--color-accent-red` / `text-red-400`                                                                        | Terminal-dead status, error states (read-only here — no destructive _action_ in this phase) |
 
 **Accent reserved for (explicit list — never "all interactive elements"):**
 
@@ -197,14 +197,14 @@ The operator must see **trends, not just point-in-time numbers** — sparklines 
 
 ### The four sparklines (CONTEXT D-02) and their history rings
 
-**4 sparklines total:** 3 per-cron freshness (`health` / `warm` / `refresh-events`) + 1 dead-link count. Per-cron (not combined) so a single drifting subsystem is visible — a combined view masks *which* cron is stalling.
+**4 sparklines total:** 3 per-cron freshness (`health` / `warm` / `refresh-events`) + 1 dead-link count. Per-cron (not combined) so a single drifting subsystem is visible — a combined view masks _which_ cron is stalling.
 
-| Sparkline | Scalar sampled | Ring source |
-| --- | --- | --- |
-| Dead-link count | `prune.deadUrlCount` from `/api/operator-status` (verified shape, `server/routes/operator-status.ts`) | Server Redis ring (CONTEXT D-01): once-daily append in the existing `/api/cron/health` handler; read via the existing `/api/operator-status` aggregator. |
-| Cron freshness ×3 (`health` / `warm` / `refresh-events`) | Age of `cron:lastTick:{name}` (verified reader `probeCronTick`, `server/routes/health.ts:348`) | Same server Redis ring family — once-daily samples written by the health cron, read via `/api/operator-status`. |
+| Sparkline                                                | Scalar sampled                                                                                        | Ring source                                                                                                                                              |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dead-link count                                          | `prune.deadUrlCount` from `/api/operator-status` (verified shape, `server/routes/operator-status.ts`) | Server Redis ring (CONTEXT D-01): once-daily append in the existing `/api/cron/health` handler; read via the existing `/api/operator-status` aggregator. |
+| Cron freshness ×3 (`health` / `warm` / `refresh-events`) | Age of `cron:lastTick:{name}` (verified reader `probeCronTick`, `server/routes/health.ts:348`)        | Same server Redis ring family — once-daily samples written by the health cron, read via `/api/operator-status`.                                          |
 
-**History ring contract (CONTEXT D-01/D-03):** bounded `LPUSH` + `LTRIM 0, 29` (cap **30**) + **30d TTL**, copying the `llm:runs:history` idiom *exactly* (verified `server/lib/llmRunHistory.ts:52–53`, 30d TTL :33). Written by the **existing** `0 0 * * *` health cron as a once-daily append; read via the **existing** `/api/operator-status` aggregator thread (Phase 44 D-01/D-10 pattern). **No new cron, no new endpoint, no new event/liveness Redis key, no pipeline/probe behavior change.** Self-referential note: because the health cron writes the ring, a stalled health cron manifests as a **flatlining/stale** sparkline — that is a valid signal, not a bug.
+**History ring contract (CONTEXT D-01/D-03):** bounded `LPUSH` + `LTRIM 0, 29` (cap **30**) + **30d TTL**, copying the `llm:runs:history` idiom _exactly_ (verified `server/lib/llmRunHistory.ts:52–53`, 30d TTL :33). Written by the **existing** `0 0 * * *` health cron as a once-daily append; read via the **existing** `/api/operator-status` aggregator thread (Phase 44 D-01/D-10 pattern). **No new cron, no new endpoint, no new event/liveness Redis key, no pipeline/probe behavior change.** Self-referential note: because the health cron writes the ring, a stalled health cron manifests as a **flatlining/stale** sparkline — that is a valid signal, not a bug.
 
 **Planner discretion (CONTEXT):** exact Redis key name + `/api/operator-status` field shape (Phase 44 D-04 lockstep — server route test + OpenAPI schema + client `opStatus` interface move in one commit; forward-compat optional fields); exact degradation thresholds for the D-05 last-point tint; cold-start / partial-ring rendering (degrade-open); sparkline dimensions/placement; how a missed-tick gap renders within the polyline. The `warm` sparkline is the least critical of the three and may be collapsed later if it reads as noise (deferred).
 
@@ -216,7 +216,7 @@ The operator must see **trends, not just point-in-time numbers** — sparklines 
 
 ## Degraded-State Convention (DASH-READ-04 honesty — carried from Phase 40/44)
 
-Degrade-open is preserved exactly. The restyle changes the *look* of empty/null states, never the contract:
+Degrade-open is preserved exactly. The restyle changes the _look_ of empty/null states, never the contract:
 
 - **Muted placeholder pattern:** `text-white/30 italic` `— no data ({reason})` where `{reason}` is the specific cause (`no filter stats`, `operator-status unreachable`, `no runs recorded`, `not enough history yet`).
 - Water/Sites already render `loading filter stats…` (:2347 / :2516) — re-tone to the muted-placeholder token/copy (`text-white/30 italic`), keeping the honest "loading" vs "no data" distinction in `{reason}`.
@@ -231,9 +231,9 @@ Degrade-open is preserved exactly. The restyle changes the *look* of empty/null 
 **The hard behavioral guarantee of the phase.**
 
 - **The WAI-ARIA tablist contract is FROZEN byte-stable.** Untouchable: `role="tablist"` (:857), every `role="tab"` + `aria-selected` + roving `tabIndex` (active `0` / inactive `-1`, :279/:778), the four `role="tabpanel" aria-labelledby="tab-{api-health,water,sites,events}"` containers (:944–964), and all tab ids / `aria-labelledby` partners. No new tab, no re-ordered tab, no changed id.
-- All restyle work lands **inside** the existing tabpanel containers. New disclosure toggles and sparkline wells are normal in-DOM elements *inside* the panel; they do NOT participate in the tablist roving-tabindex (they sit in normal `Tab` order, like the existing expand rows).
+- All restyle work lands **inside** the existing tabpanel containers. New disclosure toggles and sparkline wells are normal in-DOM elements _inside_ the panel; they do NOT participate in the tablist roving-tabindex (they sit in normal `Tab` order, like the existing expand rows).
 - **Disclosure toggles** get `aria-expanded` + `aria-controls` (standard disclosure pattern) and the file-wide `focus-visible:ring` focus treatment, but introduce **no new focus traps, no new keyboard handlers on the tablist, no new live regions**. Polling-driven sparkline/number updates are NOT announced (consistent with the rest of the dashboard).
-- **Snapshot regenerated deliberately (CONTEXT D-08):** the consolidated-layout snapshot captures the look we are intentionally redesigning — regenerate it, review the diff line-by-line, land green. The diff should show **subtab-body changes only; the tablist/tabpanel subtree must NOT diff.** The truly *frozen* contract is behavioral: `tabMerge`, `diagnosticBlocks` (roving tabindex / tab ids), `operatorActions`, prune, and degrade-open stay strictly untouched and green.
+- **Snapshot regenerated deliberately (CONTEXT D-08):** the consolidated-layout snapshot captures the look we are intentionally redesigning — regenerate it, review the diff line-by-line, land green. The diff should show **subtab-body changes only; the tablist/tabpanel subtree must NOT diff.** The truly _frozen_ contract is behavioral: `tabMerge`, `diagnosticBlocks` (roving tabindex / tab ids), `operatorActions`, prune, and degrade-open stay strictly untouched and green.
 
 ---
 
@@ -241,16 +241,16 @@ Degrade-open is preserved exactly. The restyle changes the *look* of empty/null 
 
 A **read-only telemetry restyle** — no CTAs, no destructive actions are introduced (prune/replay live in the Phase-40 API Health drawer, out of scope). The copy contract is about labels, summaries, and empty states.
 
-| Element | Copy |
-| --- | --- |
-| Primary CTA | none — read-only surface (the only controls are pre-existing disclosure carets and the untouched Phase-40 drawer actions). |
-| Section headers | Carry forward verbatim: `Water Filters` · `Sites Filters` · `By Type` · `By Country` · `Rejections by Type` · `Flight Recorder` · `Dead Links`. New disclosure-table column heads: `Reason` / `Count`. |
-| Primary-metric label | Water/Sites: promote the `P%` from the existing `N raw → M kept (P%)` line (verbatim :2385 / :2552) to the primary-metric tier; keep the full summary line verbatim. |
-| Trend labels | `DEAD LINKS · 30d` · `CRON · HEALTH` · `CRON · WARM` · `CRON · REFRESH` (small uppercase section labels above each sparkline). |
-| Empty state | muted `— no data ({reason})`; reasons: `no filter stats` / `operator-status unreachable` / `no runs recorded` / `not enough history yet` (sparkline pre-fill). |
-| Loading state | re-tone `loading filter stats…` → keep the word "loading" so it reads transient, in the muted-placeholder style (`text-white/30 italic`). |
-| Error state | No new error UI — fetch failures degrade open (section self-hides or shows muted placeholder). |
-| Destructive confirmation | none — no destructive actions in this phase. |
+| Element                                    | Copy                                                                                                                                                                                                                                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primary CTA                                | none — read-only surface (the only controls are pre-existing disclosure carets and the untouched Phase-40 drawer actions).                                                                                                                            |
+| Section headers                            | Carry forward verbatim: `Water Filters` · `Sites Filters` · `By Type` · `By Country` · `Rejections by Type` · `Flight Recorder` · `Dead Links`. New disclosure-table column heads: `Reason` / `Count`.                                                |
+| Primary-metric label                       | Water/Sites: promote the `P%` from the existing `N raw → M kept (P%)` line (verbatim :2385 / :2552) to the primary-metric tier; keep the full summary line verbatim.                                                                                  |
+| Trend labels                               | `DEAD LINKS · 30d` · `CRON · HEALTH` · `CRON · WARM` · `CRON · REFRESH` (small uppercase section labels above each sparkline).                                                                                                                        |
+| Empty state                                | muted `— no data ({reason})`; reasons: `no filter stats` / `operator-status unreachable` / `no runs recorded` / `not enough history yet` (sparkline pre-fill).                                                                                        |
+| Loading state                              | re-tone `loading filter stats…` → keep the word "loading" so it reads transient, in the muted-placeholder style (`text-white/30 italic`).                                                                                                             |
+| Error state                                | No new error UI — fetch failures degrade open (section self-hides or shows muted placeholder).                                                                                                                                                        |
+| Destructive confirmation                   | none — no destructive actions in this phase.                                                                                                                                                                                                          |
 | Sampled-tally caveat (carry from Phase 44) | per-status bucket counts in the dead-link drill-down stay labeled `of N scanned` (≤200 `MAX_SCAN_KEYS`); the authoritative total is the separate `Dead URL events: {deadUrlCount}` line — never present the sampled tally as the authoritative total. |
 
 **Copy discipline:** carry forward existing verbatim strings the pinning tests assert (water/sites provenance + raw→kept lines, Phase-44 dead-link copy). New copy is limited to the trend labels, the rejection-table column heads (`Reason`/`Count`), and the muted-placeholder reasons. Do NOT reword asserted strings — extend the test in lockstep only when the DOM shape legitimately changes.
@@ -285,10 +285,10 @@ Behavioral pins stay green; the consolidated-layout snapshot is regenerated deli
 
 ## Registry Safety
 
-| Registry | Blocks Used | Safety Gate |
-| --- | --- | --- |
-| shadcn official | none | not applicable (no shadcn, no `components.json`) |
-| third-party | none | not applicable |
+| Registry        | Blocks Used | Safety Gate                                      |
+| --------------- | ----------- | ------------------------------------------------ |
+| shadcn official | none        | not applicable (no shadcn, no `components.json`) |
+| third-party     | none        | not applicable                                   |
 
 No registries. No third-party blocks. All primitives are hand-rolled local components (`Sparkline` :3228, `ProgressBar` :108) or separate-file blocks (`FlightRecorderBlock.tsx`, `BudgetBlock.tsx`); the two new atoms (`MetricRow.tsx`, `Sparkline.tsx`) follow that precedent. Registry vetting gate **not applicable**.
 
