@@ -742,6 +742,44 @@ paths:
                           minimum: 0
                           description: >-
                             events:url-liveness-count sidecar value at sample time.
+                  rateLimiter:
+                    type: object
+                    nullable: true
+                    description: >-
+                      Phase 46 HARD-01 (D-01/D-02) — per-tier rate-limit config
+                      (from the RATE_LIMITER_CONFIG closure mirror in
+                      rateLimit.ts) plus recent 429 counts read from the
+                      ratelimit:429:{tier}:{YYYY-MM-DD} sidecars (today +
+                      yesterday, UTC). Backs the API Health tab rate-limiter
+                      block (Plan 46-04). Null on degrade-open (Redis throw
+                      inside the block — route still 200).
+                    properties:
+                      tiers:
+                        type: array
+                        description: >-
+                          One entry per rate-limit tier (flights/ships/events/
+                          news/markets/weather/sites/sources/geocode/water/
+                          public).
+                        items:
+                          type: object
+                          properties:
+                            tier:
+                              type: string
+                              description: Tier name (matches the rateLimiters table key).
+                            max:
+                              type: integer
+                              minimum: 0
+                              description: Max requests per window for this tier.
+                            windowSec:
+                              type: integer
+                              minimum: 0
+                              description: Sliding-window duration in seconds.
+                            recent429:
+                              type: integer
+                              minimum: 0
+                              description: >-
+                                Sum of today's + yesterday's 429 counts for this
+                                tier (0 when the sidecar keys are absent).
         '401':
           description: Missing or invalid operator Bearer.
           content:

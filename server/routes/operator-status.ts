@@ -41,6 +41,7 @@ import {
   type UrlLiveness,
 } from '../lib/urlLiveness.js';
 import { dashboardAuth } from '../middleware/dashboardAuth.js';
+import { RATE_LIMITER_CONFIG } from '../middleware/rateLimit.js';
 
 import type { ConflictEventEntity } from '../types.js';
 
@@ -170,6 +171,27 @@ interface TokenBudgetBlock {
     tokensOut: number;
     usd: number;
   };
+}
+
+// ============================================================================
+// Phase 46 HARD-01 (D-01/D-02) — rateLimiter block shape
+// ============================================================================
+
+/**
+ * `rateLimiter` block returned to the DevApiStatus API Health tab (Plan 46-04).
+ *
+ * Surfaces per-tier limit config (from `RATE_LIMITER_CONFIG` — the closure
+ * config mirror in `rateLimit.ts`) alongside the recent 429 counts read from
+ * the `ratelimit:429:{tier}:{YYYY-MM-DD}` sidecars. `recent429` is the sum of
+ * today's + yesterday's UTC-dated counters (RESEARCH Open-Q2 rolling window).
+ *
+ * Degrade-open (mirrors `tokenBudget` VERBATIM — T-39-03-D): any Redis throw
+ * inside the block leaves `rateLimiter: null` on a 200 response — never bubbles
+ * to the outer 500 handler. Per-tier 429 reads are additionally coerced
+ * (`Number(raw) || 0`) so a missing key leaves the tier at 0.
+ */
+interface RateLimiterBlock {
+  tiers: Array<{ tier: string; max: number; windowSec: number; recent429: number }>;
 }
 
 /**
@@ -645,6 +667,44 @@ operatorStatusRouter.get(
         // trendHistory stays null (degrade-open).
       }
 
+      // ===== Phase 46 HARD-01 — rateLimiter block (D-01/D-02) =====
+      //
+      // Degrade-open contract (mirrors tokenBudget VERBATIM — T-39-03-D): any
+      // Redis throw inside this try leaves `rateLimiter = null` on a 200
+      // response — never bubbles to the outer 500 handler.
+      //
+      // Surfaces per-tier limit config (RATE_LIMITER_CONFIG, the closure
+      // mirror in rateLimit.ts) + recent 429 counts. "Recent" = today's +
+      // yesterday's UTC-dated `ratelimit:429:{tier}:{YYYY-MM-DD}` sidecars
+      // (RESEARCH Open-Q2). Each per-tier read is defensively coerced
+      // (`Number(raw) || 0`) so a missing/absent key leaves the tier at 0.
+      let rateLimiter: RateLimiterBlock | null = null;
+      try {
+        const now = new Date();
+        const todayYmd = now.toISOString().slice(0, 10);
+        const yesterdayYmd = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+
+        const tiers = await Promise.all(
+          Object.entries(RATE_LIMITER_CONFIG).map(async ([tier, cfg]) => {
+            // Read both dated counters; each read is coerced so a missing key
+            // (null) or a non-numeric value contributes 0 rather than NaN.
+            const [todayRaw, yesterdayRaw] = await Promise.all([
+              redis.get(`ratelimit:429:${tier}:${todayYmd}`),
+              redis.get(`ratelimit:429:${tier}:${yesterdayYmd}`),
+            ]);
+            const recent429 = (Number(todayRaw) || 0) + (Number(yesterdayRaw) || 0);
+            return { tier, max: cfg.max, windowSec: cfg.windowSec, recent429 };
+          }),
+        );
+
+        rateLimiter = { tiers };
+      } catch (err) {
+        log.warn({ err }, 'failed to compute rateLimiter block');
+        // rateLimiter stays null (degrade-open).
+      }
+
       res.json({
         audit24h,
         byBearer,
@@ -653,6 +713,7 @@ operatorStatusRouter.get(
         actorQuality,
         tokenBudget,
         trendHistory,
+        rateLimiter,
       });
     } catch (err) {
       log.error({ err }, '/api/operator-status failed');

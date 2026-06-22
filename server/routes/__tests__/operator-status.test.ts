@@ -1137,3 +1137,116 @@ describe('/api/operator-status — Phase 45 DASH-READ-05 trendHistory block', ()
     expect(res.body.trendHistory).toEqual([]);
   });
 });
+
+/**
+ * Phase 46 HARD-01 (D-01/D-02) — `/api/operator-status` rateLimiter block.
+ *
+ * The aggregator surfaces per-tier limit config (RATE_LIMITER_CONFIG closure
+ * mirror in rateLimit.ts) + recent 429 counts read from the
+ * ratelimit:429:{tier}:{YYYY-MM-DD} sidecars (today + yesterday, UTC).
+ *
+ *   rateLimiter: { tiers: Array<{ tier; max; windowSec; recent429 }> } | null
+ *
+ * Tests pin (a) the happy-path shape (every tier present, recent429 = today +
+ * yesterday) and (b) degrade-open → rateLimiter === null when the 429 read
+ * throws (mirrors the tokenBudget degrade-open precedent — T-39-03-D), route
+ * stays 200.
+ */
+describe('/api/operator-status — Phase 46 HARD-01 rateLimiter block', () => {
+  const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+  const ORIGINAL_DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
+  // Expected tier names (must match the rateLimiters table + RATE_LIMITER_CONFIG).
+  const EXPECTED_TIERS: Record<string, { max: number; windowSec: number }> = {
+    flights: { max: 120, windowSec: 60 },
+    ships: { max: 60, windowSec: 60 },
+    events: { max: 20, windowSec: 60 },
+    news: { max: 20, windowSec: 60 },
+    markets: { max: 30, windowSec: 60 },
+    weather: { max: 10, windowSec: 60 },
+    sites: { max: 10, windowSec: 60 },
+    sources: { max: 30, windowSec: 60 },
+    geocode: { max: 10, windowSec: 60 },
+    water: { max: 10, windowSec: 60 },
+    public: { max: 60, windowSec: 60 },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRedis.smembers.mockResolvedValue([]);
+    mockRedis.scan.mockResolvedValue([0, []]);
+    mockRedis.get.mockResolvedValue(null);
+    mockRedis.hgetall.mockResolvedValue(null);
+    mockRedis.lrange.mockResolvedValue([]);
+    mockCacheGetSafe.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+    process.env.DASHBOARD_PASSWORD = ORIGINAL_DASHBOARD_PASSWORD;
+  });
+
+  it('rateLimiter.tiers: present with every tier name + correct max/windowSec', async () => {
+    process.env.NODE_ENV = 'development';
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+
+    const rl = res.body.rateLimiter as {
+      tiers: Array<{ tier: string; max: number; windowSec: number; recent429: number }>;
+    };
+    expect(rl).not.toBeNull();
+    expect(Array.isArray(rl.tiers)).toBe(true);
+
+    const byTier = Object.fromEntries(rl.tiers.map((t) => [t.tier, t]));
+    expect(Object.keys(byTier).sort()).toEqual(Object.keys(EXPECTED_TIERS).sort());
+    for (const [tier, cfg] of Object.entries(EXPECTED_TIERS)) {
+      expect(byTier[tier].max).toBe(cfg.max);
+      expect(byTier[tier].windowSec).toBe(cfg.windowSec);
+      // No sidecar keys set → recent429 defaults to 0.
+      expect(byTier[tier].recent429).toBe(0);
+    }
+  });
+
+  it('rateLimiter.recent429: sums today + yesterday dated 429 counters per tier', async () => {
+    process.env.NODE_ENV = 'development';
+    const now = new Date();
+    const todayYmd = now.toISOString().slice(0, 10);
+    const yesterdayYmd = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    mockRedis.get.mockImplementation(async (key: string) => {
+      if (key === `ratelimit:429:flights:${todayYmd}`) return 7;
+      if (key === `ratelimit:429:flights:${yesterdayYmd}`) return 5;
+      if (key === `ratelimit:429:events:${todayYmd}`) return '3'; // string coercion path
+      return null;
+    });
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+
+    const rl = res.body.rateLimiter as {
+      tiers: Array<{ tier: string; recent429: number }>;
+    };
+    const byTier = Object.fromEntries(rl.tiers.map((t) => [t.tier, t]));
+    expect(byTier.flights.recent429).toBe(12); // 7 + 5
+    expect(byTier.events.recent429).toBe(3); // '3' coerced
+    expect(byTier.ships.recent429).toBe(0); // absent keys → 0
+  });
+
+  it('rateLimiter: degrade-open → null when a 429 read throws, route 200 (T-39-03-D)', async () => {
+    process.env.NODE_ENV = 'development';
+    // Throw ONLY for the ratelimit:429 reads so the block degrades to null
+    // without disturbing the prune block's URL_LIVENESS_COUNT_KEY read.
+    mockRedis.get.mockImplementation(async (key: string) => {
+      if (key.startsWith('ratelimit:429:')) throw new Error('Redis death');
+      return null;
+    });
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    // Per T-39-03-D: a Redis throw inside the block must not 500.
+    expect(res.status).toBe(200);
+    expect(res.body.rateLimiter).toBeNull();
+  });
+});
