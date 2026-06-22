@@ -101,6 +101,38 @@ export const FRESHNESS_THRESHOLDS_MS: Record<string, number> = {
 };
 
 /**
+ * Phase 46 HARD-02 (D-04) — Cron schedule + grace truth-table.
+ *
+ * Hardcoded source of truth for the 3 Vercel crons, mirroring the
+ * FRESHNESS_THRESHOLDS_MS table shape (D-04: no `vercel.json` parse, no
+ * external SaaS — the 3 crons are known/bounded so a static const is the
+ * honest, testable source of truth). Keyed by the cron SHORT-NAME (the same
+ * name used in the `cron:lastTick:<name>` Redis keys), NOT the
+ * `cronHealth/cronWarm/cronRefreshEvents` endpoint ids.
+ *
+ * Cron schedule (CLAUDE.md — 3 entries, well under the Pro 40-cron cap):
+ *   health         0 0 * * *   (daily 00:00 UTC — Redis ping + freshness + eval drift)
+ *   warm           0 12 * * *  (daily 12:00 UTC — Overpass sites + water pre-warm)
+ *   refresh-events 0 4 * * *   (daily 04:00 UTC — LLM v3 extraction)
+ *
+ * Each cron fires once per 24h, so expectedIntervalMs = 24h. graceMs = 4h is
+ * Claude's discretion within the D-04 2–6h band: it sits comfortably under
+ * the existing 26h FRESHNESS_THRESHOLDS_MS cron entries so `missed` fires
+ * strictly EARLIER than the 4-state `deriveStatus` ladder's `degraded`
+ * window — and satisfies the RESEARCH constraint graceMs < (2×threshold −
+ * interval) (= 2×26h − 24h = 28h), keeping the new signal consistent with
+ * (never contradicting) the existing freshness derivation.
+ */
+export const CRON_SCHEDULE_GRACE_MS: Record<
+  string,
+  { expectedIntervalMs: number; graceMs: number }
+> = {
+  health: { expectedIntervalMs: 24 * 60 * 60_000, graceMs: 4 * 60 * 60_000 }, // 0 0 * * *
+  warm: { expectedIntervalMs: 24 * 60 * 60_000, graceMs: 4 * 60 * 60_000 }, // 0 12 * * *
+  'refresh-events': { expectedIntervalMs: 24 * 60 * 60_000, graceMs: 4 * 60 * 60_000 }, // 0 4 * * *
+};
+
+/**
  * Per-endpoint reaction tier per CONTEXT D-26. Drives:
  *   - critical  → HealthBanner toast
  *   - non-critical → StatusDropdown HUD dot color
@@ -157,4 +189,37 @@ export function deriveStatus(
   if (freshnessMs <= thresholdMs) return 'healthy';
   if (freshnessMs <= 2 * thresholdMs) return 'degraded';
   return 'unhealthy';
+}
+
+/**
+ * Phase 46 HARD-02 (D-05/D-06) — Pure helper deriving the THREE-state cron
+ * run-state, layered ON TOP of the 4-state `deriveStatus` ladder (D-06 — this
+ * does NOT modify `deriveStatus` or its return). The result is surfaced as a
+ * SIBLING `missedRun` field on the cron endpoint rows of /api/health, NEVER as
+ * a `healthStatusEnum` value (Landmine 1/2, Pitfall 1: a `missed` status on the
+ * cron tier would flip prod-connectivity-audit.yml `okCron` and regress the
+ * LLM-RELI-07 milestone-close gate).
+ *
+ * Three-state semantics (D-05):
+ *   - 'unknown' — pre-first-tick: no lastTick observed (freshnessMs === null)
+ *     AND the cron has never fired (`!hasFiredYet`). Distinct from `missed`.
+ *   - 'missed'  — fired before but now silently stopped: freshnessMs === null
+ *     AND `hasFiredYet` (lastTick lost after a prior fire), OR the last tick is
+ *     stale past `expectedIntervalMs + graceMs`.
+ *   - 'healthy' — a tick landed within `expectedIntervalMs + graceMs`
+ *     (≤ boundary is healthy).
+ *
+ * Pure function: no Redis, no `Date.now()` — the caller passes a precomputed
+ * `freshnessMs` (from `probeCronTick`) so this never throws on the request path
+ * (T-46-02-03 DoS mitigation).
+ */
+export function deriveCronRunState(
+  freshnessMs: number | null,
+  expectedIntervalMs: number,
+  graceMs: number,
+  hasFiredYet: boolean,
+): 'unknown' | 'missed' | 'healthy' {
+  if (freshnessMs === null) return hasFiredYet ? 'missed' : 'unknown';
+  if (freshnessMs <= expectedIntervalMs + graceMs) return 'healthy';
+  return 'missed';
 }
