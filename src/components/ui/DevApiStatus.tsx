@@ -1244,6 +1244,15 @@ function DevApiStatusAllApisTab({
     // 45-01 omit it; `null` (or absent) on degrade-open. Interface-only here —
     // the sparkline render that consumes it lands in Plan 04.
     trendHistory?: TrendSample[] | null;
+    // Phase 46 HARD-01 (46-04) — per-tier rate-limiter config + recent HTTP-429
+    // counts, mirrored byte-for-byte from the 46-01 server `RateLimiterBlock`
+    // (server/routes/operator-status.ts: `tiers` array of
+    // `{ tier, max, windowSec, recent429 }`). Optional forward-compat (Phase 32
+    // D-10), same as `tokenBudget?:` / `trendHistory?:` above: older servers
+    // pre-dating Plan 46-01 omit it; `null` (or absent) on per-block
+    // degrade-open. NOT gated in `fetchOpStatus` — the render block self-hides
+    // to a muted placeholder when it is null/absent.
+    rateLimiter?: RateLimiterBlock | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
   // Phase 32 Plan 05 MEDIUM-03 — `fetchOpStatus` hoisted out of the
@@ -3698,6 +3707,25 @@ type TrendSample = {
     'refresh-events': number | null;
   };
   deadUrlCount: number;
+};
+
+/**
+ * Phase 46 HARD-01 (46-04) — per-tier rate-limiter telemetry mirrored from the
+ * 46-01 server block (`server/routes/operator-status.ts` RateLimiterBlock). The
+ * field names are byte-identical to the server shape pinned by
+ * `operator-status.test.ts`: each tier carries its `max`/`windowSec` limit
+ * config (from `RATE_LIMITER_CONFIG`) + a `recent429` count (today + yesterday
+ * UTC-dated `ratelimit:429:{tier}:{date}` sidecars, coerced `Number(raw) || 0`).
+ * Forward-compat optional on `OperatorStatus` (Phase 32 D-10) — `null` on the
+ * server's per-block degrade-open.
+ */
+type RateLimiterBlock = {
+  tiers: Array<{
+    tier: string;
+    max: number;
+    windowSec: number;
+    recent429: number;
+  }>;
 };
 
 /**
