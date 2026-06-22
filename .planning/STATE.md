@@ -6,14 +6,14 @@ current_phase: 46
 current_phase_name: General Hardening + Cron Watch Start
 status: executing
 stopped_at: Phase 46 UI-SPEC approved
-last_updated: "2026-06-22T19:45:58.262Z"
+last_updated: "2026-06-22T19:49:54.859Z"
 last_activity: 2026-06-22
 last_activity_desc: Phase 46 execution started
 progress:
   total_phases: 14
   completed_phases: 4
   total_plans: 20
-  completed_plans: 17
+  completed_plans: 18
   percent: 29
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 46 (General Hardening + Cron Watch Start) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Next: Phase 46 (General Hardening + Cron Watch Start) — discuss before planning
 Last activity: 2026-06-22 — Phase 46 execution started
@@ -499,6 +499,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 45 P5 | 6min | 3 tasks | 0 files |
 | Phase 46 P01 | 9 | 3 tasks | 7 files |
 | Phase 46 P02 | 12min | 2 tasks | 6 files |
+| Phase 46 P05 | 4 | 2 tasks | 3 files |
 
 ## Decisions
 
@@ -532,6 +533,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: 46-02: missedRun is a sibling field (cronRunStateEnum), never a healthStatusEnum value — protects prod-connectivity-audit okCron / LLM-RELI-07 gate
 - [Phase ?]: 46-02: cron graceMs = 4h (D-04 band), keeps missed strictly earlier than the 26h degraded window
 - [Phase ?]: 46-02: deriveCronRunState layered ON TOP of deriveStatus — 4-state ladder untouched (D-06)
+- [Phase ?]: 46-05: HARD-03 backfill — hydration-throw no-op + flag-stays-set proven for both flight-recorder hydrate helpers; net-new trendHistory degrade-open test (Phase-45 gap closed). Test-only, no runtime change.
 
 ## Operator Next Steps
 
@@ -539,6 +541,6 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 
 ## Session
 
-**Last session:** 2026-06-22T19:45:38.769Z
+**Last session:** 2026-06-22T19:49:20.684Z
 **Stopped at:** Phase 46 UI-SPEC approved
 **Resume file:** .planning/phases/46-general-hardening-cron-watch-start/46-UI-SPEC.md
