@@ -441,7 +441,19 @@ Plans:
 2. Cron first-tick and missed-run detection works — an in-app freshness check computed from `cron:lastTick:{name}` age vs schedule + grace is surfaced via `/api/health` (999.3), with no external SaaS dependency.
 3. The 7-day cron-stability watch is structured as a NON-BLOCKING, auto-reported observation with daily auto-captured results that do NOT gate milestone close — its early-close criteria are a logged decision (citing the v1.5 Phase 31 early-close precedent), not a silent repeat.
 4. The Phase 39/40 surfaces have Nyquist test-coverage backfill — flight recorder, budget block, and subtab consolidation paths are covered, including degrade-open fault-injection tests.
-   **Plans**: TBD
+
+**Plans:** 5 plans
+
+**Wave 1** _(parallel — disjoint files)_
+
+- [ ] 46-01-PLAN.md — HARD-01 server: 429 sidecar counter (degrade-open) + RATE_LIMITER_CONFIG export + operator-status `rateLimiter` block + OpenAPI + 999.1 Bearer-bypass proof + CLAUDE.md key [HARD-01]
+- [ ] 46-02-PLAN.md — HARD-02 server: `CRON_SCHEDULE_GRACE_MS` table + `deriveCronRunState` + `missedRun` SIBLING field on /api/health (status enum UNCHANGED — protects the LLM-RELI-07 okCron gate) [HARD-02]
+- [ ] 46-05-PLAN.md — HARD-03 Nyquist backfill: hydration-throw no-op (call+run history) + net-new `trendHistory.test.ts` degrade-open backfill (narrow named gaps only) [HARD-03]
+
+**Wave 2** _(after Wave 1 — see notes)_
+
+- [ ] 46-03-PLAN.md — CRON-WATCH-01: `cronWatch.ts` ring + daily `appendWatchSample` on the existing /api/cron/health + NON-BLOCKING WATCH artifact + CLAUDE.md key (Wave 2 only to serialize the shared CLAUDE.md append after 46-01) [CRON-WATCH-01]
+- [ ] 46-04-PLAN.md — HARD-01/02 dashboard: `rateLimiter` interface + two DevApiStatus blocks inside the frozen API-Health tabpanel (MISSED alarm badge) + sidecar-absent render coverage (after 46-01 + 46-02 server shapes) [HARD-01, HARD-02]
 
 ### Phase 47: ~100-User Load Test
 
