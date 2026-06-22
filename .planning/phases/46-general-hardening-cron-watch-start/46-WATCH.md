@@ -18,7 +18,7 @@
 daysObserved: 0 / daysTarget: 7
 ```
 
-- **Source of truth:** the `cron:watch:v2.0` bounded Redis ring (LPUSH+LTRIM
+- **Source of truth:** the `cron:watch:v2` bounded Redis ring (LPUSH+LTRIM
   14-cap, ~30d TTL), written once-daily by the EXISTING `/api/cron/health` run
   (`0 0 * * *`) via `server/lib/cronWatch.ts appendWatchSample` — **no new cron,
   no new endpoint, no manual daily step** (CONTEXT D-07).
@@ -41,7 +41,7 @@ bundle (`at5km / at20km / at100km`), `dlqCount`, `breakerTrips`, and a rolled-up
 
 ## Daily watch log
 
-Mirrors the `cron:watch:v2.0` ring rows newest-first. A missing day (no row for a
+Mirrors the `cron:watch:v2` ring rows newest-first. A missing day (no row for a
 calendar date) is itself the signal that the health cron did not fire that day —
 record it as an explicit gap rather than back-dating a row.
 
@@ -77,7 +77,7 @@ Until `decided: true` is recorded here with a Phase-31 citation, the default is 
 **run the full 7 days, auto-reported**. Because the watch is non-blocking, leaving
 it partial does **not** block any phase or milestone close — but the partiality is
 visible here and in the dated ring, which is the whole point: this artifact + the
-`cron:watch:v2.0` ring make a partial close **visibly partial** instead of a
+`cron:watch:v2` ring make a partial close **visibly partial** instead of a
 silent Day-1 close-with-caveat (the v1.5 Phase 31 outcome this corrects).
 
 ## Notes

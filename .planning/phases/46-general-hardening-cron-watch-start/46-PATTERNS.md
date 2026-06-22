@@ -84,7 +84,7 @@ res.json({ audit24h, byBearer, advEval, prune, actorQuality, tokenBudget, trendH
 ### Pattern D — Once-daily bounded ring (CRON-WATCH-01)
 
 **Source:** `server/lib/trendHistory.ts:82-108` (itself a "verbatim structural copy of llmRunHistory.ts")
-**Apply to:** `cronWatch.ts` `appendWatchSample`/`readWatchHistory` for key `cron:watch:v2.0` (cap 14, ~30d TTL)
+**Apply to:** `cronWatch.ts` `appendWatchSample`/`readWatchHistory` for key `cron:watch:v2` (cap 14, ~30d TTL)
 
 ```typescript
 // server/lib/trendHistory.ts:82-93 (appendTrendSample — copy, swap key/shape)

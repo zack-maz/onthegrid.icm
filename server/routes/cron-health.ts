@@ -200,7 +200,7 @@ cronHealthRouter.get('/', async (req, res) => {
   }
 
   // Phase 46 CRON-WATCH-01 (CONTEXT D-07/D-08/D-09) — append ONE daily watch
-  // sample to the bounded `cron:watch:v2.0` ring AFTER the trend-sample write,
+  // sample to the bounded `cron:watch:v2` ring AFTER the trend-sample write,
   // in its OWN try/catch (Pitfall 4 — a watch-write throw must NEVER degrade the
   // health-cron response; mirrors the trend/eval/adversarial try/catch posture).
   // It sits after the `cron:lastTick:health` write (:133) so that write is never

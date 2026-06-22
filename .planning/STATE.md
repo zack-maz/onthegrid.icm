@@ -536,7 +536,7 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: 46-02: cron graceMs = 4h (D-04 band), keeps missed strictly earlier than the 26h degraded window
 - [Phase ?]: 46-02: deriveCronRunState layered ON TOP of deriveStatus — 4-state ladder untouched (D-06)
 - [Phase ?]: 46-05: HARD-03 backfill — hydration-throw no-op + flag-stays-set proven for both flight-recorder hydrate helpers; net-new trendHistory degrade-open test (Phase-45 gap closed). Test-only, no runtime change.
-- [Phase ?]: cron:watch:v2.0 ring cap 14 / ~30d TTL piggybacks the existing 0 0 * * * health cron — no new cron/endpoint (CRON-WATCH-01 D-07)
+- [Phase ?]: cron:watch:v2 ring cap 14 / ~30d TTL piggybacks the existing 0 0 * * * health cron — no new cron/endpoint (CRON-WATCH-01 D-07)
 - [Phase ?]: CRON-WATCH-01 watch is NON-BLOCKING; 46-WATCH.md + dated ring make a partial close visibly partial; early close requires a Phase-31-citing operator decision (D-08)
 - [Phase ?]: 46-04: rate-limiter + cron-freshness operator blocks render inside the FROZEN API Health role=tabpanel (Phase 45 D-08); zero tablist DOM change
 - [Phase ?]: 46-04: cron badge driven by the /api/health missedRun SIBLING field, never the wire status enum (okCron audit-gate safety)

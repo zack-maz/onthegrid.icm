@@ -96,8 +96,8 @@ beforeEach(() => {
 });
 
 describe('cronWatch', () => {
-  it('exposes the cron:watch:v2.0 key, cap 14, ~30d TTL', () => {
-    expect(CRON_WATCH_KEY).toBe('cron:watch:v2.0');
+  it('exposes the cron:watch:v2 key, cap 14, ~30d TTL', () => {
+    expect(CRON_WATCH_KEY).toBe('cron:watch:v2');
     expect(CRON_WATCH_MAX).toBe(14);
     expect(CRON_WATCH_TTL_SEC).toBe(30 * 24 * 3600);
   });

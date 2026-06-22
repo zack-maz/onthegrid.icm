@@ -8,9 +8,9 @@ requires:
   - server/routes/cron-health.ts (existing 0 0 * * * health cron handler + computed cronAgeMs)
   - .planning/milestones/v1.5-phases/31-cron-stability-validation-7-day-watch/ (early-close precedent to cite)
 provides:
-  - 'server/lib/cronWatch.ts — appendWatchSample/readWatchHistory bounded ring (cron:watch:v2.0)'
+  - 'server/lib/cronWatch.ts — appendWatchSample/readWatchHistory bounded ring (cron:watch:v2)'
   - 'daily appendWatchSample call on /api/cron/health (own try/catch, degrade-open)'
-  - 'cron:watch:v2.0 Redis key (registered in CLAUDE.md)'
+  - 'cron:watch:v2 Redis key (registered in CLAUDE.md)'
   - '46-WATCH.md — NON-BLOCKING watch artifact with daysObserved/daysTarget + earlyClose-cites-Phase-31 contract'
 affects:
   - Phase 47 load test (the watch ring + cron-tick freshness corroborate cron survival)
@@ -32,7 +32,7 @@ key-files:
     - server/__tests__/routes/cron-health.test.ts
     - CLAUDE.md
 decisions:
-  - 'cron:watch:v2.0 cap 14 (7-day watch + one-week buffer, within the D-07 7-14 bound), ~30d TTL (trendHistory family)'
+  - 'cron:watch:v2 cap 14 (7-day watch + one-week buffer, within the D-07 7-14 bound), ~30d TTL (trendHistory family)'
   - 'cronAgeMs hoisted to outer scope in cron-health so the watch row REUSES the computed ages (no re-read of cron:lastTick)'
   - 'dlqCount/breakerTrips recorded as 0 — health handler does not read those keys; no new Redis reads added just for the watch row'
   - 'result = PASS iff redisOk AND eval bundle resolved cleanly (evalScore !== null && evalError === null) else FAIL'
@@ -48,7 +48,7 @@ status: complete
 
 # Phase 46 Plan 03: Cron Stability Watch Start (CRON-WATCH-01) Summary
 
-Started the NON-BLOCKING 7-day cron-stability watch by adding a `cron:watch:v2.0`
+Started the NON-BLOCKING 7-day cron-stability watch by adding a `cron:watch:v2`
 bounded Redis ring (verbatim structural copy of `trendHistory.ts`) that the
 EXISTING `/api/cron/health` `0 0 * * *` run auto-captures one daily sample into —
 no new cron, no new endpoint — with a human-readable `46-WATCH.md` artifact whose
@@ -60,7 +60,7 @@ correcting the v1.5 Phase 31 silent Day-1 early-close.
 **Task 1 — `cronWatch.ts` bounded ring + degrade-open tests (TDD)** (`12362d1`)
 
 - `server/lib/cronWatch.ts`: a verbatim structural copy of `trendHistory.ts`.
-  Exports `CRON_WATCH_KEY = 'cron:watch:v2.0'`, `CRON_WATCH_MAX = 14`,
+  Exports `CRON_WATCH_KEY = 'cron:watch:v2'`, `CRON_WATCH_MAX = 14`,
   `CRON_WATCH_TTL_SEC = 30*24*3600`. `WatchSample` modeled on the Phase 31
   `watch-log.json` row (`sampledAt`, `tickDate`, `cronAgeMs:{health,warm,'refresh-events':number|null}`,
   `eval:{at5km,at20km,at100km}`, `dlqCount`, `breakerTrips`, `result:'PASS'|'FAIL'`).
@@ -96,7 +96,7 @@ daysObservedAtClose:null, caveat:null`) permitting early close ONLY by an
   explicit operator decision that cites the v1.5 Phase 31 precedent and records
   the day-count + caveat. Notes the 7-day clock runs asynchronously through later
   phases (D-09) and that the ring + artifact make a partial close visibly partial.
-- `CLAUDE.md`: registered `cron:watch:v2.0` in the active Redis-key registry (cron
+- `CLAUDE.md`: registered `cron:watch:v2` in the active Redis-key registry (cron
   family, after `cron:lastTick:{name}`) — cap 14 / ~30d TTL, writer/reader,
   piggybacks the existing health cron, NON-BLOCKING framing.
 
@@ -125,7 +125,7 @@ instruction realized in code, not a deviation.
 
 - `npx vitest run server/lib/__tests__/cronWatch.test.ts server/__tests__/routes/cron-health.test.ts` → 12 passed.
 - `npx vitest run server/` → 121 files / 1493 tests passed.
-- `test -f 46-WATCH.md && grep daysObserved 46-WATCH.md && grep cron:watch:v2.0 CLAUDE.md` → OK.
+- `test -f 46-WATCH.md && grep daysObserved 46-WATCH.md && grep cron:watch:v2 CLAUDE.md` → OK.
 - NON-BLOCKING confirmed: NO Phase 46 verification depends on elapsed wall-clock days.
 
 ## Known Stubs

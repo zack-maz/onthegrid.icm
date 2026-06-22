@@ -38,7 +38,7 @@ Phase 46 is a **pure additive observability + test-backfill phase over code that
 
 **CRON-WATCH-01 — 7-day non-blocking watch**
 
-- **D-07:** Daily results auto-captured by piggybacking on the EXISTING `/api/cron/health` run (`0 0 * * *`), persisted to a bounded dated Redis ring (Phase 45 D-01 once-daily `LPUSH`+`LTRIM` idiom, e.g. `cron:watch:v2.0` capped 7–14) AND mirrored to a human-readable WATCH artifact in the phase directory. No new cron, no new endpoint, no manual daily step.
+- **D-07:** Daily results auto-captured by piggybacking on the EXISTING `/api/cron/health` run (`0 0 * * *`), persisted to a bounded dated Redis ring (Phase 45 D-01 once-daily `LPUSH`+`LTRIM` idiom, e.g. `cron:watch:v2` capped 7–14) AND mirrored to a human-readable WATCH artifact in the phase directory. No new cron, no new endpoint, no manual daily step.
 - **D-08:** Early-close is a LOGGED, explicit decision — never a silent repeat of v1.5 Phase 31. Watch is NON-BLOCKING: milestone close proceeds regardless of watch status. Default: run the full 7 days, auto-reported. Early-close permitted ONLY by explicit operator decision citing the v1.5 Phase 31 precedent and recording day-count + caveat in the watch artifact.
 - **D-09:** Watch starts in this phase but reports asynchronously through later phases. Phase 46 delivers the structure; the 7-day clock runs in the background and does not block Phase 46 close.
 
@@ -106,7 +106,7 @@ This phase adds **no new packages**. All tooling is already present and pinned.
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `server/cache/redis.ts` → `redis`, `cacheGetSafe`, `cacheSetSafe`     | Degrade-open cache helpers                                                             | `cacheSetSafe(key, val, ttlSec)` for the watch ring sample; raw `redis.incr`/`redis.expire` for the 429 counter (mirrors `replayQuota.ts`) |
 | `server/lib/healthSources.ts`                                         | `FRESHNESS_THRESHOLDS_MS`, `CRON_LASTTICK_TTL_SEC`, `deriveStatus`, `TIER_BY_ENDPOINT` | Home of the new schedule+grace table (D-04)                                                                                                |
-| `server/lib/trendHistory.ts` → `appendTrendSample`/`readTrendHistory` | The exact once-daily LPUSH+LTRIM+EXPIRE pipeline ring to copy for CRON-WATCH-01        | Structural template for `cron:watch:v2.0`                                                                                                  |
+| `server/lib/trendHistory.ts` → `appendTrendSample`/`readTrendHistory` | The exact once-daily LPUSH+LTRIM+EXPIRE pipeline ring to copy for CRON-WATCH-01        | Structural template for `cron:watch:v2`                                                                                                    |
 | `server/lib/replayQuota.ts` / `pruneQuota.ts`                         | INCR-then-EXPIRE-on-first-call idiom (`if (used === 1) await redis.expire(key, TTL)`)  | Exact template for the 429 per-day counter                                                                                                 |
 
 **Installation:** None. `npm install` adds nothing this phase.
@@ -157,7 +157,7 @@ HARD-02 (missed-run)
 CRON-WATCH-01 (daily capture)
   Vercel cron 0 0 * * * ──▶ /api/cron/health handler
        (after lastTick:health write + appendTrendSample)
-            └──▶ NEW: appendWatchSample() → LPUSH+LTRIM+EXPIRE cron:watch:v2.0 (cap 7–14, dated)
+            └──▶ NEW: appendWatchSample() → LPUSH+LTRIM+EXPIRE cron:watch:v2 (cap 7–14, dated)
                  + (manual/extract step) mirror to WATCH-<phase>.md artifact
 
 HARD-03 (tests only — no runtime path)
@@ -217,7 +217,7 @@ try {
 ### Pattern 4: Once-daily bounded ring (CRON-WATCH-01 — D-07)
 
 **What:** `redis.pipeline().lpush(key, JSON).ltrim(key, 0, MAX-1).expire(key, TTL).exec()` — one atomic round-trip; reader `lrange(key, 0, limit-1)` with dual-shape `parseEntry`; degrade-open (both sides try/catch → never throw / return `[]`).
-**When to use:** The `cron:watch:v2.0` daily capture ring.
+**When to use:** The `cron:watch:v2` daily capture ring.
 **Example:** `server/lib/trendHistory.ts:82-93` is a **verbatim structural template** (it itself is "a verbatim structural copy of `llmRunHistory.ts`"). Copy `appendTrendSample`/`readTrendHistory` and swap the key/shape. `[VERIFIED: codebase]`
 **Phase 45 WR-02 lesson:** use `.pipeline()` for atomic LPUSH+LTRIM+EXPIRE — a kill between `lpush` and `expire` previously left a no-TTL key; between `lpush` and `ltrim` left a transient 31-entry ring. The reader caps at `MAX-1` to keep the bound pinned regardless.
 
@@ -397,13 +397,13 @@ For the operator-status route tests, the existing file uses a `mockRedis` object
 
 > This is an additive observability phase, not a rename/refactor. No stored data, OS-registered state, or build artifacts change identity. Included for completeness per the verification protocol.
 
-| Category            | Items Found                                                                                                                                                                                           | Action Required                                                                                                                                                                    |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stored data         | NEW Redis keys only: `ratelimit:429:{tier}:{YYYY-MM-DD}` (48h TTL, self-expiring) and the watch ring (e.g. `cron:watch:v2.0`, bounded LPUSH+LTRIM, ~30d TTL). No existing key is renamed or migrated. | Register both new keys in CLAUDE.md Redis registry + `docs/architecture/redis-keys.md` (DOCS-CLEAN-01, Phase 49) — but ADD them to CLAUDE.md in-phase per the registry convention. |
-| Live service config | None — no vercel.json crons change (3 entries locked), no new cron, no env var added (D-04/D-09 "no new env-tunable surfaces").                                                                       | None.                                                                                                                                                                              |
-| OS-registered state | None.                                                                                                                                                                                                 | None — verified by the no-new-cron / no-vercel.json-change constraint.                                                                                                             |
-| Secrets/env vars    | None added. Reads existing `DASHBOARD_PASSWORD` (bypass), `CRON_SECRET` (cron-health gate) — neither renamed.                                                                                         | None.                                                                                                                                                                              |
-| Build artifacts     | None — no package rename, no new bundled file. The WATCH artifact is a committed doc in the phase dir, not a build output.                                                                            | None.                                                                                                                                                                              |
+| Category            | Items Found                                                                                                                                                                                         | Action Required                                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stored data         | NEW Redis keys only: `ratelimit:429:{tier}:{YYYY-MM-DD}` (48h TTL, self-expiring) and the watch ring (e.g. `cron:watch:v2`, bounded LPUSH+LTRIM, ~30d TTL). No existing key is renamed or migrated. | Register both new keys in CLAUDE.md Redis registry + `docs/architecture/redis-keys.md` (DOCS-CLEAN-01, Phase 49) — but ADD them to CLAUDE.md in-phase per the registry convention. |
+| Live service config | None — no vercel.json crons change (3 entries locked), no new cron, no env var added (D-04/D-09 "no new env-tunable surfaces").                                                                     | None.                                                                                                                                                                              |
+| OS-registered state | None.                                                                                                                                                                                               | None — verified by the no-new-cron / no-vercel.json-change constraint.                                                                                                             |
+| Secrets/env vars    | None added. Reads existing `DASHBOARD_PASSWORD` (bypass), `CRON_SECRET` (cron-health gate) — neither renamed.                                                                                       | None.                                                                                                                                                                              |
+| Build artifacts     | None — no package rename, no new bundled file. The WATCH artifact is a committed doc in the phase dir, not a build output.                                                                          | None.                                                                                                                                                                              |
 
 **Nothing found in 4 of 5 categories** — verified by the additive-only, no-new-cron/endpoint/env constraints in CONTEXT.md.
 

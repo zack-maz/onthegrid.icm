@@ -22,7 +22,7 @@
  * (`CRON_WATCH_TTL_SEC`), matching the `trendHistory` / `llm:runs:history`
  * retention family.
  *
- * Registry note: the Redis key is `cron:watch:v2.0` — a bounded LPUSH+LTRIM
+ * Registry note: the Redis key is `cron:watch:v2` — a bounded LPUSH+LTRIM
  * 14-cap / ~30d-TTL ring in the same family as `dashboard:trends:history` /
  * `llm:calls:history` / `llm:runs:history`. Registered in CLAUDE.md.
  */
@@ -34,7 +34,7 @@ import { logger } from './logger.js';
 const log = logger.child({ module: 'cron-watch' });
 
 /** Redis key for the cron-stability watch ring (LPUSH+LTRIM 14-cap, ~30d TTL). */
-export const CRON_WATCH_KEY = 'cron:watch:v2.0';
+export const CRON_WATCH_KEY = 'cron:watch:v2';
 /** CONTEXT D-07 — the 7-day watch + a one-week buffer (within the 7–14 bound). */
 export const CRON_WATCH_MAX = 14;
 /** ~30d TTL — matches the `dashboard:trends:history` / `llm:runs:history` family. */
