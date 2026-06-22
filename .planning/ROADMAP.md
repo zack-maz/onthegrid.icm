@@ -408,13 +408,13 @@ Plans:
 4. The redesign breaks nothing behavioral — the WAI-ARIA tablist contract (roving tabindex, tab ids) is frozen byte-stable, and the 5 pinning test suites (snapshot, tabMerge, diagnosticBlocks, operatorActions) plus degrade-open semantics stay green.
 5. The operator can see trends, not just point-in-time numbers — sparklines for dead-link count and cron freshness, backed by small history rings, catch slow-burn regressions.
 
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 
 Plans:
 **Wave 1** _(parallel — disjoint files: server ring vs new atom files)_
 
 - [x] 45-01-PLAN.md — Server-backed bounded Redis trend ring (D-01): once-daily append in the existing `/api/cron/health` + `trendHistory` field on `/api/operator-status` w/ OpenAPI + route-test + client-interface lockstep [DASH-READ-05]
-- [ ] 45-02-PLAN.md — Extract the two reused atoms (D-06/D-07): `MetricRow.tsx` (tabular-nums right-aligned row) + `Sparkline.tsx` (30-pt SVG line, neutral stroke + semantic last-point tint) w/ own unit tests [DASH-READ-01, DASH-READ-03]
+- [x] 45-02-PLAN.md — Extract the two reused atoms (D-06/D-07): `MetricRow.tsx` (tabular-nums right-aligned row) + `Sparkline.tsx` (30-pt SVG line, neutral stroke + semantic last-point tint) w/ own unit tests [DASH-READ-01, DASH-READ-03]
 
 **Wave 2** _(after 45-02)_
 
@@ -485,7 +485,7 @@ Plans:
 | 42    | Water Filter Fix                      | 3/3            | Complete    | 2026-06-10 |
 | 43    | Ghost Link Prune Correctness          | 5/5            | Complete    | 2026-06-10 |
 | 44    | Events Subtab Pipeline Detail         | 2/2            | Complete    | 2026-06-10 |
-| 45    | Dashboard Subtab Readability Redesign | 1/5            | In Progress |            |
+| 45    | Dashboard Subtab Readability Redesign | 2/5            | In Progress |            |
 | 46    | General Hardening + Cron Watch Start  | 0/TBD          | Not started | -          |
 | 47    | ~100-User Load Test                   | 0/TBD          | Not started | -          |
 | 48    | Load Remediation                      | 0/TBD          | Not started | -          |
