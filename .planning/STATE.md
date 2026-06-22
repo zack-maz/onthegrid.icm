@@ -2,15 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Final Hardening — 🚧 IN PROGRESS
-status: planning
-last_updated: "2026-06-22T02:46:34.000Z"
-last_activity: 2026-06-21
+current_phase: 46
+current_phase_name: General Hardening + Cron Watch Start
+status: "Phase 45 shipped — PR #44 (awaiting merge)"
+stopped_at: Phase 45 UI-SPEC approved
+last_updated: "2026-06-22T18:47:13.543Z"
+last_activity: 2026-06-22
 progress:
   total_phases: 14
-  completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
-  percent: 21
+  completed_phases: 4
+  total_plans: 15
+  completed_plans: 15
+  percent: 29
 ---
 
 # Project State
@@ -23,11 +26,11 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 44 (Events Subtab Pipeline Detail) — ✅ CLOSED (verified + shipped 2026-06-21)
-Plan: 2 of 2 complete
-Status: Verified (44-VERIFICATION.md); merged to `main` via PR #43; deployed to production. Folded in a dead-URL sidecar count drift hotfix (`reconcileDeadUrlCount` + authoritative prune/sweep reconcile) that fixed the operator "Prune" no-op — prod phantom `deadUrlCount` 202 → 0 confirmed live.
-Next: Phase 45 (Dashboard Subtab Readability Redesign) — not started
-Last activity: 2026-06-21
+Phase: 46 — General Hardening + Cron Watch Start
+Plan: Not started
+Status: Phase 45 shipped — PR #44 (awaiting merge)
+Next: Phase 46 (General Hardening + Cron Watch Start) — discuss before planning
+Last activity: 2026-06-22
 
 Progress: [██████████] 100%
 
@@ -488,6 +491,11 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 43 P05 | 9min | 2 tasks | 3 files |
 | Phase 44 P01 | 12min | 2 tasks | 4 files |
 | Phase 44 P02 | 11min | 3 tasks | 4 files |
+| Phase 45 P01 | 5min | 3 tasks | 7 files |
+| Phase 45 P02 | 151 | 2 tasks | 4 files |
+| Phase 45 P03 | 420 | 3 tasks | 3 files |
+| Phase 45 P04 | 4min | 3 tasks | 2 files |
+| Phase 45 P5 | 6min | 3 tasks | 0 files |
 
 ## Decisions
 
@@ -510,7 +518,21 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: (44-02, D-05/D-06) 7 v2 LLM blocks mounted presence-gated into production EventsFiltersSectionV3; BudgetBarsBlock self-hides under NIM-only (correct/honest); WaterfallBlock gated on stage != idle
 - [Phase ?]: (44-02, D-09/D-10) New DeadLinkBucketsBlock: authoritative deadUrlCount + sampled 'of N scanned' per-status buckets + drill-down rows with evidence-as-TEXT (T-44-04) + dead-streak attemptCount; self-hides on absent prune
 - [Phase ?]: (44-02, Rule 3) prune threaded via events-tab-scoped operator-status fetch in DevApiStatus (eventsPrune); canonical opStatus fetch lives in sibling DevApiStatusAllApisTab; mutually-exclusive tabs => no concurrent double fetch
+- [Phase ?]: Phase 45-01: TREND_HISTORY_KEY = 'dashboard:trends:history' (bounded LPUSH+LTRIM 30-cap, 30d TTL; Phase 49 registry sweep)
+- [Phase ?]: Phase 45-01: trendHistory degrades to [] (not null) on Redis failure because readTrendHistory is itself degrade-open
+- [Phase ?]: Phase 45-01: cronAgeMs is null (never fabricated 0) when a cron:lastTick key is absent — a stalled cron is a valid sparkline signal (D-02)
+- [Phase ?]: Phase 45 readability atoms MetricRow + Sparkline extracted to separate files (CONTEXT D-06/D-07); no-inline-hex + two-weight; not yet wired into DevApiStatus (Plans 03/04 compose them)
+- [Phase ?]: Phase 45-03: shared DisclosureSection helper (FlightRecorder idiom) reused across Water + Sites for visual parity; Plan 04 can reuse
+- [Phase ?]: Phase 45-03: per-type table defaults open; By Country + Rejections default collapsed (the raw dumps being tamed)
+- [Phase ?]: Plan 45-04: events trend sparklines thread opStatus.trendHistory off the existing events-scoped /api/operator-status poll (no new fetch); cron-stale threshold 30h, dead-link tint on a new high past prior peak
+- [Phase ?]: (45-05) DASH-READ-04 freeze PROVEN + DASH-READ-03 no-inline-hex CLOSED: 4 behavioral pins (60 tests) pass unmodified; only phase tab-token diff line is a JSDoc comment (zero JSX role/aria/tabIndex changed); deliberate snapshot -u regen = ZERO diff (byte-stable, scope=all-apis-tab body only); atom + new-DevApiStatus hex grep = 0; full-phase sweep 12 files/150 green; tsc exit 0.
 
 ## Operator Next Steps
 
 - Start the next milestone with /gsd-new-milestone
+
+## Session
+
+**Last session:** 2026-06-22T05:23:11.676Z
+**Stopped at:** Phase 45 UI-SPEC approved
+**Resume file:** .planning/phases/45-dashboard-subtab-readability-redesign/45-UI-SPEC.md

@@ -4,6 +4,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { useHealthStatusContext } from '@/components/providers/HealthStatusProvider';
 import { BudgetBlock, type TokenBudgetBlock } from '@/components/ui/BudgetBlock';
 import { FlightRecorderBlock } from '@/components/ui/FlightRecorderBlock';
+import { MetricRow } from '@/components/ui/MetricRow';
+import { Sparkline } from '@/components/ui/Sparkline';
 import { useLLMStatusPolling } from '@/hooks/useLLMStatusPolling';
 import type { LLMStatus, RecentEnrichedEvent } from '@/hooks/useLLMStatusPolling';
 import { effectiveStatus } from '@/lib/apiStatus';
@@ -682,9 +684,17 @@ export function DevApiStatus() {
   //      is checked before every setEventsPrune so a slow first response
   //      resolving after a faster interval tick cannot clobber newer data.
   const [eventsPrune, setEventsPrune] = useState<PruneSummary | null>(null);
+  // Phase 45 DASH-READ-05 (Plan 04) — the Plan-01 bounded dashboard:trends:history
+  // ring, surfaced as `trendHistory` on the SAME already-fetched /api/operator-status
+  // response. Threaded into EventsFiltersSectionV3 as the source for the four trend
+  // sparklines (cron freshness ×3 + dead-link count). NO new fetch (plan prohibition):
+  // it rides the existing events-scoped operator-status poll alongside `prune`, with
+  // the identical WR-02 out-of-order + degrade-open contract.
+  const [eventsTrend, setEventsTrend] = useState<TrendSample[] | null>(null);
   useEffect(() => {
     if (activeTab !== 'events' || !showEventsTab) {
       setEventsPrune(null);
+      setEventsTrend(null);
       return;
     }
     let cancelled = false;
@@ -699,14 +709,28 @@ export function DevApiStatus() {
         });
         if (!res.ok) {
           // Degrade-open (WR-02 §1) — non-200 nulls the state; block self-hides.
-          if (mayWrite()) setEventsPrune(null);
+          if (mayWrite()) {
+            setEventsPrune(null);
+            setEventsTrend(null);
+          }
           return;
         }
-        const data = (await res.json()) as { prune?: PruneSummary | null };
-        if (mayWrite()) setEventsPrune(data?.prune ?? null);
+        const data = (await res.json()) as {
+          prune?: PruneSummary | null;
+          trendHistory?: TrendSample[] | null;
+        };
+        if (mayWrite()) {
+          setEventsPrune(data?.prune ?? null);
+          // Forward-compat: absent on servers pre-dating Plan 45-01 → null →
+          // the trend block self-hides (degrade-open).
+          setEventsTrend(data?.trendHistory ?? null);
+        }
       } catch {
         // Degrade-open (WR-02 §1) — network failure nulls the state too.
-        if (mayWrite()) setEventsPrune(null);
+        if (mayWrite()) {
+          setEventsPrune(null);
+          setEventsTrend(null);
+        }
       }
     };
     void fetchPrune();
@@ -972,7 +996,11 @@ export function DevApiStatus() {
               {llmStatus?.schemaVersion === 'v2' ? (
                 <EventsFiltersSection llmStatus={llmStatus} />
               ) : (
-                <EventsFiltersSectionV3 llmStatus={llmStatus} prune={eventsPrune} />
+                <EventsFiltersSectionV3
+                  llmStatus={llmStatus}
+                  prune={eventsPrune}
+                  trendHistory={eventsTrend}
+                />
               )}
             </div>
           )}
@@ -1209,6 +1237,13 @@ function DevApiStatusAllApisTab({
     // absent) when the server has not shipped Plan 03 or the Redis read threw
     // (degrade-open) — BudgetBlock's render gate hides the block in that case.
     tokenBudget?: TokenBudgetBlock | null;
+    // Phase 45 DASH-READ-05 (CONTEXT D-01) — bounded dashboard:trends:history
+    // ring (up to 30 daily samples, newest-first) read through this aggregator.
+    // Backs the four trend sparklines (cron freshness ×3 + dead-link count).
+    // Optional forward-compat (Phase 32 D-10): older servers pre-dating Plan
+    // 45-01 omit it; `null` (or absent) on degrade-open. Interface-only here —
+    // the sparkline render that consumes it lands in Plan 04.
+    trendHistory?: TrendSample[] | null;
   }
   const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
   // Phase 32 Plan 05 MEDIUM-03 — `fetchOpStatus` hoisted out of the
@@ -2330,6 +2365,59 @@ function DevApiStatusAllApisTab({
  * per-type rejections → total rejections → enrichment → overpass health →
  * score histogram.
  */
+/**
+ * Phase 45 Plan 03 — progressive-disclosure drill-down (DASH-READ-02).
+ *
+ * Replicates the `FlightRecorderBlock` run→detail idiom exactly:
+ *   - clickable summary row (`flex cursor-pointer items-center gap-2 rounded
+ *     px-1 py-0.5 hover:bg-white/5`) with a `▸/▾` caret,
+ *   - local transient `useState` expansion (NOT uiStore/localStorage),
+ *   - inline L2 expansion with the `mt-1 ml-2 border-l border-white/10 pl-2`
+ *     indent.
+ *
+ * Standard WAI-ARIA disclosure: `aria-expanded` on the trigger flips on toggle,
+ * `aria-controls` points at the panel id. Lives entirely INSIDE the existing
+ * `role="tabpanel"` container — adds no tablist/tab-id DOM (DASH-READ-04 freeze).
+ * Color from the white/N ramp only — no inline hex (DASH-READ-03).
+ */
+function DisclosureSection({
+  title,
+  panelId,
+  defaultOpen = false,
+  testid,
+  children,
+}: {
+  title: string;
+  panelId: string;
+  defaultOpen?: boolean;
+  testid?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        data-testid={testid}
+        className="flex w-full cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-white/5 focus-visible:ring focus-visible:ring-white/20"
+      >
+        <span className="text-white/40">{open ? '▾' : '▸'}</span>
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+          {title}
+        </span>
+      </button>
+      {open && (
+        <div id={panelId} className="mt-1 ml-2 border-l border-white/10 pl-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WaterFiltersSection() {
   const filterStats = useWaterStore((s) => s.filterStats);
 
@@ -2341,10 +2429,10 @@ function WaterFiltersSection() {
   if (!filterStats) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Water Filters
         </span>
-        <div className="mt-0.5 text-[9px] italic text-white/40">loading filter stats…</div>
+        <div className="mt-0.5 text-[9px] italic text-white/30">loading filter stats…</div>
       </div>
     );
   }
@@ -2367,101 +2455,122 @@ function WaterFiltersSection() {
     )
     .slice(0, 12);
 
+  // Phase 45 Plan 03 (DASH-READ-01) — summed rejection buckets as a labeled
+  // Reason|Count table. Reason labels are human-readable; the underlying
+  // bucket keys are preserved as data-testid suffixes for the render pins.
+  const r = filterStats.rejections;
+  const rejectionRows: { key: string; label: string; count: number }[] = [
+    { key: 'excluded_location', label: 'Excluded location', count: r.excluded_location },
+    { key: 'excluded_turkey', label: 'Excluded turkey', count: r.excluded_turkey },
+    { key: 'not_notable', label: 'Not notable', count: r.not_notable },
+    { key: 'no_name', label: 'No name', count: r.no_name },
+    { key: 'no_resolved_name', label: 'No resolved name', count: r.no_resolved_name },
+    { key: 'duplicate', label: 'Duplicate', count: r.duplicate },
+    { key: 'low_score', label: 'Low score', count: r.low_score },
+    { key: 'no_city', label: 'No city', count: r.no_city },
+  ];
+  const totalRejected = rejectionRows.reduce((a, b) => a + b.count, 0);
+
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Water Filters
       </span>
 
-      {/* Phase 27.3.1 R-08 D-30 — provenance header */}
+      {/* Phase 27.3.1 R-08 D-30 — provenance header (strings verbatim, re-toned) */}
       <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Source:</span> {filterStats.source} ·{' '}
-        <span className="font-bold text-white/40">Generated:</span>{' '}
+        <span className="font-semibold text-white/40">Source:</span> {filterStats.source} ·{' '}
+        <span className="font-semibold text-white/40">Generated:</span>{' '}
         {relativeTime(filterStats.generatedAt)}
       </div>
 
-      {/* Raw vs filtered summary */}
+      {/* Phase 45 Plan 03 — primary metric: kept % at 13px/600 (one per block) */}
+      <div
+        className="mt-0.5 text-[13px] font-semibold tabular-nums text-white/80"
+        data-testid="water-primary-metric"
+      >
+        {keepPct}%
+      </div>
+
+      {/* Raw vs filtered summary (verbatim) */}
       <div className="mt-0.5 text-[9px] text-white/60">
         {totalRaw} raw → {totalKept} kept ({keepPct}%)
       </div>
 
-      {/* Per-type breakdown */}
-      <table className="mt-0.5 w-full text-[9px]">
-        <tbody>
-          {typeKeys.map((type) => (
-            <tr key={type}>
-              <td className="text-white/40">{type}</td>
-              <td className="text-right tabular-nums text-white/60">
-                {filterStats.filteredCounts[type] ?? 0} / {filterStats.rawCounts[type] ?? 0}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Phase 27.3.1 R-08 D-28 — per-country admission table */}
-      {byCountrySorted.length > 0 && (
-        <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
-            By Country
-          </div>
-          <table className="mt-0.5 w-full text-[9px]">
-            <tbody>
-              {byCountrySorted.map(([country, perType]) => (
-                <tr key={country}>
-                  <td className="text-white/40">{country}</td>
-                  <td className="text-right tabular-nums text-white/60">
-                    {Object.entries(perType)
-                      .map(([t, n]) => `${t}=${n}`)
-                      .join(' ')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Phase 27.3.1 R-08 D-31 — per-type rejection breakdown
-          Phase 27.3.1 Plan 10 (G2) — added `turkey=` bucket display. */}
-      {Object.keys(filterStats.byTypeRejections).length > 0 && (
-        <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
-            Rejections by Type
-          </div>
-          {Object.entries(filterStats.byTypeRejections).map(([type, buckets]) => (
-            <div key={type} className="text-[9px] text-white/60">
-              <span className="text-white/40">{type}:</span> excl={buckets.excluded_location}{' '}
-              turkey={buckets.excluded_turkey} nn={buckets.not_notable} nname={buckets.no_name}{' '}
-              nores={buckets.no_resolved_name} dup=
-              {buckets.duplicate} low={buckets.low_score} nocity={buckets.no_city}
-            </div>
-          ))}
-        </>
-      )}
-
-      {/* Total rejections (back-compat + quick-scan view).
-          Phase 27.3.1 Plan 10 (G2) — added `turkey=` summed bucket. */}
-      <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Total rejections:</span> excl=
-        {filterStats.rejections.excluded_location} turkey={filterStats.rejections.excluded_turkey}{' '}
-        nn={filterStats.rejections.not_notable} nname={filterStats.rejections.no_name} nores=
-        {filterStats.rejections.no_resolved_name} dup=
-        {filterStats.rejections.duplicate} low={filterStats.rejections.low_score} nocity=
-        {filterStats.rejections.no_city}
+      {/* Per-type breakdown — MetricRow Reason|Count (may default open) */}
+      <div className="mt-0.5 flex flex-col gap-0.5">
+        {typeKeys.map((type) => (
+          <MetricRow
+            key={type}
+            label={type}
+            value={`${filterStats.filteredCounts[type] ?? 0} / ${filterStats.rawCounts[type] ?? 0}`}
+            data-testid={`water-type-${type}`}
+          />
+        ))}
       </div>
 
+      {/* Phase 45 Plan 03 — rejection breakdown behind progressive disclosure */}
+      <DisclosureSection
+        title="Rejections by Type"
+        panelId="water-rejections-panel"
+        testid="water-rejections-toggle"
+      >
+        <MetricRow label="Total rejections" value={totalRejected} emphasized />
+        {rejectionRows.map((row) => (
+          <MetricRow
+            key={row.key}
+            label={row.label}
+            value={row.count}
+            data-testid={`water-rejection-${row.key}`}
+          />
+        ))}
+        {Object.entries(filterStats.byTypeRejections).map(([type, buckets]) => (
+          <div key={type} className="mt-1">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+              {type}
+            </div>
+            <MetricRow label="Excluded location" value={buckets.excluded_location} />
+            <MetricRow label="Excluded turkey" value={buckets.excluded_turkey} />
+            <MetricRow label="Not notable" value={buckets.not_notable} />
+            <MetricRow label="No name" value={buckets.no_name} />
+            <MetricRow label="No resolved name" value={buckets.no_resolved_name} />
+            <MetricRow label="Duplicate" value={buckets.duplicate} />
+            <MetricRow label="Low score" value={buckets.low_score} />
+            <MetricRow label="No city" value={buckets.no_city} />
+          </div>
+        ))}
+      </DisclosureSection>
+
+      {/* Phase 27.3.1 R-08 D-28 — per-country admission behind disclosure */}
+      {byCountrySorted.length > 0 && (
+        <DisclosureSection
+          title="By Country"
+          panelId="water-country-panel"
+          testid="water-country-toggle"
+        >
+          {byCountrySorted.map(([country, perType]) => (
+            <MetricRow
+              key={country}
+              label={country}
+              value={Object.entries(perType)
+                .map(([t, n]) => `${t}=${n}`)
+                .join(' ')}
+            />
+          ))}
+        </DisclosureSection>
+      )}
+
       {/* Enrichment coverage */}
-      <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Enriched:</span> cap=
-        {filterStats.enrichment.withCapacity} city={filterStats.enrichment.withCity} river=
-        {filterStats.enrichment.withRiver}
+      <div className="mt-0.5 flex flex-col gap-0.5">
+        <MetricRow label="Enriched · capacity" value={filterStats.enrichment.withCapacity} />
+        <MetricRow label="Enriched · city" value={filterStats.enrichment.withCity} />
+        <MetricRow label="Enriched · river" value={filterStats.enrichment.withRiver} />
       </div>
 
       {/* Phase 27.3.1 R-08 D-29 — Overpass health rows */}
       {filterStats.overpass.length > 0 && (
         <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
+          <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-white/40">
             Overpass Health
           </div>
           {filterStats.overpass.map((rec, i) => (
@@ -2475,7 +2584,7 @@ function WaterFiltersSection() {
 
       {/* Score histogram */}
       <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Scores:</span>{' '}
+        <span className="font-semibold text-white/40">Scores:</span>{' '}
         {filterStats.scoreHistogram.map((b) => `${b.bucket}:${b.count}`).join(' ')}
       </div>
     </div>
@@ -2510,10 +2619,10 @@ function SitesFiltersSection() {
   if (!filterStats) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Sites Filters
         </span>
-        <div className="mt-0.5 text-[9px] italic text-white/40">loading filter stats…</div>
+        <div className="mt-0.5 text-[9px] italic text-white/30">loading filter stats…</div>
       </div>
     );
   }
@@ -2534,78 +2643,98 @@ function SitesFiltersSection() {
     )
     .slice(0, 12);
 
+  // Phase 45 Plan 03 (DASH-READ-01) — 4-bucket rejection register as a labeled
+  // Reason|Count table. Honors the documented water/sites asymmetry: sites has
+  // exactly 4 buckets (no per-type split, no invented buckets — see JSDoc above).
+  const sr = filterStats.rejections;
+  const rejectionRows: { key: string; label: string; count: number }[] = [
+    { key: 'excluded_turkey', label: 'Excluded turkey', count: sr.excluded_turkey },
+    { key: 'no_coords', label: 'No coords', count: sr.no_coords },
+    { key: 'no_type', label: 'No type', count: sr.no_type },
+    { key: 'duplicate', label: 'Duplicate', count: sr.duplicate },
+  ];
+  const totalRejected = rejectionRows.reduce((a, b) => a + b.count, 0);
+
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Sites Filters
       </span>
 
-      {/* Phase 27.3.1 R-05 D-30 parity — provenance header */}
+      {/* Phase 27.3.1 R-05 D-30 parity — provenance header (strings verbatim, re-toned) */}
       <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Source:</span> {filterStats.source} ·{' '}
-        <span className="font-bold text-white/40">Generated:</span>{' '}
+        <span className="font-semibold text-white/40">Source:</span> {filterStats.source} ·{' '}
+        <span className="font-semibold text-white/40">Generated:</span>{' '}
         {relativeTime(filterStats.generatedAt)}
       </div>
 
-      {/* Raw vs filtered summary */}
+      {/* Phase 45 Plan 03 — primary metric: kept % at 13px/600 (one per block) */}
+      <div
+        className="mt-0.5 text-[13px] font-semibold tabular-nums text-white/80"
+        data-testid="sites-primary-metric"
+      >
+        {keepPct}%
+      </div>
+
+      {/* Raw vs filtered summary (verbatim) */}
       <div className="mt-0.5 text-[9px] text-white/60">
         {filterStats.rawCount} raw → {filterStats.filteredCount} kept ({keepPct}%)
       </div>
 
-      {/* Per-type breakdown */}
+      {/* Per-type breakdown — MetricRow (may default open) */}
       {typeEntries.length > 0 && (
         <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
+          <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-white/40">
             By Type
           </div>
-          <table className="mt-0.5 w-full text-[9px]">
-            <tbody>
-              {typeEntries.map(([type, count]) => (
-                <tr key={type}>
-                  <td className="text-white/40">{type}</td>
-                  <td className="text-right tabular-nums text-white/60">{count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Phase 27.3.1 R-05 D-28 parity — per-country admission table */}
-      {byCountrySorted.length > 0 && (
-        <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
-            By Country
+          <div className="mt-0.5 flex flex-col gap-0.5">
+            {typeEntries.map(([type, count]) => (
+              <MetricRow key={type} label={type} value={count} data-testid={`sites-type-${type}`} />
+            ))}
           </div>
-          <table className="mt-0.5 w-full text-[9px]">
-            <tbody>
-              {byCountrySorted.map(([country, perType]) => (
-                <tr key={country}>
-                  <td className="text-white/40">{country}</td>
-                  <td className="text-right tabular-nums text-white/60">
-                    {Object.entries(perType)
-                      .map(([t, n]) => `${t}=${n}`)
-                      .join(' ')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </>
       )}
 
-      {/* Rejections — 4 buckets only (sites adapter register; see JSDoc above) */}
-      <div className="mt-0.5 text-[9px] text-white/60">
-        <span className="font-bold text-white/40">Rejections:</span> turkey=
-        {filterStats.rejections.excluded_turkey} nocoords=
-        {filterStats.rejections.no_coords} notype={filterStats.rejections.no_type} dup=
-        {filterStats.rejections.duplicate}
-      </div>
+      {/* Phase 45 Plan 03 — rejection breakdown behind progressive disclosure */}
+      <DisclosureSection
+        title="Rejections"
+        panelId="sites-rejections-panel"
+        testid="sites-rejections-toggle"
+      >
+        <MetricRow label="Total rejections" value={totalRejected} emphasized />
+        {rejectionRows.map((row) => (
+          <MetricRow
+            key={row.key}
+            label={row.label}
+            value={row.count}
+            data-testid={`sites-rejection-${row.key}`}
+          />
+        ))}
+      </DisclosureSection>
+
+      {/* Phase 27.3.1 R-05 D-28 parity — per-country admission behind disclosure */}
+      {byCountrySorted.length > 0 && (
+        <DisclosureSection
+          title="By Country"
+          panelId="sites-country-panel"
+          testid="sites-country-toggle"
+        >
+          {byCountrySorted.map(([country, perType]) => (
+            <MetricRow
+              key={country}
+              label={country}
+              value={Object.entries(perType)
+                .map(([t, n]) => `${t}=${n}`)
+                .join(' ')}
+            />
+          ))}
+        </DisclosureSection>
+      )}
 
       {/* Phase 27.3.1 R-05 D-29 parity — Overpass health rows */}
       {filterStats.overpass.length > 0 && (
         <>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
+          <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-white/40">
             Overpass Health
           </div>
           {filterStats.overpass.map((rec, i) => (
@@ -2679,7 +2808,7 @@ function WaterfallBlock({ llmStatus }: { llmStatus: LLMStatus }) {
   ];
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Pipeline Waterfall
       </div>
       {stages.map((s) => (
@@ -2715,7 +2844,7 @@ function HistogramsBlock({
   const okCount = callHistory.filter((c) => c.ok).length;
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Provenance Distribution
       </div>
       {provEntries.length === 0 ? (
@@ -2888,7 +3017,7 @@ function DrillDownBlock({ llmStatus }: { llmStatus: LLMStatus }) {
   return (
     <div className="mt-2">
       <button
-        className="text-[9px] font-bold uppercase tracking-wider text-white/40 hover:text-white/80"
+        className="text-[9px] font-semibold uppercase tracking-wider text-white/40 hover:text-white/80"
         onClick={() => setExpanded((v) => !v)}
         data-testid="drill-down-expand"
       >
@@ -2913,7 +3042,7 @@ function CallLogBlock({ callHistory }: { callHistory: NonNullable<LLMStatus['cal
   if (callHistory.length === 0) {
     return (
       <div className="mt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           LLM Call Log (0)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No LLM calls yet.</div>
@@ -2922,7 +3051,7 @@ function CallLogBlock({ callHistory }: { callHistory: NonNullable<LLMStatus['cal
   }
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         LLM Call Log (last {callHistory.length})
       </div>
       <div className="mt-1 max-h-32 overflow-y-auto">
@@ -2975,7 +3104,7 @@ function BudgetBarsBlock({
   const GROQ_MAX = 200_000;
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Token Budget (daily)
       </div>
       <div className="mt-1 text-[9px]">
@@ -3022,7 +3151,7 @@ function EvalScoreBlock({ evalScore }: { evalScore: LLMStatus['evalScore'] }) {
       : null;
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Accuracy Eval (ground-truth {evalScore.total})
       </div>
       <div className="mt-0.5 text-[9px] text-white/60">
@@ -3070,7 +3199,7 @@ function DlqBlock({ entries }: { entries: NonNullable<LLMStatus['dlqRecent']> })
   }
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-red-400">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-red-400">
         DLQ ({entries.length})
       </div>
       <div className="mt-1 max-h-20 overflow-y-auto">
@@ -3102,7 +3231,7 @@ function DlqBlock({ entries }: { entries: NonNullable<LLMStatus['dlqRecent']> })
 function SuspectBlock({ count }: { count: number }) {
   return (
     <div className="mt-2 text-[9px]">
-      <span className="font-bold uppercase tracking-wider text-white/40">Suspect events: </span>
+      <span className="font-semibold uppercase tracking-wider text-white/40">Suspect events: </span>
       <span className={count > 0 ? 'tabular-nums text-amber-400' : 'tabular-nums text-white/60'}>
         {count}
       </span>
@@ -3129,7 +3258,7 @@ function RoutingTraceBlock({ trace }: { trace?: LLMStatus['routingTrace'] }) {
   if (rows.length === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Routing Trace (last 50)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No routing decisions yet.</div>
@@ -3138,7 +3267,7 @@ function RoutingTraceBlock({ trace }: { trace?: LLMStatus['routingTrace'] }) {
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Routing Trace (last 50)
       </div>
       <div className="mt-1 max-h-32 overflow-y-auto">
@@ -3185,7 +3314,7 @@ function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) 
   if (empty) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Latency (P50/P95/P99)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No LLM calls yet.</div>
@@ -3194,7 +3323,7 @@ function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) 
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Latency (P50/P95/P99)
       </div>
       {providers.map((p) => {
@@ -3213,7 +3342,7 @@ function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) 
                 <span className="text-amber-400">⚠ over watchdog warn (60s)</span>
               ) : null}
             </div>
-            <Sparkline points={stats.sparkline} />
+            <LatencySparkline points={stats.sparkline} />
           </div>
         );
       })}
@@ -3222,10 +3351,13 @@ function LatencyHistogramBlock({ latency }: { latency?: LLMStatus['latency'] }) 
 }
 
 /**
- * Phase 27.4.3 D-12 §2 — sparkline helper. Inline SVG polyline; min 2 points.
+ * Phase 27.4.3 D-12 §2 — LLM-latency sparkline helper. Inline SVG polyline; min 2 points.
  * Caller decides container height; this scales 0..max → full height.
+ * Renamed from `Sparkline` in Phase 45-04 to avoid colliding with the imported
+ * `Sparkline` readability atom (src/components/ui/Sparkline.tsx). This local helper
+ * stays dedicated to the LLM Latency (P50/P95/P99) widget and keeps its exact look.
  */
-function Sparkline({ points }: { points: number[] }) {
+function LatencySparkline({ points }: { points: number[] }) {
   if (points.length < 2) return null;
   const max = Math.max(...points, 1);
   const xStep = 100 / (points.length - 1);
@@ -3249,7 +3381,7 @@ function RateLimitHeadroomBlock({ rateLimit }: { rateLimit?: LLMStatus['rateLimi
   if (providers.length === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Rate-Limit Headroom
         </div>
         <div className="mt-1 text-[9px] text-white/40">No requests this window.</div>
@@ -3258,7 +3390,7 @@ function RateLimitHeadroomBlock({ rateLimit }: { rateLimit?: LLMStatus['rateLimi
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Rate-Limit Headroom
       </div>
       {providers.map((p) => {
@@ -3313,7 +3445,7 @@ function SchemaStrictFailureBlock({
   if (totalAcrossAll === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Schema-Strict Failure Rate
         </div>
         <div className="mt-1 text-[9px] text-white/40">No schema rejections.</div>
@@ -3323,7 +3455,7 @@ function SchemaStrictFailureBlock({
   const totalCalls = (callHistory ?? []).length;
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Schema-Strict Failure Rate
       </div>
       {providers.map((p) => {
@@ -3358,7 +3490,7 @@ function ErrorTaxonomyBlock({ taxonomy }: { taxonomy?: LLMStatus['errorTaxonomy'
   if (totalAcrossAll === 0) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           Error Taxonomy (today UTC)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No errors today.</div>
@@ -3367,7 +3499,7 @@ function ErrorTaxonomyBlock({ taxonomy }: { taxonomy?: LLMStatus['errorTaxonomy'
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Error Taxonomy (today UTC)
       </div>
       {providers.map((p) => {
@@ -3415,7 +3547,7 @@ function CostShadowBlock({ cost }: { cost?: LLMStatus['costShadow'] }) {
   if (!c || (c.tokensIn === 0 && c.tokensOut === 0)) {
     return (
       <div className="mt-2 border-t border-white/10 pt-2">
-        <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
           v3 Cost Shadow (last 24h)
         </div>
         <div className="mt-1 text-[9px] text-white/40">No tokens billed this window.</div>
@@ -3424,7 +3556,7 @@ function CostShadowBlock({ cost }: { cost?: LLMStatus['costShadow'] }) {
   }
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         v3 Cost Shadow (last 24h)
       </div>
       <div className="mt-1 text-[9px] tabular-nums text-white/80">
@@ -3476,7 +3608,7 @@ function EventsFiltersSection({ llmStatus }: EventsFiltersSectionProps) {
 
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
         Events Pipeline (v2)
       </span>
       <div className="mt-0.5 text-[9px] text-white/60">
@@ -3548,9 +3680,30 @@ type PruneSummary = {
 };
 
 /**
+ * Phase 45 DASH-READ-05 (CONTEXT D-01) — one daily trend sample mirrored from
+ * the server's `server/lib/trendHistory.ts` TrendSample shape. Backs the four
+ * dashboard trend sparklines (cron freshness ×3 + dead-link count). `cronAgeMs`
+ * is the per-cron freshness age (ms) at sample time; `null` means the cron's
+ * lastTick key was absent (degrade-open — a stalled cron reads as null/stale,
+ * NOT a fabricated 0).
+ *
+ * Interface/type ONLY at this point (Phase 45 Plan 01 contract lockstep) — the
+ * sparkline mount that consumes it is Plan 04. Forward-compat per Phase 32 D-10.
+ */
+type TrendSample = {
+  sampledAt: string;
+  cronAgeMs: {
+    health: number | null;
+    warm: number | null;
+    'refresh-events': number | null;
+  };
+  deadUrlCount: number;
+};
+
+/**
  * Phase 44 (D-09 / EVENTS-TAB-02) — per-liveness-status dead-link state for the
  * events subtab. Follows the verbatim DlqBlock/SuspectBlock block idiom (D-13):
- * `text-[9px]`, `font-bold uppercase tracking-wider text-white/40` header,
+ * `text-[9px]`, `font-semibold uppercase tracking-wider text-white/40` header,
  * `tabular-nums`, `max-h-32 overflow-y-auto` scroll list. Threaded the already-
  * fetched `opStatus.prune` down as a prop (D-10) — NO second fetch.
  *
@@ -3579,7 +3732,9 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
   const sample = prune.deadUrlSample ?? [];
   return (
     <div className="mt-2">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-white/40">Dead Links</div>
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+        Dead Links
+      </div>
       {/* Authoritative total (sidecar) — NOT the summed buckets (D-03). */}
       <div className="mt-1 text-[9px] text-white/60" data-testid="dead-link-authoritative-total">
         Dead URL events: <span className="tabular-nums text-white/80">{prune.deadUrlCount}</span>
@@ -3603,7 +3758,7 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
               data-testid={`dead-link-bucket-${status}`}
             >
               <span
-                className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                className={`rounded px-1 text-[9px] font-semibold uppercase tracking-wider ${
                   DEAD_LINK_STATUS_COLORS[status] ?? 'text-white/60'
                 }`}
               >
@@ -3622,7 +3777,7 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
           {sample.map((entry) => (
             <div key={entry.eventId} className="flex items-center gap-1 text-[9px] text-white/60">
               <span
-                className={`rounded px-1 text-[9px] font-bold uppercase tracking-wider ${
+                className={`rounded px-1 text-[9px] font-semibold uppercase tracking-wider ${
                   DEAD_LINK_STATUS_COLORS[entry.status] ?? 'text-white/60'
                 }`}
               >
@@ -3647,6 +3802,158 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Phase 45 DASH-READ-05 (Plan 04, CONTEXT D-02/D-04/D-05) — the four trend wells
+ * for the events subtab. Reads the Plan-01 `dashboard:trends:history` ring threaded
+ * down as `trendHistory` (newest-first, ≤30 daily samples) — NO new fetch. Renders
+ * 4 labeled wells: 3 per-cron freshness (health / warm / refresh-events) + 1
+ * dead-link count, each with the CURRENT value as a 13px/600 primary metric (left)
+ * beside a Plan-02 `<Sparkline>` (right).
+ *
+ * Degrade-open (T-45-10):
+ *   - `trendHistory` null/absent/empty → the whole block self-hides (no fabricated
+ *     zeros, no false-healthy flatline).
+ *   - A series with < 2 points → the Sparkline returns null and the well shows only
+ *     the bare current value.
+ *
+ * Series orientation: trendHistory is newest-first; Sparkline expects oldest→newest,
+ * so each derived series is reversed.
+ *
+ * Degradation thresholds for the D-05 semantic last-point tint (CONTEXT discretion,
+ * recorded in the Plan-04 SUMMARY):
+ *   - Cron freshness: stale when the latest age > 30h (108_000_000 ms) — every cron
+ *     is daily (health 0 0, warm 0 12, refresh-events 0 4), so 24h schedule + 6h
+ *     grace. A null age (cron lastTick absent) is treated as 0 in the line (it cannot
+ *     fabricate a healthy value — null reads as the floor, and the AGE metric beside
+ *     it shows "—"); the tint is driven only by a real measured age crossing 30h.
+ *   - Dead-link count: degraded when the latest sample is a NEW HIGH — threshold =
+ *     the max of all prior points, thresholdDirection "above". A rising count past
+ *     its prior peak tints the "now" point.
+ *
+ * Color discipline (DASH-READ-03): the tint resolves through the @theme token
+ * `var(--color-status-degraded)` (the Sparkline default) — zero inline hex.
+ */
+const CRON_STALE_MS = 108_000_000; // 30h = daily 24h schedule + 6h grace.
+
+function formatCronAge(ms: number | null): string {
+  if (ms == null) return '—';
+  const h = ms / 3_600_000;
+  if (h >= 1) return `${h.toFixed(1)}h`;
+  const m = ms / 60_000;
+  return `${Math.round(m)}m`;
+}
+
+function TrendWell({
+  label,
+  series,
+  currentDisplay,
+  threshold,
+  thresholdDirection,
+  forceDegraded,
+  testid,
+}: {
+  label: string;
+  series: number[];
+  currentDisplay: string;
+  threshold?: number;
+  thresholdDirection?: 'above' | 'below';
+  forceDegraded?: boolean;
+  testid: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1" data-testid={testid}>
+      <span className="text-[9px] uppercase tracking-wider text-white/40">{label}</span>
+      <div className="flex items-center gap-2">
+        <span
+          className="text-[13px] font-semibold tabular-nums text-white/80"
+          data-testid={`${testid}-value`}
+        >
+          {currentDisplay}
+        </span>
+        <div className="min-w-0 flex-1">
+          <Sparkline
+            points={series}
+            threshold={threshold}
+            thresholdDirection={thresholdDirection}
+            forceDegraded={forceDegraded}
+            data-testid={`${testid}-spark`}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrendBlock({ trendHistory }: { trendHistory?: TrendSample[] | null }) {
+  // Degrade-open: self-hide when the ring is absent/empty (no fabricated zeros).
+  if (trendHistory == null || trendHistory.length === 0) return null;
+
+  // Ring is newest-first; Sparkline wants oldest→newest.
+  const chrono = [...trendHistory].reverse();
+  const latest = trendHistory[0];
+
+  // Per-cron freshness series (null age → 0 in the line; the AGE metric shows "—").
+  const cronSeries = (name: 'health' | 'warm' | 'refresh-events'): number[] =>
+    chrono.map((s) => s.cronAgeMs[name] ?? 0);
+  const deadSeries = chrono.map((s) => s.deadUrlCount);
+
+  // WR-01: a `null` latest cron age means the cron's lastTick key was absent —
+  // the cron is dead/never-ran, the single MOST degraded state. The series maps
+  // that null to the `0` floor (freshest-looking), so the numeric threshold can
+  // never fire. Force the marker into the degraded tint when the latest age is
+  // null so a dead cron reads as degraded at a glance (the AGE text already
+  // shows "—"). Driven off the latest sample, not distorting the auto-scale.
+  const cronLatestNull = (name: 'health' | 'warm' | 'refresh-events'): boolean =>
+    latest.cronAgeMs[name] == null;
+
+  // Dead-link tint threshold: a NEW HIGH past the prior peak (rising = degraded).
+  const priorDead = deadSeries.slice(0, -1);
+  const deadThreshold = priorDead.length > 0 ? Math.max(...priorDead) : undefined;
+
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2" data-testid="events-trend-block">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Trends</div>
+      <div className="mt-1 grid grid-cols-2 gap-2">
+        <TrendWell
+          label="CRON · HEALTH"
+          series={cronSeries('health')}
+          currentDisplay={formatCronAge(latest.cronAgeMs.health)}
+          threshold={CRON_STALE_MS}
+          thresholdDirection="above"
+          forceDegraded={cronLatestNull('health')}
+          testid="trend-cron-health"
+        />
+        <TrendWell
+          label="CRON · WARM"
+          series={cronSeries('warm')}
+          currentDisplay={formatCronAge(latest.cronAgeMs.warm)}
+          threshold={CRON_STALE_MS}
+          thresholdDirection="above"
+          forceDegraded={cronLatestNull('warm')}
+          testid="trend-cron-warm"
+        />
+        <TrendWell
+          label="CRON · REFRESH"
+          series={cronSeries('refresh-events')}
+          currentDisplay={formatCronAge(latest.cronAgeMs['refresh-events'])}
+          threshold={CRON_STALE_MS}
+          thresholdDirection="above"
+          forceDegraded={cronLatestNull('refresh-events')}
+          testid="trend-cron-refresh"
+        />
+        <TrendWell
+          label="DEAD LINKS · 30d"
+          series={deadSeries}
+          currentDisplay={String(latest.deadUrlCount)}
+          threshold={deadThreshold}
+          thresholdDirection="above"
+          testid="trend-dead-links"
+        />
+      </div>
     </div>
   );
 }
@@ -3677,15 +3984,25 @@ function DeadLinkBucketsBlock({ prune }: { prune: PruneSummary }) {
 function EventsFiltersSectionV3({
   llmStatus,
   prune,
+  trendHistory,
 }: {
   llmStatus: LLMStatus;
   prune?: PruneSummary | null;
+  // Phase 45 DASH-READ-05 (Plan 04) — the already-fetched dashboard:trends:history
+  // ring, threaded from the parent operator-status fetch (no new fetch). Feeds the
+  // four trend wells; self-hides when absent (degrade-open / forward-compat).
+  trendHistory?: TrendSample[] | null;
 }) {
   return (
     <section className="mt-2 border-t border-white/10 pt-2">
       <div className="text-[9px] text-white/60">
         Schema: v3 · Stage: {llmStatus.stage ?? 'idle'}
       </div>
+      {/* Phase 45 DASH-READ-05 — trend half: 4 sparkline wells (cron freshness ×3
+          + dead-link count) read from opStatus.trendHistory. Self-hides when the
+          ring is absent. Sits at the top of the dense block stack so the operator
+          sees slow-burn trends before drilling into point-in-time blocks. */}
+      <TrendBlock trendHistory={trendHistory} />
       <RoutingTraceBlock trace={llmStatus.routingTrace} />
       <LatencyHistogramBlock latency={llmStatus.latency} />
       <RateLimitHeadroomBlock rateLimit={llmStatus.rateLimit} />
@@ -3789,7 +4106,7 @@ function PrewarmCell({ llmStatus }: { llmStatus: LLMStatus }) {
   const rel = tsRaw ? relativeTime(new Date(tsRaw).toISOString()) : '—';
   return (
     <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
-      <span className="font-bold uppercase tracking-wider text-white/40">Prewarm (D-21)</span>
+      <span className="font-semibold uppercase tracking-wider text-white/40">Prewarm (D-21)</span>
       <span className="text-white/80">{count} fired</span>
       <span className={stateColor}>({state})</span>
       <span className="text-white/40">last: {rel}</span>
@@ -3808,7 +4125,7 @@ function AdaptiveBatchCell({ llmStatus }: { llmStatus: LLMStatus }) {
   );
   return (
     <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
-      <span className="font-bold uppercase tracking-wider text-white/40">
+      <span className="font-semibold uppercase tracking-wider text-white/40">
         Adaptive batch (D-04)
       </span>
       {enabledBadge}
@@ -3835,7 +4152,7 @@ function LineagePrefilterCell({ llmStatus }: { llmStatus: LLMStatus }) {
   );
   return (
     <div className="mt-2 flex items-baseline gap-2 text-[9px] text-white/60">
-      <span className="font-bold uppercase tracking-wider text-white/40">
+      <span className="font-semibold uppercase tracking-wider text-white/40">
         Lineage prefilter (D-18)
       </span>
       {enabledBadge}

@@ -33,6 +33,7 @@ import {
   SOFT_CAP_RATIO,
 } from '../lib/llmTokenBudget.js';
 import { logger } from '../lib/logger.js';
+import { readTrendHistory, type TrendSample } from '../lib/trendHistory.js';
 import {
   isTerminalDead,
   URL_LIVENESS_COUNT_KEY,
@@ -625,7 +626,34 @@ operatorStatusRouter.get(
         // tokenBudget stays null (degrade-open — T-39-03-D).
       }
 
-      res.json({ audit24h, byBearer, advEval, prune, actorQuality, tokenBudget });
+      // ===== Phase 45 DASH-READ-05 — trendHistory block (CONTEXT D-01) =====
+      //
+      // Reads the bounded `dashboard:trends:history` ring (LPUSH+LTRIM 30-cap,
+      // 30d TTL) written once-daily by the EXISTING `/api/cron/health` handler.
+      // Backs the four dashboard trend sparklines (cron freshness ×3 + dead-link
+      // count). Forward-compat optional field per Phase 32 D-10.
+      //
+      // Degrade-open contract (mirrors tokenBudget VERBATIM — T-39-03-D): any
+      // Redis throw inside readTrendHistory is already swallowed there (returns
+      // []), but the per-block try/catch here also leaves `trendHistory = null`
+      // on any unexpected throw so it NEVER bubbles to the outer 500 handler.
+      let trendHistory: TrendSample[] | null = null;
+      try {
+        trendHistory = await readTrendHistory();
+      } catch (err) {
+        log.warn({ err }, 'failed to read trendHistory ring');
+        // trendHistory stays null (degrade-open).
+      }
+
+      res.json({
+        audit24h,
+        byBearer,
+        advEval,
+        prune,
+        actorQuality,
+        tokenBudget,
+        trendHistory,
+      });
     } catch (err) {
       log.error({ err }, '/api/operator-status failed');
       res.status(500).json({ error: 'operator_status_failed' });

@@ -29,6 +29,8 @@ const mockRedis = {
   get: vi.fn(),
   scan: vi.fn(),
   hgetall: vi.fn(),
+  // Phase 45 DASH-READ-05 — `readTrendHistory` LRANGEs the trend ring.
+  lrange: vi.fn(),
 };
 const mockCacheGetSafe = vi.fn();
 vi.mock('../../cache/redis.js', () => ({
@@ -1031,5 +1033,107 @@ describe('/api/operator-status — Phase 39 Plan 03 tokenBudget block (BUDGET-03
     // Per T-39-03-D: a Redis throw inside the block must not 500.
     expect(res.status).toBe(200);
     expect(res.body.tokenBudget).toBeNull();
+  });
+});
+
+/**
+ * Phase 45 DASH-READ-05 — `/api/operator-status` trendHistory block (CONTEXT D-01).
+ *
+ * The aggregator surfaces the bounded `dashboard:trends:history` ring
+ * (LPUSH+LTRIM 30-cap, 30d TTL) written once-daily by the existing
+ * `/api/cron/health` handler, so the dashboard's four trend sparklines (cron
+ * freshness ×3 + dead-link count) read from one already-fetched Bearer-gated
+ * aggregator call (Phase 44 D-01 thread; Phase 32 D-10 forward-compat optional).
+ *
+ *   trendHistory: Array<{
+ *     sampledAt: string;
+ *     cronAgeMs: { health: number|null; warm: number|null; 'refresh-events': number|null };
+ *     deadUrlCount: number;
+ *   }> | null
+ *
+ * Tests pin (a) the array shape on success (newest-first, full sample fields)
+ * and (b) degrade-open → trendHistory === null when the ring LRANGE throws
+ * (mirrors the tokenBudget degrade-open precedent).
+ */
+describe('/api/operator-status — Phase 45 DASH-READ-05 trendHistory block', () => {
+  const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+  const ORIGINAL_DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRedis.smembers.mockResolvedValue([]);
+    mockRedis.scan.mockResolvedValue([0, []]);
+    mockRedis.get.mockResolvedValue(null);
+    mockRedis.hgetall.mockResolvedValue(null);
+    mockCacheGetSafe.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+    process.env.DASHBOARD_PASSWORD = ORIGINAL_DASHBOARD_PASSWORD;
+  });
+
+  it('trendHistory: returns the ring as a newest-first array with full sample shape', async () => {
+    process.env.NODE_ENV = 'development';
+    const samples = [
+      {
+        sampledAt: '2026-06-22T00:00:00.000Z',
+        cronAgeMs: { health: 1000, warm: 2000, 'refresh-events': null },
+        deadUrlCount: 3,
+      },
+      {
+        sampledAt: '2026-06-21T00:00:00.000Z',
+        cronAgeMs: { health: 4000, warm: 5000, 'refresh-events': 6000 },
+        deadUrlCount: 2,
+      },
+    ];
+    // readTrendHistory LRANGEs the ring; head is newest. Mixed Upstash shapes:
+    // raw-string + already-deserialized object both parse.
+    mockRedis.lrange.mockResolvedValue([JSON.stringify(samples[0]), samples[1]]);
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+
+    const trend = res.body.trendHistory as Array<{
+      sampledAt: string;
+      cronAgeMs: { health: number | null; warm: number | null; 'refresh-events': number | null };
+      deadUrlCount: number;
+    }>;
+    expect(Array.isArray(trend)).toBe(true);
+    expect(trend).toHaveLength(2);
+    // Newest at head.
+    expect(trend[0].sampledAt).toBe('2026-06-22T00:00:00.000Z');
+    expect(trend[0].cronAgeMs.health).toBe(1000);
+    // Absent-cron null survives (degrade-open, not fabricated 0).
+    expect(trend[0].cronAgeMs['refresh-events']).toBeNull();
+    expect(trend[0].deadUrlCount).toBe(3);
+    expect(trend[1].sampledAt).toBe('2026-06-21T00:00:00.000Z');
+    expect(trend[1].deadUrlCount).toBe(2);
+  });
+
+  it('trendHistory: empty ring returns [] (collecting / cold start), route 200', async () => {
+    process.env.NODE_ENV = 'development';
+    mockRedis.lrange.mockResolvedValue([]);
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+    expect(res.body.trendHistory).toEqual([]);
+  });
+
+  it('trendHistory: degrade-open → [] when the ring LRANGE throws (readTrendHistory swallows), route 200', async () => {
+    process.env.NODE_ENV = 'development';
+    // readTrendHistory's own try/catch swallows the throw and returns []; the
+    // route block stays degrade-open and never 500s.
+    mockRedis.lrange.mockRejectedValue(new Error('Redis death'));
+
+    const app = makeApp();
+    const res = await request(app).get('/api/operator-status');
+    expect(res.status).toBe(200);
+    // The route declares `trendHistory: TrendSample[] | null = null` and assigns
+    // the readTrendHistory result; the helper degrades to [] internally, so the
+    // surfaced value is [] (still non-throwing, still 200 — degrade-open intact).
+    expect(res.body.trendHistory).toEqual([]);
   });
 });

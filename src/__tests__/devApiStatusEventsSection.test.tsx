@@ -458,3 +458,190 @@ describe('EventsFiltersSection (Phase 27.4 Plan 09)', () => {
     expect(screen.getByTestId('flight-recorder-placeholder')).toBeInTheDocument();
   });
 });
+
+// ── Phase 45 DASH-READ-05 (Plan 04) — the four trend sparkline wells in the
+//    events subtab. These are RENDER pins (evolve in lockstep with the
+//    intentional UI change, NOT a frozen behavioral pin). They assert the four
+//    wells render from a ≥2-point opStatus.trendHistory and that the block
+//    degrades open (self-hides) when trendHistory is absent — UI-SPEC §Regression
+//    -Lock assertion 6 (sparklines render once ring ≥2, self-hide below) + 7
+//    (degrade-open). The trend ring rides the already-fetched /api/operator-status
+//    response (no new fetch), so these stub fetch to thread trendHistory down.
+
+type TrendSampleFixture = {
+  sampledAt: string;
+  cronAgeMs: { health: number | null; warm: number | null; 'refresh-events': number | null };
+  deadUrlCount: number;
+};
+
+function makeTrendSample(over: Partial<TrendSampleFixture> = {}): TrendSampleFixture {
+  return {
+    sampledAt: new Date(now).toISOString(),
+    cronAgeMs: { health: 3_600_000, warm: 7_200_000, 'refresh-events': 1_800_000 },
+    deadUrlCount: 5,
+    ...over,
+  };
+}
+
+/**
+ * Stub fetch so /api/operator-status resolves with the given trendHistory ring
+ * (newest-first). All other endpoints (the FlightRecorder's llm-history, etc.)
+ * resolve to an empty-but-ok body so they degrade open without throwing.
+ */
+function stubOperatorStatusFetch(trendHistory: TrendSampleFixture[] | null): void {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.includes('/api/operator-status')) {
+      return {
+        ok: true,
+        json: async () => ({
+          audit24h: 0,
+          byBearer: [],
+          advEval: null,
+          prune: null,
+          trendHistory,
+        }),
+      } as Response;
+    }
+    // Any other endpoint: ok with an empty object → degrade-open, no throw.
+    return { ok: true, json: async () => ({}), text: async () => '{}' } as Response;
+  });
+  vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+}
+
+describe('Events subtab trend sparklines (Phase 45 DASH-READ-05, Plan 04)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetAllStores();
+    useUIStore.setState({ isDevApiStatusOpen: false, activeDevApiStatusTab: 'apiHealth' });
+    useLayerStore.setState({ activeLayers: new Set(['water']) });
+    useFilterStore.setState({ showSites: true });
+    mockLLMStatus = { stage: 'idle', lastRun: null };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  // T1 — the four trend wells render from a ≥2-point trendHistory ring.
+  it('T1: renders 4 trend wells (cron ×3 + dead-links) given a ≥2-point trendHistory', async () => {
+    stubOperatorStatusFetch([
+      makeTrendSample({ deadUrlCount: 7 }),
+      makeTrendSample({ deadUrlCount: 4 }),
+    ]);
+    mockLLMStatus = makePopulatedStatus({ schemaVersion: 'v3', stage: 'done' });
+    openAndSelectEventsTab();
+    render(<DevApiStatus />);
+
+    // Flush the operator-status fetch promise chain.
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('events-trend-block')).toBeInTheDocument();
+    expect(screen.getByTestId('trend-cron-health')).toBeInTheDocument();
+    expect(screen.getByTestId('trend-cron-warm')).toBeInTheDocument();
+    expect(screen.getByTestId('trend-cron-refresh')).toBeInTheDocument();
+    expect(screen.getByTestId('trend-dead-links')).toBeInTheDocument();
+    // The well labels read.
+    expect(screen.getByText('CRON · HEALTH')).toBeInTheDocument();
+    expect(screen.getByText('DEAD LINKS · 30d')).toBeInTheDocument();
+    // Each well shows its current value as the primary metric beside the spark.
+    expect(screen.getByTestId('trend-dead-links-value')).toHaveTextContent('7');
+    // ≥2 points → each Sparkline renders (it returns null below 2).
+    expect(screen.getByTestId('trend-dead-links-spark')).toBeInTheDocument();
+    expect(screen.getByTestId('trend-cron-health-spark')).toBeInTheDocument();
+  });
+
+  // T2 — degrade-open: the block self-hides when trendHistory is absent.
+  it('T2: the trend block self-hides (degrade-open) when trendHistory is absent', async () => {
+    stubOperatorStatusFetch(null);
+    mockLLMStatus = makePopulatedStatus({ schemaVersion: 'v3', stage: 'done' });
+    openAndSelectEventsTab();
+    render(<DevApiStatus />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // No fabricated zeros — the whole block is absent.
+    expect(screen.queryByTestId('events-trend-block')).toBeNull();
+    expect(screen.queryByTestId('trend-dead-links')).toBeNull();
+    // The rest of the V3 body still renders (degrade-open is scoped to the block).
+    expect(screen.getByText(/Schema: v3 · Stage: done/)).toBeInTheDocument();
+  });
+
+  // T3 — each Sparkline self-hides below 2 points; the bare current value still
+  //       renders (no fabricated zeros). A single-sample ring fills the wells'
+  //       current-value metric but every Sparkline returns null.
+  it('T3: a 1-point ring renders the wells with bare values but no Sparklines (self-hide < 2)', async () => {
+    stubOperatorStatusFetch([makeTrendSample({ deadUrlCount: 3 })]);
+    mockLLMStatus = makePopulatedStatus({ schemaVersion: 'v3', stage: 'done' });
+    openAndSelectEventsTab();
+    render(<DevApiStatus />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Block + wells present (ring is non-empty), current value shown.
+    expect(screen.getByTestId('events-trend-block')).toBeInTheDocument();
+    expect(screen.getByTestId('trend-dead-links-value')).toHaveTextContent('3');
+    // Every Sparkline self-hides below 2 points (Plan-02 `return null`).
+    expect(screen.queryByTestId('trend-dead-links-spark')).toBeNull();
+    expect(screen.queryByTestId('trend-cron-health-spark')).toBeNull();
+  });
+
+  // T4 — the Phase-44 honest-signal contract is preserved alongside the new trend
+  //       wells: the authoritative dead-URL total + "of N scanned" sampled caveat.
+  it('T4: the Phase-44 dead-link honest-signal copy survives beside the trend wells', async () => {
+    stubOperatorStatusFetch([makeTrendSample(), makeTrendSample()]);
+    mockLLMStatus = makePopulatedStatus({ schemaVersion: 'v3', stage: 'done' });
+    // Thread a prune payload so DeadLinkBucketsBlock mounts. The events-scoped
+    // fetch reads `prune` off the same operator-status body, so re-stub with it.
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/operator-status')) {
+        return {
+          ok: true,
+          json: async () => ({
+            audit24h: 0,
+            byBearer: [],
+            advEval: null,
+            prune: {
+              deadUrlCount: 9,
+              last24hPrunes: 2,
+              countsByStatus: { '404': 3, '403': 1 },
+              deadUrlSample: [],
+            },
+            trendHistory: [makeTrendSample(), makeTrendSample()],
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({}), text: async () => '{}' } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    openAndSelectEventsTab();
+    render(<DevApiStatus />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Trend wells present.
+    expect(screen.getByTestId('events-trend-block')).toBeInTheDocument();
+    // Authoritative total line (sidecar) preserved verbatim.
+    expect(screen.getByTestId('dead-link-authoritative-total')).toHaveTextContent(
+      'Dead URL events:',
+    );
+    expect(screen.getByTestId('dead-link-authoritative-total')).toHaveTextContent('9');
+    // "of N scanned" sampled-tally caveat preserved.
+    expect(screen.getAllByText(/of 4 scanned/).length).toBeGreaterThan(0);
+  });
+});

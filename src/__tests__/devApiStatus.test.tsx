@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 import { DevApiStatus } from '@/components/ui/DevApiStatus';
@@ -11,7 +11,7 @@ import { useNewsStore } from '@/stores/newsStore';
 import { useShipStore } from '@/stores/shipStore';
 import { useSiteStore } from '@/stores/siteStore';
 import { useUIStore } from '@/stores/uiStore';
-import { useWaterStore } from '@/stores/waterStore';
+import { useWaterStore, type WaterFilterStats } from '@/stores/waterStore';
 import { useWeatherStore } from '@/stores/weatherStore';
 import type { ConflictEventEntity } from '@/types/entities';
 
@@ -366,4 +366,105 @@ describe('DevApiStatus', () => {
   it.todo('shows correct success rate X/Y format — Polling Stores removed (cc3b388)');
   it.todo('shows "Complete" for one-shot sources — Polling Stores removed (cc3b388)');
   it.todo('shows "Fetching..." during loading — Polling Stores removed (cc3b388)');
+});
+
+/**
+ * Phase 45 Plan 03 (DASH-READ-01/02/03) — WaterFiltersSection render-contract
+ * pins, EVOLVED in lockstep with the intentional restyle. These assert the new
+ * DOM shape (Reason|Count MetricRow tables + collapsed disclosures + a single
+ * 13px/600 primary metric) — NOT the frozen behavioral pins (tabMerge /
+ * diagnosticBlocks / operatorActions / prune live in their own untouched suites).
+ */
+function makeWaterFilterStats(overrides: Partial<WaterFilterStats> = {}): WaterFilterStats {
+  return {
+    rawCounts: { dam: 800, reservoir: 400, desalination: 84 },
+    filteredCounts: { dam: 200, reservoir: 80, desalination: 25 },
+    rejections: {
+      excluded_location: 3,
+      excluded_turkey: 12,
+      not_notable: 40,
+      no_name: 5,
+      no_resolved_name: 7,
+      duplicate: 8,
+      low_score: 4,
+      no_city: 6,
+    },
+    byTypeRejections: {},
+    byCountry: {
+      Iran: { dam: 120, reservoir: 40 },
+      Iraq: { dam: 50, desalination: 10 },
+    },
+    overpass: [],
+    source: 'overpass',
+    generatedAt: '2026-04-19T08:28:47.786Z',
+    enrichment: { withCapacity: 30, withCity: 200, withRiver: 90 },
+    scoreHistogram: [{ bucket: '0-1', count: 5 }],
+    ...overrides,
+  };
+}
+
+describe('WaterFiltersSection render contract (Phase 45 Plan 03)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetAllStores();
+    useUIStore.setState({ isDevApiStatusOpen: false, activeDevApiStatusTab: 'apiHealth' });
+    useLayerStore.setState({ activeLayers: new Set(['water']) });
+    useFilterStore.setState({ showSites: true });
+  });
+
+  function openWaterTab() {
+    useWaterStore.setState({ filterStats: makeWaterFilterStats() });
+    useUIStore.setState({ isDevApiStatusOpen: true, activeDevApiStatusTab: 'water' });
+  }
+
+  it('promotes kept % to a single 13px/600 primary metric; raw→kept summary preserved verbatim', () => {
+    openWaterTab();
+    render(<DevApiStatus />);
+
+    const waterSection = screen.getByText('Water Filters').closest('div') as HTMLElement;
+    // 1284 raw / 305 kept → 24%
+    expect(screen.getByTestId('water-primary-metric')).toHaveTextContent('24%');
+    // Exactly one 13px/600 headline in the section
+    expect(waterSection.querySelectorAll('.text-\\[13px\\].font-semibold').length).toBe(1);
+    // Verbatim raw→kept summary line preserved
+    expect(screen.getByText(/1284 raw → 305 kept \(24%\)/)).toBeInTheDocument();
+  });
+
+  it('renders the rejection breakdown as a Reason|Count MetricRow table behind a collapsed disclosure', () => {
+    openWaterTab();
+    render(<DevApiStatus />);
+
+    // Collapsed by default: panel absent, aria-expanded false
+    const toggle = screen.getByTestId('water-rejections-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById('water-rejections-panel')).toBeNull();
+
+    // Expand → aria-expanded flips, labeled Reason|Count rows appear
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const panel = document.getElementById('water-rejections-panel') as HTMLElement;
+    expect(panel).not.toBeNull();
+    expect(within(panel).getByTestId('water-rejection-not_notable-value')).toHaveTextContent('40');
+    expect(within(panel).getByTestId('water-rejection-duplicate-value')).toHaveTextContent('8');
+    // The old left-flowing string-dump tokens are gone
+    expect(screen.queryByText(/excl=3 turkey=12 nn=40/)).toBeNull();
+  });
+
+  it('hides the per-country table behind a collapsed disclosure that expands on toggle', () => {
+    openWaterTab();
+    render(<DevApiStatus />);
+
+    expect(screen.queryByText('Iran')).toBeNull();
+    fireEvent.click(screen.getByTestId('water-country-toggle'));
+    const panel = document.getElementById('water-country-panel') as HTMLElement;
+    expect(within(panel).getByText('Iran')).toBeInTheDocument();
+    expect(within(panel).getByText('Iraq')).toBeInTheDocument();
+  });
+
+  it('uses two weights only — no font-bold (700) survives in the restyled water section', () => {
+    openWaterTab();
+    render(<DevApiStatus />);
+    const waterSection = screen.getByText('Water Filters').closest('div') as HTMLElement;
+    expect(waterSection.querySelectorAll('.font-bold').length).toBe(0);
+  });
 });

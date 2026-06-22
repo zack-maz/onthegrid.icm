@@ -7,6 +7,8 @@ import { env } from '../config.js';
 import { CRON_LASTTICK_TTL_SEC, SOURCE_KEYS } from '../lib/healthSources.js';
 import { runEval, runAdversarialEval } from '../lib/llmEvalHarness.js';
 import { logger } from '../lib/logger.js';
+import { appendTrendSample } from '../lib/trendHistory.js';
+import { URL_LIVENESS_COUNT_KEY } from '../lib/urlLiveness.js';
 
 import type { AdversarialEvalResult } from '../lib/llmEvalHarness.js';
 
@@ -129,6 +131,60 @@ cronHealthRouter.get('/', async (req, res) => {
   // actually completed its work. cacheSetSafe is degrade-open (Redis
   // failure swallowed; memCache populated). D-11: bare Date.now() value.
   await cacheSetSafe('cron:lastTick:health', Date.now(), CRON_LASTTICK_TTL_SEC);
+
+  // Phase 45 DASH-READ-05 (CONTEXT D-01/D-02) — append ONE daily trend sample
+  // to the bounded `dashboard:trends:history` ring AFTER the lastTick:health
+  // write. This is the SOLE writer (no new cron — D-01). The whole append is
+  // try/caught so a trend-write failure NEVER degrades the health response
+  // (mirrors the eval/adversarial try/catch posture above).
+  //
+  // cronAgeMs is computed per cron from its `cron:lastTick:{name}` key: a present
+  // tick yields `now - tickTs`; an ABSENT key yields `null` (degrade-open —
+  // never fabricate 0; a stalled cron reads as null/stale, itself a valid
+  // DASH-READ-05 signal per D-02). The tickTs read mirrors `probeCronTick`'s
+  // `typeof entry.data === 'number' ? entry.data : entry.lastFresh` shape.
+  try {
+    const sampleNow = Date.now();
+    const cronNames = ['health', 'warm', 'refresh-events'] as const;
+    const ages = await Promise.all(
+      cronNames.map(async (name) => {
+        const entry = await cacheGetSafe<number>(`cron:lastTick:${name}`, 999_999_999);
+        if (entry === null) return null;
+        const tickTs = typeof entry.data === 'number' ? entry.data : entry.lastFresh;
+        // Phase 45 WR-03 — floor at 0. `tickTs` is a `Date.now()` written by a
+        // (possibly different) serverless invocation; under Fluid Compute
+        // cold-start clock skew the writer's wall clock can lead the reader's,
+        // making `sampleNow - tickTs` negative. A negative age would draw the
+        // sparkline point below the viewBox and render a negative h/m string.
+        return Math.max(0, sampleNow - tickTs);
+      }),
+    );
+
+    // Dead-URL sidecar — same key + defensive coercion as operator-status.ts
+    // (`Number(raw) || 0` + `Math.max(0, ...)` handles null/string/NaN/underflow).
+    let deadUrlCount = 0;
+    try {
+      const raw = await redis.get<number | string>(URL_LIVENESS_COUNT_KEY);
+      deadUrlCount = Math.max(0, Number(raw) || 0);
+    } catch (err) {
+      log.warn({ err }, 'failed to read events:url-liveness-count for trend sample');
+    }
+
+    await appendTrendSample({
+      sampledAt: new Date(sampleNow).toISOString(),
+      cronAgeMs: {
+        // `?? null` collapses the `| undefined` that noUncheckedIndexedAccess
+        // adds to these in-bounds tuple reads back to the degrade-open `null`
+        // the TrendSample contract expects (absent → null, never fabricate).
+        health: ages[0] ?? null,
+        warm: ages[1] ?? null,
+        'refresh-events': ages[2] ?? null,
+      },
+      deadUrlCount,
+    });
+  } catch (err) {
+    log.warn({ err }, 'trend sample append threw — continuing health response');
+  }
 
   res.json({
     status: redisOk ? 'ok' : 'degraded',
