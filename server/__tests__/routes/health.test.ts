@@ -372,6 +372,94 @@ describe('GET /api/health (W2 extended)', () => {
     expect(body.endpoints.news?.lastErrorReason ?? '').toMatch(/cache-fallback-active/);
   });
 
+  it('Test 13 (Phase 46 HARD-02): cron row with a FRESH lastTick → missedRun "healthy" + status in the 4-state set', async () => {
+    const now = Date.now();
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key.startsWith('cron:lastTick:')) {
+        // 60s old — well within 24h+4h grace → missedRun healthy.
+        return { data: now - 60_000, stale: false, lastFresh: now - 60_000 };
+      }
+      return null;
+    });
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    const fourState = ['healthy', 'degraded', 'unhealthy', 'unknown'];
+    for (const name of ['cronHealth', 'cronWarm', 'cronRefreshEvents']) {
+      expect(body.endpoints[name]?.missedRun).toBe('healthy');
+      expect(fourState).toContain(body.endpoints[name]?.status);
+    }
+  });
+
+  it('Test 14 (Phase 46 HARD-02): cron row STALE past expected+grace → missedRun "missed" but status STILL 4-state (never "missed")', async () => {
+    const now = Date.now();
+    // 29h old: past 24h+4h=28h grace (→ missedRun missed) but under the 26h
+    // freshness threshold's degraded window so status is derived by deriveStatus
+    // and is NEVER the string "missed".
+    const staleAge = 29 * 60 * 60_000;
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockImplementation(async (key: string) => {
+      if (key.startsWith('cron:lastTick:')) {
+        return { data: now - staleAge, stale: false, lastFresh: now - staleAge };
+      }
+      return null;
+    });
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    const fourState = ['healthy', 'degraded', 'unhealthy', 'unknown'];
+    for (const name of ['cronHealth', 'cronWarm', 'cronRefreshEvents']) {
+      expect(body.endpoints[name]?.missedRun).toBe('missed');
+      // THE LOAD-BEARING INVARIANT: status never equals 'missed'.
+      expect(body.endpoints[name]?.status).not.toBe('missed');
+      expect(fourState).toContain(body.endpoints[name]?.status);
+    }
+    // And the audit's cron tier rollup never carries a 'missed' bucket.
+    expect(Object.keys(body.summary.cron)).not.toContain('missed');
+  });
+
+  it('Test 15 (Phase 46 HARD-02): never-fired cron (null lastTick) → missedRun "unknown" + status "unknown"', async () => {
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockResolvedValue(null);
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    for (const name of ['cronHealth', 'cronWarm', 'cronRefreshEvents']) {
+      expect(body.endpoints[name]?.missedRun).toBe('unknown');
+      expect(body.endpoints[name]?.status).toBe('unknown');
+    }
+  });
+
+  it('Test 16 (Phase 46 HARD-02): non-cron rows OMIT missedRun (field absent)', async () => {
+    mockPing.mockResolvedValue('PONG');
+    mockCacheGetSafe.mockResolvedValue(null);
+
+    const { healthRouter } = await import('../../routes/health.js');
+    const handler = extractHandler(healthRouter);
+    const { req, res, getBody } = createReqRes();
+    await handler(req, res);
+
+    const body = healthResponseSchema.parse(getBody());
+    for (const name of ['flights', 'ships', 'events', 'markets', 'sites', 'authCheck']) {
+      expect(body.endpoints[name]?.missedRun).toBeUndefined();
+    }
+    // The parse above already proves healthResponseSchema accepts the new
+    // .optional() field present on cron rows + absent on non-cron rows.
+  });
+
   it('Test 12 (Phase 37 — fix/news-feed-rss-fallback): news is UNKNOWN when BOTH news:feed AND news:feed:rss-only are cold', async () => {
     // Phase 37 fix/news-feed-rss-fallback — total-outage honesty. When the
     // primary news:feed cache AND the RSS-only sidecar are BOTH cold, the

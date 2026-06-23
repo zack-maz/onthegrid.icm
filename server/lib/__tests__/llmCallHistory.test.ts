@@ -134,6 +134,27 @@ describe('llmCallHistory', () => {
     await expect(listCallHistory()).resolves.toEqual([]);
   });
 
+  // HARD-03 NAMED GAP (D-10/D-11) — hydration-throw no-op + flag-stays-set.
+  // Distinct from the cold-start happy-path and the append/list throw cases
+  // above: here the LRANGE inside hydrate throws MID-HYDRATE. The contract is
+  // (a) hydrate resolves (never throws — listCallHistory swallows to []),
+  // (b) the in-memory singleton is left unchanged, and (c) the hydration flag
+  // STAYS set so a second call is a no-op (no retry-loop / no second LRANGE).
+  it('hydrate is a no-op when LRANGE throws mid-hydrate; flag stays set (no retry-loop)', async () => {
+    lrangeMock.mockRejectedValue(new Error('redis down'));
+    llmProgress.callHistory = undefined;
+    __resetCallHistoryHydrationForTest();
+
+    // First call: resolves despite the throw, leaves the singleton untouched.
+    await expect(hydrateCallHistoryIfCold()).resolves.toBeUndefined();
+    expect(llmProgress.callHistory).toBeUndefined();
+    expect(lrangeMock).toHaveBeenCalledTimes(1);
+
+    // Second call: flag stays set → short-circuit, NO re-LRANGE (no retry-loop).
+    await expect(hydrateCallHistoryIfCold()).resolves.toBeUndefined();
+    expect(lrangeMock).toHaveBeenCalledTimes(1);
+  });
+
   // Phase 39 OBS-FLIGHT-05 (Plan 02) — back-correlation contract. Mirrors the
   // freeClaudeRouter callHistory writer: a call entry synthesized while a run is
   // active inherits llmProgress.runId, and the dual-write persists that runId in

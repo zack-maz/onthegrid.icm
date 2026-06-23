@@ -51,10 +51,10 @@ Operator-locked priority order: water filter → ghost links + events subtab →
 
 ### General Hardening (HARD + CRON-WATCH)
 
-- [ ] **HARD-01**: Rate-limiter state is operator-visible and operator-safe — verify Bearer bypass covers all operator dashboard polls (999.1); surface tier config + recent 429 counts in the dashboard
-- [ ] **HARD-02**: Cron first-tick and missed-run detection — in-app freshness check computed from `cron:lastTick:{name}` age vs schedule + grace, surfaced via `/api/health` (999.3); no external SaaS
-- [ ] **CRON-WATCH-01**: 7-day cron stability watch completes as a NON-BLOCKING, auto-reported observation — daily auto-captured results, does not gate milestone close (carried from v1.6; structured to avoid the v1.5 Phase 31 early-close repeat)
-- [ ] **HARD-03**: Nyquist test-coverage backfill for Phase 39/40 surfaces — flight recorder, budget block, and subtab consolidation paths covered, including degrade-open fault-injection tests
+- [x] **HARD-01**: Rate-limiter state is operator-visible and operator-safe — verify Bearer bypass covers all operator dashboard polls (999.1); surface tier config + recent 429 counts in the dashboard
+- [x] **HARD-02**: Cron first-tick and missed-run detection — in-app freshness check computed from `cron:lastTick:{name}` age vs schedule + grace, surfaced via `/api/health` (999.3); no external SaaS
+- [x] **CRON-WATCH-01**: 7-day cron stability watch completes as a NON-BLOCKING, auto-reported observation — daily auto-captured results, does not gate milestone close (carried from v1.6; structured to avoid the v1.5 Phase 31 early-close repeat)
+- [x] **HARD-03**: Nyquist test-coverage backfill for Phase 39/40 surfaces — flight recorder, budget block, and subtab consolidation paths covered, including degrade-open fault-injection tests
 
 ### Docs Cleanup (DOCS-CLEAN)
 
@@ -119,10 +119,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOAD-04         | Phase 47 | Pending  |
 | LOAD-FIX-01     | Phase 48 | Pending  |
 | LOAD-FIX-02     | Phase 48 | Pending  |
-| HARD-01         | Phase 46 | Pending  |
-| HARD-02         | Phase 46 | Pending  |
-| CRON-WATCH-01   | Phase 46 | Pending  |
-| HARD-03         | Phase 46 | Pending  |
+| HARD-01         | Phase 46 | Complete |
+| HARD-02         | Phase 46 | Complete |
+| CRON-WATCH-01   | Phase 46 | Complete |
+| HARD-03         | Phase 46 | Complete |
 | DOCS-CLEAN-01   | Phase 49 | Pending  |
 | DOCS-CLEAN-02   | Phase 49 | Pending  |
 

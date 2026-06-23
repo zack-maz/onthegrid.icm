@@ -1,11 +1,14 @@
 // @vitest-environment node
 /**
  * Phase 27.4.6 Task 5 — /api/cron/health D-09 eval-fold coverage.
+ * Phase 46 CRON-WATCH-01 — daily watch-sample append coverage.
  *
- * Three cases:
+ * Cases:
  *   1. CRON_SECRET empty → un-authed; runEval invoked + evalScore in response.
  *   2. CRON_SECRET set + wrong Bearer → 401, runEval NOT called.
  *   3. runEval throws → response still 200 with evalScore=null + evalError populated.
+ *   4. appendWatchSample invoked on a successful run (CRON-WATCH-01).
+ *   5. a throwing appendWatchSample does NOT degrade the health response (Pitfall 4).
  */
 
 import { Router } from 'express';
@@ -31,6 +34,21 @@ const mockRunEval = vi.fn().mockResolvedValue({
 });
 vi.mock('../../lib/llmEvalHarness.js', () => ({
   runEval: (...args: unknown[]) => mockRunEval(...args),
+}));
+
+// Phase 46 CRON-WATCH-01 — the route appends a daily watch sample via
+// cronWatch.appendWatchSample (degrade-open). Mock it so the test can assert the
+// invocation and inject a throw without touching real Redis. trendHistory is
+// likewise mocked so its real pipeline call doesn't surface a (swallowed) warn.
+const { mockAppendWatchSample, mockAppendTrendSample } = vi.hoisted(() => ({
+  mockAppendWatchSample: vi.fn().mockResolvedValue(undefined),
+  mockAppendTrendSample: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../../lib/cronWatch.js', () => ({
+  appendWatchSample: (...args: unknown[]) => mockAppendWatchSample(...args),
+}));
+vi.mock('../../lib/trendHistory.js', () => ({
+  appendTrendSample: (...args: unknown[]) => mockAppendTrendSample(...args),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -84,6 +102,8 @@ beforeEach(() => {
     total: 50,
   });
   mockEnv.CRON_SECRET = '';
+  mockAppendWatchSample.mockReset().mockResolvedValue(undefined);
+  mockAppendTrendSample.mockReset().mockResolvedValue(undefined);
 });
 
 describe('/api/cron/health (D-09 eval-drift fold)', () => {
@@ -124,5 +144,44 @@ describe('/api/cron/health (D-09 eval-drift fold)', () => {
     const body = getBody();
     expect(body.evalScore).toBeNull();
     expect(body.evalError).toContain('eval boom');
+  });
+
+  // Phase 46 CRON-WATCH-01
+  it('appends one daily watch sample (PASS) on a successful run', async () => {
+    const { cronHealthRouter } = await import('../../routes/cron-health.js');
+    const handler = extractHandler(cronHealthRouter);
+    const { req, res, getStatus } = createReqRes();
+    await handler(req, res);
+    expect(getStatus()).toBe(200);
+    expect(mockAppendWatchSample).toHaveBeenCalledTimes(1);
+    const sample = mockAppendWatchSample.mock.calls[0][0] as Record<string, unknown>;
+    expect(sample.result).toBe('PASS'); // redisOk + eval bundle healthy
+    expect(typeof sample.tickDate).toBe('string');
+    expect((sample.tickDate as string).length).toBe(10); // YYYY-MM-DD
+    expect(sample.eval).toEqual({ at5km: 5, at20km: 47, at100km: 50 });
+  });
+
+  it('records FAIL when the eval bundle errors (but still appends + responds 200)', async () => {
+    mockRunEval.mockRejectedValueOnce(new Error('eval boom'));
+    const { cronHealthRouter } = await import('../../routes/cron-health.js');
+    const handler = extractHandler(cronHealthRouter);
+    const { req, res, getStatus } = createReqRes();
+    await handler(req, res);
+    expect(getStatus()).toBe(200);
+    expect(mockAppendWatchSample).toHaveBeenCalledTimes(1);
+    const sample = mockAppendWatchSample.mock.calls[0][0] as Record<string, unknown>;
+    expect(sample.result).toBe('FAIL');
+  });
+
+  it('a throwing appendWatchSample does NOT degrade the health response (Pitfall 4)', async () => {
+    mockAppendWatchSample.mockRejectedValueOnce(new Error('watch redis down'));
+    const { cronHealthRouter } = await import('../../routes/cron-health.js');
+    const handler = extractHandler(cronHealthRouter);
+    const { req, res, getStatus, getBody } = createReqRes();
+    await handler(req, res);
+    expect(getStatus()).toBe(200);
+    const body = getBody();
+    expect(body.evalScore).toEqual({ within5km: 5, within20km: 47, within100km: 50, total: 50 });
+    expect(body.redis).toBe(true);
   });
 });

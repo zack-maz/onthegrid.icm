@@ -16,6 +16,8 @@ import {
   FRESHNESS_THRESHOLDS_MS,
   TIER_BY_ENDPOINT,
   deriveStatus,
+  CRON_SCHEDULE_GRACE_MS,
+  deriveCronRunState,
 } from '../../lib/healthSources.js';
 
 describe('deriveStatus()', () => {
@@ -163,6 +165,69 @@ describe('Registry consistency invariant (Phase 28.2.5 D-08)', () => {
       ).toBeDefined();
       expect(TIER_BY_ENDPOINT[name], `${name} missing from TIER_BY_ENDPOINT`).toBeDefined();
     }
+  });
+});
+
+describe('CRON_SCHEDULE_GRACE_MS — HARD-02 (Phase 46 D-04)', () => {
+  it('contains exactly the 3 crons keyed by short-name', () => {
+    expect(Object.keys(CRON_SCHEDULE_GRACE_MS).sort()).toEqual(
+      ['health', 'refresh-events', 'warm'].sort(),
+    );
+  });
+
+  it('each cron has a 24h expected interval and a 4h grace window (D-04 discretion)', () => {
+    for (const name of ['health', 'warm', 'refresh-events']) {
+      expect(CRON_SCHEDULE_GRACE_MS[name]?.expectedIntervalMs).toBe(24 * 60 * 60_000);
+      expect(CRON_SCHEDULE_GRACE_MS[name]?.graceMs).toBe(4 * 60 * 60_000);
+    }
+  });
+
+  it('keeps graceMs < (2×threshold − interval) so missed fires strictly earlier than degraded', () => {
+    // The existing FRESHNESS_THRESHOLDS_MS for the cron triad is 26h; degraded
+    // begins at threshold (26h) and the 4-state ladder hits unhealthy at 2×.
+    // expected+grace (24h+4h = 28h) must trip BEFORE the existing degraded
+    // window crosses into unhealthy (2×26h = 52h), and the constraint named in
+    // RESEARCH is grace < (2×threshold − interval).
+    const threshold = FRESHNESS_THRESHOLDS_MS.cronHealth!; // 26h
+    for (const name of ['health', 'warm', 'refresh-events']) {
+      const { expectedIntervalMs, graceMs } = CRON_SCHEDULE_GRACE_MS[name]!;
+      expect(graceMs).toBeLessThan(2 * threshold - expectedIntervalMs);
+    }
+  });
+});
+
+describe('deriveCronRunState() — HARD-02 (Phase 46 D-05/D-06)', () => {
+  const INTERVAL = 24 * 60 * 60_000; // 24h
+  const GRACE = 4 * 60 * 60_000; // 4h
+
+  it('returns unknown when freshness is null AND the cron has never fired (pre-first-tick)', () => {
+    expect(deriveCronRunState(null, INTERVAL, GRACE, false)).toBe('unknown');
+  });
+
+  it('returns missed when freshness is null BUT the cron fired before (lastTick lost)', () => {
+    expect(deriveCronRunState(null, INTERVAL, GRACE, true)).toBe('missed');
+  });
+
+  it('returns healthy when a tick landed within expected+grace', () => {
+    expect(deriveCronRunState(0, INTERVAL, GRACE, true)).toBe('healthy');
+    expect(deriveCronRunState(INTERVAL, INTERVAL, GRACE, true)).toBe('healthy');
+    expect(deriveCronRunState(INTERVAL + GRACE - 1, INTERVAL, GRACE, true)).toBe('healthy');
+  });
+
+  it('treats exactly expected+grace as healthy (≤ boundary)', () => {
+    expect(deriveCronRunState(INTERVAL + GRACE, INTERVAL, GRACE, true)).toBe('healthy');
+  });
+
+  it('returns missed when freshness is stale past expected+grace', () => {
+    expect(deriveCronRunState(INTERVAL + GRACE + 1, INTERVAL, GRACE, true)).toBe('missed');
+    expect(deriveCronRunState(999_999_999_999, INTERVAL, GRACE, true)).toBe('missed');
+  });
+
+  it('is a pure function (no side effects) — repeated calls return identical results', () => {
+    const a = deriveCronRunState(INTERVAL + GRACE + 1, INTERVAL, GRACE, true);
+    const b = deriveCronRunState(INTERVAL + GRACE + 1, INTERVAL, GRACE, true);
+    expect(a).toBe(b);
+    expect(a).toBe('missed');
   });
 });
 

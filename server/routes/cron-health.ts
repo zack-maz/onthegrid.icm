@@ -4,6 +4,7 @@ import { Router } from 'express';
 
 import { redis, cacheGetSafe, cacheSetSafe } from '../cache/redis.js';
 import { env } from '../config.js';
+import { appendWatchSample } from '../lib/cronWatch.js';
 import { CRON_LASTTICK_TTL_SEC, SOURCE_KEYS } from '../lib/healthSources.js';
 import { runEval, runAdversarialEval } from '../lib/llmEvalHarness.js';
 import { logger } from '../lib/logger.js';
@@ -143,8 +144,18 @@ cronHealthRouter.get('/', async (req, res) => {
   // never fabricate 0; a stalled cron reads as null/stale, itself a valid
   // DASH-READ-05 signal per D-02). The tickTs read mirrors `probeCronTick`'s
   // `typeof entry.data === 'number' ? entry.data : entry.lastFresh` shape.
+  // `cronAgeMs` is hoisted to this outer scope so the CRON-WATCH-01 daily watch
+  // sample below can REUSE it (CONTEXT D-07 — do NOT re-read cron:lastTick:{name}
+  // a second time). It stays `null` if the trend-sample block throws before
+  // computing it; the watch block treats absent ages as the degrade-open null.
+  let watchCronAgeMs: {
+    health: number | null;
+    warm: number | null;
+    'refresh-events': number | null;
+  } | null = null;
+  const sampleNow = Date.now();
+
   try {
-    const sampleNow = Date.now();
     const cronNames = ['health', 'warm', 'refresh-events'] as const;
     const ages = await Promise.all(
       cronNames.map(async (name) => {
@@ -170,20 +181,52 @@ cronHealthRouter.get('/', async (req, res) => {
       log.warn({ err }, 'failed to read events:url-liveness-count for trend sample');
     }
 
+    watchCronAgeMs = {
+      // `?? null` collapses the `| undefined` that noUncheckedIndexedAccess
+      // adds to these in-bounds tuple reads back to the degrade-open `null`
+      // the TrendSample contract expects (absent → null, never fabricate).
+      health: ages[0] ?? null,
+      warm: ages[1] ?? null,
+      'refresh-events': ages[2] ?? null,
+    };
+
     await appendTrendSample({
       sampledAt: new Date(sampleNow).toISOString(),
-      cronAgeMs: {
-        // `?? null` collapses the `| undefined` that noUncheckedIndexedAccess
-        // adds to these in-bounds tuple reads back to the degrade-open `null`
-        // the TrendSample contract expects (absent → null, never fabricate).
-        health: ages[0] ?? null,
-        warm: ages[1] ?? null,
-        'refresh-events': ages[2] ?? null,
-      },
+      cronAgeMs: watchCronAgeMs,
       deadUrlCount,
     });
   } catch (err) {
     log.warn({ err }, 'trend sample append threw — continuing health response');
+  }
+
+  // Phase 46 CRON-WATCH-01 (CONTEXT D-07/D-08/D-09) — append ONE daily watch
+  // sample to the bounded `cron:watch:v2` ring AFTER the trend-sample write,
+  // in its OWN try/catch (Pitfall 4 — a watch-write throw must NEVER degrade the
+  // health-cron response; mirrors the trend/eval/adversarial try/catch posture).
+  // It sits after the `cron:lastTick:health` write (:133) so that write is never
+  // blocked. It REUSES the per-cron `cronAgeMs` already computed above — no new
+  // `cron:lastTick:{name}` reads (D-07). `dlqCount`/`breakerTrips` are not read
+  // by the health handler today; per the plan we record 0 (best-effort — do NOT
+  // add new Redis reads just for the watch row; the eval bundle + per-cron ages
+  // are the load-bearing signals). `result` is PASS iff Redis is up AND the eval
+  // bundle resolved without error, else FAIL.
+  try {
+    const evalHealthy = redisOk && evalScore !== null && evalError === null;
+    await appendWatchSample({
+      sampledAt: new Date(sampleNow).toISOString(),
+      tickDate: new Date(sampleNow).toISOString().slice(0, 10),
+      cronAgeMs: watchCronAgeMs ?? { health: null, warm: null, 'refresh-events': null },
+      eval: {
+        at5km: evalScore?.within5km ?? 0,
+        at20km: evalScore?.within20km ?? 0,
+        at100km: evalScore?.within100km ?? 0,
+      },
+      dlqCount: 0,
+      breakerTrips: 0,
+      result: evalHealthy ? 'PASS' : 'FAIL',
+    });
+  } catch (err) {
+    log.warn({ err }, 'watch sample append threw — continuing health response');
   }
 
   res.json({

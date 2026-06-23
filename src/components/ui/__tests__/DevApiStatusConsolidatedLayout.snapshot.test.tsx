@@ -82,6 +82,37 @@ function makePopulatedHealth(): HealthResponse {
     '/api/flights': makeEndpoint({ name: '/api/flights', status: 'healthy', tier: 'critical' }),
     '/api/events': makeEndpoint({ name: '/api/events', status: 'degraded', tier: 'critical' }),
     '/api/news': makeEndpoint({ name: '/api/news', status: 'healthy', tier: 'non-critical' }),
+    // Phase 46 HARD-02 — cron-tier rows carry the missedRun sibling so the new
+    // Cron Freshness block renders at full breadth in the snapshot: one healthy,
+    // one missed (the load-bearing MISSED alarm), one unknown (pre-first-tick).
+    cronHealth: makeEndpoint({
+      name: 'cronHealth',
+      status: 'healthy',
+      tier: 'cron',
+      freshnessMs: 3_600_000,
+      freshnessThresholdMs: 26 * 60 * 60_000,
+      latencyMs: null,
+      missedRun: 'healthy',
+    }),
+    cronWarm: makeEndpoint({
+      name: 'cronWarm',
+      status: 'unhealthy',
+      tier: 'cron',
+      freshnessMs: 120_000_000,
+      freshnessThresholdMs: 26 * 60 * 60_000,
+      latencyMs: null,
+      missedRun: 'missed',
+    }),
+    cronRefreshEvents: makeEndpoint({
+      name: 'cronRefreshEvents',
+      status: 'unknown',
+      tier: 'cron',
+      lastSuccessTs: null,
+      freshnessMs: null,
+      freshnessThresholdMs: 26 * 60 * 60_000,
+      latencyMs: null,
+      missedRun: 'unknown',
+    }),
   };
   return {
     endpoints,
@@ -90,7 +121,7 @@ function makePopulatedHealth(): HealthResponse {
       nonCritical: { healthy: 1, degraded: 0, unhealthy: 0, unknown: 0 },
       static: { healthy: 0, degraded: 0, unhealthy: 0, unknown: 0 },
       probeOnly: { healthy: 0, unhealthy: 0, unknown: 0 },
-      cron: { healthy: 0, degraded: 0, unhealthy: 0, unknown: 0 },
+      cron: { healthy: 1, degraded: 0, unhealthy: 1, unknown: 1 },
     },
     generatedAt: FIXED_NOW,
   };
@@ -118,6 +149,16 @@ const POPULATED_OP_STATUS = {
   tokenBudget: {
     providers: { nvidia_nim: { used: 600, cap: 1000, soft: 800, hard: 950, state: 'ok' } },
     costShadow: { tokensIn: 1000, tokensOut: 500, usd: 0.0123 },
+  },
+  // Phase 46 HARD-01 — per-tier rate-limiter config + recent 429s so the new
+  // Rate Limiter block renders at full breadth (with a non-zero amber-tinted
+  // shed count) in the consolidated-layout snapshot.
+  rateLimiter: {
+    tiers: [
+      { tier: 'flights', max: 120, windowSec: 60, recent429: 0 },
+      { tier: 'events', max: 20, windowSec: 60, recent429: 4 },
+      { tier: 'public', max: 60, windowSec: 60, recent429: 2 },
+    ],
   },
 };
 

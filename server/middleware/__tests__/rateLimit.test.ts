@@ -46,8 +46,17 @@ vi.mock('@upstash/ratelimit', () => ({
 }));
 
 // Stub redis so module load doesn't try to connect to Upstash.
+// Phase 46 HARD-01: the 429 branch fires `incr429` which calls
+// `redis.incr`/`redis.expire`. Module-level mocks so the 429-sidecar tests can
+// assert the dated key + EXPIRE-on-first AND a rejecting INCR (degrade-open).
+const incrMock = vi.fn(async () => 1);
+const expireMock = vi.fn(async () => 1);
 vi.mock('../../cache/redis.js', () => ({
-  redis: { ping: vi.fn(async () => 'PONG') },
+  redis: {
+    ping: vi.fn(async () => 'PONG'),
+    incr: (...a: unknown[]) => incrMock(...a),
+    expire: (...a: unknown[]) => expireMock(...a),
+  },
 }));
 
 // Force production so the limiter actually runs (it's a no-op in dev outside
@@ -57,7 +66,7 @@ vi.stubEnv('NODE_ENV', 'production');
 // Import AFTER mocks. Both `rateLimiters.public` (prefix 'ratelimit:public')
 // and `rateLimiters.flights` (default prefix 'ratelimit:prod') are needed to
 // exercise the scope-of-bypass contract from Test 7.
-const { rateLimiters, createRateLimiter } = await import('../rateLimit.js');
+const { rateLimiters, createRateLimiter, RATE_LIMITER_CONFIG } = await import('../rateLimit.js');
 
 function createMockReq(authHeader: string | null): Partial<Request> {
   return {
@@ -260,5 +269,145 @@ describe('rate-limit bearer bypass (D-04, Phase 999.1 fold-in)', () => {
     // Bearer-attached operator/audit traffic skips the limiter on every tier.
     expect(mockLimit).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ===========================================================================
+// Phase 46 HARD-01 (D-02) — 429 sidecar counter (degrade-open) + config table
+// ===========================================================================
+describe('rate-limit 429 sidecar counter (Phase 46 HARD-01, D-02)', () => {
+  const ORIG_NODE_ENV = process.env.NODE_ENV;
+  const ORIG_VERCEL = process.env.VERCEL;
+  const ORIG_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
+  beforeEach(() => {
+    mockLimit.mockReset();
+    incrMock.mockReset();
+    expireMock.mockReset();
+    // Default: limiter REJECTS so the 429 branch (and the counter) fires.
+    mockLimit.mockResolvedValue({
+      success: false,
+      limit: 60,
+      remaining: 0,
+      reset: Date.now() + 60_000,
+    });
+    incrMock.mockResolvedValue(1);
+    expireMock.mockResolvedValue(1);
+    process.env.NODE_ENV = 'production';
+    delete process.env.VERCEL;
+    delete process.env.DASHBOARD_PASSWORD;
+  });
+
+  afterEach(() => {
+    if (ORIG_NODE_ENV === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = ORIG_NODE_ENV;
+    if (ORIG_VERCEL === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = ORIG_VERCEL;
+    if (ORIG_PASSWORD === undefined) delete process.env.DASHBOARD_PASSWORD;
+    else process.env.DASHBOARD_PASSWORD = ORIG_PASSWORD;
+  });
+
+  it('fires INCR on the dated key `ratelimit:429:{tier}:{YYYY-MM-DD}` with EXPIRE-on-first (48h) on a 429', async () => {
+    const req = createMockReq(null);
+    const { res, _status, _json } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+
+    // Response is the canonical 429 envelope.
+    expect(_status.value).toBe(429);
+    expect(_json.value).toEqual({
+      error: 'Too many requests',
+      code: 'RATE_LIMITED',
+      statusCode: 429,
+    });
+    expect(next).not.toHaveBeenCalled();
+
+    // INCR fired against the dated key. The counter is fire-and-forget, so
+    // await a microtask flush before asserting.
+    await Promise.resolve();
+    await Promise.resolve();
+    const ymd = new Date().toISOString().slice(0, 10);
+    expect(incrMock).toHaveBeenCalledTimes(1);
+    expect(incrMock).toHaveBeenCalledWith(`ratelimit:429:public:${ymd}`);
+    // EXPIRE-on-first: used===1 → TTL set to 48h.
+    expect(expireMock).toHaveBeenCalledTimes(1);
+    expect(expireMock).toHaveBeenCalledWith(`ratelimit:429:public:${ymd}`, 48 * 60 * 60);
+  });
+
+  it('does NOT re-issue EXPIRE on the second+ INCR of the day (EXPIRE-on-first only)', async () => {
+    incrMock.mockResolvedValue(2); // not the first INCR of the day
+    const req = createMockReq(null);
+    const { res, _status } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(_status.value).toBe(429);
+    expect(incrMock).toHaveBeenCalledTimes(1);
+    expect(expireMock).not.toHaveBeenCalled();
+  });
+
+  it('DEGRADE-OPEN: a rejecting INCR mock STILL yields a 429 (never a 500), and never throws', async () => {
+    incrMock.mockRejectedValue(new Error('redis down'));
+    const req = createMockReq(null);
+    const { res, _status, _json } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    // The middleware promise must resolve, not reject (no propagation to the
+    // Express error handler → no 500).
+    await expect(rateLimiters.public(req as Request, res, next)).resolves.not.toThrow();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Response is STILL a 429 with the canonical envelope.
+    expect(_status.value).toBe(429);
+    expect(_json.value).toEqual({
+      error: 'Too many requests',
+      code: 'RATE_LIMITED',
+      statusCode: 429,
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire the counter on a successful (non-429) request', async () => {
+    mockLimit.mockResolvedValue({
+      success: true,
+      limit: 60,
+      remaining: 59,
+      reset: Date.now() + 60_000,
+    });
+    const req = createMockReq(null);
+    const { res } = createMockRes();
+    const next = vi.fn() as unknown as NextFunction;
+
+    await rateLimiters.public(req as Request, res, next);
+    await Promise.resolve();
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(incrMock).not.toHaveBeenCalled();
+    expect(expireMock).not.toHaveBeenCalled();
+  });
+
+  it('RATE_LIMITER_CONFIG byte-matches the rateLimiters tier table', () => {
+    // Every tier in the limiter table must have a config entry with the EXACT
+    // max/windowSec passed to createRateLimiter — drift fails here.
+    expect(RATE_LIMITER_CONFIG).toEqual({
+      flights: { max: 120, windowSec: 60 },
+      ships: { max: 60, windowSec: 60 },
+      events: { max: 20, windowSec: 60 },
+      news: { max: 20, windowSec: 60 },
+      markets: { max: 30, windowSec: 60 },
+      weather: { max: 10, windowSec: 60 },
+      sites: { max: 10, windowSec: 60 },
+      sources: { max: 30, windowSec: 60 },
+      geocode: { max: 10, windowSec: 60 },
+      water: { max: 10, windowSec: 60 },
+      public: { max: 60, windowSec: 60 },
+    });
+    // Key set parity with the live limiter table (no tier missing/extra).
+    expect(Object.keys(RATE_LIMITER_CONFIG).sort()).toEqual(Object.keys(rateLimiters).sort());
   });
 });

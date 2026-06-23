@@ -11,7 +11,7 @@
  * ceiling of 10 req/min, so anything that trips the public tier would never
  * reach the per-endpoint limiter anyway).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import type { Request, Response, NextFunction } from 'express';
 
@@ -37,8 +37,14 @@ vi.mock('@upstash/ratelimit', () => ({
   Ratelimit: MockRatelimit,
 }));
 
+// incr/expire present so the 429-counter (Phase 46 HARD-01) doesn't throw at
+// module-load wiring; the bypass-proof tests never reach the 429 branch.
 vi.mock('../cache/redis.js', () => ({
-  redis: { ping: vi.fn(async () => 'PONG') },
+  redis: {
+    ping: vi.fn(async () => 'PONG'),
+    incr: vi.fn(async () => 1),
+    expire: vi.fn(async () => 1),
+  },
 }));
 
 // Force production mode so the limiter actually runs (it's a no-op in dev).
@@ -173,5 +179,117 @@ describe('rateLimiters.public — portfolio demo tier', () => {
     expect(headers['X-RateLimit-Remaining']).toBe('5');
     expect(headers['X-RateLimit-Reset']).toBe(String(resetTime));
     expect(next).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Phase 46 HARD-01 (D-03) — 999.1 Bearer-bypass coverage proof.
+ *
+ * The operator dashboard polls hit the public global pre-filter AND the
+ * per-endpoint limiters (flights/ships/events/…). The W6 audit-extension
+ * (rateLimit.ts:53-93) loosened the bypass so a valid DASHBOARD_PASSWORD
+ * Bearer reaches `next()` on EVERY tier, not just `public` — otherwise the
+ * audit's own Bearer-attached probes (and the operator's cold-start polling
+ * burst) self-throttle on the 10/min per-endpoint tiers.
+ *
+ * This block PROVES (per D-03) that property for the public tier AND every
+ * per-endpoint tier in `rateLimiters`, by driving each tier's middleware with
+ * a valid Bearer under stubbed production env and asserting:
+ *   - next() is called (bypass reached), AND
+ *   - limiter.limit is NOT invoked (the bypass short-circuits before it).
+ *
+ * It also keeps the empty-DASHBOARD_PASSWORD fall-through assertion (a missing
+ * privileged caller falls through to the limiter — NOT a 503).
+ *
+ * This is a TEST-ONLY proof — no change to the bypass logic in rateLimit.ts.
+ */
+describe('Bearer-bypass coverage — public AND every per-endpoint tier (Phase 46 D-03 / 999.1)', () => {
+  const PASSWORD = 'op-secret-32characters-of-bytes!';
+  const ORIG_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
+  // Every tier in the live `rateLimiters` table. The proof must cover all of
+  // them — not just `public` — so a future regression that re-scopes the
+  // bypass to the public tier only would fail here.
+  const ALL_TIERS = Object.keys(rateLimiters) as Array<keyof typeof rateLimiters>;
+
+  beforeEach(() => {
+    mockLimit.mockReset();
+    // If the bypass somehow did NOT fire, the limiter would approve — making a
+    // missing-bypass bug visible only via the `mockLimit` call assertion below.
+    mockLimit.mockResolvedValue({
+      success: true,
+      limit: 999,
+      remaining: 999,
+      reset: Date.now() + 60_000,
+    });
+    process.env.DASHBOARD_PASSWORD = PASSWORD;
+  });
+
+  afterEach(() => {
+    if (ORIG_PASSWORD === undefined) delete process.env.DASHBOARD_PASSWORD;
+    else process.env.DASHBOARD_PASSWORD = ORIG_PASSWORD;
+  });
+
+  it('covers every rateLimiters tier (sanity: the table has the expected 11 tiers)', () => {
+    expect(ALL_TIERS.sort()).toEqual(
+      [
+        'events',
+        'flights',
+        'geocode',
+        'markets',
+        'news',
+        'public',
+        'ships',
+        'sites',
+        'sources',
+        'water',
+        'weather',
+      ].sort(),
+    );
+  });
+
+  for (const tier of [
+    'flights',
+    'ships',
+    'events',
+    'news',
+    'markets',
+    'weather',
+    'sites',
+    'sources',
+    'geocode',
+    'water',
+    'public',
+  ] as const) {
+    it(`tier '${tier}': a valid Bearer reaches next() and NEVER invokes limiter.limit (bypass)`, async () => {
+      const req = {
+        ip: '203.0.113.7',
+        headers: { authorization: `Bearer ${PASSWORD}` },
+      } as Request;
+      const res = createRes() as unknown as Response;
+      const next = vi.fn() as unknown as NextFunction;
+
+      await rateLimiters[tier](req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      // The bypass short-circuits BEFORE the limiter is consulted — no Redis
+      // round-trip, no X-RateLimit-* headers.
+      expect(mockLimit).not.toHaveBeenCalled();
+    });
+  }
+
+  it('empty DASHBOARD_PASSWORD falls through to the limiter (NOT a 503) even with a Bearer present', async () => {
+    delete process.env.DASHBOARD_PASSWORD;
+    const req = { ip: '203.0.113.7', headers: { authorization: `Bearer ${PASSWORD}` } } as Request;
+    const res = createRes() as unknown as Response;
+    const next = vi.fn() as unknown as NextFunction;
+
+    // No privileged caller configured → bypass MUST NOT fire on any tier.
+    await rateLimiters.flights(req, res, next);
+
+    expect(mockLimit).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+    // Definitely not a 503 — the limiter approved this request.
+    expect((res as unknown as { _status: number })._status).toBe(200);
   });
 });

@@ -4,16 +4,17 @@ milestone: v2.0
 milestone_name: Final Hardening — 🚧 IN PROGRESS
 current_phase: 46
 current_phase_name: General Hardening + Cron Watch Start
-status: "Phase 45 shipped — PR #44 (awaiting merge)"
-stopped_at: Phase 45 UI-SPEC approved
-last_updated: "2026-06-22T18:47:13.543Z"
+status: verifying
+stopped_at: Completed 46-03-PLAN.md
+last_updated: "2026-06-22T20:09:58.549Z"
 last_activity: 2026-06-22
+last_activity_desc: Phase 46 execution started
 progress:
   total_phases: 14
-  completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
-  percent: 29
+  completed_phases: 5
+  total_plans: 20
+  completed_plans: 20
+  percent: 36
 ---
 
 # Project State
@@ -26,11 +27,11 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 46 — General Hardening + Cron Watch Start
-Plan: Not started
-Status: Phase 45 shipped — PR #44 (awaiting merge)
+Phase: 46 (General Hardening + Cron Watch Start) — EXECUTING
+Plan: 5 of 5
+Status: Phase complete — ready for verification
 Next: Phase 46 (General Hardening + Cron Watch Start) — discuss before planning
-Last activity: 2026-06-22
+Last activity: 2026-06-22 — Phase 46 execution started
 
 Progress: [██████████] 100%
 
@@ -496,6 +497,11 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 | Phase 45 P03 | 420 | 3 tasks | 3 files |
 | Phase 45 P04 | 4min | 3 tasks | 2 files |
 | Phase 45 P5 | 6min | 3 tasks | 0 files |
+| Phase 46 P01 | 9 | 3 tasks | 7 files |
+| Phase 46 P02 | 12min | 2 tasks | 6 files |
+| Phase 46 P05 | 4 | 2 tasks | 3 files |
+| Phase 46 P03 | 5min | 3 tasks | 6 files |
+| Phase 46 P04 | 7 | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -526,6 +532,15 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 - [Phase ?]: Phase 45-03: per-type table defaults open; By Country + Rejections default collapsed (the raw dumps being tamed)
 - [Phase ?]: Plan 45-04: events trend sparklines thread opStatus.trendHistory off the existing events-scoped /api/operator-status poll (no new fetch); cron-stale threshold 30h, dead-link tint on a new high past prior peak
 - [Phase ?]: (45-05) DASH-READ-04 freeze PROVEN + DASH-READ-03 no-inline-hex CLOSED: 4 behavioral pins (60 tests) pass unmodified; only phase tab-token diff line is a JSDoc comment (zero JSX role/aria/tabIndex changed); deliberate snapshot -u regen = ZERO diff (byte-stable, scope=all-apis-tab body only); atom + new-DevApiStatus hex grep = 0; full-phase sweep 12 files/150 green; tsc exit 0.
+- [Phase ?]: 46-02: missedRun is a sibling field (cronRunStateEnum), never a healthStatusEnum value — protects prod-connectivity-audit okCron / LLM-RELI-07 gate
+- [Phase ?]: 46-02: cron graceMs = 4h (D-04 band), keeps missed strictly earlier than the 26h degraded window
+- [Phase ?]: 46-02: deriveCronRunState layered ON TOP of deriveStatus — 4-state ladder untouched (D-06)
+- [Phase ?]: 46-05: HARD-03 backfill — hydration-throw no-op + flag-stays-set proven for both flight-recorder hydrate helpers; net-new trendHistory degrade-open test (Phase-45 gap closed). Test-only, no runtime change.
+- [Phase ?]: cron:watch:v2 ring cap 14 / ~30d TTL piggybacks the existing 0 0 * * * health cron — no new cron/endpoint (CRON-WATCH-01 D-07)
+- [Phase ?]: CRON-WATCH-01 watch is NON-BLOCKING; 46-WATCH.md + dated ring make a partial close visibly partial; early close requires a Phase-31-citing operator decision (D-08)
+- [Phase ?]: 46-04: rate-limiter + cron-freshness operator blocks render inside the FROZEN API Health role=tabpanel (Phase 45 D-08); zero tablist DOM change
+- [Phase ?]: 46-04: cron badge driven by the /api/health missedRun SIBLING field, never the wire status enum (okCron audit-gate safety)
+- [Phase ?]: 46-04: both blocks degrade-open to a MutedPlaceholder on null/absent source; zero inline hex (colors via --color-status-* @theme tokens)
 
 ## Operator Next Steps
 
@@ -533,6 +548,6 @@ Per Phase 28.2.7 close convention: `human_needed` is not a defect — it's the v
 
 ## Session
 
-**Last session:** 2026-06-22T05:23:11.676Z
-**Stopped at:** Phase 45 UI-SPEC approved
-**Resume file:** .planning/phases/45-dashboard-subtab-readability-redesign/45-UI-SPEC.md
+**Last session:** 2026-06-22T20:09:31.789Z
+**Stopped at:** Completed 46-03-PLAN.md
+**Resume file:** None

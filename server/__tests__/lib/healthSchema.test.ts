@@ -15,6 +15,7 @@ import {
   endpointHealthSchema,
   healthStatusEnum,
   healthTierEnum,
+  cronRunStateEnum,
   type HealthResponse,
   type EndpointHealth,
   type HealthStatus,
@@ -135,5 +136,67 @@ describe('healthSchema', () => {
     const tier: HealthTier = 'non-critical';
     expect(status).toBe('degraded');
     expect(tier).toBe('non-critical');
+  });
+});
+
+describe('healthSchema — HARD-02 missedRun sibling field (Phase 46)', () => {
+  it('REGRESSION PIN: healthStatusEnum stays EXACTLY the 4 original states (no `missed`)', () => {
+    // Landmine 1/2, Pitfall 1, T-46-02-01: widening healthStatusEnum to add
+    // `missed` would flip prod-connectivity-audit.yml okCron =
+    // ["healthy","degraded"].includes(tierStatus.cron) and regress the
+    // LLM-RELI-07 milestone-close acceptance gate. `missed` MUST be a sibling
+    // field, never a status value. This test fails the instant the enum widens.
+    expect(healthStatusEnum.options).toEqual(['healthy', 'degraded', 'unhealthy', 'unknown']);
+    expect(healthStatusEnum.options).not.toContain('missed');
+  });
+
+  it('cronRunStateEnum is the separate 3-state sibling enum', () => {
+    expect(cronRunStateEnum.options).toEqual(['unknown', 'missed', 'healthy']);
+  });
+
+  it('endpointHealthSchema accepts a row WITH the optional missedRun field', () => {
+    const cronRow: EndpointHealth = {
+      name: 'cronHealth',
+      status: 'healthy',
+      tier: 'cron',
+      lastSuccessTs: Date.now() - 60_000,
+      lastErrorReason: null,
+      freshnessMs: 60_000,
+      freshnessThresholdMs: 26 * 60 * 60_000,
+      latencyMs: 4,
+      missedRun: 'healthy',
+    };
+    const parsed = endpointHealthSchema.parse(cronRow);
+    expect(parsed.missedRun).toBe('healthy');
+  });
+
+  it('endpointHealthSchema accepts a row WITHOUT missedRun (forward/back-compat — non-cron rows omit it)', () => {
+    const nonCronRow: EndpointHealth = {
+      name: 'flights',
+      status: 'healthy',
+      tier: 'critical',
+      lastSuccessTs: Date.now() - 10_000,
+      lastErrorReason: null,
+      freshnessMs: 10_000,
+      freshnessThresholdMs: 120_000,
+      latencyMs: 12,
+    };
+    const parsed = endpointHealthSchema.parse(nonCronRow);
+    expect(parsed.missedRun).toBeUndefined();
+  });
+
+  it('endpointHealthSchema rejects an invalid missedRun value under .strict()', () => {
+    const bad = {
+      name: 'cronHealth',
+      status: 'healthy',
+      tier: 'cron',
+      lastSuccessTs: null,
+      lastErrorReason: null,
+      freshnessMs: null,
+      freshnessThresholdMs: 26 * 60 * 60_000,
+      latencyMs: null,
+      missedRun: 'totally-broken', // not a cronRunStateEnum member
+    };
+    expect(() => endpointHealthSchema.parse(bad)).toThrow(z.ZodError);
   });
 });
